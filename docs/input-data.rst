@@ -17,7 +17,7 @@ This page describes the various products you will find in the shop.
 
 .. important::
 
-    Don't forget to set-up or check your :ref:`system-settings` before
+    Don't forget to set-up or check your system (:ref:`system-settings`) before
     downloading new data! (you'll need to
     do this only once per computer)
 
@@ -37,7 +37,7 @@ If you want to change some of these parameters, you *may* have to start a
 run from a lower processing level and re-run the processing tasks.
 Whether or not this is necessary depends on the stage of the workflow
 you'd like your computations to diverge from the
-defaults (this will become more clear a we provide example use cases below).
+defaults (this will become more clear as we provide an example below).
 
 To start from a pre-processed state, simply use the
 :py:func:`workflow.init_glacier_directories` function with the
@@ -59,8 +59,8 @@ Currently, there are six available levels of pre-processing:
   to the directories. Adding all necessary pre-processing tasks
   for a dynamical run, including the mass-balance calibration, bed inversion,
   up to the :py:func:`tasks.init_present_time_glacier` task included.
-  These directories still contain all data that was necessary for the processing,
-  i.e. they are the largest in size. They are also the most flexible since
+  These directories still contain all data that were necessary for the processing,
+  i.e. the largest in size but also the most flexible since
   the processing chain can be re-run from any stage in them.
 - **Level 4**: same as level 3 but with all intermediate output files removed.
   The strong advantage of level 4 files is that their size is considerably
@@ -68,21 +68,26 @@ Currently, there are six available levels of pre-processing:
   running the bed inversion algorithm again) are not possible anymore.
 - **Level 5**: on top of level 4, an additional historical simulation is run
   from the RGI date to the last possible date of the baseline climate file
-  (for example end of 2019 for CRU and ERA5).
-  The state of the glacier as month 01, (hydrological) year 2020 can then be
+  (currently december 2019 for CRU and ERA5).
+  The state of the glacier (currently set as month 01 in hydrological year 2020) can then be
   used for future projections.
 
 In practice, most users are going to use level 2, level 3 or level 5 files. Here
 are some example use cases:
 
-1. *Running OGGM from GCM / RCM data with the default settings*: start at level 5
+1. *Running OGGM from GCM / RCM data with the default settings*: **start at level 5**
 2. *Using OGGM's flowlines but running your own baseline climate,
-   mass-balance or ice thickness inversion models*: start at level 2 (and maybe
-   use OGGM's workflow again for the ice dynamics?). This is the workflow used
+   mass-balance or ice thickness inversion models*: **start at level 2** (and maybe
+   use OGGM's workflow again for glacier dynamic evolution?). This is the workflow used
    by associated model `PyGEM <https://github.com/drounce/PyGEM>`_ for example.
 3. *Run sensitivity experiments for the ice thickness inversion*: start at level
    3 (with climate data available) and re-run the inversion steps.
 
+Here is the command to choose the pre-processing level (using Hintereisferner glacier here):
+
+   gdir = workflow.init_glacier_directories('RGI60-11.00897',
+                                                 from_prepro_level=1)
+                                                 
 
 Glacier map size: the prepro_border argument
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -157,7 +162,7 @@ for your research question, and to start your runs from level 5 if possible.
   ``dl_cache_dir`` folder (see :ref:`system-settings`).
 
 
-Available pre-processed configurations
+Available pre-processed configurations:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. admonition:: **New in version 1.4!**
@@ -175,8 +180,8 @@ Available pre-processed configurations
     for an example.
 
 
-Default
-^^^^^^^
+A. Default
+^^^^^^^^^^
 
 If not provided with a specific ``prepro_base_url`` argument,
 :py:func:`workflow.init_glacier_directories` will download the glacier
@@ -184,7 +189,7 @@ directories from the default urls. Here is a summary of the default configuratio
 
 - model parameters as of the ``oggm/params.cfg`` file at the published model version
 - flowline glaciers computed from the geometrical centerlines (including tributaries)
-- baseline climate from CRU (i.e. not available for Antarctica)
+- baseline climate from CRU (not available for Antarctica)
 - baseline climate quality checked with :py:func:`tasks.historical_climate_qc` with ``N=3``
 - mass-balance parameters calibrated with the standard OGGM procedure. No calibration
   against geodetic MB (see options below for regional calibration)
@@ -197,23 +202,23 @@ To see the code that generated these directories (for example if you want to
 make your own, visit :py:func:`cli.prepro_levels.run_prepro_levels`
 or this `file on github <https://github.com/OGGM/oggm/blob/master/oggm/cli/prepro_levels.py>`_).
 
-The urls used by OGGM per default are listed here:
+The urls used by OGGM per default are in the following ftp servor:
 
-`https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/ <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ + :
+`https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/ <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ :
 
 - `L1-L2_files/centerlines <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/>`_ for level 1 and level 2
 - `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for level 3 to 5
 
-If you are new to this, I recommend to explore these directories to familiarize yourself
+If you are new to this, we recommend to explore these directories to familiarize yourself
 to their content. Of course, when provided with an url such as above,
 OGGM will know where to find the respective files
-automatically, but is is good to understand how they are structured. The `summary` folder
+automatically, but is is good to understand how they are structured. The `summary folder`
 (`example <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/RGI62/b_080/L2/summary/>`_)
-folder contains diagnostic files which can be useful as well.
+contains diagnostic files which can be useful as well.
 
 
-Option: Geometrical centerlines or elevation band flowlines
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+B. Option: Geometrical centerlines or elevation band flowlines
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The type of flowline to use (see :ref:`flowlines`) can be decided at level 2 already.
 Therefore, the two configurations available at level 2 from these urls:
@@ -227,8 +232,8 @@ flowline types. For example with CRU:
 - `L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/>`_ for centerlines
 - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/no_match/>`_ for elevation bands
 
-Baseline climate data
-^^^^^^^^^^^^^^^^^^^^^
+C. Option: Baseline climate data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For the two most important default configurations (CRU or ERA5 as baseline climate),
 we provide all levels for both the geometrical centerlines or the elevation band
@@ -239,8 +244,8 @@ flowlines:
 - `L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match/>`_ for ERA5 + centerlines
 - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for ERA5 + elevation bands
 
-Further set-ups
-^^^^^^^^^^^^^^^
+D. Further set-ups
+^^^^^^^^^^^^^^^^^^
 
 Here is the current list of available configurations at the time of writing (explore the server for more!):
 
@@ -261,7 +266,7 @@ RGI-TOPO
 The `RGI-TOPO <https://rgitools.readthedocs.io/en/latest/dems.html>`_ dataset
 provides a local topography map for each single glacier in the RGI. It was
 generated with OGGM, and can be used very easily from the OGGM-Shop (visit
-our :ref:`tutorials` if you are interested!).
+our `tutorials <https://oggm.org/tutorials/notebooks/welcome.html>`_ if you are interested!).
 
     .. figure:: _static/malaspina_topo.png
         :width: 100%
@@ -274,7 +279,7 @@ ITS_LIVE
 
 The `ITS_LIVE <https://its-live.jpl.nasa.gov/>`_ ice velocity products
 can be downloaded and reprojected to the glacier directory
-(visit our :ref:`tutorials` if you are interested!).
+(visit our `tutorials <https://oggm.org/tutorials/notebooks/welcome.html>`_ if you are interested!).
 
     .. figure:: _static/malaspina_itslive.png
         :width: 80%
@@ -286,7 +291,7 @@ Ice thickness
 
 The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`_
 ice thickness products can be downloaded and reprojected to the glacier directory
-(visit our :ref:`tutorials` if you are interested!).
+(visit our `tutorials <https://oggm.org/tutorials/notebooks/welcome.html>`_ if you are interested!).
 
     .. figure:: _static/malaspina_thick.png
         :width: 80%
@@ -327,7 +332,7 @@ determine which bed shape should be used (rectangular or parabolic). See the
 `rgi tools <https://rgitools.readthedocs.io/en/latest/tools.html#glacier-intersects>`_
 documentation for more information about the intersects.
 
-The following table summarizes the attributes from the RGI used by OGGM. It
+The following table summarizes the RGI attributes used by OGGM. It
 can be useful to refer to this list if you use your own glacier outlines
 with OGGM.
 
@@ -358,7 +363,7 @@ Linkages            not included
 EndDate             not included
 ==================  ===========================  ======================
 
-For Greenland and Antarctica, OGGM does not take into account the
+For Greenland and Antarctica peripheral glaciers, OGGM does not take into account the
 connectivity level between the Glaciers and the Ice sheets.
 We recommend to the users to think about this before they
 run the task: ``workflow.init_glacier_directories``.
@@ -395,7 +400,7 @@ run the task: ``workflow.init_glacier_directories``.
 Topography data
 ~~~~~~~~~~~~~~~
 
-When creating a :ref:`glacierdir` a suitable topographical data source is
+When creating a :ref:`glacierdir`, a suitable topographical data source is
 chosen automatically, depending on the glacier's location. OGGM supports
 a large number of datasets (almost all of the freely available ones, we
 hope). They are listed on the
@@ -414,7 +419,7 @@ the next on the list will be tested: if the tested dataset covers
 75% of the glacier area, it is selected. In practice, NASADEM and COPDEM
 are sufficient for all but about 300 of the world's glaciers.
 
-These data are downloaded only when needed (i.e.: during an OGGM run)
+These data are downloaded only when needed (i.e. during an OGGM run)
 and they are stored in the ``dl_cache_dir``
 directory. The gridded topography is then reprojected and resampled to the local
 glacier map. The local grid is defined on a Transverse Mercator projection centered over
@@ -461,13 +466,13 @@ reproduce this information
 
     `In this blogpost <https://oggm.org/2019/10/08/dems/>`_ we talk about which
     requirements a DEM must fulfill to be helpful to OGGM. And we also explain
-    why and how we preprocess certain DEMs before we make them available to the
+    why and how we preprocess some DEMs before we make them available to the
     OGGM workflow.
 
 Climate data
 ~~~~~~~~~~~~
 
-The MB model implemented in OGGM needs monthly time series of temperature and
+The mass-balance model implemented in OGGM needs monthly time series of temperature and
 precipitation. The current default is to download and use the `CRU TS`_
 data provided by the Climatic Research Unit of the University of East Anglia.
 
@@ -493,7 +498,7 @@ following convenience functions:
     While each downloaded zip file is ~200mb in size, they are ~2.9Gb large
     after decompression!
 
-The raw, coarse (0.5°) dataset is then downscaled to a higher resolution grid
+The raw, coarse (0.5°) dataset (CRU TS v4.04 at 0.5° resolution) is then downscaled to a higher resolution grid
 (CRU CL v2.0 at 10' resolution) following the anomaly mapping approach
 described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
 this downscaling to add any new information than already available at the
@@ -555,7 +560,7 @@ project (see :py:func:`tasks.process_cesm_data`), and CMIP5/CMIP6
 Mass-balance data
 ~~~~~~~~~~~~~~~~~
 
-In-situ mass-balance data is used by OGGM to calibrate and validate the
+In-situ mass-balance data are used by OGGM to calibrate and validate the
 mass-balance model. We rely on mass-balance observations provided by the
 World Glacier Monitoring Service (`WGMS`_).
 The `Fluctuations of Glaciers (FoG)`_ database contains annual mass-balance
