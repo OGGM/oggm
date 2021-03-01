@@ -2128,6 +2128,12 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
      """
+    if 'mb_elev_feedback' in kwargs:
+        mb_elev_feedback = kwargs.get("mb_elev_feedback")
+    else:
+        mb_elev_feedback = 'annual'
+    if ((store_monthly_step == True) and (mb_elev_feedback == 'annual')):
+        warnings.warn("Mass balance is computed yearly. If you want output to reflect monthly processes set mb_elev_feedback = 'monthly'.")
 
     if cfg.PARAMS['use_inversion_params_for_run']:
         diag = gdir.get_diagnostics()
