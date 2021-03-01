@@ -5,8 +5,8 @@ Performance, cluster environments and reproducibility
 
 If you plan to run OGGM on more than a handful of glaciers, you might
 be interested in using all processors available to you, whether you
-are working on your laptop or on a cluster: see `Parallel computations`_
-for how to do this.
+are working on your laptop or on a cluster (see `Parallel computations`_
+for how to do this).
 
 For regional or global computations you will need to run
 OGGM in `Cluster environments`_. Here we provide a couple of guidelines based
@@ -14,14 +14,14 @@ on our own experience with operational runs.
 
 In `Reproducibility with OGGM`_, we discuss certain aspects of scientific
 reproducibility with OGGM, and how we try to ensure that our results are
-reproducible (it's not easy).
+reproducible (that's not easy!).
 
 
 Parallel computations
 ---------------------
 
 OGGM is designed to use the available resources as well as possible. For single
-nodes machines but with more than one processor (e.g. for personal
+node machines but with more than one processor (e.g. personal
 computers) OGGM ships with a multiprocessing approach which is fairly simple to
 use. For cluster environments with more than one machine, you can use `MPI`_.
 
@@ -42,7 +42,7 @@ the :py:func:`workflow.execute_entity_task` will distribute the operations on
 the available processors using Python's `multiprocessing`_ module.
 You can control this behavior with the ``use_multiprocessing`` config
 parameter and the number of processors with ``mp_processes``.
-The default in OGGM is:
+The default in OGGM is set to not use multiprocessing:
 
 .. ipython:: python
 
@@ -53,7 +53,9 @@ The default in OGGM is:
 
 ``-1`` means that all available processors will be used.
 
-The following environment variables will override these settings:
+The following environment variables will override these settings (see
+`_https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html`_
+for managing environment variables):
 
 - ``OGGM_USE_MULTIPROCESSING`` can be set to ``1``/``True`` or ``0``/``False``
   to override the param files at initialisation
@@ -135,7 +137,7 @@ you. They are highly configurable, and come in many flavors.
     to ensure traceable, reproducible results with any numerical model.
     We highly recommend their use.
 
-The OGGM team (mostly: `Timo <https://github.com/TimoRoth>`_) provides,
+The OGGM team (mostly `Timo <https://github.com/TimoRoth>`_) provides,
 maintains and updates a `Docker <https://www.docker.com/>`_ container.
 You can see all OGGM containers `here <https://hub.docker.com/u/oggm>`_.
 Our most important repositories are:
@@ -144,10 +146,10 @@ Our most important repositories are:
   container based on Ubuntu 18.04 and shipping with all OGGM dependencies
   installed on it. **OGGM is not guaranteed to run on these**, but we
   use them for our tests on
-  `Travis <https://github.com/OGGM/oggm/blob/master/.travis.yml#L36-L51>`_.
+  `Travis <https://github.com/OGGM/pytest-mpl/blob/master/.travis.yml>`_.
 - `base <https://hub.docker.com/r/oggm/base>`_ is built upon ``untested_base``,
   but is **pushed online only after the OGGM tests have run successfully
-  on it**. Therefore, is provides a a more secure base for the model, although
+  on it**. Therefore, is provides a more secure base for the model, although
   we cannot guarantee that past or future version of the model will always
   work on it.
 - `oggm <https://hub.docker.com/r/oggm/oggm>`_ is built upon ``base`` each
@@ -194,7 +196,7 @@ Some explanations:
   `can run docker containers <https://www.sylabs.io/guides/3.1/user-guide/singularity_and_docker.html>`_).
   Singularity is preferred over Docker in cluster
   environments, mostly for security and performance reasons. 
-  On our cluster, we use the SLURM manager, so we specify the number of nodes and CPU’s 
+  On our cluster, we use the SLURM manager, so we specify the number of nodes (`n`) and CPU’s (`c`) 
   we’d like to use and run singularity with `srun -n 1 -c X singularity exec docker://...`. 
   This might vary on your cluster.
 - we fix the container version we want to use to a certain
@@ -206,8 +208,8 @@ Some explanations:
   write to, and where OGGM will work (for example, it might also be the 
   directory you are working on with OGGM (`cfg.PATHS['working_dir']`).
   We suggest to replace this variable with what works for you.
-- the `oggm` docker images ship whith an OGGM version guaranteed to work on this container.
-  Sometimes, you may want to use another OGGM version, for example whith newer developments 
+- the `oggm` docker images ship with an OGGM version guaranteed to work on this container.
+  Sometimes, you may want to use another OGGM version, for example with newer developments 
   on it. You might also add your own flavor or parameterization to OGGM into the environment. 
   For this you can use pip and install the version you want. Here we show an example 
   where we install a specific OGGM version, here specified by its
@@ -216,11 +218,11 @@ Some explanations:
   as well). If you do that, you might want to run the tests once first to make sure 
   that it works as expected. You can do that by replacing `YOUR_RUN_SCRIPT_HERE`
   with `pytest --pyargs oggm --run-slow`!
-- Finally, the `YOUR_RUN_SCRIPT_HERE` is the actual command you want to run
+- finally, the `YOUR_RUN_SCRIPT_HERE` is the actual command you want to run
   from this container! Most of the time, it will be a call to your python
   script.
 
-We recommend to keep these scripts alongside our code and data, so that you
+We recommend to keep these `cluster` scripts alongside your code and data, so that you
 can trace them later on.
 
 Data storage
@@ -235,8 +237,8 @@ the data and store it in a folder, specified in the ``$HOME/.oggm_config``
 file (see ``dl_cache_dir`` in :ref:`system-settings`).
 
 The structure of this folder is following the URLs from which the data
-is obtained. You can either let OGGM fill it up at run time by downloading the
-data (recommended if you do regional runs, i.e. don't need the entire data
+are obtained. You can either let OGGM fill it up at run time by downloading the
+data (recommended if you do regional runs, i.e. you don't need the entire data
 set), but you might also want to pre-download everything using ``wget`` or
 equivalent. OGGM will use the data as long as the url structure is OK.
 
@@ -260,7 +262,7 @@ you have to deal with:
   and keep only the aggregated statistics files generated with the ``compile_``
   tasks (see :ref:`api-io`). A typical workflow would be to start from
   pre-processed directories, do the run, aggregate the results, copy the
-  aggregated files for long term storage, and delete the working directory.
+  aggregated files for long-term storage, and delete the working directory.
 - the method above does not allow to go back to a single glacier
   for plotting or restarting a run, or to have a more detailed look at the
   glacier geometry evolution. If you want to do these things, you'll need to
@@ -270,7 +272,7 @@ you have to deal with:
   to create compressed, aggregated files of your directories. You can
   later initialize new directories from these tar files with the `from_tar`
   keyword argument in :py:func:`workflow.init_glacier_directories`. See our
-  dedicated :ref:`tutorials` on the topic.
+  dedicated `Tutorials <https://oggm.org/tutorials/notebooks/store_and_compress_glacierdirs.html>`_ on the topic.
 
 
 Run per RGI region, not globally
@@ -305,8 +307,8 @@ The source code of OGGM is located on `GitHub <https://github.com/OGGM/oggm>`_.
 All the history of the codebase (and the tests and documentation) are
 documented in the form of git commits.
 
-When certain development milestones are reached, we release a new version
-of the model using a so-called "tag" (version number). We will try to follow
+When some development milestones are reached, we release a new version
+of the model using a so-called "`tag`" (version number). We try to follow
 our own `semantic versioning <https://semver.org/>`_ convention for
 release numbers. We use MAJOR.MINOR.PATCH, with:
 
@@ -319,7 +321,7 @@ release numbers. We use MAJOR.MINOR.PATCH, with:
    ways, that we estimated to be "small enough"** to justify a minor release
    instead of major one. Unlike the original convention, we cannot always
    guarantee backwards compatibility in the OGGM syntax yet, because it is
-   too costly. We'll try not to brake things at each release, though
+   too costly. We'll try not to brake things at each release, though.
 3. MAJOR version number increase when we significantly change the OGGM syntax
    and/or the model results, for example by relying on a new default
    parametrization.
@@ -394,8 +396,8 @@ not perfect, but we constantly seek to improve them:
         :target: https://coveralls.io/github/OGGM/oggm?branch=master
         :alt: Code coverage
 
-.. image:: https://travis-ci.org/OGGM/oggm.svg?branch=master
-    :target: https://travis-ci.org/OGGM/oggm
+.. image:: https://travis-ci.com/OGGM/oggm.svg?branch=master
+    :target: https://travis-ci.com/OGGM/oggm
     :alt: Linux build status
 
 .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
