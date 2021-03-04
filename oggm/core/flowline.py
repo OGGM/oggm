@@ -2190,12 +2190,13 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 @entity_task(log)
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        bias=None, seed=None, temperature_bias=None,
+                       precipitation_factor=None,
                        store_monthly_step=False,
                        climate_filename='climate_historical',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        zero_initial_glacier=False,
-                       unique_samples=False,
+                       unique_samples=False, check_calib_params=True,
                        **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
@@ -2224,6 +2225,10 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         be useful if you want to have the same climate years for all of them
     temperature_bias : float
         add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -2245,6 +2250,11 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         per random climate period-length
         if false, every model year will be chosen from the random climate
         period with the same probability
+    check_calib_params : bool
+        OGGM will try hard not to use wrongly calibrated mu* by checking
+        the parameters used during calibration and the ones you are
+        using at run time. If they don't match, it will raise an error.
+        Set to False to suppress this check.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2254,10 +2264,13 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                                      bias=bias, seed=seed,
                                      filename=climate_filename,
                                      input_filesuffix=climate_input_filesuffix,
-                                     unique_samples=unique_samples)
+                                     unique_samples=unique_samples,
+                                     check_calib_params=check_calib_params)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
+    if precipitation_factor is not None:
+        mb.prcp_fac = precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
                               mb_model=mb, ys=0, ye=nyears,
@@ -2270,12 +2283,14 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          bias=None, temperature_bias=None,
+                         precipitation_factor=None,
                          store_monthly_step=False,
                          output_filesuffix='',
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
+                         check_calib_params=True,
                          **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
@@ -2301,6 +2316,10 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         to zero
     temperature_bias : float
         add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -2317,6 +2336,11 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
+    check_calib_params : bool
+        OGGM will try hard not to use wrongly calibrated mu* by checking
+        the parameters used during calibration and the ones you are
+        using at run time. If they don't match, it will raise an error.
+        Set to False to suppress this check.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2324,10 +2348,13 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
                                      y0=y0, halfsize=halfsize,
                                      bias=bias, filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix)
+                                     input_filesuffix=climate_input_filesuffix,
+                                     check_calib_params=check_calib_params)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
+    if precipitation_factor is not None:
+        mb.prcp_fac = precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
                               mb_model=mb, ys=0, ye=nyears,
@@ -2344,7 +2371,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
-                          bias=None, **kwargs):
+                          bias=None, temperature_bias=None,
+                          precipitation_factor=None, check_calib_params=True,
+                          **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
@@ -2393,6 +2422,17 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         bias of the mb model. Default is to use the calibrated one, which
         is often a better idea. For t* experiments it can be useful to set it
         to zero
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+    check_calib_params : bool
+        OGGM will try hard not to use wrongly calibrated mu* by checking
+        the parameters used during calibration and the ones you are
+        using at run time. If they don't match, it will raise an error.
+        Set to False to suppress this check.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2427,7 +2467,13 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
                                      filename=climate_filename, bias=bias,
-                                     input_filesuffix=climate_input_filesuffix)
+                                     input_filesuffix=climate_input_filesuffix,
+                                     check_calib_params=check_calib_params)
+
+    if temperature_bias is not None:
+        mb.temp_bias = temperature_bias
+    if precipitation_factor is not None:
+        mb.prcp_fac = precipitation_factor
 
     if ye is None:
         # Decide from climate (we can run the last year with data as well)
