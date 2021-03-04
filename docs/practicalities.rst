@@ -53,9 +53,9 @@ The default in OGGM is set to not use multiprocessing:
 
 ``-1`` means that all available processors will be used.
 
-The following environment variables will override these settings (see
-`_https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html`_
-for managing environment variables):
+The following environment variables will override these settings (see e.g.
+`this info page <https://www.digitalocean.com/community/tutorials/how-to-read-and-set-environmental-and-shell-variables-on-linux>`_
+on managing environment variables):
 
 - ``OGGM_USE_MULTIPROCESSING`` can be set to ``1``/``True`` or ``0``/``False``
   to override the param files at initialisation
@@ -146,7 +146,7 @@ Our most important repositories are:
   container based on Ubuntu 18.04 and shipping with all OGGM dependencies
   installed on it. **OGGM is not guaranteed to run on these**, but we
   use them for our tests on
-  `Travis <https://github.com/OGGM/pytest-mpl/blob/master/.travis.yml>`_.
+  `GitHub Actions <https://github.com/OGGM/oggm/actions/workflows/run-tests.yml>`_.
 - `base <https://hub.docker.com/r/oggm/base>`_ is built upon ``untested_base``,
   but is **pushed online only after the OGGM tests have run successfully
   on it**. Therefore, is provides a more secure base for the model, although
@@ -165,10 +165,23 @@ if you want to install your own OGGM version (don't forget to test it
 afterwards!), and use ``oggm`` if you know which OGGM version you want.
 
 As an example, here is how we run a given fixed version of OGGM on our 
-own cluster, using singularity to pull from docker hub::
+own cluster. First we pull the image we want to run from docker hub somewhere
+on your system::
+
+    $ singularity pull docker://oggm/oggm:20191122
+
+This will store the image in your current directory and needs to be done only once per image.
+
+.. important::
+
+    **Please do NOT pull from docker hub in scheduled scripts**. Docker hub
+    recently changed their policies and the free version is capped to
+    `100 pulls per 6 hours <https://www.docker.com/blog/scaling-docker-to-serve-millions-more-developers-network-egress/>`_.
+
+Then, in your script, so something similar to::
 
     # All commands in the EOF block run inside of the container
-    singularity exec docker://oggm/oggm:20200708 bash -s <<EOF
+    singularity exec /path/to/oggm/image/oggm_20191122.sif bash -s <<EOF
       set -e
       # Setup a fake home dir inside of our workdir, so we don't clutter the
       # actual shared homedir with potentially incompatible stuff
@@ -196,9 +209,10 @@ Some explanations:
   `can run docker containers <https://www.sylabs.io/guides/3.1/user-guide/singularity_and_docker.html>`_).
   Singularity is preferred over Docker in cluster
   environments, mostly for security and performance reasons. 
-  On our cluster, we use the SLURM manager, so we specify the number of nodes (`n`) and CPU’s (`c`) 
-  we’d like to use and run singularity with `srun -n 1 -c X singularity exec docker://...`. 
-  This might vary on your cluster.
+  On our cluster, we use the SLURM manager to run a number of glaciers (an RGI region
+  for example), and the script above is then run on a node. You can also
+  use and run singularity with `srun -n 1 -c X singularity exec ...`:
+  this might vary on your cluster.
 - we fix the container version we want to use to a certain
   `tag <https://hub.docker.com/r/oggm/oggm/tags>`_. With this, we are
   guaranteed to always use the same software versions across runs.
@@ -222,7 +236,7 @@ Some explanations:
   from this container! Most of the time, it will be a call to your python
   script.
 
-We recommend to keep these `cluster` scripts alongside your code and data, so that you
+We recommend to keep these `cluster` scripts alongside your code and data, so that you
 can trace them later on.
 
 Data storage
@@ -393,11 +407,11 @@ We have developed a series of checks to monitor the changes in OGGM. They are
 not perfect, but we constantly seek to improve them:
 
 .. image:: https://coveralls.io/repos/github/OGGM/oggm/badge.svg?branch=master
-        :target: https://coveralls.io/github/OGGM/oggm?branch=master
-        :alt: Code coverage
+    :target: https://coveralls.io/github/OGGM/oggm?branch=master
+    :alt: Code coverage
 
-.. image:: https://travis-ci.com/OGGM/oggm.svg?branch=master
-    :target: https://travis-ci.com/OGGM/oggm
+.. image:: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml/badge.svg?branch=master
+    :target: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
     :alt: Linux build status
 
 .. image:: https://img.shields.io/badge/Cross-validation-blue.svg

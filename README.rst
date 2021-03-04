@@ -65,8 +65,8 @@ About
         :target: https://coveralls.io/github/OGGM/oggm?branch=master
         :alt: Code coverage
 
-    .. image:: https://travis-ci.org/OGGM/oggm.svg?branch=master
-        :target: https://travis-ci.org/OGGM/oggm
+    .. image:: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml/badge.svg?branch=master
+        :target: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
         :alt: Linux build status
 
     .. image:: https://img.shields.io/badge/Cross-validation-blue.svg

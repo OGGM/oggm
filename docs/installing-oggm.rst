@@ -29,7 +29,7 @@ install Python and the package dependencies with the :ref:`conda package manager
 Linux users with experience with `pip`_ can follow
 :ref:`these instructions <virtualenv-install>` to install OGGM in a pyenv environment with pip.
 
-.. _tested: https://travis-ci.org/OGGM/oggm
+.. _tested: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
 .. _conda: https://conda.io/projects/conda/en/latest/user-guide/index.html
 .. _pip: https://docs.python.org/3/installing/
 .. _strongly recommend: http://python3statement.github.io/

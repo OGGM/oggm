@@ -160,7 +160,7 @@ for these cases it is likely that something else is wrong in your workflow
 or OGGM itself.
 
 What does the "`CFL  error`" mean?
---------------------------------
+----------------------------------
 
 This happens when the ice dynamics simulation is unstable. In OGGM we use an
 adaptive time stepping scheme (which should avoid these kind of situations),
@@ -183,4 +183,5 @@ If you decide to use your own inventory (e.g. maybe because it has a better glac
 encourage you to contact the `GLIMS core team <https://www.glims.org/maps/contact_info.html>`_
 to let them know how your inventory improves the glacier digitalization compared to the
 current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
-have a look to this  `tutorial https://oggm.org/tutorials/notebooks/use_your_own_inventory.html`_!
+have a look to this
+`tutorial <https://oggm.org/tutorials/notebooks/use_your_own_inventory.html>`_!
