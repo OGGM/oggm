@@ -83,11 +83,6 @@ are some example use cases:
 3. *Run sensitivity experiments for the ice thickness inversion*: start at level
    3 (with climate data available) and re-run the inversion steps.
 
-Here is the command to choose the pre-processing level (using Hintereisferner glacier here):
-
-   gdir = workflow.init_glacier_directories('RGI60-11.00897',
-                                                 from_prepro_level=1)
-                                                 
 
 Glacier map size: the prepro_border argument
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -266,20 +261,21 @@ RGI-TOPO
 The `RGI-TOPO <https://rgitools.readthedocs.io/en/latest/dems.html>`_ dataset
 provides a local topography map for each single glacier in the RGI. It was
 generated with OGGM, and can be used very easily from the OGGM-Shop (visit
-our `tutorials <https://oggm.org/tutorials/notebooks/welcome.html>`_ if you are interested!).
+our `tutorials`_ if you are interested!).
 
     .. figure:: _static/malaspina_topo.png
         :width: 100%
 
         Example of the various RGI-TOPO products at Malaspina glacier
 
+.. _tutorials: https://oggm.org/tutorials
 
 ITS_LIVE
 --------
 
 The `ITS_LIVE <https://its-live.jpl.nasa.gov/>`_ ice velocity products
 can be downloaded and reprojected to the glacier directory
-(visit our `tutorials <https://oggm.org/tutorials/notebooks/welcome.html>`_ if you are interested!).
+(visit our `tutorials`_ if you are interested!).
 
     .. figure:: _static/malaspina_itslive.png
         :width: 80%
@@ -291,7 +287,7 @@ Ice thickness
 
 The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`_
 ice thickness products can be downloaded and reprojected to the glacier directory
-(visit our `tutorials <https://oggm.org/tutorials/notebooks/welcome.html>`_ if you are interested!).
+(visit our `tutorials`_ if you are interested!).
 
     .. figure:: _static/malaspina_thick.png
         :width: 80%
@@ -498,8 +494,8 @@ following convenience functions:
     While each downloaded zip file is ~200mb in size, they are ~2.9Gb large
     after decompression!
 
-The raw, coarse (0.5°) dataset (CRU TS v4.04 at 0.5° resolution) is then downscaled to a higher resolution grid
-(CRU CL v2.0 at 10' resolution) following the anomaly mapping approach
+The raw, coarse dataset (CRU TS v4.04 at 0.5° resolution) is then downscaled to
+a higher resolution grid (CRU CL v2.0 at 10' resolution) following the anomaly mapping approach
 described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
 this downscaling to add any new information than already available at the
 original resolution, but this allows us to have an elevation-dependent dataset

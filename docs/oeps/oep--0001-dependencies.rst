@@ -54,7 +54,7 @@ in the future:
    
 **Situation 3**
    A developer writes a new feature and sends a pull-request: the tests pass
-   on her machine but not on Travis. The failing tests are unrelated to the PR:
+   on her machine but not on github. The failing tests are unrelated to the PR:
    it is one of our dependency update that broke something in OGGM. 
    This a bad experience for new developers, and it is the job of an OGGM core 
    developer to solve the problem. 
@@ -62,8 +62,8 @@ in the future:
 **Situation 4**
    A developer writes a quantitative test of the type:
    "the model simulation should yield a volume of xx.xxx km3 ice": the test
-   passes locally but fails on Travis. Indeed, the glacier topography is 
-   slightly different on Travis because of difference in the installed GDAL
+   passes locally but fails on github. Indeed, the glacier topography is
+   slightly different on github because of difference in the installed GDAL
    version, yielding non-negligible differences in model results.
    
 **Situation 5**
@@ -95,7 +95,7 @@ Here is a set of goals that we should always try to follow:
    want to use, a performance increase, or regular updates to keep track with 
    the scientific python stack (e.g. twice a year).
 4. It should be possible to use a python environment fixed to the standard
-   dependency list on all these platforms: the Bremen cluster, on Travis, 
+   dependency list on all these platforms: the Bremen cluster, on github,
    on a local linux machine and on a university cluster with singularity.
 5. The latest OGGM code should always run error-free on the latest standard 
    dependency list. Older OGGM versions should have a standard dependency list 
@@ -155,10 +155,11 @@ The build scripts can be found at `<https://github.com/OGGM/OGGM-Docker>`_
 for reproducible results over time**.
 
 
-Travis CI (goals 5, 6 and 11)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Github Actions (goals 5, 6 and 11)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-`Travis CI <https://travis-ci.org/OGGM/oggm>`_ is the tool we use for continuous
+`Github Actions <https://github.com/OGGM/oggm/actions/workflows/run-tests.yml>`_
+is the tool we use for continuous
 testing of the OGGM software. **The tests should run on the stable
 Docker image built with the standard dependency list**. Optionally,
 we will monitor the tests on the latest image as well, but the tests are 
