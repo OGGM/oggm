@@ -50,13 +50,13 @@ reasonable global estimates of glacier mass-balance and glacier change: this
 is a result of the law of large numbers, assuming that the uncertainty for
 each single glacier can be large but random and Gaussian.
 
-If you use OGGM for a single or and handful of glaciers, chances are that the
+If you use OGGM for a single or a handful of glaciers, chances are that the
 outcome is disappointing. For these kind of applications, you'll probably
 need to re-calibrate OGGM using local data, for example of mass-balance
 or observations of past glacier change.
 
 
-Can I use OGGM to simulate long term glacier evolution?
+Can I use OGGM to simulate long-term glacier evolution?
 -------------------------------------------------------
 
 It depends what you mean by "long-term": at centennial time scales, probably,
@@ -70,6 +70,12 @@ Also, if glaciers grow into large ice complexes and ice caps, the
 flowline assumption becomes much less valid than for typical valley glaciers
 found today. For these situations, fully distributed models like PISM
 are more appropriate.
+
+In addition, there is some issues about glacier growth: you have to be sure the
+limit border you have defined is large enough to allow a large growth of glaciers ;
+secondly, you need to authorize the merge of glaciers which is not yet implemented
+into OGGM ; last, there might be not negligible changes in the landscape around
+the glacier as well as evolution of the glacier bed for long-term simulations.
 
 We are currently in the process of testing and tuning OGGM for post-LIA
 simulations in the Alps. Reach out if you would like to know more about our
@@ -149,11 +155,11 @@ We recommend to increase the glacier map in this case, by setting
 `cfg.PARAMS['border']` to a larger value, e.g. 100 or 200. The larger this
 value, the larger the glacier can grow (the drawback is that simulations
 become slower and hungrier in memory because the number of grid points
-increases as well). We do not recommend to go larger than 250, however:
+increases as well). We do not recommend to go larger than 250. However, 
 for these cases it is likely that something else is wrong in your workflow
 or OGGM itself.
 
-What does the "CFL  error" mean?
+What does the "`CFL  error`" mean?
 --------------------------------
 
 This happens when the ice dynamics simulation is unstable. In OGGM we use an
@@ -167,14 +173,14 @@ or set your own thresholds for small time steps (at the cost of computation time
 Can I use my own Glacier inventory and outlines in OGGM?
 --------------------------------------------------------
 
-You will be able to include your own inventory and outlines in OGGM,
+Yes! You will be able to include your own inventory and glacier outlines in OGGM
 as long as the format of your `shapefile <https://en.wikipedia.org/wiki/Shapefile>`_
 is the same as the RGI file (v5 and v6 are supported). The attribute table should match
 the RGI format with the same amount of columns and variable names. See
 :ref:`outlines` for more information about the list of glacier attributes
 needed by OGGM.
 If you decide to use your own inventory (e.g. maybe because it has a better glacier outline) we
-encourage you to contact the `GLIMPS core team <https://www.glims.org/maps/contact_info.html>`_
+encourage you to contact the `GLIMS core team <https://www.glims.org/maps/contact_info.html>`_
 to let them know how your inventory improves the glacier digitalization compared to the
 current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
-have a look at our :ref:`tutorials`!
+have a look to this  `tutorial https://oggm.org/tutorials/notebooks/use_your_own_inventory.html`_!

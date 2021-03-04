@@ -1,6 +1,6 @@
 .. _assets:
 
-Assets & downloads
+Assets and downloads
 ==================
 
 This page lists some datasets that are either generated or used by OGGM and
