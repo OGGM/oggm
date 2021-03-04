@@ -162,7 +162,7 @@ for your research question, and to start your runs from level 5 if possible.
   ``dl_cache_dir`` folder (see :ref:`system-settings`).
 
 
-Available pre-processed configurations:
+Available pre-processed configurations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. admonition:: **New in version 1.4!**
