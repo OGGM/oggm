@@ -68,7 +68,7 @@ Currently, there are six available levels of pre-processing:
   running the bed inversion algorithm again) are not possible anymore.
 - **Level 5**: on top of level 4, an additional historical simulation is run
   from the RGI date to the last possible date of the baseline climate file
-  (currently december 2019 for CRU and ERA5).
+  (currently January 1st 2020 at 00H for CRU and ERA5).
   The state of the glacier (currently set as month 01 in hydrological year 2020) can then be
   used for future projections.
 
