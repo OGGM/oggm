@@ -351,48 +351,56 @@ class TestMassBalanceModels:
                                                     years=mbdf.index.values)
         assert_allclose(s, mbdf['MY_MB'])
 
-    def test_prcp_fac_update(self, hef_gdir):
+    def test_prcp_fac_temp_bias_update(self, hef_gdir):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
-                                             check_calib_params=False)
-        # save old precipitation time series
+        mb_mod = massbalance.PastMassBalance(gdir, bias=0)
+        # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
+        temp_old = mb_mod.temp.copy()
         prcp_fac_old = cfg.PARAMS['prcp_scaling_factor']
+        temp_bias_old = 0
         # basic checks
         assert mb_mod.prcp_fac == prcp_fac_old
         assert mb_mod._prcp_fac == prcp_fac_old
+        assert mb_mod.temp_bias == temp_bias_old
 
-        # increase prcp by factor of 10
+        # Deprecated attrs
+        with pytest.raises(AttributeError):
+            mb_mod.prcp_bias = 2
+        with pytest.raises(AttributeError):
+            mb_mod.prcp_bias
+
+        # increase prcp by factor of 10 and add a temperature bias of 1
         factor = 10
         mb_mod.prcp_fac = factor
+        temp_bias = 1
+        mb_mod.temp_bias = temp_bias
         assert mb_mod.prcp_fac == factor
         assert mb_mod._prcp_fac == factor
+        assert mb_mod.temp_bias == temp_bias
+        assert mb_mod._temp_bias == temp_bias
         prcp_new = mb_mod.prcp
+        temp_new = mb_mod.temp
         assert_allclose(prcp_new, prcp_old * factor / prcp_fac_old)
+        assert_allclose(temp_new, temp_old + temp_bias - temp_bias_old)
 
-        # check if it gets back to the old prcp time series
+        # check if it gets back to the old prcp/temp time series
         mb_mod.prcp_fac = prcp_fac_old
         assert mb_mod.prcp_fac == prcp_fac_old
         assert mb_mod._prcp_fac == prcp_fac_old
         assert_allclose(mb_mod.prcp, prcp_old)
 
+        mb_mod.temp_bias = temp_bias_old
+        assert mb_mod.temp_bias == temp_bias_old
+        assert mb_mod._temp_bias == temp_bias_old
+        assert_allclose(mb_mod.temp, temp_old)
+
+        # check if error occurs for invalid prcp_fac
         with pytest.raises(InvalidParamsError):
             mb_mod.prcp_fac = -100
-
-        # check if an error is raised if check_calib_params
-        # is true
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
-                                             check_calib_params=True)
-        with pytest.raises(InvalidWorkflowError):
-            mb_mod.prcp_fac = 10
-
-        # normally this should also be implemented for mu_star ...
-        # with pytest.raises(InvalidWorkflowError):
-        #    mb_mod.mu_star = 100
-
 
     @pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
                                     massbalance.ConstantMassBalance,
@@ -451,10 +459,10 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_ela(year=yrs[:10]),
                         mb_gw.get_ela(year=yrs[:10]))
 
-        mb.prcp_bias = 100
-        mb_gw.prcp_bias = 100
+        mb.prcp_fac = 100
+        mb_gw.prcp_fac = 100
 
-        assert mb.prcp_bias == mb_gw.prcp_bias
+        assert mb.prcp_fac == mb_gw.prcp_fac
 
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:10]),
                         mb_gw.get_specific_mb(year=yrs[:10]))
@@ -472,7 +480,6 @@ class TestMassBalanceModels:
             mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
                                                      rdn_prcp_bias_seed=2,
                                                      rdn_temp_bias_seed=3)
-
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
@@ -681,6 +688,7 @@ class TestMassBalanceModels:
         r_mbh = 0.
         r_mbh2 = 0.
         r_mbh3 = 0.
+
         mb_mod3.temp_bias = -0.5
         annual_previous = -999.
         for i, yr in enumerate(yrs):
@@ -736,15 +744,31 @@ class TestMassBalanceModels:
         gdir = hef_gdir
 
         ref_mod = massbalance.ConstantMassBalance(gdir, bias=0)
-        mb_mod = massbalance.UncertainMassBalance(ref_mod)
 
+        # only change bias: this works as before
+        mb_mod = massbalance.UncertainMassBalance(ref_mod,
+                                                  rdn_temp_bias_sigma=0,
+                                                  rdn_prcp_bias_sigma=0,
+                                                  rdn_bias_sigma=100)
         yrs = np.arange(100)
         h, w = gdir.get_inversion_flowline_hw()
         ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(ref_mb, check_mb)
+        assert np.std(unc_mb) > 50
+
+        mb_mod = massbalance.UncertainMassBalance(ref_mod)
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        temp_1 = ref_mod.mbmod.temp.copy()
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        temp_2 = ref_mod.mbmod.temp.copy()
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        temp_3 = ref_mod.mbmod.temp.copy()
         unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
 
+        assert_allclose(temp_1, temp_2)
+        assert_allclose(temp_1, temp_3)
         assert_allclose(ref_mb, check_mb)
         assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb) > 50
@@ -763,16 +787,6 @@ class TestMassBalanceModels:
                                                   rdn_temp_bias_sigma=0,
                                                   rdn_prcp_bias_sigma=0.1,
                                                   rdn_bias_sigma=0)
-        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
-        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
-        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
-        assert_allclose(ref_mb, check_mb)
-        assert np.std(unc_mb) > 50
-
-        mb_mod = massbalance.UncertainMassBalance(ref_mod,
-                                                  rdn_temp_bias_sigma=0,
-                                                  rdn_prcp_bias_sigma=0,
-                                                  rdn_bias_sigma=100)
         ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
@@ -808,6 +822,22 @@ class TestMassBalanceModels:
         assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb - ref_mb) > 50
         assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
+
+        # do the same but with larger _sigma:
+        mb_mod = massbalance.UncertainMassBalance(ref_mod,
+                                                  rdn_temp_bias_sigma=1)
+        ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        temp_1 = ref_mod.mbmod.temp.copy()
+        unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        temp_2 = ref_mod.mbmod.temp.copy()
+        check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
+        temp_3 = ref_mod.mbmod.temp.copy()
+        unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(temp_1, temp_2)
+        assert_allclose(temp_1, temp_3)
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
+        assert np.std(unc_mb) > 50
 
     def test_mb_performance(self, hef_gdir):
 

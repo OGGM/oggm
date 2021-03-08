@@ -10,8 +10,20 @@ v1.4.1 (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- Mass-balance models now do their computations with float64 arrays instead
+  of float32 (:pull:`1211`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
+- `prcp_bias` renamed to `prcp_fac` in mass-balance models (:pull:`1211`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
+
 Enhancements
 ~~~~~~~~~~~~
+
+- Mass-balance models now properly refer to `prcp_fac` (was incorrectly named
+  "bias") (:pull:`1211`).
+  Additionally, the `run_*` tasks in `oggm.core.flowline` can now also adjust
+  the precipitation factor for sensitivity experiments.
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
 
 Bug fixes
 ~~~~~~~~~

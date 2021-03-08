@@ -417,9 +417,9 @@ def historical_climate_qc(gdir):
     with utils.ncDataset(fpath) as nc:
         # time
         # Read timeseries
-        itemp = nc.variables['temp'][:]
+        itemp = nc.variables['temp'][:].astype(np.float64)
         if 'gradient' in nc.variables:
-            igrad = nc.variables['gradient'][:]
+            igrad = nc.variables['gradient'][:].astype(np.float64)
             # Security for stuff that can happen with local gradients
             igrad = np.where(~np.isfinite(igrad), default_grad, igrad)
             igrad = utils.clip_array(igrad, g_minmax[0], g_minmax[1])
@@ -549,10 +549,10 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
         time = time[p0:p1+1]
 
         # Read timeseries
-        itemp = nc.variables['temp'][p0:p1+1]
-        iprcp = nc.variables['prcp'][p0:p1+1]
+        itemp = nc.variables['temp'][p0:p1+1].astype(np.float64)
+        iprcp = nc.variables['prcp'][p0:p1+1].astype(np.float64)
         if 'gradient' in nc.variables:
-            igrad = nc.variables['gradient'][p0:p1+1]
+            igrad = nc.variables['gradient'][p0:p1+1].astype(np.float64)
             # Security for stuff that can happen with local gradients
             igrad = np.where(~np.isfinite(igrad), default_grad, igrad)
             igrad = utils.clip_array(igrad, g_minmax[0], g_minmax[1])
