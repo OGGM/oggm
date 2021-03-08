@@ -2196,8 +2196,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        zero_initial_glacier=False,
-                       unique_samples=False, check_calib_params=True,
-                       **kwargs):
+                       unique_samples=False, **kwargs):
     """Runs the random mass-balance model for a given number of years.
 
     This will initialize a
@@ -2250,11 +2249,6 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         per random climate period-length
         if false, every model year will be chosen from the random climate
         period with the same probability
-    check_calib_params : bool
-        OGGM will try hard not to use wrongly calibrated mu* by checking
-        the parameters used during calibration and the ones you are
-        using at run time. If they don't match, it will raise an error.
-        Set to False to suppress this check.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2264,8 +2258,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                                      bias=bias, seed=seed,
                                      filename=climate_filename,
                                      input_filesuffix=climate_input_filesuffix,
-                                     unique_samples=unique_samples,
-                                     check_calib_params=check_calib_params)
+                                     unique_samples=unique_samples)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
@@ -2289,9 +2282,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
                          init_model_fls=None,
-                         zero_initial_glacier=False,
-                         check_calib_params=True,
-                         **kwargs):
+                         zero_initial_glacier=False, **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
     This will initialize a
@@ -2336,11 +2327,6 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
-    check_calib_params : bool
-        OGGM will try hard not to use wrongly calibrated mu* by checking
-        the parameters used during calibration and the ones you are
-        using at run time. If they don't match, it will raise an error.
-        Set to False to suppress this check.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2348,8 +2334,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
                                      y0=y0, halfsize=halfsize,
                                      bias=bias, filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix,
-                                     check_calib_params=check_calib_params)
+                                     input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
@@ -2372,8 +2357,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
                           bias=None, temperature_bias=None,
-                          precipitation_factor=None, check_calib_params=True,
-                          **kwargs):
+                          precipitation_factor=None, **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
@@ -2428,11 +2412,6 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
-    check_calib_params : bool
-        OGGM will try hard not to use wrongly calibrated mu* by checking
-        the parameters used during calibration and the ones you are
-        using at run time. If they don't match, it will raise an error.
-        Set to False to suppress this check.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2467,8 +2446,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
                                      filename=climate_filename, bias=bias,
-                                     input_filesuffix=climate_input_filesuffix,
-                                     check_calib_params=check_calib_params)
+                                     input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias

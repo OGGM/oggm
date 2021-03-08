@@ -310,8 +310,6 @@ class TestMassBalanceModels:
                                    atol=1e-2)
 
         mb_mod = massbalance.PastMassBalance(gdir)
-        # set that to False in order to allow temp_bias to change!
-        mb_mod.check_calib_params = False
         for yr in mbdf.index.values:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
@@ -358,8 +356,7 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
-                                             check_calib_params=False)
+        mb_mod = massbalance.PastMassBalance(gdir, bias=0)
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
@@ -398,81 +395,9 @@ class TestMassBalanceModels:
         # avoid adding numbers of different magnitudes
         assert_allclose(mb_mod.temp, temp_old, rtol=1e-6)
 
+        # check if error occurs for invalid prcp_fac
         with pytest.raises(InvalidParamsError):
             mb_mod.prcp_fac = -100
-
-        # check if an error is raised if check_calib_params
-        # is true
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
-                                             check_calib_params=True)
-        with pytest.raises(InvalidWorkflowError):
-            mb_mod.prcp_fac = 10
-        with pytest.raises(InvalidWorkflowError):
-            mb_mod.temp_bias = 1
-
-        # normally this should also be implemented for mu_star ...
-        # with pytest.raises(InvalidWorkflowError):
-        #    mb_mod.mu_star = 100
-
-    def test_prcp_fac_temp_bias_update_constant_mb(self, hef_gdir):
-
-        gdir = hef_gdir
-        init_present_time_glacier(gdir)
-
-        mb_mod = massbalance.ConstantMassBalance(gdir, bias=0,
-                                             check_calib_params=False)
-        # save old precipitation/temperature time series
-        prcp_old = mb_mod.mbmod.prcp.copy()
-        temp_old = mb_mod.mbmod.temp.copy()
-        prcp_fac_old = cfg.PARAMS['prcp_scaling_factor']
-        temp_bias_old = 0
-        # basic checks
-        assert mb_mod.prcp_fac == prcp_fac_old
-        assert mb_mod.mbmod._prcp_fac == prcp_fac_old
-        assert mb_mod.temp_bias == temp_bias_old
-
-        # increase prcp by factor of 10 and add a temperature bias of 1
-        factor = 10
-        mb_mod.prcp_fac = factor
-        temp_bias = 1
-        mb_mod.temp_bias = temp_bias
-        assert mb_mod.prcp_fac == factor
-        assert mb_mod.mbmod._prcp_fac == factor
-        assert mb_mod.temp_bias == temp_bias
-        assert mb_mod.mbmod._temp_bias == temp_bias
-        prcp_new = mb_mod.mbmod.prcp
-        temp_new = mb_mod.mbmod.temp
-        assert_allclose(prcp_new, prcp_old * factor / prcp_fac_old)
-        assert_allclose(temp_new, temp_old + temp_bias - temp_bias_old)
-
-        # check if it gets back to the old prcp/temp time series
-        mb_mod.prcp_fac = prcp_fac_old
-        assert mb_mod.prcp_fac == prcp_fac_old
-        assert mb_mod.mbmod._prcp_fac == prcp_fac_old
-        assert_allclose(mb_mod.mbmod.prcp, prcp_old)
-
-        mb_mod.temp_bias = temp_bias_old
-        assert mb_mod.temp_bias == temp_bias_old
-        assert mb_mod.mbmod._temp_bias == temp_bias_old
-        # not perfectly equal because of some rounding issues?
-        assert_allclose(mb_mod.mbmod.temp, temp_old, rtol=1e-6)
-
-        with pytest.raises(InvalidParamsError):
-            mb_mod.prcp_fac = -100
-
-        # check if an error is raised if check_calib_params
-        # is true
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0,
-                                             check_calib_params=True)
-        with pytest.raises(InvalidWorkflowError):
-            mb_mod.prcp_fac = 10
-        with pytest.raises(InvalidWorkflowError):
-            mb_mod.temp_bias = 1
-
-        # normally this should also be implemented for mu_star ...
-        # with pytest.raises(InvalidWorkflowError):
-        #    mb_mod.mu_star = 100
-
 
     @pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
                                     massbalance.ConstantMassBalance,
@@ -495,13 +420,9 @@ class TestMassBalanceModels:
         else:
             kwargs = {}
 
-        # set check_calib_params to False in order to allow
-        # temp_bias/prcp_fac to change!
-        mb = cl(gdir, check_calib_params=False, **kwargs)
+        mb = cl(gdir, **kwargs)
         mb_gw = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
                                                         mb_model_class=cl,
-                                                        check_calib_params=
-                                                        False,
                                                         **kwargs)
 
         assert_allclose(mb.get_specific_mb(h, w, year=yrs),
@@ -547,11 +468,9 @@ class TestMassBalanceModels:
                         mb_gw.get_ela(year=yrs[:10]))
 
         if cl is massbalance.PastMassBalance:
-            mb = cl(gdir, check_calib_params=False)
+            mb = cl(gdir)
             mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
-                                                            mb_model_class=cl,
-                                                            check_calib_params=
-                                                            False)
+                                                            mb_model_class=cl)
             mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
                                                   rdn_prcp_bias_seed=2,
                                                   rdn_temp_bias_seed=3)
@@ -585,8 +504,7 @@ class TestMassBalanceModels:
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0., otmb, atol=0.2)
 
-        cmb_mod = massbalance.ConstantMassBalance(gdir,
-                                                  check_calib_params=False)
+        cmb_mod = massbalance.ConstantMassBalance(gdir)
         ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0, otmb + bias, atol=0.2)
@@ -672,8 +590,7 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
 
         ref_mod = massbalance.ConstantMassBalance(gdir)
-        mb_mod = massbalance.RandomMassBalance(gdir, seed=10,
-                                               check_calib_params=False)
+        mb_mod = massbalance.RandomMassBalance(gdir, seed=10)
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -753,8 +670,7 @@ class TestMassBalanceModels:
                                                 halfsize=15)
         mb_mod3 = massbalance.RandomMassBalance(gdir, seed=20,
                                                 unique_samples=True,
-                                                halfsize=15,
-                                                check_calib_params=False)
+                                                halfsize=15)
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -827,8 +743,7 @@ class TestMassBalanceModels:
 
         gdir = hef_gdir
 
-        ref_mod = massbalance.ConstantMassBalance(gdir, bias=0,
-                                                  check_calib_params=False)
+        ref_mod = massbalance.ConstantMassBalance(gdir, bias=0)
 
         # only change bias: this works as before
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
@@ -888,7 +803,7 @@ class TestMassBalanceModels:
 
 
         # Other MBs
-        ref_mod = massbalance.PastMassBalance(gdir, check_calib_params=False)
+        ref_mod = massbalance.PastMassBalance(gdir)
         mb_mod = massbalance.UncertainMassBalance(ref_mod)
 
         yrs = np.arange(100) + 1901
@@ -903,7 +818,7 @@ class TestMassBalanceModels:
         assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
 
         # Other MBs
-        ref_mod = massbalance.RandomMassBalance(gdir, check_calib_params=False)
+        ref_mod = massbalance.RandomMassBalance(gdir)
         mb_mod = massbalance.UncertainMassBalance(ref_mod)
 
         yrs = np.arange(100) + 1901

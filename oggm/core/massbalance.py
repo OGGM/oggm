@@ -39,6 +39,23 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         self.hemisphere = None
         self.rho = cfg.PARAMS['ice_density']
 
+
+    # give a warning if prcp_bias is used:
+    @property
+    def prcp_bias(self):
+        warnings.warn('prcp_bias has been renamed to prcp_fac as it is '
+                      'a multiplicative factor, please use prcp_fac '
+                      'instead.') #, DeprecationWarning)
+        # if a DeprecationWarning is used, it is not visible at least for me ...
+        return self.prcp_fac
+
+    @prcp_bias.setter
+    def prcp_bias(self, new_prcp_fac):
+        raise AttributeError('prcp_bias has been renamed to prcp_fac as it is '
+                             'a multiplicative factor. If you want to '
+                             'change the precipitation scaling factor use '
+                             'prcp_fac instead.')
+
     def get_monthly_mb(self, heights, year=None, fl_id=None, fls=None):
         """Monthly mass-balance at given altitude(s) for a moment in time.
 
@@ -364,9 +381,6 @@ class PastMassBalance(MassBalanceModel):
         self._prcp_fac = prcp_fac
         # same for temp bias:
         self._temp_bias = 0
-        # need to check this when prcp_fac should be updated
-        # normally should also be checked when mu_star is updated?
-        self.check_calib_params = check_calib_params
 
         # Read file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
@@ -406,15 +420,6 @@ class PastMassBalance(MassBalanceModel):
 
     @prcp_fac.setter
     def prcp_fac(self, new_prcp_fac):
-        # OK, this could get problematic when mass balance is calibrated
-        # to other values
-        # Check the climate related params to the GlacierDir to make sure
-        if self.check_calib_params:
-            msg = ('You want to change the precipitation scaling'
-                   'factor which was used for calibration. Set '
-                   '`check_calib_params=False` to ignore this '
-                   'warning.')
-            raise InvalidWorkflowError(msg)
         # just to check that no invalid prcp_factors are used
         if new_prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac has to be above zero!')
@@ -423,15 +428,6 @@ class PastMassBalance(MassBalanceModel):
         # again ...
         self._prcp_fac = new_prcp_fac
 
-
-    # give a warning if prcp_bias is used:
-    @property
-    def prcp_bias(self):
-        warnings.warn('prcp_bias has been renamed to prcp_fac as it is'
-                             'a multiplicative factor, please use prcp_fac'
-                             'instead', DeprecationWarning)
-        return self.prcp_fac
-
     # same for temp_bias:
     @property
     def temp_bias(self):
@@ -439,15 +435,6 @@ class PastMassBalance(MassBalanceModel):
 
     @temp_bias.setter
     def temp_bias(self, new_temp_bias):
-        # OK, this could get problematic when mass balance is calibrated
-        # to other values
-        # Check the climate related params to the GlacierDir to make sure
-        if self.check_calib_params:
-            msg = ('You want to change the temperature bias'
-                   'which was used for calibration. Set '
-                   '`check_calib_params=False` to ignore this '
-                   'warning.')
-            raise InvalidWorkflowError(msg)
         self.temp += new_temp_bias - self._temp_bias
         # update old temp_bias in order that it can be updated
         # again ...
@@ -650,14 +637,6 @@ class ConstantMassBalance(MassBalanceModel):
                 delattr(self, attr_name)
         self.mbmod.prcp_fac = value
 
-    # give a warning if prcp_bias is used:
-    @property
-    def prcp_bias(self):
-        warnings.warn('prcp_bias has been renamed to prcp_fac as it is'
-                             'a multiplicative factor, please use prcp_fac'
-                             'instead', DeprecationWarning)
-        return self.prcp_fac
-
     @property
     def bias(self):
         """Residual bias to apply to the original series."""
@@ -834,13 +813,6 @@ class RandomMassBalance(MassBalanceModel):
         self.mbmod.prcp_fac = value
 
     @property
-    def prcp_bias(self):
-        warnings.warn('prcp_bias has been renamed to prcp_fac as it is'
-                             'a multiplicative factor, please use prcp_fac'
-                             'instead', DeprecationWarning)
-        return self.prcp_fac
-
-    @property
     def bias(self):
         """Residual bias to apply to the original series."""
         return self.mbmod.bias
@@ -918,8 +890,6 @@ class UncertainMassBalance(MassBalanceModel):
         """
         super(UncertainMassBalance, self).__init__()
         # the aim here is to change temp_bias and prcp_fac so
-        # check_calib_params has to be set to False
-        basis_model.check_calib_params = False
         self.mbmod = basis_model
         self.hemisphere = basis_model.hemisphere
         self.valid_bounds = self.mbmod.valid_bounds
@@ -956,14 +926,6 @@ class UncertainMassBalance(MassBalanceModel):
     def prcp_fac(self, value):
         """Precipitation factor to apply to the original series."""
         self.mbmod.prcp_fac = value
-
-    # give a warning if prcp_bias is used:
-    @property
-    def prcp_bias(self):
-        warnings.warn('prcp_bias has been renamed to prcp_fac as it is'
-                      'a multiplicative factor, please use prcp_fac'
-                      'instead', DeprecationWarning)
-        return self.prcp_fac
 
     def _get_state_temp(self, year):
         year = int(year)
@@ -1133,14 +1095,6 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         """Precipitation factor to apply to the original series."""
         for mbmod in self.flowline_mb_models:
             mbmod.prcp_fac = value
-
-    # give a warning if prcp_bias is used:
-    @property
-    def prcp_bias(self):
-        warnings.warn('prcp_bias has been renamed to prcp_fac as it is'
-                      'a multiplicative factor, please use prcp_fac'
-                             'instead', DeprecationWarning)
-        return self.prcp_fac
 
     @property
     def bias(self):
