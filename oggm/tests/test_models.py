@@ -367,10 +367,16 @@ class TestMassBalanceModels:
         assert mb_mod._prcp_fac == prcp_fac_old
         assert mb_mod.temp_bias == temp_bias_old
 
+        # Deprecated attrs
+        with pytest.raises(AttributeError):
+            mb_mod.prcp_bias = 2
+        with pytest.raises(AttributeError):
+            mb_mod.prcp_bias
+
         # increase prcp by factor of 10 and add a temperature bias of 1
         factor = 10
         mb_mod.prcp_fac = factor
-        temp_bias = 0.1
+        temp_bias = 1
         mb_mod.temp_bias = temp_bias
         assert mb_mod.prcp_fac == factor
         assert mb_mod._prcp_fac == factor
