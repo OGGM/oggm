@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import pandas as pd
 import netCDF4
-import warnings
 from scipy.interpolate import interp1d
 from scipy import optimize as optimization
 # Locals
@@ -39,15 +38,12 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         self.hemisphere = None
         self.rho = cfg.PARAMS['ice_density']
 
-
-    # give a warning if prcp_bias is used:
+    # TODO: remove this in OGGM v1.5
     @property
     def prcp_bias(self):
-        warnings.warn('prcp_bias has been renamed to prcp_fac as it is '
-                      'a multiplicative factor, please use prcp_fac '
-                      'instead.') #, DeprecationWarning)
-        # if a DeprecationWarning is used, it is not visible at least for me ...
-        return self.prcp_fac
+        raise AttributeError('prcp_bias has been renamed to prcp_fac as it is '
+                             'a multiplicative factor, please use prcp_fac '
+                             'instead.')
 
     @prcp_bias.setter
     def prcp_bias(self, new_prcp_fac):
@@ -379,8 +375,8 @@ class PastMassBalance(MassBalanceModel):
         # to allow prcp_fac to be changed after instantiation
         # prescribe the prcp_fac as it is instantiated
         self._prcp_fac = prcp_fac
-        # same for temp bias:
-        self._temp_bias = 0
+        # same for temp bias
+        self._temp_bias = 0.
 
         # Read file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
@@ -396,11 +392,11 @@ class PastMassBalance(MassBalanceModel):
             self.years = np.repeat(np.arange(time[-1].year-ny+1,
                                              time[-1].year+1), 12)
             self.months = np.tile(np.arange(1, 13), ny)
-            # Read timeseries and correct it:
-            self.temp = nc.variables['temp'][:] + self._temp_bias
-            self.prcp = nc.variables['prcp'][:] * self._prcp_fac
+            # Read timeseries and correct it
+            self.temp = nc.variables['temp'][:].astype(np.float64) + self._temp_bias
+            self.prcp = nc.variables['prcp'][:].astype(np.float64) * self._prcp_fac
             if 'gradient' in nc.variables:
-                grad = nc.variables['gradient'][:]
+                grad = nc.variables['gradient'][:].astype(np.float64)
                 # Security for stuff that can happen with local gradients
                 g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
                 grad = np.where(~np.isfinite(grad), default_grad, grad)
@@ -424,8 +420,7 @@ class PastMassBalance(MassBalanceModel):
         if new_prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac has to be above zero!')
         self.prcp *= new_prcp_fac / self._prcp_fac
-        # update old prcp_fac in order that it can be updated
-        # again ...
+        # update old prcp_fac in order that it can be updated again ...
         self._prcp_fac = new_prcp_fac
 
     # same for temp_bias:
@@ -436,8 +431,7 @@ class PastMassBalance(MassBalanceModel):
     @temp_bias.setter
     def temp_bias(self, new_temp_bias):
         self.temp += new_temp_bias - self._temp_bias
-        # update old temp_bias in order that it can be updated
-        # again ...
+        # update old temp_bias in order that it can be updated again ...
         self._temp_bias = new_temp_bias
 
     def get_monthly_climate(self, heights, year=None):
@@ -459,8 +453,7 @@ class PastMassBalance(MassBalanceModel):
                              '[{}, {}]'.format(y, self.ys, self.ye))
         pok = np.where((self.years == y) & (self.months == m))[0][0]
 
-        # Read already temperature bias and precipitation factor corrected
-        # timeseries
+        # Read already (temperature bias and precipitation factor corrected!)
         itemp = self.temp[pok]
         iprcp = self.prcp[pok]
         igrad = self.grad[pok]
@@ -491,8 +484,7 @@ class PastMassBalance(MassBalanceModel):
         if len(pok) < 1:
             raise ValueError('Year {} not in record'.format(int(year)))
 
-        # Read already temperature bias and precipitation factor corrected
-        # timeseries
+        # Read already (temperature bias and precipitation factor corrected!)
         itemp = self.temp[pok]
         iprcp = self.prcp[pok]
         igrad = self.grad[pok]
@@ -756,6 +748,8 @@ class RandomMassBalance(MassBalanceModel):
             once per random climate period-length
             if false, every model year will be chosen from the random climate
             period with the same probability
+        **kwargs:
+            kyeword arguments to pass to the PastMassBalance model
         """
 
         super(RandomMassBalance, self).__init__()
@@ -902,7 +896,6 @@ class UncertainMassBalance(MassBalanceModel):
         self._state_temp = dict()
         self._state_prcp = dict()
         self._state_bias = dict()
-
 
     @property
     def temp_bias(self):

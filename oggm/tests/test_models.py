@@ -349,7 +349,7 @@ class TestMassBalanceModels:
 
         s = massbalance.fixed_geometry_mass_balance(gdir,
                                                     years=mbdf.index.values)
-        assert_allclose(s, mbdf['MY_MB'], rtol=1e-6)
+        assert_allclose(s, mbdf['MY_MB'])
 
     def test_prcp_fac_temp_bias_update(self, hef_gdir):
 
@@ -390,10 +390,7 @@ class TestMassBalanceModels:
         mb_mod.temp_bias = temp_bias_old
         assert mb_mod.temp_bias == temp_bias_old
         assert mb_mod._temp_bias == temp_bias_old
-        # not perfectly equal because of some rounding issues when
-        # doing addition, this effect is stronger for -> need to
-        # avoid adding numbers of different magnitudes
-        assert_allclose(mb_mod.temp, temp_old, rtol=1e-6)
+        assert_allclose(mb_mod.temp, temp_old)
 
         # check if error occurs for invalid prcp_fac
         with pytest.raises(InvalidParamsError):
@@ -477,11 +474,8 @@ class TestMassBalanceModels:
             mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
                                                      rdn_prcp_bias_seed=2,
                                                      rdn_temp_bias_seed=3)
-        # here is a problem with UncertainMassBalance ...
-        # it needs rtol=1e-4 to work now
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
-                        mb_gw.get_specific_mb(fls=fls, year=yrs[:30]),
-                        rtol=1e-4)
+                        mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
         # ELA won't pass because of API incompatibility
         # assert_allclose(mb.get_ela(year=yrs[:30]),
@@ -766,20 +760,12 @@ class TestMassBalanceModels:
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         temp_3 = ref_mod.mbmod.temp.copy()
         unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
-        # problem: UncertainMassBalance does something to ref_mod,
-        # it slightly changes the precipitation and temperature time series
-        # maybe there is a problem because of rounding issues???
-        # because I always update the time/prcp time series immediately...
-        # this might be the reason that the tests fail, but actually the tests
-        # fail more with larger _sigma, (see below)
-        # so there must be something in ref_mb that changes ref_mod stronger
-        # with a larger _sigma, the temp_bias and prcp_fac stay however the same
-        assert_allclose(temp_1, temp_2, rtol=1e-5)
-        assert_allclose(temp_1, temp_3, rtol=1e-5)
-        assert_allclose(ref_mb, check_mb, rtol=1e-2) # 0.0048
-        assert_allclose(unc_mb, unc2_mb, rtol=1e-3)
-        assert np.std(unc_mb) > 50
 
+        assert_allclose(temp_1, temp_2)
+        assert_allclose(temp_1, temp_3)
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
+        assert np.std(unc_mb) > 50
 
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
                                                   rdn_temp_bias_sigma=0.1,
@@ -788,7 +774,7 @@ class TestMassBalanceModels:
         ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
-        assert_allclose(ref_mb, check_mb, rtol=1e-3)
+        assert_allclose(ref_mb, check_mb)
         assert np.std(unc_mb) > 50
 
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
@@ -798,9 +784,8 @@ class TestMassBalanceModels:
         ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
-        assert_allclose(ref_mb, check_mb, rtol=1e-4)
+        assert_allclose(ref_mb, check_mb)
         assert np.std(unc_mb) > 50
-
 
         # Other MBs
         ref_mod = massbalance.PastMassBalance(gdir)
@@ -812,8 +797,8 @@ class TestMassBalanceModels:
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
 
-        assert_allclose(ref_mb, check_mb, rtol=1e-4)
-        assert_allclose(unc_mb, unc2_mb, rtol=1e-4)
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb - ref_mb) > 50
         assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
 
@@ -827,8 +812,8 @@ class TestMassBalanceModels:
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
 
-        assert_allclose(ref_mb, check_mb, rtol=1e-4)
-        assert_allclose(unc_mb, unc2_mb, rtol=1e-4)
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb - ref_mb) > 50
         assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
 
@@ -842,14 +827,11 @@ class TestMassBalanceModels:
         check_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         temp_3 = ref_mod.mbmod.temp.copy()
         unc2_mb = mb_mod.get_specific_mb(h, w, year=yrs)
-        assert_allclose(temp_1, temp_2, rtol=1e-5)
-        assert_allclose(temp_1, temp_3, rtol=1e-5)
-        assert_allclose(ref_mb, check_mb, rtol=0.05) # max rel: 0.015
-        assert_allclose(unc_mb, unc2_mb, rtol=1e-3)
+        assert_allclose(temp_1, temp_2)
+        assert_allclose(temp_1, temp_3)
+        assert_allclose(ref_mb, check_mb)
+        assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb) > 50
-
-        # after that ref_mod is modified that much that the other tests fail
-        # as well
 
     def test_mb_performance(self, hef_gdir):
 
