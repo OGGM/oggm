@@ -2196,7 +2196,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         store_model_geometry = cfg.PARAMS['store_model_geometry']
 
     if store_model_geometry:
-        geom_path = gdir.get_filepath('model_run',
+        geom_path = gdir.get_filepath('model_geometry',
                                       filesuffix=output_filesuffix,
                                       delete=True)
     else:
@@ -2491,7 +2491,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     """
 
     if init_model_filesuffix is not None:
-        fp = gdir.get_filepath('model_run', filesuffix=init_model_filesuffix)
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
         with FileModel(fp) as fmod:
             if init_model_yr is None:
                 init_model_yr = fmod.last_yr

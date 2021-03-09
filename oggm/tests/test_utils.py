@@ -1004,7 +1004,7 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = FileModel(gdir.get_filepath('model_run',
+        model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
         assert model.y0 == 2004
         assert model.last_yr == 2015
@@ -1107,7 +1107,7 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = FileModel(gdir.get_filepath('model_run',
+        model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
         assert model.y0 == 2004
         assert model.last_yr == 2015

@@ -131,7 +131,7 @@ def _find_inital_glacier(final_model, firstguess_mb, y0, y1,
     raise RuntimeError('Did not converge after {} iterations'.format(c))
 
 
-@entity_task(log, writes=['model_run'])
+@entity_task(log, writes=['model_geometry'])
 def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                      write_steps=True):
     """Iterative search for the glacier in year y0.
@@ -158,7 +158,7 @@ def iterative_initial_glacier_search(gdir, y0=None, init_bias=0., rtol=0.005,
                                                  init_bias=init_bias,
                                                  ref_area=ref_area)
 
-    path = gdir.get_filepath('model_run', delete=True)
+    path = gdir.get_filepath('model_geometry', delete=True)
     if write_steps:
         past_model.run_until_and_store(y1, path=path)
     else:
@@ -190,7 +190,7 @@ def test_find_t0(self):
                                               init_bias=init_bias,
                                               rtol=rtol, write_steps=True)
 
-    past_model = flowline.FileModel(gdir.get_filepath('model_run'))
+    past_model = flowline.FileModel(gdir.get_filepath('model_geometry'))
 
     vol_start = past_model.volume_km3
     bef_fls = copy.deepcopy(past_model.fls)

@@ -288,9 +288,13 @@ _doc = ('When using a linear mass-balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
 
-_doc = ('A netcdf file containing enough information to reconstruct the '
-        'entire flowline glacier along the run (can be data expensive).')
+_doc = 'Deprecated: renamed to `model_geometry`.'
 BASENAMES['model_run'] = ('model_run.nc', _doc)
+
+_doc = ('A netcdf file containing enough information to reconstruct the '
+        'entire flowline glacier geometry along the run (can be expensive'
+        'in disk space).')
+BASENAMES['model_geometry'] = ('model_geometry.nc', _doc)
 
 _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')

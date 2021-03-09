@@ -2374,7 +2374,8 @@ class GlacierDirectory(object):
         """The glacier's RGI area (m2)."""
         return self.rgi_area_km2 * 10**6
 
-    def get_filepath(self, filename, delete=False, filesuffix=''):
+    def get_filepath(self, filename, delete=False, filesuffix='',
+                     _deprecation_check=True):
         """Absolute path to a specific file.
 
         Parameters
@@ -2395,6 +2396,19 @@ class GlacierDirectory(object):
         if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
+        deprecated = {'climate_monthly': 'climate_historical',
+                      'model_run': 'model_geometry',
+                     }
+        if _deprecation_check:
+            for old, new in deprecated.items():
+                if filename == old:
+                    warnings.warn('Basename `{}` is deprecated and replaced by'
+                                  '`{}`. Please update your code soon.'
+                                  ''.format(old, new),
+                                  DeprecationWarning)
+                    self.get_filepath(new, delete=delete,
+                                      filesuffix=filesuffix)
+
         fname = cfg.BASENAMES[filename]
         if filesuffix:
             fname = fname.split('.')
@@ -2403,17 +2417,20 @@ class GlacierDirectory(object):
 
         out = os.path.join(self.dir, fname)
 
-        if filename == 'climate_historical' and not os.path.exists(out):
-            # For backwards compatibility, in these cases try climate_monthly
-            if self.has_file('climate_monthly'):
-                return self.get_filepath('climate_monthly', delete=delete,
-                                         filesuffix=filesuffix)
+        # Deprecation cycle:
+        for old, new in deprecated.items():
+            if filename == new and not os.path.exists(out):
+                # For backwards compatibility, in these cases try old
+                if self.has_file(old, _deprecation_check=False):
+                    return self.get_filepath(old, delete=delete,
+                                             filesuffix=filesuffix,
+                                             _deprecation_check=False)
 
         if delete and os.path.isfile(out):
             os.remove(out)
         return out
 
-    def has_file(self, filename, filesuffix=''):
+    def has_file(self, filename, filesuffix='', _deprecation_check=True):
         """Checks if a file exists.
 
         Parameters
@@ -2421,7 +2438,8 @@ class GlacierDirectory(object):
         filename : str
             file name (must be listed in cfg.BASENAME)
         """
-        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        fp = self.get_filepath(filename, filesuffix=filesuffix,
+                               _deprecation_check=_deprecation_check)
         if '.shp' in fp and cfg.PARAMS['use_tar_shapefiles']:
             fp = fp.replace('.shp', '.tar')
             if cfg.PARAMS['use_compression']:

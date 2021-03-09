@@ -2754,8 +2754,8 @@ class TestHEF:
                              glen_a=inversion_params['inversion_glen_a'],
                              bias=0, output_filesuffix='_ct')
 
-        paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
-                 hef_gdir.get_filepath('model_run', filesuffix='_ct'),
+        paths = [hef_gdir.get_filepath('model_geometry', filesuffix='_rdn'),
+                 hef_gdir.get_filepath('model_geometry', filesuffix='_ct'),
                  ]
 
         for path in paths:
@@ -2792,8 +2792,8 @@ class TestHEF:
             with xr.open_dataset(path) as ds:
                 assert ds.calendar_month[0] == 4
 
-        paths = [gdir_sh.get_filepath('model_run', filesuffix='_rdn'),
-                 gdir_sh.get_filepath('model_run', filesuffix='_ct'),
+        paths = [gdir_sh.get_filepath('model_geometry', filesuffix='_rdn'),
+                 gdir_sh.get_filepath('model_geometry', filesuffix='_ct'),
                  ]
         for path in paths:
             with FileModel(path) as model:
@@ -2868,7 +2868,7 @@ class TestHEF:
         # Make a dummy run for 0 years
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
 
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2877,7 +2877,7 @@ class TestHEF:
         # Again
         run_from_climate_data(hef_gdir, ye=2004, init_model_filesuffix='_1',
                               output_filesuffix='_2')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2899,7 +2899,7 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ye=2002, max_ys=2002,
                               output_filesuffix='_1')
 
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2908,7 +2908,7 @@ class TestHEF:
         # Again
         run_from_climate_data(hef_gdir, ye=2005, min_ys=2005,
                               output_filesuffix='_2')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2918,7 +2918,7 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ys=2002, ye=2003,
                               init_model_filesuffix='_1',
                               output_filesuffix='_3')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_3')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_3')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
@@ -2928,7 +2928,7 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ys=None, ye=None,
                               init_model_filesuffix='_1',
                               output_filesuffix='_4')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_4')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_4')
         with FileModel(fp) as fmod:
             assert fmod.y0 == 2002
             assert fmod.last_yr == 2004
