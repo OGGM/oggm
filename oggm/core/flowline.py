@@ -2433,10 +2433,11 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         except AttributeError:
             ys = gdir.rgi_date
         # The RGI timestamp is in calendar date - we convert to hydro date,
-        # i.e. 2003 becomes 2004 (so that we don't count the MB year 2003
-        # in the simulation)
+        # i.e. 2003 becomes 2004 if hydro_month is not 1 (January)
+        # (so that we don't count the MB year 2003 in the simulation)
         # See also: https://github.com/OGGM/oggm/issues/1020
-        ys += 1
+        if cfg.PARAMS['hydro_month_'+gdir.hemisphere] != 1:
+            ys += 1
 
     # Final crop
     if min_ys is not None:

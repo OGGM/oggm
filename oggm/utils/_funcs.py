@@ -609,7 +609,10 @@ def hydrodate_to_calendardate(y, m, start_month=None):
     e = 13 - start_month
     try:
         if m <= e:
-            out_y = y - 1
+            if start_month == 1:
+                out_y = y
+            else:
+                out_y = y - 1
             out_m = m + start_month - 1
         else:
             out_y = y
@@ -645,7 +648,10 @@ def calendardate_to_hydrodate(y, m, start_month=None):
 
     try:
         if m >= start_month:
-            out_y = y + 1
+            if start_month == 1:
+                out_y = y
+            else:
+                out_y = y + 1
             out_m = m - start_month + 1
         else:
             out_y = y
