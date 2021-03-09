@@ -42,7 +42,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """String Representation of the mass-balance model"""
         summary = ['<oggm.MassBalanceModel>']
         summary += ['  Class: ' + self.__class__.__name__]
-        summary += ['  Attributes: ']
+        summary += ['  Attributes:']
         # Add all scalar attributes
         for k, v in self.__dict__.items():
             if np.isscalar(v) and not k.startswith('_'):

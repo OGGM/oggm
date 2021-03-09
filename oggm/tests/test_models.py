@@ -357,7 +357,7 @@ class TestMassBalanceModels:
         expected = dedent("""\
         <oggm.MassBalanceModel>
           Class: PastMassBalance
-          Attributes: 
+          Attributes:
             - hemisphere: nh
             - rho: 900.0
             - mu_star: 198.9489403133207
@@ -1516,15 +1516,15 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
+        if os.path.exists(geom_path):
+            os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        model.run_until_and_store(500, run_path=run_path,
+        model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path,
                                   store_monthly_step=True)
 
@@ -1534,7 +1534,7 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        with FileModel(run_path) as fmodel:
+        with FileModel(geom_path) as fmodel:
             assert fmodel.last_yr == 500
             fls = dummy_constant_bed()
             model = FluxBasedModel(fls, mb_model=mb, y0=0.,
@@ -1568,10 +1568,10 @@ class TestIO():
     @pytest.mark.slow
     def test_calving_filemodel(self, class_case_dir):
         y1 = 1200
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
+        if os.path.exists(geom_path):
+            os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
         model = FluxBasedModel(bu_tidewater_bed(),
@@ -1579,7 +1579,7 @@ class TestIO():
                                is_tidewater=True,
                                flux_gate=0.12, do_kcalving=True,
                                calving_k=0.2)
-        _, diag = model.run_until_and_store(y1, run_path=run_path,
+        _, diag = model.run_until_and_store(y1, geom_path=geom_path,
                                             diag_path=diag_path)
         assert model.calving_m3_since_y0 > 0
 
@@ -1588,7 +1588,7 @@ class TestIO():
         assert_allclose(diag.volume_m3.max() + diag.calving_m3.max(),
                         model.flux_gate_m3_since_y0)
 
-        with FileModel(run_path) as fmodel:
+        with FileModel(geom_path) as fmodel:
             assert fmodel.last_yr == y1
             assert fmodel.do_calving
 
@@ -1641,15 +1641,15 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
+        if os.path.exists(geom_path):
+            os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        model.run_until_and_store(500, run_path=run_path,
+        model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path)
 
         with xr.open_dataset(diag_path) as ds_:
@@ -1658,7 +1658,7 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        with FileModel(run_path) as fmodel:
+        with FileModel(geom_path) as fmodel:
             assert fmodel.last_yr == 500
             fls = dummy_constant_bed()
             model = FluxBasedModel(fls, mb_model=mb, y0=0.,
