@@ -351,6 +351,29 @@ class TestMassBalanceModels:
                                                     years=mbdf.index.values)
         assert_allclose(s, mbdf['MY_MB'])
 
+    def test_repr(self, hef_gdir):
+        from textwrap import dedent
+
+        expected = dedent("""\
+        <oggm.MassBalanceModel>
+          Class: PastMassBalance
+          Attributes: 
+            - hemisphere: nh
+            - rho: 900.0
+            - mu_star: 198.9489403133207
+            - bias: 0
+            - t_solid: 0.0
+            - t_liq: 2.0
+            - t_melt: -1.0
+            - repeat: False
+            - ref_hgt: 3160.0
+            - ys: 1802
+            - ye: 2003
+        """)
+
+        mb_mod = massbalance.PastMassBalance(hef_gdir, bias=0)
+        assert mb_mod.__repr__() == expected
+
     def test_prcp_fac_temp_bias_update(self, hef_gdir):
 
         gdir = hef_gdir
@@ -1453,6 +1476,12 @@ class TestIO():
                                glen_a=self.glen_a)
         ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
         ds = ds[0]
+
+        # Check attrs
+        assert ds.attrs['mb_model_class'] == 'LinearMassBalance'
+        assert ds.attrs['mb_model_rho'] == cfg.PARAMS['ice_density']
+        assert ds_diag.attrs['mb_model_class'] == 'LinearMassBalance'
+        assert ds_diag.attrs['mb_model_ela_h'] == 2600
 
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,

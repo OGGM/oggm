@@ -2232,6 +2232,7 @@ class GlacierDirectory(object):
             summary += ['  Name: ' + self.name]
         summary += ['  Glacier type: ' + str(self.glacier_type)]
         summary += ['  Terminus type: ' + str(self.terminus_type)]
+        summary += ['  Status: ' + str(self.status)]
         summary += ['  Area: ' + str(self.rgi_area_km2) + ' km2']
         summary += ['  Lon, Lat: (' + str(self.cenlon) + ', ' +
                     str(self.cenlat) + ')']

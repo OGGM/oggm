@@ -920,10 +920,15 @@ class FlowlineModel(object):
         diag_ds.attrs['calendar'] = '365-day no leap'
         diag_ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
                                                   gmtime())
-        diag_ds.attrs['hemisphere'] = self.mb_model.hemisphere
         diag_ds.attrs['water_level'] = self.water_level
         diag_ds.attrs['glen_a'] = self.glen_a
         diag_ds.attrs['fs'] = self.fs
+
+        # Add MB model attributes
+        diag_ds.attrs['mb_model_class'] = self.mb_model.__class__.__name__
+        for k, v in self.mb_model.__dict__.items():
+            if np.isscalar(v) and not k.startswith('_'):
+                diag_ds.attrs['mb_model_{}'.format(k)] = v
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)
@@ -975,8 +980,10 @@ class FlowlineModel(object):
         # Run
         j = 0
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
-            self.run_until(yr)
             # Model run
+            self.run_until(yr)
+
+            # Glacier geometry
             if mo == 1:
                 for s, w, b, fl in zip(sects, widths, bucket, self.fls):
                     s[j, :] = fl.section
@@ -1006,6 +1013,15 @@ class FlowlineModel(object):
             ds.attrs['calendar'] = '365-day no leap'
             ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
                                                  gmtime())
+            ds.attrs['water_level'] = self.water_level
+            ds.attrs['glen_a'] = self.glen_a
+            ds.attrs['fs'] = self.fs
+            # Add MB model attributes
+            ds.attrs['mb_model_class'] = self.mb_model.__class__.__name__
+            for k, v in self.mb_model.__dict__.items():
+                if np.isscalar(v) and not k.startswith('_'):
+                    ds.attrs['mb_model_{}'.format(k)] = v
+
             ds.coords['time'] = yearly_time
             ds['time'].attrs['description'] = 'Floating hydrological year'
             varcoords = OrderedDict(time=('time', yearly_time),

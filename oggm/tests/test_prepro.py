@@ -245,6 +245,7 @@ class TestGIS(unittest.TestCase):
           Name: Hintereisferner
           Glacier type: Glacier
           Terminus type: Land-terminating
+          Status: Glacier or ice cap
           Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
           Grid (nx, ny): (159, 114)
