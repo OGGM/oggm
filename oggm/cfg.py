@@ -550,6 +550,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
     k = 'free_board_marine_terminating'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
+    k = 'store_diagnostic_variables'
+    PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
 
     # Inversion
     k = 'use_shape_factor_for_inversion'
@@ -582,7 +584,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run', 'ref_mb_valid_window',
-           'tidewater_type', 'store_model_geometry']
+           'tidewater_type', 'store_model_geometry',
+           'store_diagnostic_variables']
     for k in ltr:
         cp.pop(k, None)
 

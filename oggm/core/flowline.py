@@ -970,38 +970,47 @@ class FlowlineModel(object):
         diag_ds['calendar_month'].attrs['description'] = 'Calendar month'
 
         # Variables and attributes
-        diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
-        diag_ds['volume_m3'].attrs['unit'] = 'm 3'
+        ovars = cfg.PARAMS['store_diagnostic_variables']
 
-        diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
-                                                         'below '
-                                                         'sea-level')
-        diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
+        if 'volume' in ovars:
+            diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
+            diag_ds['volume_m3'].attrs['unit'] = 'm 3'
 
-        diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
-                                                         'below '
-                                                         'water-level')
-        diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
+        if 'volume_bsl' in ovars:
+            diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
+                                                             'below '
+                                                             'sea-level')
+            diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
 
-        diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
-        diag_ds['area_m2'].attrs['unit'] = 'm 2'
+        if 'volume_bwl' in ovars:
+            diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
+                                                             'below '
+                                                             'water-level')
+            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
 
-        diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['length_m'].attrs['description'] = 'Glacier length'
-        diag_ds['length_m'].attrs['unit'] = 'm 3'
+        if 'area' in ovars:
+            diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
+            diag_ds['area_m2'].attrs['unit'] = 'm 2'
 
-        diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
-                                                      'calving flux')
-        diag_ds['calving_m3'].attrs['unit'] = 'm 3'
+        if 'length' in ovars:
+            diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['length_m'].attrs['description'] = 'Glacier length'
+            diag_ds['length_m'].attrs['unit'] = 'm 3'
 
-        diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
-        diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
-        diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
+        if 'calving' in ovars:
+            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
+                                                          'calving flux')
+            diag_ds['calving_m3'].attrs['unit'] = 'm 3'
+
+        if 'calving_rate' in ovars:
+            diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
+            diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
         # Run
         j = 0
@@ -1022,13 +1031,20 @@ class FlowlineModel(object):
                 j += 1
 
             # Diagnostics
-            diag_ds['volume_m3'].data[i] = self.volume_m3
-            diag_ds['area_m2'].data[i] = self.area_m2
-            diag_ds['length_m'].data[i] = self.length_m
-            diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
-            diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
-            diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
-            diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+            if 'volume' in ovars:
+                diag_ds['volume_m3'].data[i] = self.volume_m3
+            if 'area' in ovars:
+                diag_ds['area_m2'].data[i] = self.area_m2
+            if 'length' in ovars:
+                diag_ds['length_m'].data[i] = self.length_m
+            if 'calving' in ovars:
+                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
+            if 'calving_rate' in ovars:
+                diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
+            if 'volume_bsl' in ovars:
+                diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
+            if 'volume_bwl' in ovars:
+                diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
 
         # to datasets
         geom_ds = None

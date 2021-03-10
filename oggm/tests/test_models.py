@@ -3078,6 +3078,71 @@ class TestHEF:
             plt.legend()
             plt.show()
 
+    @pytest.mark.slow
+    def test_output_management(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+        tasks.run_from_climate_data(gdir, min_ys=1980,
+                                    output_filesuffix='_hist')
+
+        past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
+        mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
+        stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
+        out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir], path=stats_file)
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+        assert not df.loc[gdir.rgi_id, 'is_tidewater']
+
+        # Compile stuff
+        utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
+        utils.compile_run_output([gdir], path=past_run_file,
+                                 input_filesuffix='_hist')
+
+        # Extend
+        utils.extend_past_climate_run(past_run_file=past_run_file,
+                                      fixed_geometry_mb_file=mb_file,
+                                      glacier_statistics_file=stats_file,
+                                      path=out_path)
+
+        with xr.open_dataset(out_path) as ods, \
+                xr.open_dataset(past_run_file) as ds:
+
+            ref = ds.volume
+            new = ods.volume
+            for y in [1992, 2000, 2003]:
+                assert new.sel(time=y).data == ref.sel(time=y).data
+
+            new = ods.volume_fixed_geom
+            np.testing.assert_allclose(new.sel(time=2000), ref.sel(time=2000),
+                                       rtol=0.01)
+
+            del ods['volume_fixed_geom']
+            assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))
+
+            for vn in ['area']:
+                ref = ds[vn]
+                new = ods[vn]
+                for y in [1992, 2000, 2003]:
+                    assert new.sel(time=y).data == ref.sel(time=y).data
+                assert new.sel(time=1950).data == new.sel(time=1980).data
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['volume']:
+                rtol = 0.4
+                np.testing.assert_allclose(ods[vn].sel(time=2000) -
+                                           ods[vn].sel(time=1990),
+                                           ods[vn].sel(time=1990) -
+                                           ods[vn].sel(time=1980),
+                                           rtol=rtol)
+
 
 @pytest.fixture(scope='class')
 def merged_hef_cfg(class_case_dir):
