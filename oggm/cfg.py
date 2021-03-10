@@ -288,9 +288,13 @@ _doc = ('When using a linear mass-balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
 
-_doc = ('A netcdf file containing enough information to reconstruct the '
-        'entire flowline glacier along the run (can be data expensive).')
+_doc = 'Deprecated: renamed to `model_geometry`.'
 BASENAMES['model_run'] = ('model_run.nc', _doc)
+
+_doc = ('A netcdf file containing enough information to reconstruct the '
+        'entire flowline glacier geometry along the run (can be expensive'
+        'in disk space).')
+BASENAMES['model_geometry'] = ('model_geometry.nc', _doc)
 
 _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')
@@ -527,6 +531,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['use_inversion_params_for_run'] = cp.as_bool('use_inversion_params_for_run')
     k = 'error_when_glacier_reaches_boundaries'
     PARAMS[k] = cp.as_bool(k)
+    PARAMS['store_model_geometry'] = cp.as_bool('store_model_geometry')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -545,6 +550,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
     k = 'free_board_marine_terminating'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
+    k = 'store_diagnostic_variables'
+    PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
 
     # Inversion
     k = 'use_shape_factor_for_inversion'
@@ -577,7 +584,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run', 'ref_mb_valid_window',
-           'tidewater_type']
+           'tidewater_type', 'store_model_geometry',
+           'store_diagnostic_variables']
     for k in ltr:
         cp.pop(k, None)
 

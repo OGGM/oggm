@@ -645,7 +645,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
     if model is None:
         models = []
         for gdir in gdirs:
-            model = FileModel(gdir.get_filepath('model_run',
+            model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix=filesuffix))
             model.run_until(modelyr)
             models.append(model)

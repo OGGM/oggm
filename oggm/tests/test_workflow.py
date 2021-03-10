@@ -303,7 +303,7 @@ class TestFullRun(unittest.TestCase):
                                      output_filesuffix='_test')
 
         for gd in gdirs:
-            path = gd.get_filepath('model_run', filesuffix='_test')
+            path = gd.get_filepath('model_geometry', filesuffix='_test')
             # See that we are running ok
             with flowline.FileModel(path) as model:
                 vol = model.volume_km3_ts()

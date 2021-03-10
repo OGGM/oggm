@@ -90,6 +90,8 @@ class TestGIS(unittest.TestCase):
         assert gdir.has_file('outlines')
         assert gdir.has_file('intersects')
         assert not gdir.has_file('glacier_grid')
+        with pytest.deprecated_call():
+            gdir.get_filepath('model_run')
 
     def test_define_region(self):
 
@@ -245,6 +247,7 @@ class TestGIS(unittest.TestCase):
           Name: Hintereisferner
           Glacier type: Glacier
           Terminus type: Land-terminating
+          Status: Glacier or ice cap
           Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
           Grid (nx, ny): (159, 114)

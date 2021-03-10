@@ -351,6 +351,29 @@ class TestMassBalanceModels:
                                                     years=mbdf.index.values)
         assert_allclose(s, mbdf['MY_MB'])
 
+    def test_repr(self, hef_gdir):
+        from textwrap import dedent
+
+        expected = dedent("""\
+        <oggm.MassBalanceModel>
+          Class: PastMassBalance
+          Attributes:
+            - hemisphere: nh
+            - rho: 900.0
+            - mu_star: 198.9489403133207
+            - bias: 0
+            - t_solid: 0.0
+            - t_liq: 2.0
+            - t_melt: -1.0
+            - repeat: False
+            - ref_hgt: 3160.0
+            - ys: 1802
+            - ye: 2003
+        """)
+
+        mb_mod = massbalance.PastMassBalance(hef_gdir, bias=0)
+        assert mb_mod.__repr__() == expected
+
     def test_prcp_fac_temp_bias_update(self, hef_gdir):
 
         gdir = hef_gdir
@@ -1454,6 +1477,12 @@ class TestIO():
         ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
         ds = ds[0]
 
+        # Check attrs
+        assert ds.attrs['mb_model_class'] == 'LinearMassBalance'
+        assert ds.attrs['mb_model_rho'] == cfg.PARAMS['ice_density']
+        assert ds_diag.attrs['mb_model_class'] == 'LinearMassBalance'
+        assert ds_diag.attrs['mb_model_ela_h'] == 2600
+
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
@@ -1487,15 +1516,15 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
+        if os.path.exists(geom_path):
+            os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        model.run_until_and_store(500, run_path=run_path,
+        model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path,
                                   store_monthly_step=True)
 
@@ -1505,7 +1534,7 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        with FileModel(run_path) as fmodel:
+        with FileModel(geom_path) as fmodel:
             assert fmodel.last_yr == 500
             fls = dummy_constant_bed()
             model = FluxBasedModel(fls, mb_model=mb, y0=0.,
@@ -1539,10 +1568,10 @@ class TestIO():
     @pytest.mark.slow
     def test_calving_filemodel(self, class_case_dir):
         y1 = 1200
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
+        if os.path.exists(geom_path):
+            os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
         model = FluxBasedModel(bu_tidewater_bed(),
@@ -1550,7 +1579,7 @@ class TestIO():
                                is_tidewater=True,
                                flux_gate=0.12, do_kcalving=True,
                                calving_k=0.2)
-        _, diag = model.run_until_and_store(y1, run_path=run_path,
+        _, diag = model.run_until_and_store(y1, geom_path=geom_path,
                                             diag_path=diag_path)
         assert model.calving_m3_since_y0 > 0
 
@@ -1559,7 +1588,7 @@ class TestIO():
         assert_allclose(diag.volume_m3.max() + diag.calving_m3.max(),
                         model.flux_gate_m3_since_y0)
 
-        with FileModel(run_path) as fmodel:
+        with FileModel(geom_path) as fmodel:
             assert fmodel.last_yr == y1
             assert fmodel.do_calving
 
@@ -1612,15 +1641,15 @@ class TestIO():
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
         fls = dummy_constant_bed()
-        run_path = os.path.join(class_case_dir, 'ts_ideal.nc')
+        geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
-        if os.path.exists(run_path):
-            os.remove(run_path)
+        if os.path.exists(geom_path):
+            os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        model.run_until_and_store(500, run_path=run_path,
+        model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path)
 
         with xr.open_dataset(diag_path) as ds_:
@@ -1629,7 +1658,7 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        with FileModel(run_path) as fmodel:
+        with FileModel(geom_path) as fmodel:
             assert fmodel.last_yr == 500
             fls = dummy_constant_bed()
             model = FluxBasedModel(fls, mb_model=mb, y0=0.,
@@ -2725,8 +2754,8 @@ class TestHEF:
                              glen_a=inversion_params['inversion_glen_a'],
                              bias=0, output_filesuffix='_ct')
 
-        paths = [hef_gdir.get_filepath('model_run', filesuffix='_rdn'),
-                 hef_gdir.get_filepath('model_run', filesuffix='_ct'),
+        paths = [hef_gdir.get_filepath('model_geometry', filesuffix='_rdn'),
+                 hef_gdir.get_filepath('model_geometry', filesuffix='_ct'),
                  ]
 
         for path in paths:
@@ -2763,8 +2792,8 @@ class TestHEF:
             with xr.open_dataset(path) as ds:
                 assert ds.calendar_month[0] == 4
 
-        paths = [gdir_sh.get_filepath('model_run', filesuffix='_rdn'),
-                 gdir_sh.get_filepath('model_run', filesuffix='_ct'),
+        paths = [gdir_sh.get_filepath('model_geometry', filesuffix='_rdn'),
+                 gdir_sh.get_filepath('model_geometry', filesuffix='_ct'),
                  ]
         for path in paths:
             with FileModel(path) as model:
@@ -2839,7 +2868,7 @@ class TestHEF:
         # Make a dummy run for 0 years
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
 
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2848,7 +2877,7 @@ class TestHEF:
         # Again
         run_from_climate_data(hef_gdir, ye=2004, init_model_filesuffix='_1',
                               output_filesuffix='_2')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2870,7 +2899,7 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ye=2002, max_ys=2002,
                               output_filesuffix='_1')
 
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2879,7 +2908,7 @@ class TestHEF:
         # Again
         run_from_climate_data(hef_gdir, ye=2005, min_ys=2005,
                               output_filesuffix='_2')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_2')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_2')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area)
@@ -2889,7 +2918,7 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ys=2002, ye=2003,
                               init_model_filesuffix='_1',
                               output_filesuffix='_3')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_3')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_3')
         with FileModel(fp) as fmod:
             fmod.run_until(fmod.last_yr)
             np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
@@ -2899,7 +2928,7 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ys=None, ye=None,
                               init_model_filesuffix='_1',
                               output_filesuffix='_4')
-        fp = hef_gdir.get_filepath('model_run', filesuffix='_4')
+        fp = hef_gdir.get_filepath('model_geometry', filesuffix='_4')
         with FileModel(fp) as fmod:
             assert fmod.y0 == 2002
             assert fmod.last_yr == 2004
@@ -3048,6 +3077,71 @@ class TestHEF:
             plt.xlabel('Vol (km3)')
             plt.legend()
             plt.show()
+
+    @pytest.mark.slow
+    def test_output_management(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+        tasks.run_from_climate_data(gdir, min_ys=1980,
+                                    output_filesuffix='_hist')
+
+        past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
+        mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
+        stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
+        out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir], path=stats_file)
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+        assert not df.loc[gdir.rgi_id, 'is_tidewater']
+
+        # Compile stuff
+        utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
+        utils.compile_run_output([gdir], path=past_run_file,
+                                 input_filesuffix='_hist')
+
+        # Extend
+        utils.extend_past_climate_run(past_run_file=past_run_file,
+                                      fixed_geometry_mb_file=mb_file,
+                                      glacier_statistics_file=stats_file,
+                                      path=out_path)
+
+        with xr.open_dataset(out_path) as ods, \
+                xr.open_dataset(past_run_file) as ds:
+
+            ref = ds.volume
+            new = ods.volume
+            for y in [1992, 2000, 2003]:
+                assert new.sel(time=y).data == ref.sel(time=y).data
+
+            new = ods.volume_fixed_geom
+            np.testing.assert_allclose(new.sel(time=2000), ref.sel(time=2000),
+                                       rtol=0.01)
+
+            del ods['volume_fixed_geom']
+            assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))
+
+            for vn in ['area']:
+                ref = ds[vn]
+                new = ods[vn]
+                for y in [1992, 2000, 2003]:
+                    assert new.sel(time=y).data == ref.sel(time=y).data
+                assert new.sel(time=1950).data == new.sel(time=1980).data
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['volume']:
+                rtol = 0.4
+                np.testing.assert_allclose(ods[vn].sel(time=2000) -
+                                           ods[vn].sel(time=1990),
+                                           ods[vn].sel(time=1990) -
+                                           ods[vn].sel(time=1980),
+                                           rtol=rtol)
 
 
 @pytest.fixture(scope='class')

@@ -1732,6 +1732,10 @@ def extend_past_climate_run(past_run_file=None,
 
     with xr.open_dataset(past_run_file) as past_ds:
 
+        # We need at least area and vol to do something
+        if 'volume' not in past_ds.data_vars or 'area' not in past_ds.data_vars:
+            raise InvalidWorkflowError('Need both volume and area to proceed')
+
         y0_run = int(past_ds.time[0])
         y1_run = int(past_ds.time[-1])
         if (y1_run - y0_run + 1) != len(past_ds.time):
@@ -1766,8 +1770,9 @@ def extend_past_climate_run(past_run_file=None,
         # New vars
         for vn in ['volume', 'volume_bsl', 'volume_bwl',
                    'area', 'length', 'calving', 'calving_rate']:
-            ods[vn + '_ext'] = ods[vn].copy(deep=True)
-            ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
+            if vn in ods.data_vars:
+                ods[vn + '_ext'] = ods[vn].copy(deep=True)
+                ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
 
         vn = 'volume_fixed_geom_ext'
         ods[vn] = ods['volume'].copy(deep=True)
@@ -1785,15 +1790,9 @@ def extend_past_climate_run(past_run_file=None,
             if np.isfinite(orig_vol_ts[0]):
                 # Nothing to extend, really
                 continue
-            orig_area_ts = ods.area_ext.data[:, i]
-            orig_length_ts = ods.length_ext.data[:, i]
-            orig_calv_ts = ods.calving_ext.data[:, i]
-            orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
+
             # First valid id
             fid = np.argmax(np.isfinite(orig_vol_ts))
-            # Fill area and length which stays constant
-            orig_area_ts[:fid] = orig_area_ts[fid]
-            orig_length_ts[:fid] = orig_length_ts[fid]
 
             # Add calving to the mix
             try:
@@ -1807,8 +1806,9 @@ def extend_past_climate_run(past_run_file=None,
             if not np.isfinite(calv_rate):
                 calv_rate = 0
 
-            # +1 because calving rate at year 0 is unkown from the dyns model
-            orig_calv_rate_ts[:fid+1] = calv_rate
+            # Fill area and length which stays constant before date
+            orig_area_ts = ods.area_ext.data[:, i]
+            orig_area_ts[:fid] = orig_area_ts[fid]
 
             # We convert SMB to volume
             mb_vol_ts = (mb_ts / rho * orig_area_ts[fid] - calv_flux).cumsum()
@@ -1816,21 +1816,37 @@ def extend_past_climate_run(past_run_file=None,
 
             # The -1 is because the volume change is known at end of year
             mb_vol_ts = mb_vol_ts + orig_vol_ts[fid] - mb_vol_ts[fid-1]
-            calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
 
             # Now back to netcdf
             ods.volume_fixed_geom_ext.data[1:, i] = mb_vol_ts
             ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
-            ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
             ods.area_ext.data[:, i] = orig_area_ts
-            ods.length_ext.data[:, i] = orig_length_ts
-            ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
+
+            # Optional variables
+            if 'length' in ods.data_vars:
+                orig_length_ts = ods.length_ext.data[:, i]
+                orig_length_ts[:fid] = orig_length_ts[fid]
+                ods.length_ext.data[:, i] = orig_length_ts
+
+            if 'calving' in ods.data_vars:
+                orig_calv_ts = ods.calving_ext.data[:, i]
+                # The -1 is because the volume change is known at end of year
+                calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
+                ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
+
+            if 'calving_rate' in ods.data_vars:
+                orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
+                # +1 because calving rate at year 0 is unkown from the dyns model
+                orig_calv_rate_ts[:fid+1] = calv_rate
+                ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
 
             # Extend vol bsl by assuming that % stays constant
-            bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
-            bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
-            ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
-            ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
+            if 'volume_bsl' in ods.data_vars:
+                bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
+                ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
+            if 'volume_bwl' in ods.data_vars:
+                bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
+                ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
 
         # Remove old vars
         for vn in list(ods.data_vars):
@@ -2232,6 +2248,7 @@ class GlacierDirectory(object):
             summary += ['  Name: ' + self.name]
         summary += ['  Glacier type: ' + str(self.glacier_type)]
         summary += ['  Terminus type: ' + str(self.terminus_type)]
+        summary += ['  Status: ' + str(self.status)]
         summary += ['  Area: ' + str(self.rgi_area_km2) + ' km2']
         summary += ['  Lon, Lat: (' + str(self.cenlon) + ', ' +
                     str(self.cenlat) + ')']
@@ -2373,7 +2390,8 @@ class GlacierDirectory(object):
         """The glacier's RGI area (m2)."""
         return self.rgi_area_km2 * 10**6
 
-    def get_filepath(self, filename, delete=False, filesuffix=''):
+    def get_filepath(self, filename, delete=False, filesuffix='',
+                     _deprecation_check=True):
         """Absolute path to a specific file.
 
         Parameters
@@ -2394,6 +2412,19 @@ class GlacierDirectory(object):
         if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
+        deprecated = {'climate_monthly': 'climate_historical',
+                      'model_run': 'model_geometry',
+                      }
+        if _deprecation_check:
+            for old, new in deprecated.items():
+                if filename == old:
+                    warnings.warn('Basename `{}` is deprecated and replaced by'
+                                  '`{}`. Please update your code soon.'
+                                  ''.format(old, new),
+                                  DeprecationWarning)
+                    self.get_filepath(new, delete=delete,
+                                      filesuffix=filesuffix)
+
         fname = cfg.BASENAMES[filename]
         if filesuffix:
             fname = fname.split('.')
@@ -2402,25 +2433,32 @@ class GlacierDirectory(object):
 
         out = os.path.join(self.dir, fname)
 
-        if filename == 'climate_historical' and not os.path.exists(out):
-            # For backwards compatibility, in these cases try climate_monthly
-            if self.has_file('climate_monthly'):
-                return self.get_filepath('climate_monthly', delete=delete,
-                                         filesuffix=filesuffix)
+        # Deprecation cycle:
+        for old, new in deprecated.items():
+            if filename == new and not os.path.exists(out):
+                # For backwards compatibility, in these cases try old
+                if self.has_file(old, _deprecation_check=False):
+                    return self.get_filepath(old, delete=delete,
+                                             filesuffix=filesuffix,
+                                             _deprecation_check=False)
 
         if delete and os.path.isfile(out):
             os.remove(out)
         return out
 
-    def has_file(self, filename, filesuffix=''):
+    def has_file(self, filename, filesuffix='', _deprecation_check=True):
         """Checks if a file exists.
 
         Parameters
         ----------
         filename : str
             file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for model runs). Note
+            that the BASENAME remains same.
         """
-        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        fp = self.get_filepath(filename, filesuffix=filesuffix,
+                               _deprecation_check=_deprecation_check)
         if '.shp' in fp and cfg.PARAMS['use_tar_shapefiles']:
             fp = fp.replace('.shp', '.tar')
             if cfg.PARAMS['use_compression']:

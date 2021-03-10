@@ -1141,7 +1141,7 @@ def default_calving():
                            is_tidewater=True, calving_use_limiter=True,
                            flux_gate=0.06, do_kcalving=True,
                            calving_k=0.2)
-    _, ds = model.run_until_and_store(3000)
+    _, ds = model.run_until_and_store(3000, geom_path=False)
     df_diag = model.get_diagnostics()
     assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                     model.flux_gate_m3_since_y0)
@@ -1162,7 +1162,8 @@ class TestKCalving():
                                is_tidewater=True, calving_use_limiter=False,
                                flux_gate=0.06, do_kcalving=True,
                                calving_k=0.2)
-        _, ds2 = model.run_until_and_store(3000)
+        o, ds2 = model.run_until_and_store(3000, geom_path=False)
+        assert o is None
         df_diag2 = model.get_diagnostics()
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)
@@ -1196,7 +1197,7 @@ class TestKCalving():
                                smooth_trib_influx=False,
                                flux_gate=[0.06, 0], do_kcalving=True,
                                calving_k=0.2)
-        _, ds2 = model.run_until_and_store(3000)
+        _, ds2 = model.run_until_and_store(3000, geom_path=False)
         df_diag2_a = model.get_diagnostics(fl_id=0)
         df_diag2_b = model.get_diagnostics(fl_id=1)
 
@@ -1237,7 +1238,7 @@ class TestKCalving():
                                flux_gate=0.06, do_kcalving=True,
                                water_level=1000,
                                calving_k=0.2)
-        _, ds_2 = model.run_until_and_store(3000)
+        _, ds_2 = model.run_until_and_store(3000, geom_path=False)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)
 

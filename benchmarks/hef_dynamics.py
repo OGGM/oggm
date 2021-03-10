@@ -47,7 +47,7 @@ def time_hef_run_until_and_store():
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0, seed=0)
     fls = gdir.read_pickle('model_flowlines')
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.)
-    model.run_until_and_store(200)
+    model.run_until_and_store(200, geom_path=False)
 
 
 def time_hef_run_until_and_store_with_nc():
@@ -55,7 +55,7 @@ def time_hef_run_until_and_store_with_nc():
     mb_mod = massbalance.RandomMassBalance(gdir, bias=0, seed=0)
     fls = gdir.read_pickle('model_flowlines')
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0.)
-    model.run_until_and_store(200, run_path=os.path.join(testdir, 'run.nc'),
+    model.run_until_and_store(200, geom_path=os.path.join(testdir, 'run.nc'),
                               diag_path=os.path.join(testdir, 'diag.nc'))
 
 

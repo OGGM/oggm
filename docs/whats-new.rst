@@ -15,19 +15,32 @@ Breaking changes
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - `prcp_bias` renamed to `prcp_fac` in mass-balance models (:pull:`1211`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
+- Various name changes (with deprecation cycle, i.e. old code should still
+  work):
+    - ``gdir.get_filepath('model_run')`` renamed to ``gdir.get_filepath('model_geometry')``
+    - ``run_path`` kwarg in ``run_until_and_store`` renamed to ``geom_path``
+
 
 Enhancements
 ~~~~~~~~~~~~
 
-- Mass-balance models now properly refer to `prcp_fac` (was incorrectly named
-  "bias") (:pull:`1211`).
-  Additionally, the `run_*` tasks in `oggm.core.flowline` can now also adjust
+- Mass-balance models now properly refer to ``prcp_fac`` (was incorrectly named
+  ``prcp+bias``) (:pull:`1211`).
+  Additionally, the ``run_*`` tasks in ``oggm.core.flowline`` can now also adjust
   the precipitation factor for sensitivity experiments.
   By `Lilian Schuster <https://github.com/lilianschuster>`_
+- Users can now choose the variables that are written in diagnostics files
+  and can also choose not to write the glacier geometry files during the run
+  (:pull:`1219`). The respective global parameters are ``store_diagnostic_variables``
+  and ``store_model_geometry``.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed bug in hydro date / calendar date conversions with month=1 (i.e.
+  no conversion) (:pull:`1220`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
 
 v1.4.0 (17.02.2021)
 -------------------
