@@ -2436,8 +2436,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         # i.e. 2003 becomes 2004 if hydro_month is not 1 (January)
         # (so that we don't count the MB year 2003 in the simulation)
         # See also: https://github.com/OGGM/oggm/issues/1020
-        if cfg.PARAMS['hydro_month_'+gdir.hemisphere] != 1:
-            ys += 1
+        # even if hydro_month is 1, we prefer to start from Jan 2004
+        # as in the alps the rgi is from Aug 2003
+        ys += 1
 
     # Final crop
     if min_ys is not None:
