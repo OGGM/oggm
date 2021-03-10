@@ -221,6 +221,41 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
+        # January
+        # hydro year/month corresponds to calendar year/month
+        y, m = utils.hydrodate_to_calendardate(1, 1, start_month=1)
+        assert (y, m) == (1, 1)
+        y, m = utils.hydrodate_to_calendardate(1, 4, start_month=1)
+        assert (y, m) == (1, 4)
+        y, m = utils.hydrodate_to_calendardate(1, 12, start_month=1)
+        assert (y, m) == (1, 12)
+
+        y, m = utils.hydrodate_to_calendardate([1, 1, 1], [1, 4, 12],
+                                               start_month=1)
+        np.testing.assert_array_equal(y, [1, 1, 1])
+        np.testing.assert_array_equal(m, [1, 4, 12])
+
+        y, m = utils.calendardate_to_hydrodate(1, 1, start_month=1)
+        assert (y, m) == (1, 1)
+        y, m = utils.calendardate_to_hydrodate(1, 9, start_month=1)
+        assert (y, m) == (1, 9)
+        y, m = utils.calendardate_to_hydrodate(1, 10, start_month=1)
+        assert (y, m) == (1, 10)
+
+        y, m = utils.calendardate_to_hydrodate([1, 1, 1], [1, 9, 10],
+                                               start_month=1)
+        np.testing.assert_array_equal(y, [1, 1, 1])
+        np.testing.assert_array_equal(m, [1, 9, 10])
+
+        # Roundtrip
+        time = pd.period_range('0001-01', '1000-12', freq='M')
+        y, m = utils.calendardate_to_hydrodate(time.year, time.month,
+                                               start_month=1)
+        y, m = utils.hydrodate_to_calendardate(y, m, start_month=1)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+
+
     def test_rgi_meta(self):
         cfg.initialize()
         reg_names, subreg_names = utils.parse_rgi_meta(version='6')
