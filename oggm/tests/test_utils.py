@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
-
 import unittest
 import os
 import shutil

@@ -897,7 +897,7 @@ class FlowlineModel(object):
 
         if run_path is not None:
             warnings.warn("`run_path` has been renamed to `geom_path` and "
-                          "will be deleted in the future.", DeprecationWarning)
+                          "will be deleted in the future.", FutureWarning)
             geom_path = run_path
 
         # Do we need to create a geometry dataset?
@@ -2144,8 +2144,7 @@ def init_present_time_glacier(gdir):
 
 
 def robust_model_run(*args, **kwargs):
-    warnings.warn('The task `robust_model_run` is deprecated.',
-                  DeprecationWarning)
+    warnings.warn('The task `robust_model_run` is deprecated.', FutureWarning)
     return flowline_model_run(*args, **kwargs)
 
 

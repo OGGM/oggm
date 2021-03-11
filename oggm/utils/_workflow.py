@@ -820,8 +820,7 @@ class compile_to_netcdf(object):
             if filesuffix:
                 warnings.warn('The `filesuffix` kwarg is deprecated for '
                               'compile_* tasks. Use input_filesuffix from '
-                              'now on.',
-                              DeprecationWarning)
+                              'now on.', FutureWarning)
                 input_filesuffix = filesuffix
 
             if not output_filesuffix:
@@ -2420,8 +2419,7 @@ class GlacierDirectory(object):
                 if filename == old:
                     warnings.warn('Basename `{}` is deprecated and replaced by'
                                   '`{}`. Please update your code soon.'
-                                  ''.format(old, new),
-                                  DeprecationWarning)
+                                  ''.format(old, new), FutureWarning)
                     self.get_filepath(new, delete=delete,
                                       filesuffix=filesuffix)
 
@@ -2437,7 +2435,8 @@ class GlacierDirectory(object):
         for old, new in deprecated.items():
             if filename == new and not os.path.exists(out):
                 # For backwards compatibility, in these cases try old
-                if self.has_file(old, _deprecation_check=False):
+                if self.has_file(old, filesuffix=filesuffix,
+                                 _deprecation_check=False):
                     return self.get_filepath(old, delete=delete,
                                              filesuffix=filesuffix,
                                              _deprecation_check=False)

@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
-
 import os
 from functools import partial
 import shutil

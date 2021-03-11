@@ -699,7 +699,7 @@ def glacier_mu_candidates(gdir):
     """
 
     warnings.warn('The task `glacier_mu_candidates` is deprecated. It should '
-                  'only be used for testing.', DeprecationWarning)
+                  'only be used for testing.', FutureWarning)
 
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
 

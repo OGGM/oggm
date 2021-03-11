@@ -1,9 +1,6 @@
 import pytest
 pytestmark = pytest.mark.test_env("minimal")
 
-import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
-
 import unittest
 from functools import partial
 

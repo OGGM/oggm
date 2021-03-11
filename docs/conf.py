@@ -95,14 +95,6 @@ try:
 except ImportError:
     print("no salem")
 
-# Remove some warnings
-try:
-    import warnings
-    from fiona.errors import FionaDeprecationWarning
-    warnings.filterwarnings('ignore', category=FionaDeprecationWarning)
-except ImportError:
-    pass
-
 # If we are on a proper oggm install, we should be able to import all modules
 import oggm  # noqa: E402
 import oggm.utils  # noqa: E402
