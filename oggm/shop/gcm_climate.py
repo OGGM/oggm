@@ -265,7 +265,7 @@ def process_cmip5_data(*args, **kwargs):
     """Renamed to process_cmip_data.
     """
     warnings.warn('The task `process_cmip5_data` is deprecated and renamed '
-                  'to `process_cmip_data`.', DeprecationWarning)
+                  'to `process_cmip_data`.', FutureWarning)
     process_cmip_data(*args, **kwargs)
 
 

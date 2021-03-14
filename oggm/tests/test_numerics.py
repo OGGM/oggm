@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
-
 import unittest
 from functools import partial
 import pytest

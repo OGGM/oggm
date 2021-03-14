@@ -1,6 +1,5 @@
 import os
 import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
 
 import pytest
 salem = pytest.importorskip('salem')

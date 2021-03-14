@@ -141,10 +141,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         disable the hash verification of OGGM downloads
     """
 
-    # TODO: temporarily silence Fiona and other deprecation warnings
-    import warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
-
     # Input check
     if max_level not in [1, 2, 3, 4, 5]:
         raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')

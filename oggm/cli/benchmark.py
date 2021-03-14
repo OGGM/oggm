@@ -56,10 +56,6 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
         for testing purposes only
     """
 
-    # TODO: temporarily silence Fiona deprecation warnings
-    import warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
-
     # Module logger
     log = logging.getLogger(__name__)
 

@@ -1,11 +1,9 @@
-import warnings
-warnings.filterwarnings("once", category=DeprecationWarning)  # noqa: E402
-
 import unittest
 import os
 import shutil
 from distutils.version import LooseVersion
 import pytest
+import warnings
 
 import shapely.geometry as shpg
 import numpy as np
@@ -90,7 +88,7 @@ class TestGIS(unittest.TestCase):
         assert gdir.has_file('outlines')
         assert gdir.has_file('intersects')
         assert not gdir.has_file('glacier_grid')
-        with pytest.deprecated_call():
+        with pytest.warns(FutureWarning):
             gdir.get_filepath('model_run')
 
     def test_define_region(self):
@@ -1616,7 +1614,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(FutureWarning):
             se = climate.glacier_mu_candidates(gdir)
 
         self.assertTrue(se.index[0] == 1802)
@@ -1649,7 +1647,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(FutureWarning):
             mu_yr_clim = climate.glacier_mu_candidates(gdir)
 
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
@@ -1820,7 +1818,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(FutureWarning):
             mu_ref = climate.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])
@@ -1894,7 +1892,7 @@ class TestClimate(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(FutureWarning):
             climate.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf['ANNUAL_BALANCE'])

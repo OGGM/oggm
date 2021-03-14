@@ -22,7 +22,6 @@ from oggm.utils import get_demo_file
 from oggm import utils, workflow
 
 # Warnings
-warnings.filterwarnings("once", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning,
                         message=r'.*guessing baseline image.*')
 
