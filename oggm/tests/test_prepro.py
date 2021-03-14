@@ -3,6 +3,7 @@ import os
 import shutil
 from distutils.version import LooseVersion
 import pytest
+import warnings
 
 import shapely.geometry as shpg
 import numpy as np

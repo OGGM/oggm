@@ -532,25 +532,19 @@ class PastMassBalance(MassBalanceModel):
         return (t.mean(axis=1), tfmelt.sum(axis=1),
                 prcp.sum(axis=1), prcpsol.sum(axis=1))
 
-    def get_monthly_mb(self, heights, year=None, add_climate=False, **kwargs):
+    def get_monthly_mb(self, heights, year=None, **kwargs):
 
-        t, tmelt, prcp, prcpsol = self.get_monthly_climate(heights, year=year)
+        _, tmelt, _, prcpsol = self.get_monthly_climate(heights, year=year)
         mb_month = prcpsol - self.mu_star * tmelt
         mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
-        mb_month /= SEC_IN_MONTH / self.rho
-        if add_climate:
-            return mb_month, t, tmelt, prcp, prcpsol
-        return mb_month
+        return mb_month / SEC_IN_MONTH / self.rho
 
-    def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
+    def get_annual_mb(self, heights, year=None, **kwargs):
 
-        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
-        mb_annual = np.sum(prcpsol - self.mu_star * tmelt, axis=1)
-        mb_annual = (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
-        if add_climate:
-            return (mb_annual, np.mean(t, axis=1), np.sum(tmelt, axis=1),
-                    np.sum(prcp, axis=1), np.sum(prcpsol, axis=1))
-        return mb_annual
+        _, temp2dformelt, _, prcpsol = self._get_2d_annual_climate(heights,
+                                                                   year)
+        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
+        return (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
 
 
 class ConstantMassBalance(MassBalanceModel):
