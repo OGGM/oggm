@@ -1161,7 +1161,6 @@ class TestPreproCLI(unittest.TestCase):
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
-                          disable_mp=True,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
