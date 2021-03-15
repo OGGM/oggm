@@ -34,6 +34,11 @@ Enhancements
   (:pull:`1219`). The respective global parameters are ``store_diagnostic_variables``
   and ``store_model_geometry``.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added experimental ``run_with_hydro`` task which computes hydrological
+  diagnostics after a standard dynamical run (:pull:`1224`).
+  This is highly experimental, will likely change in the future.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~

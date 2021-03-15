@@ -22,6 +22,7 @@ try:
     import salem
 except ImportError:
     pass
+import pandas as pd
 
 # Locals
 from oggm import __version__
@@ -2556,6 +2557,241 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               **kwargs)
+
+
+@entity_task(log)
+def run_with_hydro(gdir, run_task=None, **kwargs):
+    """Run the flowline model and add hydro diagnostics (experimental!).
+
+    TODOs:
+        - Add the possibility to merge with previous model runs
+        - Add the possibility to prescribe glacier area (e.g. with starting area)
+        - Add the possibility to store monthly hydro output
+        - Add the possibility to record during run (requires change in API)
+        - ...
+
+    Parameters
+    ----------
+    run_task : func
+        any of the `run_*`` tasks above. The mass-balance model used needs
+        to have the `add_climate` output option available though
+    **kwargs : all valid kwargs for ``run_task``
+    """
+
+    # Make sure it'll return something
+    kwargs['return_value'] = True
+    out = run_task(gdir, **kwargs)
+
+    if out is None:
+        raise InvalidWorkflowError('Previous run task ({}) did not run '
+                                   'successfully.'.format(run_task.__name__))
+
+    # Mass balance model used during the run
+    mb_mod = out.mb_model
+
+    # Glacier geometry during the run
+    suffix = kwargs.get('output_filesuffix', '')
+
+    with FileModel(gdir.get_filepath('model_geometry', filesuffix=suffix)) as fmod:
+
+        # We start by fetching mass balance data and geometry for all years
+        years = np.arange(fmod.y0, fmod.last_yr)
+
+        # Geometry at t0 to start with + off-glacier snow bucket
+        bin_area_2ds = []
+        bin_elev_2ds = []
+        max_areas = []
+        snow_buckets = []
+        for fl in fmod.fls:
+            # Glacier area on bins
+            bin_area = fl.bin_area_m2
+            max_areas.append(bin_area)
+            snow_buckets.append(bin_area * 0)
+
+            # Output 2d data
+            shape = len(years), len(bin_area)
+            bin_area_2ds.append(np.empty(shape, np.float64))
+            bin_elev_2ds.append(np.empty(shape, np.float64))
+
+        # Ok now fetch all geometry data in a first loop
+        # We do that because we want to get the largest possible area (always)
+        # and we want to minimize the number of calls to run_until
+        model_area = []
+        model_vol = []
+        for i, yr in enumerate(years):
+            fmod.run_until(yr)
+            model_area.append(fmod.area_m2)
+            model_vol.append(fmod.volume_m3)
+
+            for fl_id, (fl, max_area, bin_area_2d, bin_elev_2d) in \
+                    enumerate(zip(fmod.fls, max_areas, bin_area_2ds, bin_elev_2ds)):
+                # Update the area if necessary
+                bin_area = fl.bin_area_m2
+                max_area[:] = utils.clip_min(max_area, bin_area)
+
+                # Time varying bins
+                bin_area_2d[i, :] = bin_area
+                bin_elev_2d[i, :] = fl.surface_h
+
+    # Ok now we have arrays, we can work with that
+    # Second time varying loop for mass-balance
+
+    # Columns that need initial values
+    index = [
+        'off_area',
+        'on_area',
+        'melt_off_glacier',
+        'melt_on_glacier',
+        'liq_prcp_off_glacier',
+        'liq_prcp_on_glacier',
+        'snowfall_off_glacier',
+        'snowfall_on_glacier',
+        'snow_bucket',
+    ]
+
+    odf = []
+    for i, yr in enumerate(years):
+        o = pd.Series(index=index, data=np.zeros(len(index)))
+        o.name = yr
+        for fl_id, (max_area, snow_bucket, bin_area_2d, bin_elev_2d) in \
+                enumerate(zip(max_areas, snow_buckets, bin_area_2ds, bin_elev_2ds)):
+
+            bin_area = bin_area_2d[i, :]
+            bin_elev = bin_elev_2d[i, :]
+
+            # Make sure we have no negative contribution
+            off_area = utils.clip_min(max_area - bin_area, 0)
+
+            # Get the mb data
+            try:
+                mb, _, _, prcp, prcpsol = mb_mod.get_annual_mb(bin_elev,
+                                                               fl_id=fl_id,
+                                                               year=yr,
+                                                               add_climate=True)
+            except ValueError as e:
+                if 'too many values to unpack' in str(e):
+                    raise InvalidWorkflowError('Run with hydro needs a MB '
+                                               'model able to add climate '
+                                               'info to `get_annual_mb`.')
+                raise
+
+            # Here we use mass (kg yr-1) not ice volume
+            mb *= cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+
+            liq_prcp_on_g = (prcp - prcpsol) * bin_area
+            liq_prcp_off_g = (prcp - prcpsol) * off_area
+
+            prcpsol_on_g = prcpsol * bin_area
+            prcpsol_off_g = prcpsol * off_area
+
+            # This doesn't check if there is enough to melt yet
+            melt_on_g = (prcpsol - mb) * bin_area
+            melt_off_g = (prcpsol - mb) * off_area
+
+            # Update bucket with accumulation and melt
+            snow_bucket += prcpsol_off_g
+
+            # It can only melt that much
+            melt_off_g = np.where((snow_bucket - melt_off_g) >= 0, melt_off_g, snow_bucket)
+
+            # Update bucket
+            snow_bucket -= melt_off_g
+
+            # out
+            o.loc['off_area'] += np.sum(off_area)
+            o.loc['on_area'] += np.sum(bin_area)
+            o.loc['melt_off_glacier'] += np.sum(melt_off_g)
+            o.loc['melt_on_glacier'] += np.sum(melt_on_g)
+            o.loc['liq_prcp_off_glacier'] += np.sum(liq_prcp_off_g)
+            o.loc['liq_prcp_on_glacier'] += np.sum(liq_prcp_on_g)
+            o.loc['snowfall_off_glacier'] += np.sum(prcpsol_off_g)
+            o.loc['snowfall_on_glacier'] += np.sum(prcpsol_on_g)
+            o.loc['snow_bucket'] += np.sum(snow_bucket)
+
+        # Update the final dataframe
+        odf.append(o)
+
+    # Add an empty one for the last year for compatibility with the diags
+    o = pd.Series(index=index, data=np.zeros(len(index)) * np.NaN)
+    o.name = yr + 1
+    odf.append(o)
+    fmod.run_until(yr + 1)
+    model_area.append(fmod.area_m2)
+    model_vol.append(fmod.volume_m3)
+
+    # Final output
+    odf = pd.DataFrame(odf)
+    odf.index.name = 'time'
+    odf['model_vol'] = np.array(model_vol) * cfg.PARAMS['ice_density']
+    odf['model_mb'] = odf['model_vol'].iloc[1:].values - odf['model_vol'].iloc[:-1]
+
+    # The snow bucket is actually a state variable - pos end of timestamp
+    odf['snow_bucket'] = np.append(0., odf['snow_bucket'].iloc[:-1])
+
+    # Correct for non available mass
+    reconstructed_mb = odf['snowfall_on_glacier'] - odf['melt_on_glacier']
+    residual_mb = odf['model_mb'] - reconstructed_mb
+    odf['residual_mb'] = residual_mb
+    odf['melt_on_glacier'] = odf['melt_on_glacier'] - residual_mb
+
+    # Append the output to the existing diagnostics and convert to
+    # xarray for compatibility
+    fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
+
+    sel_vars = {
+        'off_area': {
+            'description': 'Off-glacier area',
+            'unit': 'm 2'
+        },
+        'on_area': {
+            'description': 'On-glacier area',
+            'unit': 'm 2'
+        },
+        'melt_off_glacier': {
+            'description': 'Off-glacier melt',
+            'unit': 'kg yr-1'
+        },
+        'melt_on_glacier': {
+            'description': 'On-glacier melt',
+            'unit': 'kg yr-1'
+        },
+        'liq_prcp_off_glacier': {
+            'description': 'Off-glacier liquid precipitation',
+            'unit': 'kg yr-1'
+        },
+        'liq_prcp_on_glacier': {
+            'description': 'On-glacier liquid precipitation',
+            'unit': 'kg yr-1'
+        },
+        'snowfall_off_glacier': {
+            'description': 'Off-glacier solid precipitation',
+            'unit': 'kg yr-1'
+        },
+        'snowfall_on_glacier': {
+            'description': 'On-glacier solid precipitation',
+            'unit': 'kg yr-1'
+        },
+        'snow_bucket': {
+            'description': 'Off-glacier snow reservoir (state variable)',
+            'unit': 'kg'
+        },
+        'model_mb': {
+            'description': 'Annual mass-balance from dynamical model',
+            'unit': 'kg yr-1'
+        },
+        'residual_mb': {
+            'description': 'Difference (before correction) between mb model and dyn model melt',
+            'unit': 'kg yr-1'
+        },
+    }
+    ods = xr.Dataset.from_dataframe(odf[sel_vars.keys()])
+    for k, v in sel_vars.items():
+        ods[k].attrs = v
+
+    # Add attrs
+    ods.to_netcdf(fpath, mode='a')
+
+    return out
 
 
 def merge_to_one_glacier(main, tribs, filename='climate_historical',
