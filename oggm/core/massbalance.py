@@ -528,8 +528,8 @@ class PastMassBalance(MassBalanceModel):
         -------
         (temp, tempformelt, prcp, prcpsol)
         """
-        t, tfmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
-        return (t.mean(axis=1), tfmelt.sum(axis=1),
+        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
+        return (t.mean(axis=1), tmelt.sum(axis=1),
                 prcp.sum(axis=1), prcpsol.sum(axis=1))
 
     def get_monthly_mb(self, heights, year=None, **kwargs):
@@ -539,12 +539,15 @@ class PastMassBalance(MassBalanceModel):
         mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
         return mb_month / SEC_IN_MONTH / self.rho
 
-    def get_annual_mb(self, heights, year=None, **kwargs):
+    def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
 
-        _, temp2dformelt, _, prcpsol = self._get_2d_annual_climate(heights,
-                                                                   year)
-        mb_annual = np.sum(prcpsol - self.mu_star * temp2dformelt, axis=1)
-        return (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
+        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
+        mb_annual = np.sum(prcpsol - self.mu_star * tmelt, axis=1)
+        mb_annual = (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
+        if add_climate:
+            return (mb_annual, t.mean(axis=1), tmelt.sum(axis=1),
+                    prcp.sum(axis=1), prcpsol.sum(axis=1))
+        return mb_annual
 
 
 class ConstantMassBalance(MassBalanceModel):
@@ -706,8 +709,12 @@ class ConstantMassBalance(MassBalanceModel):
         yr, m = floatyear_to_date(year)
         return self.interp_m[m-1](heights)
 
-    def get_annual_mb(self, heights, year=None, **kwargs):
-        return self.interp_yr(heights)
+    def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
+        mb = self.interp_yr(heights)
+        if add_climate:
+            t, tmelt, prcp, prcpsol = self.get_climate(heights)
+            return mb, t, tmelt, prcp, prcpsol
+        return mb
 
 
 class RandomMassBalance(MassBalanceModel):
@@ -856,7 +863,7 @@ class RandomMassBalance(MassBalanceModel):
 
     def get_annual_mb(self, heights, year=None, **kwargs):
         ryr = self.get_state_yr(int(year))
-        return self.mbmod.get_annual_mb(heights, year=ryr)
+        return self.mbmod.get_annual_mb(heights, year=ryr, **kwargs)
 
 
 class UncertainMassBalance(MassBalanceModel):
@@ -1118,7 +1125,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                              'MultipleFlowlineMassBalance!')
 
         return self.flowline_mb_models[fl_id].get_monthly_mb(heights,
-                                                             year=year)
+                                                             year=year,
+                                                             **kwargs)
 
     def get_annual_mb(self, heights, year=None, fl_id=None, **kwargs):
 
@@ -1127,7 +1135,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                              'MultipleFlowlineMassBalance!')
 
         return self.flowline_mb_models[fl_id].get_annual_mb(heights,
-                                                            year=year)
+                                                            year=year,
+                                                            **kwargs)
 
     def get_annual_mb_on_flowlines(self, fls=None, year=None):
         """Get the MB on all points of the glacier at once.

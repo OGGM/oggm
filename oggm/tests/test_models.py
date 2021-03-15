@@ -3141,6 +3141,235 @@ class TestHEF:
                                            ods[vn].sel(time=1980),
                                            rtol=rtol)
 
+@pytest.mark.usefixtures('with_class_wd')
+class TestHydro:
+
+    @pytest.mark.slow
+    def test_hydro_out_from_no_glacier(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             bias=0, nyears=100, zero_initial_glacier=True,
+                             output_filesuffix='_const')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_const')) as ds:
+            odf = ds.to_dataframe().iloc[:-1]
+
+        # Sanity checks
+        # Tot prcp here is constant (constant climate)
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+        assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        odf['reconstructed_vol'] = odf['model_mb'].cumsum() / cfg.PARAMS['ice_density']
+        assert_allclose(odf['volume_m3'].iloc[1:], odf['reconstructed_vol'].iloc[:-1])
+
+        # Mass-conservation
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in - mass_out - mass_in_snow - mass_in_glacier,
+                        0, atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # At the very first timesep there is no glacier so the
+        # melt_on_glacier var is negative - this is a numerical artifact
+        # from the residual
+        assert_allclose(odf['melt_on_glacier'].iloc[0],
+                        - odf['residual_mb'].iloc[0])
+
+    @pytest.mark.slow
+    def test_hydro_out_commitment(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             nyears=100, y0=2003-5, halfsize=5,
+                             output_filesuffix='_const')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_const')) as ds:
+            odf = ds.to_dataframe().iloc[:-1]
+
+        # Sanity checks
+        # Tot prcp here is constant (constant climate)
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+        assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        reconstructed_vol = (odf['model_mb'].cumsum() / cfg.PARAMS['ice_density'] +
+                             odf['volume_m3'].iloc[0])
+        assert_allclose(odf['volume_m3'].iloc[1:], reconstructed_vol.iloc[:-1])
+
+        # Mass-conservation
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # Qualitative assessments
+        assert odf['melt_on_glacier'].iloc[-1] < odf['melt_on_glacier'].iloc[0] * 0.7
+        assert odf['liq_prcp_off_glacier'].iloc[-1] > odf['liq_prcp_on_glacier'].iloc[-1]
+        assert odf['liq_prcp_off_glacier'].iloc[0] < odf['liq_prcp_on_glacier'].iloc[0]
+
+        # Residual MB should not be crazy large
+        frac = odf['residual_mb'] / odf['melt_on_glacier']
+        assert_allclose(frac, 0, atol=0.02)
+
+    @pytest.mark.slow
+    def test_hydro_out_past_climate(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                             min_ys=1980, output_filesuffix='_hist')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_hist')) as ds:
+            odf = ds.to_dataframe().iloc[:-1]
+
+        # Sanity checks
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        reconstructed_vol = (odf['model_mb'].cumsum() / cfg.PARAMS['ice_density'] +
+                             odf['volume_m3'].iloc[0])
+        assert_allclose(odf['volume_m3'].iloc[1:], reconstructed_vol.iloc[:-1])
+
+        # Mass-conservation
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # Residual MB should not be crazy large
+        frac = odf['residual_mb'] / odf['melt_on_glacier']
+        assert_allclose(frac, 0, atol=0.01)
+
+        # Also check output stuff
+        nds = utils.compile_run_output([gdir], filesuffix='_hist')
+        assert nds.residual_mb.attrs['unit'] == 'kg yr-1'
+        assert_allclose(nds['snowfall_on_glacier'].squeeze()[:-1],
+                        odf['snowfall_on_glacier'])
+
+    @pytest.mark.slow
+    def test_hydro_out_random(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+        tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
+                             seed=0, nyears=100, y0=2003-5, halfsize=5,
+                             output_filesuffix='_rand')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_rand')) as ds:
+            odf = ds.to_dataframe().iloc[:-1]
+
+        # Sanity checks
+        # Tot prcp here is constant (constant climate)
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        reconstructed_vol = (odf['model_mb'].cumsum() / cfg.PARAMS['ice_density'] +
+                             odf['volume_m3'].iloc[0])
+        assert_allclose(odf['volume_m3'].iloc[1:], reconstructed_vol.iloc[:-1])
+
+        # Mass-conservation
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # Qualitative assessments
+        assert odf['melt_on_glacier'].iloc[-1] < odf['melt_on_glacier'].iloc[0] * 0.7
+        assert odf['liq_prcp_off_glacier'].iloc[-1] > odf['liq_prcp_on_glacier'].iloc[-1]
+        assert odf['liq_prcp_off_glacier'].iloc[0] < odf['liq_prcp_on_glacier'].iloc[0]
+
+        # Residual MB should not be crazy large
+        frac = odf['residual_mb'] / odf['melt_on_glacier']
+        assert_allclose(frac, 0, atol=0.04)  # annual can be large (prob)
+
 
 @pytest.fixture(scope='class')
 def merged_hef_cfg(class_case_dir):

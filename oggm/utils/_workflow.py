@@ -24,6 +24,7 @@ import fnmatch
 import platform
 import struct
 import importlib
+import re as regexp
 
 # External libs
 import pandas as pd
@@ -1019,7 +1020,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         # Backwards compatibility - to remove one day...
         for r in ['_m3', '_m2', '_myr', '_m']:
             # Order matters
-            vn = vn.replace(r, '')
+            vn = regexp.sub(r + '$', '', vn)
         ds[vn] = (('time', 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_1d.items():
