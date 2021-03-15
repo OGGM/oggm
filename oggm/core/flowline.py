@@ -2654,7 +2654,7 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
         o = pd.Series(index=index, data=np.zeros(len(index)))
         o.name = yr
         for fl_id, (max_area, snow_bucket, bin_area_2d, bin_elev_2d) in \
-            enumerate(zip(max_areas, snow_buckets, bin_area_2ds, bin_elev_2ds)):
+                enumerate(zip(max_areas, snow_buckets, bin_area_2ds, bin_elev_2ds)):
 
             bin_area = bin_area_2d[i, :]
             bin_elev = bin_elev_2d[i, :]
