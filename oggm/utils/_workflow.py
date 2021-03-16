@@ -2626,8 +2626,8 @@ class GlacierDirectory(object):
         Parameters
         ----------
         input_filesuffix : str
-            input_filesuffix of the climate_historical that should be used
-            default is to take the climate_historical without input_filesuffix
+            input_filesuffix of the climate_historical that should be used.
+            Default is to take the climate_historical without input_filesuffix
         """
 
         try:
@@ -2928,8 +2928,8 @@ class GlacierDirectory(object):
             climate data (or PARAMS['ref_mb_valid_window']) and decide
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used
-            if y0 and y1 are not given,
-            default is to take the climate_historical without input_filesuffix
+            if y0 and y1 are not given. The default is to take the
+            climate_historical without input_filesuffix
         """
 
         if self._mbdf is None:
@@ -2966,7 +2966,7 @@ class GlacierDirectory(object):
         Parameters
         ----------
         input_filesuffix : str
-            input_filesuffix of the climate_historical that should be used,
+            input_filesuffix of the climate_historical that should be used. The
             default is to take the climate_historical without input_filesuffix
 
         """
