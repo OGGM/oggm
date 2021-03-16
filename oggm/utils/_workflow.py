@@ -2621,11 +2621,14 @@ class GlacierDirectory(object):
             json.dump(var, f, default=np_convert)
 
     def get_climate_info(self, input_filesuffix=''):
-        """Convenience function handling some backwards compat aspects"""
+        """Convenience function handling some backwards compat aspects
 
-        # I don't see another way to ensure that the right climate is used
-        if not input_filesuffix and (cfg.PARAMS['baseline_climate'] == 'ERA5_daily'):
-            input_filesuffix = '_daily'
+        Parameters
+        ----------
+        input_filesuffix : str
+            input_filesuffix of the climate_historical that should be used.
+            Default is to take the climate_historical without input_filesuffix
+        """
 
         try:
             out = self.read_json('climate_info')
@@ -2910,7 +2913,7 @@ class GlacierDirectory(object):
         mb_df.index.name = 'YEAR'
         self._mbdf = mb_df
 
-    def get_ref_mb_data(self, y0=None, y1=None):
+    def get_ref_mb_data(self, y0=None, y1=None, input_filesuffix=''):
         """Get the reference mb data from WGMS (for some glaciers only!).
 
         Raises an Error if it isn't a reference glacier at all.
@@ -2923,6 +2926,10 @@ class GlacierDirectory(object):
         y1 : int
             override the default behavior which is to check the available
             climate data (or PARAMS['ref_mb_valid_window']) and decide
+        input_filesuffix : str
+            input_filesuffix of the climate_historical that should be used
+            if y0 and y1 are not given. The default is to take the
+            climate_historical without input_filesuffix
         """
 
         if self._mbdf is None:
@@ -2936,7 +2943,7 @@ class GlacierDirectory(object):
             y1 = t1
 
         if y0 is None or y1 is None:
-            ci = self.get_climate_info()
+            ci = self.get_climate_info(input_filesuffix=input_filesuffix)
             if 'baseline_hydro_yr_0' not in ci:
                 raise InvalidWorkflowError('Please process some climate data '
                                            'before call')
@@ -2950,11 +2957,18 @@ class GlacierDirectory(object):
             out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
-    def get_ref_mb_profile(self):
+    def get_ref_mb_profile(self, input_filesuffix=''):
         """Get the reference mb profile data from WGMS (if available!).
 
         Returns None if this glacier has no profile and an Error if it isn't
         a reference glacier at all.
+
+        Parameters
+        ----------
+        input_filesuffix : str
+            input_filesuffix of the climate_historical that should be used. The
+            default is to take the climate_historical without input_filesuffix
+
         """
 
         if self._mbprofdf is None:
@@ -2974,7 +2988,7 @@ class GlacierDirectory(object):
             # list of years
             self._mbprofdf = pd.read_csv(reff, index_col=0)
 
-        ci = self.get_climate_info()
+        ci = self.get_climate_info(input_filesuffix=input_filesuffix)
         if 'baseline_hydro_yr_0' not in ci:
             raise RuntimeError('Please process some climate data before call')
         y0 = ci['baseline_hydro_yr_0']
