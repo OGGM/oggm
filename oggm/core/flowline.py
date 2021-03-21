@@ -1748,24 +1748,43 @@ class FileModel(object):
         """
 
         self.fls = glacier_from_netcdf(path)
-        dss = []
-        for flid, fl in enumerate(self.fls):
-            ds = xr.open_dataset(path, group='fl_{}'.format(flid))
-            ds.load()
-            dss.append(ds)
 
-        try:
-            self.last_yr = ds.year.values[-1]
-        except AttributeError:
-            raise InvalidWorkflowError('The provided model output file is '
-                                       'incomplete (likely when the previous '
-                                       'run failed) or corrupt.')
-        self.dss = dss
+        fl_tss = []
+        for flid, fl in enumerate(self.fls):
+            with xr.open_dataset(path, group='fl_{}'.format(flid)) as ds:
+                if flid == 0:
+                    # Populate time
+                    self.time = ds.time.values
+                    try:
+                        self.years = ds.year.values
+                    except AttributeError:
+                        raise InvalidWorkflowError('The provided model output '
+                                                   'file is incomplete (likely '
+                                                   'when the previous '
+                                                   'run failed) or corrupt.')
+                    try:
+                        self.months = ds.month.values
+                    except AttributeError:
+                        self.months = self.years * 0 + 1
+
+                # Read out the data
+                fl_data = {
+                    'ts_section': ds.ts_section.values,
+                    'ts_width_m': ds.ts_width_m.values,
+                }
+                try:
+                    fl_data['ts_calving_bucket_m3'] = ds.ts_calving_bucket_m3.values
+                except AttributeError:
+                    fl_data['ts_calving_bucket_m3'] = self.years * 0
+                fl_tss.append(fl_data)
+
+        self.fl_tss = fl_tss
+        self.last_yr = float(ds.time[-1])
 
         # Calving diags
         try:
             with xr.open_dataset(path) as ds:
-                self._calving_m3_since_y0 = ds.calving_m3.load()
+                self._calving_m3_since_y0 = ds.calving_m3.values
                 self.do_calving = True
         except AttributeError:
             self._calving_m3_since_y0 = 0
@@ -1775,19 +1794,22 @@ class FileModel(object):
         self.reset_y0()
 
     def __enter__(self):
+        warnings.warn('FileModel no longer needs to be run as a '
+                      'context manager. You can safely remove the '
+                      '`with` statement.', FutureWarning)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        for ds in self.dss:
-            ds.close()
+        pass
 
     def reset_y0(self, y0=None):
         """Reset the initial model time"""
 
         if y0 is None:
-            y0 = float(self.dss[0].time[0])
+            y0 = float(self.time[0])
         self.y0 = y0
         self.yr = y0
+        self._current_index = 0
 
     @property
     def area_m2(self):
@@ -1811,39 +1833,39 @@ class FileModel(object):
 
     @property
     def calving_m3_since_y0(self):
-        return self._calving_m3_since_y0.sel(time=self.yr).values
+        if self.do_calving:
+            return self._calving_m3_since_y0[self._current_index]
+        else:
+            return 0
 
     def run_until(self, year=None, month=None):
         """Mimics the model's behavior.
 
         Is quite slow tbh.
         """
-        if month is not None:
-            for fl, ds in zip(self.fls, self.dss):
-                sel = ds.isel(time=(ds.year == year) & (ds.month == month))
-                fl.section = sel.ts_section.values
-                try:
-                    fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
-                except AttributeError:
-                    fl.calving_bucket_m3 = 0
-        else:
-            for fl, ds in zip(self.fls, self.dss):
-                sel = ds.sel(time=year)
-                fl.section = sel.ts_section.values
-                try:
-                    fl.calving_bucket_m3 = sel.ts_calving_bucket_m3.values
-                except AttributeError:
-                    fl.calving_bucket_m3 = 0
-        self.yr = sel.time.values
+        try:
+            if month is not None:
+                pok = np.nonzero((self.years == year) & (self.months == month))[0][0]
+            else:
+                pok = np.nonzero(self.time == year)[0][0]
+        except IndexError as err:
+            raise IndexError('Index year={}, month={} not available in '
+                             'FileModel.'.format(year, month)) from err
+
+        self.yr = self.time[pok]
+        self._current_index = pok
+
+        for fl, fl_ts in zip(self.fls, self.fl_tss):
+            fl.section = fl_ts['ts_section'][pok, :]
+            fl.calving_bucket_m3 = fl_ts['ts_calving_bucket_m3'][pok]
 
     def area_m2_ts(self, rollmin=0):
         """rollmin is the number of years you want to smooth onto"""
         sel = 0
-        for fl, ds in zip(self.fls, self.dss):
-            widths = ds.ts_width_m.copy()
-            widths[:] = np.where(ds.ts_section > 0., ds.ts_width_m, 0.)
-            sel += widths.sum(dim='x') * fl.dx_meter
-        sel = sel.to_series()
+        for fl, fl_ts in zip(self.fls, self.fl_tss):
+            widths = np.where(fl_ts['ts_section'] > 0., fl_ts['ts_width_m'], 0.)
+            sel += widths.sum(axis=1) * fl.dx_meter
+        sel = pd.Series(data=sel, index=self.time, name='area_m2')
         if rollmin != 0:
             sel = sel.rolling(rollmin).min()
             sel.iloc[0:rollmin] = sel.iloc[rollmin]
@@ -1854,13 +1876,10 @@ class FileModel(object):
 
     def volume_m3_ts(self):
         sel = 0
-        for fl, ds in zip(self.fls, self.dss):
-            sel += ds.ts_section.sum(dim='x') * fl.dx_meter
-            try:
-                sel -= ds.ts_calving_bucket_m3
-            except AttributeError:
-                pass
-        return sel.to_series()
+        for fl, fl_ts in zip(self.fls, self.fl_tss):
+            sel += fl_ts['ts_section'].sum(axis=1) * fl.dx_meter
+            sel -= fl_ts['ts_calving_bucket_m3']
+        return pd.Series(data=sel, index=self.time, name='volume_m3')
 
     def volume_km3_ts(self):
         return self.volume_m3_ts() * 1e-9
@@ -2509,13 +2528,13 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
                                filesuffix=init_model_filesuffix)
-        with FileModel(fp) as fmod:
-            if init_model_yr is None:
-                init_model_yr = fmod.last_yr
-            fmod.run_until(init_model_yr)
-            init_model_fls = fmod.fls
-            if ys is None:
-                ys = init_model_yr
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
+        if ys is None:
+            ys = init_model_yr
 
     # Take from rgi date if not set yet
     if ys is None:
@@ -2592,46 +2611,45 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
     # Glacier geometry during the run
     suffix = kwargs.get('output_filesuffix', '')
 
-    with FileModel(gdir.get_filepath('model_geometry', filesuffix=suffix)) as fmod:
+    # We start by fetching mass balance data and geometry for all years
+    fmod = FileModel(gdir.get_filepath('model_geometry', filesuffix=suffix))
+    years = np.arange(fmod.y0, fmod.last_yr)
 
-        # We start by fetching mass balance data and geometry for all years
-        years = np.arange(fmod.y0, fmod.last_yr)
+    # Geometry at t0 to start with + off-glacier snow bucket
+    bin_area_2ds = []
+    bin_elev_2ds = []
+    max_areas = []
+    snow_buckets = []
+    for fl in fmod.fls:
+        # Glacier area on bins
+        bin_area = fl.bin_area_m2
+        max_areas.append(bin_area)
+        snow_buckets.append(bin_area * 0)
 
-        # Geometry at t0 to start with + off-glacier snow bucket
-        bin_area_2ds = []
-        bin_elev_2ds = []
-        max_areas = []
-        snow_buckets = []
-        for fl in fmod.fls:
-            # Glacier area on bins
+        # Output 2d data
+        shape = len(years), len(bin_area)
+        bin_area_2ds.append(np.empty(shape, np.float64))
+        bin_elev_2ds.append(np.empty(shape, np.float64))
+
+    # Ok now fetch all geometry data in a first loop
+    # We do that because we want to get the largest possible area (always)
+    # and we want to minimize the number of calls to run_until
+    model_area = []
+    model_vol = []
+    for i, yr in enumerate(years):
+        fmod.run_until(yr)
+        model_area.append(fmod.area_m2)
+        model_vol.append(fmod.volume_m3)
+
+        for fl_id, (fl, max_area, bin_area_2d, bin_elev_2d) in \
+                enumerate(zip(fmod.fls, max_areas, bin_area_2ds, bin_elev_2ds)):
+            # Update the area if necessary
             bin_area = fl.bin_area_m2
-            max_areas.append(bin_area)
-            snow_buckets.append(bin_area * 0)
+            max_area[:] = utils.clip_min(max_area, bin_area)
 
-            # Output 2d data
-            shape = len(years), len(bin_area)
-            bin_area_2ds.append(np.empty(shape, np.float64))
-            bin_elev_2ds.append(np.empty(shape, np.float64))
-
-        # Ok now fetch all geometry data in a first loop
-        # We do that because we want to get the largest possible area (always)
-        # and we want to minimize the number of calls to run_until
-        model_area = []
-        model_vol = []
-        for i, yr in enumerate(years):
-            fmod.run_until(yr)
-            model_area.append(fmod.area_m2)
-            model_vol.append(fmod.volume_m3)
-
-            for fl_id, (fl, max_area, bin_area_2d, bin_elev_2d) in \
-                    enumerate(zip(fmod.fls, max_areas, bin_area_2ds, bin_elev_2ds)):
-                # Update the area if necessary
-                bin_area = fl.bin_area_m2
-                max_area[:] = utils.clip_min(max_area, bin_area)
-
-                # Time varying bins
-                bin_area_2d[i, :] = bin_area
-                bin_elev_2d[i, :] = fl.surface_h
+            # Time varying bins
+            bin_area_2d[i, :] = bin_area
+            bin_elev_2d[i, :] = fl.surface_h
 
     # Ok now we have arrays, we can work with that
     # Second time varying loop for mass-balance

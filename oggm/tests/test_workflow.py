@@ -3,6 +3,7 @@ import shutil
 import unittest
 import pickle
 import pytest
+import warnings
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
@@ -13,7 +14,6 @@ salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
 # Locals
-import oggm
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape
@@ -302,12 +302,12 @@ class TestFullRun(unittest.TestCase):
         for gd in gdirs:
             path = gd.get_filepath('model_geometry', filesuffix='_test')
             # See that we are running ok
-            with flowline.FileModel(path) as model:
-                vol = model.volume_km3_ts()
-                area = model.area_km2_ts()
+            model = flowline.FileModel(path)
+            vol = model.volume_km3_ts()
+            area = model.area_km2_ts()
 
-                self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
-                self.assertTrue(np.all(np.isfinite(area) & area != 0.))
+            self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
+            self.assertTrue(np.all(np.isfinite(area) & area != 0.))
 
             ds_diag = gd.get_filepath('model_diagnostics', filesuffix='_test')
             ds_diag = xr.open_dataset(ds_diag)

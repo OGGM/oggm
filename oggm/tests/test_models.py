@@ -1532,36 +1532,47 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        with FileModel(geom_path) as fmodel:
-            assert fmodel.last_yr == 500
-            fls = dummy_constant_bed()
-            model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                   glen_a=self.glen_a)
-            for yr in years:
-                model.run_until(yr)
-                if yr in [100, 300, 500]:
-                    # this is sloooooow so we test a little bit only
-                    fmodel.run_until(yr)
-                    np.testing.assert_allclose(model.fls[0].section,
-                                               fmodel.fls[0].section)
-                    np.testing.assert_allclose(model.fls[0].widths_m,
-                                               fmodel.fls[0].widths_m)
+        with pytest.warns(FutureWarning):
+            with FileModel(geom_path):
+                pass
 
-            np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-            np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
-            with pytest.raises(NotImplementedError):
-                fmodel.length_m_ts()
+        fmodel = FileModel(geom_path)
+        assert fmodel.last_yr == 500
 
-            # Can we start a run from the middle?
-            fmodel.run_until(300)
-            model = FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
-                                   glen_a=self.glen_a)
-            model.run_until(500)
-            fmodel.run_until(500)
-            np.testing.assert_allclose(model.fls[0].section,
-                                       fmodel.fls[0].section)
-            np.testing.assert_allclose(model.fls[0].thick,
-                                       fmodel.fls[0].thick)
+        with pytest.raises(IndexError):
+            fmodel.run_until(500.1)
+
+        with pytest.raises(IndexError):
+            fmodel.run_until(500, 12)
+
+        fls = dummy_constant_bed()
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               glen_a=self.glen_a)
+        for yr in years:
+            model.run_until(yr)
+            if yr in [100, 300, 500]:
+                # this is sloooooow so we test a little bit only
+                fmodel.run_until(yr, 1)
+                np.testing.assert_allclose(model.fls[0].section,
+                                           fmodel.fls[0].section)
+                np.testing.assert_allclose(model.fls[0].widths_m,
+                                           fmodel.fls[0].widths_m)
+
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        with pytest.raises(NotImplementedError):
+            fmodel.length_m_ts()
+
+        # Can we start a run from the middle?
+        fmodel.run_until(300)
+        model = FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
+                               glen_a=self.glen_a)
+        model.run_until(500)
+        fmodel.run_until(500)
+        np.testing.assert_allclose(model.fls[0].section,
+                                   fmodel.fls[0].section)
+        np.testing.assert_allclose(model.fls[0].thick,
+                                   fmodel.fls[0].thick)
 
     @pytest.mark.slow
     def test_calving_filemodel(self, class_case_dir):
@@ -1586,16 +1597,16 @@ class TestIO():
         assert_allclose(diag.volume_m3.max() + diag.calving_m3.max(),
                         model.flux_gate_m3_since_y0)
 
-        with FileModel(geom_path) as fmodel:
-            assert fmodel.last_yr == y1
-            assert fmodel.do_calving
+        fmodel = FileModel(geom_path)
+        assert fmodel.last_yr == y1
+        assert fmodel.do_calving
 
-            np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
-            np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
 
-            fmodel.run_until(y1)
-            assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
-                            model.flux_gate_m3_since_y0)
+        fmodel.run_until(y1)
+        assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
 
     @pytest.mark.slow
     def test_run_annual_step(self, class_case_dir):
@@ -1656,32 +1667,33 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
-        with FileModel(geom_path) as fmodel:
-            assert fmodel.last_yr == 500
-            fls = dummy_constant_bed()
-            model = FluxBasedModel(fls, mb_model=mb, y0=0.,
-                                   glen_a=self.glen_a)
-            for yr in years:
-                model.run_until(yr)
-                if yr in [100, 300, 500]:
-                    # this is sloooooow so we test a little bit only
-                    fmodel.run_until(yr)
-                    np.testing.assert_allclose(model.fls[0].section,
-                                               fmodel.fls[0].section)
-                    np.testing.assert_allclose(model.fls[0].widths_m,
-                                               fmodel.fls[0].widths_m)
+        fmodel = FileModel(geom_path)
+        assert fmodel.last_yr == 500
+        fls = dummy_constant_bed()
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               glen_a=self.glen_a)
 
-            np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
-            np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+        for yr in years:
+            model.run_until(yr)
+            if yr in [100, 300, 500]:
+                # this used to be sloooooow so we test a little bit only
+                fmodel.run_until(yr)
+                np.testing.assert_allclose(model.fls[0].section,
+                                           fmodel.fls[0].section)
+                np.testing.assert_allclose(model.fls[0].widths_m,
+                                           fmodel.fls[0].widths_m)
 
-            # Can we start a run from the middle?
-            fmodel.run_until(300)
-            model = FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
-                                   glen_a=self.glen_a)
-            model.run_until(500)
-            fmodel.run_until(500)
-            np.testing.assert_allclose(model.fls[0].section,
-                                       fmodel.fls[0].section)
+        np.testing.assert_allclose(fmodel.volume_m3_ts(), vol_ref)
+        np.testing.assert_allclose(fmodel.area_m2_ts(), a_ref)
+
+        # Can we start a run from the middle?
+        fmodel.run_until(300)
+        model = FluxBasedModel(fmodel.fls, mb_model=mb, y0=300,
+                               glen_a=self.glen_a)
+        model.run_until(500)
+        fmodel.run_until(500)
+        np.testing.assert_allclose(model.fls[0].section,
+                                   fmodel.fls[0].section)
 
     def test_gdir_copy(self, hef_gdir):
 
@@ -2757,13 +2769,13 @@ class TestHEF:
                  ]
 
         for path in paths:
-            with FileModel(path) as model:
-                vol = model.volume_km3_ts()
-                area = model.area_km2_ts()
-                np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                           rtol=0.12)
-                np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                           rtol=0.1)
+            model = FileModel(path)
+            vol = model.volume_km3_ts()
+            area = model.area_km2_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                       rtol=0.12)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                       rtol=0.1)
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
@@ -2794,13 +2806,13 @@ class TestHEF:
                  gdir_sh.get_filepath('model_geometry', filesuffix='_ct'),
                  ]
         for path in paths:
-            with FileModel(path) as model:
-                vol = model.volume_km3_ts()
-                area = model.area_km2_ts()
-                np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                           rtol=0.1)
-                np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                           rtol=0.1)
+            model = FileModel(path)
+            vol = model.volume_km3_ts()
+            area = model.area_km2_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                       rtol=0.1)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                       rtol=0.1)
 
         # Test a SH/NH mix
         init_present_time_glacier(gdir)
@@ -2867,19 +2879,19 @@ class TestHEF:
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
+        fmod = FileModel(fp)
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
         run_from_climate_data(hef_gdir, ye=2004, init_model_filesuffix='_1',
                               output_filesuffix='_2')
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_2')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
+        fmod = FileModel(fp)
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
 
     def test_start_from_spinup_minmax_ys(self, hef_gdir):
 
@@ -2898,38 +2910,38 @@ class TestHEF:
                               output_filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
+        fmod = FileModel(fp)
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
         run_from_climate_data(hef_gdir, ye=2005, min_ys=2005,
                               output_filesuffix='_2')
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_2')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area)
-            np.testing.assert_allclose(fmod.volume_km3, vol)
+        fmod = FileModel(fp)
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area)
+        np.testing.assert_allclose(fmod.volume_km3, vol)
 
         # Again
         run_from_climate_data(hef_gdir, ys=2002, ye=2003,
                               init_model_filesuffix='_1',
                               output_filesuffix='_3')
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_3')
-        with FileModel(fp) as fmod:
-            fmod.run_until(fmod.last_yr)
-            np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
-            np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
+        fmod = FileModel(fp)
+        fmod.run_until(fmod.last_yr)
+        np.testing.assert_allclose(fmod.area_km2, area, rtol=0.05)
+        np.testing.assert_allclose(fmod.volume_km3, vol, rtol=0.05)
 
         # Again to check that time is correct
         run_from_climate_data(hef_gdir, ys=None, ye=None,
                               init_model_filesuffix='_1',
                               output_filesuffix='_4')
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_4')
-        with FileModel(fp) as fmod:
-            assert fmod.y0 == 2002
-            assert fmod.last_yr == 2004
+        fmod = FileModel(fp)
+        assert fmod.y0 == 2002
+        assert fmod.last_yr == 2004
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
