@@ -2579,7 +2579,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
 
 @entity_task(log)
-def run_with_hydro(gdir, run_task=None, **kwargs):
+def run_with_hydro(gdir, run_task=None, store_monthly_hydro = False, **kwargs):
     """Run the flowline model and add hydro diagnostics (experimental!).
 
     TODOs:
@@ -2612,9 +2612,10 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
     suffix = kwargs.get('output_filesuffix', '')
 
     # We start by fetching mass balance data and geometry for all years
+    # although the netcdf file is in monthly timesteps FileModel only gives yearly timesteps
     fmod = FileModel(gdir.get_filepath('model_geometry', filesuffix=suffix))
     years = np.arange(fmod.y0, fmod.last_yr)
-
+    
     # Geometry at t0 to start with + off-glacier snow bucket
     bin_area_2ds = []
     bin_elev_2ds = []
@@ -2636,8 +2637,16 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
     # and we want to minimize the number of calls to run_until
     model_area = []
     model_vol = []
+    if kwargs['store_monthly_step']:
+        years = utils.monthly_timeseries(years[0],years[-1]+1)[:-1]
     for i, yr in enumerate(years):
-        fmod.run_until(yr)
+        if kwargs['store_monthly_step']:
+            y, m = utils.floatyear_to_date(yr)
+            #this does not work though
+            #fmod.months are always 1
+            fmod.run_until(y, m)
+        else:
+            fmod.run_until(yr)
         model_area.append(fmod.area_m2)
         model_vol.append(fmod.volume_m3)
 
@@ -2668,21 +2677,31 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
     ]
 
     odf = []
+    if kwargs['store_monthly_step'] or store_monthly_hydro:
+        years = utils.monthly_timeseries(years[0],years[-1]+1)[:-1]
     for i, yr in enumerate(years):
         o = pd.Series(index=index, data=np.zeros(len(index)))
         o.name = yr
         for fl_id, (max_area, snow_bucket, bin_area_2d, bin_elev_2d) in \
                 enumerate(zip(max_areas, snow_buckets, bin_area_2ds, bin_elev_2ds)):
-
+            if kwargs['store_monthly_step'] or store_monthly_hydro:
+                #would not be needed if FileModel works on monthly scale
+                i = int(np.floor(i/12))
             bin_area = bin_area_2d[i, :]
             bin_elev = bin_elev_2d[i, :]
 
             # Make sure we have no negative contribution
             off_area = utils.clip_min(max_area - bin_area, 0)
-
+            
             # Get the mb data
             try:
-                mb, _, _, prcp, prcpsol = mb_mod.get_annual_mb(bin_elev,
+                if kwargs['store_monthly_step'] or store_monthly_hydro:
+                    mb, _, _, prcp, prcpsol = mb_mod.get_monthly_mb(bin_elev,
+                                                               fl_id=fl_id,
+                                                               year=yr,
+                                                               add_climate=True)
+                else:
+                    mb, _, _, prcp, prcpsol = mb_mod.get_annual_mb(bin_elev,
                                                                fl_id=fl_id,
                                                                year=yr,
                                                                add_climate=True)
@@ -2694,7 +2713,10 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
                 raise
 
             # Here we use mass (kg yr-1) not ice volume
-            mb *= cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+            if kwargs['store_monthly_step'] or store_monthly_hydro:
+                mb *= cfg.SEC_IN_MONTH * cfg.PARAMS['ice_density']
+            else:
+                mb *= cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
 
             liq_prcp_on_g = (prcp - prcpsol) * bin_area
             liq_prcp_off_g = (prcp - prcpsol) * off_area
@@ -2731,15 +2753,26 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
 
     # Add an empty one for the last year for compatibility with the diags
     o = pd.Series(index=index, data=np.zeros(len(index)) * np.NaN)
-    o.name = yr + 1
+    if kwargs['store_monthly_step'] or store_monthly_hydro:
+        yr_add = yr + 1/12
+        yr, m = utils.floatyear_to_date(yr_add)
+    else:
+        yr_add = yr + 1
+    o.name = yr_add
     odf.append(o)
-    fmod.run_until(yr + 1)
+    #TO DO run until only runs on yearly time scale, therefore output of model area and model vol is in years
+    if kwargs['store_monthly_step'] or store_monthly_hydro:
+        #this does not give monthly output but monthly output necessary for model_area, model_vol
+        fmod.run_until(yr, m)
+    else:
+        fmod.run_until(yr_add)
     model_area.append(fmod.area_m2)
     model_vol.append(fmod.volume_m3)
 
     # Final output
     odf = pd.DataFrame(odf)
     odf.index.name = 'time'
+    #model volume has yearly steps but odf has monthly steps, does not work together
     odf['model_vol'] = np.array(model_vol) * cfg.PARAMS['ice_density']
     odf['model_mb'] = odf['model_vol'].iloc[1:].values - odf['model_vol'].iloc[:-1]
 
@@ -2754,6 +2787,7 @@ def run_with_hydro(gdir, run_task=None, **kwargs):
 
     # Append the output to the existing diagnostics and convert to
     # xarray for compatibility
+    #TO DO: it can not be added to existing file path, because if the run only stores yearly values you cannot change this and store monthly values
     fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
 
     sel_vars = {
