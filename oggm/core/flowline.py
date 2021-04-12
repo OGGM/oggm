@@ -2215,7 +2215,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     if store_monthly_step and (mb_elev_feedback == 'annual'):
         warnings.warn("The mass-balance used to drive the ice dynamics model "
                       "is updated yearly. If you want the output to be stored "
-                      "monthly and also reflect reflect monthly processes," 
+                      "monthly and also reflect reflect monthly processes,"
                       "set store_monthly_step=True and "
                       "mb_elev_feedback='monthly'. This is not necessarily "
                       "recommended though.")
@@ -2615,7 +2615,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
     if kwargs.get('mb_elev_feedback', 'annual') != 'annual':
         raise InvalidParamsError('run_with_hydro only compatible with '
                                  "mb_elev_feedback='annual' (yes, even "
-                                 "when asked for monthly hydro output.")
+                                 "when asked for monthly hydro output).")
 
     out = run_task(gdir, **kwargs)
     if out is None:
@@ -2653,10 +2653,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
     # Ok now fetch all geometry data in a first loop
     # We do that because we want to get the largest possible area (always)
     # and we want to minimize the number of calls to run_until
-    model_vol = []
     for i, yr in enumerate(years):
         fmod.run_until(yr)
-        model_vol.append(fmod.volume_m3)
 
         for fl_id, (fl, max_area, bin_area_2d, bin_elev_2d) in \
                 enumerate(zip(fmod.fls, max_areas, bin_area_2ds, bin_elev_2ds)):
@@ -2848,10 +2846,12 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
             else:
                 # We simply spread over the months
                 residual_mb /= 12
-                out['melt_on_glacier']['data'][i, :] = out['melt_on_glacier']['data'][i, :] - residual_mb
+                out['melt_on_glacier']['data'][i, :] = (out['melt_on_glacier']['data'][i, :] -
+                                                        residual_mb)
         else:
             # We simply apply the residual - no choice here
-            out['melt_on_glacier']['data'][i, :] = out['melt_on_glacier']['data'][i, :] - residual_mb
+            out['melt_on_glacier']['data'][i, :] = (out['melt_on_glacier']['data'][i, :] -
+                                                    residual_mb)
 
         out['model_mb']['data'][i] = model_mb
         out['residual_mb']['data'][i] = residual_mb

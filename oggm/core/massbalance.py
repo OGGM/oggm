@@ -712,7 +712,7 @@ class ConstantMassBalance(MassBalanceModel):
         yr, m = floatyear_to_date(year)
         if add_climate:
             t, tmelt, prcp, prcpsol = self.get_climate(heights)
-            return self.interp_m[m-1](heights), t, tmelt, prcp, prcpsol       
+            return self.interp_m[m-1](heights), t, tmelt, prcp, prcpsol
         return self.interp_m[m-1](heights)
 
     def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):

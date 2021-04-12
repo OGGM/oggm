@@ -32,7 +32,6 @@ import numpy as np
 from scipy import stats
 import xarray as xr
 import shapely.geometry as shpg
-from scipy.sparse import diags
 from shapely.ops import transform as shp_trafo
 import netCDF4
 
