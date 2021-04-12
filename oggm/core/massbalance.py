@@ -865,7 +865,7 @@ class RandomMassBalance(MassBalanceModel):
     def get_monthly_mb(self, heights, year=None, **kwargs):
         ryr, m = floatyear_to_date(year)
         ryr = date_to_floatyear(self.get_state_yr(ryr), m)
-        return self.mbmod.get_monthly_mb(heights, year=ryr)
+        return self.mbmod.get_monthly_mb(heights, year=ryr, **kwargs)
 
     def get_annual_mb(self, heights, year=None, **kwargs):
         ryr = self.get_state_yr(int(year))

@@ -32,6 +32,7 @@ import numpy as np
 from scipy import stats
 import xarray as xr
 import shapely.geometry as shpg
+from scipy.sparse import diags
 from shapely.ops import transform as shp_trafo
 import netCDF4
 
@@ -982,6 +983,8 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         shape = (len(time), len(rgi_ids))
         out_2d = dict()
         for vn in ds_diag.data_vars:
+            if 'month_2d' in ds_diag[vn].dims:
+                continue
             var = dict()
             var['data'] = np.full(shape, np.nan)
             var['attrs'] = ds_diag[vn].attrs
@@ -1001,6 +1004,24 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             var['attrs'] = attrs
             out_1d[vn] = var
 
+        # Maybe 3D?
+        out_3d = dict()
+        if 'month_2d' in ds_diag.dims:
+            # We have some 3d vars
+            month_2d = ds_diag['month_2d']
+            ds.coords['month_2d'] = ('month_2d', month_2d)
+            cn = 'calendar_month_2d'
+            ds.coords[cn] = ('month_2d', ds_diag[cn].values)
+
+            shape = (len(time), len(month_2d), len(rgi_ids))
+            for vn in ds_diag.data_vars:
+                if 'month_2d' not in ds_diag[vn].dims:
+                    continue
+                var = dict()
+                var['data'] = np.full(shape, np.nan)
+                var['attrs'] = ds_diag[vn].attrs
+                out_3d[vn] = var
+
     # Read out
     for i, gdir in enumerate(gdirs):
         try:
@@ -1010,6 +1031,8 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                 nt = - len(ds_diag.volume_m3.values)
                 for vn, var in out_2d.items():
                     var['data'][nt:, i] = ds_diag[vn].values
+                for vn, var in out_3d.items():
+                    var['data'][nt:, :, i] = ds_diag[vn].values
                 for vn, var in out_1d.items():
                     var['data'][i] = ds_diag.attrs[vn]
         except BaseException:
@@ -1022,6 +1045,9 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             # Order matters
             vn = regexp.sub(r + '$', '', vn)
         ds[vn] = (('time', 'rgi_id'), var['data'])
+        ds[vn].attrs = var['attrs']
+    for vn, var in out_3d.items():
+        ds[vn] = (('time', 'month_2d', 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_1d.items():
         ds[vn] = (('rgi_id', ), var['data'])
