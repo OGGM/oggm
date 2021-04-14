@@ -677,7 +677,38 @@ class ConstantMassBalance(MassBalanceModel):
             interp_m.append(interp1d(self.hbins, mb_on_h / len(self.years)))
         return interp_m
 
-    def get_climate(self, heights, year=None):
+    def get_monthly_climate(self, heights, year=None):
+        """Average climate information at given heights.
+
+        Note that prcp is corrected with the precipitation factor and that
+        all other biases (precipitation, temp) are applied
+
+        Returns
+        -------
+        (temp, tempformelt, prcp, prcpsol)
+        """
+        _, m = floatyear_to_date(year)
+        yrs = [date_to_floatyear(y, m) for y in self.years]
+        heights = np.atleast_1d(heights)
+        nh = len(heights)
+        shape = (len(yrs), nh)
+        temp = np.zeros(shape)
+        tempformelt = np.zeros(shape)
+        prcp = np.zeros(shape)
+        prcpsol = np.zeros(shape)
+        for i, yr in enumerate(yrs):
+            t, tm, p, ps = self.mbmod.get_monthly_climate(heights, year=yr)
+            temp[i, :] = t
+            tempformelt[i, :] = tm
+            prcp[i, :] = p
+            prcpsol[i, :] = ps
+        # Note that we do not weight for number of days per month - bad
+        return (np.mean(temp, axis=0),
+                np.mean(tempformelt, axis=0),
+                np.mean(prcp, axis=0),
+                np.mean(prcpsol, axis=0))
+
+    def get_annual_climate(self, heights, year=None):
         """Average climate information at given heights.
 
         Note that prcp is corrected with the precipitation factor and that
@@ -702,7 +733,8 @@ class ConstantMassBalance(MassBalanceModel):
             tempformelt[i, :] = tm
             prcp[i, :] = p
             prcpsol[i, :] = ps
-        # Note that we do not weight for number of days per month - bad
+        # Note that we do not weight for number of days per month
+        # That's OGGM
         return (np.mean(temp, axis=0),
                 np.mean(tempformelt, axis=0) * 12,
                 np.mean(prcp, axis=0) * 12,
@@ -711,14 +743,14 @@ class ConstantMassBalance(MassBalanceModel):
     def get_monthly_mb(self, heights, year=None, add_climate=False, **kwargs):
         yr, m = floatyear_to_date(year)
         if add_climate:
-            t, tmelt, prcp, prcpsol = self.get_climate(heights)
+            t, tmelt, prcp, prcpsol = self.get_monthly_climate(heights, year=year)
             return self.interp_m[m-1](heights), t, tmelt, prcp, prcpsol
         return self.interp_m[m-1](heights)
 
     def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
         mb = self.interp_yr(heights)
         if add_climate:
-            t, tmelt, prcp, prcpsol = self.get_climate(heights)
+            t, tmelt, prcp, prcpsol = self.get_annual_climate(heights)
             return mb, t, tmelt, prcp, prcpsol
         return mb
 

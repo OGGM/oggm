@@ -1000,7 +1000,7 @@ class FlowlineModel(object):
         if 'length' in ovars:
             diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['length_m'].attrs['description'] = 'Glacier length'
-            diag_ds['length_m'].attrs['unit'] = 'm 3'
+            diag_ds['length_m'].attrs['unit'] = 'm'
 
         if 'calving' in ovars:
             diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)

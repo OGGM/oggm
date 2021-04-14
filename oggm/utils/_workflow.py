@@ -1626,7 +1626,7 @@ def climate_statistics(gdir, add_climate_period=1995):
                 d['tstar_mb_grad'] = np.NaN
             d['tstar_ela_h'] = mbmod.get_ela()
             # Climate
-            t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
+            t, tm, p, ps = mbmod.flowline_mb_models[0].get_annual_climate(
                 [d['tstar_ela_h'],
                  d['flowline_mean_elev'],
                  d['flowline_max_elev'],
@@ -1664,7 +1664,7 @@ def climate_statistics(gdir, add_climate_period=1995):
                     d[fs + '_mb_grad'] = np.NaN
                 d[fs + '_ela_h'] = mbmod.get_ela()
                 # Climate
-                t, tm, p, ps = mbmod.flowline_mb_models[0].get_climate(
+                t, tm, p, ps = mbmod.flowline_mb_models[0].get_annual_climate(
                     [d[fs + '_ela_h'],
                      d['flowline_mean_elev'],
                      d['flowline_max_elev'],
