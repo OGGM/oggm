@@ -25,7 +25,7 @@ Enhancements
 ~~~~~~~~~~~~
 
 - Mass-balance models now properly refer to ``prcp_fac`` (was incorrectly named
-  ``prcp+bias``) (:pull:`1211`).
+  ``prcp_bias``) (:pull:`1211`).
   Additionally, the ``run_*`` tasks in ``oggm.core.flowline`` can now also adjust
   the precipitation factor for sensitivity experiments.
   By `Lilian Schuster <https://github.com/lilianschuster>`_
@@ -38,6 +38,9 @@ Enhancements
   diagnostics after a standard dynamical run (:pull:`1224`).
   This is highly experimental, will likely change in the future.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added monthly output to ``run_with_hydro`` (:pull:`1232`).
+  By `Sarah Hanus <https://github.com/sarah-hanus>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 Bug fixes

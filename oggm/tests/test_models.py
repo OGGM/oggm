@@ -3471,7 +3471,7 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf_ma['residual_mb'] / odf_ma['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.01)
+        assert_allclose(frac.loc[~frac.isnull()], 0, atol=0.01)
 
         # Runoff peak should follow a temperature curve
         assert_allclose(odf_ma['runoff'].idxmax(), 11, atol=1.1)

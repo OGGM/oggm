@@ -2787,8 +2787,9 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
                 # IMPORTANT: this does not guarantee that melt cannot be negative
                 # the reason is the MB residual (called .bias in the model)
                 # that here can only be understood as a fake melt process.
-                # In particular at the montly scale this can lead to negative
-                # melt id mb_mod.bias is negative
+                # In particular at the monthly scale this can lead to negative
+                # melt id mb_mod.bias is negative - we try to mitigate this
+                # issue at the end of the year
                 melt_on_g = (prcpsol - mb) * bin_area
                 melt_off_g = (prcpsol - mb) * off_area
 
@@ -2824,7 +2825,22 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
         out['off_area']['data'][i] = off_area_out
         out['on_area']['data'][i] = on_area_out
 
-        # Correct for mass-conservation
+        # If monthly, try to mitigate for negative melt
+        if store_monthly_hydro:
+            for melt in [out['melt_on_glacier']['data'][i, :],
+                         out['melt_off_glacier']['data'][i, :]]:
+                is_neg = melt < 0
+                neg_melt = np.where(is_neg, melt, 0)
+                pos_melt = np.where(~is_neg, melt, 0)
+                # Ok we correct the positive melt instead
+                neg_sum = neg_melt.sum()
+                pos_sum = pos_melt.sum()
+                if pos_sum > 0 and (neg_sum / pos_sum > -1):
+                    # try to find a fac
+                    fac = 1 + neg_sum / pos_sum
+                    melt[:] = pos_melt * fac
+
+        # Correct for mass-conservation and match the ice-dynamics model
         fmod.run_until(yr + 1)
         model_mb = (fmod.volume_m3 - prev_model_vol) * cfg.PARAMS['ice_density']
         prev_model_vol = fmod.volume_m3
@@ -2837,7 +2853,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
         if store_monthly_hydro:
             # We try to correct the melt only where there is some
             asum = out['melt_on_glacier']['data'][i, :].sum()
-            if asum > 1 and residual_mb > 0:
+            if asum > 1e-7 and (residual_mb / asum < 1):
                 # try to find a fac
                 fac = 1 - residual_mb / asum
                 corr = out['melt_on_glacier']['data'][i, :] * fac
@@ -2888,8 +2904,6 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
     # Append the output to the existing diagnostics
     fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
     ods.to_netcdf(fpath, mode='a')
-
-    return out
 
 
 def merge_to_one_glacier(main, tribs, filename='climate_historical',

@@ -1008,7 +1008,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         if 'month_2d' in ds_diag.dims:
             # We have some 3d vars
             month_2d = ds_diag['month_2d']
-            ds.coords['month_2d'] = ('month_2d', month_2d)
+            ds.coords['month_2d'] = ('month_2d', month_2d.data)
             cn = 'calendar_month_2d'
             ds.coords[cn] = ('month_2d', ds_diag[cn].values)
 
