@@ -702,7 +702,6 @@ class ConstantMassBalance(MassBalanceModel):
             tempformelt[i, :] = tm
             prcp[i, :] = p
             prcpsol[i, :] = ps
-        # Note that we do not weight for number of days per month - bad
         return (np.mean(temp, axis=0),
                 np.mean(tempformelt, axis=0),
                 np.mean(prcp, axis=0),
@@ -733,8 +732,8 @@ class ConstantMassBalance(MassBalanceModel):
             tempformelt[i, :] = tm
             prcp[i, :] = p
             prcpsol[i, :] = ps
-        # Note that we do not weight for number of days per month
-        # That's OGGM
+        # Note that we do not weight for number of days per month:
+        # this is consistent with OGGM's calendar
         return (np.mean(temp, axis=0),
                 np.mean(tempformelt, axis=0) * 12,
                 np.mean(prcp, axis=0) * 12,

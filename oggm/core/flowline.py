@@ -2217,8 +2217,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                       "is updated yearly. If you want the output to be stored "
                       "monthly and also reflect reflect monthly processes,"
                       "set store_monthly_step=True and "
-                      "mb_elev_feedback='monthly'. This is not necessarily "
-                      "recommended though.")
+                      "mb_elev_feedback='monthly'. This is not recommended "
+                      "though: for monthly MB applications, we recommend to "
+                      "use the `run_with_hydro` task.")
 
     if cfg.PARAMS['use_inversion_params_for_run']:
         diag = gdir.get_diagnostics()
@@ -2583,14 +2584,14 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
 
 @entity_task(log)
-def run_with_hydro(gdir, run_task=None, store_monthly_hydro=None, **kwargs):
+def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
     """Run the flowline model and add hydro diagnostics (experimental!).
 
     TODOs:
         - Add the possibility to merge with previous model runs
         - Add the possibility to prescribe glacier area (e.g. with starting area)
-        - Add the possibility to store monthly hydro output
-        - Add the possibility to record during run (requires change in API)
+        - Add the possibility to record MB during run to improve performance
+          (requires change in API)
         - ...
 
     Parameters
