@@ -2911,7 +2911,7 @@ class TestColumbiaCalving(unittest.TestCase):
         # We use a simple MB model
         mbmod = massbalance.ConstantMassBalance(gdir)
         heights, widths = gdir.get_inversion_flowline_hw()  # width is in m
-        temp, tempformelt, prcp, prcpsol = mbmod.get_climate(heights)
+        temp, tempformelt, prcp, prcpsol = mbmod.get_annual_climate(heights)
         # prcpsol is in units mm w.e per year - let's convert
         # compute the area of each section
         fls = gdir.read_pickle('inversion_flowlines')

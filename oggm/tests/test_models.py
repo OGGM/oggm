@@ -577,7 +577,7 @@ class TestMassBalanceModels:
         # Climate info
         h = np.sort(h)
         cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
-        t, tm, p, ps = cmb_mod.get_climate(h)
+        t, tm, p, ps = cmb_mod.get_annual_climate(h)
 
         # Simple sanity checks
         assert np.all(np.diff(t) <= 0)
@@ -600,7 +600,7 @@ class TestMassBalanceModels:
 
         # ELA
         elah = cmb_mod.get_ela()
-        t, tm, p, ps = cmb_mod.get_climate([elah])
+        t, tm, p, ps = cmb_mod.get_annual_climate([elah])
         mb = ps - cmb_mod.mbmod.mu_star * tm
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.12)
@@ -3158,7 +3158,8 @@ class TestHEF:
 class TestHydro:
 
     @pytest.mark.slow
-    def test_hydro_out_from_no_glacier(self, hef_gdir, inversion_params):
+    @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
+    def test_hydro_out_from_no_glacier(self, hef_gdir, inversion_params, store_monthly_hydro):
 
         gdir = hef_gdir
 
@@ -3167,12 +3168,14 @@ class TestHydro:
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
-                             bias=0, nyears=100, zero_initial_glacier=True,
+                             store_monthly_hydro=store_monthly_hydro,
+                             bias=0, nyears=50, zero_initial_glacier=True,
                              output_filesuffix='_const')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_const')) as ds:
-            odf = ds.to_dataframe().iloc[:-1]
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
 
         # Sanity checks
         # Tot prcp here is constant (constant climate)
@@ -3209,7 +3212,8 @@ class TestHydro:
                         - odf['residual_mb'].iloc[0])
 
     @pytest.mark.slow
-    def test_hydro_out_commitment(self, hef_gdir, inversion_params):
+    @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
+    def test_hydro_out_commitment(self, hef_gdir, inversion_params, store_monthly_hydro):
 
         gdir = hef_gdir
 
@@ -3218,12 +3222,14 @@ class TestHydro:
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             store_monthly_hydro=store_monthly_hydro,
                              nyears=100, y0=2003-5, halfsize=5,
                              output_filesuffix='_const')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_const')) as ds:
-            odf = ds.to_dataframe().iloc[:-1]
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
 
         # Sanity checks
         # Tot prcp here is constant (constant climate)
@@ -3267,7 +3273,8 @@ class TestHydro:
         assert_allclose(frac, 0, atol=0.02)
 
     @pytest.mark.slow
-    def test_hydro_out_past_climate(self, hef_gdir, inversion_params):
+    @pytest.mark.parametrize('store_monthly_hydro', [True, False], ids=['monthly', 'annual'])
+    def test_hydro_out_past_climate(self, hef_gdir, inversion_params, store_monthly_hydro):
 
         gdir = hef_gdir
         gdir.rgi_date = 1990
@@ -3275,16 +3282,15 @@ class TestHydro:
         # Try minimal output and see if it works
         cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
 
-        # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
-
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                             store_monthly_hydro=store_monthly_hydro,
                              min_ys=1980, output_filesuffix='_hist')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_hist')) as ds:
-            odf = ds.to_dataframe().iloc[:-1]
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
 
         # Sanity checks
         odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
@@ -3318,16 +3324,24 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.01)
+        assert_allclose(frac, 0, atol=0.05)
 
         # Also check output stuff
-        nds = utils.compile_run_output([gdir], filesuffix='_hist')
+        nds = utils.compile_run_output([gdir], input_filesuffix='_hist')
         assert nds.residual_mb.attrs['unit'] == 'kg yr-1'
         assert_allclose(nds['snowfall_on_glacier'].squeeze()[:-1],
                         odf['snowfall_on_glacier'])
+        if 'month_2d' in nds:
+            # 3d vars
+            sel_vars = [v for v in nds.variables if 'month_2d' in nds[v].dims]
+            odf_ma = nds[sel_vars].mean(dim=('time', 'rgi_id')).to_dataframe()
+            odf_ma.columns = [c.replace('_monthly', '') for c in odf_ma.columns]
+            # Runoff peak should follow a temperature curve
+            assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 11, atol=1.1)
 
     @pytest.mark.slow
-    def test_hydro_out_random(self, hef_gdir, inversion_params):
+    @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
+    def test_hydro_out_random(self, hef_gdir, inversion_params, store_monthly_hydro):
 
         gdir = hef_gdir
 
@@ -3336,12 +3350,14 @@ class TestHydro:
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
+                             store_monthly_hydro=store_monthly_hydro,
                              seed=0, nyears=100, y0=2003-5, halfsize=5,
                              output_filesuffix='_rand')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_rand')) as ds:
-            odf = ds.to_dataframe().iloc[:-1]
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
 
         # Sanity checks
         # Tot prcp here is constant (constant climate)
@@ -3382,6 +3398,83 @@ class TestHydro:
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.04)  # annual can be large (prob)
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize('mb_type', ['random', 'const', 'hist'])
+    def test_hydro_monhly_vs_annual(self, hef_gdir, inversion_params, mb_type):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+
+        init_present_time_glacier(gdir)
+
+        if mb_type == 'random':
+            tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
+                                 store_monthly_hydro=False,
+                                 seed=0, nyears=20, y0=2003 - 5, halfsize=5,
+                                 output_filesuffix='_annual')
+            tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
+                                 store_monthly_hydro=True,
+                                 seed=0, nyears=20, y0=2003 - 5, halfsize=5,
+                                 output_filesuffix='_monthly')
+        elif mb_type == 'const':
+            tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                                 store_monthly_hydro=False,
+                                 nyears=20, y0=2003-5, halfsize=5,
+                                 output_filesuffix='_annual')
+            tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                                 store_monthly_hydro=True,
+                                 nyears=20, y0=2003-5, halfsize=5,
+                                 output_filesuffix='_monthly')
+        elif mb_type == 'hist':
+            tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 store_monthly_hydro=False,
+                                 min_ys=1980, output_filesuffix='_annual')
+            tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 store_monthly_hydro=True,
+                                 min_ys=1980, output_filesuffix='_monthly')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_annual')) as ds:
+            odf_a = ds.to_dataframe()
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_monthly')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf_m = ds[sel_vars].to_dataframe()
+            sel_vars = [v for v in ds.variables if 'month_2d' in ds[v].dims]
+            odf_ma = ds[sel_vars].mean(dim='time').to_dataframe()
+            odf_ma.columns = [c.replace('_monthly', '') for c in odf_ma.columns]
+
+        # Check that yearly equals monthly
+        np.testing.assert_array_equal(odf_a.columns, odf_m.columns)
+        for c in odf_a.columns:
+            rtol = 1e-5
+            if c == 'melt_off_glacier':
+                rtol = 0.1
+            if c in ['snow_bucket']:
+                continue
+            assert_allclose(odf_a[c], odf_m[c], rtol=rtol)
+
+        # Check monthly stuff
+        odf_ma['tot_prcp'] = (odf_ma['liq_prcp_off_glacier'] +
+                              odf_ma['liq_prcp_on_glacier'] +
+                              odf_ma['snowfall_off_glacier'] +
+                              odf_ma['snowfall_on_glacier'])
+
+        odf_ma['runoff'] = (odf_ma['melt_on_glacier'] +
+                            odf_ma['melt_off_glacier'] +
+                            odf_ma['liq_prcp_on_glacier'] +
+                            odf_ma['liq_prcp_off_glacier'])
+
+        # Residual MB should not be crazy large
+        frac = odf_ma['residual_mb'] / odf_ma['melt_on_glacier']
+        assert_allclose(frac.loc[~frac.isnull()], 0, atol=0.01)
+
+        # Runoff peak should follow a temperature curve
+        assert_allclose(odf_ma['runoff'].idxmax(), 11, atol=1.1)
 
 
 @pytest.fixture(scope='class')
