@@ -80,6 +80,7 @@ DEMS_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
+CHECKSUM_LIFETIME = 24 * 60 * 60
 
 # Web mercator proj constants
 WEB_N_PIX = 256
@@ -199,9 +200,13 @@ def get_dl_verify_data(section):
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
 
-    def verify_file():
+    def verify_file(force=False):
         """Check the hash file's own hash"""
         if not cfg.PARAMS['has_internet']:
+            return
+
+        if not force and os.path.isfile(verify_file_path) and \
+           os.path.getmtime(verify_file_path) + CHECKSUM_LIFETIME > time.time():
             return
 
         logger.info('Checking the download verification file checksum...')
@@ -223,6 +228,8 @@ def get_dl_verify_data(section):
                 logger.warning('%s changed or invalid, deleting.'
                                % (verify_file_path))
                 os.remove(verify_file_path)
+            else:
+                os.utime(verify_file_path)
 
     if not np.any(['dl_verify_data_' in k for k in cfg.DATA.keys()]):
         # We check the hash file only once per session
@@ -246,7 +253,7 @@ def get_dl_verify_data(section):
 
         logger.info('Done downloading.')
 
-        verify_file()
+        verify_file(force=True)
 
     if not os.path.isfile(verify_file_path):
         logger.warning('Downloading and verifying checksums failed.')
