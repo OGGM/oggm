@@ -49,6 +49,9 @@ Bug fixes
 - Fixed bug in hydro date / calendar date conversions with month=1 (i.e.
   no conversion) (:pull:`1220`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
+- Fixed bug in ``graphics.plot_distributed_thickness`` which encounter Error under
+  the elevation bands flowline (:pull: `1238`).
+  By `Li Fei <https://github.com/Keeptg>`_
 
 v1.4.0 (17.02.2021)
 -------------------
