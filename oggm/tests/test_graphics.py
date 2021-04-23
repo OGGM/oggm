@@ -13,7 +13,7 @@ gpd = pytest.importorskip('geopandas')
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import (init_columbia_eb, init_hef, 
+from oggm.tests.funcs import (init_columbia_eb, init_hef,
                               get_test_dir, apply_test_ref_tstars)
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
@@ -317,7 +317,7 @@ def test_thick_elev_bands():
     fig.tight_layout()
     return fig
 
-    
+
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_catch_areas():

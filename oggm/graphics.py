@@ -611,7 +611,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
         # Plot boundaries
         # Try to read geometry.pkl as the glacier boundary,
         # if it can't be found, we use the shapefile to instead.
-        try:    
+        try:
             geom = gdir.read_pickle('geometries')
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
