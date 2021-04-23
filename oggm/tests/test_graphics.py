@@ -13,7 +13,8 @@ gpd = pytest.importorskip('geopandas')
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import init_hef, get_test_dir, apply_test_ref_tstars
+from oggm.tests.funcs import (init_columbia_eb, init_hef, 
+                              get_test_dir, apply_test_ref_tstars)
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
                        massbalance)
@@ -305,6 +306,18 @@ def test_thick_interp():
     return fig
 
 
+@pytest.mark.graphic
+@mpl_image_compare(multi=True)
+def test_thick_elev_bands():
+    fig, ax = plt.subplots()
+    gdir = init_columbia_eb(dir_name='test_thick_eb')
+    workflow.inversion_tasks(utils.tolist(gdir))
+    inversion.distribute_thickness_per_altitude(gdir)
+    graphics.plot_distributed_thickness(gdir, ax=ax)
+    fig.tight_layout()
+    return fig
+
+    
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_catch_areas():
