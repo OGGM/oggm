@@ -3401,7 +3401,9 @@ class TestHydro:
 
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_type', ['random', 'const', 'hist'])
-    def test_hydro_monhly_vs_annual(self, hef_gdir, inversion_params, mb_type):
+    @pytest.mark.parametrize('mb_bias', [500, -500, 0])
+    def test_hydro_monhly_vs_annual(self, hef_gdir, inversion_params,
+                                    mb_type, mb_bias):
 
         gdir = hef_gdir
         gdir.rgi_date = 1990
@@ -3412,27 +3414,33 @@ class TestHydro:
 
         if mb_type == 'random':
             tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
+                                 bias=mb_bias,
                                  store_monthly_hydro=False,
                                  seed=0, nyears=20, y0=2003 - 5, halfsize=5,
                                  output_filesuffix='_annual')
             tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
+                                 bias=mb_bias,
                                  store_monthly_hydro=True,
                                  seed=0, nyears=20, y0=2003 - 5, halfsize=5,
                                  output_filesuffix='_monthly')
         elif mb_type == 'const':
             tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                                 bias=mb_bias,
                                  store_monthly_hydro=False,
                                  nyears=20, y0=2003-5, halfsize=5,
                                  output_filesuffix='_annual')
             tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                                 bias=mb_bias,
                                  store_monthly_hydro=True,
                                  nyears=20, y0=2003-5, halfsize=5,
                                  output_filesuffix='_monthly')
         elif mb_type == 'hist':
             tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 bias=mb_bias,
                                  store_monthly_hydro=False,
                                  min_ys=1980, output_filesuffix='_annual')
             tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 bias=mb_bias,
                                  store_monthly_hydro=True,
                                  min_ys=1980, output_filesuffix='_monthly')
 
@@ -3453,7 +3461,7 @@ class TestHydro:
         for c in odf_a.columns:
             rtol = 1e-5
             if c == 'melt_off_glacier':
-                rtol = 0.1
+                rtol = 0.15
             if c in ['snow_bucket']:
                 continue
             assert_allclose(odf_a[c], odf_m[c], rtol=rtol)
@@ -3469,8 +3477,12 @@ class TestHydro:
                             odf_ma['liq_prcp_on_glacier'] +
                             odf_ma['liq_prcp_off_glacier'])
 
+        # Regardless of MB bias the melt in months 3, 4, 5, 6 should be zero
+        assert_allclose(odf_ma['melt_on_glacier'].loc[3:6], 0, atol=5)
+
         # Residual MB should not be crazy large
         frac = odf_ma['residual_mb'] / odf_ma['melt_on_glacier']
+        frac[odf_ma['melt_on_glacier'] < 1e-4] = 0
         assert_allclose(frac.loc[~frac.isnull()], 0, atol=0.01)
 
         # Runoff peak should follow a temperature curve
