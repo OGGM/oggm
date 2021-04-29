@@ -3163,8 +3163,7 @@ class TestHydro:
 
         gdir = hef_gdir
 
-        # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3217,8 +3216,7 @@ class TestHydro:
 
         gdir = hef_gdir
 
-        # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3279,8 +3277,7 @@ class TestHydro:
         gdir = hef_gdir
         gdir.rgi_date = 1990
 
-        # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -3345,8 +3342,7 @@ class TestHydro:
 
         gdir = hef_gdir
 
-        # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
@@ -3408,7 +3404,7 @@ class TestHydro:
         gdir = hef_gdir
         gdir.rgi_date = 1990
 
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
 
         init_present_time_glacier(gdir)
 

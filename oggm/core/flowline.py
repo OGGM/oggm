@@ -2899,6 +2899,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
         out['residual_mb']['data'][i] = residual_mb
 
     # Convert to xarray
+    out_vars = cfg.PARAMS['store_diagnostic_variables']
     ods = xr.Dataset()
     ods.coords['time'] = fmod.years
     if store_monthly_hydro:
@@ -2908,6 +2909,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
         ods.coords['calendar_month_2d'] = ('month_2d', (np.arange(12) + sm - 1) % 12 + 1)
     for varname, d in out.items():
         data = d.pop('data')
+        if varname not in out_vars:
+            continue
         if len(data.shape) == 2:
             # First the annual agg
             if varname == 'snow_bucket':

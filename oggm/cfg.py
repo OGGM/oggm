@@ -7,9 +7,7 @@ import os
 import shutil
 import sys
 import glob
-import json
 from collections import OrderedDict
-from multiprocessing import Manager
 from distutils.util import strtobool
 import warnings
 
