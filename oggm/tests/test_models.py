@@ -51,6 +51,11 @@ do_plot = False
 
 DOM_BORDER = 80
 
+ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length',
+             'calving', 'calving_rate', 'off_area', 'on_area', 'melt_off_glacier',
+             'melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
+             'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
+             'residual_mb', 'snow_bucket']
 
 class TestInitPresentDayFlowline:
 
@@ -3164,9 +3169,7 @@ class TestHydro:
         gdir = hef_gdir
 
         # Add debug vars
-        diags = cfg.PARAMS['store_diagnostic_variables']
-        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
-        cfg.PARAMS['store_diagnostic_variables'] = diags
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3220,9 +3223,7 @@ class TestHydro:
         gdir = hef_gdir
 
         # Add debug vars
-        diags = cfg.PARAMS['store_diagnostic_variables']
-        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
-        cfg.PARAMS['store_diagnostic_variables'] = diags
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3284,9 +3285,7 @@ class TestHydro:
         gdir.rgi_date = 1990
 
         # Add debug vars
-        diags = cfg.PARAMS['store_diagnostic_variables']
-        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
-        cfg.PARAMS['store_diagnostic_variables'] = diags
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -3352,9 +3351,7 @@ class TestHydro:
         gdir = hef_gdir
 
         # Add debug vars
-        diags = cfg.PARAMS['store_diagnostic_variables']
-        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
-        cfg.PARAMS['store_diagnostic_variables'] = diags
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
@@ -3417,9 +3414,7 @@ class TestHydro:
         gdir.rgi_date = 1990
 
         # Add debug vars
-        diags = cfg.PARAMS['store_diagnostic_variables']
-        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
-        cfg.PARAMS['store_diagnostic_variables'] = diags
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
 
         init_present_time_glacier(gdir)
 
