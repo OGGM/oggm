@@ -3163,7 +3163,10 @@ class TestHydro:
 
         gdir = hef_gdir
 
-        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        # Add debug vars
+        diags = cfg.PARAMS['store_diagnostic_variables']
+        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        cfg.PARAMS['store_diagnostic_variables'] = diags
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3216,7 +3219,10 @@ class TestHydro:
 
         gdir = hef_gdir
 
-        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        # Add debug vars
+        diags = cfg.PARAMS['store_diagnostic_variables']
+        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        cfg.PARAMS['store_diagnostic_variables'] = diags
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3277,7 +3283,10 @@ class TestHydro:
         gdir = hef_gdir
         gdir.rgi_date = 1990
 
-        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        # Add debug vars
+        diags = cfg.PARAMS['store_diagnostic_variables']
+        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        cfg.PARAMS['store_diagnostic_variables'] = diags
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -3342,7 +3351,10 @@ class TestHydro:
 
         gdir = hef_gdir
 
-        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        # Add debug vars
+        diags = cfg.PARAMS['store_diagnostic_variables']
+        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        cfg.PARAMS['store_diagnostic_variables'] = diags
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
@@ -3404,7 +3416,10 @@ class TestHydro:
         gdir = hef_gdir
         gdir.rgi_date = 1990
 
-        cfg.PARAMS['store_diagnostic_variables'].extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        # Add debug vars
+        diags = cfg.PARAMS['store_diagnostic_variables']
+        diags.extend(['model_mb', 'residual_mb', 'snow_bucket'])
+        cfg.PARAMS['store_diagnostic_variables'] = diags
 
         init_present_time_glacier(gdir)
 
