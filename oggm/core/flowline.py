@@ -2699,6 +2699,16 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
             'unit': 'kg yr-1',
             'data': np.zeros(oshape),
         },
+        'melt_residual_off_glacier': {
+            'description': 'Off-glacier melt due to MB model residual',
+            'unit': 'kg yr-1',
+            'data': np.zeros(oshape),
+        },
+        'melt_residual_on_glacier': {
+            'description': 'On-glacier melt due to MB model residual',
+            'unit': 'kg yr-1',
+            'data': np.zeros(oshape),
+        },
         'liq_prcp_off_glacier': {
             'description': 'Off-glacier liquid precipitation',
             'unit': 'kg yr-1',
@@ -2779,6 +2789,9 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
                 # Here we use mass (kg yr-1) not ice volume
                 mb *= seconds * cfg.PARAMS['ice_density']
 
+                # Bias of the mb model is a fake melt term that we need to deal with
+                mb_bias = mb_mod.bias * seconds / cfg.SEC_IN_YEAR
+
                 liq_prcp_on_g = (prcp - prcpsol) * bin_area
                 liq_prcp_off_g = (prcp - prcpsol) * off_area
 
@@ -2786,13 +2799,17 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
                 prcpsol_off_g = prcpsol * off_area
 
                 # IMPORTANT: this does not guarantee that melt cannot be negative
-                # the reason is the MB residual (called .bias in the model)
-                # that here can only be understood as a fake melt process.
+                # the reason is the MB residual that here can only be understood
+                # as a fake melt process.
                 # In particular at the monthly scale this can lead to negative
-                # melt id mb_mod.bias is negative - we try to mitigate this
+                # or winter positive melt - we try to mitigate this
                 # issue at the end of the year
                 melt_on_g = (prcpsol - mb) * bin_area
                 melt_off_g = (prcpsol - mb) * off_area
+
+                # This is the bad boy
+                bias_on_g = mb_bias * bin_area
+                bias_off_g = mb_bias * off_area
 
                 # Update bucket with accumulation and melt
                 snow_bucket += prcpsol_off_g
@@ -2808,6 +2825,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
                 # Monthly out
                 out['melt_off_glacier']['data'][i, m-1] += np.sum(melt_off_g)
                 out['melt_on_glacier']['data'][i, m-1] += np.sum(melt_on_g)
+                out['melt_residual_off_glacier']['data'][i, m-1] += np.sum(bias_off_g)
+                out['melt_residual_on_glacier']['data'][i, m-1] += np.sum(bias_on_g)
                 out['liq_prcp_off_glacier']['data'][i, m-1] += np.sum(liq_prcp_off_g)
                 out['liq_prcp_on_glacier']['data'][i, m-1] += np.sum(liq_prcp_on_g)
                 out['snowfall_off_glacier']['data'][i, m-1] += np.sum(prcpsol_off_g)
@@ -2826,20 +2845,26 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
         out['off_area']['data'][i] = off_area_out
         out['on_area']['data'][i] = on_area_out
 
-        # If monthly, try to mitigate for negative melt
+        # If monthly, put the residual where we can
         if store_monthly_hydro:
-            for melt in [out['melt_on_glacier']['data'][i, :],
-                         out['melt_off_glacier']['data'][i, :]]:
-                is_neg = melt < 0
-                neg_melt = np.where(is_neg, melt, 0)
-                pos_melt = np.where(~is_neg, melt, 0)
-                # Ok we correct the positive melt instead
-                neg_sum = neg_melt.sum()
-                pos_sum = pos_melt.sum()
-                if pos_sum > 0 and (neg_sum / pos_sum > -1):
-                    # try to find a fac
-                    fac = 1 + neg_sum / pos_sum
-                    melt[:] = pos_melt * fac
+            for melt, bias in zip(
+                    [
+                        out['melt_on_glacier']['data'][i, :],
+                        out['melt_off_glacier']['data'][i, :],
+                    ],
+                    [
+                        out['melt_residual_on_glacier']['data'][i, :],
+                        out['melt_residual_off_glacier']['data'][i, :],
+                    ],
+            ):
+
+                real_melt = melt - bias
+                real_melt_sum = np.sum(real_melt)
+                bias_sum = np.sum(bias)
+                if real_melt_sum > 0:
+                    # Ok we correct the positive melt instead
+                    fac = 1 + bias_sum / real_melt_sum
+                    melt[:] = real_melt * fac
 
         # Correct for mass-conservation and match the ice-dynamics model
         fmod.run_until(yr + 1)
@@ -2874,6 +2899,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
         out['residual_mb']['data'][i] = residual_mb
 
     # Convert to xarray
+    out_vars = cfg.PARAMS['store_diagnostic_variables']
     ods = xr.Dataset()
     ods.coords['time'] = fmod.years
     if store_monthly_hydro:
@@ -2883,6 +2909,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
         ods.coords['calendar_month_2d'] = ('month_2d', (np.arange(12) + sm - 1) % 12 + 1)
     for varname, d in out.items():
         data = d.pop('data')
+        if varname not in out_vars:
+            continue
         if len(data.shape) == 2:
             # First the annual agg
             if varname == 'snow_bucket':
