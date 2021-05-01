@@ -607,13 +607,18 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
         thick = np.where(mask, thick, np.NaN)
 
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
 
         # Plot boundaries
-        poly_pix = geom['polygon_pix']
-        smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        # Try to read geometries.pkl as the glacier boundary,
+        # if it can't be found, we use the shapefile to instead.
+        try:
+            geom = gdir.read_pickle('geometries')
+            poly_pix = geom['polygon_pix']
+            smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
+            for l in poly_pix.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+        except FileNotFoundError:
+            smap.set_shapefile(gdir.read_shapefile('outlines'), fc='none')
         smap.set_data(thick, crs=crs, overplot=True)
 
     smap.set_plot_params(cmap=OGGM_CMAPS['glacier_thickness'])
