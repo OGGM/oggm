@@ -138,7 +138,7 @@ def cli():
 
     if nr == '0':
         key = 'urs.earthdata.nasa.gov'
-        testurl = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
+        testurl = ('https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/' +
                    '2000.03.01/ASTGTMV003_S09W158.zip')
 
     elif nr == '1':
