@@ -609,7 +609,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
         crs = gdir.grid.center_grid
 
         # Plot boundaries
-        # Try to read geometry.pkl as the glacier boundary,
+        # Try to read geometries.pkl as the glacier boundary,
         # if it can't be found, we use the shapefile to instead.
         try:
             geom = gdir.read_pickle('geometries')
