@@ -244,7 +244,7 @@ def _check_rgi_input(rgidf=None):
     try:
         rgi_ids = rgidf.RGIId
         # if dataframe we can also check for connectivity
-        if np.any(rgidf['Connect'] == 2):
+        if 'Connect' in rgidf and np.any(rgidf['Connect'] == 2):
             log.workflow('WARNING! You have glaciers with connectivity level '
                          '2 in your list. OGGM does not provide pre-processed '
                          'directories for these.')
