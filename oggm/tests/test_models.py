@@ -1404,21 +1404,30 @@ class TestModelFlowlines():
         assert rec.length_m == ref_l
         rec.thick = rec.thick * 0 + 100
         assert rec.length_m == full_l
+        assert rec.terminus_index == nx - 1
 
         cfg.PARAMS['glacier_length_method'] = 'consecutive'
         assert rec.length_m == full_l
+        assert rec.terminus_index == nx - 1
 
         cfg.PARAMS['min_ice_thick_for_length'] = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
+        assert rec.terminus_index == -1
+
+        cfg.PARAMS['glacier_length_method'] = 'naive'
+        assert rec.length_m == 0
+        assert rec.terminus_index == -1
 
         t = rec.thick * 0 + 20
         t[10] = 0.5
         rec.thick = t
-        assert rec.length_m == 1000
+        assert rec.length_m == full_l - map_dx
+        assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'naive'
-        assert rec.length_m == full_l - 100
+        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        assert rec.length_m == 1000
+        assert rec.terminus_index == 9
 
 
 @pytest.fixture(scope='class')
@@ -3100,7 +3109,13 @@ class TestHEF:
         gdir.rgi_date = 1990
 
         # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
+                                                    'terminus_thick_0',
+                                                    'terminus_thick_1',
+                                                    'terminus_thick_2',
+                                                    ]
+
+        cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
@@ -3140,7 +3155,13 @@ class TestHEF:
                                        rtol=0.01)
 
             del ods['volume_fixed_geom']
-            assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))
+            all_vars = list(ds.data_vars)
+            no_term = [vn for vn in all_vars if 'terminus_thick_' not in vn]
+            assert sorted(no_term) == sorted(list(ods.data_vars))
+
+            assert np.all(ds.terminus_thick_0 > 0.1)
+            assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
+            assert np.all(ds.terminus_thick_2 > ds.terminus_thick_1)
 
             for vn in ['area']:
                 ref = ds[vn]
