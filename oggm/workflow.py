@@ -235,18 +235,23 @@ def gdir_from_tar(entity, from_tar):
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
-def _check_duplicates(rgidf=None):
+def _check_rgi_input(rgidf=None):
     """Complain if the input has duplicates."""
 
     if rgidf is None:
         return
     # Check if dataframe or list of strs
     try:
-        rgidf = rgidf.RGIId
+        rgi_ids = rgidf.RGIId
+        # if dataframe we can also check for connectivity
+        if np.any(rgidf['Connect'] == 2):
+            log.workflow('WARNING! You have glaciers with connectivity level '
+                         '2 in your list. OGGM does not provide pre-processed '
+                         'directories for these.')
     except AttributeError:
-        rgidf = utils.tolist(rgidf)
-    u, c = np.unique(rgidf, return_counts=True)
-    if len(u) < len(rgidf):
+        rgi_ids = utils.tolist(rgidf)
+    u, c = np.unique(rgi_ids, return_counts=True)
+    if len(u) < len(rgi_ids):
         raise InvalidWorkflowError('Found duplicates in the list of '
                                    'RGI IDs: {}'.format(u[c > 1]))
 
@@ -305,7 +310,7 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     a glacier directory is valid also without DEM.
     """
 
-    _check_duplicates(rgidf)
+    _check_rgi_input(rgidf)
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
@@ -431,7 +436,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     codebase.
     """
 
-    _check_duplicates(rgidf)
+    _check_rgi_input(rgidf)
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
