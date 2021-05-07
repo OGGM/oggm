@@ -41,6 +41,9 @@ Enhancements
 - Added monthly output to ``run_with_hydro`` (:pull:`1232`).
   By `Sarah Hanus <https://github.com/sarah-hanus>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
+- Added new diagnostic variables (`terminus_thick_0` ...) to better track
+  the thickness at the terminus (:pull:`1230`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 Bug fixes
