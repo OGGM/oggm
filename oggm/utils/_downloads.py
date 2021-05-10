@@ -558,6 +558,8 @@ def _progress_urlretrieve(url, cache_name=None, reset=False,
             nonlocal pbar
             if pbar is None:
                 pbar = DataTransferBar()
+                if not pbar.is_terminal:
+                    pbar.min_poll_interval = 15
             if pbar.max_value is None:
                 if total > 0:
                     pbar.start(total)
