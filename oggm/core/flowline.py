@@ -2416,6 +2416,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          precipitation_factor=None,
                          store_monthly_step=False,
                          store_model_geometry=None,
+                         init_model_filesuffix=None,
+                         init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
@@ -2456,6 +2458,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -2472,6 +2480,15 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
+
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
                                      y0=y0, halfsize=halfsize,
