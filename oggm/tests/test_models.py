@@ -2792,6 +2792,32 @@ class TestHEF:
                                        rtol=0.1)
 
     @pytest.mark.slow
+    def test_start_from_date(self, hef_gdir, inversion_params):
+
+        init_present_time_glacier(hef_gdir)
+        run_constant_climate(hef_gdir, nyears=20,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct')
+
+        run_constant_climate(hef_gdir, nyears=10,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct_1')
+        run_constant_climate(hef_gdir, nyears=10,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             init_model_filesuffix='_ct_1',
+                             bias=0, output_filesuffix='_ct_2')
+
+        ds = utils.compile_run_output([hef_gdir], input_filesuffix='_ct')
+        ds1 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_1')
+        ds2 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_2')
+
+        ds_ = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+        np.testing.assert_allclose(ds.volume, ds_.volume, rtol=1e-5)
+
+    @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
 
         gdir = hef_gdir
