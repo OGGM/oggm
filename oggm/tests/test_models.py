@@ -2815,7 +2815,7 @@ class TestHEF:
         ds2 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_2')
 
         ds_ = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
-        np.testing.assert_allclose(ds.volume, ds_.volume, rtol=1e-6)
+        np.testing.assert_allclose(ds.volume, ds_.volume, rtol=1e-5)
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
