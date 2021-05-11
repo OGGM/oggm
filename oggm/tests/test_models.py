@@ -393,6 +393,12 @@ class TestMassBalanceModels:
         assert mb_mod._prcp_fac == prcp_fac_old
         assert mb_mod.temp_bias == temp_bias_old
 
+        # Now monthly stuff
+        mb_mod.temp_bias = [0] * 12
+        np.testing.assert_allclose(mb_mod.temp_bias, temp_bias_old)
+        mb_mod.prcp_fac = [prcp_fac_old] * 12
+        np.testing.assert_allclose(mb_mod.prcp_fac, prcp_fac_old)
+
         # Deprecated attrs
         with pytest.raises(AttributeError):
             mb_mod.prcp_bias = 2
@@ -515,6 +521,8 @@ class TestMassBalanceModels:
 
     def test_constant_mb_model(self, hef_gdir):
 
+        do_plot = True
+
         rho = cfg.PARAMS['ice_density']
 
         gdir = hef_gdir
@@ -560,6 +568,7 @@ class TestMassBalanceModels:
         months = np.arange(12)
         monthly_1 = months * 0.
         monthly_2 = months * 0.
+        monthly_3 = months * 0.
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
             cmb_mod.temp_bias = 0
@@ -568,14 +577,23 @@ class TestMassBalanceModels:
             cmb_mod.temp_bias = 1
             tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
             monthly_2[m] = np.average(tmp, weights=w)
+            cmb_mod.temp_bias = [0] * 6 + [1] + [0] * 5
+            cmb_mod.prcp_fac = [10] * 3 + [2.5] * 9
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
+            monthly_3[m] = np.average(tmp, weights=w)
+            cmb_mod.prcp_fac = 2.5
 
         # check that the winter months are close but summer months no
         np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5], atol=1)
+        np.testing.assert_allclose(monthly_1[1: 2], monthly_3[1: 2], atol=1)
         assert np.mean(monthly_1[5:]) > (np.mean(monthly_2[5:]) + 100)
+        assert np.mean(monthly_3[3:5]) > (np.mean(monthly_1[3:5]) + 100)
+        assert monthly_3[9] == monthly_2[9]
 
         if do_plot:  # pragma: no cover
             plt.plot(monthly_1, '-', label='Normal')
             plt.plot(monthly_2, '-', label='Temp bias')
+            plt.plot(monthly_3, '-', label='Temp bias monthly')
             plt.legend()
             plt.show()
 

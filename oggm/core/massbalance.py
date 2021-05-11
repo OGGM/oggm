@@ -428,15 +428,15 @@ class PastMassBalance(MassBalanceModel):
     @prcp_fac.setter
     def prcp_fac(self, new_prcp_fac):
         # just to check that no invalid prcp_factors are used
-        if np.any(new_prcp_fac <= 0):
+        if np.any(np.asarray(new_prcp_fac) <= 0):
             raise InvalidParamsError('prcp_fac has to be above zero!')
 
-        if len(np.asarray(new_prcp_fac)) == 12:
+        if not np.isscalar(new_prcp_fac) and len(new_prcp_fac) == 12:
             # OK so that's monthly stuff
             # We dirtily assume that user just used calendar month
             sm = cfg.PARAMS['hydro_month_' + self.hemisphere]
             new_prcp_fac = np.roll(new_prcp_fac, 13 - sm)
-            new_prcp_fac = np.repeat(new_prcp_fac, len(self.prcp) // 12)
+            new_prcp_fac = np.tile(new_prcp_fac, len(self.prcp) // 12)
 
         self.prcp *= new_prcp_fac / self._prcp_fac
 
@@ -451,12 +451,12 @@ class PastMassBalance(MassBalanceModel):
     @temp_bias.setter
     def temp_bias(self, new_temp_bias):
 
-        if len(np.asarray(new_temp_bias)) == 12:
+        if not np.isscalar(new_temp_bias) and len(new_temp_bias) == 12:
             # OK so that's monthly stuff
             # We dirtily assume that user just used calendar month
             sm = cfg.PARAMS['hydro_month_' + self.hemisphere]
             new_temp_bias = np.roll(new_temp_bias, 13 - sm)
-            new_temp_bias = np.repeat(new_temp_bias, len(self.temp) // 12)
+            new_temp_bias = np.tile(new_temp_bias, len(self.temp) // 12)
 
         self.temp += new_temp_bias - self._temp_bias
 
