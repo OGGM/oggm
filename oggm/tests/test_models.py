@@ -521,8 +521,6 @@ class TestMassBalanceModels:
 
     def test_constant_mb_model(self, hef_gdir):
 
-        do_plot = True
-
         rho = cfg.PARAMS['ice_density']
 
         gdir = hef_gdir

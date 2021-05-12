@@ -431,7 +431,7 @@ class PastMassBalance(MassBalanceModel):
         if np.any(np.asarray(new_prcp_fac) <= 0):
             raise InvalidParamsError('prcp_fac has to be above zero!')
 
-        if not np.isscalar(new_prcp_fac) and len(new_prcp_fac) == 12:
+        if len(np.atleast_1d(new_prcp_fac)) == 12:
             # OK so that's monthly stuff
             # We dirtily assume that user just used calendar month
             sm = cfg.PARAMS['hydro_month_' + self.hemisphere]
@@ -451,7 +451,7 @@ class PastMassBalance(MassBalanceModel):
     @temp_bias.setter
     def temp_bias(self, new_temp_bias):
 
-        if not np.isscalar(new_temp_bias) and len(new_temp_bias) == 12:
+        if len(np.atleast_1d(new_temp_bias)) == 12:
             # OK so that's monthly stuff
             # We dirtily assume that user just used calendar month
             sm = cfg.PARAMS['hydro_month_' + self.hemisphere]
