@@ -745,8 +745,9 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 
 @global_task(log)
-def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
-                               period='2000-01-01_2020-01-01'):
+def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet_reg',
+                               period='2000-01-01_2020-01-01',
+                               file_path=None):
     """Regional shift of the mass-balance residual to match observations.
 
     This is useful for operational runs, but also quite hacky.
@@ -758,26 +759,37 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
     rgi_reg : str
        the rgi region to match
     dataset : str
-       'hugonnet', or 'zemp'
+       'hugonnet_reg', 'hugonnet_all', or 'zemp'
     period : str
-       for 'hugonnet' only. One of
+       for 'hugonnet_reg' only. One of
        '2000-01-01_2010-01-01',
        '2010-01-01_2020-01-01',
        '2006-01-01_2019-01-01',
        '2000-01-01_2020-01-01'.
+       For 'hugonett_all', the period is always 2000-2020
        For 'zemp', the period is always 2006-2016.
+    file_path: str
+       local file path if 'hugonnet_all' is used
     """
+
+    # should this be included in the function as the data starts at January?
+    # cfg.PARAMS['hydro_month_nh'] = 1
 
     # Get the mass-balance OGGM would give out of the box
     df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
     df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
 
+    # maybe set back afterwards
+    # cfg.PARAMS['hydro_month_nh'] = 10
+
     # And also the Area and calving fluxes
     dfs = utils.compile_glacier_statistics(gdirs, path=False)
 
-    if dataset == 'hugonnet':
+    if dataset == 'hugonnet_reg':
         y0 = int(period.split('_')[0].split('-')[0])
         y1 = int(period.split('_')[1].split('-')[0]) - 1
+    elif dataset == 'hugonnet_all':
+        y0, y1 = 2000, 2020
     elif dataset == 'zemp':
         y0, y1 = 2006, 2015
 
@@ -795,13 +807,14 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
     # We have to drop nans here, which occur when calving glaciers fail to run
     odf = odf.dropna()
 
-    # Compare area with total RGI area
-    rdf = 'rgi62_areas.csv'
-    rdf = pd.read_csv(utils.get_demo_file(rdf), dtype={'O1Region': str})
-    ref_area = rdf.loc[rdf['O1Region'] == rgi_reg].iloc[0]['AreaNoC2NoNominal']
-    diff = (1 - odf['AREA'].sum() * 1e-6 / ref_area) * 100
-    msg = 'Applying geodetic MB correction on RGI reg {}. Diff area: {:.2f}%'
-    log.workflow(msg.format(rgi_reg, diff))
+    if dataset in ['hugonnet_reg', 'zemp']:
+        # Compare area with total RGI area
+        rdf = 'rgi62_areas.csv'
+        rdf = pd.read_csv(utils.get_demo_file(rdf), dtype={'O1Region': str})
+        ref_area = rdf.loc[rdf['O1Region'] == rgi_reg].iloc[0]['AreaNoC2NoNominal']
+        diff = (1 - odf['AREA'].sum() * 1e-6 / ref_area) * 100
+        msg = 'Applying geodetic MB correction on RGI reg {}. Diff area: {:.2f}%'
+        log.workflow(msg.format(rgi_reg, diff))
 
     # Total MB OGGM
     out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
@@ -809,11 +822,44 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
     smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
 
     # Total MB Reference
-    if dataset == 'hugonnet':
+    if dataset == 'hugonnet_reg':
         df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
         df = pd.read_csv(utils.get_demo_file(df))
         df = df.loc[df.period == period].set_index('reg')
         smb_ref = df.loc[int(rgi_reg), 'dmdtda']
+    elif dataset == 'hugonnet_all':
+        # TODO: upload the file
+        if file_path is None:
+            rdf = 'hugonnet_2021_ds_rgi60_pergla_rates_only_2000-01-01_2020-01-01.csv'
+            pd.read_csv(utils.get_demo_file(rdf), index_col='rgiid')
+        else:
+            df = pd.read_csv(file_path, index_col='rgiid')
+        # use only rgi_ids which are considered in total OGGM MB,
+        # if this is used maybe also log the number of glaciers with no OGGM MB
+        msg = 'Use OGGM SMB from {} of {} glaciers.'
+        log.workflow(msg.format(len(odf), len(gdirs)))
+        rids = odf.index.values
+        # or use all given rgi_ids
+        # rids = [gdir.rgi_id for gdir in gdirs]
+        smb_ref = df.loc[rids].dmdtda.values * 1000
+        area_ref = df.loc[rids].area
+        smb_nan = np.isnan(smb_ref)
+
+        if smb_nan.all():
+            # TODO: Log that no data is available for this glaciers or maybe error
+            pass
+
+        # Calculate for how much glacier area no measurements are available
+        diff = area_ref[smb_nan].sum() / area_ref.sum() * 100
+        msg = ('Applying geodetic MB correction using data from {} of {} '
+               'glaciers. Not considered area: {:.2f}%')
+        log.workflow(msg.format(np.count_nonzero(~smb_nan),
+                                len(smb_ref), diff))
+
+        # calculate total smb_ref
+        smb_ref = smb_ref[~smb_nan]
+        area_ref = area_ref[~smb_nan]
+        smb_ref = np.average(smb_ref, weights=area_ref)
     elif dataset == 'zemp':
         df = 'zemp_ref_2006_2016.csv'
         df = pd.read_csv(utils.get_demo_file(df), index_col=0)
