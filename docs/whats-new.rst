@@ -4,7 +4,7 @@
 Version history
 ===============
 
-v1.4.1 (unreleased)
+v1.5.0 (unreleased)
 -------------------
 
 Breaking changes
@@ -44,6 +44,9 @@ Enhancements
 - Added new diagnostic variables (`terminus_thick_0` ...) to better track
   the thickness at the terminus (:pull:`1230`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Temperature and precipitation corrections can now also be applied on a
+  monthly basis for the PastMassBalanceModel (:pull:`1247`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 Bug fixes
@@ -52,8 +55,8 @@ Bug fixes
 - Fixed bug in hydro date / calendar date conversions with month=1 (i.e.
   no conversion) (:pull:`1220`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
-- Fixed bug in ``graphics.plot_distributed_thickness`` which encounter Error under
-  the elevation bands flowline (:pull: `1241`).
+- Fixed bug in ``graphics.plot_distributed_thickness`` which led to an error with
+  elevation bands flowlines (:pull:`1241`).
   By `Li Fei <https://github.com/Keeptg>`_
 
 v1.4.0 (17.02.2021)
