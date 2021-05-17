@@ -16,6 +16,9 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Small bug fix to ensure backwards compatibility of ``gdir.get_filepath('model_run')``.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 v1.5.0
 ------
 

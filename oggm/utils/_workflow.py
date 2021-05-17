@@ -2447,10 +2447,10 @@ class GlacierDirectory(object):
             for old, new in deprecated.items():
                 if filename == old:
                     warnings.warn('Basename `{}` is deprecated and replaced by'
-                                  '`{}`. Please update your code soon.'
+                                  ' `{}`. Please update your code soon.'
                                   ''.format(old, new), FutureWarning)
-                    self.get_filepath(new, delete=delete,
-                                      filesuffix=filesuffix)
+                    return self.get_filepath(new, delete=delete,
+                                             filesuffix=filesuffix)
 
         fname = cfg.BASENAMES[filename]
         if filesuffix:

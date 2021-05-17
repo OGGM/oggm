@@ -2934,6 +2934,10 @@ class TestHEF:
         # Make a dummy run for 0 years
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
 
+        with pytest.warns(FutureWarning):
+            fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+            assert fp == hef_gdir.get_filepath('model_geometry', filesuffix='_1')
+
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         fmod = FileModel(fp)
         fmod.run_until(fmod.last_yr)
