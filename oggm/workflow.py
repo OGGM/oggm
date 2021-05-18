@@ -843,7 +843,9 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
     """Shift the mass-balance residual to match geodetic mb observations.
 
     This method finds the "best mass-balance residual" to match all glaciers in
-    gdirs with geodetic mass-balance measurements from Hugonnet 2021.
+    gdirs with available OGGM mass balance and available geodetic mass-balance
+    measurements from Hugonnet 2021. It is possible to provide your own
+    geodetic mass-balance measurements by defining the 'file_path'.
 
     Parameters
     ----------
@@ -854,7 +856,14 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
        '2000-01-01_2010-01-01',
        '2010-01-01_2020-01-01'.
     file_path: str
-       local file path, depricated if file uploaded online
+       local file path to csv file containing geodetic measurements, file must
+       contain the columns:
+           - 'rgiid': is the RGIId as in the RGI 6.0
+           - 'period': time intervall of the measurements in the format shown
+             above
+           - 'dmdtda': the specific-mass change rate in meters water-equivalent
+             per year,
+           - 'area': is the glacier area (same as in RGI 6.0) in meters square
     """
 
     # Get the mass-balance OGGM would give out of the box
@@ -881,45 +890,44 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
     # We have to drop nans here, which occur when calving glaciers fail to run
     odf = odf.dropna()
 
-    # Total MB OGGM
-    out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
-    out_cal = np.average(odf['CALVING'], weights=odf['AREA'])  # for logging
-    smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
+    # save all rgi_ids for which a valid OGGM mb is available
+    rgi_ids_oggm = odf.index.values
 
-    # TODO: fetch the file
+    # fetch the file online or read custom file
     if file_path is None:
-        base_url = '...'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide.csv'
-        df = utils.file_downloader(base_url + file_name)
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide.hdf'
+        df = pd.read_hdf(utils.file_downloader(base_url + file_name))
     else:
         df = pd.read_csv(file_path, index_col='rgiid')
 
     # get the correct period from the whole dataset
     df = df.loc[df['period'] == period]
 
-    # use only rgi_ids with available OGGM SMB
-    rids = odf.index.values
-    msg = 'Available OGGM SMB from {} of {} glaciers.'
-    log.workflow(msg.format(len(odf), len(gdirs)))
+    # get only geodetic measurements for which a valid OGGM mb is available
+    rdf = df.loc[rgi_ids_oggm]
 
-    smb_ref = df.loc[rids].dmdtda.values * 1000
-    area_ref = df.loc[rids].area
-    smb_isnan = np.isnan(smb_ref)
-
-    if smb_isnan.all():
+    # drop nans, to exclude glaciers with no valid geodetic measurments
+    rdf = rdf.dropna()
+    if rdf.empty:
         raise InvalidWorkflowError('No gedoetic MB measurements available for '
                                    'this glacier selection!')
 
-    # Calculate for how much glacier area no measurements are available
-    diff = area_ref[smb_isnan].sum() / area_ref.sum() * 100
-    msg = ('Applying geodetic MB correction using data from {} of {} '
-           'glaciers. Not considered area: {:.2f}%')
-    log.workflow(msg.format(np.count_nonzero(~smb_isnan),
-                            len(smb_ref), diff))
+    # the remaining glaciers now have a OGGM mb and geodetic measurements
+    rgi_ids = rdf.index.values
+    msg = ('Applying geodetic MB correction using {} of {} glaciers, with '
+           'available OGGM MB and available geodetic measurements.')
+    log.workflow(msg.format(len(rgi_ids), len(gdirs)))
 
-    # calculate total smb_ref
-    smb_ref = smb_ref[~smb_isnan]
-    area_ref = area_ref[~smb_isnan]
+    # Total MB OGGM, only using glaciers with OGGM mb and geodetic measurements
+    odf = odf.loc[rgi_ids]
+    out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
+    out_cal = np.average(odf['CALVING'], weights=odf['AREA'])  # for logging
+    smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
+
+    # Total geodetic MB, no need for indexing
+    smb_ref = rdf.dmdtda.values * 1000
+    area_ref = rdf.area.values
     smb_ref = np.average(smb_ref, weights=area_ref)
 
     # Diff between the two
