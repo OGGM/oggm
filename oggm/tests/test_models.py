@@ -393,6 +393,12 @@ class TestMassBalanceModels:
         assert mb_mod._prcp_fac == prcp_fac_old
         assert mb_mod.temp_bias == temp_bias_old
 
+        # Now monthly stuff
+        mb_mod.temp_bias = [0] * 12
+        np.testing.assert_allclose(mb_mod.temp_bias, temp_bias_old)
+        mb_mod.prcp_fac = [prcp_fac_old] * 12
+        np.testing.assert_allclose(mb_mod.prcp_fac, prcp_fac_old)
+
         # Deprecated attrs
         with pytest.raises(AttributeError):
             mb_mod.prcp_bias = 2
@@ -560,6 +566,7 @@ class TestMassBalanceModels:
         months = np.arange(12)
         monthly_1 = months * 0.
         monthly_2 = months * 0.
+        monthly_3 = months * 0.
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
             cmb_mod.temp_bias = 0
@@ -568,14 +575,23 @@ class TestMassBalanceModels:
             cmb_mod.temp_bias = 1
             tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
             monthly_2[m] = np.average(tmp, weights=w)
+            cmb_mod.temp_bias = [0] * 6 + [1] + [0] * 5
+            cmb_mod.prcp_fac = [10] * 3 + [2.5] * 9
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
+            monthly_3[m] = np.average(tmp, weights=w)
+            cmb_mod.prcp_fac = 2.5
 
         # check that the winter months are close but summer months no
         np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5], atol=1)
+        np.testing.assert_allclose(monthly_1[1: 2], monthly_3[1: 2], atol=1)
         assert np.mean(monthly_1[5:]) > (np.mean(monthly_2[5:]) + 100)
+        assert np.mean(monthly_3[3:5]) > (np.mean(monthly_1[3:5]) + 100)
+        assert monthly_3[9] == monthly_2[9]
 
         if do_plot:  # pragma: no cover
             plt.plot(monthly_1, '-', label='Normal')
             plt.plot(monthly_2, '-', label='Temp bias')
+            plt.plot(monthly_3, '-', label='Temp bias monthly')
             plt.legend()
             plt.show()
 
@@ -1404,21 +1420,30 @@ class TestModelFlowlines():
         assert rec.length_m == ref_l
         rec.thick = rec.thick * 0 + 100
         assert rec.length_m == full_l
+        assert rec.terminus_index == nx - 1
 
         cfg.PARAMS['glacier_length_method'] = 'consecutive'
         assert rec.length_m == full_l
+        assert rec.terminus_index == nx - 1
 
         cfg.PARAMS['min_ice_thick_for_length'] = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
+        assert rec.terminus_index == -1
+
+        cfg.PARAMS['glacier_length_method'] = 'naive'
+        assert rec.length_m == 0
+        assert rec.terminus_index == -1
 
         t = rec.thick * 0 + 20
         t[10] = 0.5
         rec.thick = t
-        assert rec.length_m == 1000
+        assert rec.length_m == full_l - map_dx
+        assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'naive'
-        assert rec.length_m == full_l - 100
+        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        assert rec.length_m == 1000
+        assert rec.terminus_index == 9
 
 
 @pytest.fixture(scope='class')
@@ -2783,6 +2808,32 @@ class TestHEF:
                                        rtol=0.1)
 
     @pytest.mark.slow
+    def test_start_from_date(self, hef_gdir, inversion_params):
+
+        init_present_time_glacier(hef_gdir)
+        run_constant_climate(hef_gdir, nyears=20,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct')
+
+        run_constant_climate(hef_gdir, nyears=10,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct_1')
+        run_constant_climate(hef_gdir, nyears=10,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             init_model_filesuffix='_ct_1',
+                             bias=0, output_filesuffix='_ct_2')
+
+        ds = utils.compile_run_output([hef_gdir], input_filesuffix='_ct')
+        ds1 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_1')
+        ds2 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_2')
+
+        ds_ = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+        np.testing.assert_allclose(ds.volume, ds_.volume, rtol=1e-5)
+
+    @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
 
         gdir = hef_gdir
@@ -2882,6 +2933,10 @@ class TestHEF:
 
         # Make a dummy run for 0 years
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
+
+        with pytest.warns(FutureWarning):
+            fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+            assert fp == hef_gdir.get_filepath('model_geometry', filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         fmod = FileModel(fp)
@@ -3100,7 +3155,13 @@ class TestHEF:
         gdir.rgi_date = 1990
 
         # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
+                                                    'terminus_thick_0',
+                                                    'terminus_thick_1',
+                                                    'terminus_thick_2',
+                                                    ]
+
+        cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
@@ -3140,7 +3201,13 @@ class TestHEF:
                                        rtol=0.01)
 
             del ods['volume_fixed_geom']
-            assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))
+            all_vars = list(ds.data_vars)
+            no_term = [vn for vn in all_vars if 'terminus_thick_' not in vn]
+            assert sorted(no_term) == sorted(list(ods.data_vars))
+
+            assert np.all(ds.terminus_thick_0 > 0.1)
+            assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
+            assert np.all(ds.terminus_thick_2 > ds.terminus_thick_1)
 
             for vn in ['area']:
                 ref = ds[vn]

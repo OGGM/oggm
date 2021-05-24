@@ -136,6 +136,23 @@ class Flowline(Centerline):
         return nx * self.dx_meter
 
     @property
+    def terminus_index(self):
+        # the index of the last point with ice thickness above
+        # min_ice_thick_for_length and consistent with length
+        lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
+        if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
+            if (self.thick > lt).all():
+                ix = len(self.thick) - 1
+            else:
+                ix = np.where(self.thick <= lt)[0][0] - 1
+        else:
+            try:
+                ix = np.where(self.thick > lt)[0][-1]
+            except IndexError:
+                ix = -1
+        return ix
+
+    @property
     def volume_m3(self):
         return utils.clip_min(np.sum(self.section * self.dx_meter) -
                               getattr(self, 'calving_bucket_m3', 0), 0)
@@ -1013,6 +1030,14 @@ class FlowlineModel(object):
             diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
             diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
+        for gi in range(10):
+            vn = f'terminus_thick_{gi}'
+            if vn in ovars:
+                diag_ds[vn] = ('time', np.zeros(nm) * np.NaN)
+                diag_ds[vn].attrs['description'] = ('Thickness of grid point '
+                                                    f'{gi} from terminus.')
+                diag_ds[vn].attrs['unit'] = 'm'
+
         # Run
         j = 0
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
@@ -1046,6 +1071,15 @@ class FlowlineModel(object):
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
                 diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+
+            # Terminus thick is a bit more logic
+            ti = None
+            for gi in range(10):
+                vn = f'terminus_thick_{gi}'
+                if vn in ovars:
+                    if ti is None:
+                        ti = self.fls[-1].terminus_index
+                    diag_ds[vn].data[i] = self.fls[-1].thick[ti - gi]
 
         # to datasets
         geom_ds = None
@@ -2382,6 +2416,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          precipitation_factor=None,
                          store_monthly_step=False,
                          store_model_geometry=None,
+                         init_model_filesuffix=None,
+                         init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
@@ -2422,6 +2458,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -2438,6 +2480,15 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
+
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
                                      y0=y0, halfsize=halfsize,

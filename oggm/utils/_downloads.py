@@ -552,22 +552,25 @@ def _progress_urlretrieve(url, cache_name=None, reset=False,
 
     try:
         from progressbar import DataTransferBar, UnknownLength
-        pbar = [None]
+        pbar = None
 
         def _upd(count, size, total):
-            if pbar[0] is None:
-                pbar[0] = DataTransferBar()
-            if pbar[0].max_value is None:
+            nonlocal pbar
+            if pbar is None:
+                pbar = DataTransferBar()
+                if not pbar.is_terminal:
+                    pbar.min_poll_interval = 15
+            if pbar.max_value is None:
                 if total > 0:
-                    pbar[0].start(total)
+                    pbar.start(total)
                 else:
-                    pbar[0].start(UnknownLength)
-            pbar[0].update(min(count * size, total))
+                    pbar.start(UnknownLength)
+            pbar.update(min(count * size, total))
             sys.stdout.flush()
         res = oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset,
                                reporthook=_upd, auth=auth, timeout=timeout)
         try:
-            pbar[0].finish()
+            pbar.finish()
         except BaseException:
             pass
         return res
