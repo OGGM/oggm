@@ -780,3 +780,72 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     shape_factors[np.isnan(shape_factors)] = 1.
 
     return shape_factors
+
+
+def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
+               id_suffix=None, save_special_columns=None,
+               assign_col_values=None,):
+    """ Cook the user's glacier inventory with the RGI format
+
+    Parameters
+    ----------
+    gi_gdf : :py:geopandas.GeoDataFrame
+        the GeoDataFrame of the user's glacier inventory
+    region : str
+        Glacier RGI region code, only usable when set `confirm_region=False`.
+        The default is '13'.
+    version : str
+        Glacier inventory version code. The default is '60'.
+    ids : list of integer, each element should be a str of length 5
+        Assign special id number to each glacier. The default is None, the id code
+        following the glacier order.
+    id_suffix : str or None
+         Ad a suffix to the glacier id. The default is None, no suffix
+    save_special_columns : list or str, columns name in the original gi_gdf
+        Whether save special columns in the output data.
+        The default is None.
+    assign_col_values : dict
+        Add new columns or change the value of existed colunms. 
+        The default is None.
+
+    Returns
+    -------
+    cooked_rgidf : :py:geopandas.GeoDataFrame
+        with same attribution with RGI 
+
+    """
+
+    if ids is not None:
+        assert len(ids) == len(gi_gdf)
+    else:
+        ids = range(len(gi_gdf))
+    
+    if id_suffix is None:
+        id_suffix=''
+    else:
+        id_suffix = '_' + id_suffix
+    id_ = ['RGI{}-{}.{:0>5d}{}'.format(version, region, i, id_suffix) 
+           for i in ids]
+    
+    gi_gdf = gi_gdf.to_crs('epsg:4326')
+    
+    clon = gi_gdf.geometry.centroid.x
+    clat = gi_gdf.geometry.centroid.y
+    glims_id = ['G{0:0>6d}E{1:0>5d}N'.format(round(x*1e3), round(y*1e3)) 
+                for x, y in zip(gi_gdf.CenLon, gi_gdf.CenLat)]
+    data = {'RGIId': id_, 'CenLon': clon, 'CenLat': clat, 'GLIMSID': glims_id,
+            'BgnDate': '20009999', 'EndDate': -9999999, 'O1Region': region, 'O2Region': '1',
+            'Area': -9999, 'Zmin': -9999, 'Zmax': -9999, 'Zmed': -9999, 'Slope': -9999,
+            'Aspect': -9999, 'Lmax': -9999, 'Status': 0, 'Connect': 0, 'Form': 0, 
+            'TermTyep': 0, 'Surging': 0, 'Linkages': 1, 'check_geom': None, 'Name': ''}
+    cooked_rgidf = gpd.GeoDataFrame(data=data, geometry=gi_gdf.geometry, crs='epsg:4326')
+    if save_special_columns is not None:
+        save_special_columns = tolist(save_special_columns)
+        for col in save_special_columns:
+            cooked_rgidf[col] = gi_gdf[col].values
+    
+    if assign_col_values:
+        for key in assign_col_values.keys():
+            cooked_rgidf[key]=assign_col_values[key]
+    
+    return cooked_rgidf
