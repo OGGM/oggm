@@ -804,18 +804,18 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
          Ad a suffix to the glacier id. The default is None, no suffix
     save_special_columns : dict or None
         The key in the dict is the column name which we tend to keep in the output data.
-        The value in the dict is the column name which we tend to show 
+        The value in the dict is the column name which we tend to show
             the keeped data in the output data.
         Whether save special columns in the output data.
         The default is None.
     assign_col_values : dict
-        Add new columns or change the value of existed colunms. 
+        Add new columns or change the value of existed colunms.
         The default is None.
 
     Returns
     -------
     cooked_rgidf : :py:geopandas.GeoDataFrame
-        with same attribution with RGI 
+        with same attribution with RGI
 
     """
 
@@ -824,25 +824,25 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
         assert len(ids) == len(gi_gdf)
     else:
         ids = range(1, len(gi_gdf)+1)
-    
+
     # Check if a suffix is assigned to the rgiid
     if id_suffix is None:
-        id_suffix=''
+        id_suffix = ''
     else:
         id_suffix = '_' + id_suffix
     
     # To construct a fake rgiid list following RGI format
     id_ = ['RGI{}-{}.{:0>5d}{}'.format(version, region, i, id_suffix) 
            for i in ids]
-    
+
     # Calculate the central point of the glaciers
     clon = gi_gdf.geometry.centroid.x
     clat = gi_gdf.geometry.centroid.y
-    
+
     # Check the coordination system.
     # RGI use the geographic coordinate,
-    # so if the orignial glacier inventory is not in geographic coordinate, 
-    # we need to convert both of the central point and the glacier outline 
+    # so if the orignial glacier inventory is not in geographic coordinate,
+    # we need to convert both of the central point and the glacier outline
     # to geographic coordinate
     if gi_gdf.crs != 'epsg:4326':
         p = Proj(gi_gdf.crs)
@@ -850,16 +850,16 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
         geom = gi_gdf.copy().to_crs('epsg:4326').geometry.values
 
     # Construct the glims id list
-    glims_id = ['G{0:0>6d}E{1:0>5d}N'.format(round(x*1e3), round(y*1e3)) 
+    glims_id = ['G{0:0>6d}E{1:0>5d}N'.format(round(x*1e3), round(y*1e3))
                 for x, y in zip(clon, clat)]
-    
+
     # Prepare data for the output GeoDataFrame
     data = {'RGIId': id_, 'CenLon': clon, 'CenLat': clat, 'GLIMSId': glims_id,
             'BgnDate': '20009999', 'EndDate': -9999999, 'O1Region': region, 'O2Region': '1',
             'Area': -9999, 'Zmin': -9999, 'Zmax': -9999, 'Zmed': -9999, 'Slope': -9999,
-            'Aspect': -9999, 'Lmax': -9999, 'Status': 0, 'Connect': 0, 'Form': 0, 
+            'Aspect': -9999, 'Lmax': -9999, 'Status': 0, 'Connect': 0, 'Form': 0,
             'TermType': 0, 'Surging': 0, 'Linkages': 1, 'check_geom': None, 'Name': ''}
-    
+
     # Construct the output GeoDataFrame
     cooked_rgidf = gpd.GeoDataFrame(data=data, geometry=geom, crs='epsg:4326')
 
@@ -867,10 +867,10 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
     if save_special_columns is not None:
         for col in save_special_columns.keys():
             cooked_rgidf[save_special_columns[col]] = gi_gdf[col].values
-    
+
     # If there are any new column and values we want to add
     if assign_col_values:
         for key in assign_col_values.keys():
-            cooked_rgidf[key]=assign_col_values[key]
-    
+            cooked_rgidf[key] = assign_col_values[key]
+
     return cooked_rgidf
