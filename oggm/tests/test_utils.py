@@ -323,6 +323,22 @@ class TestFuncs(unittest.TestCase):
         t2 = timeit.timeit('utils.clip_min(a, 15)', number=n, setup=s2)
         assert t2 < t1
 
+    def test_cook_rgidf(self):
+        from oggm import workflow
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = utils.get_temp_dir(dirname='test_cook_rgidf')
+        path = utils.get_demo_file('cgi2.shp')
+        cgidf = gpd.read_file(path)
+        rgidf = utils.cook_rgidf(cgidf, save_special_columns={'Glc_Long': 'CenLon', 'Glc_Lati': 'CenLat'},
+                                 assign_col_values={'Area': cgidf.Glc_Area*1e-6})
+        gdirs = workflow.init_glacier_directories(rgidf)
+        workflow.gis_prepro_tasks(gdirs)
+        workflow.download_ref_tstars()
+        workflow.climate_tasks(gdirs)
+        workflow.inversion_tasks(gdirs)
+        df = utils.compile_glacier_statistics(gdirs, inversion_only=True)
+        assert np.any(np.isnan(df.inv_vol_km3))
 
 class TestInitialize(unittest.TestCase):
 
