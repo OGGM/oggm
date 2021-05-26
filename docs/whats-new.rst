@@ -12,6 +12,9 @@ Breaking changes
 
 Enhancements
 ~~~~~~~~~~~~
+- Add ``cook_rgidf()`` in ``utils._funcs`` to make it easy of 
+  using a non-RGI glacier inventory in OGGM (:pull:`1251`).
+  By `Li Fei <https://github.com/Keeptg>`_
 
 Bug fixes
 ~~~~~~~~~
