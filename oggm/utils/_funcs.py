@@ -830,9 +830,9 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
         id_suffix = ''
     else:
         id_suffix = '_' + id_suffix
-    
+
     # To construct a fake rgiid list following RGI format
-    id_ = ['RGI{}-{}.{:0>5d}{}'.format(version, region, i, id_suffix) 
+    id_ = ['RGI{}-{}.{:0>5d}{}'.format(version, region, i, id_suffix)
            for i in ids]
 
     # Calculate the central point of the glaciers
