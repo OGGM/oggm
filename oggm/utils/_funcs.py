@@ -20,6 +20,7 @@ except AttributeError:
     # Old scipy
     from scipy.signal import gaussian
 from scipy.interpolate import interp1d
+from pyproj import Proj
 import shapely.geometry as shpg
 from shapely.ops import linemerge
 
@@ -784,7 +785,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
 
 def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
                id_suffix=None, save_special_columns=None,
-               assign_col_values=None,):
+               assign_col_values=None):
     """ Cook the user's glacier inventory with the RGI format
 
     Parameters
@@ -798,10 +799,13 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
         Glacier inventory version code. The default is '60'.
     ids : list of integer, each element should be a str of length 5
         Assign special id number to each glacier. The default is None, the id code
-        following the glacier order.
+            following the glacier order.
     id_suffix : str or None
          Ad a suffix to the glacier id. The default is None, no suffix
-    save_special_columns : list or str, columns name in the original gi_gdf
+    save_special_columns : dict or None
+        The key in the dict is the column name which we tend to keep in the output data.
+        The value in the dict is the column name which we tend to show 
+            the keeped data in the output data.
         Whether save special columns in the output data.
         The default is None.
     assign_col_values : dict
@@ -815,35 +819,56 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
 
     """
 
+    # Check if the rgiid is assigned
     if ids is not None:
         assert len(ids) == len(gi_gdf)
     else:
-        ids = range(len(gi_gdf))
+        ids = range(1, len(gi_gdf)+1)
     
+    # Check if a suffix is assigned to the rgiid
     if id_suffix is None:
         id_suffix=''
     else:
         id_suffix = '_' + id_suffix
+    
+    # To construct a fake rgiid list following RGI format
     id_ = ['RGI{}-{}.{:0>5d}{}'.format(version, region, i, id_suffix) 
            for i in ids]
     
-    gi_gdf = gi_gdf.to_crs('epsg:4326')
-    
+    # Calculate the central point of the glaciers
     clon = gi_gdf.geometry.centroid.x
     clat = gi_gdf.geometry.centroid.y
+    
+    # Check the coordination system.
+    # RGI use the geographic coordinate,
+    # so if the orignial glacier inventory is not in geographic coordinate, 
+    # we need to convert both of the central point and the glacier outline 
+    # to geographic coordinate
+    if gi_gdf.crs != 'epsg:4326':
+        p = Proj(gi_gdf.crs)
+        clon, clat = p(clon, clat, inverse=True)
+        geom = gi_gdf.copy().to_crs('epsg:4326').geometry.values
+
+    # Construct the glims id list
     glims_id = ['G{0:0>6d}E{1:0>5d}N'.format(round(x*1e3), round(y*1e3)) 
-                for x, y in zip(gi_gdf.CenLon, gi_gdf.CenLat)]
-    data = {'RGIId': id_, 'CenLon': clon, 'CenLat': clat, 'GLIMSID': glims_id,
+                for x, y in zip(clon, clat)]
+    
+    # Prepare data for the output GeoDataFrame
+    data = {'RGIId': id_, 'CenLon': clon, 'CenLat': clat, 'GLIMSId': glims_id,
             'BgnDate': '20009999', 'EndDate': -9999999, 'O1Region': region, 'O2Region': '1',
             'Area': -9999, 'Zmin': -9999, 'Zmax': -9999, 'Zmed': -9999, 'Slope': -9999,
             'Aspect': -9999, 'Lmax': -9999, 'Status': 0, 'Connect': 0, 'Form': 0, 
-            'TermTyep': 0, 'Surging': 0, 'Linkages': 1, 'check_geom': None, 'Name': ''}
-    cooked_rgidf = gpd.GeoDataFrame(data=data, geometry=gi_gdf.geometry, crs='epsg:4326')
-    if save_special_columns is not None:
-        save_special_columns = tolist(save_special_columns)
-        for col in save_special_columns:
-            cooked_rgidf[col] = gi_gdf[col].values
+            'TermType': 0, 'Surging': 0, 'Linkages': 1, 'check_geom': None, 'Name': ''}
     
+    # Construct the output GeoDataFrame
+    cooked_rgidf = gpd.GeoDataFrame(data=data, geometry=geom, crs='epsg:4326')
+
+    # If there are specifical column in the original glacier inventory we want to keep
+    if save_special_columns is not None:
+        for col in save_special_columns.keys():
+            cooked_rgidf[save_special_columns[col]] = gi_gdf[col].values
+    
+    # If there are any new column and values we want to add
     if assign_col_values:
         for key in assign_col_values.keys():
             cooked_rgidf[key]=assign_col_values[key]
