@@ -801,7 +801,7 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
         Assign special id number to each glacier. The default is None, the id code
             following the glacier order.
     id_suffix : str or None
-         Ad a suffix to the glacier id. The default is None, no suffix
+         Add a suffix to the glacier id. The default is None, no suffix
     save_special_columns : dict or None
         The key in the dict is the column name which we tend to keep in the output data.
         The value in the dict is the column name which we tend to show
