@@ -328,7 +328,7 @@ class TestFuncs(unittest.TestCase):
         cfg.initialize()
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = utils.mkdir(utils.get_temp_dir(dirname='test_cook_rgidf'),
-                                                                  reset=True)
+                                               reset=True)
         path = utils.get_demo_file('cgi2.shp')
         cgidf = gpd.read_file(path)
         rgidf = utils.cook_rgidf(cgidf, save_special_columns={'Glc_Long': 'CenLon',
@@ -336,7 +336,7 @@ class TestFuncs(unittest.TestCase):
                                  assign_col_values={'Area': cgidf.Glc_Area*1e-6})
         gdirs = workflow.init_glacier_directories(rgidf)
         workflow.gis_prepro_tasks(gdirs)
-        workflow.download_ref_tstars('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/' +\
+        workflow.download_ref_tstars('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/' +
                                      'oggm_v1.4/RGIV62/CRU/centerlines/qc3/pcp2.5')
         workflow.climate_tasks(gdirs)
         workflow.inversion_tasks(gdirs)
