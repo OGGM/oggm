@@ -341,7 +341,7 @@ class TestFuncs(unittest.TestCase):
         workflow.climate_tasks(gdirs)
         workflow.inversion_tasks(gdirs)
         df = utils.compile_glacier_statistics(gdirs, inversion_only=True)
-        assert np.any(np.isfinite(df.inv_volume_km3))
+        assert np.all(np.isfinite(df.inv_volume_km3))
 
 
 class TestInitialize(unittest.TestCase):
