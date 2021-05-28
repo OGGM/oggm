@@ -331,7 +331,7 @@ class TestFuncs(unittest.TestCase):
         cfg.PATHS['working_dir'] = utils.mkdir(working_dir, reset=True)
         path = utils.get_demo_file('cgi2.shp')
         cgidf = gpd.read_file(path)
-        rgidf = utils.cook_rgidf(cgidf,
+        rgidf = utils.cook_rgidf(cgidf, region='13',
                                  save_special_columns={'Glc_Long': 'CenLon',
                                                        'Glc_Lati': 'CenLat'})
         rgidf['Area'] = cgidf.Glc_Area * 1e-6

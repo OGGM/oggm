@@ -864,7 +864,7 @@ def cook_rgidf(gi_gdf, region, version='60', ids=None, id_suffix=None,
 
     # If there are specifical column in the original glacier inventory we want to keep
     if save_special_columns is not None:
-        for key, val in save_special_columns.item():
+        for key, val in save_special_columns.items():
             cooked_rgidf[val] = gi_gdf[key].values
 
     return cooked_rgidf
