@@ -783,39 +783,38 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
     return shape_factors
 
 
-def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
-               id_suffix=None, save_special_columns=None,
-               assign_col_values=None):
+def cook_rgidf(gi_gdf, region, version='60', ids=None, id_suffix=None,
+               save_special_columns=None):
     """ Cook the user's glacier inventory with the RGI format
 
     Parameters
     ----------
     gi_gdf : :py:geopandas.GeoDataFrame
-        the GeoDataFrame of the user's glacier inventory
+        the GeoDataFrame of the user's glacier inventory.
     region : str
-        Glacier RGI region code, only usable when set `confirm_region=False`.
-        The default is '13'.
+        Glacier RGI region code, which is important in some OGGM proceduer.
+        For example, oggm.shop.its_live() need it to locate the right dataset.
+        Should be assigned correctly.
     version : str
-        Glacier inventory version code. The default is '60'.
-    ids : list of integer, each element should be a str of length 5
-        Assign special id number to each glacier. The default is None, the id code
-            following the glacier order.
+        Glacier inventory version code, which is neccessary to generate the RGIId.
+        The default is '60'.
+    ids : list of integer in the str format, the elements should be with a length of 5.
+        Assign special id number to each glacier.
+        The default is None, the id code following the number of glacier order.
     id_suffix : str or None
          Add a suffix to the glacier id. The default is None, no suffix
     save_special_columns : dict or None
-        The key in the dict is the column name which we tend to keep in the output data.
-        The value in the dict is the column name which we tend to show
+        Whether or not save special columns in the original data to the output data.
+        The default is None, don't save.
+        If it's dict:
+            The key in the dict is the column name which we tend to keep in the output data.
+            The value in the dict is the column name which we tend to show
             the keeped data in the output data.
-        Whether save special columns in the output data.
-        The default is None.
-    assign_col_values : dict
-        Add new columns or change the value of existed colunms.
-        The default is None.
 
     Returns
     -------
     cooked_rgidf : :py:geopandas.GeoDataFrame
-        with same attribution with RGI
+        with same attribution of RGI
 
     """
 
@@ -840,8 +839,8 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
     clat = gi_gdf.geometry.centroid.y
 
     # Check the coordination system.
-    # RGI use the geographic coordinate,
-    # so if the orignial glacier inventory is not in geographic coordinate,
+    # RGI use the geographic coordinate.
+    # So if the orignial glacier inventory is not in geographic coordinate,
     # we need to convert both of the central point and the glacier outline
     # to geographic coordinate
     if gi_gdf.crs != 'epsg:4326':
@@ -865,12 +864,7 @@ def cook_rgidf(gi_gdf, region='13', version='60', ids=None,
 
     # If there are specifical column in the original glacier inventory we want to keep
     if save_special_columns is not None:
-        for col in save_special_columns.keys():
-            cooked_rgidf[save_special_columns[col]] = gi_gdf[col].values
-
-    # If there are any new column and values we want to add
-    if assign_col_values:
-        for key in assign_col_values.keys():
-            cooked_rgidf[key] = assign_col_values[key]
+        for key, val in save_special_columns.item():
+            cooked_rgidf[val] = gi_gdf[key].values
 
     return cooked_rgidf
