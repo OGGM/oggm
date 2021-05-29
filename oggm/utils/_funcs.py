@@ -847,6 +847,8 @@ def cook_rgidf(gi_gdf, region, version='60', ids=None, id_suffix=None,
         p = Proj(gi_gdf.crs)
         clon, clat = p(clon, clat, inverse=True)
         geom = gi_gdf.copy().to_crs('epsg:4326').geometry.values
+    else:
+        geom = gi_gdf.geometry.values
 
     # Construct the glims id list
     glims_id = ['G{0:0>6d}E{1:0>5d}N'.format(round(x*1e3), round(y*1e3))
