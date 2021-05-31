@@ -28,14 +28,6 @@ try:
     import geopandas as gpd
 except ImportError:
     pass
-try:
-    from pyproj import Proj
-except ImportError:
-    pass
-try:
-    from salem import proj_is_same
-except ImportError:
-    pass
 
 # Locals
 import oggm.cfg as cfg
