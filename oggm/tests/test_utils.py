@@ -331,11 +331,16 @@ class TestFuncs(unittest.TestCase):
         cfg.PATHS['working_dir'] = utils.mkdir(working_dir, reset=True)
         path = utils.get_demo_file('cgi2.shp')
         cgidf = gpd.read_file(path)
-        rgidf = utils.cook_rgidf(cgidf, region='13',
-                                 save_special_columns={'Glc_Long': 'CenLon',
+        rgidf = utils.cook_rgidf(cgidf, o1_region='13',
+                                 assign_column_values={'Glc_Long': 'CenLon',
                                                        'Glc_Lati': 'CenLat'})
         rgidf['Area'] = cgidf.Glc_Area * 1e-6
-        workflow.init_glacier_directories(rgidf)
+        gdirs = workflow.init_glacier_directories(rgidf)
+        df = utils.compile_glacier_statistics(gdirs)
+        assert np.all(df.glacier_type == 'Glacier')
+        assert np.all(df.rgi_region == '13')
+        assert_allclose(df.cenlon, cgidf['Glc_Long'])
+        assert_allclose(df.rgi_area_km2, cgidf['Glc_Area'] * 1e-6, rtol=1e-3)
 
 
 class TestInitialize(unittest.TestCase):
