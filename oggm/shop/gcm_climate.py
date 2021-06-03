@@ -351,6 +351,9 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         path to the temp file (default: LMR v2.1 from server above)
     fpath_precip : str
         path to the precip file (default: LMR v2.1 from server above)
+    year_range : tuple of str
+        the year range for which you want to compute the anomalies. Default
+        for LMR is `('1951', '1980')`
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
 
@@ -358,7 +361,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
     """
 
     # Get the path of GCM temperature & precipitation data
-    base_url =  'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
+    base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
     if fpath_temp is None:
         fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
     if fpath_precip is None:
@@ -387,7 +390,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         temp = temp.mean(dim='MCrun')
         precip = precip.mean(dim='MCrun')
 
-        # Precip unit is kg/m^2/s
+        # Precip unit is kg/m^2/s we convert to mm month since we apply the anomaly after
         precip = precip * 30.5 * (60 * 60 * 24)
 
         # Back to [-180, 180] for OGGM
@@ -413,7 +416,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                             dims=('time',))
 
         # For precip the std dev is very small - lets keep it as is for now but
-        # this is a bit ridiculous
+        # this is a bit ridiculous. We clip to zero here to be sure
         precip = utils.clip_min((loc_pre.data + precip.data[:, np.newaxis]).flatten(), 0)
         precip = xr.DataArray(precip, dims=('time',),
                               coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
