@@ -16,6 +16,8 @@ Enhancements
 - Added ``cook_rgidf()`` function in ``oggm.utils`` to simplify the use
   of a non-RGI glacier inventory in OGGM (:pull:`1251`).
   By `Li Fei <https://github.com/Keeptg>`_
+- Added support for last millenium reanalysis data to the shop (:pull:`1257`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
