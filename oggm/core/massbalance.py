@@ -2,6 +2,7 @@
 # Built ins
 import logging
 # External libs
+import cftime
 import numpy as np
 import pandas as pd
 import netCDF4
@@ -394,7 +395,11 @@ class PastMassBalance(MassBalanceModel):
         with ncDataset(fpath, mode='r') as nc:
             # time
             time = nc.variables['time']
-            time = netCDF4.num2date(time[:], time.units)
+            try:
+                time = netCDF4.num2date(time[:], time.units)
+            except ValueError:
+                # This is for longer time series
+                time = cftime.num2date(time[:], time.units, calendar='noleap')
             ny, r = divmod(len(time), 12)
             if r != 0:
                 raise ValueError('Climate data should be N full years')
