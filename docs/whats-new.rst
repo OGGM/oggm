@@ -16,6 +16,9 @@ Enhancements
 - Added ``cook_rgidf()`` function in ``oggm.utils`` to simplify the use
   of a non-RGI glacier inventory in OGGM (:pull:`1251`).
   By `Li Fei <https://github.com/Keeptg>`_
+- Added a argument ``apply_func`` in ``utils.compile_glacier_statistics``
+  to allow users statistics any information by define a custom function (:pull:`1259`)
+  By `Li Fei <https://github.com/Keeptg>`_
 
 Bug fixes
 ~~~~~~~~~
