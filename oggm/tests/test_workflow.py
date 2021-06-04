@@ -1,5 +1,6 @@
 import os
 import shutil
+from typing import OrderedDict
 import unittest
 import pickle
 import pytest
@@ -189,6 +190,31 @@ class TestFullRun(unittest.TestCase):
         dfc = utils.compile_glacier_statistics(gdirs)
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
         assert np.all(dfc.t_star > 1850)
+        def statistic_glacier_ext_num(gdir, in_percent=False):
+            d = OrderedDict()
+            d['rgi_id'] = gdir.rgi_id
+            ds = xr.open_dataset(gdir.get_filepath('gridded_data'))
+            glc_ext = ds['glacier_ext'].values
+            glc_mask = ds['glacier_mask'].values
+            if in_percent:
+                glc_ext_num = np.sum(glc_ext) / np.sum(glc_mask)
+                label = 'glc_ext_num_perc'
+            else:
+                glc_ext_num = np.sum(glc_ext)
+                label = 'glc_ext_num'
+
+            d[label] = glc_ext_num
+
+            return d
+
+        dfc = utils.compile_glacier_statistics(gdirs, apply_func=statistic_glacier_ext_num,
+                                               in_percent=True)
+        assert 'glc_ext_num_perc' in dfc.columns
+        assert np.any(np.isfinite(dfc.glc_ext_num_perc.values))
+
+            
+            
+            
         dfc = utils.compile_climate_statistics(gdirs)
         cc = dfc[['flowline_mean_elev',
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]
