@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import OrderedDict
+from collections import OrderedDict
 import unittest
 import pickle
 import pytest
