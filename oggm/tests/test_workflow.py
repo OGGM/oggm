@@ -190,6 +190,7 @@ class TestFullRun(unittest.TestCase):
         dfc = utils.compile_glacier_statistics(gdirs)
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
         assert np.all(dfc.t_star > 1850)
+
         def statistic_glacier_ext_num(gdir, in_percent=False):
             d = OrderedDict()
             d['rgi_id'] = gdir.rgi_id
