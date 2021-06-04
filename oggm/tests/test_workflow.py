@@ -212,9 +212,6 @@ class TestFullRun(unittest.TestCase):
         assert 'glc_ext_num_perc' in dfc.columns
         assert np.any(np.isfinite(dfc.glc_ext_num_perc.values))
 
-            
-            
-            
         dfc = utils.compile_climate_statistics(gdirs)
         cc = dfc[['flowline_mean_elev',
                   'tstar_avg_temp_mean_elev']].corr().values[0, 1]

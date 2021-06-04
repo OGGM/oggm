@@ -1457,7 +1457,7 @@ def glacier_statistics(gdir, inversion_only=False):
 
 @global_task(log)
 def compile_glacier_statistics(gdirs, filesuffix='', path=True,
-                               inversion_only=False):
+                               inversion_only=False, apply_func=None, **kwargs):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1475,13 +1475,32 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
         Set to a path to store the file to your chosen location
     inversion_only : bool
         if one wants to summarize the inversion output only (including calving)
+    apply_func : function
+        if one wants to summarize other information, a function can be passed in.
+        The first position argument should be `oggm.GlacierDirectory` class.
+        Other key words argument can be passed to apply_func
+    kwargs : dict
+        pass to apply_func
     """
     from oggm.workflow import execute_entity_task
 
-    out_df = execute_entity_task(glacier_statistics, gdirs,
-                                 inversion_only=inversion_only)
+    out_df1 = execute_entity_task(glacier_statistics, gdirs,
+                                  inversion_only=inversion_only)
 
-    out = pd.DataFrame(out_df).set_index('rgi_id')
+    out_df1 = pd.DataFrame(out_df1).set_index('rgi_id')
+    if apply_func is not None:
+        @entity_task(log)
+        def decorate_apply_func(gdir, **kwargs):
+            '''Decorate the apply_func with entity_task
+            '''
+            func_out = apply_func(gdir, **kwargs)
+            return func_out
+
+        out_df2 = execute_entity_task(decorate_apply_func, gdirs, **kwargs)
+        out_df2 = pd.DataFrame(out_df2).set_index('rgi_id')
+        out = pd.concat([out_df1, out_df2], axis=1)
+    else:
+        out = out_df1
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
