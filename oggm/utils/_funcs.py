@@ -838,8 +838,8 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
 
     # Calculate the central point of the glaciers
     geom = gi_gdf.geometry.values
-    clon = gi_gdf.geometry.centroid.x
-    clat = gi_gdf.geometry.centroid.y
+    centroids = gi_gdf.geometry.representative_point()
+    clon, clat = centroids.x, centroids.y
 
     # Prepare data for the output GeoDataFrame
     data = {'RGIId': str_ids, 'CenLon': clon, 'CenLat': clat, 'GLIMSId': '',
