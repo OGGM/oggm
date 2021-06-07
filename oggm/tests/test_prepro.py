@@ -126,8 +126,8 @@ class TestGIS(unittest.TestCase):
         assert gdir.cenlon != prev_lon
         assert gdir.cenlat != prev_lat
         np.testing.assert_allclose(gdir.rgi_area_km2, prev_area, atol=0.01)
-        np.testing.assert_allclose(gdir.cenlon, prev_lon, atol=1e-4)
-        np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-4)
+        np.testing.assert_allclose(gdir.cenlon, prev_lon, atol=1e-2)
+        np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-2)
 
         assert gdir.status == 'Glacier or ice cap'
 
