@@ -2138,7 +2138,7 @@ class GlacierDirectory(object):
             self.cenlon = float(rgi_entity.CenLon)
             self.cenlat = float(rgi_entity.CenLat)
         else:
-            cenlon, cenlat = rgi_entity.geometry.centroid.xy
+            cenlon, cenlat = rgi_entity.geometry.representative_point().xy
             self.cenlon = float(cenlon[0])
             self.cenlat = float(cenlat[0])
 
