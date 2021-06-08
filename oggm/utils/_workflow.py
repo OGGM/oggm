@@ -1294,7 +1294,7 @@ def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
 
 
 @entity_task(log)
-def glacier_statistics(gdir, inversion_only=False):
+def glacier_statistics(gdir, inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1305,6 +1305,12 @@ def glacier_statistics(gdir, inversion_only=False):
     ----------
     inversion_only : bool
         if one wants to summarize the inversion output only (including calving)
+    apply_func : function
+        if one wants to summarize further information about a glacier, set
+        this kwarg to a function that accepts a glacier directory as first
+        positional argument, and the directory to fill in with data as
+        second argument. The directory should only store scalar values (strings,
+        float, int)
     """
 
     d = OrderedDict()
@@ -1452,12 +1458,19 @@ def glacier_statistics(gdir, inversion_only=False):
         except BaseException:
             pass
 
+        if apply_func:
+            # User defined statistics
+            try:
+                apply_func(gdir, d)
+            except BaseException:
+                pass
+
     return d
 
 
 @global_task(log)
 def compile_glacier_statistics(gdirs, filesuffix='', path=True,
-                               inversion_only=False, apply_func=None, **kwargs):
+                               inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1476,31 +1489,20 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
     inversion_only : bool
         if one wants to summarize the inversion output only (including calving)
     apply_func : function
-        if one wants to summarize other information, a function can be passed in.
-        The first position argument should be `oggm.GlacierDirectory` class.
-        Other key words argument can be passed to apply_func
-    kwargs : dict
-        pass to apply_func
+        if one wants to summarize further information about a glacier, set
+        this kwarg to a function that accepts a glacier directory as first
+        positional argument, and the directory to fill in with data as
+        second argument. The directory should only store scalar values (strings,
+        float, int)
     """
     from oggm.workflow import execute_entity_task
 
-    out_df1 = execute_entity_task(glacier_statistics, gdirs,
-                                  inversion_only=inversion_only)
+    out_df = execute_entity_task(glacier_statistics, gdirs,
+                                 apply_func=apply_func,
+                                 inversion_only=inversion_only)
 
-    out_df1 = pd.DataFrame(out_df1).set_index('rgi_id')
-    if apply_func is not None:
-        @entity_task(log)
-        def decorate_apply_func(gdir, **kwargs):
-            '''Decorate the apply_func with entity_task
-            '''
-            func_out = apply_func(gdir, **kwargs)
-            return func_out
+    out = pd.DataFrame(out_df).set_index('rgi_id')
 
-        out_df2 = execute_entity_task(decorate_apply_func, gdirs, **kwargs)
-        out_df2 = pd.DataFrame(out_df2).set_index('rgi_id')
-        out = pd.concat([out_df1, out_df2], axis=1)
-    else:
-        out = out_df1
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
