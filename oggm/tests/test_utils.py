@@ -20,7 +20,8 @@ import oggm
 from oggm import utils, workflow, tasks
 from oggm.utils import _downloads
 from oggm import cfg
-from oggm.tests.funcs import get_test_dir, init_hef, TempEnvironmentVariable
+from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
+                              characs_apply_func)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              DownloadVerificationFailedException)
@@ -404,16 +405,10 @@ class TestWorkflowTools(unittest.TestCase):
 
     def test_glacier_characs(self):
 
-        def add_func(gdir, d):
-            # add some new stats to the mix
-            with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-                glc_ext = ds['glacier_ext'].values
-                glc_mask = ds['glacier_mask'].values
-                d['glc_ext_num_perc'] = np.sum(glc_ext) / np.sum(glc_mask)
-
         gdir = init_hef()
 
-        df = utils.compile_glacier_statistics([gdir], apply_func=add_func,
+        df = utils.compile_glacier_statistics([gdir],
+                                              apply_func=characs_apply_func,
                                               path=False)
         assert len(df) == 1
 

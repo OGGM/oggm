@@ -1493,7 +1493,10 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
         this kwarg to a function that accepts a glacier directory as first
         positional argument, and the directory to fill in with data as
         second argument. The directory should only store scalar values (strings,
-        float, int)
+        float, int).
+        !Careful! For multiprocessing, the function cannot be located at the
+        top level, i.e. you may need to import it from a module for this to work,
+        or from a dummy class (https://stackoverflow.com/questions/8804830)
     """
     from oggm.workflow import execute_entity_task
 

@@ -18,7 +18,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import get_test_dir, use_multiprocessing
+from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
 from oggm.shop import cru
 from oggm.core import flowline
 from oggm import tasks
@@ -53,6 +53,7 @@ def up_to_climate(reset=False):
 
     # Use multiprocessing
     cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
+    cfg.PARAMS['use_multiprocessing'] = True
 
     # Working dir
     cfg.PATHS['working_dir'] = _TEST_DIR
@@ -186,7 +187,12 @@ class TestFullRun(unittest.TestCase):
         gdirs = up_to_inversion()
 
         # Test the glacier charac
-        dfc = utils.compile_glacier_statistics(gdirs)
+        dfc = utils.compile_glacier_statistics(gdirs,
+                                               apply_func=characs_apply_func)
+
+        assert 'glc_ext_num_perc' in dfc.columns
+        assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
+
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
         assert np.all(dfc.t_star > 1850)
         dfc = utils.compile_climate_statistics(gdirs)
