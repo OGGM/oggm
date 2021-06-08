@@ -1294,7 +1294,7 @@ def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
 
 
 @entity_task(log)
-def glacier_statistics(gdir, inversion_only=False):
+def glacier_statistics(gdir, inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1305,6 +1305,12 @@ def glacier_statistics(gdir, inversion_only=False):
     ----------
     inversion_only : bool
         if one wants to summarize the inversion output only (including calving)
+    apply_func : function
+        if one wants to summarize further information about a glacier, set
+        this kwarg to a function that accepts a glacier directory as first
+        positional argument, and the directory to fill in with data as
+        second argument. The directory should only store scalar values (strings,
+        float, int)
     """
 
     d = OrderedDict()
@@ -1452,12 +1458,19 @@ def glacier_statistics(gdir, inversion_only=False):
         except BaseException:
             pass
 
+        if apply_func:
+            # User defined statistics
+            try:
+                apply_func(gdir, d)
+            except BaseException:
+                pass
+
     return d
 
 
 @global_task(log)
 def compile_glacier_statistics(gdirs, filesuffix='', path=True,
-                               inversion_only=False):
+                               inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1475,13 +1488,24 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
         Set to a path to store the file to your chosen location
     inversion_only : bool
         if one wants to summarize the inversion output only (including calving)
+    apply_func : function
+        if one wants to summarize further information about a glacier, set
+        this kwarg to a function that accepts a glacier directory as first
+        positional argument, and the directory to fill in with data as
+        second argument. The directory should only store scalar values (strings,
+        float, int).
+        !Careful! For multiprocessing, the function cannot be located at the
+        top level, i.e. you may need to import it from a module for this to work,
+        or from a dummy class (https://stackoverflow.com/questions/8804830)
     """
     from oggm.workflow import execute_entity_task
 
     out_df = execute_entity_task(glacier_statistics, gdirs,
+                                 apply_func=apply_func,
                                  inversion_only=inversion_only)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
+
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],

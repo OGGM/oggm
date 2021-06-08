@@ -20,7 +20,8 @@ import oggm
 from oggm import utils, workflow, tasks
 from oggm.utils import _downloads
 from oggm import cfg
-from oggm.tests.funcs import get_test_dir, init_hef, TempEnvironmentVariable
+from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
+                              characs_apply_func)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              DownloadVerificationFailedException)
@@ -406,11 +407,19 @@ class TestWorkflowTools(unittest.TestCase):
 
         gdir = init_hef()
 
-        df = utils.compile_glacier_statistics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir],
+                                              apply_func=characs_apply_func,
+                                              path=False)
         assert len(df) == 1
+
+        assert 'glc_ext_num_perc' in df.columns
+        assert np.all(np.isfinite(df.glc_ext_num_perc.values))
+
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
+
+
 
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)

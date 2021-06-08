@@ -18,6 +18,9 @@ Enhancements
   By `Li Fei <https://github.com/Keeptg>`_
 - Added support for last millenium reanalysis data to the shop (:pull:`1257`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added an argument ``apply_func`` in ``utils.compile_glacier_statistics``
+  to allow users statistics any information by define a custom function (:pull:`1259`)
+  By `Li Fei <https://github.com/Keeptg>`_
 
 Bug fixes
 ~~~~~~~~~
