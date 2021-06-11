@@ -839,13 +839,18 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
 
 @global_task(log)
 def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
-                                    file_path=None):
+                                    file_path=None, fail_safe=False):
     """Shift the mass-balance residual to match geodetic mb observations.
+
+    It is similar to match_regional_geodetic_mb but uses the raw, glacier
+    per glacier tabular data.
 
     This method finds the "best mass-balance residual" to match all glaciers in
     gdirs with available OGGM mass balance and available geodetic mass-balance
-    measurements from Hugonnet 2021. It is possible to provide your own
-    geodetic mass-balance measurements by defining the 'file_path'.
+    measurements from Hugonnet 2021 or any other file with the same format.
+
+    The default is to use hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf
+    in  https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/
 
     Parameters
     ----------
@@ -856,7 +861,7 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
        '2000-01-01_2010-01-01',
        '2010-01-01_2020-01-01'.
     file_path: str
-       local file path to csv file containing geodetic measurements, file must
+       local file path to tabular file containing geodetic measurements, file must
        contain the columns:
            - 'rgiid': is the RGIId as in the RGI 6.0
            - 'period': time intervall of the measurements in the format shown
@@ -864,6 +869,10 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
            - 'dmdtda': the specific-mass change rate in meters water-equivalent
              per year,
            - 'area': is the glacier area (same as in RGI 6.0) in meters square
+    fail_safe : bool
+        some glaciers in the obs data have been corrected with the regional
+        average. We don't use these values, unless there is no other choice and
+        in which case you can set fail_safe to True
     """
 
     # Get the mass-balance OGGM would give out of the box
@@ -896,22 +905,33 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
     # fetch the file online or read custom file
     if file_path is None:
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide.hdf'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
         df = pd.read_hdf(utils.file_downloader(base_url + file_name))
     else:
-        df = pd.read_csv(file_path, index_col='rgiid')
+        extension = os.path.splitext(file_path)[1]
+        if extension == '.csv':
+            df = pd.read_csv(file_path, index_col='rgiid')
+        elif extension == '.hdf':
+            df = pd.read_hdf(file_path, index_col='rgiid')
 
     # get the correct period from the whole dataset
     df = df.loc[df['period'] == period]
 
     # get only geodetic measurements for which a valid OGGM mb is available
-    rdf = df.loc[rgi_ids_oggm]
-
-    # drop nans, to exclude glaciers with no valid geodetic measurments
-    rdf = rdf.dropna()
-    if rdf.empty:
-        raise InvalidWorkflowError('No gedoetic MB measurements available for '
+    rdf_all = df.loc[rgi_ids_oggm]
+    if rdf_all.empty:
+        raise InvalidWorkflowError('No geodetic MB measurements available for '
                                    'this glacier selection!')
+
+    # drop glaciers with no valid geodetic measurements
+    rdf = rdf_all.loc[~rdf_all['is_cor']]
+    if rdf.empty:
+        if not fail_safe:
+            raise InvalidWorkflowError('No gedoetic MB measurements available for '
+                                       'this glacier selection! Set '
+                                       'fail_safe=True to use the '
+                                       'corrected values.')
+        rdf = rdf_all
 
     # the remaining glaciers now have a OGGM mb and geodetic measurements
     rgi_ids = rdf.index.values
@@ -926,7 +946,7 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
     smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
 
     # Total geodetic MB, no need for indexing
-    smb_ref = rdf.dmdtda.values * 1000
+    smb_ref = rdf.dmdtda.values * 1000  # m to mm conversion
     area_ref = rdf.area.values
     smb_ref = np.average(smb_ref, weights=area_ref)
 
@@ -938,6 +958,8 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
     log.workflow('Observations give {}'.format(smb_ref))
     log.workflow('OGGM SMB gives {}'.format(out_smb))
     log.workflow('OGGM frontal ablation gives {}'.format(out_cal))
+
+    # This time we shift over all glaciers
     for gdir in gdirs:
         try:
             df = gdir.read_json('local_mustar')
