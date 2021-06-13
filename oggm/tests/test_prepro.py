@@ -1973,8 +1973,9 @@ class TestClimate(unittest.TestCase):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
+        entity['RGIId'] = 'RGI60-11.00897'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        assert gdir.rgi_version == '50'
+        assert gdir.rgi_version == '60'
         gis.define_glacier_region(gdir)
         workflow.gis_prepro_tasks([gdir])
 
@@ -1985,7 +1986,7 @@ class TestClimate(unittest.TestCase):
         apply_test_ref_tstars()
         workflow.climate_tasks([gdir])
 
-        # Test match geod
+        # Test match geod - method 1
         workflow.match_regional_geodetic_mb([gdir], rgi_reg='11',
                                             period='2000-01-01_2010-01-01')
         df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
@@ -2005,7 +2006,45 @@ class TestClimate(unittest.TestCase):
         mb = df.loc[2006:2015].mean()
         np.testing.assert_allclose(mb, smb_ref)
 
+        # Test match geod - method 2
+        workflow.match_geodetic_mb_for_selection([gdir],
+                                                 period='2000-01-01_2010-01-01')
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        df = pd.read_hdf(utils.file_downloader(base_url + file_name))
+        df = df.loc[df['period'] == '2000-01-01_2010-01-01']
+        rdf = df.loc[['RGI60-11.00897']]
+
+        mbdf = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = mbdf.loc[2000:2009].mean()
+
+        wgms = gdir.get_ref_mb_data().loc[2000:2009]
+
+        np.testing.assert_allclose(mb, rdf.dmdtda * 1000)
+        np.testing.assert_allclose(mb, wgms['ANNUAL_BALANCE'].mean(), atol=30)
+
+        # Check error management
+        # We trick with a glaciers whith no valid data
+        rdf['is_cor'] = True
+        fpath = os.path.join(self.testdir, 'test_hugo.hdf')
+        rdf.to_hdf(fpath, key='df')
+
         # This raises
+        with pytest.raises(InvalidWorkflowError):
+            workflow.match_geodetic_mb_for_selection([gdir], file_path=fpath,
+                                                     period='2000-01-01_2010-01-01')
+
+        # This doesnt
+        workflow.match_geodetic_mb_for_selection([gdir], file_path=fpath,
+                                                 fail_safe=True,
+                                                 period='2000-01-01_2010-01-01')
+
+        mbdf = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = mbdf.loc[2000:2009].mean()
+        np.testing.assert_allclose(mb, rdf.dmdtda * 1000)
+
+        # This raises as well, for different reasons
         cfg.PARAMS['prcp_scaling_factor'] = 1.8
         with pytest.raises(MassBalanceCalibrationError):
             workflow.climate_tasks([gdir])
@@ -3025,7 +3064,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert diag['calving_mu_star'] < diag['mu_star_before_calving']
         np.testing.assert_allclose(diag['calving_flux'], diag['calving_law_flux'])
 
-        # Where we also match MB
+        # Where we also match MB - method 1
         workflow.match_regional_geodetic_mb(gdir, rgi_reg='01')
 
         # Check OGGM part
@@ -3040,6 +3079,23 @@ class TestColumbiaCalving(unittest.TestCase):
         df = df.loc[df.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = df.loc[int('01'), 'dmdtda']
         np.testing.assert_allclose(mb - cal, smb_ref)
+
+        # Test match geod - method 2
+        workflow.match_geodetic_mb_for_selection([gdir])
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        df = pd.read_hdf(utils.file_downloader(base_url + file_name))
+        df = df.loc[df['period'] == '2000-01-01_2020-01-01']
+        rdf = df.loc[[gdir.rgi_id]]
+
+        # Check OGGM part
+        df = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = df.loc[2000:2019].mean()
+        rho = cfg.PARAMS['ice_density']
+        cal = diag['calving_flux'] * 1e9 * rho / gdir.rgi_area_m2
+
+        np.testing.assert_allclose(mb - cal, rdf.dmdtda * 1000)
 
         # OK - run
         tasks.init_present_time_glacier(gdir)

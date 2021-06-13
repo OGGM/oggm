@@ -18,9 +18,13 @@ Enhancements
   By `Li Fei <https://github.com/Keeptg>`_
 - Added support for last millenium reanalysis data to the shop (:pull:`1257`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- Added an argument ``apply_func`` in ``utils.compile_glacier_statistics``
-  to allow users statistics any information by define a custom function (:pull:`1259`)
+- Added a new ``apply_func``  argument in ``utils.compile_glacier_statistics``
+  that allows user to compute any new statistics from a gdir themselves (:pull:`1259`)
   By `Li Fei <https://github.com/Keeptg>`_
+- Added a new ``workflow.match_geodetic_mb_for_selection`` function to match
+  the MB bias for any selection of glaciers (:pull:`1248`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+
 
 Bug fixes
 ~~~~~~~~~
