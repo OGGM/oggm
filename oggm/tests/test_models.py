@@ -3257,6 +3257,61 @@ class TestHydro:
                            odf['snowfall_on_glacier'])
         assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
 
+        # So is domain area
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        odf['reconstructed_vol'] = odf['model_mb'].cumsum() / cfg.PARAMS['ice_density']
+        assert_allclose(odf['volume_m3'].iloc[1:], odf['reconstructed_vol'].iloc[:-1])
+
+        # Mass-conservation
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in - mass_out - mass_in_snow - mass_in_glacier,
+                        0, atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # At the very first timesep there is no glacier so the
+        # melt_on_glacier var is negative - this is a numerical artifact
+        # from the residual
+        assert_allclose(odf['melt_on_glacier'].iloc[0],
+                        - odf['residual_mb'].iloc[0])
+
+        # Now with zero ref area
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             store_monthly_hydro=store_monthly_hydro,
+                             bias=0, nyears=50, zero_initial_glacier=True,
+                             ref_area_from_y0=True, output_filesuffix='_const_y0')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_const_y0')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        # Sanity checks
+        # Tot prcp here is not constant but grows always since glacier area grows
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+        assert np.all(odf['tot_prcp'].iloc[1:].values -
+                      odf['tot_prcp'].iloc[:-1].values > 0)
+
+        # So is domain area
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+        assert np.all(odf['dom_area'].iloc[1:].values -
+                      odf['dom_area'].iloc[:-1].values > 0)
+
         # Glacier area is the same (remove on_area?)
         assert_allclose(odf['on_area'], odf['area_m2'])
 
