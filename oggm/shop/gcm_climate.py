@@ -98,14 +98,17 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         if scale_stddev:
             # This is a bit more arithmetic
             ts_tmp_sel = temp.sel(time=slice(*year_range))
+            if len(ts_tmp_sel) // 12 != len(ts_tmp_sel) / 12:
+                raise InvalidParamsError('year_range cannot contain the first'
+                                         'or last calendar year in the series')
+            if ((len(ts_tmp_sel) // 12) % 2) == 1:
+                raise InvalidParamsError('We need an even number of years '
+                                         'for this to work')
             ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
             std_fac = ds_ref.temp.groupby('time.month').std(dim='time') / ts_tmp_std
             std_fac = std_fac.roll(month=13-sm, roll_coords=True)
             std_fac = np.tile(std_fac.data, len(temp) // 12)
             # We need an even number of years for this to work
-            if ((len(ts_tmp_sel) // 12) % 2) == 1:
-                raise InvalidParamsError('We need an even number of years '
-                                         'for this to work')
             win_size = len(ts_tmp_sel) + 1
 
             def roll_func(x, axis=None):

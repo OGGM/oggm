@@ -24,6 +24,9 @@ Enhancements
 - Added a new ``workflow.match_geodetic_mb_for_selection`` function to match
   the MB bias for any selection of glaciers (:pull:`1248`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added functionality to control the area over which the hydrological
+  output is computed (:pull:`1264`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 Bug fixes
