@@ -983,7 +983,13 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         out_2d = dict()
         for vn in ds_diag.data_vars:
             if 'month_2d' in ds_diag[vn].dims:
+                name_2d = 'month_2d'
                 continue
+            if 'day_2d' in ds_diag[vn].dims:
+                name_2d = 'day_2d'
+                continue
+            else:
+                name_2d = False
             var = dict()
             var['data'] = np.full(shape, np.nan)
             var['attrs'] = ds_diag[vn].attrs
@@ -1005,16 +1011,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
         # Maybe 3D?
         out_3d = dict()
-        if 'month_2d' in ds_diag.dims:
+        if name_2d:
             # We have some 3d vars
-            month_2d = ds_diag['month_2d']
-            ds.coords['month_2d'] = ('month_2d', month_2d.data)
-            cn = 'calendar_month_2d'
-            ds.coords[cn] = ('month_2d', ds_diag[cn].values)
+            month_2d = ds_diag[name_2d]
+            ds.coords[name_2d] = (name_2d, month_2d)
+            cn = 'calendar_' + name_2d
+            ds.coords[cn] = (name_2d, ds_diag[cn].values)
 
             shape = (len(time), len(month_2d), len(rgi_ids))
             for vn in ds_diag.data_vars:
-                if 'month_2d' not in ds_diag[vn].dims:
+                if name_2d not in ds_diag[vn].dims:
                     continue
                 var = dict()
                 var['data'] = np.full(shape, np.nan)
@@ -1046,7 +1052,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds[vn] = (('time', 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_3d.items():
-        ds[vn] = (('time', 'month_2d', 'rgi_id'), var['data'])
+        ds[vn] = (('time', name_2d, 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_1d.items():
         ds[vn] = (('rgi_id', ), var['data'])

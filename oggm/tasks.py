@@ -55,5 +55,6 @@ from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
 from oggm.core.flowline import run_with_hydro
+from oggm.core.flowline import run_with_hydro_daily
 from oggm.utils import copy_to_basedir
 from oggm.utils import gdir_to_tar
