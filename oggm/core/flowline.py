@@ -136,6 +136,23 @@ class Flowline(Centerline):
         return nx * self.dx_meter
 
     @property
+    def terminus_index(self):
+        # the index of the last point with ice thickness above
+        # min_ice_thick_for_length and consistent with length
+        lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
+        if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
+            if (self.thick > lt).all():
+                ix = len(self.thick) - 1
+            else:
+                ix = np.where(self.thick <= lt)[0][0] - 1
+        else:
+            try:
+                ix = np.where(self.thick > lt)[0][-1]
+            except IndexError:
+                ix = -1
+        return ix
+
+    @property
     def volume_m3(self):
         return utils.clip_min(np.sum(self.section * self.dx_meter) -
                               getattr(self, 'calving_bucket_m3', 0), 0)
@@ -1013,6 +1030,14 @@ class FlowlineModel(object):
             diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
             diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
+        for gi in range(10):
+            vn = f'terminus_thick_{gi}'
+            if vn in ovars:
+                diag_ds[vn] = ('time', np.zeros(nm) * np.NaN)
+                diag_ds[vn].attrs['description'] = ('Thickness of grid point '
+                                                    f'{gi} from terminus.')
+                diag_ds[vn].attrs['unit'] = 'm'
+
         # Run
         j = 0
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
@@ -1046,6 +1071,15 @@ class FlowlineModel(object):
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
                 diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+
+            # Terminus thick is a bit more logic
+            ti = None
+            for gi in range(10):
+                vn = f'terminus_thick_{gi}'
+                if vn in ovars:
+                    if ti is None:
+                        ti = self.fls[-1].terminus_index
+                    diag_ds[vn].data[i] = self.fls[-1].thick[ti - gi]
 
         # to datasets
         geom_ds = None
@@ -2382,6 +2416,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          precipitation_factor=None,
                          store_monthly_step=False,
                          store_model_geometry=None,
+                         init_model_filesuffix=None,
+                         init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
@@ -2422,6 +2458,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -2438,6 +2480,15 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
+
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
 
     mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
                                      y0=y0, halfsize=halfsize,
@@ -2584,7 +2635,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
 
 @entity_task(log)
-def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
+def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
+                   ref_area_from_y0=False, **kwargs):
     """Run the flowline model and add hydro diagnostics (experimental!).
 
     TODOs:
@@ -2603,6 +2655,11 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
     store_monthly_hydro : bool
         also compute monthly hydrological diagnostics. The monthly ouptputs
         are stored in 2D fields (years, months)
+    ref_area_from_y0 : bool
+        the hydrological output is computed over a reference area, which
+        per default is the largest area covered by the glacier in the simulation
+        period. Use this kwarg to force a specifi area to the state of the
+        glacier at the provided simulation year.
     **kwargs : all valid kwargs for ``run_task``
     """
 
@@ -2635,15 +2692,15 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
     # The last one is the final state - we can't compute MB for that
     years = fmod.years[:-1]
 
-    # Geometry at t0 to start with + off-glacier snow bucket
+    # Geometry at y0 to start with + off-glacier snow bucket
     bin_area_2ds = []
     bin_elev_2ds = []
-    max_areas = []
+    ref_areas = []
     snow_buckets = []
     for fl in fmod.fls:
         # Glacier area on bins
         bin_area = fl.bin_area_m2
-        max_areas.append(bin_area)
+        ref_areas.append(bin_area)
         snow_buckets.append(bin_area * 0)
 
         # Output 2d data
@@ -2652,20 +2709,20 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
         bin_elev_2ds.append(np.empty(shape, np.float64))
 
     # Ok now fetch all geometry data in a first loop
-    # We do that because we want to get the largest possible area (always)
+    # We do that because we might want to get the largest possible area (default)
     # and we want to minimize the number of calls to run_until
     for i, yr in enumerate(years):
         fmod.run_until(yr)
-
-        for fl_id, (fl, max_area, bin_area_2d, bin_elev_2d) in \
-                enumerate(zip(fmod.fls, max_areas, bin_area_2ds, bin_elev_2ds)):
-            # Update the area if necessary
-            bin_area = fl.bin_area_m2
-            max_area[:] = utils.clip_min(max_area, bin_area)
-
+        for fl_id, (fl, bin_area_2d, bin_elev_2d) in \
+                enumerate(zip(fmod.fls, bin_area_2ds, bin_elev_2ds)):
             # Time varying bins
-            bin_area_2d[i, :] = bin_area
+            bin_area_2d[i, :] = fl.bin_area_m2
             bin_elev_2d[i, :] = fl.surface_h
+
+    if not ref_area_from_y0:
+        # Ok we get the max area instead
+        for ref_area, bin_area_2d in zip(ref_areas, bin_area_2ds):
+            ref_area[:] = bin_area_2d.max(axis=0)
 
     # Ok now we have arrays, we can work with that
     # -> second time varying loop is for mass-balance
@@ -2759,14 +2816,14 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False, **kwargs):
             off_area_out = 0
             on_area_out = 0
 
-            for fl_id, (max_area, snow_bucket, bin_area_2d, bin_elev_2d) in \
-                    enumerate(zip(max_areas, snow_buckets, bin_area_2ds, bin_elev_2ds)):
+            for fl_id, (ref_area, snow_bucket, bin_area_2d, bin_elev_2d) in \
+                    enumerate(zip(ref_areas, snow_buckets, bin_area_2ds, bin_elev_2ds)):
 
                 bin_area = bin_area_2d[i, :]
                 bin_elev = bin_elev_2d[i, :]
 
-                # Make sure we have no negative contribution
-                off_area = utils.clip_min(max_area - bin_area, 0)
+                # Make sure we have no negative contribution when glaciers are out
+                off_area = utils.clip_min(ref_area - bin_area, 0)
 
                 try:
                     if store_monthly_hydro:

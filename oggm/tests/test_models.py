@@ -393,6 +393,12 @@ class TestMassBalanceModels:
         assert mb_mod._prcp_fac == prcp_fac_old
         assert mb_mod.temp_bias == temp_bias_old
 
+        # Now monthly stuff
+        mb_mod.temp_bias = [0] * 12
+        np.testing.assert_allclose(mb_mod.temp_bias, temp_bias_old)
+        mb_mod.prcp_fac = [prcp_fac_old] * 12
+        np.testing.assert_allclose(mb_mod.prcp_fac, prcp_fac_old)
+
         # Deprecated attrs
         with pytest.raises(AttributeError):
             mb_mod.prcp_bias = 2
@@ -560,6 +566,7 @@ class TestMassBalanceModels:
         months = np.arange(12)
         monthly_1 = months * 0.
         monthly_2 = months * 0.
+        monthly_3 = months * 0.
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
             cmb_mod.temp_bias = 0
@@ -568,14 +575,23 @@ class TestMassBalanceModels:
             cmb_mod.temp_bias = 1
             tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
             monthly_2[m] = np.average(tmp, weights=w)
+            cmb_mod.temp_bias = [0] * 6 + [1] + [0] * 5
+            cmb_mod.prcp_fac = [10] * 3 + [2.5] * 9
+            tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
+            monthly_3[m] = np.average(tmp, weights=w)
+            cmb_mod.prcp_fac = 2.5
 
         # check that the winter months are close but summer months no
         np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5], atol=1)
+        np.testing.assert_allclose(monthly_1[1: 2], monthly_3[1: 2], atol=1)
         assert np.mean(monthly_1[5:]) > (np.mean(monthly_2[5:]) + 100)
+        assert np.mean(monthly_3[3:5]) > (np.mean(monthly_1[3:5]) + 100)
+        assert monthly_3[9] == monthly_2[9]
 
         if do_plot:  # pragma: no cover
             plt.plot(monthly_1, '-', label='Normal')
             plt.plot(monthly_2, '-', label='Temp bias')
+            plt.plot(monthly_3, '-', label='Temp bias monthly')
             plt.legend()
             plt.show()
 
@@ -609,6 +625,40 @@ class TestMassBalanceModels:
         mb = ps - cmb_mod.mbmod.mu_star * tm
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.12)
+
+    def test_avgclimate_mb_model(self, hef_gdir):
+
+        rho = cfg.PARAMS['ice_density']
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        df = gdir.read_json('local_mustar')
+        bias = df['bias']
+
+        h, w = gdir.get_inversion_flowline_hw()
+
+        cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        otmb = np.average(ombh, weights=w)
+        np.testing.assert_allclose(0., otmb, atol=0.2)
+
+        avg_mod = massbalance.AvgClimateMassBalance(gdir, bias=0)
+        ombh = avg_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        otmb = np.average(ombh, weights=w)
+        # This is now wrong -> but not too far we hope...
+        np.testing.assert_allclose(0., otmb, atol=130)
+
+        # Another simulation
+        cmb_mod = massbalance.ConstantMassBalance(gdir, y0=1991, halfsize=10)
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        otmb = np.average(ombh, weights=w)
+
+        avg_mod = massbalance.AvgClimateMassBalance(gdir, y0=1991, halfsize=10)
+        _ombh = avg_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        _otmb = np.average(_ombh, weights=w)
+        # This is now wrong -> but not too far we hope...
+        np.testing.assert_allclose(otmb, _otmb, atol=200)
 
     def test_random_mb(self, hef_gdir):
 
@@ -1404,21 +1454,30 @@ class TestModelFlowlines():
         assert rec.length_m == ref_l
         rec.thick = rec.thick * 0 + 100
         assert rec.length_m == full_l
+        assert rec.terminus_index == nx - 1
 
         cfg.PARAMS['glacier_length_method'] = 'consecutive'
         assert rec.length_m == full_l
+        assert rec.terminus_index == nx - 1
 
         cfg.PARAMS['min_ice_thick_for_length'] = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
+        assert rec.terminus_index == -1
+
+        cfg.PARAMS['glacier_length_method'] = 'naive'
+        assert rec.length_m == 0
+        assert rec.terminus_index == -1
 
         t = rec.thick * 0 + 20
         t[10] = 0.5
         rec.thick = t
-        assert rec.length_m == 1000
+        assert rec.length_m == full_l - map_dx
+        assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'naive'
-        assert rec.length_m == full_l - 100
+        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        assert rec.length_m == 1000
+        assert rec.terminus_index == 9
 
 
 @pytest.fixture(scope='class')
@@ -2783,6 +2842,32 @@ class TestHEF:
                                        rtol=0.1)
 
     @pytest.mark.slow
+    def test_start_from_date(self, hef_gdir, inversion_params):
+
+        init_present_time_glacier(hef_gdir)
+        run_constant_climate(hef_gdir, nyears=20,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct')
+
+        run_constant_climate(hef_gdir, nyears=10,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct_1')
+        run_constant_climate(hef_gdir, nyears=10,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             init_model_filesuffix='_ct_1',
+                             bias=0, output_filesuffix='_ct_2')
+
+        ds = utils.compile_run_output([hef_gdir], input_filesuffix='_ct')
+        ds1 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_1')
+        ds2 = utils.compile_run_output([hef_gdir], input_filesuffix='_ct_2')
+
+        ds_ = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+        np.testing.assert_allclose(ds.volume, ds_.volume, rtol=1e-5)
+
+    @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
 
         gdir = hef_gdir
@@ -2882,6 +2967,10 @@ class TestHEF:
 
         # Make a dummy run for 0 years
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
+
+        with pytest.warns(FutureWarning):
+            fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
+            assert fp == hef_gdir.get_filepath('model_geometry', filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         fmod = FileModel(fp)
@@ -3100,7 +3189,13 @@ class TestHEF:
         gdir.rgi_date = 1990
 
         # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area']
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
+                                                    'terminus_thick_0',
+                                                    'terminus_thick_1',
+                                                    'terminus_thick_2',
+                                                    ]
+
+        cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
@@ -3140,7 +3235,13 @@ class TestHEF:
                                        rtol=0.01)
 
             del ods['volume_fixed_geom']
-            assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))
+            all_vars = list(ds.data_vars)
+            no_term = [vn for vn in all_vars if 'terminus_thick_' not in vn]
+            assert sorted(no_term) == sorted(list(ods.data_vars))
+
+            assert np.all(ds.terminus_thick_0 > 0.1)
+            assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
+            assert np.all(ds.terminus_thick_2 > ds.terminus_thick_1)
 
             for vn in ['area']:
                 ref = ds[vn]
@@ -3189,6 +3290,61 @@ class TestHydro:
                            odf['snowfall_off_glacier'] +
                            odf['snowfall_on_glacier'])
         assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
+
+        # So is domain area
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        odf['reconstructed_vol'] = odf['model_mb'].cumsum() / cfg.PARAMS['ice_density']
+        assert_allclose(odf['volume_m3'].iloc[1:], odf['reconstructed_vol'].iloc[:-1])
+
+        # Mass-conservation
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in - mass_out - mass_in_snow - mass_in_glacier,
+                        0, atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # At the very first timesep there is no glacier so the
+        # melt_on_glacier var is negative - this is a numerical artifact
+        # from the residual
+        assert_allclose(odf['melt_on_glacier'].iloc[0],
+                        - odf['residual_mb'].iloc[0])
+
+        # Now with zero ref area
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             store_monthly_hydro=store_monthly_hydro,
+                             bias=0, nyears=50, zero_initial_glacier=True,
+                             ref_area_from_y0=True, output_filesuffix='_const_y0')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_const_y0')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        # Sanity checks
+        # Tot prcp here is not constant but grows always since glacier area grows
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+        assert np.all(odf['tot_prcp'].iloc[1:].values -
+                      odf['tot_prcp'].iloc[:-1].values > 0)
+
+        # So is domain area
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+        assert np.all(odf['dom_area'].iloc[1:].values -
+                      odf['dom_area'].iloc[:-1].values > 0)
 
         # Glacier area is the same (remove on_area?)
         assert_allclose(odf['on_area'], odf['area_m2'])

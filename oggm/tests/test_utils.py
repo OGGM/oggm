@@ -20,7 +20,8 @@ import oggm
 from oggm import utils, workflow, tasks
 from oggm.utils import _downloads
 from oggm import cfg
-from oggm.tests.funcs import get_test_dir, init_hef, TempEnvironmentVariable
+from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
+                              characs_apply_func)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              DownloadVerificationFailedException)
@@ -323,6 +324,25 @@ class TestFuncs(unittest.TestCase):
         t2 = timeit.timeit('utils.clip_min(a, 15)', number=n, setup=s2)
         assert t2 < t1
 
+    def test_cook_rgidf(self):
+        from oggm import workflow
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        working_dir = utils.get_temp_dir(dirname='test_cook_rgidf')
+        cfg.PATHS['working_dir'] = utils.mkdir(working_dir, reset=True)
+        path = utils.get_demo_file('cgi2.shp')
+        cgidf = gpd.read_file(path)
+        rgidf = utils.cook_rgidf(cgidf, o1_region='13',
+                                 assign_column_values={'Glc_Long': 'CenLon',
+                                                       'Glc_Lati': 'CenLat'})
+        rgidf['Area'] = cgidf.Glc_Area * 1e-6
+        gdirs = workflow.init_glacier_directories(rgidf)
+        df = utils.compile_glacier_statistics(gdirs)
+        assert np.all(df.glacier_type == 'Glacier')
+        assert np.all(df.rgi_region == '13')
+        assert_allclose(df.cenlon, cgidf['Glc_Long'])
+        assert_allclose(df.rgi_area_km2, cgidf['Glc_Area'] * 1e-6, rtol=1e-3)
+
 
 class TestInitialize(unittest.TestCase):
 
@@ -387,11 +407,19 @@ class TestWorkflowTools(unittest.TestCase):
 
         gdir = init_hef()
 
-        df = utils.compile_glacier_statistics([gdir], path=False)
+        df = utils.compile_glacier_statistics([gdir],
+                                              apply_func=characs_apply_func,
+                                              path=False)
         assert len(df) == 1
+
+        assert 'glc_ext_num_perc' in df.columns
+        assert np.all(np.isfinite(df.glc_ext_num_perc.values))
+
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
+
+
 
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)

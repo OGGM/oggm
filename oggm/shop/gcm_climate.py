@@ -5,6 +5,7 @@ from distutils.version import LooseVersion
 import warnings
 
 # External libs
+import cftime
 import numpy as np
 import netCDF4
 import xarray as xr
@@ -86,79 +87,79 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     assert len(prcp) // 12 == len(prcp) / 12, 'Somehow we didn\'t get full years'
     assert len(temp) // 12 == len(temp) / 12, 'Somehow we didn\'t get full years'
 
-    # Get CRU to apply the anomaly to
+    # Get the reference data to apply the anomaly to
     fpath = gdir.get_filepath('climate_historical')
-    ds_cru = xr.open_dataset(fpath)
+    with xr.open_dataset(fpath) as ds_ref:
 
-    # Add CRU clim
-    dscru = ds_cru.sel(time=slice(*year_range))
+        ds_ref = ds_ref.sel(time=slice(*year_range))
 
-    # compute monthly anomalies
-    # of temp
-    if scale_stddev:
-        # This is a bit more arithmetic
+        # compute monthly anomalies
+        # of temp
+        if scale_stddev:
+            # This is a bit more arithmetic
+            ts_tmp_sel = temp.sel(time=slice(*year_range))
+            if len(ts_tmp_sel) // 12 != len(ts_tmp_sel) / 12:
+                raise InvalidParamsError('year_range cannot contain the first'
+                                         'or last calendar year in the series')
+            if ((len(ts_tmp_sel) // 12) % 2) == 1:
+                raise InvalidParamsError('We need an even number of years '
+                                         'for this to work')
+            ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
+            std_fac = ds_ref.temp.groupby('time.month').std(dim='time') / ts_tmp_std
+            std_fac = std_fac.roll(month=13-sm, roll_coords=True)
+            std_fac = np.tile(std_fac.data, len(temp) // 12)
+            # We need an even number of years for this to work
+            win_size = len(ts_tmp_sel) + 1
+
+            def roll_func(x, axis=None):
+                x = x[:, ::12]
+                n = len(x[0, :]) // 2
+                xm = np.nanmean(x, axis=axis)
+                return xm + (x[:, n] - xm) * std_fac
+
+            temp = temp.rolling(time=win_size, center=True,
+                                min_periods=1).reduce(roll_func)
+
         ts_tmp_sel = temp.sel(time=slice(*year_range))
-        ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
-        std_fac = dscru.temp.groupby('time.month').std(dim='time') / ts_tmp_std
-        std_fac = std_fac.roll(month=13-sm, roll_coords=True)
-        std_fac = np.tile(std_fac.data, len(temp) // 12)
-        # We need an even number of years for this to work
-        if ((len(ts_tmp_sel) // 12) % 2) == 1:
-            raise InvalidParamsError('We need an even number of years '
-                                     'for this to work')
-        win_size = len(ts_tmp_sel) + 1
+        ts_tmp_avg = ts_tmp_sel.groupby('time.month').mean(dim='time')
+        ts_tmp = temp.groupby('time.month') - ts_tmp_avg
+        # of precip -- scaled anomalies
+        ts_pre_avg = prcp.sel(time=slice(*year_range))
+        ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
+        ts_pre_ano = prcp.groupby('time.month') - ts_pre_avg
+        # scaled anomalies is the default. Standard anomalies above
+        # are used later for where ts_pre_avg == 0
+        ts_pre = prcp.groupby('time.month') / ts_pre_avg
 
-        def roll_func(x, axis=None):
-            x = x[:, ::12]
-            n = len(x[0, :]) // 2
-            xm = np.nanmean(x, axis=axis)
-            return xm + (x[:, n] - xm) * std_fac
+        # for temp
+        loc_tmp = ds_ref.temp.groupby('time.month').mean()
+        ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
 
-        temp = temp.rolling(time=win_size, center=True,
-                            min_periods=1).reduce(roll_func)
+        # for prcp
+        loc_pre = ds_ref.prcp.groupby('time.month').mean()
+        # scaled anomalies
+        ts_pre = ts_pre.groupby('time.month') * loc_pre
+        # standard anomalies
+        ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
+        # Correct infinite values with standard anomalies
+        ts_pre.values = np.where(np.isfinite(ts_pre.values),
+                                 ts_pre.values,
+                                 ts_pre_ano.values)
+        # The previous step might create negative values (unlikely). Clip them
+        ts_pre.values = utils.clip_min(ts_pre.values, 0)
 
-    ts_tmp_sel = temp.sel(time=slice(*year_range))
-    ts_tmp_avg = ts_tmp_sel.groupby('time.month').mean(dim='time')
-    ts_tmp = temp.groupby('time.month') - ts_tmp_avg
-    # of precip -- scaled anomalies
-    ts_pre_avg = prcp.sel(time=slice(*year_range))
-    ts_pre_avg = ts_pre_avg.groupby('time.month').mean(dim='time')
-    ts_pre_ano = prcp.groupby('time.month') - ts_pre_avg
-    # scaled anomalies is the default. Standard anomalies above
-    # are used later for where ts_pre_avg == 0
-    ts_pre = prcp.groupby('time.month') / ts_pre_avg
+        assert np.all(np.isfinite(ts_pre.values))
+        assert np.all(np.isfinite(ts_tmp.values))
 
-    # for temp
-    loc_tmp = dscru.temp.groupby('time.month').mean()
-    ts_tmp = ts_tmp.groupby('time.month') + loc_tmp
-
-    # for prcp
-    loc_pre = dscru.prcp.groupby('time.month').mean()
-    # scaled anomalies
-    ts_pre = ts_pre.groupby('time.month') * loc_pre
-    # standard anomalies
-    ts_pre_ano = ts_pre_ano.groupby('time.month') + loc_pre
-    # Correct infinite values with standard anomalies
-    ts_pre.values = np.where(np.isfinite(ts_pre.values),
-                             ts_pre.values,
-                             ts_pre_ano.values)
-    # The previous step might create negative values (unlikely). Clip them
-    ts_pre.values = utils.clip_min(ts_pre.values, 0)
-
-    assert np.all(np.isfinite(ts_pre.values))
-    assert np.all(np.isfinite(ts_tmp.values))
-
-    gdir.write_monthly_climate_file(temp.time.values,
-                                    ts_pre.values, ts_tmp.values,
-                                    float(dscru.ref_hgt),
-                                    prcp.lon.values, prcp.lat.values,
-                                    time_unit=time_unit,
-                                    calendar=calendar,
-                                    file_name='gcm_data',
-                                    source=source,
-                                    filesuffix=filesuffix)
-
-    ds_cru.close()
+        gdir.write_monthly_climate_file(temp.time.values,
+                                        ts_pre.values, ts_tmp.values,
+                                        float(ds_ref.ref_hgt),
+                                        prcp.lon.values, prcp.lat.values,
+                                        time_unit=time_unit,
+                                        calendar=calendar,
+                                        file_name='gcm_data',
+                                        source=source,
+                                        filesuffix=filesuffix)
 
 
 @entity_task(log, writes=['gcm_data'])
@@ -332,3 +333,97 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
 
     process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
                      source=filesuffix, **kwargs)
+
+
+@entity_task(log, writes=['gcm_data'])
+def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
+                     year_range=('1951', '1980'), filesuffix='', **kwargs):
+    """Read, process and store the Last Millennium Reanalysis (LMR) data for this glacier.
+
+    LMR data: https://atmos.washington.edu/~hakim/lmr/LMRv2/
+
+    LMR data is annualised in anomaly format relative to 1951-1980. We
+    create synthetic timeseries from the reference data.
+
+    It stores the data in a format that can be used by the OGGM mass balance
+    model and in the glacier directory.
+
+    Parameters
+    ----------
+    fpath_temp : str
+        path to the temp file (default: LMR v2.1 from server above)
+    fpath_precip : str
+        path to the precip file (default: LMR v2.1 from server above)
+    year_range : tuple of str
+        the year range for which you want to compute the anomalies. Default
+        for LMR is `('1951', '1980')`
+    filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
+
+    **kwargs: any kwarg to be passed to ref:`process_gcm_data`
+    """
+
+    # Get the path of GCM temperature & precipitation data
+    base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
+    if fpath_temp is None:
+        fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
+    if fpath_precip is None:
+        fpath_precip = utils.file_downloader(base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+
+    # Glacier location
+    glon = gdir.cenlon
+    glat = gdir.cenlat
+
+    # Read the GCM files
+    with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
+            xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
+
+        # Check longitude conventions
+        if tempds.lon.min() >= 0 and glon <= 0:
+            glon += 360
+
+        # Take the closest to the glacier
+        # Should we consider GCM interpolation?
+        temp = tempds.air.sel(lat=glat, lon=glon, method='nearest')
+        precip = precipds.prate.sel(lat=glat, lon=glon, method='nearest')
+
+        # Currently we just take the mean of the ensemble, although
+        # this is probably not advised. The GCM climate will correct
+        # anyways
+        temp = temp.mean(dim='MCrun')
+        precip = precip.mean(dim='MCrun')
+
+        # Precip unit is kg/m^2/s we convert to mm month since we apply the anomaly after
+        precip = precip * 30.5 * (60 * 60 * 24)
+
+        # Back to [-180, 180] for OGGM
+        temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
+        precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
+
+    # OK now we have to turn these annual timeseries in monthly data
+    # We take the ref climate
+    fpath = gdir.get_filepath('climate_historical')
+    with xr.open_dataset(fpath) as ds_ref:
+        ds_ref = ds_ref.sel(time=slice(*year_range))
+
+        loc_tmp = ds_ref.temp.groupby('time.month').mean()
+        loc_pre = ds_ref.prcp.groupby('time.month').mean()
+
+        # Make time coord
+        t = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] * len(temp))
+        t = cftime.num2date(np.append([0], t[:-1]), 'days since 0000-01-01 00:00:00',
+                            calendar='noleap')
+
+        temp = xr.DataArray((loc_tmp.data + temp.data[:, np.newaxis]).flatten(),
+                            coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
+                            dims=('time',))
+
+        # For precip the std dev is very small - lets keep it as is for now but
+        # this is a bit ridiculous. We clip to zero here to be sure
+        precip = utils.clip_min((loc_pre.data + precip.data[:, np.newaxis]).flatten(), 0)
+        precip = xr.DataArray(precip, dims=('time',),
+                              coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
+
+    process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
+                     year_range=year_range, calendar='noleap',
+                     source='lmr', **kwargs)

@@ -126,8 +126,8 @@ class TestGIS(unittest.TestCase):
         assert gdir.cenlon != prev_lon
         assert gdir.cenlat != prev_lat
         np.testing.assert_allclose(gdir.rgi_area_km2, prev_area, atol=0.01)
-        np.testing.assert_allclose(gdir.cenlon, prev_lon, atol=1e-4)
-        np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-4)
+        np.testing.assert_allclose(gdir.cenlon, prev_lon, atol=1e-2)
+        np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-2)
 
         assert gdir.status == 'Glacier or ice cap'
 
@@ -1973,8 +1973,9 @@ class TestClimate(unittest.TestCase):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
+        entity['RGIId'] = 'RGI60-11.00897'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        assert gdir.rgi_version == '50'
+        assert gdir.rgi_version == '60'
         gis.define_glacier_region(gdir)
         workflow.gis_prepro_tasks([gdir])
 
@@ -1985,7 +1986,7 @@ class TestClimate(unittest.TestCase):
         apply_test_ref_tstars()
         workflow.climate_tasks([gdir])
 
-        # Test match geod
+        # Test match geod - method 1
         workflow.match_regional_geodetic_mb([gdir], rgi_reg='11',
                                             period='2000-01-01_2010-01-01')
         df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
@@ -2005,7 +2006,45 @@ class TestClimate(unittest.TestCase):
         mb = df.loc[2006:2015].mean()
         np.testing.assert_allclose(mb, smb_ref)
 
+        # Test match geod - method 2
+        workflow.match_geodetic_mb_for_selection([gdir],
+                                                 period='2000-01-01_2010-01-01')
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        df = pd.read_hdf(utils.file_downloader(base_url + file_name))
+        df = df.loc[df['period'] == '2000-01-01_2010-01-01']
+        rdf = df.loc[['RGI60-11.00897']]
+
+        mbdf = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = mbdf.loc[2000:2009].mean()
+
+        wgms = gdir.get_ref_mb_data().loc[2000:2009]
+
+        np.testing.assert_allclose(mb, rdf.dmdtda * 1000)
+        np.testing.assert_allclose(mb, wgms['ANNUAL_BALANCE'].mean(), atol=30)
+
+        # Check error management
+        # We trick with a glaciers whith no valid data
+        rdf['is_cor'] = True
+        fpath = os.path.join(self.testdir, 'test_hugo.hdf')
+        rdf.to_hdf(fpath, key='df')
+
         # This raises
+        with pytest.raises(InvalidWorkflowError):
+            workflow.match_geodetic_mb_for_selection([gdir], file_path=fpath,
+                                                     period='2000-01-01_2010-01-01')
+
+        # This doesnt
+        workflow.match_geodetic_mb_for_selection([gdir], file_path=fpath,
+                                                 fail_safe=True,
+                                                 period='2000-01-01_2010-01-01')
+
+        mbdf = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = mbdf.loc[2000:2009].mean()
+        np.testing.assert_allclose(mb, rdf.dmdtda * 1000)
+
+        # This raises as well, for different reasons
         cfg.PARAMS['prcp_scaling_factor'] = 1.8
         with pytest.raises(MassBalanceCalibrationError):
             workflow.climate_tasks([gdir])
@@ -3025,7 +3064,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert diag['calving_mu_star'] < diag['mu_star_before_calving']
         np.testing.assert_allclose(diag['calving_flux'], diag['calving_law_flux'])
 
-        # Where we also match MB
+        # Where we also match MB - method 1
         workflow.match_regional_geodetic_mb(gdir, rgi_reg='01')
 
         # Check OGGM part
@@ -3040,6 +3079,23 @@ class TestColumbiaCalving(unittest.TestCase):
         df = df.loc[df.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = df.loc[int('01'), 'dmdtda']
         np.testing.assert_allclose(mb - cal, smb_ref)
+
+        # Test match geod - method 2
+        workflow.match_geodetic_mb_for_selection([gdir])
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        df = pd.read_hdf(utils.file_downloader(base_url + file_name))
+        df = df.loc[df['period'] == '2000-01-01_2020-01-01']
+        rdf = df.loc[[gdir.rgi_id]]
+
+        # Check OGGM part
+        df = utils.compile_fixed_geometry_mass_balance([gdir])
+        mb = df.loc[2000:2019].mean()
+        rho = cfg.PARAMS['ice_density']
+        cal = diag['calving_flux'] * 1e9 * rho / gdir.rgi_area_m2
+
+        np.testing.assert_allclose(mb - cal, rdf.dmdtda * 1000)
 
         # OK - run
         tasks.init_present_time_glacier(gdir)
@@ -3427,7 +3483,8 @@ class TestGCMClimate(unittest.TestCase):
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
 
-            # Here no std dev!
+            # Here also std dev! But its not perfect because std_dev
+            # is preserved over 31 years
             _scru = scru.groupby('time.month').std(dim='time')
             _scesm = scesm.groupby('time.month').std(dim='time')
             assert np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
@@ -3449,6 +3506,59 @@ class TestGCMClimate(unittest.TestCase):
             assert scmip1.temp.mean() < (scmip2.temp.mean() - 1)
             # N more than 30%? (silly test)
             np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
+
+    def test_process_lmr(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        tasks.process_cru_data(gdir)
+
+        ci = gdir.get_climate_info()
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        fpath_temp = get_demo_file('air_MCruns_ensemble_mean_LMRv2.1.nc')
+        fpath_precip = get_demo_file('prate_MCruns_ensemble_mean_LMRv2.1.nc')
+        gcm_climate.process_lmr_data(gdir, fpath_temp=fpath_temp,
+                                     fpath_precip=fpath_precip)
+
+        fh = gdir.get_filepath('climate_historical')
+        fcmip = gdir.get_filepath('gcm_data')
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+            # Let's do some basic checks
+            scru = cru.sel(time=slice('1951', '1980'))
+            scesm = cmip.sel(time=slice('1951', '1980'))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+
+            # Here also std dev! But its not perfect because std_dev
+            # is preserved over 31 years
+            _scru = scru.groupby('time.month').std(dim='time')
+            _scesm = scesm.groupby('time.month').std(dim='time')
+            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=0.15)
+
+            # And also the annual cycle
+            scru = scru.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
+            # How did the annual cycle change with time?
+            scmip1 = cmip.sel(time=slice('1970', '1999'))
+            scmip2 = cmip.sel(time=slice('1800', '1829'))
+            scmip1 = scmip1.groupby('time.month').mean(dim='time')
+            scmip2 = scmip2.groupby('time.month').mean(dim='time')
+            # It has warmed
+            assert scmip2.temp.mean() < scmip1.temp.mean()
 
     def test_process_cmip5_scale(self):
 

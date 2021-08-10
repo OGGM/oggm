@@ -65,6 +65,7 @@ Input/Output
     utils.copy_to_basedir
     utils.gdir_to_tar
     utils.base_dir_to_tar
+    utils.cook_rgidf
     global_tasks.write_centerlines_to_shape
     global_tasks.compile_glacier_statistics
     global_tasks.compile_run_output

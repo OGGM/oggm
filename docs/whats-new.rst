@@ -4,8 +4,44 @@
 Version history
 ===============
 
-v1.4.1 (unreleased)
+v1.5.X (unreleased)
 -------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+- Added ``cook_rgidf()`` function in ``oggm.utils`` to simplify the use
+  of a non-RGI glacier inventory in OGGM (:pull:`1251`).
+  By `Li Fei <https://github.com/Keeptg>`_
+- Added support for last millenium reanalysis data to the shop (:pull:`1257`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added a new ``apply_func``  argument in ``utils.compile_glacier_statistics``
+  that allows user to compute any new statistics from a gdir themselves (:pull:`1259`)
+  By `Li Fei <https://github.com/Keeptg>`_
+- Added a new ``workflow.match_geodetic_mb_for_selection`` function to match
+  the MB bias for any selection of glaciers (:pull:`1248`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added functionality to control the area over which the hydrological
+  output is computed (:pull:`1264`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
+
+Bug fixes
+~~~~~~~~~
+
+- Small bug fix to ensure backwards compatibility of ``gdir.get_filepath('model_run')``.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
+v1.5.0
+------
+
+This a new update of the OGGM model. It should be largely compatible with
+OGGM v1.4.0. **The main addition in this release is the computation of
+hydrological diagnostics.** Check-out the new tutorial at
+https://oggm.org/tutorials !
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -41,6 +77,12 @@ Enhancements
 - Added monthly output to ``run_with_hydro`` (:pull:`1232`).
   By `Sarah Hanus <https://github.com/sarah-hanus>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
+- Added new diagnostic variables (`terminus_thick_0` ...) to better track
+  the thickness at the terminus (:pull:`1230`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Temperature and precipitation corrections can now also be applied on a
+  monthly basis for the PastMassBalanceModel (:pull:`1247`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 Bug fixes
@@ -49,8 +91,8 @@ Bug fixes
 - Fixed bug in hydro date / calendar date conversions with month=1 (i.e.
   no conversion) (:pull:`1220`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
-- Fixed bug in ``graphics.plot_distributed_thickness`` which encounter Error under
-  the elevation bands flowline (:pull: `1241`).
+- Fixed bug in ``graphics.plot_distributed_thickness`` which led to an error with
+  elevation bands flowlines (:pull:`1241`).
   By `Li Fei <https://github.com/Keeptg>`_
 
 v1.4.0 (17.02.2021)

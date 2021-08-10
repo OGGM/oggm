@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'f71d75040cfe3f7b72ccb3b9b5ff8d67c5de628c'
+SAMPLE_DATA_COMMIT = '7c4d9ddb9cd855646f63d66d39324865acbbba0b'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -552,22 +552,25 @@ def _progress_urlretrieve(url, cache_name=None, reset=False,
 
     try:
         from progressbar import DataTransferBar, UnknownLength
-        pbar = [None]
+        pbar = None
 
         def _upd(count, size, total):
-            if pbar[0] is None:
-                pbar[0] = DataTransferBar()
-            if pbar[0].max_value is None:
+            nonlocal pbar
+            if pbar is None:
+                pbar = DataTransferBar()
+                if not pbar.is_terminal:
+                    pbar.min_poll_interval = 15
+            if pbar.max_value is None:
                 if total > 0:
-                    pbar[0].start(total)
+                    pbar.start(total)
                 else:
-                    pbar[0].start(UnknownLength)
-            pbar[0].update(min(count * size, total))
+                    pbar.start(UnknownLength)
+            pbar.update(min(count * size, total))
             sys.stdout.flush()
         res = oggm_urlretrieve(url, cache_obj_name=cache_name, reset=reset,
                                reporthook=_upd, auth=auth, timeout=timeout)
         try:
-            pbar[0].finish()
+            pbar.finish()
         except BaseException:
             pass
         return res
