@@ -626,6 +626,40 @@ class TestMassBalanceModels:
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.12)
 
+    def test_avgclimate_mb_model(self, hef_gdir):
+
+        rho = cfg.PARAMS['ice_density']
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        df = gdir.read_json('local_mustar')
+        bias = df['bias']
+
+        h, w = gdir.get_inversion_flowline_hw()
+
+        cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        otmb = np.average(ombh, weights=w)
+        np.testing.assert_allclose(0., otmb, atol=0.2)
+
+        avg_mod = massbalance.AvgClimateMassBalance(gdir, bias=0)
+        ombh = avg_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        otmb = np.average(ombh, weights=w)
+        # This is now wrong -> but not too far we hope...
+        np.testing.assert_allclose(0., otmb, atol=130)
+
+        # Another simulation
+        cmb_mod = massbalance.ConstantMassBalance(gdir, y0=1991, halfsize=10)
+        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        otmb = np.average(ombh, weights=w)
+
+        avg_mod = massbalance.AvgClimateMassBalance(gdir, y0=1991, halfsize=10)
+        _ombh = avg_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
+        _otmb = np.average(_ombh, weights=w)
+        # This is now wrong -> but not too far we hope...
+        np.testing.assert_allclose(otmb, _otmb, atol=200)
+
     def test_random_mb(self, hef_gdir):
 
         gdir = hef_gdir
