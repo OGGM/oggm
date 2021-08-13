@@ -33,6 +33,7 @@ from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    PastMassBalance,
+                                   AvgClimateMassBalance,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
 from oggm.core.inversion import find_sia_flux_from_thickness
@@ -2422,7 +2423,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
                          init_model_fls=None,
-                         zero_initial_glacier=False, **kwargs):
+                         zero_initial_glacier=False,
+                         use_avg_climate=False,
+                         **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
     This will initialize a
@@ -2477,6 +2480,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
+    use_avg_climate : bool
+        use the average climate instead of the correct MB model. This is
+        for testing only!!!
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2490,7 +2496,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         fmod.run_until(init_model_yr)
         init_model_fls = fmod.fls
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
+    if use_avg_climate:
+        mb_model = AvgClimateMassBalance
+    else:
+        mb_model = ConstantMassBalance
+
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model,
                                      y0=y0, halfsize=halfsize,
                                      bias=bias, filename=climate_filename,
                                      input_filesuffix=climate_input_filesuffix)
