@@ -146,7 +146,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             ds = ds.sel(number=ensemble_member)
         try:
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-        except ValueError:
+        except (ValueError, KeyError):
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
             ds = ds.isel(points=np.argmin(c.data))
@@ -163,7 +163,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             ds = ds.sel(number=ensemble_member)
         try:
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-        except ValueError:
+        except (ValueError, KeyError):
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
             ds = ds.isel(points=np.argmin(c.data))
@@ -173,7 +173,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         ds = ds.isel(time=0)
         try:
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-        except ValueError:
+        except (ValueError, KeyError):
             # Flattened ERA5
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
             ds = ds.isel(points=np.argmin(c.data))
