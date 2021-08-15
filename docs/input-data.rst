@@ -282,6 +282,14 @@ can be downloaded and reprojected to the glacier directory
 
         Example of the reprojected ITS_LIVE products at Malaspina glacier
 
+The data source used is https://its-live.jpl.nasa.gov/#data
+Currently the only data downloaded is the 120m composite for both
+(u, v) and their uncertainty. The composite is computed from the
+1985 to 2018 average.
+
+If you want more velocity products, feel free to open a new topic
+on the OGGM issue tracker!
+
 Ice thickness
 -------------
 
