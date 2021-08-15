@@ -13,8 +13,8 @@ are not trivial to install. The instructions below provide all the required
 details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
-OGGM is fully `tested`_ with Python version 3.6, 3.7 and 3.8 on Linux.
-OGGM doesn't work with Python 2. We do not test OGGM automatically on
+OGGM is fully `tested`_ with Python version 3.7, 3.8 and 3.9 on Linux.
+OGGM does not work with Python 2. We do not test OGGM automatically on
 Mac OSX, but it should probably run fine there as well.
 
 .. warning::
