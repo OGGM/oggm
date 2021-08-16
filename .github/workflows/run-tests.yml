@@ -24,9 +24,9 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - oggm/untested_base:20210221
-          - oggm/untested_base:py36
+          - oggm/untested_base:20210808
           - oggm/untested_base:py37
+          - oggm/untested_base:py39
         include:
           - container: python:3.8-slim
             test-env: minimal
