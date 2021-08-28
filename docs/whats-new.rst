@@ -4,11 +4,16 @@
 Version history
 ===============
 
-v1.5.X (unreleased)
+v1.5.1 (28.08.2021)
 -------------------
+
+This is a minor relase of OGGM, containing mostly bugfixes and a few new
+features.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
+
+This version should be fully backwards compatible.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -25,15 +30,21 @@ Enhancements
   the MB bias for any selection of glaciers (:pull:`1248`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added functionality to control the area over which the hydrological
-  output is computed (:pull:`1264`).
+  output is computed (:pull:`1264,1276`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-
+- Added a new (wrong) way to compute equilibrium runs based on the average
+  climate (:pull:`1275`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a quite bad bug where monthly runoff data would have very large artifacts
+  (:pull:`1283`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Small bug fix to ensure backwards compatibility of ``gdir.get_filepath('model_run')``.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Various backwards compatibility fixes (mostly xarray).
 
 v1.5.0
 ------
