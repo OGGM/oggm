@@ -4,6 +4,18 @@
 Version history
 ===============
 
+v1.5.X (unreleased)
+-------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+Bug fixes
+~~~~~~~~~
+
 v1.5.1 (28.08.2021)
 -------------------
 
