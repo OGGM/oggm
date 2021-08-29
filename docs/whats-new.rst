@@ -4,13 +4,15 @@
 Version history
 ===============
 
-v1.5.X (unreleased)
+v1.5.2 (29.08.2021)
 -------------------
+
+Very minor relsease to remove the dependency on the ``python-colorspace`` package.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
-- Removed use and dependency on the `python-colorspace` package. Although
+- Removed use and dependency on the ``python-colorspace`` package. Although
   not very dramatic, this change might change the way your plots look like
   (:pull:`1284`). Users can specify their own colormaps anyways to get back to
   the old plots.
