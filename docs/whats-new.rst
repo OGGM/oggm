@@ -10,11 +10,11 @@ v1.5.X (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
-Enhancements
-~~~~~~~~~~~~
-
-Bug fixes
-~~~~~~~~~
+- Removed use and dependency on the `python-colorspace` package. Although
+  not very dramatic, this change might change the way your plots look like
+  (:pull:`1284`). Users can specify their own colormaps anyways to get back to
+  the old plots.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 v1.5.1 (28.08.2021)
 -------------------
