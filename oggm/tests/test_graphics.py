@@ -31,7 +31,7 @@ pytestmark = pytest.mark.test_env("graphics")
 
 
 def setup_module():
-    graphics.set_oggm_cmaps(use_hcl=False)
+    graphics.set_oggm_cmaps()
 
 
 def teardown_module():

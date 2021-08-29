@@ -14,8 +14,8 @@ if [[ $OGGM_TEST_ENV == *-* ]]; then
 fi
 
 [[ $OGGM_TEST_MODE == single ]] && export OGGM_TEST_MULTIPROC=False
-[[ $OGGM_TEST_MODE == multi ]]  && export OGGM_TEST_MULTIPROC=True
-[[ $OGGM_TEST_MODE == mpl ]]  && export OGGM_MPL=--mpl
+[[ $OGGM_TEST_MODE == multi ]]  && export OGGM_TEST_MULTIPROC=True && export OGGM_MPL=--mpl
+[[ $OGGM_TEST_MODE == mpl ]] && export OGGM_MPL=--mpl
 
 if [[ $OGGM_TEST_ENV == minimal ]]; then
     # Special Mode for minimal tests on minimal Python-Image
