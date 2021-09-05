@@ -85,11 +85,6 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
         previous experiments)
     """
 
-    if cfg.PATHS.get('climate_file', None):
-        warnings.warn("You seem to have set a custom climate file for this "
-                      "run, but are using the default HISTALP climate file "
-                      "instead.")
-
     if cfg.PARAMS['baseline_climate'] != 'HISTALP':
         raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
                                  "set to HISTALP.")

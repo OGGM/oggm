@@ -116,11 +116,6 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         previous experiments)
     """
 
-    if cfg.PATHS.get('climate_file', None):
-        warnings.warn("You seem to have set a custom climate file for this "
-                      "run, but are using the ECMWF climate file "
-                      "instead.")
-
     if dataset is None:
         dataset = cfg.PARAMS['baseline_climate']
 

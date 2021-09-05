@@ -47,7 +47,6 @@ CONFIG_MODIFIED = False
 DL_VERIFIED = dict()
 DEM_SOURCE_TABLE = dict()
 DATA = dict()
-LRUHANDLERS = dict()
 
 # Machine epsilon
 FLOAT_EPS = np.finfo(float).eps
@@ -166,6 +165,7 @@ IS_INITIALIZED = False
 PARAMS = ParamsLoggingDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
+LRUHANDLERS = ResettingOrderedDict()
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -816,7 +816,6 @@ def pack_config():
         'LRUHANDLERS': LRUHANDLERS,
         'DATA': DATA,
         'BASENAMES': dict(BASENAMES),
-
         'DL_VERIFIED': DL_VERIFIED,
         'DEM_SOURCE_TABLE': DEM_SOURCE_TABLE
     }
@@ -833,6 +832,8 @@ def unpack_config(cfg_dict):
     PATHS = cfg_dict['PATHS']
     LRUHANDLERS = cfg_dict['LRUHANDLERS']
     DATA = cfg_dict['DATA']
+    DL_VERIFIED = cfg_dict['DL_VERIFIED']
+    DEM_SOURCE_TABLE = cfg_dict['DEM_SOURCE_TABLE']
 
     # BASENAMES is a DocumentedDict, which cannot be pickled because
     # set intentionally mismatches with get
@@ -840,14 +841,11 @@ def unpack_config(cfg_dict):
     for k in cfg_dict['BASENAMES']:
         BASENAMES[k] = (cfg_dict['BASENAMES'][k], 'Imported Pickle')
 
-    DL_VERIFIED = cfg_dict['DL_VERIFIED']
-    DEM_SOURCE_TABLE = cfg_dict['DEM_SOURCE_TABLE']
-
 
 def set_manager(manager):
     """Sets a multiprocessing manager to use for shared dicts"""
 
-    global DL_VERIFIED, DEM_SOURCE_TABLE, DATA, LRUHANDLERS
+    global DL_VERIFIED, DEM_SOURCE_TABLE, DATA
 
     if manager:
         new_dict = manager.dict()
@@ -861,15 +859,10 @@ def set_manager(manager):
         new_dict = manager.dict()
         new_dict.update(DATA)
         DATA = new_dict
-
-        new_dict = manager.dict()
-        new_dict.update(LRUHANDLERS)
-        LRUHANDLERS = new_dict
     else:
         DL_VERIFIED = dict(DL_VERIFIED)
         DEM_SOURCE_TABLE = dict(DEM_SOURCE_TABLE)
         DATA = dict(DATA)
-        LRUHANDLERS = dict(LRUHANDLERS)
 
 
 def add_to_basenames(basename, filename, docstr=''):

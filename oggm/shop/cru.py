@@ -102,11 +102,6 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
         previous experiments)
     """
 
-    if cfg.PATHS.get('climate_file', None):
-        warnings.warn("You seem to have set a custom climate file for this "
-                      "run, but are using the default CRU climate "
-                      "file instead.")
-
     if cfg.PARAMS['baseline_climate'] != 'CRU':
         raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
                                  "set to CRU")
