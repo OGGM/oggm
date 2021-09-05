@@ -1168,8 +1168,8 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
 
 def _fallback_mu_star_calibration(gdir):
     """A Fallback function if climate.mu_star_calibration raises an Error.
-￼
-￼	    This function will still read, expand and write a `local_mustar.json`,
+
+    This function will still read, expand and write a `local_mustar.json`,
     filled with NANs, if climate.mu_star_calibration fails
     and if cfg.PARAMS['continue_on_error'] = True.
 

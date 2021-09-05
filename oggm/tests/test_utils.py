@@ -452,6 +452,17 @@ class TestWorkflowTools(unittest.TestCase):
         assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
                                            'ref_tstars_params.json'))
 
+    def test_ref_data_manager(self):
+
+        df = utils.get_geodetic_mb_dataframe()
+        assert len(df.loc[df['dmdtda'].isnull()]) == 0
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        file_path = utils.file_downloader(base_url + file_name)
+
+        assert file_path in cfg.DATA
+
 
 class TestStartFromTar(unittest.TestCase):
 

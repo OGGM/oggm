@@ -911,17 +911,8 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
     # save all rgi_ids for which a valid OGGM mb is available
     rgi_ids_oggm = odf.index.values
 
-    # fetch the file online or read custom file
-    if file_path is None:
-        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
-        df = pd.read_hdf(utils.file_downloader(base_url + file_name))
-    else:
-        extension = os.path.splitext(file_path)[1]
-        if extension == '.csv':
-            df = pd.read_csv(file_path, index_col='rgiid')
-        elif extension == '.hdf':
-            df = pd.read_hdf(file_path, index_col='rgiid')
+    # Fetch the reference data
+    df = utils.get_geodetic_mb_dataframe(file_path=file_path)
 
     # get the correct period from the whole dataset
     df = df.loc[df['period'] == period]
