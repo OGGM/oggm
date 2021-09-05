@@ -1317,7 +1317,9 @@ def get_geodetic_mb_dataframe(file_path=None):
     """Fetches the reference geodetic dataframe for calibration.
 
     Currently that's the data from Hughonnet et al 2021, corrected for
-    outliers and with void filled.
+    outliers and with void filled. The data preparation script is
+    available at
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
 
     Parameters
     ----------
