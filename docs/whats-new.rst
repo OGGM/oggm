@@ -13,6 +13,12 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Added a new ``utils.get_geodetic_mb_dataframe`` which returns the
+  reference geodetic MB data, currently from Huguonnet et al 2021.
+  Also changed the behavior of ``cfg.DATA`` to be shared
+  across processes (:pull:`1285`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 Bug fixes
 ~~~~~~~~~
 

@@ -452,6 +452,21 @@ class TestWorkflowTools(unittest.TestCase):
         assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
                                            'ref_tstars_params.json'))
 
+    def test_ref_data_manager(self):
+
+        workflow.init_mp_pool()
+
+        df = utils.get_geodetic_mb_dataframe()
+        assert len(df.loc[df['dmdtda'].isnull()]) == 0
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        file_path = utils.file_downloader(base_url + file_name)
+
+        assert file_path in cfg.DATA
+        import multiprocessing
+        assert type(cfg.DATA) is multiprocessing.managers.DictProxy
+
 
 class TestStartFromTar(unittest.TestCase):
 
@@ -2315,6 +2330,7 @@ class TestDataFiles(unittest.TestCase):
 
         # initiate some files in empty directory
         self.reset_dir()
+
         foo = []
         bar = []
         for i, e in itertools.product(range(1, 4), ['foo', 'bar']):
@@ -2324,9 +2340,9 @@ class TestDataFiles(unittest.TestCase):
             time.sleep(0.1)
 
         # init handler for dldir and ending 'foo'
-        lru_foo = cfg.get_lru_handler(self.dldir, ending='.foo')
+        lru_foo1 = cfg.get_lru_handler(self.dldir, ending='.foo')
         # no maxsize specified: use default
-        self.assertTrue(lru_foo.maxsize == cfg.PARAMS['lru_maxsize'])
+        self.assertTrue(lru_foo1.maxsize == cfg.PARAMS['lru_maxsize'])
         # all files should exist
         self.assertTrue(all([os.path.exists(f) for f in foo]))
 
@@ -2335,14 +2351,21 @@ class TestDataFiles(unittest.TestCase):
         # all files should exist
         self.assertTrue(all([os.path.exists(b) for b in bar]))
 
-        # update foo handler, decresing maxsize should delete first file
+        # update foo handler, decreasing maxsize should delete first file
         lru_foo2 = cfg.get_lru_handler(self.dldir, maxsize=2, ending='.foo')
         self.assertFalse(os.path.exists(foo[0]))
         self.assertTrue(os.path.exists(foo[1]))
         self.assertTrue(os.path.exists(foo[2]))
-        # but this should be the same handler instance as above:
-        self.assertTrue(lru_foo is lru_foo2)
-        self.assertTrue(lru_foo.maxsize == 2)
+        # but this should be the same handler instance as above
+        assert lru_foo1 is lru_foo2
+        lru_foo2.append('tessst')
+
+        lru_foo3 = cfg.get_lru_handler(self.dldir, ending='.foo')
+        assert 'tessst' in lru_foo1.files
+        assert 'tessst' in lru_foo2.files
+        assert 'tessst' in lru_foo3.files
+
+        self.assertTrue(lru_foo1.maxsize == 2)
 
         # And bar files should not be affected by decreased cache size of foo
         self.assertTrue(all([os.path.exists(b) for b in bar]))
