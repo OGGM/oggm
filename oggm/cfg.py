@@ -538,6 +538,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['climate_qc_months'] = cp.as_int('climate_qc_months')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
+    PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
 
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
@@ -583,7 +584,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run', 'ref_mb_valid_window',
            'tidewater_type', 'store_model_geometry',
-           'store_diagnostic_variables']
+           'store_diagnostic_variables', 'geodetic_mb_period']
     for k in ltr:
         cp.pop(k, None)
 

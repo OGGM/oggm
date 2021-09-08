@@ -1290,6 +1290,194 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
     gdir.write_json(df, 'local_mustar')
 
 
+@entity_task(log, writes=['inversion_flowlines'],
+             fallback=_fallback_mu_star_calibration)
+def mu_star_calibration_from_geodetic_mb(gdir,
+                                         ref_mb=None,
+                                         ref_period='',
+                                         step_height_for_corr=50,
+                                         max_height_change_for_corr=3000,
+                                         min_mu_star=None,
+                                         max_mu_star=None):
+    """Compute the flowlines' mu* from the reference geodetic MB data.
+
+    This is similar to mu_star_calibration but using the reference geodetic
+    MB data instead, and this does NOT compute the apparent mass-balance at
+    the same time - users need to run apparent_mb_from_any_mb separately.
+    Currently only works for single flowlines.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    ref_mb : float
+        the reference mass-balance to match (units: kg m-2 yr-1)
+    ref_period : str, default: PARAMS['geodetic_mb_period']
+        one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
+        '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
+        the same format but can be any date.
+    min_mu_star: bool, optional
+        defaults to cfg.PARAMS['min_mu_star']
+    max_mu_star: bool, optional
+        defaults to cfg.PARAMS['max_mu_star']
+    """
+
+    # mu* constraints
+    if min_mu_star is None:
+        min_mu_star = cfg.PARAMS['min_mu_star']
+    if max_mu_star is None:
+        max_mu_star = cfg.PARAMS['max_mu_star']
+
+    if max_mu_star > 1000:
+        raise InvalidParamsError('You seem to have set a very high '
+                                 'max_mu_star for this run. This is not '
+                                 'how this task is supposed to work, and '
+                                 'we recommend a value lower than 1000 '
+                                 '(or even 600).')
+
+    if not ref_period:
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+
+    # For each flowline compute the apparent MB
+    fls = gdir.read_pickle('inversion_flowlines')
+    if len(fls) > 1:
+        raise InvalidWorkflowError('mu_star_calibration_from_geodetic_mb '
+                                   'currently only works with single '
+                                   'flowlines.')
+    # If someone called another task before we need to reset this
+    for fl in fls:
+        fl.mu_star_is_valid = False
+
+    # Let's go
+    # Climate period
+    y0, y1 = ref_period.split('_')
+    y0 = int(y0.split('-')[0])
+    y1 = int(y1.split('-')[0])
+    yr_range = [y0, y1-1]
+
+    # Climate data on flowline
+    heights = np.array([])
+    widths = np.array([])
+    for fl in fls:
+        heights = np.append(heights, fl.surface_h)
+        widths = np.append(widths, fl.widths)
+
+    _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
+                                                year_range=yr_range,
+                                                flatten=False)
+
+    # Get the reference data
+    if ref_mb is None:
+        ref_mb = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_mb = float(ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda'])
+        # dmdtda: in meters water-equivalent per year -> we convert
+        ref_mb *= 1000  # kg m-2 yr-1
+
+    # Do we have a calving glacier?
+    cmb = calving_mb(gdir)
+    if cmb != 0:
+        raise NotImplementedError('Calving with geodetic MB is not implemented '
+                                  'yet, but it should actually work. Well keep '
+                                  'you posted!')
+
+    # _mu_star_per_minimization solves for 0, we add calving to the match
+    ref_mb += cmb
+
+    try:
+        mu_star = optimize.brentq(_mu_star_per_minimization,
+                                  min_mu_star, max_mu_star,
+                                  args=(fls, ref_mb, temp, prcp, widths),
+                                  xtol=_brentq_xtol)
+    except ValueError:
+        # This happens when out of bounds
+
+        # Funny enough, this bias correction is arbitrary.
+        # Here I'm trying something arbitrary as well.
+        # Let's try to find a range of corrections that would lead to an
+        # allowed mu* and pick one
+
+        # Check in which direction we should correct the temp
+        _lim0 = _mu_star_per_minimization(min_mu_star, fls, ref_mb, temp,
+                                          prcp, widths)
+        if _lim0 < 0:
+            # The mass-balances are too positive to be matched - we need to
+            # cool down the climate data
+            step = -step_height_for_corr
+            end = -max_height_change_for_corr
+        else:
+            # The other way around
+            step = step_height_for_corr
+            end = max_height_change_for_corr
+
+        fpath = gdir.get_filepath('climate_historical')
+        with utils.ncDataset(fpath, 'a') as nc:
+            # Her we ignore the previous QC correction - if any
+            start = getattr(nc, 'uncorrected_ref_hgt', nc.ref_hgt)
+            nc.uncorrected_ref_hgt = start
+
+        steps = np.arange(start, start + end, step, dtype=np.int64)
+        mu_candidates = steps * np.NaN
+        for i, h in enumerate(steps):
+            with utils.ncDataset(fpath, 'a') as nc:
+                nc.ref_hgt = h
+
+            # Read timeseries
+            _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
+                                                        year_range=yr_range,
+                                                        flatten=False)
+
+            try:
+                mu_star = optimize.brentq(_mu_star_per_minimization,
+                                          min_mu_star, max_mu_star,
+                                          args=(fls, ref_mb, temp, prcp, widths),
+                                          xtol=_brentq_xtol)
+            except ValueError:
+                mu_star = np.NaN
+
+            # Done - store for later
+            mu_candidates[i] = mu_star
+
+        sel_steps = steps[np.isfinite(mu_candidates)]
+        sel_mus = mu_candidates[np.isfinite(mu_candidates)]
+        if len(sel_mus) == 0:
+            # Yeah nothing we can do here
+            raise MassBalanceCalibrationError('We could not find a way to '
+                                              'correct the climate data and '
+                                              'fit within the prescribed '
+                                              'bounds for mu*.')
+
+        # Now according to all the corrections we have a series of candidates
+        # Her we just pick the first, but to be fair it is arbitrary
+        # We could also pick one randomly...
+        mu_star = sel_mus[0]
+        # Final correction of the data
+        with utils.ncDataset(fpath, 'a') as nc:
+            nc.ref_hgt = sel_steps[0]
+        gdir.add_to_diagnostics('ref_hgt_calib_diff', sel_steps[0] - start)
+
+    if not np.isfinite(mu_star):
+        raise MassBalanceCalibrationError('{} '.format(gdir.rgi_id) +
+                                          'has a non finite mu.')
+
+    # Add the climate related params to the GlacierDir to make sure
+    # other tools cannot fool around without re-calibration
+    out = gdir.get_climate_info()
+    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in MB_PARAMS}
+    gdir.write_json(out, 'climate_info')
+
+    # Store diagnostics
+    df = dict()
+    df['rgi_id'] = gdir.rgi_id
+    df['t_star'] = np.nan
+    df['bias'] = 0
+    df['mu_star_per_flowline'] = [mu_star]
+    df['mu_star_glacierwide'] = mu_star
+    df['mu_star_flowline_avg'] = mu_star
+    df['mu_star_allsame'] = True
+    # Write
+    gdir.write_json(df, 'local_mustar')
+
+
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
 def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     """Compute apparent mb from a linear mass-balance assumption (for testing).
@@ -1360,10 +1548,14 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
-        the mass-balance model to use
+        the mass-balance model to use - if None, will use the default OGGM
+        one.
     mb_years : array
         the array of years from which you want to average the MB for (for
-        mb_model only).
+        mb_model only). Default is to pick from the reference geodetic MB
+        period, i.e. PARAMS['geodetic_mb_period']. It does not matter much,
+        but it should be a period long enough to have a representative
+        MB gradient.
     """
 
     # Do we have a calving glacier?
@@ -1371,6 +1563,17 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
+
+    if mb_model is None:
+        from oggm.core.massbalance import MultipleFlowlineMassBalance
+        mb_model = MultipleFlowlineMassBalance(gdir, use_inversion_flowlines=True)
+
+    if mb_years is None:
+        mb_years = cfg.PARAMS['geodetic_mb_period']
+        y0, y1 = mb_years.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        mb_years = [y0, y1-1]
 
     # Unchanged SMB
     o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
