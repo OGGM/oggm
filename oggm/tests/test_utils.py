@@ -896,7 +896,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
-        assert not kwargs['match_geodetic_mb']
+        assert not kwargs['match_regional_geodetic_mb']
         assert not kwargs['centerlines_only']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -923,7 +923,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--output', '/local/out',
                                            '--elev-bands',
                                            '--centerlines-only',
-                                           '--match-geodetic-mb', 'zemp',
+                                           '--match-regional-geodetic-mb', 'zemp',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -935,8 +935,19 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
-        assert kwargs['match_geodetic_mb'] == 'zemp'
+        assert kwargs['match_regional_geodetic_mb'] == 'zemp'
         assert kwargs['centerlines_only']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--output', '/local/out',
+                                           '--elev-bands',
+                                           '--centerlines-only',
+                                           '--match-geodetic-mb-per-glacier', 'hugonnet',
+                                           '--working-dir', '/local/work',
+                                           ])
+
+        assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -981,7 +992,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_geodetic_mb='hugonnet')
+                          test_topofile=topof, match_regional_geodetic_mb='hugonnet')
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
@@ -1172,6 +1183,98 @@ class TestPreproCLI(unittest.TestCase):
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
+        assert isinstance(model, FlowlineModel)
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
+            tasks.init_present_time_glacier(gdir)
+
+        # L5
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = FileModel(gdir.get_filepath('model_geometry',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2015
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
+            tasks.init_present_time_glacier(gdir)
+
+    @pytest.mark.slow
+    def test_geodetic_per_glacier_run(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        # Read in the RGI file
+        inter, rgidf = self._read_shp()
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
+
+        params = {'max_mu_star': 600,
+                  'geodetic_mb_period': '2000-01-01_2010-01-01'}
+        # Remove bad actors
+        rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
+
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf, test_intersects_file=inter,
+                          match_geodetic_mb_per_glacier='hugonnet',
+                          override_params=params,
+                          test_topofile=topof, elev_bands=True)
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'glacier_type' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'dem_source' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'main_flowline_length' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'inv_volume_km3' in df
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'climate_statistics_11.csv'))
+        assert '1980-2010_avg_prcp' in df
+
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
+                                           'package_versions.txt'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+
+        # See if we can start from L3 and L4
+        from oggm import tasks
+        from oggm.core.flowline import FlowlineModel, FileModel
+        cfg.PARAMS['continue_on_error'] = False
+        rid = df.rgi_id.iloc[0]
+        entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
+
+        # L3
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, y0=1990, nyears=10)
+        assert isinstance(model, FlowlineModel)
+
+        # L4
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, y0=1990, nyears=10)
         assert isinstance(model, FlowlineModel)
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
