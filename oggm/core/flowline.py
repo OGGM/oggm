@@ -520,7 +520,7 @@ class FlowlineModel(object):
                  fs=None, inplace=False, smooth_trib_influx=True,
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
-                 water_level=None):
+                 water_level=None, required_model_steps='monthly'):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -556,6 +556,15 @@ class FlowlineModel(object):
             whether the model should raise an error when the glacier exceeds
             the domain boundaries. The default is to follow
             PARAMS['error_when_glacier_reaches_boundaries']
+        required_model_steps : str
+            some Flowline models have an adaptive time stepping scheme, which
+            is randomly taking steps towards the goal of a "run_until". The
+            default ('monthly') makes sure that the model results are
+            consistent wether the users want data at monthly or annual
+            timesteps by forcing the model to land on monthly steps even if
+            only annual updates are required. You may want to change this
+            for optimisation reasons for models that don't require adaptive
+            steps (for example the deltaH method).
         """
 
         self.is_tidewater = is_tidewater
@@ -605,6 +614,11 @@ class FlowlineModel(object):
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
 
+        # Time
+        if required_model_steps not in ['annual', 'monthly']:
+            raise InvalidParamsError('required_model_steps needs to be of '
+                                     '`annual` or `monthly`.')
+        self.required_model_steps = required_model_steps
         self.y0 = None
         self.t = None
         self.reset_y0(y0)
@@ -832,13 +846,16 @@ class FlowlineModel(object):
             Upper time span for how long the model should run
         """
 
-        # We force timesteps to monthly frequencies for consistent results
-        # among use cases (monthly or yearly output) and also to prevent
-        # "too large" steps in the adaptive scheme.
-        ts = utils.monthly_timeseries(self.yr, y1)
-
-        # Add the last date to be sure we end on it
-        ts = np.append(ts, y1)
+        if self.required_model_steps == 'monthly':
+            # We force timesteps to monthly frequencies for consistent results
+            # among use cases (monthly or yearly output) and also to prevent
+            # "too large" steps in the adaptive scheme.
+            ts = utils.monthly_timeseries(self.yr, y1)
+            # Add the last date to be sure we end on it - implementations
+            # of `step()` and of the loop below should not run twice anyways
+            ts = np.append(ts, y1)
+        else:
+            ts = np.arange(int(self.yr), int(y1+1))
 
         # Loop over the steps we want to meet
         for y in ts:
@@ -846,7 +863,7 @@ class FlowlineModel(object):
             # because of CFL, step() doesn't ensure that the end date is met
             # lets run the steps until we reach our desired date
             while self.t < t:
-                self.step(t-self.t)
+                self.step(t - self.t)
 
             # Check for domain bounds
             if self.check_for_boundaries:
@@ -1926,6 +1943,330 @@ class FileModel(object):
                                   'output file.')
 
 
+class MassRedistributionCurveModel(FlowlineModel):
+    """Glacier geometry updated using mass redistribution curves.
+
+    Also known as the "delta-h method": This uses mass redistribution curves
+    from Huss et al. (2010) to update the glacier geometry.
+
+    Code by David Rounce (PyGEM) and adapted by F. Maussion.
+    """
+
+    def __init__(self, flowlines, mb_model=None, y0=0.,
+                 is_tidewater=False, water_level=None,
+                 do_kcalving=None, calving_k=None,
+                 advance_method=1,
+                 **kwargs):
+        """ Instanciate the model.
+
+        Parameters
+        ----------
+        flowlines : list
+            the glacier flowlines
+        mb_model : MassBalanceModel
+            the mass-balance model
+        y0 : int
+            initial year of the simulation
+        advance_method : int
+            different ways to handle positive MBs:
+            - 0: do nothing, i.e. simply let the glacier thicken instead of
+                 thinning
+            - 1: add some of the mass at the end of the glacier
+            - 2: add some of the mass at the end of the glacier, but
+                 differently
+        """
+        super(MassRedistributionCurveModel, self).__init__(flowlines,
+                                                           mb_model=mb_model,
+                                                           y0=y0,
+                                                           water_level=water_level,
+                                                           mb_elev_feedback='annual',
+                                                           required_model_steps='annual',
+                                                           **kwargs)
+
+        if len(self.fls) > 1:
+            raise InvalidWorkflowError('MassRedistributionCurveModel is not '
+                                       'set up for multiple flowlines')
+        fl = self.fls[0]
+        self.glac_idx_initial = fl.thick.nonzero()[0]
+        self.y0 = y0
+
+        # Some ways to deal with positive MB
+        self.advance_method = advance_method
+
+        # Frontal ablation shenanigans
+        if do_kcalving is None:
+            do_kcalving = cfg.PARAMS['use_kcalving_for_run']
+        self.do_calving = do_kcalving and self.is_tidewater
+        if calving_k is None:
+            calving_k = cfg.PARAMS['calving_k']
+
+        self.is_tidewater = is_tidewater
+        self.calving_k = calving_k
+        self.calving_m3_since_y0 = 0.  # total calving since time y0
+
+    def step(self, dt):
+        """Advance one step. Here it should be one year"""
+
+        # Just a check to avoid useless computations
+        if dt <= 0:
+            raise InvalidParamsError('dt needs to be strictly positive')
+        if dt > cfg.SEC_IN_YEAR:
+            # This should not happen from how run_until is built, but
+            # to match the adaptive time stepping scheme of other models
+            # we don't complain here and just do one year
+            dt = cfg.SEC_IN_YEAR
+
+        elif dt < cfg.SEC_IN_YEAR:
+            # Here however we complain - we really want one year exactly
+            raise InvalidWorkflowError('I was asked to run for less than one '
+                                       'year. Delta-H models cant do that.')
+
+        # Flowline state
+        fl = self.fls[0]
+        fl_id = 0
+
+        height = fl.surface_h.copy()
+        section = fl.section.copy()
+        thick = fl.thick.copy()
+        width = fl.widths_m.copy()
+
+        # FRONTAL ABLATION
+        if self.is_tidewater:
+            raise NotImplementedError('Frontal ablation not there yet.')
+
+        # Redistribute mass if glacier is still there
+        if not np.any(section > 0):
+            # Do nothing
+            self.t += dt
+            return dt
+
+        # Mass redistribution according to Huss empirical curves
+        # Annual glacier mass balance [m ice s-1]
+        mb = self.get_mb(height, year=self.yr, fls=self.fls, fl_id=fl_id)
+        # [m ice yr-1]
+        mb *= cfg.SEC_IN_YEAR
+
+        # Ok now to the bulk of it
+        # Mass redistribution according to empirical equations from
+        # Huss and Hock (2015) accounting for retreat/advance.
+        # glac_idx_initial is required to ensure that the glacier does not
+        # advance to area where glacier did not exist before
+        # (e.g., retreat and advance over a vertical cliff)
+
+        # Note: since OGGM uses the DEM, heights along the flowline do not
+        # necessarily decrease, i.e., there can be overdeepenings along the
+        # flowlines that occur as the glacier retreats. This is problematic
+        # for 'adding' a bin downstream in cases of glacier advance because
+        # you'd be moving new ice to a higher elevation. To avoid this
+        # unrealistic case, in the event that this would occur, the
+        # overdeepening will simply fill up with ice first until it reaches
+        # an elevation where it would put new ice into a downstream bin.
+
+        # Bin area [m2]
+        bin_area = width * fl.dx_meter
+        bin_area[thick == 0] = 0
+
+        # Annual glacier-wide volume change [m3]
+        # units: m3 ice per year
+        glacier_delta_v = (mb * bin_area).sum()
+
+        # For hindcast simulations, volume change is the opposite
+        # We don't implement this in OGGM right now
+
+        # If volume loss is more than the glacier volume, melt everything and
+        # stop here. Otherwise, redistribute mass loss/gains across the glacier
+        glacier_volume_total = (section * fl.dx_meter).sum()
+        if (glacier_volume_total + glacier_delta_v) < 0:
+            # Set all to zero and return
+            fl.section *= 0
+            return
+
+        # Determine where glacier exists
+        glac_idx = thick.nonzero()[0]
+
+        # Compute bin volume change [m3 ice yr-1] after redistribution
+        bin_delta_v = mass_redistribution_curve_huss(height, bin_area, mb,
+                                                     glac_idx, glacier_delta_v)
+
+        # Here per construction bin_delta_v should be approx equal to glacier_delta_v
+        np.testing.assert_allclose(bin_delta_v.sum(), glacier_delta_v)
+
+        # Update cross sectional area
+        # relevant issue: https://github.com/OGGM/oggm/issues/941
+        #  volume change divided by length (dx); units m2
+        delta_s = bin_delta_v / fl.dx_meter
+
+        fl.section = utils.clip_min(section + delta_s, 0)
+        if not np.any(delta_s > 0):
+            # We shrink - all good
+            fl.section = utils.clip_min(section + delta_s, 0)
+            # Done
+            self.t += dt
+            return dt
+
+        # We grow - that's bad because growing is hard
+
+        # First see what happens with thickness
+        # (per construction the redistribution curves are all positive btw)
+        fl.section = utils.clip_min(section + delta_s, 0)
+        # We decide if we really want to advance or if we don't care
+        # Matthias and Dave use 5m, I find that too much, because not
+        # redistributing may lead to runaway effects
+        dh_thres = 1  # in meters
+        if np.all((fl.thick - thick) <= dh_thres):
+            # That was not much increase return
+            self.t += dt
+            return dt
+
+        # Ok, we really grow then - back to previous state and decide on what to do
+        fl.section = section
+
+        if self.advance_method == 0:
+            # Do not advance (same as in the melting case but thickening)
+            fl.section = utils.clip_min(section + delta_s, 0)
+
+        if self.advance_method == 1:
+            # Just shift the redistribution by one pix
+            new_delta_s = np.append([0], delta_s)[:-1]
+
+            # Redis param - how much of mass we want to shift (0 - 1)
+            # 0 would be like method 0 (do nothing)
+            # 1 would be to shift all mass by 1 pixel
+            a = 0.2
+            new_delta_s = a * new_delta_s + (1 - a) * delta_s
+
+            # Make sure we are still preserving mass
+            new_delta_s *= delta_s.sum() / new_delta_s.sum()
+
+            # Update section
+            fl.section = utils.clip_min(section + new_delta_s, 0)
+
+        elif self.advance_method == 2:
+
+            # How much of what's positive do we want to add in front
+            redis_perc = 0.01  # in %
+
+            # Decide on volume that needs redistributed
+            section_redis = delta_s * redis_perc
+
+            # The rest is added where it was
+            fl.section = utils.clip_min(section + delta_s - section_redis, 0)
+
+            # Then lets put this "volume" where we can
+            section_redis = section_redis.sum()
+            while section_redis > 0:
+                # Get the terminus grid
+                orig_section = fl.section.copy()
+                p_term = np.nonzero(fl.thick > 0)[0][-1]
+
+                # Put ice on the next bin, until ice is as high as terminus
+                # Anything else would require slope assumptions, but it would
+                # be possible
+                new_thick = fl.surface_h[p_term] - fl.bed_h[p_term + 1]
+                if new_thick > 0:
+                    # No deepening
+                    fl.thick[p_term + 1] = new_thick
+                    new_section = fl.section[p_term + 1]
+                    if new_section > section_redis:
+                        # This would be too much, just add what we have
+                        orig_section[p_term + 1] = section_redis
+                        fl.section = orig_section
+                        section_redis = 0
+                    else:
+                        # OK this bin is done, continue
+                        section_redis -= new_section
+                else:
+                    # We have a deepening, or we have to climb
+                    target_h = fl.bed_h[p_term + 1] + 1
+                    to_fill = (fl.surface_h < target_h) & (fl.thick > 0)
+
+                    # Theoretical section area needed
+                    fl.thick[to_fill] = target_h - fl.bed_h[to_fill]
+                    new_section = fl.section.sum() - orig_section.sum()
+                    if new_section > section_redis:
+                        # This would be too much, just add what we have
+                        orig_section[to_fill] += new_section / np.sum(to_fill)
+                        fl.section = orig_section
+                        section_redis = 0
+                    else:
+                        # OK this bin is done, continue
+                        section_redis -= new_section
+
+        elif self.advance_method == 3:
+            # A bit closer to Huss and Rounce maybe?
+            raise RuntimeError('not yet')
+
+        # Done
+        self.t += dt
+        return dt
+
+
+def mass_redistribution_curve_huss(height, bin_area, mb, glac_idx, glacier_delta_v):
+    """Apply the mass redistribution curves from Huss and Hock (2015).
+
+    This has to be followed by added logic which takes into consideration
+    retreat and advance.
+
+    Parameters
+    ----------
+    height : np.ndarray
+        Glacier elevation [m] from previous year for each elevation bin
+    bin_area : np.ndarray
+        Glacier area [m2] from previous year for each elevation bin
+    mb : np.ndarray
+        Annual climatic mass balance [m ice yr-1] for each elevation bin for
+        a single year
+    glac_idx : np.ndarray
+        glacier indices for present timestep
+    glacier_delta_v : float
+        glacier-wide volume change [m3 ice yr-1] based on the annual mb
+
+    Returns
+    -------
+    bin_volume_change : np.ndarray
+        Ice volume change [m3 yr-1] for each elevation bin
+    """
+
+    # Apply mass redistribution curve
+    if glac_idx.shape[0] <= 3:
+        # No need for a curve when glacier is so small
+        return mb * bin_area
+
+    # Select the paramaters based on glacier area
+    if bin_area.sum() * 1e-6 > 20:
+        gamma, a, b, c = (6, -0.02, 0.12, 0)
+    elif bin_area.sum() * 1e-6 > 5:
+        gamma, a, b, c = (4, -0.05, 0.19, 0.01)
+    else:
+        gamma, a, b, c = (2, -0.30, 0.60, 0.09)
+
+    # reset variables
+    delta_h_norm = bin_area * 0
+
+    # Normalized elevation range [-]
+    #  (max elevation - bin elevation) / (max_elevation - min_elevation)
+    gla_height = height[glac_idx]
+    max_elev, min_elev = gla_height.max(), gla_height.min()
+    h_norm = (max_elev - gla_height) / (max_elev - min_elev)
+
+    #  using indices as opposed to elevations automatically skips bins on
+    #  the glacier that have no area such that the normalization is done
+    #  only on bins where the glacier lies
+    # Normalized ice thickness change [-]
+    delta_h_norm[glac_idx] = (h_norm + a) ** gamma + b * (h_norm + a) + c
+
+    # delta_h = (h_n + a)**gamma + b*(h_n + a) + c
+    # limit normalized ice thickness change to between 0 - 1
+    delta_h_norm = utils.clip_array(delta_h_norm, 0, 1)
+
+    # Huss' ice thickness scaling factor, fs_huss [m ice]
+    #  units: m3 / (m2 * [-]) * (1000 m / 1 km) = m ice
+    fs_huss = glacier_delta_v / (bin_area * delta_h_norm).sum()
+
+    # Volume change [m3 ice yr-1]
+    return delta_h_norm * fs_huss * bin_area
+
+
 def flowline_from_dataset(ds):
     """Instanciates a flowline from an xarray Dataset."""
 
@@ -2208,6 +2549,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
                        init_model_fls=None, store_monthly_step=False,
                        store_model_geometry=None, water_level=None,
+                       evolution_model=FluxBasedModel,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -2236,6 +2578,8 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: FluxBasedModel
     water_level : float
         the water level. It should be zero m a.s.l, but:
         - sometimes the frontal elevation is unrealistically high (or low).
@@ -2301,7 +2645,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                                        '`False` or set `water_level` '
                                        'to prevent this error.')
 
-    model = FluxBasedModel(fls, mb_model=mb_model, y0=ys,
+    model = evolution_model(fls, mb_model=mb_model, y0=ys,
                            inplace=True,
                            is_tidewater=gdir.is_tidewater,
                            is_lake_terminating=gdir.is_lake_terminating,

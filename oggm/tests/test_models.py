@@ -31,7 +31,7 @@ from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_width_bed_tributary)
 
 import matplotlib.pyplot as plt
-from oggm.core.flowline import (FluxBasedModel, FlowlineModel,
+from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributionCurveModel,
                                 init_present_time_glacier, glacier_from_netcdf,
                                 RectangularBedFlowline, TrapezoidalBedFlowline,
                                 ParabolicBedFlowline, MixedBedFlowline,
@@ -56,6 +56,7 @@ ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length',
              'melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
              'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
              'residual_mb', 'snow_bucket']
+
 
 class TestInitPresentDayFlowline:
 
@@ -3259,6 +3260,37 @@ class TestHEF:
                                            ods[vn].sel(time=1980),
                                            rtol=rtol)
 
+    @pytest.mark.slow
+    def test_equilibrium(self, hef_gdir, inversion_params):
+
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+
+        mb_mod = massbalance.ConstantMassBalance(hef_gdir)
+
+        fls = hef_gdir.read_pickle('model_flowlines')
+        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                               fs=inversion_params['inversion_fs'],
+                               glen_a=inversion_params['inversion_glen_a'],
+                               mb_elev_feedback='never')
+
+        ref_vol = model.volume_km3
+        ref_area = model.area_km2
+        ref_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
+
+        model.run_until_equilibrium(rate=1e-4)
+        assert model.yr >= 50
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=100.01)
+
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHydro:
@@ -3649,6 +3681,101 @@ class TestHydro:
 
         # Runoff peak should follow a temperature curve
         assert_allclose(odf_ma['runoff'].idxmax(), 11, atol=1.1)
+
+
+class TestMassRedis:
+
+    def test_hef_retreat(self, class_case_dir):
+
+        import geopandas as gpd
+
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+        cfg.PARAMS['baseline_climate'] = ''
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PARAMS['min_ice_thick_for_length'] = 5
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=class_case_dir)
+        tasks.define_glacier_region(gdir)
+        tasks.simple_glacier_masks(gdir)
+        tasks.elevation_band_flowline(gdir)
+        tasks.fixed_dx_elevation_band_flowline(gdir)
+        tasks.compute_downstream_line(gdir)
+        tasks.compute_downstream_bedshape(gdir)
+        tasks.process_custom_climate_data(gdir)
+
+        mbdf = gdir.get_ref_mb_data()
+        cfg.PARAMS['max_mu_star'] = 600
+        ref_mb = mbdf.ANNUAL_BALANCE.mean()
+        tasks.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
+                                                   ref_period='1953-01-01_2004-01-01')
+        tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+        workflow.calibrate_inversion_from_consensus([gdir])
+        tasks.init_present_time_glacier(gdir)
+
+        seed = 0
+
+        odf_l = pd.DataFrame()
+        odf_v = pd.DataFrame()
+        biases = [-0.6, -0.3, 0]
+        for bias in biases:
+            tasks.run_random_climate(gdir, nyears=500, y0=1990, halfsize=10,
+                                     temperature_bias=bias,
+                                     seed=seed,
+                                     output_filesuffix='_fl')
+            with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                                   filesuffix='_fl')) as ds:
+                df_fl = ds.to_dataframe()
+
+            odf_v[f'fl_t{bias}'] = df_fl['volume_m3']
+            odf_l[f'fl_t{bias}'] = df_fl['length_m']
+
+            for advance_method in [0, 1, 2]:
+                MethodCurveModel = partial(MassRedistributionCurveModel,
+                                           advance_method=advance_method)
+                tasks.run_random_climate(gdir, nyears=500, y0=1990, halfsize=10,
+                                         temperature_bias=bias,
+                                         seed=seed,
+                                         evolution_model=MethodCurveModel,
+                                         output_filesuffix='_mr')
+                with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                                       filesuffix='_mr')) as ds:
+                    df_mr = ds.to_dataframe()
+
+                odf_v[f'mr_m{advance_method}_t{bias}'] = df_mr['volume_m3']
+                odf_l[f'mr_m{advance_method}_t{bias}'] = df_mr['length_m']
+
+        # Test that during the retreat phase all is very close
+        # (incredibly close actually)
+        for bias in biases:
+            cc = [c for c in odf_v if f'_t{bias}' in c]
+            sdf = odf_v[cc].loc[:100]
+            for c in sdf.columns[1:]:
+                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=0.05)
+
+        if do_plot:
+            for advance_method in [0, 1, 2]:
+                cc = [c for c in odf_v if f'_m{advance_method}' in c or 'fl' in c]
+                v = odf_v[cc]
+                l = odf_l[cc]
+
+                f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+                v.plot(ax=ax1,
+                       color=['C0']*2+['C1']*2+['C3']*2,
+                       style=['-', ':'] * 3)
+                ax1.set_title(f'Volume, advance_method={advance_method}')
+                l.plot(ax=ax2,
+                       color=['C0']*2+['C1']*2+['C3']*2,
+                       style=['-', ':'] * 3)
+                ax2.set_title(f'Length, advance_method={advance_method}')
+                plt.show()
 
 
 @pytest.fixture(scope='class')
