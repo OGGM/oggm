@@ -2681,6 +2681,7 @@ class TestHEF:
 
         # As long as hef_gdir uses 1, we need to use 1 here as well
         cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
         init_present_time_glacier(hef_gdir)
 
         mb_mod = massbalance.ConstantMassBalance(hef_gdir)
