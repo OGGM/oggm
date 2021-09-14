@@ -1036,7 +1036,7 @@ class TestIdealisedCases(unittest.TestCase):
             model.run_until(300)
         assert 'required time step smaller than' in str(excinfo.value)
 
-    def test_mass_redistribution(self):
+    def test_mass_redistribution_retreat(self):
 
         fls = dummy_constant_bed()
         mb = LinearMassBalance(2600.)
@@ -1104,7 +1104,8 @@ class TestIdealisedCases(unittest.TestCase):
             ax.plot(shs[1][0], 'C1')
             ax.plot(shs[2][0], 'C0')
             ax.set_title('Start Shape')
-            ax.set_xlabel('[m]'); ax.set_ylabel('Elevation [m]')
+            ax.set_xlabel('[m]')
+            ax.set_ylabel('Elevation [m]')
             ax.legend(['Bed', 'SIA', 'MassRedis'])
 
             ax = axs[1]
@@ -1113,7 +1114,8 @@ class TestIdealisedCases(unittest.TestCase):
             ax.plot(shs[1][-1], 'C1')
             ax.plot(shs[2][-1], 'C0')
             ax.set_title('End Shape')
-            ax.set_xlabel('[m]'); ax.set_ylabel('Elevation [m]')
+            ax.set_xlabel('[m]')
+            ax.set_ylabel('Elevation [m]')
 
             ax = axs[2]
             ax.plot(yrs, vols[0], 'C3')
@@ -1128,6 +1130,109 @@ class TestIdealisedCases(unittest.TestCase):
             ax.plot(yrs, lens[0], 'C3')
             ax.plot(yrs, lens[1], 'C1')
             ax.plot(yrs, lens[1], 'C0')
+            ax.set_title('Length')
+            ax.set_xlabel('years')
+            ax.set_ylabel('[m]')
+            ax.legend(['SIA', 'MassRedis 1', 'MassRedis 2'])
+
+            plt.tight_layout()
+            plt.show()
+
+    @pytest.mark.slow
+    def test_mass_redistribution_grow(self):
+
+        fls = dummy_constant_bed()
+        mb = LinearMassBalance(2700.)
+
+        from oggm.core.flowline import FluxBasedModel, MassRedistributionCurveModel
+
+        fl_model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        fl_model.run_until(100)
+
+        fl_model = FluxBasedModel(fl_model.fls, mb_model=mb, y0=0.)
+        dh_model_1 = MassRedistributionCurveModel(fl_model.fls, mb_model=mb,
+                                                  y0=0, advance_method=1)
+        dh_model_2 = MassRedistributionCurveModel(fl_model.fls, mb_model=mb,
+                                                  y0=0, advance_method=2)
+
+        # The test fails if the simulation is too long
+        yrs = np.arange(1, 800)
+
+        lens = []
+        vols = []
+        areas = []
+        shs = []
+
+        for model in [fl_model, dh_model_1, dh_model_2]:
+
+            length = yrs * 0.
+            vol = yrs * 0.
+            area = yrs * 0.
+            surface_h = []
+
+            for i, y in enumerate(yrs):
+                model.run_until(y)
+                assert model.yr == y
+                length[i] = model.fls[-1].length_m
+                vol[i] = model.fls[-1].volume_km3
+                area[i] = model.fls[-1].area_m2
+
+                # Just for the plot
+                _sh = model.fls[-1].surface_h.copy()
+                pp = np.nonzero(model.fls[-1].thick)[0][-1] + 2
+                _sh[pp:] = np.NaN
+                surface_h.append(_sh)
+
+            # We are almost at equilibrium. Spec MB should be close to 0
+            # assert_allclose(mb.get_specific_mb(fls=model.fls), 0, atol=10)
+
+            lens.append(length)
+            vols.append(vol)
+            areas.append(area)
+            shs.append(surface_h)
+
+        assert_allclose(vols[0][-1], vols[1][-1], rtol=0.1)
+        assert_allclose(vols[1], vols[2])
+
+        assert_allclose(lens[0][-1], lens[1][-1], rtol=0.1)
+        assert_allclose(lens[1], lens[2])
+
+        if do_plot:
+            f, axs = plt.subplots(2, 2, figsize=(12, 8))
+            axs = np.array(axs).flatten()
+
+            ax = axs[0]
+            ax.plot(fls[-1].bed_h, 'k')
+            ax.plot(shs[0][0], 'C3')
+            ax.plot(shs[1][0], 'C1')
+            ax.plot(shs[2][0], 'C0')
+            ax.set_title('Start Shape')
+            ax.set_xlabel('[m]')
+            ax.set_ylabel('Elevation [m]')
+            ax.legend(['Bed', 'SIA', 'MassRedis'])
+
+            ax = axs[1]
+            ax.plot(fls[-1].bed_h, 'k')
+            ax.plot(shs[0][-1], 'C3')
+            ax.plot(shs[1][-1], 'C1')
+            ax.plot(shs[2][-1], 'C0')
+            ax.set_title('End Shape')
+            ax.set_xlabel('[m]')
+            ax.set_ylabel('Elevation [m]')
+
+            ax = axs[2]
+            ax.plot(yrs, vols[0], 'C3')
+            ax.plot(yrs, vols[1], 'C1')
+            ax.plot(yrs, vols[2], 'C0')
+            ax.set_title('Volume')
+            ax.set_xlabel('years')
+            ax.set_ylabel('[m3]')
+            ax.legend(['SIA', 'MassRedis 1', 'MassRedis 2'])
+
+            ax = axs[3]
+            ax.plot(yrs, lens[0], 'C3')
+            ax.plot(yrs, lens[1], 'C1')
+            ax.plot(yrs, lens[2], 'C0')
             ax.set_title('Length')
             ax.set_xlabel('years')
             ax.set_ylabel('[m]')
