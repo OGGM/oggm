@@ -1914,7 +1914,6 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(mb_new.bias, 0)
 
         # OK now check what happens with unrealistic climate input
-
         # Very positive
         ref_mb = 2000
         climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,

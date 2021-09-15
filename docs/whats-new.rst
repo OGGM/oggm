@@ -13,9 +13,14 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Implemented a ``MassRedistributionCurveModel`` under the FlowlineModel
+  interface, which uses the Huss curves to parameterize glacier retreat.
+  There is some parameterisation for advance as well, but a very coarse one
+  (:pull:`1288`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added a new ``mu_star_calibration_from_geodetic_mb`` task which now calibrates
   each glacier individually from the reference geodetic MB data. This is a rather
-  quick solution for now, but it opens new avenues.
+  quick solution for now, but it opens new avenues (:pull:`1286`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added a new ``utils.get_geodetic_mb_dataframe`` which returns the
   reference geodetic MB data, currently from Hugonnet et al 2021.
