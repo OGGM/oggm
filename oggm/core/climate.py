@@ -1180,7 +1180,13 @@ def _fallback_mu_star_calibration(gdir):
 
     """
     # read json
-    df = gdir.read_json('local_mustar')
+    try:
+        df = gdir.read_json('local_mustar')
+    except FileNotFoundError:
+        df = dict()
+        df['rgi_id'] = gdir.rgi_id
+        df['t_star'] = np.nan
+        df['bias'] = 0
     # add these keys which mu_star_calibration would add
     df['mu_star_per_flowline'] = [np.nan]
     df['mu_star_flowline_avg'] = np.nan
@@ -1295,7 +1301,7 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
 def mu_star_calibration_from_geodetic_mb(gdir,
                                          ref_mb=None,
                                          ref_period='',
-                                         step_height_for_corr=50,
+                                         step_height_for_corr=25,
                                          max_height_change_for_corr=3000,
                                          min_mu_star=None,
                                          max_mu_star=None):
@@ -1396,6 +1402,19 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         # Let's try to find a range of corrections that would lead to an
         # allowed mu* and pick one
 
+        # Here we ignore the previous QC correction - if any -
+        # to ensure that results are the same even after previous correction
+        fpath = gdir.get_filepath('climate_historical')
+        with utils.ncDataset(fpath, 'a') as nc:
+            start = getattr(nc, 'uncorrected_ref_hgt', nc.ref_hgt)
+            nc.uncorrected_ref_hgt = start
+            nc.ref_hgt = start
+
+        # Read timeseries again after reset
+        _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
+                                                    year_range=yr_range,
+                                                    flatten=False)
+
         # Check in which direction we should correct the temp
         _lim0 = _mu_star_per_minimization(min_mu_star, fls, ref_mb, temp,
                                           prcp, widths)
@@ -1408,12 +1427,6 @@ def mu_star_calibration_from_geodetic_mb(gdir,
             # The other way around
             step = step_height_for_corr
             end = max_height_change_for_corr
-
-        fpath = gdir.get_filepath('climate_historical')
-        with utils.ncDataset(fpath, 'a') as nc:
-            # Her we ignore the previous QC correction - if any
-            start = getattr(nc, 'uncorrected_ref_hgt', nc.ref_hgt)
-            nc.uncorrected_ref_hgt = start
 
         steps = np.arange(start, start + end, step, dtype=np.int64)
         mu_candidates = steps * np.NaN
