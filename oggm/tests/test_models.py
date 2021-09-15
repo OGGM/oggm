@@ -3261,38 +3261,6 @@ class TestHEF:
                                            ods[vn].sel(time=1980),
                                            rtol=rtol)
 
-    @pytest.mark.slow
-    def test_equilibrium(self, hef_gdir, inversion_params):
-
-        # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        init_present_time_glacier(hef_gdir)
-
-        mb_mod = massbalance.ConstantMassBalance(hef_gdir)
-
-        fls = hef_gdir.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['inversion_fs'],
-                               glen_a=inversion_params['inversion_glen_a'],
-                               mb_elev_feedback='never')
-
-        ref_vol = model.volume_km3
-        ref_area = model.area_km2
-        ref_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
-
-        model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 50
-        after_vol = model.volume_km3
-        after_area = model.area_km2
-        after_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
-        np.testing.assert_allclose(ref_len, after_len, atol=100.01)
-
-
 @pytest.mark.usefixtures('with_class_wd')
 class TestHydro:
 
