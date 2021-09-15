@@ -405,14 +405,25 @@ class PastMassBalance(MassBalanceModel):
                 raise ValueError('Climate data should be N full years')
             # This is where we switch to hydro float year format
             # Last year gives the tone of the hydro year
-            self.years = np.repeat(np.arange(time[-1].year-ny+1,
-                                             time[-1].year+1), 12)
-            self.months = np.tile(np.arange(1, 13), ny)
+            self.years = np.repeat(np.arange(time[-1].year - ny + 1,
+                                             time[-1].year + 1), 12)
+
+            pok = slice(None)  # take all is default (optim)
+            if ys is not None:
+                pok = self.years >= ys
+            if ye is not None:
+                try:
+                    pok = pok & (self.years <= ye)
+                except TypeError:
+                    pok = self.years <= ye
+
+            self.years = self.years[pok]
+            self.months = np.tile(np.arange(1, 13), ny)[pok]
             # Read timeseries and correct it
-            self.temp = nc.variables['temp'][:].astype(np.float64) + self._temp_bias
-            self.prcp = nc.variables['prcp'][:].astype(np.float64) * self._prcp_fac
+            self.temp = nc.variables['temp'][pok].astype(np.float64) + self._temp_bias
+            self.prcp = nc.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
             if 'gradient' in nc.variables:
-                grad = nc.variables['gradient'][:].astype(np.float64)
+                grad = nc.variables['gradient'][pok].astype(np.float64)
                 # Security for stuff that can happen with local gradients
                 g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
                 grad = np.where(~np.isfinite(grad), default_grad, grad)
@@ -421,8 +432,8 @@ class PastMassBalance(MassBalanceModel):
                 grad = self.prcp * 0 + default_grad
             self.grad = grad
             self.ref_hgt = nc.ref_hgt
-            self.ys = self.years[0] if ys is None else ys
-            self.ye = self.years[-1] if ye is None else ye
+            self.ys = self.years[0]
+            self.ye = self.years[-1]
 
     # adds the possibility of changing prcp_fac
     # after instantiation with properly changing the prcp time series
@@ -775,6 +786,82 @@ class ConstantMassBalance(MassBalanceModel):
             t, tmelt, prcp, prcpsol = self.get_annual_climate(heights)
             return mb, t, tmelt, prcp, prcpsol
         return mb
+
+
+class AvgClimateMassBalance(ConstantMassBalance):
+    """Mass balance with the average climate of a selected period.
+
+    !!!Careful! This is conceptually wrong!!! This is here only to make
+    a point.
+
+    See https://oggm.org/2021/08/05/mean-forcing/
+    """
+
+    def __init__(self, gdir, mu_star=None, bias=None,
+                 filename='climate_historical', input_filesuffix='',
+                 y0=None, halfsize=15, **kwargs):
+        """Initialize.
+
+        Parameters
+        ----------
+        gdir : GlacierDirectory
+            the glacier directory
+        mu_star : float, optional
+            set to the alternative value of mu* you want to use
+            (the default is to use the calibrated value).
+        bias : float, optional
+            set to the alternative value of the calibration bias [mm we yr-1]
+            you want to use (the default is to use the calibrated value)
+            Note that this bias is *substracted* from the computed MB. Indeed:
+            BIAS = MODEL_MB - REFERENCE_MB.
+        filename : str, optional
+            set to a different BASENAME if you want to use alternative climate
+            data.
+        input_filesuffix : str
+            the file suffix of the input climate file
+        y0 : int, optional, default: tstar
+            the year at the center of the period of interest. The default
+            is to use tstar as center.
+        halfsize : int, optional
+            the half-size of the time window (window size = 2 * halfsize + 1)
+
+        Attributes
+        ----------
+        temp_bias : float, default 0
+            Add a temperature bias to the time series
+        prcp_fac : float, default cfg.PARAMS['prcp_scaling_factor']
+            Precipitation factor to the time series (called factor to make clear
+             that it is a multiplicative factor in contrast to the additive
+             `temp_bias`)
+        """
+        super(AvgClimateMassBalance, self).__init__(gdir, mu_star=mu_star,
+                                                    bias=bias,
+                                                    filename=filename,
+                                                    input_filesuffix=input_filesuffix,
+                                                    y0=y0, halfsize=halfsize)
+
+        if y0 is None:
+            df = gdir.read_json('local_mustar')
+            y0 = df['t_star']
+
+        self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
+                                     filename=filename,
+                                     input_filesuffix=input_filesuffix,
+                                     ys=y0-halfsize, ye=y0+halfsize,
+                                     **kwargs)
+        tmp = self.mbmod.temp
+        assert (len(tmp) // 12) == (halfsize * 2 + 1)
+        self.mbmod.temp = tmp.reshape((len(tmp) // 12, 12)).mean(axis=0)
+        tmp = self.mbmod.prcp
+        self.mbmod.prcp = tmp.reshape((len(tmp) // 12, 12)).mean(axis=0)
+        tmp = self.mbmod.grad
+        self.mbmod.grad = tmp.reshape((len(tmp) // 12, 12)).mean(axis=0)
+
+        self.mbmod.ys = y0
+        self.mbmod.ye = y0
+        self.mbmod.months = np.arange(1, 13, dtype=int)
+        self.mbmod.years = np.asarray([y0]*12)
+        self.years = np.asarray([y0]*12)
 
 
 class RandomMassBalance(MassBalanceModel):

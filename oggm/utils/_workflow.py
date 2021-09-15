@@ -1138,8 +1138,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
     ds.coords['hydro_year'] = ('time', yrs)
     ds.coords['hydro_month'] = ('time', months)
-    ds.coords['calendar_year'] = ('time', cyrs)
-    ds.coords['calendar_month'] = ('time', cmonths)
+    ds.coords['calendar_year'] = ('time', cyrs.data)
+    ds.coords['calendar_month'] = ('time', cmonths.data)
     ds['time'].attrs['description'] = 'Floating hydrological year'
     ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
     ds['hydro_year'].attrs['description'] = 'Hydrological year'

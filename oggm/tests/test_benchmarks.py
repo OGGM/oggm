@@ -78,7 +78,11 @@ class TestSouthGlacier(unittest.TestCase):
         df['i'] = ii
         df['j'] = jj
         df['ij'] = ['{:04d}_{:04d}'.format(i, j) for i, j in zip(ii, jj)]
-        return df.groupby('ij').mean()
+        df = df.groupby('ij').mean()
+        # Averaging converts to floats
+        df['i'] = df['i'].astype(np.int64)
+        df['j'] = df['j'].astype(np.int64)
+        return df
 
     def test_mb(self):
 

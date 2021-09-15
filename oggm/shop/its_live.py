@@ -185,6 +185,11 @@ def _reproject_and_scale(gdir, do_error=False):
 def velocity_to_gdir(gdir, add_error=False):
     """Reproject the its_live files to the given glacier directory.
 
+    The data source used is https://its-live.jpl.nasa.gov/#data
+    Currently the only data downloaded is the 120m composite for both
+    (u, v) and their uncertainty. The composite is computed from the
+    1985 to 2018 average.
+
     Variables are added to the gridded_data nc file.
 
     Reprojecting velocities from one map proj to another is done
@@ -196,6 +201,9 @@ def velocity_to_gdir(gdir, add_error=False):
 
     We use bilinear interpolation to reproject the velocities to the local
     glacier map.
+
+    If you want more velocity products, feel free to open a new topic
+    on OGGM's issue tracker!
 
     Parameters
     ----------

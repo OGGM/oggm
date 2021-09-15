@@ -33,6 +33,7 @@ from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    PastMassBalance,
+                                   AvgClimateMassBalance,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
 from oggm.core.inversion import find_sia_flux_from_thickness
@@ -2422,7 +2423,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          climate_filename='climate_historical',
                          climate_input_filesuffix='',
                          init_model_fls=None,
-                         zero_initial_glacier=False, **kwargs):
+                         zero_initial_glacier=False,
+                         use_avg_climate=False,
+                         **kwargs):
     """Runs the constant mass-balance model for a given number of years.
 
     This will initialize a
@@ -2477,6 +2480,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
+    use_avg_climate : bool
+        use the average climate instead of the correct MB model. This is
+        for testing only!!!
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
@@ -2490,7 +2496,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         fmod.run_until(init_model_yr)
         init_model_fls = fmod.fls
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=ConstantMassBalance,
+    if use_avg_climate:
+        mb_model = AvgClimateMassBalance
+    else:
+        mb_model = ConstantMassBalance
+
+    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model,
                                      y0=y0, halfsize=halfsize,
                                      bias=bias, filename=climate_filename,
                                      input_filesuffix=climate_input_filesuffix)
@@ -2847,6 +2858,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                 mb *= seconds * cfg.PARAMS['ice_density']
 
                 # Bias of the mb model is a fake melt term that we need to deal with
+                # This is here for correction purposes later
                 mb_bias = mb_mod.bias * seconds / cfg.SEC_IN_YEAR
 
                 liq_prcp_on_g = (prcp - prcpsol) * bin_area
@@ -2916,12 +2928,12 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             ):
 
                 real_melt = melt - bias
-                real_melt_sum = np.sum(real_melt)
-                bias_sum = np.sum(bias)
-                if real_melt_sum > 0:
+                to_correct = utils.clip_min(real_melt, 0)
+                to_correct_sum = np.sum(to_correct)
+                if (to_correct_sum > 1e-7) and (np.sum(melt) > 0):
                     # Ok we correct the positive melt instead
-                    fac = 1 + bias_sum / real_melt_sum
-                    melt[:] = real_melt * fac
+                    fac = np.sum(melt) / to_correct_sum
+                    melt[:] = to_correct * fac
 
         # Correct for mass-conservation and match the ice-dynamics model
         fmod.run_until(yr + 1)

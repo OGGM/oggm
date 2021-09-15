@@ -385,6 +385,15 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
     return gdirs
 
 
+def _isdir(path):
+    """os.path.isdir, returning False instead of an error on non-string/path-like objects
+    """
+    try:
+        return os.path.isdir(path)
+    except TypeError:
+        return False
+
+
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
@@ -508,7 +517,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                     # List of str
                     pass
 
-            if os.path.isdir(from_tar):
+            if _isdir(from_tar):
                 gdirs = execute_entity_task(gdir_from_tar, entities,
                                             from_tar=from_tar)
             else:
