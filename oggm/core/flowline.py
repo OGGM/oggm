@@ -3287,12 +3287,12 @@ def run_with_hydro_daily(gdir, run_task=None, ref_area_from_y0=False, Testing=Fa
         ):
 
             real_melt = melt - bias
-            real_melt_sum = np.sum(real_melt)
-            bias_sum = np.sum(bias)
-            if real_melt_sum > 0:
+            to_correct = utils.clip_min(real_melt, 0)
+            to_correct_sum = np.sum(to_correct)
+            if (to_correct_sum > 1e-7) and (np.sum(melt) > 0):
                 # Ok we correct the positive melt instead
-                fac = 1 + bias_sum / real_melt_sum
-                melt[:] = real_melt * fac
+                fac = np.sum(melt) / to_correct_sum
+                melt[:] = to_correct * fac
 
         # Correct for mass-conservation and match the ice-dynamics model
         fmod.run_until(yr + 1)
