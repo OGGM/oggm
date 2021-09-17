@@ -36,18 +36,20 @@ Software DOI
 If you want to refer to a specific version of the software you can use
 the `Zenodo citation`_ for this purpose. An example BibTeX entry::
 
-    @misc{OGGM_v1.1,
-    author       = {Fabien Maussion and Timo Rothenpieler and
-                    Matthias Dusch and Beatriz Recinos and Anouk Vlug and
-                    Ben Marzeion and Johannes Landmann and Julia Eis and
-                    Sadie Bartholomew and Nicolas Champollion and
-                    Philipp Gregor and Anton Butenko and Schmitty Smith and
-                    Moritz Oberrauch},
-    title        = {OGGM/oggm: v1.1},
-    month        = feb,
-    year         = 2019,
-    doi          = {10.5281/zenodo.2580277},
-    url          = {https://doi.org/10.5281/zenodo.2580277}
+    @misc{OGGM_v1.5.2,
+    author       = {Fabien Maussion and Timo Rothenpieler and Matthias Dusch and
+                    Anouk Vlug and Nicolas Champollion and Ben Marzeion and Lilian Schuster and
+                    Moritz Oberrauch and Fei Li and Johannes Landmann and Julia Eis and
+                    Alex Jarosch and Sarah Hanus and David Rounce and Matteo Castellani and
+                    Sadie L. Bartholomew and Chris Merrill and David Loibl and Lizz Ultee and
+                    Schmitty Smith and Anton Butenko and Patrick Schmitt and Philipp Gregor},
+    title        = {OGGM/oggm: v1.5.2},
+    month        = aug,
+    year         = 2021,
+    publisher    = {Zenodo},
+    version      = {v1.5.2},
+    doi          = {10.5281/zenodo.5327634},
+    url          = {https://doi.org/10.5281/zenodo.5327634}
     }
 
 .. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645

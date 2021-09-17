@@ -1,9 +1,11 @@
-Ice dynamics
-============
+.. _ice-dynamics:
 
-The glaciers in OGGM are represented by a depth-integrated flowline
+Ice dynamics flowline model (default)
+=====================================
+
+The standard geometry evolution model in OGGM is a depth-integrated flowline
 model. The equations for the isothermal shallow ice are solved along
-the glacier centerline, computed to represent best the flow of ice
+the glacier centerline(s), computed to represent best the flow of ice
 along the glacier (see for example `antarcticglaciers.org`_ for a general
 introduction about the various types of glacier models).
 
@@ -18,12 +20,13 @@ Let :math:`S` be the area of a cross-section perpendicular to the
 flowline. It has a width :math:`w` and a thickness :math:`h` and, in this
 example, a parabolic bed shape.
 
-    .. figure:: _static/hef_flowline.jpg
-        :width: 80%
+.. figure:: _static/hef_flowline.jpg
+    :width: 80%
+    :align: left
 
-        Example of a cross-section along the glacier flowline. Background
-        image from
-        http://www.swisseduc.ch/glaciers/alps/hintereisferner/index-de.html
+    Example of a cross-section along the glacier flowline. Background
+    image from
+    http://www.swisseduc.ch/glaciers/alps/hintereisferner/index-de.html
 
 Volume conservation for this discrete element implies:
 
@@ -86,8 +89,8 @@ Rectangular
 ~~~~~~~~~~~
 
 
-    .. figure:: _static/bed_vertical.png
-        :width: 40%
+.. figure:: _static/bed_vertical.png
+    :width: 40%
 
 
 The simplest shape. The glacier width does not change with ice thickness.
@@ -97,8 +100,8 @@ Trapezoidal
 ~~~~~~~~~~~
 
 
-    .. figure:: _static/bed_trapezoidal.png
-        :width: 40%
+.. figure:: _static/bed_trapezoidal.png
+    :width: 40%
 
 
 Trapezoidal shape with two degrees of freedom. The width change with thickness
@@ -119,8 +122,8 @@ Parabolic
 ~~~~~~~~~
 
 
-    .. figure:: _static/bed_parabolic.png
-        :width: 40%
+.. figure:: _static/bed_parabolic.png
+    :width: 40%
 
 
 Parabolic shape with one degree of freedom, which makes it particularly

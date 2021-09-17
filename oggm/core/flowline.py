@@ -243,10 +243,6 @@ class ParabolicBedFlowline(Flowline):
         ----------
         line : :py:class:`shapely.geometry.LineString`
             the geometrical line of a :py:class:`oggm.Centerline`
-
-        Properties
-        ----------
-        #TODO: document properties
         """
         super(ParabolicBedFlowline, self).__init__(line, dx, map_dx,
                                                    surface_h, bed_h,
@@ -294,9 +290,6 @@ class RectangularBedFlowline(Flowline):
         line : :py:class:`shapely.geometry.LineString`
             the geometrical line of a :py:class:`oggm.Centerline`
 
-        Properties
-        ----------
-        #TODO: document properties
         """
         super(RectangularBedFlowline, self).__init__(line, dx, map_dx,
                                                      surface_h, bed_h,
@@ -341,10 +334,6 @@ class TrapezoidalBedFlowline(Flowline):
         ----------
         line : :py:class:`shapely.geometry.LineString`
             the geometrical line of a :py:class:`oggm.Centerline`
-
-        Properties
-        ----------
-        #TODO: document properties
         """
         super(TrapezoidalBedFlowline, self).__init__(line, dx, map_dx,
                                                      surface_h, bed_h,
@@ -406,11 +395,6 @@ class MixedBedFlowline(Flowline):
         ----------
         line : :py:class:`shapely.geometry.LineString`
             the geometrical line of a :py:class:`oggm.Centerline`
-
-        Properties
-        ----------
-        #TODO: document properties
-        width_m is optional - for thick=0
         """
 
         super(MixedBedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
@@ -1665,9 +1649,6 @@ class MassConservationChecker(FluxBasedModel):
         Parameters
         ----------
 
-        Properties
-        ----------
-        #TODO: document properties
         """
         super(MassConservationChecker, self).__init__(flowlines, **kwargs)
         self.total_mass = 0.
@@ -1705,11 +1686,6 @@ class KarthausModel(FlowlineModel):
 
         Parameters
         ----------
-
-        Properties
-        ----------
-        #TODO: document properties
-        #TODO: Changed from assumed N=3 to N
         """
 
         if len(flowlines) > 1:
@@ -1793,10 +1769,6 @@ class FileModel(object):
 
         Parameters
         ----------
-
-        Properties
-        ----------
-        #TODO: document properties
         """
 
         self.fls = glacier_from_netcdf(path)

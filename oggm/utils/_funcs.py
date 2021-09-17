@@ -794,7 +794,7 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
         Glacier RGI region code, which is important for some OGGM applications.
         For example, oggm.shop.its_live() need it to locate the right dataset.
         Needs to be assigned.
-    o2_region :  str or list of str
+    o2_region : str or list of str
         Glacier RGI subregion code (default: 01)
     bgndate : str or list of str
         The date of the outlines. This is quite important for the glacier
@@ -809,15 +809,14 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
          Add a suffix to the glacier ids. The default is None, no suffix
     assign_column_values : dict or None
         Assign predefined values from the original data to the RGI dataframe.
-        dict format :
-            - key: name of the column in the original dataframe
-            - value: name of the column in the RGI-like file to assign the values to
+        Dict format :
+        - key: name of the column in the original dataframe
+        - value: name of the column in the RGI-like file to assign the values to
 
     Returns
     -------
     cooked_rgidf : :py:geopandas.GeoDataFrame
         glacier inventory into a dataset looking like the RGI (OGGM ready)
-
     """
 
     # Check input

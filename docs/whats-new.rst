@@ -104,9 +104,8 @@ Breaking changes
 - `prcp_bias` renamed to `prcp_fac` in mass-balance models (:pull:`1211`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - Various name changes (with deprecation cycle, i.e. old code should still
-  work):
-    - ``gdir.get_filepath('model_run')`` renamed to ``gdir.get_filepath('model_geometry')``
-    - ``run_path`` kwarg in ``run_until_and_store`` renamed to ``geom_path``
+  work): ``gdir.get_filepath('model_run')`` renamed to ``gdir.get_filepath('model_geometry')``;
+  ``run_path`` kwarg in ``run_until_and_store`` renamed to ``geom_path``.
 
 
 Enhancements
