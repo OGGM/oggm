@@ -5,7 +5,6 @@
 Glacier flowlines
 =================
 
-
 .. ipython:: python
    :suppress:
 
@@ -19,10 +18,7 @@ Glacier flowlines
 
     from oggm import graphics
 
-Computing the flowlines is the first task to run after the definition
-of the local map and topography.
-
-OGGM is a "flowline model", which means that the glacier ice flow is
+OGGM's default model is a "flowline model", which means that the glacier ice flow is
 assumed to happen along a representative "1.5D" flowline, as in the image
 below. "1.5D" here is used to emphasize that although glacier ice can flow
 only in one direction along the flowline, each point of the glacier has
@@ -30,11 +26,12 @@ a geometrical width. This width means that flowline glaciers are able to match
 the observed area-elevation distribution of true glaciers, and can parametrize
 the changes in glacier width with thickness changes.
 
-    .. figure:: _static/hef_flowline.jpg
-        :width: 80%
+.. figure:: _static/hef_flowline.jpg
+   :width: 80%
+   :align: left
 
-        Example of a glacier flowline. Background image from
-        http://www.swisseduc.ch/glaciers/alps/hintereisferner/index-de.html
+   Example of a glacier flowline. Background image from
+   http://www.swisseduc.ch/glaciers/alps/hintereisferner/index-de.html
 
 .. admonition:: **New in version 1.4!**
 
@@ -47,8 +44,9 @@ the changes in glacier width with thickness changes.
       averaging of 2D slopes into a "bulk" flowline glacier. This is the method
       first developed and applied by [Huss_Farinotti_2012]_.
 
-   Both methods have strengths and weaknesses, which we discuss in more depth
-   below. First, let's have a look at how they work.
+
+Both methods have strengths and weaknesses, which we discuss in more depth
+below. First, let's have a look at how they work.
 
 
 Geometrical centerlines
@@ -204,25 +202,28 @@ elevation-band flowline per glacier, while there can be several geometrical
 centerlines. The downstream lines are computed the same way for both the
 elevation-band and geometrical flowlines.
 
-    .. figure:: _static/flowchart_flowlines.png
-        :width: 100%
+.. figure:: _static/flowchart_flowlines.png
+   :width: 100%
+   :align: left
 
-        Flowchart illustrating the different ways to compute the flowlines
-        and at which point in the workflow they can be treated equivalently
+   Flowchart illustrating the different ways to compute the flowlines
+   and at which point in the workflow they can be treated equivalently
 
 Both flowline types are available for download and for use in the OGGM
 framework. The plot below has been obtained from the
 `centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_.
 
 
-    .. figure:: _static/eb_vs_cl.png
-        :width: 100%
+.. figure:: _static/eb_vs_cl.png
+   :width: 100%
+   :align: left
 
-        Cross-sections of the two flowline types at the example Hintereisferner
-        with OGGM version 1.4. Note the different lengths. The main flowline in
-        the geometrical centerline case does not reach as high here because
-        other flowlines (tributaries) are higher for this glacier.
+   Cross-sections of the two flowline types at the example Hintereisferner
+   with OGGM version 1.4. Note the different lengths. The main flowline in
+   the geometrical centerline case does not reach as high here because
+   other flowlines (tributaries) are higher for this glacier.
 
+.. _flprocons:
 
 Pros and cons of both methods
 -----------------------------
@@ -241,63 +242,68 @@ Geometrical centerlines
 
 - Pros:
 
-   - Closer to the "true" length of the glacier.
-   - Grid points along the centerlines preserve their geometrical information,
-     i.e. one can compute the exact location of ice thickness change.
-   - It is possibile to have different model parameters for each flowline (e.g.
-     different mass-balance models), although this is comming with its own
-     challenges.
-   - Arguably: better suitability for mass-balance parameterizations taking
-     glacier geometry and exposition into account.
-   - Arguably: better representation of the main glacier flow?
+  - Closer to the "true" length of the glacier.
+  - Grid points along the centerlines preserve their geometrical information,
+    i.e. one can compute the exact location of ice thickness change.
+  - It is possibile to have different model parameters for each flowline (e.g.
+    different mass-balance models), although this is comming with its own
+    challenges.
+  - Arguably: better suitability for mass-balance parameterizations taking
+    glacier geometry and exposition into account.
+  - Arguably: better representation of the main glacier flow?
 
 - Cons:
 
-   - Complex and error prone: considerably more code than the elevation band
-     flowlines.
-   - Less robust: more glaciers are failing in the preprocessing than with
-     the simpler method.
-     When glaciers are badly outlined (or worse, when ice caps are not
-     properly divided), or with bad DEMs, the geometrical flowline
-     can "look" very ugly.
-   - Computationally expensive (more grid points on average, more prone
-     to numerical instabilities).
-   - Complex handling of mass-balance parameters for tributaries at the
-     inversion (leading to multiple temperature sensitivity parameters
-     for large glaciers).
+  - Complex and error prone: considerably more code than the elevation band
+    flowlines.
+  - Less robust: more glaciers are failing in the preprocessing than with
+    the simpler method.
+    When glaciers are badly outlined (or worse, when ice caps are not
+    properly divided), or with bad DEMs, the geometrical flowline
+    can "look" very ugly.
+  - Computationally expensive (more grid points on average, more prone
+    to numerical instabilities).
+  - Complex handling of mass-balance parameters for tributaries at the
+    inversion (leading to multiple temperature sensitivity parameters
+    for large glaciers).
+  - Related: **all "new generation" maas-balance models in OGGM currently
+    handle only a single flowline because of this complexity.**
 
 .. admonition:: **Summary**
 
    **When to use:** when geometry matters, and when length is a important variable.
-   For mountain glaciers (e.g. Alps, Himalayas).
+   For mountain glaciers (e.g. Alps, Himalayas). With the old mass-balance
+   model.
 
    **When not to use:** for ice caps, badly outlined glaciers, very large and
    flat glaciers, for global applications where geometrical details matters less.
+   With the more fancy mass-balance models.
 
 Elevation-band flowlines
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Pros:
 
-   - Robust approach: much less sensitive to DEM and outline errors. This is
-     probably its best attribute, and makes it very interesting for large-scale
-     applications.
-   - Computationally cheap and simple: less error prone.
-   - Arguably: better representation of the main glacier flow?
+  - Robust approach: much less sensitive to DEM and outline errors. This is
+    probably its best attribute, and makes it very interesting for large-scale
+    applications.
+  - Computationally cheap and simple: less error prone.
+  - Simpler mass-balance, because no complexity with the tributaries.
+  - Arguably: better representation of the main glacier flow?
 
 - Cons:
 
-   - Geometry is lost, glaciers cannot be plotted on a map anymore.
-   - Glacier length is not the "true" length.
-   - Somewhat arbitrary: it's not clear why averaging the slopes with subjectively
-     chosen quantiles is a good idea.
-   - Only one flowline.
+  - Geometry is lost, glaciers cannot be plotted on a map anymore.
+  - Glacier length is not the "true" length.
+  - Somewhat arbitrary: it's not clear why averaging the slopes with subjectively
+    chosen quantiles is a good idea.
+  - Only one flowline.
 
 .. admonition:: **Summary**
 
    **When to use:** when "true" geometry does not matter. When doing simulations
    at large scales, and when robustness to bad / uncertain boundary conditions
-   is important.
+   is important. With the new generation mass-balance models.
 
    **When not to use:** when glacier geometry or (absolute) length matters.
 

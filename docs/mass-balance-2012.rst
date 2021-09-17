@@ -121,13 +121,14 @@ The benefit of this approach is best shown with the results of a cross-validatio
 study realized by `Marzeion et al., (2012)`_ and confirmed by OGGM:
 
 .. figure:: _static/mb_crossval_panel.png
-    :width: 100%
+   :width: 100%
+   :align: left
 
-    Benefit of spatially interpolating :math:`t^{*}` instead of :math:`\mu ^{*}` as shown
-    by leave-one-glacier-out cross-validation (N = 255). **Left**: error
-    distribution of the computed mass-balance if determined by the
-    interpolated :math:`t^{*}`. **Right**: error distribution of the mass-balance
-    if determined by interpolation of :math:`\mu ^{*}`.
+   Benefit of spatially interpolating :math:`t^{*}` instead of :math:`\mu ^{*}` as shown
+   by leave-one-glacier-out cross-validation (N = 255). **Left**: error
+   distribution of the computed mass-balance if determined by the
+   interpolated :math:`t^{*}`. **Right**: error distribution of the mass-balance
+   if determined by interpolation of :math:`\mu ^{*}`.
 
 This substantial improvement in model performance is due to several factors:
 

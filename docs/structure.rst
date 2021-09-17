@@ -13,7 +13,7 @@ entities by the ice divides, ensuring that all ice in a glacier basin flows
 towards a single glacier terminus.
 
 .. figure:: https://oggm.org/framework_talk/img/iceland.png
-    :width: 100%
+    :align: left
 
     Glacier centric approach applied to the Eyjafjallajökull ice cap in Iceland.
     Glacier outlines provided by the Randolph Glacier Inventory v6.0.
@@ -26,7 +26,7 @@ Another approach would be to handle entire glacier complexes as one single body 
 complexes as if they were single glacier entities.**
 
 .. admonition:: More details on the glacier centric approach
-   :class: note, dropdown
+    :class: note, dropdown
 
     The advantage of glacier centric models is their adherence to the de-facto standard
     inventory of glacier outlines: the Randolph Glacier Inventory. Any glacier can be selected
@@ -71,7 +71,7 @@ and a list of glacier IDs they’d like to start from. The
 downloading and extracting these data locally:
 
 .. ipython:: python
-   :suppress:
+    :suppress:
 
     from oggm import cfg, utils
     cfg.initialize()
@@ -98,7 +98,7 @@ See also the documentation page for :ref:`shop` for more examples of
 the kind of data that can be added to glacier directories.
 
 .. admonition:: More details: pros and cons of glacier directories
-   :class: note, dropdown
+    :class: note, dropdown
 
     **Pros**:
 
@@ -173,7 +173,7 @@ omitted (for example, users can choose whether a quality check filter
 should be applied to the climate timeseries or not).
 
 .. figure:: _static/flowchart_flowlines.png
-    :width: 100%
+    :align: left
 
     Example flowchart illustrating how OGGM implemented support for
     two kinds of flowline representations for a glacier: centerlines on the

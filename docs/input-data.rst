@@ -5,8 +5,8 @@
 OGGM Shop
 =========
 
-    .. figure:: _static/logos/logo_shop.png
-        :width: 100%
+.. figure:: _static/logos/logo_shop.png
+    :width: 100%
 
 OGGM needs various data files to run. **We rely exclusively on
 open-access data that can be downloaded automatically for the user**. We like
@@ -352,10 +352,11 @@ provides a local topography map for each single glacier in the RGI. It was
 generated with OGGM, and can be used very easily from the OGGM-Shop (visit
 our `tutorials`_ if you are interested!).
 
-    .. figure:: _static/malaspina_topo.png
-        :width: 100%
+.. figure:: _static/malaspina_topo.png
+    :width: 100%
+    :align: left
 
-        Example of the various RGI-TOPO products at Malaspina glacier
+    Example of the various RGI-TOPO products at Malaspina glacier
 
 .. _tutorials: https://oggm.org/tutorials
 
@@ -380,6 +381,7 @@ reparted over the globe:
 
 .. figure:: _static/wgms_rgi_map.png
     :width: 100%
+    :align: left
 
     Map of the RGI regions; the red dots indicate the glacier locations
     and the blue circles the location of the 254 reference WGMS
@@ -461,10 +463,11 @@ The `ITS_LIVE <https://its-live.jpl.nasa.gov/>`_ ice velocity products
 can be downloaded and reprojected to the glacier directory
 (visit our `tutorials`_ if you are interested!).
 
-    .. figure:: _static/malaspina_itslive.png
-        :width: 80%
+.. figure:: _static/malaspina_itslive.png
+    :width: 80%
+    :align: left
 
-        Example of the reprojected ITS_LIVE products at Malaspina glacier
+    Example of the reprojected ITS_LIVE products at Malaspina glacier
 
 The data source used is https://its-live.jpl.nasa.gov/#data
 Currently the only data downloaded is the 120m composite for both
@@ -481,10 +484,11 @@ The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`
 ice thickness products can be downloaded and reprojected to the glacier directory
 (visit our `tutorials`_ if you are interested!).
 
-    .. figure:: _static/malaspina_thick.png
-        :width: 80%
+.. figure:: _static/malaspina_thick.png
+    :width: 80%
+    :align: left
 
-        Example of the reprojected ice thickness products at Malaspina glacier
+    Example of the reprojected ice thickness products at Malaspina glacier
 
 Raw data sources
 ----------------

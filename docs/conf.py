@@ -223,7 +223,7 @@ html_theme_options = {
     "use_issues_button": True,
     "use_edit_page_button": True,
     "path_to_docs": "docs",
-    "home_page_in_toc": True,
+    # "home_page_in_toc": True,
     "toc_title": 'On this page',
     # 'display_version': False,
 }

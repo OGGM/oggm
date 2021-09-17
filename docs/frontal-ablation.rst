@@ -8,8 +8,9 @@ are still in the testing phase and are switched off per default.
 Visit our `turotials <https://oggm.org/tutorials/notebooks/welcome.html>`_
 if you are interested and would like to give them a go.
 
-    .. figure:: https://oggm.org/img/blog/calving_param/calving_ex.png
-        :width: 100%
+.. figure:: https://oggm.org/img/blog/calving_param/calving_ex.png
+    :width: 100%
+    :align: left
 
-        Illustration of the water-depth – calving-rate feedbacks. See the tutorials
-        for more details.
+    Illustration of the water-depth – calving-rate feedbacks. See the tutorials
+    for more details.
