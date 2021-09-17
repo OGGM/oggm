@@ -1,9 +1,11 @@
-Ice dynamics
-============
+.. _ice-dynamics:
 
-The glaciers in OGGM are represented by a depth-integrated flowline
+Ice dynamics flowline model (default)
+=====================================
+
+The standard geometry evolution model in OGGM is a depth-integrated flowline
 model. The equations for the isothermal shallow ice are solved along
-the glacier centerline, computed to represent best the flow of ice
+the glacier centerline(s), computed to represent best the flow of ice
 along the glacier (see for example `antarcticglaciers.org`_ for a general
 introduction about the various types of glacier models).
 

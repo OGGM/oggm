@@ -28,10 +28,6 @@ class MUSCLSuperBeeModel(FlowlineModel):
 
         Parameters
         ----------
-
-        Properties
-        ----------
-        #TODO: document properties
         """
 
         if len(flowlines) > 1:
