@@ -77,6 +77,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       disable_mp=False, params_file=None, elev_bands=False,
                       match_regional_geodetic_mb=False,
                       match_geodetic_mb_per_glacier=False,
+                      evolution_model='fl_sia',
                       centerlines_only=False, override_params=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
@@ -131,6 +132,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     match_geodetic_mb_per_glacier : str
         match the mass-balance estimates at the glacier level
         (currently only 'hugonnet': Hugonnet et al., 2020).
+    evolution_model : str
+        which geometry evolution model to use: `fl_sia` (default),
+        or `massredis` (mass redistribution curve).
     add_consensus : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -169,6 +173,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if match_geodetic_mb_per_glacier and match_geodetic_mb_per_glacier != 'hugonnet':
         raise InvalidParamsError('Currently only `hugonnet` is available for '
                                  'match_geodetic_mb_per_glacier.')
+
+    if evolution_model not in ['fl_sia', 'massredis']:
+        raise InvalidParamsError('evolution_model should be one of '
+                                 "['fl_sia', 'massredis'].")
 
     # Time
     start = time.time()
@@ -560,9 +568,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         except BaseException:
             i += 1
 
+    # Which model?
+    if evolution_model == 'massredis':
+        from oggm.core.flowline import MassRedistributionCurveModel
+        evolution_model = MassRedistributionCurveModel
+    else:
+        from oggm.core.flowline import FluxBasedModel
+        evolution_model = FluxBasedModel
+
     # OK - run
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
+                                 evolution_model=evolution_model,
                                  output_filesuffix='_historical')
 
     # Now compile the output
@@ -663,6 +680,10 @@ def parse_args(args):
                         help='match SMB values to geodetic estimates '
                              '(currently hugonnet: Hugonnet et al., '
                              '2020 only.')
+    parser.add_argument('--evolution-model', type=str, default='fl_sia',
+                        help='which geometry evolution model to use: '
+                             '`fl_sia` (default), or `massredis` (mass '
+                             'redistribution curve).')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -742,6 +763,7 @@ def parse_args(args):
                 add_consensus=args.add_consensus,
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
+                evolution_model=args.evolution_model,
                 )
 
 
