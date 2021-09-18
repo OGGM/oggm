@@ -937,6 +937,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['elev_bands']
         assert kwargs['match_regional_geodetic_mb'] == 'zemp'
         assert kwargs['centerlines_only']
+        assert kwargs['evolution_model'] == 'fl_sia'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -944,10 +945,12 @@ class TestPreproCLI(unittest.TestCase):
                                            '--elev-bands',
                                            '--centerlines-only',
                                            '--match-geodetic-mb-per-glacier', 'hugonnet',
+                                           '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
                                            ])
 
         assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
+        assert kwargs['evolution_model'] == 'massredis'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1202,7 +1205,7 @@ class TestPreproCLI(unittest.TestCase):
             tasks.init_present_time_glacier(gdir)
 
     @pytest.mark.slow
-    def test_geodetic_per_glacier_run(self):
+    def test_geodetic_per_glacier_and_massredis_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1224,6 +1227,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           match_geodetic_mb_per_glacier='hugonnet',
+                          evolution_model='massredis',
                           override_params=params,
                           test_topofile=topof, elev_bands=True)
 
