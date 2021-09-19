@@ -2003,7 +2003,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         width = fl.widths_m.copy()
 
         # FRONTAL ABLATION
-        if self.is_tidewater:
+        if self.do_calving:
             raise NotImplementedError('Frontal ablation not there yet.')
 
         # Redistribute mass if glacier is still there
