@@ -2093,7 +2093,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         # Ok, we really grow then - back to previous state and decide on what to do
         fl.section = section
 
-        if self.advance_method == 0:
+        if (fl.thick[-2] > 0) or (self.advance_method == 0):
             # Do not advance (same as in the melting case but thickening)
             fl.section = utils.clip_min(section + delta_s, 0)
 
