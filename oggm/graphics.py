@@ -19,13 +19,6 @@ except ImportError:
 
 OGGM_CMAPS = dict()
 
-try:
-    # optional python-colorspace dependency for better (HCL-based) colormaps
-    from colorspace import sequential_hcl
-    HAS_HCL_CMAP = True
-except ImportError:
-    HAS_HCL_CMAP = False
-
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
 from oggm.core import gis
@@ -34,22 +27,12 @@ from oggm.core import gis
 log = logging.getLogger(__name__)
 
 
-def set_oggm_cmaps(use_hcl=None):
+def set_oggm_cmaps():
     # Set global colormaps
     global OGGM_CMAPS
-
-    if use_hcl is None:
-        use_hcl = HAS_HCL_CMAP
-
     OGGM_CMAPS['terrain'] = colormap.terrain
-    if HAS_HCL_CMAP and use_hcl:
-        cm_divs = 100  # number of discrete colours from continuous colormaps
-        tcmap = sequential_hcl("Blue-Yellow", rev=True).cmap(cm_divs)
-        OGGM_CMAPS['section_thickness'] = tcmap
-        OGGM_CMAPS['glacier_thickness'] = tcmap
-    else:
-        OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlOrRd')
-        OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
+    OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlGnBu')
+    OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
 
 
 set_oggm_cmaps()

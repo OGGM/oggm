@@ -24,9 +24,9 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - oggm/untested_base:20210221
-          - oggm/untested_base:py36
+          - oggm/untested_base:20210808
           - oggm/untested_base:py37
+          - oggm/untested_base:py39
         include:
           - container: python:3.8-slim
             test-env: minimal
@@ -43,6 +43,7 @@ jobs:
         run: ./ci/run_tests.sh ${{ matrix.test-env }}
       - name: Upload Coverage
         if: ${{ !contains(matrix.container, 'py3') }}
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
@@ -53,6 +54,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     container: python:3-slim
+    continue-on-error: true
     steps:
     - name: Coveralls Finished
       env:

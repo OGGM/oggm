@@ -29,6 +29,7 @@ from oggm.core.climate import historical_delta_method
 from oggm.core.climate import historical_climate_qc
 from oggm.core.climate import local_t_star
 from oggm.core.climate import mu_star_calibration
+from oggm.core.climate import mu_star_calibration_from_geodetic_mb
 from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.climate import apparent_mb_from_any_mb
 from oggm.core.massbalance import fixed_geometry_mass_balance

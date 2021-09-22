@@ -67,6 +67,7 @@ default :math:`A`). This is best shown by this figure from
 
 .. figure:: _static/global_volume_mau2019.png
     :width: 100%
+    :align: left
 
     Global volume estimated as a function of the multiplication factor
     applied to the ice creep parameter A, with five different setups:

@@ -75,10 +75,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None, elev_bands=False,
-                      match_geodetic_mb=False, centerlines_only=False,
+                      match_regional_geodetic_mb=False,
+                      match_geodetic_mb_per_glacier=False,
+                      evolution_model='fl_sia',
+                      centerlines_only=False, override_params=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
-                      logging_level='WORKFLOW', disable_dl_verify=False):
+                      logging_level='WORKFLOW', disable_dl_verify=False,
+                      continue_on_error=True):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -122,9 +126,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     centerlines_only : bool
         compute all flowlines based on the OGGM centerline(s) method instead
         of the OGGM default, which is a mix of elev_bands and centerlines.
-    match_geodetic_mb : str
+    match_regional_geodetic_mb : str
         match the regional mass-balance estimates at the regional level
         ('hugonnet': Hugonnet et al., 2020 or 'zemp': Zemp et al., 2019).
+    match_geodetic_mb_per_glacier : str
+        match the mass-balance estimates at the glacier level
+        (currently only 'hugonnet': Hugonnet et al., 2020).
+    evolution_model : str
+        which geometry evolution model to use: `fl_sia` (default),
+        or `massredis` (mass redistribution curve).
     add_consensus : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -137,6 +147,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the maximum pre-processing level before stopping
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
+    override_params : dict
+        a dict of parameters to override.
     disable_dl_verify : bool
         disable the hash verification of OGGM downloads
     """
@@ -154,6 +166,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     else:
         start_level = 0
 
+    if match_regional_geodetic_mb and match_geodetic_mb_per_glacier:
+        raise InvalidParamsError('match_regional_geodetic_mb incompatible with '
+                                 'match_geodetic_mb_per_glacier!')
+
+    if match_geodetic_mb_per_glacier and match_geodetic_mb_per_glacier != 'hugonnet':
+        raise InvalidParamsError('Currently only `hugonnet` is available for '
+                                 'match_geodetic_mb_per_glacier.')
+
+    if evolution_model not in ['fl_sia', 'massredis']:
+        raise InvalidParamsError('evolution_model should be one of '
+                                 "['fl_sia', 'massredis'].")
+
     # Time
     start = time.time()
 
@@ -164,15 +188,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         log.workflow('OGGM prepro_levels is done! Time needed: '
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
-    # Config Override Params
-    params = {}
-
     # Local paths
+    if override_params is None:
+        override_params = {}
+
     utils.mkdir(working_dir)
-    params['working_dir'] = working_dir
+    override_params['working_dir'] = working_dir
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(file=params_file, params=params,
+    cfg.initialize(file=params_file, params=override_params,
                    logging_level=logging_level,
                    future=True)
 
@@ -184,7 +208,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     cfg.PARAMS['border'] = border
 
     # Set to True for operational runs
-    cfg.PARAMS['continue_on_error'] = True
+    cfg.PARAMS['continue_on_error'] = continue_on_error
 
     # Check for the integrity of the files OGGM downloads at run time
     # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
@@ -442,10 +466,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Climate
     workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+
     if cfg.PARAMS['climate_qc_months'] > 0:
         workflow.execute_entity_task(tasks.historical_climate_qc, gdirs)
-    workflow.execute_entity_task(tasks.local_t_star, gdirs)
-    workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
+
+    if match_geodetic_mb_per_glacier:
+        utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
+        workflow.execute_entity_task(tasks.mu_star_calibration_from_geodetic_mb, gdirs)
+        workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+    else:
+        workflow.execute_entity_task(tasks.local_t_star, gdirs)
+        workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
 
     # Inversion: we match the consensus
     filter = border >= 20
@@ -457,12 +488,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Do we want to match geodetic estimates?
     # This affects only the bias so we can actually do this *after*
     # the inversion, but we really want to take calving into account here
-    if match_geodetic_mb:
+    if match_regional_geodetic_mb:
         opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
                                       'before_match_{}.csv'.format(rgi_reg))
         utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
         workflow.match_regional_geodetic_mb(gdirs, rgi_reg=rgi_reg,
-                                            dataset=match_geodetic_mb)
+                                            dataset=match_regional_geodetic_mb)
 
     # We get ready for modelling
     if border >= 20:
@@ -537,9 +568,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         except BaseException:
             i += 1
 
+    # Which model?
+    if evolution_model == 'massredis':
+        from oggm.core.flowline import MassRedistributionCurveModel
+        evolution_model = MassRedistributionCurveModel
+    else:
+        from oggm.core.flowline import FluxBasedModel
+        evolution_model = FluxBasedModel
+
     # OK - run
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
+                                 evolution_model=evolution_model,
                                  output_filesuffix='_historical')
 
     # Now compile the output
@@ -631,11 +671,19 @@ def parse_args(args):
                              'centerline(s) method instead of the OGGM '
                              'default, which is a mix of elev_bands and '
                              'centerlines.')
-    parser.add_argument('--match-geodetic-mb', type=str, default='',
+    parser.add_argument('--match-regional-geodetic-mb', type=str, default='',
                         help='match regional SMB values to geodetic estimates '
                              '(currently hugonnet: Hugonnet et al., 2020, or '
                              'zemp: Zemp et al, 2019) '
                              'by shifting the SMB residual.')
+    parser.add_argument('--match-geodetic-mb-per-glacier', type=str, default='',
+                        help='match SMB values to geodetic estimates '
+                             '(currently hugonnet: Hugonnet et al., '
+                             '2020 only.')
+    parser.add_argument('--evolution-model', type=str, default='fl_sia',
+                        help='which geometry evolution model to use: '
+                             '`fl_sia` (default), or `massredis` (mass '
+                             'redistribution curve).')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -710,10 +758,12 @@ def parse_args(args):
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level, elev_bands=args.elev_bands,
                 centerlines_only=args.centerlines_only,
-                match_geodetic_mb=args.match_geodetic_mb,
+                match_regional_geodetic_mb=args.match_regional_geodetic_mb,
+                match_geodetic_mb_per_glacier=args.match_geodetic_mb_per_glacier,
                 add_consensus=args.add_consensus,
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
+                evolution_model=args.evolution_model,
                 )
 
 

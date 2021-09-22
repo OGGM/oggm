@@ -73,10 +73,11 @@ users (the ``shared`` folder in your ``$HOME``). The first time you run a
 new glacier, OGGM will first check if the data is available in the ``shared`` folder,
 and if not it will download it for you and the other users.
 
-    .. figure:: _static/hub_envs.png
-        :width: 100%
+.. figure:: _static/hub_envs.png
+    :width: 100%
+    :align: left
 
-        Welcome screen of https://hub.oggm.org
+    Welcome screen of https://hub.oggm.org
 
 When logging in, you can choose between two environments:
 

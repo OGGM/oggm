@@ -22,11 +22,11 @@ The following files are available:
 
 If you use these data, please cite `Maussion et al., 2019 <https://gmd.copernicus.org/articles/12/909/2019/>`_.
 
-    .. figure:: _static/assets_shapes.png
-        :width: 100%
+.. figure:: _static/assets_shapes.png
+    :width: 100%
+    :align: left
 
-
-        Shapefile of OGGM's flowlines and widths for a subset of RGI region 15
+    Shapefile of OGGM's flowlines and widths for a subset of RGI region 15
 
 
 RGI-TOPO
@@ -37,10 +37,11 @@ provides a local topography map for each single glacier in the RGI (currently ve
 It was generated with OGGM, and can be used very easily from the :ref:`shop` (visit
 our :ref:`tutorials` if you want to learn how to use them!).
 
-    .. figure:: _static/malaspina_topo.png
-        :width: 100%
+.. figure:: _static/malaspina_topo.png
+    :width: 100%
+    :align: left
 
-        Example of the various RGI-TOPO products at Malaspina glacier
+    Example of the various RGI-TOPO products at Malaspina glacier
 
 
 Useful data tables

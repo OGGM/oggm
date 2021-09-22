@@ -116,6 +116,14 @@ e.g.
 
 If you need some specific variables, please write on GitHub and we can discuss.
 
+
+
+Which type of flowlines should I use: elevation bands or multiple?
+------------------------------------------------------------------
+
+We have written a documentation chapter about the :ref:`flprocons`.
+
+
 Troubleshooting
 ===============
 

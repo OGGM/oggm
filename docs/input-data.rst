@@ -5,8 +5,8 @@
 OGGM Shop
 =========
 
-    .. figure:: _static/logos/logo_shop.png
-        :width: 100%
+.. figure:: _static/logos/logo_shop.png
+    :width: 100%
 
 OGGM needs various data files to run. **We rely exclusively on
 open-access data that can be downloaded automatically for the user**. We like
@@ -255,6 +255,95 @@ Here is the current list of available configurations at the time of writing (exp
 Note: the additional set-ups might not always have all map sizes available. Please
 get in touch if you have interest in a specific set-up.
 
+Climate data
+------------
+
+Here are the various climate datasets that OGGM handles automatically.
+
+CRU
+~~~
+
+`CRU TS`_
+data provided by the Climatic Research Unit of the University of East Anglia.
+If asked to do so, OGGM will automatically download and unpack the
+latest dataset from the CRU servers.
+
+.. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
+
+.. warning::
+
+    While the downloaded zip files are ~370mb in size, they are ~5.6Gb large
+    after decompression!
+
+The raw, coarse (0.5°) dataset is then downscaled to a higher resolution grid
+(CRU CL v2.0 at 10' resolution) following the anomaly mapping approach
+described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
+this downscaling to add any new information than already available at the
+original resolution, but this allows us to have an elevation-dependent dataset
+based on a presumably better climatology. The monthly anomalies are computed
+following [Harris_et_al_2010]_ : we use standard anomalies for temperature and
+scaled (fractional) anomalies for precipitation.
+
+.. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
+
+ERA5 and CERA-20C
+~~~~~~~~~~~~~~~~~
+
+Since OGGM v1.4, users can also use reanalysis data from the ECMWF, the
+European Centre for Medium-Range Weather Forecasts based in Reading, UK.
+OGGM can use the
+`ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1979-2019, 0.25° resolution) and
+`CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
+datasets as baseline. One can also apply a combination of both, for example
+by applying the CERA-20C anomalies to the reference ERA5 for example
+(useful only in some circumstances).
+
+HISTALP
+~~~~~~~
+
+If required by the user, OGGM can also automatically
+download and use the data from the `HISTALP`_ dataset (available only
+for the European Alps region, more details in [Chimani_et_al_2012]_.
+The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
+However, the data is considered spurious before 1850. Therefore, we
+recommend to use data from 1850 onwards.
+
+.. _HISTALP: http://www.zamg.ac.at/histalp/
+
+.. ipython:: python
+   :suppress:
+
+    fpath = "_code/prepare_climate.py"
+    with open(fpath) as f:
+        code = compile(f.read(), fpath, 'exec')
+        exec(code)
+
+.. ipython:: python
+   :okwarning:
+
+    @savefig plot_temp_ts.png width=100%
+    example_plot_temp_ts()  # the code for these examples is posted below
+
+User-provided climate dataset
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can provide any other dataset to OGGM. See the `HISTALP_oetztal.nc` data
+file in the OGGM `sample-data`_ folder for an example format.
+
+.. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
+
+
+GCM data
+~~~~~~~~
+
+OGGM can also use climate model output to drive the mass-balance model. In
+this case we still rely on gridded observations (e.g. CRU) for the reference
+climatology and apply the GCM anomalies computed from a preselected reference
+period. This method is often called the
+`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
+Visit our online tutorials to see how this can be done
+(`OGGM run with GCM tutorial <https://oggm.org/tutorials/notebooks/run_with_gcm.html>`_).
+
 RGI-TOPO
 --------
 
@@ -263,12 +352,109 @@ provides a local topography map for each single glacier in the RGI. It was
 generated with OGGM, and can be used very easily from the OGGM-Shop (visit
 our `tutorials`_ if you are interested!).
 
-    .. figure:: _static/malaspina_topo.png
-        :width: 100%
+.. figure:: _static/malaspina_topo.png
+    :width: 100%
+    :align: left
 
-        Example of the various RGI-TOPO products at Malaspina glacier
+    Example of the various RGI-TOPO products at Malaspina glacier
 
 .. _tutorials: https://oggm.org/tutorials
+
+Reference mass-balance data
+---------------------------
+
+Traditional in-situ MB data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In-situ mass-balance data are used by OGGM to calibrate and validate the
+first generation mass-balance model (:ref:`mass-balance-2012`).
+We rely on mass-balance observations provided by the
+World Glacier Monitoring Service (`WGMS`_).
+The `Fluctuations of Glaciers (FoG)`_ database contains annual mass-balance
+values for several hundreds of glaciers worldwide. We exclude water-terminating
+glaciers and the time series with less than five years of
+data.
+Since 2017, the WGMS provides a lookup table
+linking the RGI and the WGMS databases. We updated this list for version 6 of
+the RGI, leaving us with 268 mass balance time series. These are not equally
+reparted over the globe:
+
+.. figure:: _static/wgms_rgi_map.png
+    :width: 100%
+    :align: left
+
+    Map of the RGI regions; the red dots indicate the glacier locations
+    and the blue circles the location of the 254 reference WGMS
+    glaciers used by the OGGM calibration. From our `GMD paper`_.
+
+These data are shipped automatically with OGGM. All reference glaciers
+have access to the timeseries through the glacier directory:
+
+.. ipython:: python
+
+    gdir = workflow.init_glacier_directories('RGI60-11.00897',
+                                             from_prepro_level=3,
+                                             prepro_border=10)[0]
+    mb = gdir.get_ref_mb_data()
+    @savefig plot_ref_mbdata.png width=100%
+    mb[['ANNUAL_BALANCE']].plot(title='WGMS data: Hintereisferner');
+
+
+.. _WGMS: https://wgms.ch
+.. _Fluctuations of Glaciers (FoG): https://wgms.ch/data_databaseversions/
+.. _GMD Paper: https://www.geosci-model-dev.net/12/909/2019/
+
+.. _shop-geod:
+
+Geodetic MB data
+~~~~~~~~~~~~~~~~
+
+OGGM ships with a geodetic mass-balance table containing MB information for all
+of the world's glaciers as obtained from `Hugonnet et al., 2021`_.
+
+The original, raw data have been modified in three ways (`code <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb>`_):
+
+- the glaciers in RGI region 12 (Caucasus) had to be manually linked to the product by
+  Hugonnet because of large errors in the RGI outlines. The resulting product
+  used by OGGM in region 12 has large uncertainties.
+- outliers have been filtered as following: all glaciers with an error estimate
+  larger than 3 :math:`\Sigma` at the RGI region level are filtered out
+- all missing data (including outliers) are attributed with the regional average.
+
+You can access the table with:
+
+.. ipython:: python
+
+    from oggm import utils
+    mbdf = utils.get_geodetic_mb_dataframe()
+    mbdf.head()
+
+The data contains the climatic mass-balance (in units meters water-equivalent per year)
+for three reference periods (2000-2010, 2010-2020, 2000-2020):
+
+.. ipython:: python
+
+    mbdf['dmdtda'].loc[mbdf.period=='2000-01-01_2010-01-01'].plot.hist(bins=100, alpha=0.5, label='2000-2010');
+    mbdf['dmdtda'].loc[mbdf.period=='2010-01-01_2020-01-01'].plot.hist(bins=100, alpha=0.5, label='2010-2020');
+    @savefig plot_hugonnet_mbdata.png width=100%
+    plt.xlabel(''); plt.xlim(-3, 3); plt.legend();
+
+Just for fun, here is a comparaison of both products at Hintereisferner:
+
+.. ipython:: python
+
+    sel = mbdf.loc[gdir.rgi_id].set_index('period') * 1000
+    _mb, _err = sel.loc['2000-01-01_2010-01-01'][['dmdtda', 'err_dmdtda']]
+    plt.fill_between([2000, 2010], [_mb-_err, _mb-_err], [_mb+_err, _mb+_err], alpha=0.5, color='C0');
+    plt.plot([2000, 2010], [_mb, _mb], color='C0');
+    _mb, _err = sel.loc['2010-01-01_2020-01-01'][['dmdtda', 'err_dmdtda']]
+    plt.fill_between([2010, 2020], [_mb-_err, _mb-_err], [_mb+_err, _mb+_err], alpha=0.5, color='C1');
+    plt.plot([2010, 2020], [_mb, _mb], color='C1');
+    @savefig plot_hugonnet_mbdata_hef.png width=100%
+    mb[['ANNUAL_BALANCE']].loc[2000:].plot(ax=plt.gca(), title='MB data: Hintereisferner', c='k', legend=False);
+
+.. _Hugonnet et al., 2021: https://www.sedoo.fr/theia-publication-products/?uuid=c428c5b9-df8f-4f86-9b75-e04c778e29b9
+
 
 ITS_LIVE
 --------
@@ -277,10 +463,19 @@ The `ITS_LIVE <https://its-live.jpl.nasa.gov/>`_ ice velocity products
 can be downloaded and reprojected to the glacier directory
 (visit our `tutorials`_ if you are interested!).
 
-    .. figure:: _static/malaspina_itslive.png
-        :width: 80%
+.. figure:: _static/malaspina_itslive.png
+    :width: 80%
+    :align: left
 
-        Example of the reprojected ITS_LIVE products at Malaspina glacier
+    Example of the reprojected ITS_LIVE products at Malaspina glacier
+
+The data source used is https://its-live.jpl.nasa.gov/#data
+Currently the only data downloaded is the 120m composite for both
+(u, v) and their uncertainty. The composite is computed from the
+1985 to 2018 average.
+
+If you want more velocity products, feel free to open a new topic
+on the OGGM issue tracker!
 
 Ice thickness
 -------------
@@ -289,10 +484,11 @@ The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`
 ice thickness products can be downloaded and reprojected to the glacier directory
 (visit our `tutorials`_ if you are interested!).
 
-    .. figure:: _static/malaspina_thick.png
-        :width: 80%
+.. figure:: _static/malaspina_thick.png
+    :width: 80%
+    :align: left
 
-        Example of the reprojected ice thickness products at Malaspina glacier
+    Example of the reprojected ice thickness products at Malaspina glacier
 
 Raw data sources
 ----------------
@@ -468,17 +664,9 @@ reproduce this information
 Climate data
 ~~~~~~~~~~~~
 
-The mass-balance model implemented in OGGM needs monthly time series of temperature and
-precipitation. The current default is to download and use the `CRU TS`_
-data provided by the Climatic Research Unit of the University of East Anglia.
+**‣ CRU**
 
-.. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
-
-
-**‣ CRU (default)**
-
-If not specified otherwise, OGGM will automatically download and unpack the
-latest dataset from the CRU servers. To download them you can use the
+To download CRU data you can use the
 following convenience functions:
 
 .. code-block:: python
@@ -551,44 +739,3 @@ Currently we can process data from the
 `CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
 project (see :py:func:`tasks.process_cesm_data`), and CMIP5/CMIP6
 (:py:func:`tasks.process_cmip_data`).
-
-
-Mass-balance data
-~~~~~~~~~~~~~~~~~
-
-In-situ mass-balance data are used by OGGM to calibrate and validate the
-mass-balance model. We rely on mass-balance observations provided by the
-World Glacier Monitoring Service (`WGMS`_).
-The `Fluctuations of Glaciers (FoG)`_ database contains annual mass-balance
-values for several hundreds of glaciers worldwide. We exclude water-terminating
-glaciers and the time series with less than five years of
-data.
-Since 2017, the WGMS provides a lookup table
-linking the RGI and the WGMS databases. We updated this list for version 6 of
-the RGI, leaving us with 268 mass balance time series. These are not equally
-reparted over the globe:
-
-.. figure:: _static/wgms_rgi_map.png
-    :width: 100%
-
-    Map of the RGI regions; the red dots indicate the glacier locations
-    and the blue circles the location of the 254 reference WGMS
-    glaciers used by the OGGM calibration. From our `GMD paper`_.
-
-These data are shipped automatically with OGGM. All reference glaciers
-have access to the timeseries through the glacier directory:
-
-
-.. ipython:: python
-
-    gdir = workflow.init_glacier_directories('RGI60-11.00897',
-                                             from_prepro_level=3,
-                                             prepro_border=10)[0]
-    mb = gdir.get_ref_mb_data()
-    @savefig plot_ref_mbdata.png width=100%
-    mb[['ANNUAL_BALANCE']].plot(title='WGMS data: Hintereisferner')
-
-
-.. _WGMS: https://wgms.ch
-.. _Fluctuations of Glaciers (FoG): https://wgms.ch/data_databaseversions/
-.. _GMD Paper: https://www.geosci-model-dev.net/12/909/2019/

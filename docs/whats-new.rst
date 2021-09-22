@@ -4,11 +4,57 @@
 Version history
 ===============
 
-v1.5.X (unreleased)
+v1.5.x (unreleased)
 -------------------
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+- Implemented a ``MassRedistributionCurveModel`` under the FlowlineModel
+  interface, which uses the Huss curves to parameterize glacier retreat.
+  There is some parameterisation for advance as well, but a very coarse one
+  (:pull:`1288`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added a new ``mu_star_calibration_from_geodetic_mb`` task which now calibrates
+  each glacier individually from the reference geodetic MB data. This is a rather
+  quick solution for now, but it opens new avenues (:pull:`1286`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added a new ``utils.get_geodetic_mb_dataframe`` which returns the
+  reference geodetic MB data, currently from Hugonnet et al 2021.
+  Also changed the behavior of ``cfg.DATA`` to be shared
+  across processes (:pull:`1285`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
+Bug fixes
+~~~~~~~~~
+
+v1.5.2 (29.08.2021)
+-------------------
+
+Very minor relsease to remove the dependency on the ``python-colorspace`` package.
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+- Removed use and dependency on the ``python-colorspace`` package. Although
+  not very dramatic, this change might change the way your plots look like
+  (:pull:`1284`). Users can specify their own colormaps anyways to get back to
+  the old plots.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
+v1.5.1 (28.08.2021)
+-------------------
+
+This is a minor relase of OGGM, containing mostly bugfixes and a few new
+features.
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+This version should be fully backwards compatible.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -25,15 +71,21 @@ Enhancements
   the MB bias for any selection of glaciers (:pull:`1248`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added functionality to control the area over which the hydrological
-  output is computed (:pull:`1264`).
+  output is computed (:pull:`1264,1276`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-
+- Added a new (wrong) way to compute equilibrium runs based on the average
+  climate (:pull:`1275`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a quite bad bug where monthly runoff data would have very large artifacts
+  (:pull:`1283`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Small bug fix to ensure backwards compatibility of ``gdir.get_filepath('model_run')``.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Various backwards compatibility fixes (mostly xarray).
 
 v1.5.0
 ------
@@ -52,9 +104,8 @@ Breaking changes
 - `prcp_bias` renamed to `prcp_fac` in mass-balance models (:pull:`1211`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - Various name changes (with deprecation cycle, i.e. old code should still
-  work):
-    - ``gdir.get_filepath('model_run')`` renamed to ``gdir.get_filepath('model_geometry')``
-    - ``run_path`` kwarg in ``run_until_and_store`` renamed to ``geom_path``
+  work): ``gdir.get_filepath('model_run')`` renamed to ``gdir.get_filepath('model_geometry')``;
+  ``run_path`` kwarg in ``run_until_and_store`` renamed to ``geom_path``.
 
 
 Enhancements

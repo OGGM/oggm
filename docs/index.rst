@@ -6,8 +6,9 @@ A modular open source glacier model in Python
 future mass-balance, volume and geometry of (almost) any glacier in the world,
 in a fully automated and extensible workflow.
 
-The model accounts for glacier geometry (including contributory branches) and
-includes an explicit ice dynamics module. We rely exclusively on publicly
+The model can account for glacier geometry (including contributory branches) and
+ships with several glacier evolution models, including
+an explicit ice dynamics module. We rely exclusively on publicly
 available data for calibration and validation. **OGGM is modular and
 supports novel modelling workflows**: it LOVES to be remixed and reused!
 
@@ -30,17 +31,17 @@ If you are new to OGGM would like a short introduction, here is a recent
 
 *Slides available* `here <https://oggm.org/framework_talk>`_
 
-Principles
-^^^^^^^^^^
+Overview
+^^^^^^^^
 
-Physical principles implemented in the model and their underlying assumptions.
-For more detailed information, we recommend to read the OGGM
-`description paper <https://www.geosci-model-dev.net/12/909/2019/>`_.
+Core principles and structure of the OGGM modelling framework.
 
 * :doc:`introduction`
+* :doc:`structure`
+* :doc:`preprocessing`
 * :doc:`flowlines`
 * :doc:`mass-balance`
-* :doc:`ice-dynamics`
+* :doc:`geometry-evolution`
 * :doc:`inversion`
 * :doc:`frontal-ablation`
 
@@ -50,9 +51,11 @@ For more detailed information, we recommend to read the OGGM
     :caption: Principles
 
     introduction.rst
+    structure.rst
     flowlines.rst
+    preprocessing.rst
     mass-balance.rst
-    ice-dynamics.rst
+    geometry-evolution.rst
     inversion.rst
     frontal-ablation.rst
 

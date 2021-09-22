@@ -13,8 +13,8 @@ are not trivial to install. The instructions below provide all the required
 details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
-OGGM is fully `tested`_ with Python version 3.6, 3.7 and 3.8 on Linux.
-OGGM doesn't work with Python 2. We do not test OGGM automatically on
+OGGM is fully `tested`_ with Python version 3.7, 3.8 and 3.9 on Linux.
+OGGM does not work with Python 2. We do not test OGGM automatically on
 Mac OSX, but it should probably run fine there as well.
 
 .. warning::
@@ -77,8 +77,6 @@ Other libraries:
 Optional:
     - progressbar2 (displays the download progress)
     - bottleneck (might speed up some xarray operations)
-    - `python-colorspace <https://github.com/retostauffer/python-colorspace>`_
-      (applies HCL-based color palettes to some graphics)
 
 .. _conda-install:
 
@@ -335,7 +333,6 @@ environment from the following ``environment.yml`` file used to work::
         - progressbar2
         - motionless
         - git+https://github.com/fmaussion/salem.git
-        - git+https://github.com/retostauffer/python-colorspace
         - git+https://github.com/OGGM/pytest-mpl
         - git+https://github.com/OGGM/oggm
 
@@ -405,11 +402,10 @@ Install some packages one by one::
 A pinning of the NetCDF4 package to 1.3.1 might be necessary on some systems
 (`related issue <https://github.com/Unidata/netcdf4-python/issues/962>`_).
 
-Finally, install the pytest-mpl OGGM fork, salem and python-colorspace libraries::
+Finally, install the pytest-mpl OGGM fork and salem libraries::
 
     $ pip install git+https://github.com/OGGM/pytest-mpl.git
     $ pip install git+https://github.com/fmaussion/salem.git
-    $ pip install git+https://github.com/retostauffer/python-colorspace.git
 
 Install OGGM and run the tests
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

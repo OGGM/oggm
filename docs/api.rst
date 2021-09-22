@@ -166,6 +166,8 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.copy_to_basedir
     tasks.gdir_to_tar
 
+.. _apiglobaltasks:
+
 Global tasks
 ============
 

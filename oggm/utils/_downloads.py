@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '7c4d9ddb9cd855646f63d66d39324865acbbba0b'
+SAMPLE_DATA_COMMIT = '98f6e299ab60b04cba9eb3be382231e19baf8c9e'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -1311,6 +1311,51 @@ def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
         raise RuntimeError('Could not find file at ' + url)
 
     return tar_base
+
+
+def get_geodetic_mb_dataframe(file_path=None):
+    """Fetches the reference geodetic dataframe for calibration.
+
+    Currently that's the data from Hughonnet et al 2021, corrected for
+    outliers and with void filled. The data preparation script is
+    available at
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
+
+    Parameters
+    ----------
+    file_path : str
+        in case you have your own file to parse (check the format first!)
+
+    Returns
+    -------
+    a DataFrame with the data.
+    """
+
+    # fetch the file online or read custom file
+    if file_path is None:
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        file_path = file_downloader(base_url + file_name)
+
+    # Did we open it yet?
+    if file_path in cfg.DATA:
+        return cfg.DATA[file_path]
+
+    # If not let's go
+    extension = os.path.splitext(file_path)[1]
+    if extension == '.csv':
+        df = pd.read_csv(file_path, index_col=0)
+    elif extension == '.hdf':
+        df = pd.read_hdf(file_path)
+
+    # Check for missing data (old files)
+    if len(df.loc[df['dmdtda'].isnull()]) > 0:
+        raise InvalidParamsError('The reference file you are using has missing '
+                                 'data and is probably outdated (sorry for '
+                                 'that). Delete the file at '
+                                 f'{file_path} and start again.')
+    cfg.DATA[file_path] = df
+    return df
 
 
 def srtm_zone(lon_ex, lat_ex):
