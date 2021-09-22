@@ -499,10 +499,8 @@ class TestStartFromTar(unittest.TestCase):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
-        workflow.execute_entity_task(tasks.define_glacier_region, gdirs)
-
-        # End - compress all
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+        workflow.execute_entity_task([tasks.define_glacier_region, utils.gdir_to_tar],
+                                     gdirs)
 
         # Test - reopen form tar
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True,
@@ -510,9 +508,7 @@ class TestStartFromTar(unittest.TestCase):
         for gdir in gdirs:
             assert gdir.has_file('dem')
             assert not os.path.exists(gdir.dir + '.tar.gz')
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+        workflow.execute_entity_task([tasks.glacier_masks, utils.gdir_to_tar], gdirs)
 
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True)
         for gdir in gdirs:
@@ -524,10 +520,9 @@ class TestStartFromTar(unittest.TestCase):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
-        workflow.execute_entity_task(tasks.define_glacier_region, gdirs)
-
+        workflow.execute_entity_task([tasks.define_glacier_region, utils.gdir_to_tar],
+                                     gdirs)
         # End - compress all
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
         utils.base_dir_to_tar()
 
         # Test - reopen form tar
@@ -536,9 +531,7 @@ class TestStartFromTar(unittest.TestCase):
         for gdir in gdirs:
             assert gdir.has_file('dem')
             assert not os.path.exists(gdir.dir + '.tar.gz')
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs)
+        workflow.execute_entity_task([tasks.glacier_masks, utils.gdir_to_tar], gdirs)
         utils.base_dir_to_tar()
 
         tar_dir = os.path.join(self.testdir, 'new_dir')
@@ -552,14 +545,13 @@ class TestStartFromTar(unittest.TestCase):
     @pytest.mark.slow
     def test_to_and_from_tar_new_dir(self):
 
+        base_dir = os.path.join(self.testdir, 'new_base_dir')
+
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
-        workflow.execute_entity_task(tasks.define_glacier_region, gdirs)
-
-        # End - compress all
-        base_dir = os.path.join(self.testdir, 'new_base_dir')
-        paths = workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
-                                             base_dir=base_dir)
+        paths = workflow.execute_entity_task([
+            tasks.define_glacier_region,
+            (utils.gdir_to_tar, {"base_dir": base_dir})], gdirs)
 
         # Test - reopen form tar after copy
         for p, gdir in zip(paths, gdirs):
@@ -577,15 +569,15 @@ class TestStartFromTar(unittest.TestCase):
 
     def test_to_and_from_tar_string(self):
 
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf)
-        workflow.execute_entity_task(tasks.define_glacier_region, gdirs)
-
-        # End - compress all
         base_dir = os.path.join(self.testdir, 'new_base_dir')
         utils.mkdir(base_dir, reset=True)
-        paths = workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
-                                             base_dir=base_dir, delete=False)
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(self.rgidf)
+        paths = workflow.execute_entity_task([
+            tasks.define_glacier_region,
+            (utils.gdir_to_tar, {"base_dir": base_dir, "delete": False})],
+            gdirs)
 
         # Test - reopen form tar after copy
         new_base_dir = os.path.join(self.testdir, 'newer_base_dir')
