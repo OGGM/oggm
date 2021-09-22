@@ -86,18 +86,27 @@ class _pickle_copier(object):
         self.call_func = func
         self.out_kwargs = kwargs
 
-    def __call__(self, arg):
-        if self.call_func:
-            gdir = arg
-            call_func = self.call_func
-        else:
-            call_func, gdir = arg
+    def _call_internal(self, call_func, gdir, kwargs):
+        # If the function is None, assume gdir is tuple with task function
+        if not call_func:
+            call_func, gdir = gdir
+
+        # Merge main kwargs with per-task kwargs
+        kwargs = _merge_dicts(self.out_kwargs, kwargs)
+
+        # If gdir is a sequence, again assume it's a tuple with per-gdir kwargs.
         if isinstance(gdir, Sequence) and not isinstance(gdir, str):
             gdir, gdir_kwargs = gdir
-            gdir_kwargs = _merge_dicts(self.out_kwargs, gdir_kwargs)
-            return call_func(gdir, **gdir_kwargs)
-        else:
-            return call_func(gdir, **self.out_kwargs)
+            kwargs.update(gdir_kwargs)
+
+        return call_func(gdir, **kwargs)
+
+    def __call__(self, arg):
+        res = None
+        for func in self.call_func:
+            func, kwargs = func
+            res = self._call_internal(func, arg, kwargs)
+        return res
 
 
 def reset_multiprocessing():
@@ -123,28 +132,49 @@ def execute_entity_task(task, gdirs, **kwargs):
 
     Parameters
     ----------
-    task : function
-         the entity task to apply
+    task : function or sequence of functions
+         The entity task(s) to apply.
+         Can be None, in which case each gdir is expected to be a tuple of (task, gdir).
+         When passing a sequence, each item can also optionally be a tuple of (task, dictionary).
+         In this case the dictionary items will be passed to the task as kwargs.
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
-        the glacier directories to process
+        The glacier directories to process.
+        Each individual gdir can optionally be a tuple of (gdir, dictionary).
+        In this case, the values in the dictionary will be passed to the task as
+        keyword arguments for that specific gdir.
+
+    Returns
+    -------
+    List of results from task. Last task if a list of tasks was given.
     """
 
-    if task.__dict__.get('is_global_task', False):
-        raise InvalidWorkflowError('execute_entity_task cannot be used on '
-                                   'global tasks.')
+    # Normalize task into list of tuples for simplicity
+    if not isinstance(task, Sequence):
+        task = [task]
+    tasks = []
+    for t in task:
+        if isinstance(t, tuple):
+            tasks.append(t)
+        else:
+            tasks.append((t, {}))
+
+    # Reject global tasks
+    for t in tasks:
+        if t[0].__dict__.get('is_global_task', False):
+            raise InvalidWorkflowError('execute_entity_task cannot be used on '
+                                       'global tasks.')
 
     # Should be iterable
     gdirs = utils.tolist(gdirs)
     ng = len(gdirs)
     if ng == 0:
-        log.workflow('Called entity task %s on 0 glaciers. Returning...',
-                     task.__name__)
+        log.workflow('Called execute_entity_task on 0 glaciers. Returning...')
         return
 
-    log.workflow('Execute entity task %s on %d glaciers',
-                 task.__name__, ng)
+    log.workflow('Execute entity tasks [%s] on %d glaciers',
+                 ', '.join([t[0].__name__ for t in tasks]), ng)
 
-    pc = _pickle_copier(task, kwargs)
+    pc = _pickle_copier(tasks, kwargs)
 
     if _have_ogmpi:
         if ogmpi.OGGM_MPI_COMM is not None:
