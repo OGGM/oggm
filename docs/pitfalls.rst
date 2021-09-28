@@ -123,6 +123,11 @@ see [Maussion_etal_2019]_ and :ref:`mass-balance`.
    level based on available estimates. See :py:func:`workflow.match_regional_geodetic_mb`
    for more info.
 
+.. admonition:: **New in version 1.5.2!**
+
+   As of v1.5.2, OGGM can now also calibrate the mass-balance model on a glacier
+   per glacier basis. See :ref:`mass-balance-2012-pergla` for more info.
+
 
 References
 ==========

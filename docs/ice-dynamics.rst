@@ -150,17 +150,17 @@ A combination of rectangular, trapezoidal and parabolic shapes.
 
 .. note::
 
-    The default in OGGM is to used mixed flowlines, following these rules:
+   The default in OGGM is to used mixed flowlines, following these rules:
 
-        - **elevation-band flowlines** have a trapezoid bed everywhere, except on the glacier
-          forefront where the bed is parabolic (computed from the valley topography).
-        - **geometrical centerlines** have a parabolic bed shape, with two exceptions:
+   - **elevation-band flowlines** have a trapezoid bed everywhere, except on the glacier
+     forefront where the bed is parabolic (computed from the valley topography).
+   - **geometrical centerlines** have a parabolic bed shape, with two exceptions:
 
-            - if the glacier section touches an ice-divide or a neighboring tributary
-              catchment outline, the bed is considered to be rectangular;
-            - if the parabolic shape parameter :math:`P_s` is below a certain threshold,
-              a trapezoidal shape is used. Indeed, flat parabolas tend to be very
-              sensitive to small changes in :math:`h`, which is undesired.
+     - if the glacier section touches an ice-divide or a neighboring tributary
+       catchment outline, the bed is considered to be rectangular;
+     - if the parabolic shape parameter :math:`P_s` is below a certain threshold,
+       a trapezoidal shape is used. Indeed, flat parabolas tend to be very
+       sensitive to small changes in :math:`h`, which is undesired.
 
 
 Numerics
