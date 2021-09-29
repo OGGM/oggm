@@ -37,7 +37,7 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 ParabolicBedFlowline, MixedBedFlowline,
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
-                                run_from_climate_data)
+                                run_from_climate_data, equilibrium_stop_criterion)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -2707,6 +2707,40 @@ class TestHEF:
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
         np.testing.assert_allclose(ref_len, after_len, atol=200.01)
+
+    @pytest.mark.slow
+    def test_stop_criterion(self, hef_gdir, inversion_params):
+
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        run_random_climate(hef_gdir, y0=1985, nyears=200,
+                           stop_criterion=equilibrium_stop_criterion,
+                           output_filesuffix='_stop', seed=1)
+        run_random_climate(hef_gdir, y0=1985, nyears=200,
+                           output_filesuffix='_nostop', seed=1)
+
+        fp = hef_gdir.get_filepath('model_diagnostics', filesuffix='_stop')
+        with xr.open_dataset(fp) as ds:
+            ds_stop = ds.load()
+        fp = hef_gdir.get_filepath('model_diagnostics', filesuffix='_nostop')
+        with xr.open_dataset(fp) as ds:
+            ds_nostop = ds.load()
+
+        assert ds_stop.volume_m3.isnull().sum() > 100
+        assert ds_nostop.volume_m3.isnull().sum() == 0
+
+        ds_stop = ds_stop.volume_m3.isel(time=~ds_stop.volume_m3.isnull())
+        ds_nostop = ds_nostop.volume_m3
+        assert_allclose(ds_stop.isel(time=-1), ds_nostop.isel(time=-1), rtol=0.2)
+
+        if True:
+            ds_nostop.plot(label='NoStop')
+            ds_stop.plot(label='Stop')
+            plt.legend()
+            plt.show()
 
     @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
