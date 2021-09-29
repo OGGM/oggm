@@ -2736,7 +2736,7 @@ class TestHEF:
         ds_nostop = ds_nostop.volume_m3
         assert_allclose(ds_stop.isel(time=-1), ds_nostop.isel(time=-1), rtol=0.2)
 
-        if True:
+        if do_plot:
             ds_nostop.plot(label='NoStop')
             ds_stop.plot(label='Stop')
             plt.legend()

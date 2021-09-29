@@ -902,7 +902,7 @@ class FlowlineModel(object):
             stop (True/False), new_state = stop_criterion(model, previous_state)
 
             where previous_state can be None, or anything else (very likely a
-            container of some sort, e.g. a dict.
+            container of some sort, e.g. a dict.)
 
         Returns
         -------
