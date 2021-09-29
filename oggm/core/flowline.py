@@ -865,7 +865,8 @@ class FlowlineModel(object):
                             run_path=None,
                             geom_path=None,
                             diag_path=None,
-                            store_monthly_step=None):
+                            store_monthly_step=None,
+                            stop_criterion=None):
         """Runs the model and returns intermediate steps in xarray datasets.
 
         This function repeatedly calls FlowlineModel.run_until for either
@@ -893,6 +894,15 @@ class FlowlineModel(object):
             If True (False)  model diagnostics will be stored monthly (yearly).
             If unspecified, we follow the update of the MB model, which
             defaults to yearly (see __init__).
+        stop_criterion : func
+            a function evaluating the model state (and possibly evolution over
+            time), and deciding when to stop the simulation. Its signature
+            should look like:
+
+            stop (True/False), new_state = stop_criterion(model, previous_state)
+
+            where previous_state can be None, or anything else (very likely a
+            container of some sort, e.g. a dict.)
 
         Returns
         -------
@@ -1042,6 +1052,7 @@ class FlowlineModel(object):
 
         # Run
         j = 0
+        prev_state = None  # for the stopping criterion
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
             # Model run
             self.run_until(yr)
@@ -1082,6 +1093,12 @@ class FlowlineModel(object):
                     if ti is None:
                         ti = self.fls[-1].terminus_index
                     diag_ds[vn].data[i] = self.fls[-1].thick[ti - gi]
+
+            # Decide if we continue
+            if stop_criterion is not None:
+                stop, prev_state = stop_criterion(self, prev_state)
+                if stop:
+                    break
 
         # to datasets
         geom_ds = None
@@ -2521,7 +2538,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
                        init_model_fls=None, store_monthly_step=False,
                        store_model_geometry=None, water_level=None,
-                       evolution_model=FluxBasedModel,
+                       evolution_model=FluxBasedModel, stop_criterion=None,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -2559,6 +2576,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         - other uncertainties
         The default is to take the water level obtained from the ice
         thickness inversion.
+    stop_criterion : func
+        a function which decides on when to stop the simulation. See
+        `run_until_and_store` documentation for more information.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
      """
@@ -2630,7 +2650,8 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         model.run_until_and_store(ye,
                                   geom_path=geom_path,
                                   diag_path=diag_path,
-                                  store_monthly_step=store_monthly_step)
+                                  store_monthly_step=store_monthly_step,
+                                  stop_criterion=stop_criterion)
 
     return model
 
@@ -3318,6 +3339,118 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # Append the output to the existing diagnostics
     fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
     ods.to_netcdf(fpath, mode='a')
+
+
+def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
+    """Stop the simulation when the glacier volume is zero for a given period
+
+    To be passed as kwarg to `run_until_and_store`.
+
+    Parameters
+    ----------
+    model : the model class
+    state : a dict
+    n_zero : number of 0 volume years
+    n_years : number of years to consider
+
+    Returns
+    -------
+    stop (True/False), new_state
+    """
+
+    if state is None:
+        # OK first call
+        state = {}
+
+    if 'was_zero' not in state:
+        # Maybe the state is from another criteria
+        state['was_zero'] = []
+
+    if model.yr != int(model.yr):
+        # We consider only full model years
+        return False, state
+
+    if model.volume_m3 == 0:
+        if len(state['was_zero']) < n_years:
+            return False, state
+        if np.sum(state['was_zero'][-n_years:]) >= n_zero - 1:
+            return True, state
+        else:
+            state['was_zero'] = np.append(state['was_zero'], [True])
+    else:
+        state['was_zero'] = np.append(state['was_zero'], [False])
+
+    return False, state
+
+
+def spec_mb_stop_criterion(model, state, spec_mb_threshold=100, n_years=20):
+    """Stop the simulation when the specific MB is close to zero for a given period.
+
+    To be passed as kwarg to `run_until_and_store`.
+
+    Parameters
+    ----------
+    model : the model class
+    state : a dict
+    spec_mb_threshold : the specific MB threshold (in mm w.e. per year)
+    n_years : number of years to consider
+
+    Returns
+    -------
+    stop (True/False), new_state
+    """
+
+    if state is None:
+        # OK first call
+        state = {}
+
+    if 'spec_mb' not in state:
+        # Maybe the state is from another criteria
+        state['spec_mb'] = []
+
+    if model.yr != int(model.yr):
+        # We consider only full model years
+        return False, state
+
+    spec_mb = model.mb_model.get_specific_mb(fls=model.fls, year=model.yr)
+    state['spec_mb'] = np.append(state['spec_mb'], [spec_mb])
+
+    if len(state['spec_mb']) < n_years:
+        return False, state
+
+    mbavg = np.mean(state['spec_mb'][-n_years:])
+    if abs(mbavg) <= spec_mb_threshold:
+        return True, state
+    else:
+        return False, state
+
+
+def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_years=20):
+    """Stop the simulation when of og spec_mb and zero_volume criteria are met.
+
+    To be passed as kwarg to `run_until_and_store`.
+
+    Parameters
+    ----------
+    model : the model class
+    state : a dict
+    spec_mb_threshold : the specific MB threshold (in mm w.e. per year)
+    n_zero : number of 0 volume years
+    n_years : number of years to consider
+
+    Returns
+    -------
+    stop (True/False), new_state
+    """
+
+    if state is None:
+        # OK first call
+        state = {}
+    s1, state = zero_glacier_stop_criterion(model, state, n_years=n_years,
+                                            n_zero=n_zero)
+    s2, state = spec_mb_stop_criterion(model, state, n_years=n_years,
+                                       spec_mb_threshold=spec_mb_threshold)
+    return s1 or s2, state
 
 
 def merge_to_one_glacier(main, tribs, filename='climate_historical',

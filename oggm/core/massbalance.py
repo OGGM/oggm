@@ -1330,7 +1330,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         mbs = []
         widths = []
-        for i, (fl, mb_mod) in enumerate(zip(self.fls, self.flowline_mb_models)):
+        for i, (fl, mb_mod) in enumerate(zip(fls, self.flowline_mb_models)):
             _widths = fl.widths
             try:
                 # For rect and parabola don't compute spec mb

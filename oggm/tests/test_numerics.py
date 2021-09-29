@@ -1241,6 +1241,72 @@ class TestIdealisedCases(unittest.TestCase):
             plt.tight_layout()
             plt.show()
 
+    @pytest.mark.slow
+    def test_stop_criterions(self):
+
+        fls = dummy_constant_bed()
+        mb = LinearMassBalance(2600.)
+
+        from oggm.core.flowline import FluxBasedModel, MassRedistributionCurveModel
+        spinup = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        spinup.run_until(500)
+
+        mb = LinearMassBalance(3400.)
+        fl_model = FluxBasedModel(spinup.fls, mb_model=mb, y0=0.)
+        dh_model = MassRedistributionCurveModel(spinup.fls, mb_model=mb, y0=0)
+
+        from oggm.core.flowline import zero_glacier_stop_criterion
+        _, fl_ds = fl_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
+        _, dh_ds = dh_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
+
+        assert fl_ds.volume_m3.isnull().sum() > 800
+        assert dh_ds.volume_m3.isnull().sum() > 450
+
+        fl_ds = fl_ds.volume_m3.isel(time=~fl_ds.volume_m3.isnull())
+        dh_ds = dh_ds.volume_m3.isel(time=~dh_ds.volume_m3.isnull())
+
+        assert fl_ds.isel(time=-5) == 0
+        assert dh_ds.isel(time=-5) == 0
+        assert fl_ds.isel(time=-6) > 0
+        assert dh_ds.isel(time=-6) > 0
+
+        if do_plot:
+            fl_ds.volume_m3.plot(label='Flowline')
+            dh_ds.volume_m3.plot(label='MassRedis')
+            plt.legend()
+            plt.show()
+
+        mb = LinearMassBalance(2800.)
+        fl_model = FluxBasedModel(spinup.fls, mb_model=mb, y0=0.)
+        dh_model = MassRedistributionCurveModel(spinup.fls, mb_model=mb, y0=0)
+
+        from oggm.core.flowline import spec_mb_stop_criterion
+        _, fl_ds = fl_model.run_until_and_store(1000, stop_criterion=spec_mb_stop_criterion)
+        _, dh_ds = dh_model.run_until_and_store(1000, stop_criterion=spec_mb_stop_criterion)
+
+        _, fl_ds_ns = fl_model.run_until_and_store(800)
+        _, dh_ds_ns = dh_model.run_until_and_store(800)
+
+        assert fl_ds.volume_m3.isnull().sum() > 600
+        assert dh_ds.volume_m3.isnull().sum() > 600
+
+        fl_ds = fl_ds.volume_m3.isel(time=~fl_ds.volume_m3.isnull())
+        dh_ds = dh_ds.volume_m3.isel(time=~dh_ds.volume_m3.isnull())
+
+        fl_ds_ns = fl_ds_ns.volume_m3
+        dh_ds_ns = dh_ds_ns.volume_m3
+
+        assert_allclose(fl_ds.isel(time=-1), fl_ds_ns.isel(time=-1), rtol=0.07)
+        assert_allclose(dh_ds.isel(time=-1), dh_ds_ns.isel(time=-1), rtol=0.12)
+
+        if do_plot:
+            fl_ds.volume_m3.plot(label='Flowline', color='C0', linewidth=5)
+            fl_ds_ns.volume_m3.plot(label='Flowline - cont', color='C0')
+            dh_ds.volume_m3.plot(label='MassRedis', color='C1', linewidth=5)
+            dh_ds_ns.volume_m3.plot(label='MassRedis - cont', color='C1')
+            plt.legend()
+            plt.show()
+
 
 class TestFluxGate(unittest.TestCase):
 
