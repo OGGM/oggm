@@ -200,6 +200,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                    logging_level=logging_level,
                    future=True)
 
+    if match_geodetic_mb_per_glacier and (cfg.PARAMS['hydro_month_nh'] != 1 or
+                                          cfg.PARAMS['hydro_month_sh'] != 1):
+        raise InvalidParamsError('We recommend to set hydro_month_nh and sh '
+                                 'to 1 for the geodetic MB calibration per '
+                                 'glacier.')
+
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = not disable_mp
 

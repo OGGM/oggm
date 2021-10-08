@@ -36,7 +36,8 @@ _brentq_xtol = 2e-12
 
 # Climate relevant params
 MB_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
-             'temp_melt', 'prcp_scaling_factor', 'climate_qc_months']
+             'temp_melt', 'prcp_scaling_factor', 'climate_qc_months',
+             'hydro_month_nh', 'hydro_month_sh']
 
 
 @entity_task(log, writes=['climate_historical'])
@@ -1303,6 +1304,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
                                          ref_period='',
                                          step_height_for_corr=25,
                                          max_height_change_for_corr=3000,
+                                         ignore_hydro_months=False,
                                          min_mu_star=None,
                                          max_mu_star=None):
     """Compute the flowlines' mu* from the reference geodetic MB data.
@@ -1322,6 +1324,8 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
         the same format but can be any date.
+    ignore_hydro_months: bool, optional
+        do not raise and error if we are not working on calendar years.
     min_mu_star: bool, optional
         defaults to cfg.PARAMS['min_mu_star']
     max_mu_star: bool, optional
@@ -1333,6 +1337,15 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         min_mu_star = cfg.PARAMS['min_mu_star']
     if max_mu_star is None:
         max_mu_star = cfg.PARAMS['max_mu_star']
+
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    if sm != 1 and not ignore_hydro_months:
+        raise InvalidParamsError('mu_star_calibration_from_geodetic_mb makes '
+                                 'more sense when applied on calendar years '
+                                 "(PARAMS['hydro_month_nh']=1 and "
+                                 "`PARAMS['hydro_month_sh']=1). If you want "
+                                 "to ignore this error, set "
+                                 "ignore_hydro_months to True")
 
     if max_mu_star > 1000:
         raise InvalidParamsError('You seem to have set a very high '
@@ -1346,10 +1359,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
-    if len(fls) > 1:
-        raise InvalidWorkflowError('mu_star_calibration_from_geodetic_mb '
-                                   'currently only works with single '
-                                   'flowlines.')
+
     # If someone called another task before we need to reset this
     for fl in fls:
         fl.mu_star_is_valid = False
@@ -1483,7 +1493,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = 0
-    df['mu_star_per_flowline'] = [mu_star]
+    df['mu_star_per_flowline'] = [mu_star] * len(fls)
     df['mu_star_glacierwide'] = mu_star
     df['mu_star_flowline_avg'] = mu_star
     df['mu_star_allsame'] = True
@@ -1609,6 +1619,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
                                           fls=fls, fl_id=fl_id)
         mbz = mbz / len(mb_years)
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual)
+        if (fl_id < len(fls) and (fl.flux[-1]) < -1e3):
+            log.warning('({}) a tributary has a stronly negative flux. '
+                        'Inversion works but is physically quite '
+                        'questionable.'.format(gdir.rgi_id))
 
     # Check and write
     aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
