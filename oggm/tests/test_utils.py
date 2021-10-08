@@ -1213,7 +1213,8 @@ class TestPreproCLI(unittest.TestCase):
         params = {'max_mu_star': 600,
                   'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'hydro_month_nh': 1,
-                  'hydro_month_sh': 1,}
+                  'hydro_month_sh': 1,
+                  }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
 

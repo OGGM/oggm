@@ -1620,7 +1620,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         mbz = mbz / len(mb_years)
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual)
         if (fl_id < len(fls) and (fl.flux[-1]) < -1e3):
-            log.warning('({}) a tributary has a stronly negative flux. '
+            log.warning('({}) a tributary has a strongly negative flux. '
                         'Inversion works but is physically quite '
                         'questionable.'.format(gdir.rgi_id))
 
