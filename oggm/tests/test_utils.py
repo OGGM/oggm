@@ -1211,7 +1211,10 @@ class TestPreproCLI(unittest.TestCase):
         np.random.seed(0)
 
         params = {'max_mu_star': 600,
-                  'geodetic_mb_period': '2000-01-01_2010-01-01'}
+                  'geodetic_mb_period': '2000-01-01_2010-01-01',
+                  'hydro_month_nh': 1,
+                  'hydro_month_sh': 1,
+                  }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
 
@@ -1288,6 +1291,14 @@ class TestPreproCLI(unittest.TestCase):
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_historical')) as ds:
+            ds = ds.load()
+
+        # Some time stuff
+        np.testing.assert_allclose(ds.hydro_year, ds.calendar_year)
+        np.testing.assert_allclose(ds.hydro_month, ds.calendar_month)
 
     def test_start_from_prepro(self):
 

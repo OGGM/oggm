@@ -121,6 +121,10 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                 min_periods=1).reduce(roll_func)
 
         ts_tmp_sel = temp.sel(time=slice(*year_range))
+        if len(ts_tmp_sel.time) != len(ds_ref.time):
+            raise InvalidParamsError('The reference climate period and the '
+                                     'GCM period after window selection do '
+                                     'not match.')
         ts_tmp_avg = ts_tmp_sel.groupby('time.month').mean(dim='time')
         ts_tmp = temp.groupby('time.month') - ts_tmp_avg
         # of precip -- scaled anomalies
