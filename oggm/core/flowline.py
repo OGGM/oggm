@@ -863,7 +863,7 @@ class FlowlineModel(object):
 
     def run_until_and_store(self, y1,
                             run_path=None,
-                            geom_path=None,
+                            geom_path=False,
                             diag_path=None,
                             store_monthly_step=None,
                             stop_criterion=None):
@@ -884,12 +884,14 @@ class FlowlineModel(object):
             dataset contains all necessary info to retrieve the full glacier
             geometry after the run,  with a FileModel. This is stored
             on an annual basis.
-            The default (None) will not store the dataset to disk but return
-            the dataset to the user after execution.
-            Set this to False to prevent creating this dataset altogether
+            The default (False) prevents creating this dataset altogether
             (for optimisation).
+            Set this to None to not store the dataset to disk but return
+            the dataset to the user after execution.
         diag_path : str
-            Path and filename where to store the model diagnostics dataset
+            Path and filename where to store the model diagnostics dataset.
+            The default (None ) is to not store the dataset to disk but return
+            the dataset to the user after execution.
         store_monthly_step : Bool
             If True (False)  model diagnostics will be stored monthly (yearly).
             If unspecified, we follow the update of the MB model, which
