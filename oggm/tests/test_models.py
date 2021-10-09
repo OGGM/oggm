@@ -1537,7 +1537,8 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
+        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True,
+                                                geom_path=None)
         ds = ds[0]
 
         # Check attrs
@@ -1680,7 +1681,7 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500)
+        ds, ds_diag = model.run_until_and_store(500, geom_path=None)
         ds = ds[0]
 
         fls = dummy_constant_bed()
