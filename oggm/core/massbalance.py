@@ -878,7 +878,8 @@ class RandomMassBalance(MassBalanceModel):
     def __init__(self, gdir, mu_star=None, bias=None,
                  y0=None, halfsize=15, seed=None,
                  filename='climate_historical', input_filesuffix='',
-                 all_years=False, unique_samples=False, **kwargs):
+                 all_years=False, unique_samples=False, prescribe_years=None,
+                 **kwargs):
         """Initialize.
 
         Parameters
@@ -913,6 +914,11 @@ class RandomMassBalance(MassBalanceModel):
             once per random climate period-length
             if false, every model year will be chosen from the random climate
             period with the same probability
+        prescribe_years : pandas Series
+            instead of random samples, take a series of (i, y) pairs where
+            (i) is the simulation year index and (y) is the year to pick in the
+            original timeseries. Overrides `y0`, `halfsize`, `all_years`,
+            `unique_samples` and `seed`.
         **kwargs:
             kyeword arguments to pass to the PastMassBalance model
         """
@@ -936,8 +942,12 @@ class RandomMassBalance(MassBalanceModel):
         self.ny = len(self.years)
         self.hemisphere = gdir.hemisphere
 
-        # RandomState
-        self.rng = np.random.RandomState(seed)
+        self.prescribe_years = prescribe_years
+
+        if self.prescribe_years is None:
+            self.rng = np.random.RandomState(seed)
+        else:
+            self.rng = None
         self._state_yr = dict()
 
         # Sampling without replacement
@@ -985,22 +995,25 @@ class RandomMassBalance(MassBalanceModel):
         """For a given year, get the random year associated to it."""
         year = int(year)
         if year not in self._state_yr:
-            if self.unique_samples:
-                # --- Sampling without replacement ---
-                if self.sampling_years.size == 0:
-                    # refill sample pool when all years were picked once
-                    self.sampling_years = self.years
-                # choose one year which was not used in the current period
-                _sample = self.rng.choice(self.sampling_years)
-                # write chosen year to dictionary
-                self._state_yr[year] = _sample
-                # update sample pool: remove the chosen year from it
-                self.sampling_years = np.delete(
-                    self.sampling_years,
-                    np.where(self.sampling_years == _sample))
+            if self.prescribe_years is not None:
+                self._state_yr[year] = self.prescribe_years.loc[year]
             else:
-                # --- Sampling with replacement ---
-                self._state_yr[year] = self.rng.randint(*self.yr_range)
+                if self.unique_samples:
+                    # --- Sampling without replacement ---
+                    if self.sampling_years.size == 0:
+                        # refill sample pool when all years were picked once
+                        self.sampling_years = self.years
+                    # choose one year which was not used in the current period
+                    _sample = self.rng.choice(self.sampling_years)
+                    # write chosen year to dictionary
+                    self._state_yr[year] = _sample
+                    # update sample pool: remove the chosen year from it
+                    self.sampling_years = np.delete(
+                        self.sampling_years,
+                        np.where(self.sampling_years == _sample))
+                else:
+                    # --- Sampling with replacement ---
+                    self._state_yr[year] = self.rng.randint(*self.yr_range)
         return self._state_yr[year]
 
     def get_monthly_mb(self, heights, year=None, **kwargs):
