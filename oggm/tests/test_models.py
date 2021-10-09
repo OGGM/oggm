@@ -744,7 +744,7 @@ class TestMassBalanceModels:
                                     weights=w))
             mb_ts2.append(np.average(p_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
                                      weights=w))
-        np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2))
+        np.testing.assert_allclose(mb_ts, mb_ts2)
 
     def test_random_mb_unique(self, hef_gdir):
 
