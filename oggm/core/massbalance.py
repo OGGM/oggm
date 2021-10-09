@@ -931,23 +931,26 @@ class RandomMassBalance(MassBalanceModel):
                                      **kwargs)
 
         # Climate period
-        if all_years:
-            self.years = self.mbmod.years
-        else:
-            if y0 is None:
-                df = gdir.read_json('local_mustar')
-                y0 = df['t_star']
-            self.years = np.arange(y0-halfsize, y0+halfsize+1)
-        self.yr_range = (self.years[0], self.years[-1]+1)
-        self.ny = len(self.years)
-        self.hemisphere = gdir.hemisphere
-
         self.prescribe_years = prescribe_years
 
         if self.prescribe_years is None:
+            # Normal stuff
             self.rng = np.random.RandomState(seed)
+            if all_years:
+                self.years = self.mbmod.years
+            else:
+                if y0 is None:
+                    df = gdir.read_json('local_mustar')
+                    y0 = df['t_star']
+                self.years = np.arange(y0 - halfsize, y0 + halfsize + 1)
         else:
             self.rng = None
+            self.years = self.prescribe_years.index
+
+        self.yr_range = (self.years[0], self.years[-1] + 1)
+        self.ny = len(self.years)
+        self.hemisphere = gdir.hemisphere
+
         self._state_yr = dict()
 
         # Sampling without replacement
