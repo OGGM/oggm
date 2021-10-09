@@ -13,6 +13,9 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Added a ``prescribe_years`` kwarg to ``RandomMassBalance`` to control from
+  outside which years are picked (:pull:`1310`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added a ``stop_criterion`` kwarg to ``run_until_and_store``, so that
   users can specify when a simulation has to stop based on their chosen
   criteria (:pull:`1303`).

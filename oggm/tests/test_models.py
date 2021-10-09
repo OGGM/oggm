@@ -732,6 +732,20 @@ class TestMassBalanceModels:
         ref_mb = ref_mb / 31
         assert utils.rmsd(ref_mb, my_mb) < 0.1
 
+        # Prescribe MB
+        pdf = pd.Series(index=mb_mod._state_yr.keys(), data=mb_mod._state_yr.values())
+        p_mod = massbalance.RandomMassBalance(gdir, prescribe_years=pdf)
+
+        mb_ts = []
+        mb_ts2 = []
+        yrs = np.arange(1973, 2004, 1)
+        for yr in yrs:
+            mb_ts.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
+                                    weights=w))
+            mb_ts2.append(np.average(p_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
+                                     weights=w))
+        np.testing.assert_allclose(mb_ts, mb_ts2)
+
     def test_random_mb_unique(self, hef_gdir):
 
         gdir = hef_gdir
