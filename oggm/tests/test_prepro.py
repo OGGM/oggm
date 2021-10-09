@@ -3661,6 +3661,66 @@ class TestGCMClimate(unittest.TestCase):
             # N more than 30%? (silly test)
             np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
 
+    @pytest.mark.slow
+    def test_process_cmip_no_hydromonths(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        tasks.process_cru_data(gdir)
+
+        ci = gdir.get_climate_info()
+        self.assertEqual(ci['baseline_hydro_yr_0'], 1901)
+        self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
+
+        ft = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        fp = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        gcm_climate.process_cmip_data(gdir, fpath_temp=ft,
+                                      fpath_precip=fp,
+                                      filesuffix='_CCSM4')
+
+        fh = gdir.get_filepath('climate_historical')
+        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+            # Let's do some basic checks
+            assert cru['time.year'][0] == 1901
+            assert cru['time.year'][-1] == 2014
+            assert cru['time.month'][0] == 1
+            assert cru['time.month'][-1] == 12
+            assert cmip['time.year'][0] == 1870
+            assert cmip['time.year'][-1] == 2100
+            assert cmip['time.month'][0] == 1
+            assert cmip['time.month'][-1] == 12
+
+            scru = cru.sel(time=slice('1961', '1990'))
+            scesm = cmip.load().isel(time=((cmip['time.year'] >= 1961) &
+                                           (cmip['time.year'] <= 1990)))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(scru.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+
+            # Here also std dev! But its not perfect because std_dev
+            # is preserved over 31 years
+            _scru = scru.groupby('time.month').std(dim='time')
+            _scesm = scesm.groupby('time.month').std(dim='time')
+            assert np.allclose(_scru.temp, _scesm.temp, rtol=1e-2)
+
+            # And also the annual cycle
+            scru = scru.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
     def test_process_lmr(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
