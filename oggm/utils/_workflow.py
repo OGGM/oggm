@@ -829,29 +829,31 @@ class compile_to_netcdf(object):
 
             gdirs = tolist(gdirs)
 
-            hemisphere = [gd.hemisphere for gd in gdirs]
-            if len(np.unique(hemisphere)) == 2:
-                if path is not True:
-                    raise InvalidParamsError('With glaciers from both '
-                                             'hemispheres, set `path=True`.')
-                self.log.workflow('compile_*: you gave me a list of gdirs from '
-                                  'both hemispheres. I am going to write two '
-                                  'files out of it with _sh and _nh suffixes.')
-                _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
-                _compile_to_netcdf(_gdirs,
-                                   input_filesuffix=input_filesuffix,
-                                   output_filesuffix=output_filesuffix + '_sh',
-                                   path=True,
-                                   tmp_file_size=tmp_file_size,
-                                   **kwargs)
-                _gdirs = [gd for gd in gdirs if gd.hemisphere == 'nh']
-                _compile_to_netcdf(_gdirs,
-                                   input_filesuffix=input_filesuffix,
-                                   output_filesuffix=output_filesuffix + '_nh',
-                                   path=True,
-                                   tmp_file_size=tmp_file_size,
-                                   **kwargs)
-                return
+            if cfg.PARAMS['hydro_month_nh'] != cfg.PARAMS['hydro_month_sh']:
+                # Check some stuff
+                hemisphere = [gd.hemisphere for gd in gdirs]
+                if len(np.unique(hemisphere)) == 2:
+                    if path is not True:
+                        raise InvalidParamsError('With glaciers from both '
+                                                 'hemispheres, set `path=True`.')
+                    self.log.workflow('compile_*: you gave me a list of gdirs from '
+                                      'both hemispheres. I am going to write two '
+                                      'files out of it with _sh and _nh suffixes.')
+                    _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
+                    _compile_to_netcdf(_gdirs,
+                                       input_filesuffix=input_filesuffix,
+                                       output_filesuffix=output_filesuffix + '_sh',
+                                       path=True,
+                                       tmp_file_size=tmp_file_size,
+                                       **kwargs)
+                    _gdirs = [gd for gd in gdirs if gd.hemisphere == 'nh']
+                    _compile_to_netcdf(_gdirs,
+                                       input_filesuffix=input_filesuffix,
+                                       output_filesuffix=output_filesuffix + '_nh',
+                                       path=True,
+                                       tmp_file_size=tmp_file_size,
+                                       **kwargs)
+                    return
 
             task_name = task_func.__name__
             output_base = task_name.replace('compile_', '')
