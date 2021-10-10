@@ -2743,7 +2743,7 @@ class TestHEF:
         with xr.open_dataset(fp) as ds:
             ds_nostop = ds.load()
 
-        assert ds_stop.volume_m3.isnull().sum() > 100
+        assert ds_stop.volume_m3.isnull().sum() > 50
         assert ds_nostop.volume_m3.isnull().sum() == 0
 
         ds_stop = ds_stop.volume_m3.isel(time=~ds_stop.volume_m3.isnull())

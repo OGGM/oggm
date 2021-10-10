@@ -3383,7 +3383,7 @@ def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
     return False, state
 
 
-def spec_mb_stop_criterion(model, state, spec_mb_threshold=100, n_years=20):
+def spec_mb_stop_criterion(model, state, spec_mb_threshold=50, n_years=60):
     """Stop the simulation when the specific MB is close to zero for a given period.
 
     To be passed as kwarg to `run_until_and_store`.
@@ -3407,25 +3407,35 @@ def spec_mb_stop_criterion(model, state, spec_mb_threshold=100, n_years=20):
     if 'spec_mb' not in state:
         # Maybe the state is from another criteria
         state['spec_mb'] = []
+        state['volume_m3'] = []
 
     if model.yr != int(model.yr):
         # We consider only full model years
         return False, state
 
-    spec_mb = model.mb_model.get_specific_mb(fls=model.fls, year=model.yr)
+    area = model.area_m2
+    volume = model.volume_m3
+    if area < 1 or len(state['volume_m3']) == 0:
+        spec_mb = np.NaN
+    else:
+        spec_mb = (volume - state['volume_m3'][-1]) / area * cfg.PARAMS['ice_density']
+
     state['spec_mb'] = np.append(state['spec_mb'], [spec_mb])
+    state['volume_m3'] = np.append(state['volume_m3'], [volume])
 
     if len(state['spec_mb']) < n_years:
         return False, state
 
-    mbavg = np.mean(state['spec_mb'][-n_years:])
+    mbavg = np.nanmean(state['spec_mb'][-n_years:])
     if abs(mbavg) <= spec_mb_threshold:
         return True, state
     else:
         return False, state
 
 
-def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_years=20):
+def equilibrium_stop_criterion(model, state,
+                               spec_mb_threshold=50, n_years_specmb=60,
+                               n_zero=5, n_years_zero=20):
     """Stop the simulation when of og spec_mb and zero_volume criteria are met.
 
     To be passed as kwarg to `run_until_and_store`.
@@ -3435,8 +3445,9 @@ def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_
     model : the model class
     state : a dict
     spec_mb_threshold : the specific MB threshold (in mm w.e. per year)
+    n_years_specmb : number of years to consider for the spec_mb criterion
     n_zero : number of 0 volume years
-    n_years : number of years to consider
+    n_years_zero : number of years to consider for the zero volume criterion.
 
     Returns
     -------
@@ -3446,9 +3457,9 @@ def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_
     if state is None:
         # OK first call
         state = {}
-    s1, state = zero_glacier_stop_criterion(model, state, n_years=n_years,
+    s1, state = zero_glacier_stop_criterion(model, state, n_years=n_years_zero,
                                             n_zero=n_zero)
-    s2, state = spec_mb_stop_criterion(model, state, n_years=n_years,
+    s2, state = spec_mb_stop_criterion(model, state, n_years=n_years_specmb,
                                        spec_mb_threshold=spec_mb_threshold)
     return s1 or s2, state
 
