@@ -56,7 +56,7 @@ Centerline determination
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 Our algorithm is an implementation of the procedure described by
-`Kienholz et al., (2014)`_. Appart from some minor changes (mostly the choice
+`Kienholz et al., (2014)`_. Apart from some minor changes (mostly the choice
 of some parameters), we stay close to the original algorithm.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/
@@ -75,7 +75,7 @@ elevation gain and (ii) the distance to the glacier terminus:
 The glacier has a major centerline (the longest one), and
 tributary branches (in this case: two). The Hintereisferner glacier is a
 good example of a wrongly outlined glacier: the two northern glacier sub-catchments
-should have been classified as independant entities since they do not flow
+should have been classified as independent entities since they do not flow
 to the main flowline (more on this below).
 
 At this stage, the centerlines are still not fully suitable
@@ -182,7 +182,7 @@ quantile range (see [Werder_et_al_2019]_ for details), chosen to remove
 outliers and to return a slope angle that is both representative of the
 main trunk of the glacier and somewhat consistent with its real length.
 
-The flowlines obtained this way have an irregular spacing, dependant on the
+The flowlines obtained this way have an irregular spacing, dependent on the
 bin size and slope. For OGGM, we then convert this first flowline to a regularly
 space one by interpolating to the target resolution, which is the same
 as the geometrical centerlines (default: 2 dx of the underlying map).
@@ -245,8 +245,8 @@ Geometrical centerlines
   - Closer to the "true" length of the glacier.
   - Grid points along the centerlines preserve their geometrical information,
     i.e. one can compute the exact location of ice thickness change.
-  - It is possibile to have different model parameters for each flowline (e.g.
-    different mass-balance models), although this is comming with its own
+  - It is possible to have different model parameters for each flowline (e.g.
+    different mass-balance models), although this is coming with its own
     challenges.
   - Arguably: better suitability for mass-balance parameterizations taking
     glacier geometry and exposition into account.

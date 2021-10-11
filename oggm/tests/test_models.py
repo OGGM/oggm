@@ -673,7 +673,7 @@ class TestMassBalanceModels:
 
         ref_mbh = ref_mod.get_annual_mb(h, None) * SEC_IN_YEAR
 
-        # two years shoudn't be equal
+        # two years shouldn't be equal
         r_mbh1 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
         r_mbh2 = mb_mod.get_annual_mb(h, 2) * SEC_IN_YEAR
         assert not np.all(np.allclose(r_mbh1, r_mbh2))
@@ -3117,7 +3117,7 @@ class TestHEF:
             np.testing.assert_allclose(shist.prcp.mean(),
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
-            # And also the anual cycle
+            # And also the annual cycle
             scru = shist.groupby('time.month').mean(dim='time')
             scesm = scesm.groupby('time.month').mean(dim='time')
             np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)

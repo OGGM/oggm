@@ -162,7 +162,7 @@ def _plot_map(plotfunc):
 
         if title is None:
             if 'title' not in out:
-                # Make a defaut one
+                # Make a default one
                 title = ''
                 if len(gdirs) == 1:
                     gdir = gdirs[0]
@@ -361,7 +361,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
         # plot Centerlines
         cls = gdir.read_pickle(filename)
 
-        # Go in reverse order for red always being the longuest
+        # Go in reverse order for red always being the longest
         cls = cls[::-1]
         nl = len(cls)
         color = gencolor(len(cls) + 1, cmap=lines_cmap)

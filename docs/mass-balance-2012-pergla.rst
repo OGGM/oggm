@@ -29,7 +29,7 @@ solid precipitation is based on the monthly mean temperature: all solid below
 (default: 2°C), linear change in between.
 
 The difference with the previous model is that :math:`\epsilon` isn't needed
-anymore, now that we can calibrate on each glacier individualy.
+anymore, now that we can calibrate on each glacier individually.
 
 Calibration
 -----------

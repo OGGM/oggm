@@ -55,7 +55,7 @@ Breaking changes
 v1.5.1 (28.08.2021)
 -------------------
 
-This is a minor relase of OGGM, containing mostly bugfixes and a few new
+This is a minor release of OGGM, containing mostly bugfixes and a few new
 features.
 
 Breaking changes
@@ -69,7 +69,7 @@ Enhancements
 - Added ``cook_rgidf()`` function in ``oggm.utils`` to simplify the use
   of a non-RGI glacier inventory in OGGM (:pull:`1251`).
   By `Li Fei <https://github.com/Keeptg>`_
-- Added support for last millenium reanalysis data to the shop (:pull:`1257`).
+- Added support for last millennium reanalysis data to the shop (:pull:`1257`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added a new ``apply_func``  argument in ``utils.compile_glacier_statistics``
   that allows user to compute any new statistics from a gdir themselves (:pull:`1259`)
@@ -273,7 +273,7 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
-- Maintainance updates for upstream libraries and various small bug fixes
+- Maintenance updates for upstream libraries and various small bug fixes
   (:pull:`957`, :pull:`967`, :pull:`968`, :pull:`958`, :pull:`974`, :pull:`977`,
   :pull:`976`, :pull:`1124`).
   By `Fabien Maussion <https://github.com/fmaussion>`_,
@@ -318,7 +318,7 @@ Breaking changes
 ~~~~~~~~~~~~~~~~
 
 - The adaptive time stepping scheme of OGGM has been fixed for several flaws
-  which lead to instable results in certain conditions.
+  which lead to unstable results in certain conditions.
   See `the blog post <https://oggm.org/2020/01/18/stability-analysis/>`_
   for a full description. The API didn't change in the process, but the
   OGGM results are likely to change slightly in some conditions.
@@ -559,7 +559,7 @@ Breaking changes
   anybody was using them (:pull:`465`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Diagnostic variables (length, area, volume, ELA) are now stored at annual
-  steps instead of montly steps (:pull:`488`). The old behavior can still be
+  steps instead of monthly steps (:pull:`488`). The old behavior can still be
   used with the ``store_monthly_step`` kwarg. Most users should not notice
   this change because the regionally compiled files were stored at yearly
   steps anyways.
@@ -649,7 +649,7 @@ Enhancements
   available. You can get the profiles with ``gdir.get_ref_mb_profile()``
   (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- New ``process_histalp_data`` taks to run OGGM with HISTALP data
+- New ``process_histalp_data`` task to run OGGM with HISTALP data
   automatically. The task comes with a list of predefined t* like CRU and
   with different default parameters
   (see `blog <https://oggm.org/2018/08/10/histalp-parameters/>`_). The PR

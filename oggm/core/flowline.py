@@ -237,7 +237,7 @@ class ParabolicBedFlowline(Flowline):
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, bed_shape=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -283,7 +283,7 @@ class RectangularBedFlowline(Flowline):
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, widths=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -328,7 +328,7 @@ class TrapezoidalBedFlowline(Flowline):
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, widths=None, lambdas=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -389,7 +389,7 @@ class MixedBedFlowline(Flowline):
                  bed_h=None, section=None, bed_shape=None,
                  is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -544,7 +544,7 @@ class FlowlineModel(object):
             some Flowline models have an adaptive time stepping scheme, which
             is randomly taking steps towards the goal of a "run_until". The
             default ('monthly') makes sure that the model results are
-            consistent wether the users want data at monthly or annual
+            consistent whether the users want data at monthly or annual
             timesteps by forcing the model to land on monthly steps even if
             only annual updates are required. You may want to change this
             for optimisation reasons for models that don't require adaptive
@@ -1201,7 +1201,7 @@ class FluxBasedModel(FlowlineModel):
                  do_kcalving=None, calving_k=None, calving_use_limiter=None,
                  calving_limiter_frac=None, water_level=None,
                  **kwargs):
-        """Instanciate the model.
+        """Instantiate the model.
 
         Parameters
         ----------
@@ -1256,7 +1256,7 @@ class FluxBasedModel(FlowlineModel):
             changing the flux_gate_buildup time. You can also provide
             a function (or an array of functions) returning the flux
             (unit: m3 of ice per second) as a function of time.
-            This is overriden by `flux_gate_thickness` if provided.
+            This is overridden by `flux_gate_thickness` if provided.
         flux_gate_buildup : int
             number of years used to build up the flux gate to full value
         do_kcalving : bool
@@ -1661,7 +1661,7 @@ class MassConservationChecker(FluxBasedModel):
     """This checks if the FluxBasedModel is conserving mass."""
 
     def __init__(self, flowlines, **kwargs):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -1699,7 +1699,7 @@ class KarthausModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
                  inplace=False, **kwargs):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -1782,7 +1782,7 @@ class FileModel(object):
     """Duck FlowlineModel which actually reads data out of a nc file."""
 
     def __init__(self, path):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -1946,7 +1946,7 @@ class MassRedistributionCurveModel(FlowlineModel):
                  do_kcalving=None, calving_k=None,
                  advance_method=1,
                  **kwargs):
-        """ Instanciate the model.
+        """ Instantiate the model.
 
         Parameters
         ----------
@@ -2008,7 +2008,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         elif dt < cfg.SEC_IN_YEAR:
             # Here however we complain - we really want one year exactly
             raise InvalidWorkflowError('I was asked to run for less than one '
-                                       'year. Delta-H models cant do that.')
+                                       'year. Delta-H models can\'t do that.')
 
         # Flowline state
         fl = self.fls[0]
@@ -2221,7 +2221,7 @@ def mass_redistribution_curve_huss(height, bin_area, mb, glac_idx, glacier_delta
         # No need for a curve when glacier is so small
         return mb * bin_area
 
-    # Select the paramaters based on glacier area
+    # Select the parameters based on glacier area
     if bin_area.sum() * 1e-6 > 20:
         gamma, a, b, c = (6, -0.02, 0.12, 0)
     elif bin_area.sum() * 1e-6 > 5:
@@ -2257,7 +2257,7 @@ def mass_redistribution_curve_huss(height, bin_area, mb, glac_idx, glacier_delta
 
 
 def flowline_from_dataset(ds):
-    """Instanciates a flowline from an xarray Dataset."""
+    """Instantiates a flowline from an xarray Dataset."""
 
     cl = globals()[ds.attrs['class']]
     line = shpg.LineString(ds['linecoords'].values)
@@ -2278,7 +2278,7 @@ def flowline_from_dataset(ds):
 
 
 def glacier_from_netcdf(path):
-    """Instanciates a list of flowlines from an xarray Dataset."""
+    """Instantiates a list of flowlines from an xarray Dataset."""
 
     with xr.open_dataset(path) as ds:
         fls = []
@@ -3490,7 +3490,7 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
 
     # read flowlines of the Main glacier
     fls = main.read_pickle('model_flowlines')
-    mfl = fls.pop(-1)  # remove main line from list and treat seperately
+    mfl = fls.pop(-1)  # remove main line from list and treat separately
 
     for trib in tribs:
 
@@ -3590,7 +3590,7 @@ def clean_merged_flowlines(gdir, buffer=None):
 
     fls = gdir.read_pickle('model_flowlines')
 
-    # seperate the main main flowline
+    # separate the main main flowline
     mainfl = fls.pop(-1)
 
     # split fls in main and tribs
@@ -3687,7 +3687,7 @@ def clean_merged_flowlines(gdir, buffer=None):
         # 3. set flow to attributes. This also adds inflow values to other
         fl1.set_flows_to(_olline)
 
-        # change the array size of tributary flowline attributs
+        # change the array size of tributary flowline attributes
         for atr, value in fl1.__dict__.items():
             if atr in ['_ptrap', '_prec']:
                 # those are indices, remove those above nx
