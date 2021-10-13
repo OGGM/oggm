@@ -377,7 +377,8 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
             fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
     if fpath_precip is None:
         with utils.get_lock():
-            fpath_precip = utils.file_downloader(base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+            fpath_precip = utils.file_downloader(
+                base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
 
     # Glacier location
     glon = gdir.cenlon
