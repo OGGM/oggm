@@ -370,12 +370,14 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
-    # Get the path of GCM temperature & precipitation data
+        # Get the path of GCM temperature & precipitation data
     base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
     if fpath_temp is None:
-        fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
+        with utils.get_lock():
+            fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
     if fpath_precip is None:
-        fpath_precip = utils.file_downloader(base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+        with utils.get_lock():
+            fpath_precip = utils.file_downloader(base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
 
     # Glacier location
     glon = gdir.cenlon
