@@ -374,8 +374,10 @@ class PastMassBalance(MassBalanceModel):
             for k, v in mb_calib.items():
                 if v != cfg.PARAMS[k]:
                     msg = ('You seem to use different mass-balance parameters '
-                           'than used for the calibration. Set '
-                           '`check_calib_params=False` to ignore this '
+                           'than used for the calibration: '
+                           f"you use cfg.PARAMS['{k}']={cfg.PARAMS[k]} while "
+                           f"it was calibrated with cfg.PARAMS['{k}']={v}. "
+                           'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
 

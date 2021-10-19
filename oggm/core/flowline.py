@@ -2539,6 +2539,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        init_model_fls=None, store_monthly_step=False,
                        store_model_geometry=None, water_level=None,
                        evolution_model=FluxBasedModel, stop_criterion=None,
+                       init_model_filesuffix=None, init_model_yr=None,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -2557,6 +2558,12 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         end year of the model run (default: from the config file)
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
@@ -2582,6 +2589,16 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
      """
+
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
+
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):
         warnings.warn("The mass-balance used to drive the ice dynamics model "
@@ -2665,6 +2682,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        climate_filename='climate_historical',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
+                       init_model_filesuffix=None,
+                       init_model_yr=None,
                        zero_initial_glacier=False,
                        unique_samples=False, **kwargs):
     """Runs the random mass-balance model for a given number of years.
@@ -2713,6 +2732,12 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     output_filesuffix : str
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
@@ -2743,6 +2768,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               mb_model=mb, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
+                              init_model_filesuffix=init_model_filesuffix,
+                              init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               **kwargs)
@@ -2824,15 +2851,6 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    if init_model_filesuffix is not None:
-        fp = gdir.get_filepath('model_geometry',
-                               filesuffix=init_model_filesuffix)
-        fmod = FileModel(fp)
-        if init_model_yr is None:
-            init_model_yr = fmod.last_yr
-        fmod.run_until(init_model_yr)
-        init_model_fls = fmod.fls
-
     if use_avg_climate:
         mb_model = AvgClimateMassBalance
     else:
@@ -2852,6 +2870,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               mb_model=mb, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
+                              init_model_filesuffix=init_model_filesuffix,
+                              init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               **kwargs)
