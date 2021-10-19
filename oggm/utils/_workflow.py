@@ -256,7 +256,7 @@ class LRUFileCache():
     """
 
     def __init__(self, l0=None, maxsize=None):
-        """Instanciate.
+        """Instantiate.
 
         Parameters
         ----------
@@ -438,7 +438,7 @@ class entity_task(object):
 
         cnt = ['    Notes']
         cnt += ['    -----']
-        cnt += ['    Files writen to the glacier directory:']
+        cnt += ['    Files written to the glacier directory:']
 
         for k in sorted(writes):
             cnt += [cfg.BASENAMES.doc_str(k)]
@@ -1890,7 +1890,7 @@ def extend_past_climate_run(past_run_file=None,
 
             if 'calving_rate' in ods.data_vars:
                 orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
-                # +1 because calving rate at year 0 is unkown from the dyns model
+                # +1 because calving rate at year 0 is unknown from the dyns model
                 orig_calv_rate_ts[:fid+1] = calv_rate
                 ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
 
@@ -3260,7 +3260,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
                            filename='climate_historical',
                            input_filesuffix='',
                            dem_source=None):
-    """Creats a new GlacierDirectory if tributaries are merged to a glacier
+    """Creates a new GlacierDirectory if tributaries are merged to a glacier
 
     This function should be called after centerlines.intersect_downstream_lines
     and before flowline.merge_tributary_flowlines.

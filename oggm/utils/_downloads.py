@@ -1400,7 +1400,7 @@ def _tandem_path(lon_tile, lat_tile):
     level_1 = 'W' if lon_tile < 0 else 'E'
     level_1 += '{:03d}'.format(divmod(abs(lon_tile), 10)[0] * 10)
 
-    # Level 2 is formating, but depends on lat
+    # Level 2 is formatting, but depends on lat
     level_2 = 'W' if lon_tile < 0 else 'E'
     if abs(lat_tile) <= 60:
         level_2 += '{:03d}'.format(abs(lon_tile))

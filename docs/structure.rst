@@ -43,7 +43,7 @@ complexes as if they were single glacier entities.**
     presence of glacier complexes and ice divides (this problem can be mitigated by
     defining glacier complexes as one single entity, requiring other strategies than
     currently standard in OGGM). A larger issue of glacier centric models is that
-    they are focussed on simulating glaciers that have been inventoried, i.e. they cannot
+    they are focused on simulating glaciers that have been inventoried, i.e. they cannot
     retrieve past (or present) uncharted glaciers. For these reasons, they are not well adapted for
     studying glacier evolution in climates when glaciers were widely
     different from today (e.g. the Last Glacial Maximum).

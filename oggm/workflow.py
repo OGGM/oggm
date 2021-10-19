@@ -755,7 +755,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         # Ok can't find an A. Log for debug:
         odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
         odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
-        msg = ('calibration fom consensus estimate CANT converge with fs={}.\n'
+        msg = ('calibration from consensus estimate CAN\'T converge with fs={}.\n'
                'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
                'Ref={:.3f} OGGM={:.3f} for A factor {}'
                ''.format(fs,
@@ -903,7 +903,7 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
        local file path to tabular file containing geodetic measurements, file must
        contain the columns:
            - 'rgiid': is the RGIId as in the RGI 6.0
-           - 'period': time intervall of the measurements in the format shown
+           - 'period': time interval of the measurements in the format shown
              above
            - 'dmdtda': the specific-mass change rate in meters water-equivalent
              per year,
@@ -1011,7 +1011,7 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
         all glaciers, main and tributary. Preprocessed and initialised
     main_rgi_id: str
         RGI ID of the main glacier of interest. If None is provided merging
-        will start based uppon the largest glacier
+        will start based upon the largest glacier
     return_all : bool
         if main_rgi_id is given and return_all = False: only the main glacier
         is returned
@@ -1099,7 +1099,7 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None, dem_source=None,
         # if no tributaries: nothing to do
         return gdir_main, gdirs
 
-    # seperate those glaciers which are not already found to be a tributary
+    # separate those glaciers which are not already found to be a tributary
     gdirs = [gd for gd in gdirs if gd not in tributaries]
 
     gdirs_to_merge = []

@@ -21,7 +21,7 @@ Mac OSX, but it should probably run fine there as well.
 
     OGGM does not work on Windows. If you are using Windows 10,
     we recommend to install the free
-    `Windows subsytem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_
+    `Windows subsystem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_
     and install and run OGGM from there.
 
 For most users we recommend to

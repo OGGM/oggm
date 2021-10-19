@@ -420,7 +420,7 @@ class TestGIS(unittest.TestCase):
         self.assertEqual(ds.height, gdir.grid.ny)
         self.assertEqual(ds.transform[0], gdir.grid.dx)
         self.assertEqual(ds.transform[4], gdir.grid.dy)
-        # orgin is center for gdir grid but corner for dem_mask, so shift
+        # origin is center for gdir grid but corner for dem_mask, so shift
         self.assertAlmostEqual(ds.transform[2], gdir.grid.x0 - gdir.grid.dx/2)
         self.assertAlmostEqual(ds.transform[5], gdir.grid.y0 - gdir.grid.dy/2)
 
@@ -660,7 +660,7 @@ class TestCenterlines(unittest.TestCase):
         c = gdir.read_pickle('downstream_line')['downstream_line']
         c = centerlines.Centerline(c, dx=tpl.dx)
 
-        # Independant reproduction for a few points
+        # Independent reproduction for a few points
         o = out['bedshapes']
         i0s = [0, 5, 10, 15, 20]
         for i0 in i0s:
@@ -2179,7 +2179,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(mb, wgms['ANNUAL_BALANCE'].mean(), atol=30)
 
         # Check error management
-        # We trick with a glaciers whith no valid data
+        # We trick with a glaciers with no valid data
         rdf['is_cor'] = True
         fpath = os.path.join(self.testdir, 'test_hugo.hdf')
         rdf.to_hdf(fpath, key='df')
@@ -2189,7 +2189,7 @@ class TestClimate(unittest.TestCase):
             workflow.match_geodetic_mb_for_selection([gdir], file_path=fpath,
                                                      period='2000-01-01_2010-01-01')
 
-        # This doesnt
+        # This doesn't
         workflow.match_geodetic_mb_for_selection([gdir], file_path=fpath,
                                                  fail_safe=True,
                                                  period='2000-01-01_2010-01-01')
@@ -2884,7 +2884,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        # check that its not tooo sensitive to the dx
+        # check that its not too sensitive to the dx
         cfg.PARAMS['flowline_dx'] = 1.
         cfg.PARAMS['filter_for_neg_flux'] = False
         centerlines.initialize_flowlines(gdir)
@@ -3113,7 +3113,7 @@ class TestColumbiaCalving(unittest.TestCase):
         prcpsol = np.sum(prcpsol * area_sec)
         # Convert to ice and km3
         accu_ice = prcpsol * 1e-9 / rho
-        # Finally, chech that this is equal to our calving flux
+        # Finally, check that this is equal to our calving flux
         # units: mk3 ice yr-1
         np.testing.assert_allclose(accu_ice, df['calving_flux'],
                                    atol=0.001)

@@ -128,7 +128,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self.mu_star_is_valid = False  # if mu* leeds to good flux, keep it
         self.flux = None  # Flux (kg m-2)
         self.flux_needs_correction = False  # whether this branch was baaad
-        self.rgi_id = rgi_id  # Usefull if line is used with another glacier
+        self.rgi_id = rgi_id  # Useful if line is used with another glacier
 
     def set_flows_to(self, other, check_tail=True, to_head=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -449,7 +449,7 @@ def _filter_lines(lines, heads, k, r):
 
         ilines.remove(ll)
         if len(olines) > 0:
-            # the cutted line's last point is not guaranteed
+            # the cut line's last point is not guaranteed
             # to on straight coordinates. Remove it
             olines.append(shpg.LineString(np.asarray(ll.xy)[:, 0:-1].T))
         else:
@@ -499,7 +499,7 @@ def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     oheads = [heads[0]]
     for line, head in zip(lines[1:], heads[1:]):
 
-        # The code below mimicks what initialize_flowlines will do
+        # The code below mimics what initialize_flowlines will do
         # this is a bit smelly but necessary
         points = line_interpol(line, dx_cls)
 
@@ -913,7 +913,7 @@ def compute_centerlines(gdir, heads=None):
         log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
-    # And rejoin the cutted tails
+    # And rejoin the cut tails
     olines = _join_lines(olines, oheads)
 
     # Adds the line level
@@ -1028,7 +1028,7 @@ def _approx_parabola(x, y, y0=0):
     x : array
        the x axis variabls
     y : array
-       the dependant variable
+       the dependent variable
     y0 : float, optional
        the intercept
 
@@ -2109,7 +2109,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     bin_variables : str or list of str
         variables to add to the binned flowline
     preserve_totals : bool or list of bool
-        wether or not to preserve the variables totals (e.g. volume)
+        whether or not to preserve the variables totals (e.g. volume)
     """
 
     # Variables
@@ -2259,7 +2259,7 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
         csv file: gdir.get_filepath('elevation_band_flowline',
         filesuffix='_fixed_dx').
     preserve_totals : bool or list of bool
-        wether or not to preserve the variables totals (e.g. volume)
+        whether or not to preserve the variables totals (e.g. volume)
     """
 
     df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)

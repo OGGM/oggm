@@ -60,7 +60,7 @@ Can I use OGGM to simulate long-term glacier evolution?
 -------------------------------------------------------
 
 It depends what you mean by "long-term": at centennial time scales, probably,
-yes. At millenial time scales, maybe. At glacial time scales, probably not.
+yes. At millennial time scales, maybe. At glacial time scales, probably not.
 The major issue we have to face with OGGM is that it uses a "glacier-centric"
 approach: it can simulate the mountain glaciers and ice-caps we know from
 contemporary inventories, but it cannot simulate glaciers which existed before
