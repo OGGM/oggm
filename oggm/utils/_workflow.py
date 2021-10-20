@@ -1415,11 +1415,11 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
         try:
             # Centerlines
             cls = gdir.read_pickle('centerlines')
-            longuest = 0.
+            longest = 0.
             for cl in cls:
-                longuest = np.max([longuest, cl.dis_on_line[-1]])
+                longest = np.max([longest, cl.dis_on_line[-1]])
             d['n_centerlines'] = len(cls)
-            d['longuest_centerline_km'] = longuest * gdir.grid.dx / 1000.
+            d['longest_centerline_km'] = longest * gdir.grid.dx / 1000.
         except BaseException:
             pass
 

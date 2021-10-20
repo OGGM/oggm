@@ -642,9 +642,9 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
     def test_start_from_level_1_str(self):
 
         # Go - initialize working directories
-        entitites = self.rgidf.iloc[:2].RGIId
+        entities = self.rgidf.iloc[:2].RGIId
         cfg.PARAMS['border'] = 20
-        gdirs = workflow.init_glacier_directories(entitites,
+        gdirs = workflow.init_glacier_directories(entities,
                                                   prepro_rgi_version='61',
                                                   from_prepro_level=1)
         n_intersects = 0
@@ -1533,12 +1533,12 @@ def touch(path):
 
 
 def make_fake_zipdir(dir_path, fakefile=None, base_dir=None,
-                     archiv='zip', extension='.zip'):
+                     archive='zip', extension='.zip'):
     """Creates a directory with a file in it if asked to, then compresses it"""
     utils.mkdir(dir_path)
     if fakefile:
         touch(os.path.join(dir_path, fakefile))
-    shutil.make_archive(dir_path, archiv, dir_path, base_dir)
+    shutil.make_archive(dir_path, archive, dir_path, base_dir)
     return dir_path + extension
 
 
@@ -1848,7 +1848,7 @@ class TestFakeDownloads(unittest.TestCase):
         upper_path = os.path.dirname(deep_path)
         fakefile = os.path.join(deep_path, 'N049W006_AVE_DSM.tif')
         tf = make_fake_zipdir(upper_path, fakefile=fakefile,
-                              archiv='gztar', extension='.tar.gz')
+                              archive='gztar', extension='.tar.gz')
 
         def down_check(url, *args, **kwargs):
             expected = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/' +
@@ -1876,7 +1876,7 @@ class TestFakeDownloads(unittest.TestCase):
                                 'Copernicus_DSM_30_N46_00_E010_00_DEM.tif')
         tf = make_fake_zipdir(upper_path, fakefile=fakefile,
                               base_dir='Copernicus_DSM_30_N46_00_E010_00',
-                              archiv='tar', extension='.tar')
+                              archive='tar', extension='.tar')
 
         def down_check(url, *args, **kwargs):
             expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
