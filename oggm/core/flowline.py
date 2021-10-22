@@ -1140,6 +1140,8 @@ class FlowlineModel(object):
             for i, ds in enumerate(geom_ds):
                 ds.to_netcdf(geom_path, 'a', group='fl_{}'.format(i),
                              encoding=encode)
+            # Add calving diagnostics because the FileModel can't infer it
+            diag_ds[['calving_m3']].to_netcdf(geom_path, 'a')
 
         if diag_path is not None:
             diag_ds.to_netcdf(diag_path)
