@@ -862,9 +862,9 @@ class FlowlineModel(object):
                                              'at year: {}'.format(self.yr))
 
     def run_until_and_store(self, y1,
-                            run_path=None,
-                            geom_path=False,
                             diag_path=None,
+                            fl_diag_path=False,
+                            geom_path=False,
                             store_monthly_step=None,
                             stop_criterion=None):
         """Runs the model and returns intermediate steps in xarray datasets.
@@ -877,20 +877,24 @@ class FlowlineModel(object):
         y1 : int
             Upper time span for how long the model should run (needs to be
             a full year)
-        run_path : str
-            Deprecated and renamed to geom_path
-        geom_path : str or bool
+        diag_path : str
+            Path and filename where to store the glacier-wide diagnostics
+            dataset (length, area, volume, etc.) as controlled by
+            cfg.PARAMS['store_diagnostic_variables'].
+            The default (None) is to not store the dataset to disk but return
+            the dataset to the user after execution.
+        fl_diag_path : str, None or bool
+            Path and filename where to store the model diagnostics along the
+            flowline(s).
+        geom_path : str, None or bool
             Path and filename where to store the model geometry dataset. This
             dataset contains all necessary info to retrieve the full glacier
             geometry after the run,  with a FileModel. This is stored
-            on an annual basis.
+            on an annual basis and can be used to restart a run from a
+            past simulation's geometry ("restart file").
             The default (False) prevents creating this dataset altogether
-            (for optimisation).
+            (for optimisation purposes).
             Set this to None to not store the dataset to disk but return
-            the dataset to the user after execution.
-        diag_path : str
-            Path and filename where to store the model diagnostics dataset.
-            The default (None ) is to not store the dataset to disk but return
             the dataset to the user after execution.
         store_monthly_step : Bool
             If True (False)  model diagnostics will be stored monthly (yearly).
@@ -901,10 +905,11 @@ class FlowlineModel(object):
             time), and deciding when to stop the simulation. Its signature
             should look like:
 
-            stop (True/False), new_state = stop_criterion(model, previous_state)
+            stop, new_state = stop_criterion(model, previous_state)
 
-            where previous_state can be None, or anything else (very likely a
-            container of some sort, e.g. a dict.)
+            where stop is a bool, and new_state a container (liekly: dict)
+            initialized by the function itself on the first call (where
+            previous_state is None).
 
         Returns
         -------
@@ -926,11 +931,6 @@ class FlowlineModel(object):
             raise InvalidParamsError('run_until_and_store needs a '
                                      'mass-balance model with an unambiguous '
                                      'hemisphere.')
-
-        if run_path is not None:
-            warnings.warn("`run_path` has been renamed to `geom_path` and "
-                          "will be deleted in the future.", FutureWarning)
-            geom_path = run_path
 
         # Do we need to create a geometry dataset?
         do_geom = geom_path is None or geom_path
