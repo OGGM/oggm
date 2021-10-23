@@ -1509,7 +1509,7 @@ class TestIO():
 
         fls = dummy_width_bed_tributary()
         model = FluxBasedModel(fls)
-        model.to_netcdf(p)
+        model.to_geometry_netcdf(p)
         fls_ = glacier_from_netcdf(p)
 
         for fl, fl_ in zip(fls, fls_):
@@ -1798,7 +1798,7 @@ class TestIO():
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls)
 
-        model.to_netcdf(p)
+        model.to_geometry_netcdf(p)
         fls_ = glacier_from_netcdf(p)
 
         for fl, fl_ in zip(fls, fls_):
@@ -1817,7 +1817,7 @@ class TestIO():
         p = os.path.join(class_case_dir, 'grp_hef_mix.nc')
         if os.path.isfile(p):
             os.remove(p)
-        model.to_netcdf(p)
+        model.to_geometry_netcdf(p)
         fls_ = glacier_from_netcdf(p)
 
         np.testing.assert_allclose(fls[0].section, fls_[0].section)
@@ -2856,6 +2856,8 @@ class TestHEF:
     @pytest.mark.slow
     def test_random(self, hef_gdir, inversion_params):
 
+        cfg.PARAMS['store_model_geometry'] = True
+
         init_present_time_glacier(hef_gdir)
         run_random_climate(hef_gdir, nyears=100, seed=6,
                            fs=inversion_params['inversion_fs'],
@@ -3308,6 +3310,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3417,6 +3421,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3479,6 +3485,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -3545,6 +3553,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
@@ -3608,6 +3618,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
 

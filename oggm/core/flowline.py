@@ -3088,7 +3088,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # Make sure it'll return something
     kwargs['return_value'] = True
 
-    # Check that kwargs are compatible
+    # Check that kwargs and params are compatible
     if kwargs.get('store_monthly_step', False):
         raise InvalidParamsError('run_with_hydro only compatible with '
                                  'store_monthly_step=False.')
@@ -3096,6 +3096,10 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         raise InvalidParamsError('run_with_hydro only compatible with '
                                  "mb_elev_feedback='annual' (yes, even "
                                  "when asked for monthly hydro output).")
+    if not cfg.PARAMS['store_model_geometry']:
+        raise InvalidParamsError('run_with_hydro only works with '
+                                 "PARAMS['store_model_geometry'] = True "
+                                 "for now.")
 
     out = run_task(gdir, **kwargs)
     if out is None:
