@@ -1494,11 +1494,11 @@ class TestIO():
                                      dummy_noisy_bed, dummy_bumpy_bed,
                                      dummy_parabolic_bed,
                                      dummy_trapezoidal_bed, dummy_mixed_bed])
-    def test_flowline_to_dataset(self, bed):
+    def test_flowline_to_geometry_dataset(self, bed):
         fl = bed()[0]
-        ds = fl.to_dataset()
+        ds = fl.to_geometry_dataset()
         fl_ = flowline_from_dataset(ds)
-        ds_ = fl_.to_dataset()
+        ds_ = fl_.to_geometry_dataset()
         assert ds_.equals(ds)
 
     def test_model_to_file(self, class_case_dir):
@@ -1513,8 +1513,8 @@ class TestIO():
         fls_ = glacier_from_netcdf(p)
 
         for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
+            ds = fl.to_geometry_dataset()
+            ds_ = fl_.to_geometry_dataset()
             assert ds_.equals(ds)
 
         assert fls_[0].flows_to is fls_[1]
@@ -1537,7 +1537,7 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True,
+        ds_diag, ds = model.run_until_and_store(500, store_monthly_step=True,
                                                 geom_path=None)
         ds = ds[0]
 
@@ -1654,8 +1654,8 @@ class TestIO():
                                is_tidewater=True,
                                flux_gate=0.12, do_kcalving=True,
                                calving_k=0.2)
-        _, diag = model.run_until_and_store(y1, geom_path=geom_path,
-                                            diag_path=diag_path)
+        diag, _ = model.run_until_and_store(y1, diag_path=diag_path,
+                                            geom_path=geom_path)
         assert model.calving_m3_since_y0 > 0
 
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1681,7 +1681,7 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500, geom_path=None)
+        ds_diag, ds = model.run_until_and_store(500, geom_path=None)
         ds = ds[0]
 
         fls = dummy_constant_bed()
@@ -1802,8 +1802,8 @@ class TestIO():
         fls_ = glacier_from_netcdf(p)
 
         for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
+            ds = fl.to_geometry_dataset()
+            ds_ = fl_.to_geometry_dataset()
             for v in ds.variables.keys():
                 np.testing.assert_allclose(ds_[v], ds[v], equal_nan=True)
 
@@ -1825,8 +1825,8 @@ class TestIO():
         np.testing.assert_allclose(fls[0].bed_h, fls_[0].bed_h)
 
         for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
+            ds = fl.to_geometry_dataset()
+            ds_ = fl_.to_geometry_dataset()
             np.testing.assert_allclose(fl.section, fl_.section)
             np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
             np.testing.assert_allclose(fl.bed_h, fl_.bed_h)

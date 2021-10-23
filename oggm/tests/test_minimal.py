@@ -89,7 +89,7 @@ class TestIdealisedCases(unittest.TestCase):
         mb = LinearMassBalance(2600.)
 
         model = FluxBasedModel(fls, mb_model=mb)
-        ds_f, ds_d = model.run_until_and_store(150)
+        ds_d = model.run_until_and_store(150)
         assert ds_d['length_m'][-1] > 1e3
 
         df = model.get_diagnostics()
@@ -171,7 +171,6 @@ class TestSia2d(unittest.TestCase):
 
         # Other direction
         bed_2d = np.repeat(fls[-1].bed_h, 3).reshape((fls[-1].nx, 3)).T
-
         sdmodel = Upstream2D(bed_2d, dx=map_dx, mb_model=mb, y0=0.,
                              ice_thick_filter=None)
 

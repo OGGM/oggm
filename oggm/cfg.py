@@ -551,6 +551,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'store_diagnostic_variables'
     PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
+    k = 'store_fl_diagnostic_variables'
+    PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
 
     # Inversion
     k = 'use_shape_factor_for_inversion'
@@ -584,7 +586,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run', 'ref_mb_valid_window',
            'tidewater_type', 'store_model_geometry',
-           'store_diagnostic_variables', 'geodetic_mb_period']
+           'store_diagnostic_variables', 'store_fl_diagnostic_variables',
+           'geodetic_mb_period']
     for k in ltr:
         cp.pop(k, None)
 
