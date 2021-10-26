@@ -1537,9 +1537,12 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds_diag, ds = model.run_until_and_store(500, store_monthly_step=True,
-                                                geom_path=None)
+        ds_diag, ds_fl, ds = model.run_until_and_store(500,
+                                                       store_monthly_step=True,
+                                                       fl_diag_path=None,
+                                                       geom_path=None)
         ds = ds[0]
+        ds_fl = ds_fl[0]
 
         # Check attrs
         assert ds.attrs['mb_model_class'] == 'LinearMassBalance'
@@ -1571,25 +1574,44 @@ class TestIO():
                 l_ref.append(model.length_m)
                 if int(yr) == 500:
                     secfortest = model.fls[0].section
+                    hfortest = model.fls[0].thick
 
         np.testing.assert_allclose(ds.ts_section.isel(time=-1),
                                    secfortest)
+        np.testing.assert_allclose(ds_fl.thickness_m.isel(time=-1),
+                                   hfortest)
 
         np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
         np.testing.assert_allclose(ds_diag.area_m2, a_diag)
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
+        np.testing.assert_allclose(ds_fl.volume_m3.sum(dim='dis_along_flowline'),
+                                   vol_ref)
+        np.testing.assert_allclose(ds_fl.volume_bwl_m3.sum(dim='dis_along_flowline'),
+                                   0)
+        np.testing.assert_allclose(ds_fl.volume_bsl_m3.sum(dim='dis_along_flowline'),
+                                   0)
+        np.testing.assert_allclose(ds_fl.area_m2.sum(dim='dis_along_flowline'),
+                                   a_ref)
+
+        vel = ds_fl.ice_velocity_myr.isel(time=-1)
+        assert 20 < vel.max() < 40
+
         fls = dummy_constant_bed()
         geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
+        fl_diag_path = os.path.join(class_case_dir, 'ts_fl_diag.nc')
         if os.path.exists(geom_path):
             os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
+        if os.path.exists(fl_diag_path):
+            os.remove(fl_diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
         model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path,
+                                  fl_diag_path=fl_diag_path,
                                   store_monthly_step=True)
 
         with xr.open_dataset(diag_path) as ds_:
@@ -1598,6 +1620,18 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
+        # Test new fl diags
+        with xr.open_dataset(fl_diag_path, group='fl_0') as ds_fl:
+            assert_allclose(ds_fl.volume_m3.sum(dim='dis_along_flowline'),
+                            vol_ref)
+            assert_allclose(ds_fl.volume_bwl_m3.sum(dim='dis_along_flowline'),
+                            0)
+            assert_allclose(ds_fl.volume_bsl_m3.sum(dim='dis_along_flowline'),
+                            0)
+            assert_allclose(ds_fl.area_m2.sum(dim='dis_along_flowline'),
+                            a_ref)
+
+        # Test restart files
         with pytest.warns(FutureWarning):
             with FileModel(geom_path):
                 pass
