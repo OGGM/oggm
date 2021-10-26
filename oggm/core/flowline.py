@@ -3189,7 +3189,6 @@ def run_with_hydro_daily(gdir, run_task=None, ref_area_from_y0=False, Testing=Fa
                                                  year=yr,
                                                  add_climate=True)
                     mb, _, _, prcp, prcpsol = mb_out
-                    print(np.shape(prcp), np.shape(mb))
                 except:
                     raise InvalidWorkflowError('Run with hydro daily needs a daily MB '
                                                'model, so it can only run with TIModel.')
