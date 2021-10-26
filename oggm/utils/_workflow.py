@@ -980,11 +980,15 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             ds.coords[cn] = ('time', ds_diag[cn].values)
             ds[cn].attrs['description'] = ds_diag[cn].attrs['description']
 
+        # We decide on the name of "3d" variables in case we have daily
+        # output
+        name_2d_dim = 'day_2d' if 'day_2d' in ds_diag.dims else 'month_2d'
+
         # Prepare the 2D variables
         shape = (len(time), len(rgi_ids))
         out_2d = dict()
         for vn in ds_diag.data_vars:
-            if 'month_2d' in ds_diag[vn].dims:
+            if name_2d_dim in ds_diag[vn].dims:
                 continue
             var = dict()
             var['data'] = np.full(shape, np.nan)
@@ -1007,16 +1011,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
         # Maybe 3D?
         out_3d = dict()
-        if 'month_2d' in ds_diag.dims:
+        if name_2d_dim in ds_diag.dims:
             # We have some 3d vars
-            month_2d = ds_diag['month_2d']
-            ds.coords['month_2d'] = ('month_2d', month_2d.data)
-            cn = 'calendar_month_2d'
-            ds.coords[cn] = ('month_2d', ds_diag[cn].values)
+            month_2d = ds_diag[name_2d_dim]
+            ds.coords[name_2d_dim] = (name_2d_dim, month_2d.data)
+            cn = f'calendar_{name_2d_dim}'
+            ds.coords[cn] = (name_2d_dim, ds_diag[cn].values)
 
             shape = (len(time), len(month_2d), len(rgi_ids))
             for vn in ds_diag.data_vars:
-                if 'month_2d' not in ds_diag[vn].dims:
+                if name_2d_dim not in ds_diag[vn].dims:
                     continue
                 var = dict()
                 var['data'] = np.full(shape, np.nan)
@@ -1048,7 +1052,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds[vn] = (('time', 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_3d.items():
-        ds[vn] = (('time', 'month_2d', 'rgi_id'), var['data'])
+        ds[vn] = (('time', name_2d_dim, 'rgi_id'), var['data'])
         ds[vn].attrs = var['attrs']
     for vn, var in out_1d.items():
         ds[vn] = (('rgi_id', ), var['data'])
