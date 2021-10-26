@@ -1099,8 +1099,7 @@ class FlowlineModel(object):
                 ds.attrs['description'] = 'OGGM model output'
                 ds.attrs['oggm_version'] = __version__
                 ds.attrs['calendar'] = '365-day no leap'
-                ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S",
-                                                          gmtime())
+                ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
                 ds.attrs['water_level'] = self.water_level
                 ds.attrs['glen_a'] = self.glen_a
                 ds.attrs['fs'] = self.fs
@@ -1181,7 +1180,8 @@ class FlowlineModel(object):
                             var = self.u_stag[fl_id]
                             val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2
                             ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
-
+                # j is the yearly index in case we have monthly output
+                # we have to count it ourselves
                 j += 1
 
             # Diagnostics

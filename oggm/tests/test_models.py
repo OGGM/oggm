@@ -3053,6 +3053,7 @@ class TestHEF:
     def test_start_from_spinup(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
+        cfg.PARAMS['store_model_geometry'] = True
 
         fls = hef_gdir.read_pickle('model_flowlines')
         vol = 0
