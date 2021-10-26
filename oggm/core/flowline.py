@@ -2728,7 +2728,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         cfg.PARAMS['store_model_geometry'])
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
-        (default is to follow cfg.PARAMS['store_model_fl_diagnostics'])
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
     water_level : float
@@ -2893,7 +2893,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         cfg.PARAMS['store_model_geometry'])
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
-        (default is to follow cfg.PARAMS['store_model_fl_diagnostics'])
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -2999,7 +2999,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         cfg.PARAMS['store_model_geometry'])
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
-        (default is to follow cfg.PARAMS['store_model_fl_diagnostics'])
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     init_model_filesuffix : str
         if you want to start from a previous model run state. Can be
         combined with `init_model_yr`
@@ -3095,7 +3095,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         cfg.PARAMS['store_model_geometry'])
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
-        (default is to follow cfg.PARAMS['store_model_fl_diagnostics'])
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'

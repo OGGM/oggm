@@ -535,7 +535,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     k = 'error_when_glacier_reaches_boundaries'
     PARAMS[k] = cp.as_bool(k)
     PARAMS['store_model_geometry'] = cp.as_bool('store_model_geometry')
-    PARAMS['store_model_fl_diagnostics'] = cp.as_bool('store_model_fl_diagnostics')
+    PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -593,7 +593,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'use_inversion_params_for_run', 'ref_mb_valid_window',
            'tidewater_type', 'store_model_geometry',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_model_fl_diagnostics']
+           'geodetic_mb_period', 'store_fl_diagnostics']
     for k in ltr:
         cp.pop(k, None)
 

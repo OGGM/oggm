@@ -1702,8 +1702,10 @@ class TestIO():
                                is_tidewater=True,
                                flux_gate=0.12, do_kcalving=True,
                                calving_k=0.2)
-        diag, _ = model.run_until_and_store(y1, diag_path=diag_path,
-                                            geom_path=geom_path)
+        diag, fl_diag, _ = model.run_until_and_store(y1,
+                                                     fl_diag_path=None,
+                                                     diag_path=diag_path,
+                                                     geom_path=geom_path)
         assert model.calving_m3_since_y0 > 0
 
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1715,8 +1717,15 @@ class TestIO():
         assert fmodel.last_yr == y1
         assert fmodel.do_calving
 
-        np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
-        np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
+        assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
+        assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
+
+        fl_diag = fl_diag[0]
+        assert_allclose(fl_diag.volume_m3.sum(dim='dis_along_flowline') -
+                        fl_diag.calving_bucket_m3,
+                        diag.volume_m3)
+        assert_allclose(fl_diag.area_m2.sum(dim='dis_along_flowline'),
+                        diag.area_m2)
 
         fmodel.run_until(y1)
         assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
