@@ -190,7 +190,7 @@ directories from the default urls. Here is a summary of the default configuratio
   against geodetic MB (see options below for regional calibration)
 - ice volume inversion calibrated to match the ice volume from [Farinotti_etal_2019]_
   **at the RGI region level**, i.e. glacier estimates might differ. If not specified otherwise,
-  it's also the precalibrated paramaters that will be used for the dynamical run.
+  it's also the precalibrated parameters that will be used for the dynamical run.
 - frontal ablation by calving (at inversion and for the dynamical runs) is switched off
 
 To see the code that generated these directories (for example if you want to
@@ -439,7 +439,7 @@ for three reference periods (2000-2010, 2010-2020, 2000-2020):
     @savefig plot_hugonnet_mbdata.png width=100%
     plt.xlabel(''); plt.xlim(-3, 3); plt.legend();
 
-Just for fun, here is a comparaison of both products at Hintereisferner:
+Just for fun, here is a comparison of both products at Hintereisferner:
 
 .. ipython:: python
 
@@ -515,7 +515,7 @@ and type:
 
 The RGI folders should now contain the glacier outlines in the
 `shapefile format <https://en.wikipedia.org/wiki/Shapefile>`_, a format widely
-used in GIS applications. These files can be read by several softwares
+used in GIS applications. These files can be read by several software
 (e.g. `qgis <https://www.qgis.org/en/site/>`_), and OGGM can read them too.
 
 The "RGI Intersects" shapefiles contain the locations of the ice divides
@@ -736,6 +736,6 @@ period. This method is sometimes called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
 
 Currently we can process data from the
-`CESM Last Millenium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
+`CESM Last Millennium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
 project (see :py:func:`tasks.process_cesm_data`), and CMIP5/CMIP6
 (:py:func:`tasks.process_cmip_data`).

@@ -673,7 +673,7 @@ class TestMassBalanceModels:
 
         ref_mbh = ref_mod.get_annual_mb(h, None) * SEC_IN_YEAR
 
-        # two years shoudn't be equal
+        # two years shouldn't be equal
         r_mbh1 = mb_mod.get_annual_mb(h, 1) * SEC_IN_YEAR
         r_mbh2 = mb_mod.get_annual_mb(h, 2) * SEC_IN_YEAR
         assert not np.all(np.allclose(r_mbh1, r_mbh2))
@@ -731,6 +731,20 @@ class TestMassBalanceModels:
         my_mb = my_mb / 31
         ref_mb = ref_mb / 31
         assert utils.rmsd(ref_mb, my_mb) < 0.1
+
+        # Prescribe MB
+        pdf = pd.Series(index=mb_mod._state_yr.keys(), data=mb_mod._state_yr.values())
+        p_mod = massbalance.RandomMassBalance(gdir, prescribe_years=pdf)
+
+        mb_ts = []
+        mb_ts2 = []
+        yrs = np.arange(1973, 2004, 1)
+        for yr in yrs:
+            mb_ts.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
+                                    weights=w))
+            mb_ts2.append(np.average(p_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
+                                     weights=w))
+        np.testing.assert_allclose(mb_ts, mb_ts2)
 
     def test_random_mb_unique(self, hef_gdir):
 
@@ -2764,7 +2778,7 @@ class TestHEF:
         with xr.open_dataset(fp) as ds:
             ds_nostop = ds.load()
 
-        assert ds_stop.volume_m3.isnull().sum() > 100
+        assert ds_stop.volume_m3.isnull().sum() > 50
         assert ds_nostop.volume_m3.isnull().sum() == 0
 
         ds_stop = ds_stop.volume_m3.isel(time=~ds_stop.volume_m3.isnull())
@@ -3140,7 +3154,7 @@ class TestHEF:
             np.testing.assert_allclose(shist.prcp.mean(),
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
-            # And also the anual cycle
+            # And also the annual cycle
             scru = shist.groupby('time.month').mean(dim='time')
             scesm = scesm.groupby('time.month').mean(dim='time')
             np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)

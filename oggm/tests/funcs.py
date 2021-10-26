@@ -227,7 +227,7 @@ def dummy_width_bed_tributary(map_dx=100., n_trib=1):
 
 def dummy_bed_tributary_tail_to_head(map_dx=100., n_trib=1, small_cliff=False):
     # bed with tributary glacier(s) flowing directly into their top
-    # (for splitted flowline experiments)
+    # (for split flowline experiments)
     dx = 1.
     nx = 200
 

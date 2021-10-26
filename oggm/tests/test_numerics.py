@@ -1271,8 +1271,8 @@ class TestIdealisedCases(unittest.TestCase):
         assert dh_ds.isel(time=-6) > 0
 
         if do_plot:
-            fl_ds.volume_m3.plot(label='Flowline')
-            dh_ds.volume_m3.plot(label='MassRedis')
+            fl_ds.plot(label='Flowline')
+            dh_ds.plot(label='MassRedis')
             plt.legend()
             plt.show()
 
@@ -1300,10 +1300,10 @@ class TestIdealisedCases(unittest.TestCase):
         assert_allclose(dh_ds.isel(time=-1), dh_ds_ns.isel(time=-1), rtol=0.12)
 
         if do_plot:
-            fl_ds.volume_m3.plot(label='Flowline', color='C0', linewidth=5)
-            fl_ds_ns.volume_m3.plot(label='Flowline - cont', color='C0')
-            dh_ds.volume_m3.plot(label='MassRedis', color='C1', linewidth=5)
-            dh_ds_ns.volume_m3.plot(label='MassRedis - cont', color='C1')
+            fl_ds.plot(label='Flowline', color='C0', linewidth=5)
+            fl_ds_ns.plot(label='Flowline - cont', color='C0')
+            dh_ds.plot(label='MassRedis', color='C1', linewidth=5)
+            dh_ds_ns.plot(label='MassRedis - cont', color='C1')
             plt.legend()
             plt.show()
 

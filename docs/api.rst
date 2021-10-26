@@ -417,7 +417,7 @@ model flowlines
    :py:func:`init_present_time_glacier`, which combines information from
    several preprocessing steps, the downstream line and the bed inversion.
    From a user perspective, especially if preprocessed directories are used,
-   these model flowlines are the most important ones and further informations
+   these model flowlines are the most important ones and further information
    on the class interface and attributes are given below.
 
 .. _Kienholz et al., (2014): http://www.the-cryosphere.net/8/503/2014/

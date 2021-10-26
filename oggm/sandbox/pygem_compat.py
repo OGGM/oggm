@@ -105,7 +105,7 @@ def present_time_glacier_from_bins(gdir, data=None,
         bed_shape = 4 * thick / width ** 2
 
     # TODO: this is a very dirty fix -> we should rather interpolate,
-    # AND we should be really carefull about flat bed shapes
+    # AND we should be really careful about flat bed shapes
     bed_shape = np.where(np.isfinite(bed_shape), bed_shape,
                          np.nanmean(bed_shape))
 

@@ -272,7 +272,7 @@ class ParabolicBedFlowline(Flowline):
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, bed_shape=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -318,7 +318,7 @@ class RectangularBedFlowline(Flowline):
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, widths=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -363,7 +363,7 @@ class TrapezoidalBedFlowline(Flowline):
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, widths=None, lambdas=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -424,7 +424,7 @@ class MixedBedFlowline(Flowline):
                  bed_h=None, section=None, bed_shape=None,
                  is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None,
                  water_level=None):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -579,7 +579,7 @@ class FlowlineModel(object):
             some Flowline models have an adaptive time stepping scheme, which
             is randomly taking steps towards the goal of a "run_until". The
             default ('monthly') makes sure that the model results are
-            consistent wether the users want data at monthly or annual
+            consistent whether the users want data at monthly or annual
             timesteps by forcing the model to land on monthly steps even if
             only annual updates are required. You may want to change this
             for optimisation reasons for models that don't require adaptive
@@ -1351,7 +1351,7 @@ class FluxBasedModel(FlowlineModel):
                  do_kcalving=None, calving_k=None, calving_use_limiter=None,
                  calving_limiter_frac=None, water_level=None,
                  **kwargs):
-        """Instanciate the model.
+        """Instantiate the model.
 
         Parameters
         ----------
@@ -1406,7 +1406,7 @@ class FluxBasedModel(FlowlineModel):
             changing the flux_gate_buildup time. You can also provide
             a function (or an array of functions) returning the flux
             (unit: m3 of ice per second) as a function of time.
-            This is overriden by `flux_gate_thickness` if provided.
+            This is overridden by `flux_gate_thickness` if provided.
         flux_gate_buildup : int
             number of years used to build up the flux gate to full value
         do_kcalving : bool
@@ -1811,7 +1811,7 @@ class MassConservationChecker(FluxBasedModel):
     """This checks if the FluxBasedModel is conserving mass."""
 
     def __init__(self, flowlines, **kwargs):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -1849,7 +1849,7 @@ class KarthausModel(FlowlineModel):
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  fixed_dt=None, min_dt=SEC_IN_DAY, max_dt=31*SEC_IN_DAY,
                  inplace=False, **kwargs):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -1932,7 +1932,7 @@ class FileModel(object):
     """Duck FlowlineModel which actually reads data out of a nc file."""
 
     def __init__(self, path):
-        """ Instanciate.
+        """ Instantiate.
 
         Parameters
         ----------
@@ -2096,7 +2096,7 @@ class MassRedistributionCurveModel(FlowlineModel):
                  do_kcalving=None, calving_k=None,
                  advance_method=1,
                  **kwargs):
-        """ Instanciate the model.
+        """ Instantiate the model.
 
         Parameters
         ----------
@@ -2158,7 +2158,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         elif dt < cfg.SEC_IN_YEAR:
             # Here however we complain - we really want one year exactly
             raise InvalidWorkflowError('I was asked to run for less than one '
-                                       'year. Delta-H models cant do that.')
+                                       'year. Delta-H models can\'t do that.')
 
         # Flowline state
         fl = self.fls[0]
@@ -2371,7 +2371,7 @@ def mass_redistribution_curve_huss(height, bin_area, mb, glac_idx, glacier_delta
         # No need for a curve when glacier is so small
         return mb * bin_area
 
-    # Select the paramaters based on glacier area
+    # Select the parameters based on glacier area
     if bin_area.sum() * 1e-6 > 20:
         gamma, a, b, c = (6, -0.02, 0.12, 0)
     elif bin_area.sum() * 1e-6 > 5:
@@ -2407,7 +2407,7 @@ def mass_redistribution_curve_huss(height, bin_area, mb, glac_idx, glacier_delta
 
 
 def flowline_from_dataset(ds):
-    """Instanciates a flowline from an xarray Dataset."""
+    """Instantiates a flowline from an xarray Dataset."""
 
     cl = globals()[ds.attrs['class']]
     line = shpg.LineString(ds['linecoords'].values)
@@ -2428,7 +2428,7 @@ def flowline_from_dataset(ds):
 
 
 def glacier_from_netcdf(path):
-    """Instanciates a list of flowlines from an xarray Dataset."""
+    """Instantiates a list of flowlines from an xarray Dataset."""
 
     with xr.open_dataset(path) as ds:
         fls = []
@@ -2691,6 +2691,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        store_fl_diagnostics=None,
                        water_level=None,
                        evolution_model=FluxBasedModel, stop_criterion=None,
+                       init_model_filesuffix=None, init_model_yr=None,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -2709,6 +2710,12 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         end year of the model run (default: from the config file)
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
@@ -2737,6 +2744,16 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
      """
+
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
+        init_model_fls = fmod.fls
+
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):
         warnings.warn("The mass-balance used to drive the ice dynamics model "
@@ -2832,6 +2849,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        climate_filename='climate_historical',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
+                       init_model_filesuffix=None,
+                       init_model_yr=None,
                        zero_initial_glacier=False,
                        unique_samples=False, **kwargs):
     """Runs the random mass-balance model for a given number of years.
@@ -2883,6 +2902,12 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     output_filesuffix : str
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    init_model_filesuffix : str
+        if you want to start from a previous model run state. Can be
+        combined with `init_model_yr`
+    init_model_yr : int
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory)
@@ -2914,6 +2939,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
+                              init_model_filesuffix=init_model_filesuffix,
+                              init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               **kwargs)
@@ -2999,15 +3026,6 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    if init_model_filesuffix is not None:
-        fp = gdir.get_filepath('model_geometry',
-                               filesuffix=init_model_filesuffix)
-        fmod = FileModel(fp)
-        if init_model_yr is None:
-            init_model_yr = fmod.last_yr
-        fmod.run_until(init_model_yr)
-        init_model_fls = fmod.fls
-
     if use_avg_climate:
         mb_model = AvgClimateMassBalance
     else:
@@ -3028,6 +3046,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
+                              init_model_filesuffix=init_model_filesuffix,
+                              init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               **kwargs)
@@ -3568,7 +3588,7 @@ def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
     return False, state
 
 
-def spec_mb_stop_criterion(model, state, spec_mb_threshold=100, n_years=20):
+def spec_mb_stop_criterion(model, state, spec_mb_threshold=50, n_years=60):
     """Stop the simulation when the specific MB is close to zero for a given period.
 
     To be passed as kwarg to `run_until_and_store`.
@@ -3592,25 +3612,35 @@ def spec_mb_stop_criterion(model, state, spec_mb_threshold=100, n_years=20):
     if 'spec_mb' not in state:
         # Maybe the state is from another criteria
         state['spec_mb'] = []
+        state['volume_m3'] = []
 
     if model.yr != int(model.yr):
         # We consider only full model years
         return False, state
 
-    spec_mb = model.mb_model.get_specific_mb(fls=model.fls, year=model.yr)
+    area = model.area_m2
+    volume = model.volume_m3
+    if area < 1 or len(state['volume_m3']) == 0:
+        spec_mb = np.NaN
+    else:
+        spec_mb = (volume - state['volume_m3'][-1]) / area * cfg.PARAMS['ice_density']
+
     state['spec_mb'] = np.append(state['spec_mb'], [spec_mb])
+    state['volume_m3'] = np.append(state['volume_m3'], [volume])
 
     if len(state['spec_mb']) < n_years:
         return False, state
 
-    mbavg = np.mean(state['spec_mb'][-n_years:])
+    mbavg = np.nanmean(state['spec_mb'][-n_years:])
     if abs(mbavg) <= spec_mb_threshold:
         return True, state
     else:
         return False, state
 
 
-def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_years=20):
+def equilibrium_stop_criterion(model, state,
+                               spec_mb_threshold=50, n_years_specmb=60,
+                               n_zero=5, n_years_zero=20):
     """Stop the simulation when of og spec_mb and zero_volume criteria are met.
 
     To be passed as kwarg to `run_until_and_store`.
@@ -3620,8 +3650,9 @@ def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_
     model : the model class
     state : a dict
     spec_mb_threshold : the specific MB threshold (in mm w.e. per year)
+    n_years_specmb : number of years to consider for the spec_mb criterion
     n_zero : number of 0 volume years
-    n_years : number of years to consider
+    n_years_zero : number of years to consider for the zero volume criterion.
 
     Returns
     -------
@@ -3631,9 +3662,9 @@ def equilibrium_stop_criterion(model, state, spec_mb_threshold=100, n_zero=5, n_
     if state is None:
         # OK first call
         state = {}
-    s1, state = zero_glacier_stop_criterion(model, state, n_years=n_years,
+    s1, state = zero_glacier_stop_criterion(model, state, n_years=n_years_zero,
                                             n_zero=n_zero)
-    s2, state = spec_mb_stop_criterion(model, state, n_years=n_years,
+    s2, state = spec_mb_stop_criterion(model, state, n_years=n_years_specmb,
                                        spec_mb_threshold=spec_mb_threshold)
     return s1 or s2, state
 
@@ -3664,7 +3695,7 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
 
     # read flowlines of the Main glacier
     fls = main.read_pickle('model_flowlines')
-    mfl = fls.pop(-1)  # remove main line from list and treat seperately
+    mfl = fls.pop(-1)  # remove main line from list and treat separately
 
     for trib in tribs:
 
@@ -3764,7 +3795,7 @@ def clean_merged_flowlines(gdir, buffer=None):
 
     fls = gdir.read_pickle('model_flowlines')
 
-    # seperate the main main flowline
+    # separate the main main flowline
     mainfl = fls.pop(-1)
 
     # split fls in main and tribs
@@ -3861,7 +3892,7 @@ def clean_merged_flowlines(gdir, buffer=None):
         # 3. set flow to attributes. This also adds inflow values to other
         fl1.set_flows_to(_olline)
 
-        # change the array size of tributary flowline attributs
+        # change the array size of tributary flowline attributes
         for atr, value in fl1.__dict__.items():
             if atr in ['_ptrap', '_prec']:
                 # those are indices, remove those above nx

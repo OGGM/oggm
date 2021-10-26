@@ -81,8 +81,9 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
 
     # from normal years to hydrological years
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    prcp = prcp[sm-1:sm-13].load()
-    temp = temp[sm-1:sm-13].load()
+    if sm != 1:
+        prcp = prcp[sm-1:sm-13].load()
+        temp = temp[sm-1:sm-13].load()
 
     assert len(prcp) // 12 == len(prcp) / 12, 'Somehow we didn\'t get full years'
     assert len(temp) // 12 == len(temp) / 12, 'Somehow we didn\'t get full years'
@@ -106,7 +107,9 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                          'for this to work')
             ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
             std_fac = ds_ref.temp.groupby('time.month').std(dim='time') / ts_tmp_std
-            std_fac = std_fac.roll(month=13-sm, roll_coords=True)
+            if sm != 1:
+                # Just to avoid useless roll
+                std_fac = std_fac.roll(month=13-sm, roll_coords=True)
             std_fac = np.tile(std_fac.data, len(temp) // 12)
             # We need an even number of years for this to work
             win_size = len(ts_tmp_sel) + 1
@@ -370,9 +373,12 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
     # Get the path of GCM temperature & precipitation data
     base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
     if fpath_temp is None:
-        fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
+        with utils.get_lock():
+            fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
     if fpath_precip is None:
-        fpath_precip = utils.file_downloader(base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+        with utils.get_lock():
+            fpath_precip = utils.file_downloader(
+                base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
 
     # Glacier location
     glon = gdir.cenlon

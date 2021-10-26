@@ -314,7 +314,7 @@ class Upstream2D(Model2D):
         self._ixkmlp = ix_(self.km, self.lp)
 
     def diffusion_upstream_2d(self):
-        # Builded upon the Eq. (62) with the term in y in the diffusivity.
+        # Built upon the Eq. (62) with the term in y in the diffusivity.
         # It differs from diffusion_Upstream_2D_V1 only for the definition of
         # "s_grad", l282-283 & l305-306 in V1 and l355-356 & l379-380 in V2)
 

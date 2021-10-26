@@ -913,7 +913,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     If none of these are provided (the default), this list be obtained from
     the current working directory (``ref_tstars.csv`` and associated params
     ``ref_tstars_params.json``). These files can either be generated with a
-    call to ``compute_ref_t_stars`` if you know what you are doing, ot you
+    call to ``compute_ref_t_stars`` if you know what you are doing, or you
     can obtain pre-preprocessed lists from our servers:
     https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/
 

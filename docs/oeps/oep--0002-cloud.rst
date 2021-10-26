@@ -39,7 +39,7 @@ list the most important ones:
 - `JupyterLab`_ is the web development environment where the notebooks can be
   run and edited.
 - `JupyterHub`_ is the server which spawns JupyterLab in the containerized
-  environment. It also handles user authentification and many other things.
+  environment. It also handles user authentication and many other things.
 - `MyBinder`_ is a versatile server which automatises the process of
   providing *any kind of environment* in a JupyterHub. MyBinder is a free to
   use deployment of the open-source Binder tool - but anyone can deploy a
@@ -188,7 +188,7 @@ on the cloud idea a little more.
 Detailed roadmap
 ----------------
 
-**Scaling**. This is relatively independant of cloud or HPC and should be done
+**Scaling**. This is relatively independent of cloud or HPC and should be done
 anyway.
 
 - **refactor the multiprocessing workflow of OGGM to use dask**. Once OGGM can

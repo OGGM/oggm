@@ -133,14 +133,14 @@ will take place on this repository or the main OGGM repository.
 Docker and Singularity containers (goal 4)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The easiest way to guarantee consistency accross platforms and over longer
+The easiest way to guarantee consistency across platforms and over longer
 periods of time are `containers <https://www.docker.com/resources/what-container>`_.
 A container image is a lightweight, standalone, executable package of software 
 that includes everything needed to run an application: code, runtime, system 
 tools, system libraries and settings.
 
 The most widely used container platform is `Docker <https://www.docker.com>`_.
-For security and preformance reasons, HPC centers prefer to use 
+For security and performance reasons, HPC centers prefer to use 
 `Singularity <https://www.sylabs.io>`_. Fortunately, Singularity containers
 can be built from Docker images.
 

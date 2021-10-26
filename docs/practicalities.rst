@@ -384,7 +384,7 @@ developers.
 Dependence on hardware and input data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The OGGM model will always be dependant on the input data (topography, climate,
+The OGGM model will always be dependent on the input data (topography, climate,
 outlines...). Be aware that while certain results are robust (like interannual
 variability of surface mass-balance), other results are highly sensitive
 to small changes in the boundary conditions. Some examples include:
