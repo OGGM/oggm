@@ -2941,6 +2941,8 @@ class TestHEF:
     @pytest.mark.slow
     def test_start_from_date(self, hef_gdir, inversion_params):
 
+        cfg.PARAMS['store_model_geometry'] = True
+
         init_present_time_glacier(hef_gdir)
         run_constant_climate(hef_gdir, nyears=20,
                              fs=inversion_params['inversion_fs'],
@@ -2966,6 +2968,8 @@ class TestHEF:
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
+
+        cfg.PARAMS['store_model_geometry'] = True
 
         gdir = hef_gdir
         init_present_time_glacier(gdir_sh)
@@ -3088,6 +3092,7 @@ class TestHEF:
     def test_start_from_spinup_minmax_ys(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
+        cfg.PARAMS['store_model_geometry'] = True
 
         fls = hef_gdir.read_pickle('model_flowlines')
         vol = 0
@@ -3137,6 +3142,8 @@ class TestHEF:
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
+
+        cfg.PARAMS['store_model_geometry'] = True
 
         gdir = hef_gdir
 
@@ -3285,6 +3292,8 @@ class TestHEF:
 
         gdir = hef_gdir
         gdir.rgi_date = 1990
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
 
         # Try minimal output and see if it works
         cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
@@ -3292,12 +3301,20 @@ class TestHEF:
                                                     'terminus_thick_1',
                                                     'terminus_thick_2',
                                                     ]
+        cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
 
         cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
                                     output_filesuffix='_hist')
+
+        # Check fl diagnostics
+        fl_diag_path = gdir.get_filepath('fl_diagnostics', filesuffix='_hist')
+        with xr.open_dataset(fl_diag_path, group='fl_0') as ds_fl:
+            assert 'area_m2' in ds_fl
+            assert 'volume_m3' in ds_fl
+            assert 'volume_bsl_m3' not in ds_fl
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')

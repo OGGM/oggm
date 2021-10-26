@@ -1116,6 +1116,9 @@ class FlowlineModel(object):
 
             # Variables and attributes
             ovars_fl = cfg.PARAMS['store_fl_diagnostic_variables']
+            if 'volume' not in ovars_fl or 'area' not in ovars_fl:
+                raise InvalidParamsError('Flowline diagnostics need at least '
+                                         'volume and area as output.')
 
             for ds, sect, width, bucket in zip(fl_diag_dss, sects, widths, buckets):
                 if 'volume' in ovars_fl:
@@ -1252,6 +1255,7 @@ class FlowlineModel(object):
             for ds in fl_diag_dss:
                 dx = ds.attrs['map_dx'] * ds.attrs['dx']
                 # No inplace because the other dataset uses them
+                # These variables are always there (see above)
                 ds['volume_m3'] = ds['volume_m3'] * dx
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
 
