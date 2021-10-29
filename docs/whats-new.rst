@@ -10,6 +10,21 @@ v1.5.x (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- In the process of adding new output diagnostic files (:pull:`1308`), the
+  signature and return output of ``FlowlineModel.run_until_and_store``
+  changed. We hope that this change won't affect too many of our users but
+  if it does, it should be relatively straightforward to update your code:
+  users now control the number of outputs with the ``fl_diag_path`` and
+  ``geom_path`` kwargs. Most users will probably have used the ``run_*``
+  tasks anyway and won't be affected by this change.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Furthermore, ``cfg.PARAMS['store_model_geometry']`` is now set to ``False``
+  per default. If you were relying on these files (e.g. for a run with spinup
+  or similar), your code will fail with ``FileNotFoundError`` for the
+  ``model_geometry`` files. Setting ``cfg.PARAMS['store_model_geometry']``
+  back to ``True`` should solve the issue.
+
+
 Enhancements
 ~~~~~~~~~~~~
 
@@ -33,6 +48,12 @@ Enhancements
   reference geodetic MB data, currently from Hugonnet et al 2021.
   Also changed the behavior of ``cfg.DATA`` to be shared
   across processes (:pull:`1285`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added a new output diagnostic files containing variables along the flowlines
+  instead of aggregated at the glacier level (:pull:`1308`). These files are
+  stored in the glacier directory (``gdir.get_filepath('fl_diagnostics')``) and
+  are not saved per default. Set ``cfg.PARAMS['store_fl_diagnostics'] = True``
+  to activate it.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes

@@ -1508,11 +1508,11 @@ class TestIO():
                                      dummy_noisy_bed, dummy_bumpy_bed,
                                      dummy_parabolic_bed,
                                      dummy_trapezoidal_bed, dummy_mixed_bed])
-    def test_flowline_to_dataset(self, bed):
+    def test_flowline_to_geometry_dataset(self, bed):
         fl = bed()[0]
-        ds = fl.to_dataset()
+        ds = fl.to_geometry_dataset()
         fl_ = flowline_from_dataset(ds)
-        ds_ = fl_.to_dataset()
+        ds_ = fl_.to_geometry_dataset()
         assert ds_.equals(ds)
 
     def test_model_to_file(self, class_case_dir):
@@ -1523,12 +1523,12 @@ class TestIO():
 
         fls = dummy_width_bed_tributary()
         model = FluxBasedModel(fls)
-        model.to_netcdf(p)
+        model.to_geometry_netcdf(p)
         fls_ = glacier_from_netcdf(p)
 
         for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
+            ds = fl.to_geometry_dataset()
+            ds_ = fl_.to_geometry_dataset()
             assert ds_.equals(ds)
 
         assert fls_[0].flows_to is fls_[1]
@@ -1551,8 +1551,12 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500, store_monthly_step=True)
+        ds_diag, ds_fl, ds = model.run_until_and_store(500,
+                                                       store_monthly_step=True,
+                                                       fl_diag_path=None,
+                                                       geom_path=None)
         ds = ds[0]
+        ds_fl = ds_fl[0]
 
         # Check attrs
         assert ds.attrs['mb_model_class'] == 'LinearMassBalance'
@@ -1584,25 +1588,44 @@ class TestIO():
                 l_ref.append(model.length_m)
                 if int(yr) == 500:
                     secfortest = model.fls[0].section
+                    hfortest = model.fls[0].thick
 
         np.testing.assert_allclose(ds.ts_section.isel(time=-1),
                                    secfortest)
+        np.testing.assert_allclose(ds_fl.thickness_m.isel(time=-1),
+                                   hfortest)
 
         np.testing.assert_allclose(ds_diag.volume_m3, vol_diag)
         np.testing.assert_allclose(ds_diag.area_m2, a_diag)
         np.testing.assert_allclose(ds_diag.length_m, l_diag)
 
+        np.testing.assert_allclose(ds_fl.volume_m3.sum(dim='dis_along_flowline'),
+                                   vol_ref)
+        np.testing.assert_allclose(ds_fl.volume_bwl_m3.sum(dim='dis_along_flowline'),
+                                   0)
+        np.testing.assert_allclose(ds_fl.volume_bsl_m3.sum(dim='dis_along_flowline'),
+                                   0)
+        np.testing.assert_allclose(ds_fl.area_m2.sum(dim='dis_along_flowline'),
+                                   a_ref)
+
+        vel = ds_fl.ice_velocity_myr.isel(time=-1)
+        assert 20 < vel.max() < 40
+
         fls = dummy_constant_bed()
         geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
         diag_path = os.path.join(class_case_dir, 'ts_diag.nc')
+        fl_diag_path = os.path.join(class_case_dir, 'ts_fl_diag.nc')
         if os.path.exists(geom_path):
             os.remove(geom_path)
         if os.path.exists(diag_path):
             os.remove(diag_path)
+        if os.path.exists(fl_diag_path):
+            os.remove(fl_diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
         model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path,
+                                  fl_diag_path=fl_diag_path,
                                   store_monthly_step=True)
 
         with xr.open_dataset(diag_path) as ds_:
@@ -1611,6 +1634,18 @@ class TestIO():
             del ds_.attrs['creation_date']
             xr.testing.assert_identical(ds_diag, ds_)
 
+        # Test new fl diags
+        with xr.open_dataset(fl_diag_path, group='fl_0') as ds_fl:
+            assert_allclose(ds_fl.volume_m3.sum(dim='dis_along_flowline'),
+                            vol_ref)
+            assert_allclose(ds_fl.volume_bwl_m3.sum(dim='dis_along_flowline'),
+                            0)
+            assert_allclose(ds_fl.volume_bsl_m3.sum(dim='dis_along_flowline'),
+                            0)
+            assert_allclose(ds_fl.area_m2.sum(dim='dis_along_flowline'),
+                            a_ref)
+
+        # Test restart files
         with pytest.warns(FutureWarning):
             with FileModel(geom_path):
                 pass
@@ -1667,8 +1702,10 @@ class TestIO():
                                is_tidewater=True,
                                flux_gate=0.12, do_kcalving=True,
                                calving_k=0.2)
-        _, diag = model.run_until_and_store(y1, geom_path=geom_path,
-                                            diag_path=diag_path)
+        diag, fl_diag, _ = model.run_until_and_store(y1,
+                                                     fl_diag_path=None,
+                                                     diag_path=diag_path,
+                                                     geom_path=geom_path)
         assert model.calving_m3_since_y0 > 0
 
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1680,8 +1717,15 @@ class TestIO():
         assert fmodel.last_yr == y1
         assert fmodel.do_calving
 
-        np.testing.assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
-        np.testing.assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
+        assert_allclose(fmodel.volume_m3_ts(), diag.volume_m3)
+        assert_allclose(fmodel.area_m2_ts(), diag.area_m2)
+
+        fl_diag = fl_diag[0]
+        assert_allclose(fl_diag.volume_m3.sum(dim='dis_along_flowline') -
+                        fl_diag.calving_bucket_m3,
+                        diag.volume_m3)
+        assert_allclose(fl_diag.area_m2.sum(dim='dis_along_flowline'),
+                        diag.area_m2)
 
         fmodel.run_until(y1)
         assert_allclose(fmodel.volume_m3 + fmodel.calving_m3_since_y0,
@@ -1694,7 +1738,7 @@ class TestIO():
         fls = dummy_constant_bed()
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
-        ds, ds_diag = model.run_until_and_store(500)
+        ds_diag, ds = model.run_until_and_store(500, geom_path=None)
         ds = ds[0]
 
         fls = dummy_constant_bed()
@@ -1811,12 +1855,12 @@ class TestIO():
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls)
 
-        model.to_netcdf(p)
+        model.to_geometry_netcdf(p)
         fls_ = glacier_from_netcdf(p)
 
         for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
+            ds = fl.to_geometry_dataset()
+            ds_ = fl_.to_geometry_dataset()
             for v in ds.variables.keys():
                 np.testing.assert_allclose(ds_[v], ds[v], equal_nan=True)
 
@@ -1830,7 +1874,7 @@ class TestIO():
         p = os.path.join(class_case_dir, 'grp_hef_mix.nc')
         if os.path.isfile(p):
             os.remove(p)
-        model.to_netcdf(p)
+        model.to_geometry_netcdf(p)
         fls_ = glacier_from_netcdf(p)
 
         np.testing.assert_allclose(fls[0].section, fls_[0].section)
@@ -1838,8 +1882,8 @@ class TestIO():
         np.testing.assert_allclose(fls[0].bed_h, fls_[0].bed_h)
 
         for fl, fl_ in zip(fls, fls_):
-            ds = fl.to_dataset()
-            ds_ = fl_.to_dataset()
+            ds = fl.to_geometry_dataset()
+            ds_ = fl_.to_geometry_dataset()
             np.testing.assert_allclose(fl.section, fl_.section)
             np.testing.assert_allclose(fl._ptrap, fl_._ptrap)
             np.testing.assert_allclose(fl.bed_h, fl_.bed_h)
@@ -2869,6 +2913,8 @@ class TestHEF:
     @pytest.mark.slow
     def test_random(self, hef_gdir, inversion_params):
 
+        cfg.PARAMS['store_model_geometry'] = True
+
         init_present_time_glacier(hef_gdir)
         run_random_climate(hef_gdir, nyears=100, seed=6,
                            fs=inversion_params['inversion_fs'],
@@ -2895,6 +2941,8 @@ class TestHEF:
     @pytest.mark.slow
     def test_start_from_date(self, hef_gdir, inversion_params):
 
+        cfg.PARAMS['store_model_geometry'] = True
+
         init_present_time_glacier(hef_gdir)
         run_constant_climate(hef_gdir, nyears=20,
                              fs=inversion_params['inversion_fs'],
@@ -2920,6 +2968,8 @@ class TestHEF:
 
     @pytest.mark.slow
     def test_random_sh(self, gdir_sh, hef_gdir):
+
+        cfg.PARAMS['store_model_geometry'] = True
 
         gdir = hef_gdir
         init_present_time_glacier(gdir_sh)
@@ -3007,6 +3057,7 @@ class TestHEF:
     def test_start_from_spinup(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
+        cfg.PARAMS['store_model_geometry'] = True
 
         fls = hef_gdir.read_pickle('model_flowlines')
         vol = 0
@@ -3041,6 +3092,7 @@ class TestHEF:
     def test_start_from_spinup_minmax_ys(self, hef_gdir):
 
         init_present_time_glacier(hef_gdir)
+        cfg.PARAMS['store_model_geometry'] = True
 
         fls = hef_gdir.read_pickle('model_flowlines')
         vol = 0
@@ -3090,6 +3142,8 @@ class TestHEF:
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
+
+        cfg.PARAMS['store_model_geometry'] = True
 
         gdir = hef_gdir
 
@@ -3238,6 +3292,8 @@ class TestHEF:
 
         gdir = hef_gdir
         gdir.rgi_date = 1990
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
 
         # Try minimal output and see if it works
         cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
@@ -3245,12 +3301,20 @@ class TestHEF:
                                                     'terminus_thick_1',
                                                     'terminus_thick_2',
                                                     ]
+        cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
 
         cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
                                     output_filesuffix='_hist')
+
+        # Check fl diagnostics
+        fl_diag_path = gdir.get_filepath('fl_diagnostics', filesuffix='_hist')
+        with xr.open_dataset(fl_diag_path, group='fl_0') as ds_fl:
+            assert 'area_m2' in ds_fl
+            assert 'volume_m3' in ds_fl
+            assert 'volume_bsl_m3' not in ds_fl
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
@@ -3321,6 +3385,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3430,6 +3496,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
@@ -3492,6 +3560,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -3558,6 +3628,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
@@ -3621,6 +3693,8 @@ class TestHydro:
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(gdir)
 

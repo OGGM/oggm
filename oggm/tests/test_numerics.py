@@ -1256,8 +1256,8 @@ class TestIdealisedCases(unittest.TestCase):
         dh_model = MassRedistributionCurveModel(spinup.fls, mb_model=mb, y0=0)
 
         from oggm.core.flowline import zero_glacier_stop_criterion
-        _, fl_ds = fl_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
-        _, dh_ds = dh_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
+        fl_ds = fl_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
+        dh_ds = dh_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
 
         assert fl_ds.volume_m3.isnull().sum() > 800
         assert dh_ds.volume_m3.isnull().sum() > 450
@@ -1281,11 +1281,11 @@ class TestIdealisedCases(unittest.TestCase):
         dh_model = MassRedistributionCurveModel(spinup.fls, mb_model=mb, y0=0)
 
         from oggm.core.flowline import spec_mb_stop_criterion
-        _, fl_ds = fl_model.run_until_and_store(1000, stop_criterion=spec_mb_stop_criterion)
-        _, dh_ds = dh_model.run_until_and_store(1000, stop_criterion=spec_mb_stop_criterion)
+        fl_ds = fl_model.run_until_and_store(1000, stop_criterion=spec_mb_stop_criterion)
+        dh_ds = dh_model.run_until_and_store(1000, stop_criterion=spec_mb_stop_criterion)
 
-        _, fl_ds_ns = fl_model.run_until_and_store(800)
-        _, dh_ds_ns = dh_model.run_until_and_store(800)
+        fl_ds_ns = fl_model.run_until_and_store(800)
+        dh_ds_ns = dh_model.run_until_and_store(800)
 
         assert fl_ds.volume_m3.isnull().sum() > 600
         assert dh_ds.volume_m3.isnull().sum() > 600
@@ -1409,7 +1409,7 @@ def default_calving():
                            is_tidewater=True, calving_use_limiter=True,
                            flux_gate=0.06, do_kcalving=True,
                            calving_k=0.2)
-    _, ds = model.run_until_and_store(3000, geom_path=False)
+    ds = model.run_until_and_store(3000)
     df_diag = model.get_diagnostics()
     assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                     model.flux_gate_m3_since_y0)
@@ -1430,8 +1430,7 @@ class TestKCalving():
                                is_tidewater=True, calving_use_limiter=False,
                                flux_gate=0.06, do_kcalving=True,
                                calving_k=0.2)
-        o, ds2 = model.run_until_and_store(3000, geom_path=False)
-        assert o is None
+        ds2 = model.run_until_and_store(3000)
         df_diag2 = model.get_diagnostics()
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)
@@ -1465,7 +1464,7 @@ class TestKCalving():
                                smooth_trib_influx=False,
                                flux_gate=[0.06, 0], do_kcalving=True,
                                calving_k=0.2)
-        _, ds2 = model.run_until_and_store(3000, geom_path=False)
+        ds2 = model.run_until_and_store(3000)
         df_diag2_a = model.get_diagnostics(fl_id=0)
         df_diag2_b = model.get_diagnostics(fl_id=1)
 
@@ -1506,7 +1505,7 @@ class TestKCalving():
                                flux_gate=0.06, do_kcalving=True,
                                water_level=1000,
                                calving_k=0.2)
-        _, ds_2 = model.run_until_and_store(3000, geom_path=False)
+        ds_2 = model.run_until_and_store(3000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)
 

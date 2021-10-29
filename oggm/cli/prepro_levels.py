@@ -221,6 +221,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # takes a long time, so deactivating this can make sense
     cfg.PARAMS['dl_verify'] = not disable_dl_verify
 
+    # Other things that make sense
+    cfg.PARAMS['store_model_geometry'] = True
+
     # Log the parameters
     msg = '# OGGM Run parameters:'
     for k, v in cfg.PARAMS.items():

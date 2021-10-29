@@ -208,8 +208,12 @@ class Flowline(Centerline):
         """Add bed specific parameters."""
         raise NotImplementedError()
 
-    def to_dataset(self):
-        """Makes an xarray Dataset out of the flowline."""
+    def to_geometry_dataset(self):
+        """Makes an xarray Dataset out of the flowline.
+
+        Useful only for geometry files (FileModel / restart files),
+        therefore a bit cryptic regarding dimensions.
+        """
 
         h = self.surface_h
         nx = len(h)
@@ -221,12 +225,43 @@ class Flowline(Centerline):
         except AttributeError:
             # squeezed lines
             pass
-        ds['surface_h'] = (['x'],  h)
-        ds['bed_h'] = (['x'],  self.bed_h)
+        ds['surface_h'] = (['x'], h)
+        ds['bed_h'] = (['x'], self.bed_h)
         ds.attrs['class'] = type(self).__name__
         ds.attrs['map_dx'] = self.map_dx
         ds.attrs['dx'] = self.dx
         self._add_attrs_to_dataset(ds)
+        return ds
+
+    def to_diagnostics_dataset(self):
+        """Makes an xarray Dataset out of the flowline.
+
+        Useful for run_until_and_store's flowline diagnostics data.
+        """
+
+        h = self.bed_h
+        nx = len(h)
+        ds = xr.Dataset()
+        ds.coords['dis_along_flowline'] = np.arange(nx) * self.map_dx * self.dx
+        try:
+            # This is a bit bad design, but basically if some task
+            # computed to the lons of the flowlines before, use it
+            # we don't have access to gdir here so we cant convert the coords
+            ds['point_lons'] = (['dis_along_flowline'], self.point_lons)
+            ds['point_lons'].attrs['description'] = 'Longitude along the flowline'
+            ds['point_lons'].attrs['unit'] = 'deg'
+            ds['point_lats'] = (['dis_along_flowline'], self.point_lats)
+            ds['point_lats'].attrs['description'] = 'Latitude along the flowline'
+            ds['point_lats'].attrs['unit'] = 'deg'
+        except AttributeError:
+            # squeezed lines or we haven't computed lons and lats yet
+            pass
+        ds['bed_h'] = (['dis_along_flowline'], h)
+        ds['bed_h'].attrs['description'] = 'Bed elevation along the flowline'
+        ds['bed_h'].attrs['unit'] = 'm'
+        ds.attrs['class'] = type(self).__name__
+        ds.attrs['map_dx'] = self.map_dx
+        ds.attrs['dx'] = self.dx
         return ds
 
 
@@ -272,7 +307,7 @@ class ParabolicBedFlowline(Flowline):
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
-        ds['bed_shape'] = (['x'],  self.bed_shape)
+        ds['bed_shape'] = (['x'], self.bed_shape)
 
 
 class RectangularBedFlowline(Flowline):
@@ -318,7 +353,7 @@ class RectangularBedFlowline(Flowline):
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
-        ds['widths'] = (['x'],  self._widths)
+        ds['widths'] = (['x'], self._widths)
 
 
 class TrapezoidalBedFlowline(Flowline):
@@ -374,8 +409,8 @@ class TrapezoidalBedFlowline(Flowline):
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
-        ds['widths'] = (['x'],  self.widths)
-        ds['lambdas'] = (['x'],  self._lambdas)
+        ds['widths'] = (['x'], self.widths)
+        ds['lambdas'] = (['x'], self._lambdas)
 
 
 class MixedBedFlowline(Flowline):
@@ -490,11 +525,11 @@ class MixedBedFlowline(Flowline):
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
 
-        ds['section'] = (['x'],  self.section)
-        ds['bed_shape'] = (['x'],  self.bed_shape)
+        ds['section'] = (['x'], self.section)
+        ds['bed_shape'] = (['x'], self.bed_shape)
         ds['is_trapezoid'] = (['x'], self.is_trapezoid)
         ds['widths_m'] = (['x'], self._w0_m)
-        ds['lambdas'] = (['x'],  self._lambdas)
+        ds['lambdas'] = (['x'], self._lambdas)
 
 
 class FlowlineModel(object):
@@ -767,7 +802,7 @@ class FlowlineModel(object):
 
         return self._mb_current_out[fl_id]
 
-    def to_netcdf(self, path):
+    def to_geometry_netcdf(self, path):
         """Creates a netcdf group file storing the state of the model."""
 
         flows_to_id = []
@@ -784,7 +819,7 @@ class FlowlineModel(object):
             ds['flows_to_id'] = ('flowlines', flows_to_id)
             ds.to_netcdf(path)
             for i, fl in enumerate(self.fls):
-                ds = fl.to_dataset()
+                ds = fl.to_geometry_dataset()
                 ds.to_netcdf(path, 'a', group='fl_{}'.format(i))
         finally:
             ds.close()
@@ -862,9 +897,9 @@ class FlowlineModel(object):
                                              'at year: {}'.format(self.yr))
 
     def run_until_and_store(self, y1,
-                            run_path=None,
-                            geom_path=None,
                             diag_path=None,
+                            fl_diag_path=False,
+                            geom_path=False,
                             store_monthly_step=None,
                             stop_criterion=None):
         """Runs the model and returns intermediate steps in xarray datasets.
@@ -877,19 +912,25 @@ class FlowlineModel(object):
         y1 : int
             Upper time span for how long the model should run (needs to be
             a full year)
-        run_path : str
-            Deprecated and renamed to geom_path
-        geom_path : str or bool
+        diag_path : str
+            Path and filename where to store the glacier-wide diagnostics
+            dataset (length, area, volume, etc.) as controlled by
+            cfg.PARAMS['store_diagnostic_variables'].
+            The default (None) is to not store the dataset to disk but return
+            the dataset to the user after execution.
+        fl_diag_path : str, None or bool
+            Path and filename where to store the model diagnostics along the
+            flowline(s).
+        geom_path : str, None or bool
             Path and filename where to store the model geometry dataset. This
             dataset contains all necessary info to retrieve the full glacier
             geometry after the run,  with a FileModel. This is stored
-            on an annual basis.
-            The default (None) will not store the dataset to disk but return
+            on an annual basis and can be used to restart a run from a
+            past simulation's geometry ("restart file").
+            The default (False) prevents creating this dataset altogether
+            (for optimisation purposes).
+            Set this to None to not store the dataset to disk but return
             the dataset to the user after execution.
-            Set this to False to prevent creating this dataset altogether
-            (for optimisation).
-        diag_path : str
-            Path and filename where to store the model diagnostics dataset
         store_monthly_step : Bool
             If True (False)  model diagnostics will be stored monthly (yearly).
             If unspecified, we follow the update of the MB model, which
@@ -899,10 +940,12 @@ class FlowlineModel(object):
             time), and deciding when to stop the simulation. Its signature
             should look like:
 
-            stop (True/False), new_state = stop_criterion(model, previous_state)
+            stop, new_state = stop_criterion(model, previous_state)
 
-            where previous_state can be None, or anything else (very likely a
-            container of some sort, e.g. a dict.)
+            where stop is a bool, and new_state a container (likely: dict)
+            initialized by the function itself on the first call (previous_state
+            can and should be None on the first call). See
+            `zero_glacier_stop_criterion` for an example.
 
         Returns
         -------
@@ -925,13 +968,9 @@ class FlowlineModel(object):
                                      'mass-balance model with an unambiguous '
                                      'hemisphere.')
 
-        if run_path is not None:
-            warnings.warn("`run_path` has been renamed to `geom_path` and "
-                          "will be deleted in the future.", FutureWarning)
-            geom_path = run_path
-
-        # Do we need to create a geometry dataset?
+        # Do we need to create a geometry or flowline diagnostics dataset?
         do_geom = geom_path is None or geom_path
+        do_fl_diag = fl_diag_path is None or fl_diag_path
 
         # time
         yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
@@ -952,7 +991,7 @@ class FlowlineModel(object):
 
         # init output
         if geom_path:
-            self.to_netcdf(geom_path)
+            self.to_geometry_netcdf(geom_path)
 
         ny = len(yearly_time)
         if ny == 1:
@@ -962,10 +1001,10 @@ class FlowlineModel(object):
             cmonths = [cmonths]
         nm = len(monthly_time)
 
-        if do_geom:
+        if do_geom or do_fl_diag:
             sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
             widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
-            bucket = [np.zeros(ny) for _ in self.fls]
+            buckets = [np.zeros(ny) for _ in self.fls]
 
         # Diagnostics dataset
         diag_ds = xr.Dataset()
@@ -1050,6 +1089,68 @@ class FlowlineModel(object):
                                                     f'{gi} from terminus.')
                 diag_ds[vn].attrs['unit'] = 'm'
 
+        fl_diag_dss = None
+        if do_fl_diag:
+            # Time invariant datasets
+            fl_diag_dss = [fl.to_diagnostics_dataset() for fl in self.fls]
+
+            # Global attributes
+            for ds in fl_diag_dss:
+                ds.attrs['description'] = 'OGGM model output'
+                ds.attrs['oggm_version'] = __version__
+                ds.attrs['calendar'] = '365-day no leap'
+                ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+                ds.attrs['water_level'] = self.water_level
+                ds.attrs['glen_a'] = self.glen_a
+                ds.attrs['fs'] = self.fs
+
+                # Add MB model attributes
+                ds.attrs['mb_model_class'] = self.mb_model.__class__.__name__
+                for k, v in self.mb_model.__dict__.items():
+                    if np.isscalar(v) and not k.startswith('_'):
+                        ds.attrs['mb_model_{}'.format(k)] = v
+
+                # Coordinates
+                ds.coords['time'] = yearly_time
+                ds['time'].attrs['description'] = 'Floating hydrological year'
+
+            # Variables and attributes
+            ovars_fl = cfg.PARAMS['store_fl_diagnostic_variables']
+            if 'volume' not in ovars_fl or 'area' not in ovars_fl:
+                raise InvalidParamsError('Flowline diagnostics need at least '
+                                         'volume and area as output.')
+
+            for ds, sect, width, bucket in zip(fl_diag_dss, sects, widths, buckets):
+                if 'volume' in ovars_fl:
+                    ds['volume_m3'] = (('time', 'dis_along_flowline'), sect)
+                    ds['volume_m3'].attrs['description'] = 'Section volume'
+                    ds['volume_m3'].attrs['unit'] = 'm 3'
+                if 'volume_bsl' in ovars_fl:
+                    ds['volume_bsl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
+                    ds['volume_bsl_m3'].attrs['description'] = 'Section volume below sea level'
+                    ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
+                if 'volume_bwl' in ovars_fl:
+                    ds['volume_bwl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
+                    ds['volume_bwl_m3'].attrs['description'] = 'Section volume below water level'
+                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
+                if 'area' in ovars_fl:
+                    ds['area_m2'] = (('time', 'dis_along_flowline'), width)
+                    ds['area_m2'].attrs['description'] = 'Section area'
+                    ds['area_m2'].attrs['unit'] = 'm 2'
+                if 'thickness' in ovars_fl:
+                    ds['thickness_m'] = (('time', 'dis_along_flowline'), width * 0)
+                    ds['thickness_m'].attrs['description'] = 'Section thickness'
+                    ds['thickness_m'].attrs['unit'] = 'm'
+                if 'ice_velocity' in ovars_fl:
+                    ds['ice_velocity_myr'] = (('time', 'dis_along_flowline'), width * 0)
+                    ds['ice_velocity_myr'].attrs['description'] = 'Ice velocity'
+                    ds['ice_velocity_myr'].attrs['unit'] = 'm yr-1'
+                if 'calving_bucket' in ovars_fl:
+                    ds['calving_bucket_m3'] = (('time',), bucket)
+                    desc = 'Flowline calving bucket (volume not yet calved)'
+                    ds['calving_bucket_m3'].attrs['description'] = desc
+                    ds['calving_bucket_m3'].attrs['unit'] = 'm 3'
+
         # Run
         j = 0
         prev_state = None  # for the stopping criterion
@@ -1058,8 +1159,8 @@ class FlowlineModel(object):
             self.run_until(yr)
 
             # Glacier geometry
-            if do_geom and mo == 1:
-                for s, w, b, fl in zip(sects, widths, bucket, self.fls):
+            if (do_geom or do_fl_diag) and mo == 1:
+                for s, w, b, fl in zip(sects, widths, buckets, self.fls):
                     s[j, :] = fl.section
                     w[j, :] = fl.widths_m
                     if self.is_tidewater:
@@ -1067,6 +1168,23 @@ class FlowlineModel(object):
                             b[j] = fl.calving_bucket_m3
                         except AttributeError:
                             pass
+
+                # Flowline diagnostics
+                if do_fl_diag:
+                    for fl_id, (ds, fl) in enumerate(zip(fl_diag_dss, self.fls)):
+                        # area and volume are already being taken care of above
+                        if 'thickness' in ovars_fl:
+                            ds['thickness_m'].data[j, :] = fl.thick
+                        if 'volume_bsl' in ovars_fl:
+                            ds['volume_bsl_m3'].data[j, :] = fl.volume_bsl_m3
+                        if 'volume_bwl' in ovars_fl:
+                            ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3
+                        if 'ice_velocity' in ovars_fl:
+                            var = self.u_stag[fl_id]
+                            val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2
+                            ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
+                # j is the yearly index in case we have monthly output
+                # we have to count it ourselves
                 j += 1
 
             # Diagnostics
@@ -1084,7 +1202,6 @@ class FlowlineModel(object):
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
                 diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
-
             # Terminus thick is a bit more logic
             ti = None
             for gi in range(10):
@@ -1104,7 +1221,7 @@ class FlowlineModel(object):
         geom_ds = None
         if do_geom:
             geom_ds = []
-            for (s, w, b) in zip(sects, widths, bucket):
+            for (s, w, b) in zip(sects, widths, buckets):
                 ds = xr.Dataset()
                 ds.attrs['description'] = 'OGGM model output'
                 ds.attrs['oggm_version'] = __version__
@@ -1133,20 +1250,57 @@ class FlowlineModel(object):
                 geom_ds.append(ds)
 
         # write output?
-        if do_geom and geom_path is not None:
+        if do_fl_diag:
+            # Unit conversions for these
+            for ds in fl_diag_dss:
+                dx = ds.attrs['map_dx'] * ds.attrs['dx']
+                # No inplace because the other dataset uses them
+                # These variables are always there (see above)
+                ds['volume_m3'] = ds['volume_m3'] * dx
+                ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
+
+            # Write out?
+            if fl_diag_path not in [True, None]:
+                encode = {}
+                for v in fl_diag_dss[0]:
+                    encode[v] = {'zlib': True, 'complevel': 5}
+
+                # Welcome ds
+                ds = xr.Dataset()
+                ds.attrs['description'] = ('OGGM model output on flowlines. '
+                                           'Check groups for data.')
+                ds.attrs['oggm_version'] = __version__
+                ds.to_netcdf(fl_diag_path, 'w')
+                for i, ds in enumerate(fl_diag_dss):
+                    ds.to_netcdf(fl_diag_path, 'a', group='fl_{}'.format(i),
+                                 encoding=encode)
+
+        if do_geom and geom_path not in [True, None]:
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
                       }
             for i, ds in enumerate(geom_ds):
                 ds.to_netcdf(geom_path, 'a', group='fl_{}'.format(i),
                              encoding=encode)
-            # Add other diagnostics (Fabien in 2021: why?)
-            diag_ds.to_netcdf(geom_path, 'a')
 
-        if diag_path is not None:
+            # Add calving to geom file because the FileModel can't infer it
+            if 'calving_m3' in diag_ds:
+                diag_ds[['calving_m3']].to_netcdf(geom_path, 'a')
+
+        if diag_path not in [True, None]:
             diag_ds.to_netcdf(diag_path)
 
-        return geom_ds, diag_ds
+        # Decide on what to give back
+        out = [diag_ds]
+        if fl_diag_dss is not None:
+            out.append(fl_diag_dss)
+        if geom_ds is not None:
+            out.append(geom_ds)
+        if len(out) == 1:
+            out = out[0]
+        else:
+            out = tuple(out)
+        return out
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
         """ Runs the model until an equilibrium state is reached.
@@ -2537,7 +2691,9 @@ def robust_model_run(*args, **kwargs):
 def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
                        init_model_fls=None, store_monthly_step=False,
-                       store_model_geometry=None, water_level=None,
+                       store_model_geometry=None,
+                       store_fl_diagnostics=None,
+                       water_level=None,
                        evolution_model=FluxBasedModel, stop_criterion=None,
                        init_model_filesuffix=None, init_model_yr=None,
                        **kwargs):
@@ -2574,6 +2730,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    store_fl_diagnostics : bool
+        whether to store the model flowline diagnostics to disk or not.
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
     water_level : float
@@ -2623,12 +2782,22 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     if store_model_geometry is None:
         store_model_geometry = cfg.PARAMS['store_model_geometry']
 
+    if store_fl_diagnostics is None:
+        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
+
     if store_model_geometry:
         geom_path = gdir.get_filepath('model_geometry',
                                       filesuffix=output_filesuffix,
                                       delete=True)
     else:
         geom_path = False
+
+    if store_fl_diagnostics:
+        fl_diag_path = gdir.get_filepath('fl_diagnostics',
+                                         filesuffix=output_filesuffix,
+                                         delete=True)
+    else:
+        fl_diag_path = False
 
     diag_path = gdir.get_filepath('model_diagnostics',
                                   filesuffix=output_filesuffix,
@@ -2667,6 +2836,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         model.run_until_and_store(ye,
                                   geom_path=geom_path,
                                   diag_path=diag_path,
+                                  fl_diag_path=fl_diag_path,
                                   store_monthly_step=store_monthly_step,
                                   stop_criterion=stop_criterion)
 
@@ -2679,6 +2849,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        precipitation_factor=None,
                        store_monthly_step=False,
                        store_model_geometry=None,
+                       store_fl_diagnostics=None,
                        climate_filename='climate_historical',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
@@ -2724,6 +2895,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    store_fl_diagnostics : bool
+        whether to store the model flowline diagnostics to disk or not.
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -2768,6 +2942,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               mb_model=mb, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
+                              store_fl_diagnostics=store_fl_diagnostics,
                               init_model_filesuffix=init_model_filesuffix,
                               init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
@@ -2781,6 +2956,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          precipitation_factor=None,
                          store_monthly_step=False,
                          store_model_geometry=None,
+                         store_fl_diagnostics=None,
                          init_model_filesuffix=None,
                          init_model_yr=None,
                          output_filesuffix='',
@@ -2825,6 +3001,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    store_fl_diagnostics : bool
+        whether to store the model flowline diagnostics to disk or not.
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     init_model_filesuffix : str
         if you want to start from a previous model run state. Can be
         combined with `init_model_yr`
@@ -2870,6 +3049,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               mb_model=mb, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
+                              store_fl_diagnostics=store_fl_diagnostics,
                               init_model_filesuffix=init_model_filesuffix,
                               init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
@@ -2881,6 +3061,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_monthly_step=False,
                           store_model_geometry=None,
+                          store_fl_diagnostics=None,
                           climate_filename='climate_historical',
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
@@ -2916,6 +3097,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
         cfg.PARAMS['store_model_geometry'])
+    store_fl_diagnostics : bool
+        whether to store the model flowline diagnostics to disk or not.
+        (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -2997,6 +3181,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                               mb_model=mb, ys=ys, ye=ye,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
+                              store_fl_diagnostics=store_fl_diagnostics,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               **kwargs)
@@ -3034,7 +3219,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # Make sure it'll return something
     kwargs['return_value'] = True
 
-    # Check that kwargs are compatible
+    # Check that kwargs and params are compatible
     if kwargs.get('store_monthly_step', False):
         raise InvalidParamsError('run_with_hydro only compatible with '
                                  'store_monthly_step=False.')
@@ -3042,6 +3227,10 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         raise InvalidParamsError('run_with_hydro only compatible with '
                                  "mb_elev_feedback='annual' (yes, even "
                                  "when asked for monthly hydro output).")
+    if not cfg.PARAMS['store_model_geometry']:
+        raise InvalidParamsError('run_with_hydro only works with '
+                                 "PARAMS['store_model_geometry'] = True "
+                                 "for now.")
 
     out = run_task(gdir, **kwargs)
     if out is None:

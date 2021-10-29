@@ -298,6 +298,11 @@ _doc = ('A netcdf file containing the model diagnostics (volume, '
         'mass-balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
+_doc = ('A group netcdf file containing the model diagnostics (volume, '
+        'thickness, velocity...) along the flowlines (thus much heavier).'
+        'Netcdf groups = fl_{i}, with i between 0 and n_flowlines - 1')
+BASENAMES['fl_diagnostics'] = ('fl_diagnostics.nc', _doc)
+
 _doc = "A table containing the Huss&Farinotti 2012 squeezed flowlines."
 BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 
@@ -530,6 +535,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     k = 'error_when_glacier_reaches_boundaries'
     PARAMS[k] = cp.as_bool(k)
     PARAMS['store_model_geometry'] = cp.as_bool('store_model_geometry')
+    PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
@@ -550,6 +556,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     k = 'free_board_marine_terminating'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'store_diagnostic_variables'
+    PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
+    k = 'store_fl_diagnostic_variables'
     PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
 
     # Inversion
@@ -584,7 +592,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run', 'ref_mb_valid_window',
            'tidewater_type', 'store_model_geometry',
-           'store_diagnostic_variables', 'geodetic_mb_period']
+           'store_diagnostic_variables', 'store_fl_diagnostic_variables',
+           'geodetic_mb_period', 'store_fl_diagnostics']
     for k in ltr:
         cp.pop(k, None)
 

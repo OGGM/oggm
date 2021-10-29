@@ -53,7 +53,6 @@ def up_to_climate(reset=False):
 
     # Use multiprocessing
     cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
-    cfg.PARAMS['use_multiprocessing'] = True
 
     # Working dir
     cfg.PATHS['working_dir'] = _TEST_DIR
@@ -82,6 +81,7 @@ def up_to_climate(reset=False):
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
+    cfg.PARAMS['store_model_geometry'] = True
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
