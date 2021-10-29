@@ -3233,6 +3233,22 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                 melt_on_g = (prcpsol - mb) * bin_area
                 melt_off_g = (prcpsol - mb) * off_area
 
+                if mb_mod.bias == 0:
+                    # Here we can add an additional sanity check
+                    # These thresholds are arbitrary for now. TODO: remove
+                    if np.any(melt_on_g < -1):
+                        log.warning('WARNING: Melt on glacier is negative although it '
+                                    'should not be. If you have time, check '
+                                    'whats going on. Melt: {}'.format(melt_on_g.min()))
+                    if np.any(melt_off_g < -1):
+                        log.warning('WARNING: Melt off glacier is negative although it '
+                                    'should not be. If you have time, check '
+                                    'whats going on. Melt: {}'.format(melt_off_g.min()))
+
+                    # We clip anyway
+                    melt_on_g = utils.clip_min(melt_on_g, 0)
+                    melt_off_g = utils.clip_min(melt_off_g, 0)
+
                 # This is the bad boy
                 bias_on_g = mb_bias * bin_area
                 bias_off_g = mb_bias * off_area
@@ -3272,7 +3288,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         out['on_area']['data'][i] = on_area_out
 
         # If monthly, put the residual where we can
-        if store_monthly_hydro:
+        if store_monthly_hydro and mb_mod.bias != 0:
             for melt, bias in zip(
                     [
                         out['melt_on_glacier']['data'][i, :],
