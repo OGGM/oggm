@@ -3318,11 +3318,6 @@ class TestColumbiaCalving(unittest.TestCase):
                                            ods[vn].sel(time=2010),
                                            rtol=rtol)
 
-            # More quantitative check: verify with spinup
-            ods = ods.sel(time=slice(1980, 2019))
-            np.testing.assert_allclose(ods.volume, ds_spin.volume)
-            np.testing.assert_allclose(ods.area, ds_spin.area)
-            np.testing.assert_allclose(ods.length, ds_spin.length)
 
     def test_find_calving_any_mb(self):
 
