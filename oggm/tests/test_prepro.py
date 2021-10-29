@@ -3255,9 +3255,6 @@ class TestColumbiaCalving(unittest.TestCase):
         tasks.init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980, ye=2019,
                                     output_filesuffix='_hist')
-        tasks.run_from_climate_data(gdir, fixed_geometry_spinup_yr=1980,
-                                    ye=2019,
-                                    output_filesuffix='_spin')
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
@@ -3273,7 +3270,6 @@ class TestColumbiaCalving(unittest.TestCase):
         utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
         utils.compile_run_output([gdir], path=past_run_file,
                                  input_filesuffix='_hist')
-        ds_spin = utils.compile_run_output([gdir], input_filesuffix='_spin')
 
         # Extend
         utils.extend_past_climate_run(past_run_file=past_run_file,

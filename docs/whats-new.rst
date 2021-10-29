@@ -28,8 +28,8 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
-- Added a ``prescribe_years`` kwarg to ``RandomMassBalance`` to control from
-  outside which years are picked (:pull:`1310`).
+- Added a ``prescribe_years`` kwarg to ``RandomMassBalance`` to control
+  which years are picked instead of the random number generator (:pull:`1310`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added a ``stop_criterion`` kwarg to ``run_until_and_store``, so that
   users can specify when a simulation has to stop based on their chosen
@@ -55,6 +55,14 @@ Enhancements
   are not saved per default. Set ``cfg.PARAMS['store_fl_diagnostics'] = True``
   to activate it.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added a new keyword argument to ``run_with_hydro``, ``run_from_climate_data``,
+  and ``run_until_and_store``: ``fixed_geometry_spinup_yr`` which allows to
+  "start" a simulation at an earlier date than the RGI date (:pull:`1327`). In practice,
+  it computes the glacier volume change from SMB only (fixed geometry),
+  ignoring glacier area change in this period. Therefore, it is only valid for
+  short periods of times (years, not decades).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~

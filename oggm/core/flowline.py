@@ -1181,7 +1181,7 @@ class FlowlineModel(object):
 
                 h = fl.surface_h
                 a = fl.widths_m * fl.dx_meter
-                a[fl.section <=0] = 0
+                a[fl.section <= 0] = 0
 
                 for j, yr in enumerate(monthly_time[is_spinup_time]):
                     smb = self.get_mb(h, year=yr, fl_id=fl_id, fls=self.fls)
@@ -3583,7 +3583,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             residual_mb = model_mb - reconstructed_mb
 
         # Now correct
-        if  residual_mb == 0:
+        if residual_mb == 0:
             pass
         elif store_monthly_hydro:
             # We try to correct the melt only where there is some

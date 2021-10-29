@@ -3329,7 +3329,6 @@ class TestHEF:
                                                     'terminus_thick_2',
                                                     ]
         cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
-
         cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
@@ -3662,10 +3661,14 @@ class TestHydro:
         assert_allclose(mass_in_glacier_end,
                         mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
                         atol=1e-2)  # 0.01 kg is OK as numerical error
+        # Other checks
+        assert_allclose(odf_spin['is_fixed_geometry_spinup'].loc[:1990], 1)
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
+        # In the spinup run the residual is zero for the spinup part
+        assert_allclose(odf_spin['residual_mb'].loc[:1990], 0)
 
         # Also check output stuff
         nds = utils.compile_run_output([gdir], input_filesuffix='_hist')
