@@ -3318,7 +3318,6 @@ class TestColumbiaCalving(unittest.TestCase):
                                            ods[vn].sel(time=2010),
                                            rtol=rtol)
 
-
     def test_find_calving_any_mb(self):
 
         gdir = init_columbia_eb('test_find_calving_any_mb')
