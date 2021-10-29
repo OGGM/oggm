@@ -1260,7 +1260,7 @@ class FlowlineModel(object):
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
 
             # Write out?
-            if fl_diag_path is not None:
+            if fl_diag_path not in [True, None]:
                 encode = {}
                 for v in fl_diag_dss[0]:
                     encode[v] = {'zlib': True, 'complevel': 5}
@@ -1275,7 +1275,7 @@ class FlowlineModel(object):
                     ds.to_netcdf(fl_diag_path, 'a', group='fl_{}'.format(i),
                                  encoding=encode)
 
-        if do_geom and geom_path is not None:
+        if do_geom and geom_path not in [True, None]:
             encode = {'ts_section': {'zlib': True, 'complevel': 5},
                       'ts_width_m': {'zlib': True, 'complevel': 5},
                       }
@@ -1287,7 +1287,7 @@ class FlowlineModel(object):
             if 'calving_m3' in diag_ds:
                 diag_ds[['calving_m3']].to_netcdf(geom_path, 'a')
 
-        if diag_path is not None:
+        if diag_path not in [True, None]:
             diag_ds.to_netcdf(diag_path)
 
         # Decide on what to give back

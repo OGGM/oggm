@@ -13,11 +13,16 @@ Breaking changes
 - In the process of adding new output diagnostic files (:pull:`1308`), the
   signature and return output of ``FlowlineModel.run_until_and_store``
   changed. We hope that this change won't affect too many of our users but
-  if it does, it should be relatively straightforward to update your code.
+  if it does, it should be relatively straightforward to update your code:
+  users now control the number of outputs with the ``fl_diag_path`` and
+  ``geom_path`` kwargs. Most users will probably have used the ``run_*``
+  tasks anyway and won't be affected by this change.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Furthermore, ``cfg.PARAMS['store_model_geometry']`` is now set to ``False``
-  per default. If your code fails with ``'model_geometry_*.nc' ... FileNotFoundError``,
-  setting it back to `True` should solve the issue.
+  per default. If you were relying on these files (e.g. for a run with spinup
+  or similar), your code will fail with ``FileNotFoundError`` for the
+  ``model_geometry`` files. Setting ``cfg.PARAMS['store_model_geometry']``
+  back to ``True`` should solve the issue.
 
 
 Enhancements
