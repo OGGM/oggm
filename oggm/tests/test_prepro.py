@@ -3255,6 +3255,9 @@ class TestColumbiaCalving(unittest.TestCase):
         tasks.init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980, ye=2019,
                                     output_filesuffix='_hist')
+        tasks.run_from_climate_data(gdir, fixed_geometry_spinup_yr=1980,
+                                    ye=2019,
+                                    output_filesuffix='_spin')
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
@@ -3270,6 +3273,7 @@ class TestColumbiaCalving(unittest.TestCase):
         utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
         utils.compile_run_output([gdir], path=past_run_file,
                                  input_filesuffix='_hist')
+        ds_spin = utils.compile_run_output([gdir], input_filesuffix='_spin')
 
         # Extend
         utils.extend_past_climate_run(past_run_file=past_run_file,
@@ -3317,6 +3321,12 @@ class TestColumbiaCalving(unittest.TestCase):
                                            ods[vn].sel(time=2018) -
                                            ods[vn].sel(time=2010),
                                            rtol=rtol)
+
+            # More quantitative check: verify with spinup
+            ods = ods.sel(time=slice(1980, 2019))
+            np.testing.assert_allclose(ods.volume, ds_spin.volume)
+            np.testing.assert_allclose(ods.area, ds_spin.area)
+            np.testing.assert_allclose(ods.length, ds_spin.length)
 
     def test_find_calving_any_mb(self):
 
