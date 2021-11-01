@@ -1142,8 +1142,12 @@ class FlowlineModel(object):
                     ds['thickness_m'].attrs['description'] = 'Section thickness'
                     ds['thickness_m'].attrs['unit'] = 'm'
                 if 'ice_velocity' in ovars_fl:
+                    if not (hasattr(self, '_surf_vel_fac') or hasattr(self, 'u_stag')):
+                        raise InvalidParamsError('This flowline model does not seem '
+                                                 'to be able to provide surface '
+                                                 'velocities.')
                     ds['ice_velocity_myr'] = (('time', 'dis_along_flowline'), width * 0)
-                    ds['ice_velocity_myr'].attrs['description'] = 'Ice velocity'
+                    ds['ice_velocity_myr'].attrs['description'] = 'Ice velocity at the surface'
                     ds['ice_velocity_myr'].attrs['unit'] = 'm yr-1'
                 if 'calving_bucket' in ovars_fl:
                     ds['calving_bucket_m3'] = (('time',), bucket)
@@ -1181,7 +1185,7 @@ class FlowlineModel(object):
                             ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3
                         if 'ice_velocity' in ovars_fl:
                             var = self.u_stag[fl_id]
-                            val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2
+                            val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2 * self._surf_vel_fac
                             ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
                 # j is the yearly index in case we have monthly output
                 # we have to count it ourselves
@@ -1512,6 +1516,8 @@ class FluxBasedModel(FlowlineModel):
                                             flux_value=fg,
                                             flux_gate_yr=(flux_gate_build_up +
                                                           self.y0))
+        # Special output
+        self._surf_vel_fac = (self.glen_n + 2) / (self.glen_n + 1)
 
         # Optim
         self.slope_stag = []
@@ -1535,6 +1541,7 @@ class FluxBasedModel(FlowlineModel):
             self.u_stag.append(np.zeros(nx+1))
             self.shapefac_stag.append(np.ones(nx+1))  # beware the ones!
             self.flux_stag.append(np.zeros(nx+1))
+            self._avg_velocity.append(np.zeros(nx))
 
     def step(self, dt):
         """Advance one step."""
@@ -1767,6 +1774,11 @@ class FluxBasedModel(FlowlineModel):
     def get_diagnostics(self, fl_id=-1):
         """Obtain model diagnostics in a pandas DataFrame.
 
+        Velocities in OGGM's FluxBasedModel are sometimes subject to
+        numerical instabilities. To deal with the issue, you can either
+        set a smaller ``PARAMS['cfl_number']`` (e.g. 0.01) or smooth the
+        output a bit, e.g. with ``df.rolling(5, center=True, min_periods=1).mean()``
+
         Parameters
         ----------
         fl_id : int
@@ -1781,6 +1793,7 @@ class FluxBasedModel(FlowlineModel):
             - slope: -
             - ice_flux, tributary_flux: m3 of *ice* per second
             - ice_velocity: m per second (depth-section integrated)
+            - surface_ice_velocity: m per second (corrected for surface - simplifed)
         """
         import pandas as pd
 
@@ -1802,6 +1815,7 @@ class FluxBasedModel(FlowlineModel):
         df['ice_flux'] = (var[1:nx+1] + var[:nx])/2
         var = self.u_stag[fl_id]
         df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
+        df['surface_ice_velocity'] = df['ice_velocity'] * self._surf_vel_fac
         var = self.shapefac_stag[fl_id]
         df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
 

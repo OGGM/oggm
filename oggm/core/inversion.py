@@ -652,17 +652,19 @@ def get_inversion_volume(gdir):
 
 
 @entity_task(log, writes=['inversion_output'])
-def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
+def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
+                       with_sliding=False):
     """Surface velocities along the flowlines from inverted ice thickness.
 
-    Computed following the methods described in
-    Cuffey and Paterson (2010) Eq. 8.35, pp 310:
+    Computed following the methods described in Cuffey and Paterson (2010)
+    Eq. 8.35, pp 310:
 
         u_s = u_basal + (2A/n+1)* tau^n * H
 
-    In the case of no sliding:
+    In the case of no sliding (or if with_sliding=False, which is a
+    justifiable simplification given uncertainties on basal sliding):
 
-        u_z/u_s = [n+1]/[n+2] = 0.8 if n = 3.
+        u_z/u_s = [n+1]/[n+2] (= 0.8 if n = 3).
 
     The output is written in 'inversion_output.pkl' in m yr-1
 
@@ -673,7 +675,10 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
     ----------
     gdir : Glacier directory
     with_sliding : bool
-        default is True, if set to False will not add the sliding component.
+        default is False, if set to True we will compute using
+        the sliding component.
+    glen_a : Glen A, defaults to PARAMS
+    fs : sliding, defaults to PARAMS
     filesuffix : str
         add a suffix to the output file
     """
@@ -699,7 +704,7 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
         angle = cl['slope_angle']
         thick = cl['thick']
 
-        if fs > 0:
+        if fs > 0 and with_sliding:
             tau = rho * cfg.G * angle * thick
 
             with warnings.catch_warnings():
@@ -726,8 +731,8 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix=''):
                 velocity = flux / section
             velocity *= cfg.SEC_IN_YEAR
             u_surface = velocity / fac
-            u_basal = velocity * 0
-            u_deformation = velocity * 0
+            u_basal = velocity * np.NaN
+            u_deformation = velocity * np.NaN
 
         # output
         cl['u_integrated'] = velocity
