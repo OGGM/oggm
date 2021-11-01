@@ -901,7 +901,9 @@ class FlowlineModel(object):
                             fl_diag_path=False,
                             geom_path=False,
                             store_monthly_step=None,
-                            stop_criterion=None):
+                            stop_criterion=None,
+                            fixed_geometry_spinup_yr=None
+                            ):
         """Runs the model and returns intermediate steps in xarray datasets.
 
         This function repeatedly calls FlowlineModel.run_until for either
@@ -946,7 +948,12 @@ class FlowlineModel(object):
             initialized by the function itself on the first call (previous_state
             can and should be None on the first call). See
             `zero_glacier_stop_criterion` for an example.
-
+        fixed_geometry_spinup_yr : int
+            if set to an integer, the model will artificially prolongate
+            all outputs of run_until_and_store to encompass all time stamps
+            starting from the chosen year. The only output affected are the
+            glacier wide diagnostic files - all other outputs are set
+            to constants during "spinup"
         Returns
         -------
         geom_ds : xarray.Dataset or None
@@ -968,20 +975,24 @@ class FlowlineModel(object):
                                      'mass-balance model with an unambiguous '
                                      'hemisphere.')
 
+        # Do we have a spinup?
+        do_fixed_spinup = fixed_geometry_spinup_yr is not None
+        y0 = fixed_geometry_spinup_yr if do_fixed_spinup else self.yr
+
         # Do we need to create a geometry or flowline diagnostics dataset?
         do_geom = geom_path is None or geom_path
         do_fl_diag = fl_diag_path is None or fl_diag_path
 
         # time
-        yearly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+        yearly_time = np.arange(np.floor(y0), np.floor(y1)+1)
 
         if store_monthly_step is None:
             store_monthly_step = self.mb_step == 'monthly'
 
         if store_monthly_step:
-            monthly_time = utils.monthly_timeseries(self.yr, y1)
+            monthly_time = utils.monthly_timeseries(y0, y1)
         else:
-            monthly_time = np.arange(np.floor(self.yr), np.floor(y1)+1)
+            monthly_time = np.arange(np.floor(y0), np.floor(y1)+1)
 
         sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
 
@@ -1089,6 +1100,13 @@ class FlowlineModel(object):
                                                     f'{gi} from terminus.')
                 diag_ds[vn].attrs['unit'] = 'm'
 
+        if do_fixed_spinup:
+            is_spinup_time = monthly_time < self.yr
+            diag_ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
+            desc = 'Part of the series which are spinup'
+            diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc
+            diag_ds['is_fixed_geometry_spinup'].attrs['unit'] = '-'
+
         fl_diag_dss = None
         if do_fl_diag:
             # Time invariant datasets
@@ -1150,13 +1168,39 @@ class FlowlineModel(object):
                     desc = 'Flowline calving bucket (volume not yet calved)'
                     ds['calving_bucket_m3'].attrs['description'] = desc
                     ds['calving_bucket_m3'].attrs['unit'] = 'm 3'
+                if do_fixed_spinup:
+                    ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
+                    desc = 'Part of the series which are spinup'
+                    ds['is_fixed_geometry_spinup'].attrs['description'] = desc
+                    ds['is_fixed_geometry_spinup'].attrs['unit'] = '-'
+
+        # First deal with spinup (we compute volume change only)
+        if do_fixed_spinup:
+            spinup_vol = monthly_time * 0
+            for fl_id, fl in enumerate(self.fls):
+
+                h = fl.surface_h
+                a = fl.widths_m * fl.dx_meter
+                a[fl.section <= 0] = 0
+
+                for j, yr in enumerate(monthly_time[is_spinup_time]):
+                    smb = self.get_mb(h, year=yr, fl_id=fl_id, fls=self.fls)
+                    spinup_vol[j] -= np.sum(smb * a)  # per second and minus because backwards
+
+            # per unit time
+            dt = (monthly_time[1:] - monthly_time[:-1]) * cfg.SEC_IN_YEAR
+            spinup_vol[:-1] = spinup_vol[:-1] * dt
+            spinup_vol = np.cumsum(spinup_vol[::-1])[::-1]
 
         # Run
         j = 0
         prev_state = None  # for the stopping criterion
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
-            # Model run
-            self.run_until(yr)
+
+            if yr > self.yr:
+                # Here we model run - otherwize (for spinup) we
+                # constantly store the same data
+                self.run_until(yr)
 
             # Glacier geometry
             if (do_geom or do_fl_diag) and mo == 1:
@@ -1248,6 +1292,14 @@ class FlowlineModel(object):
                 ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
                                                           coords=varcoords)
                 geom_ds.append(ds)
+
+        # Add the spinup volume to the diag
+        if do_fixed_spinup:
+            # If there is calving we need to trick as well
+            if 'calving_m3' in diag_ds and np.any(diag_ds['calving_m3'] > 0):
+                raise NotImplementedError('Calving and fixed_geometry_spinup_yr '
+                                          'not implemented yet.')
+            diag_ds['volume_m3'].data[:] += spinup_vol
 
         # write output?
         if do_fl_diag:
@@ -2691,6 +2743,7 @@ def robust_model_run(*args, **kwargs):
 def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
                        init_model_fls=None, store_monthly_step=False,
+                       fixed_geometry_spinup_yr=None,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
                        water_level=None,
@@ -2747,6 +2800,12 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         `run_until_and_store` documentation for more information.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
+    fixed_geometry_spinup_yr : int
+        if set to an integer, the model will artificially prolongate
+        all outputs of run_until_and_store to encompass all time stamps
+        starting from the chosen year. The only output affected are the
+        glacier wide diagnostic files - all other outputs are set
+        to constants during "spinup"
      """
 
     if init_model_filesuffix is not None:
@@ -2838,6 +2897,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                                   diag_path=diag_path,
                                   fl_diag_path=fl_diag_path,
                                   store_monthly_step=store_monthly_step,
+                                  fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                                   stop_criterion=stop_criterion)
 
     return model
@@ -3059,6 +3119,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 @entity_task(log)
 def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
+                          fixed_geometry_spinup_yr=None,
                           store_monthly_step=False,
                           store_model_geometry=None,
                           store_fl_diagnostics=None,
@@ -3131,6 +3192,12 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
+    fixed_geometry_spinup_yr : int
+        if set to an integer, the model will artificially prolongate
+        all outputs of run_until_and_store to encompass all time stamps
+        starting from the chosen year. The only output affected are the
+        glacier wide diagnostic files - all other outputs are set
+        to constants during "spinup"
     """
 
     if init_model_filesuffix is not None:
@@ -3144,19 +3211,26 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         if ys is None:
             ys = init_model_yr
 
+    try:
+        rgi_year = gdir.rgi_date.year
+    except AttributeError:
+        rgi_year = gdir.rgi_date
+
     # Take from rgi date if not set yet
     if ys is None:
-        try:
-            ys = gdir.rgi_date.year
-        except AttributeError:
-            ys = gdir.rgi_date
         # The RGI timestamp is in calendar date - we convert to hydro date,
         # i.e. 2003 becomes 2004 if hydro_month is not 1 (January)
         # (so that we don't count the MB year 2003 in the simulation)
         # See also: https://github.com/OGGM/oggm/issues/1020
         # even if hydro_month is 1, we prefer to start from Jan 2004
         # as in the alps the rgi is from Aug 2003
-        ys += 1
+        ys = rgi_year + 1
+
+    if ys <= rgi_year and init_model_filesuffix is None:
+        log.warning('You are attempting to run_with_climate_data at dates '
+                    'prior to the RGI inventory date. This may indicate some '
+                    'problem in your workflow. Consider using '
+                    '`fixed_geometry_spinup_yr` for example.')
 
     # Final crop
     if min_ys is not None:
@@ -3184,11 +3258,13 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                               store_fl_diagnostics=store_fl_diagnostics,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
+                              fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                               **kwargs)
 
 
 @entity_task(log)
 def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
+                   fixed_geometry_spinup_yr=None,
                    ref_area_from_y0=False, **kwargs):
     """Run the flowline model and add hydro diagnostics (experimental!).
 
@@ -3211,8 +3287,14 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     ref_area_from_y0 : bool
         the hydrological output is computed over a reference area, which
         per default is the largest area covered by the glacier in the simulation
-        period. Use this kwarg to force a specifi area to the state of the
+        period. Use this kwarg to force a specific area to the state of the
         glacier at the provided simulation year.
+    fixed_geometry_spinup_yr : int
+        if set to an integer, the model will artificially prolongate
+        all outputs of run_until_and_store to encompass all time stamps
+        starting from the chosen year. The only output affected are the
+        glacier wide diagnostic files - all other outputs are set
+        to constants during "spinup"
     **kwargs : all valid kwargs for ``run_task``
     """
 
@@ -3232,10 +3314,15 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                                  "PARAMS['store_model_geometry'] = True "
                                  "for now.")
 
-    out = run_task(gdir, **kwargs)
+    out = run_task(gdir, fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
+                   **kwargs)
     if out is None:
         raise InvalidWorkflowError('The run task ({}) did not run '
                                    'successfully.'.format(run_task.__name__))
+
+    do_spinup = fixed_geometry_spinup_yr is not None
+    if do_spinup:
+        start_dyna_model_yr = out.y0
 
     # Mass balance model used during the run
     mb_mod = out.mb_model
@@ -3497,17 +3584,24 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                     fac = np.sum(melt) / to_correct_sum
                     melt[:] = to_correct * fac
 
-        # Correct for mass-conservation and match the ice-dynamics model
-        fmod.run_until(yr + 1)
-        model_mb = (fmod.volume_m3 - prev_model_vol) * cfg.PARAMS['ice_density']
-        prev_model_vol = fmod.volume_m3
+        if do_spinup and yr < start_dyna_model_yr:
+            residual_mb = 0
+            model_mb = (out['snowfall_on_glacier']['data'][i, :].sum() -
+                        out['melt_on_glacier']['data'][i, :].sum())
+        else:
+            # Correct for mass-conservation and match the ice-dynamics model
+            fmod.run_until(yr + 1)
+            model_mb = (fmod.volume_m3 - prev_model_vol) * cfg.PARAMS['ice_density']
+            prev_model_vol = fmod.volume_m3
 
-        reconstructed_mb = (out['snowfall_on_glacier']['data'][i, :].sum() -
-                            out['melt_on_glacier']['data'][i, :].sum())
-        residual_mb = model_mb - reconstructed_mb
+            reconstructed_mb = (out['snowfall_on_glacier']['data'][i, :].sum() -
+                                out['melt_on_glacier']['data'][i, :].sum())
+            residual_mb = model_mb - reconstructed_mb
 
         # Now correct
-        if store_monthly_hydro:
+        if residual_mb == 0:
+            pass
+        elif store_monthly_hydro:
             # We try to correct the melt only where there is some
             asum = out['melt_on_glacier']['data'][i, :].sum()
             if asum > 1e-7 and (residual_mb / asum < 1):

@@ -1689,6 +1689,33 @@ class TestIO():
                                    fmodel.fls[0].thick)
 
     @pytest.mark.slow
+    def test_fixed_geom_spinup(self, class_case_dir):
+        mb = LinearMassBalance(2600.)
+        model = FluxBasedModel(dummy_constant_bed(), mb_model=mb, y0=0., glen_a=self.glen_a)
+        model.run_until(200)
+
+        mb = LinearMassBalance(2800.)
+        model = FluxBasedModel(model.fls, mb_model=mb, y0=20, glen_a=self.glen_a)
+
+        ds_diag, ds_fl, ds = model.run_until_and_store(40,
+                                                       fl_diag_path=None,
+                                                       geom_path=None,
+                                                       fixed_geometry_spinup_yr=0)
+        assert ds_diag.time[0] == 0
+        assert ds_diag.time[-1] == 40
+
+        area = ds_diag.area_m2.to_series()
+        vol = ds_diag.volume_m3.to_series()
+        is_spin = ds_diag.is_fixed_geometry_spinup.to_series()
+        assert_allclose(area.loc[:19], area.loc[0])
+        assert_allclose(is_spin.loc[:19], True)
+        assert_allclose(is_spin.loc[20:], False)
+        dv = vol.iloc[1:].values - vol.iloc[:-1]
+        assert_allclose(dv.loc[:19], dv.loc[0])
+        # This doesn't work though
+        assert np.all(dv.loc[:19] != dv.loc[20])
+
+    @pytest.mark.slow
     def test_calving_filemodel(self, class_case_dir):
         y1 = 1200
         geom_path = os.path.join(class_case_dir, 'ts_ideal.nc')
@@ -3302,12 +3329,13 @@ class TestHEF:
                                                     'terminus_thick_2',
                                                     ]
         cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
-
         cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
                                     output_filesuffix='_hist')
+        tasks.run_from_climate_data(gdir, fixed_geometry_spinup_yr=1980,
+                                    output_filesuffix='_spin')
 
         # Check fl diagnostics
         fl_diag_path = gdir.get_filepath('fl_diagnostics', filesuffix='_hist')
@@ -3568,10 +3596,20 @@ class TestHydro:
                              store_monthly_hydro=store_monthly_hydro,
                              min_ys=1980, output_filesuffix='_hist')
 
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                             store_monthly_hydro=store_monthly_hydro,
+                             fixed_geometry_spinup_yr=1980,
+                             output_filesuffix='_spin')
+
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_hist')) as ds:
             sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
             odf = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_spin')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf_spin = ds[sel_vars].to_dataframe().iloc[:-1]
 
         # Sanity checks
         odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
@@ -3603,9 +3641,34 @@ class TestHydro:
                         mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
                         atol=1e-2)  # 0.01 kg is OK as numerical error
 
+        # Mass-conservation spinup
+        odf_spin['tot_prcp'] = (odf_spin['liq_prcp_off_glacier'] +
+                                odf_spin['liq_prcp_on_glacier'] +
+                                odf_spin['snowfall_off_glacier'] +
+                                odf_spin['snowfall_on_glacier'])
+
+        odf_spin['runoff'] = (odf_spin['melt_on_glacier'] +
+                              odf_spin['melt_off_glacier'] +
+                              odf_spin['liq_prcp_on_glacier'] +
+                              odf_spin['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf_spin['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf_spin['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf_spin['snow_bucket'].iloc[-1]
+        mass_in = odf_spin['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf_spin['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+        # Other checks
+        assert_allclose(odf_spin['is_fixed_geometry_spinup'].loc[:1990], 1)
+
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
+        # In the spinup run the residual is zero for the spinup part
+        assert_allclose(odf_spin['residual_mb'].loc[:1990], 0)
 
         # Also check output stuff
         nds = utils.compile_run_output([gdir], input_filesuffix='_hist')
