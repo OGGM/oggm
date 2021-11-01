@@ -16,8 +16,8 @@ Breaking changes
   if it does, it should be relatively straightforward to update your code:
   users now control the number of outputs with the ``fl_diag_path`` and
   ``geom_path`` kwargs. Most users will probably have used the ``run_*``
-  tasks anyway and won't be affected by this change.
-  By `Fabien Maussion <https://github.com/fmaussion>`_
+  tasks anyway, and won't be affected by this change (except maybe for the
+  point below). By `Fabien Maussion <https://github.com/fmaussion>`_
 - Furthermore, ``cfg.PARAMS['store_model_geometry']`` is now set to ``False``
   per default. If you were relying on these files (e.g. for a run with spinup
   or similar), your code will fail with ``FileNotFoundError`` for the
