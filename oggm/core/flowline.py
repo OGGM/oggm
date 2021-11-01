@@ -1541,7 +1541,6 @@ class FluxBasedModel(FlowlineModel):
             self.u_stag.append(np.zeros(nx+1))
             self.shapefac_stag.append(np.ones(nx+1))  # beware the ones!
             self.flux_stag.append(np.zeros(nx+1))
-            self._avg_velocity.append(np.zeros(nx))
 
     def step(self, dt):
         """Advance one step."""
