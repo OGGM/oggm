@@ -2472,7 +2472,7 @@ class GlacierDirectory(object):
 
         # Deprecation cycle
         if (filename == 'model_geometry' and
-                not self.has_file('model_geometry') and
+                not self.has_file('model_geometry', filesuffix=filesuffix) and
                 not cfg.PARAMS['store_model_geometry']):
             raise InvalidWorkflowError("You wish to access `model_geometry` files "
                                        "but PARAMS['store_model_geometry'] is set "
