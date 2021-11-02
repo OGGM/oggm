@@ -2470,6 +2470,15 @@ class GlacierDirectory(object):
         if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
+        # Deprecation cycle
+        if (filename == 'model_geometry' and
+                not self.has_file('model_geometry') and
+                not cfg.PARAMS['store_model_geometry']):
+            raise InvalidWorkflowError("You wish to access `model_geometry` files "
+                                       "but PARAMS['store_model_geometry'] is set "
+                                       "to False (this has changed in OGGM v1.6.0). "
+                                       "This is likely to create problems.")
+
         deprecated = {'climate_monthly': 'climate_historical',
                       'model_run': 'model_geometry',
                       }
