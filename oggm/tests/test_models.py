@@ -3684,6 +3684,49 @@ class TestHydro:
             assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 11, atol=1.1)
 
     @pytest.mark.slow
+    def test_hydro_ref_area(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+
+        # Add debug vars
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
+
+        init_present_time_glacier(gdir)
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                             store_monthly_hydro=False,
+                             fixed_geometry_spinup_yr=1980,
+                             ye=1999,
+                             output_filesuffix='_hist')
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                             store_monthly_hydro=False,
+                             init_model_filesuffix='_hist',
+                             ref_geometry_filesuffix='_hist',
+                             ref_area_from_y0=True,
+                             output_filesuffix='_run')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_hist')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf_hist = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_run')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf_run = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        assert odf_hist.index[0] == 1980
+        assert odf_hist.index[-1] == 1998  # this matches becaus last year is removed above
+        assert odf_run.index[0] == 1999
+
+        odf = pd.concat([odf_hist, odf_run])
+        # Domain area is constant and equal to the first year
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=1e-4)
+
+    @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
     def test_hydro_out_random(self, hef_gdir, inversion_params, store_monthly_hydro):
 
