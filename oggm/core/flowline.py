@@ -3277,13 +3277,12 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
 @entity_task(log)
 def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
-                   fixed_geometry_spinup_yr=None,
-                   ref_area_from_y0=False, **kwargs):
+                   fixed_geometry_spinup_yr=None, ref_area_from_y0=False,
+                   ref_area_yr=None, ref_geometry_filesuffix=None,
+                   **kwargs):
     """Run the flowline model and add hydro diagnostics (experimental!).
 
     TODOs:
-        - Add the possibility to merge with previous model runs
-        - Add the possibility to prescribe glacier area (e.g. with starting area)
         - Add the possibility to record MB during run to improve performance
           (requires change in API)
         - ...
@@ -3297,11 +3296,19 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     store_monthly_hydro : bool
         also compute monthly hydrological diagnostics. The monthly ouptputs
         are stored in 2D fields (years, months)
-    ref_area_from_y0 : bool
+    ref_area_yr : int
         the hydrological output is computed over a reference area, which
         per default is the largest area covered by the glacier in the simulation
         period. Use this kwarg to force a specific area to the state of the
         glacier at the provided simulation year.
+    ref_area_from_y0 : bool
+        overwrite ref_area_yr to the first year of the timeseries
+    ref_geometry_filesuffix : str
+        this kwarg allows to copy the reference area from a previous simulation
+        (useful for projections with historical spinup for example).
+        Set to a model_geometry file filesuffix that is present in the
+        current directory (e.g. `_historical` for pre-processed gdirs).
+        If set, ref_area_yr and ref_area_from_y0 refer to this file instead.
     fixed_geometry_spinup_yr : int
         if set to an integer, the model will artificially prolongate
         all outputs of run_until_and_store to encompass all time stamps
@@ -3343,18 +3350,40 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # Glacier geometry during the run
     suffix = kwargs.get('output_filesuffix', '')
 
-    # We start by fetching mass balance data and geometry for all years
-    # model_geometry files always retrieve yearly timesteps
+    # We start by fetching the reference model geometry
+    # The one we just computed
     fmod = FileModel(gdir.get_filepath('model_geometry', filesuffix=suffix))
     # The last one is the final state - we can't compute MB for that
     years = fmod.years[:-1]
 
-    # Geometry at y0 to start with + off-glacier snow bucket
+    if ref_geometry_filesuffix:
+        if not ref_area_from_y0 and ref_area_yr is None:
+            raise InvalidParamsError('If `ref_geometry_filesuffix` is set, '
+                                     'users need to specify `ref_area_from_y0`'
+                                     ' or `ref_area_yr`')
+        # User provided
+        fmod_ref = FileModel(gdir.get_filepath('model_geometry',
+                                               filesuffix=ref_geometry_filesuffix))
+    else:
+        # ours as well
+        fmod_ref = fmod
+
+    # Check input
+    if ref_area_from_y0:
+        ref_area_yr = fmod_ref.years[0]
+
+    # Geometry at year yr to start with + off-glacier snow bucket
+    if ref_area_yr is not None:
+        if ref_area_yr not in fmod_ref.years:
+            raise InvalidParamsError('The chosen ref_area_yr is not '
+                                     'available!')
+        fmod_ref.run_until(ref_area_yr)
+
     bin_area_2ds = []
     bin_elev_2ds = []
     ref_areas = []
     snow_buckets = []
-    for fl in fmod.fls:
+    for fl in fmod_ref.fls:
         # Glacier area on bins
         bin_area = fl.bin_area_m2
         ref_areas.append(bin_area)
@@ -3376,7 +3405,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             bin_area_2d[i, :] = fl.bin_area_m2
             bin_elev_2d[i, :] = fl.surface_h
 
-    if not ref_area_from_y0:
+    if ref_area_yr is None:
         # Ok we get the max area instead
         for ref_area, bin_area_2d in zip(ref_areas, bin_area_2ds):
             ref_area[:] = bin_area_2d.max(axis=0)
