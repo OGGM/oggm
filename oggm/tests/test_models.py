@@ -3698,6 +3698,7 @@ class TestHydro:
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
                              store_monthly_hydro=False,
                              fixed_geometry_spinup_yr=1980,
+                             ref_area_from_y0=True,
                              ye=1999,
                              output_filesuffix='_hist')
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,

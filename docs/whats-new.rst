@@ -62,7 +62,12 @@ Enhancements
   ignoring glacier area change in this period. Therefore, it is only valid for
   short periods of times (years, not decades).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-
+- Added new keyword arguments to ``run_with_hydro`` which allow to
+  select which glacier area should be used as reference for the hydro
+  computations (:pull:`1331`). Furthermore, it also allows to use a previous
+  geometry file for the computations, i.e. allowing for continuous
+  historical to projections outputs (if needed).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
