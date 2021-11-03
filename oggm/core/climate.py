@@ -1459,7 +1459,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
             # Done - store for later
             mu_candidates[i] = mu_star
-            # if we find one working melt_f we can actually stop
+            # if we find one working mu_star we can actually stop
             # the loop to make it faster.
             # We are here only interested in the candidate which
             # changes the ref_hgt the least!
