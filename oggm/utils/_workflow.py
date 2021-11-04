@@ -3567,3 +3567,4 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
                                   filesuffix=output_filesuffix,
                                   delete=True)
     diag_ds.to_netcdf(diag_path)
+    
