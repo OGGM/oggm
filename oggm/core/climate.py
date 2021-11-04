@@ -1459,7 +1459,15 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
             # Done - store for later
             mu_candidates[i] = mu_star
+            # if we find one working mu_star we can actually stop
+            # the loop to make it faster.
+            # We are here only interested in the candidate which
+            # changes the ref_hgt the least!
+            if np.isfinite(mu_star):
+                break
 
+        # the workflow below works in general when having more candidates
+        # but also works for one candidate (as we stopped the loop)
         sel_steps = steps[np.isfinite(mu_candidates)]
         sel_mus = mu_candidates[np.isfinite(mu_candidates)]
         if len(sel_mus) == 0:
@@ -1469,9 +1477,9 @@ def mu_star_calibration_from_geodetic_mb(gdir,
                                               'fit within the prescribed '
                                               'bounds for mu*.')
 
-        # Now according to all the corrections we have a series of candidates
-        # Her we just pick the first, but to be fair it is arbitrary
-        # We could also pick one randomly...
+        # We have just picked the first, but to be fair it is arbitrary
+        # We could also pick one randomly... but here we rather prefer to have
+        # the smallest ref_hgt change as possible (hence smalles temp. bias change)
         mu_star = sel_mus[0]
         # Final correction of the data
         with utils.ncDataset(fpath, 'a') as nc:
