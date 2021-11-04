@@ -27,7 +27,8 @@ Breaking changes
 
 Enhancements
 ~~~~~~~~~~~~
-
+- Added the ELA back as output variable that can be computed during post processing
+  (``run_compute_ela``), but also without doing a model run (:pull:`1333`).
 - Added a ``prescribe_years`` kwarg to ``RandomMassBalance`` to control
   which years are picked instead of the random number generator (:pull:`1310`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
@@ -75,7 +76,7 @@ Bug fixes
 v1.5.2 (29.08.2021)
 -------------------
 
-Very minor relsease to remove the dependency on the ``python-colorspace`` package.
+Very minor release to remove the dependency on the ``python-colorspace`` package.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
