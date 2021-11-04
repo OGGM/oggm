@@ -3480,8 +3480,9 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
 
 @entity_task(log)
-def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical', temperature_bias=None,
-                    precipitation_factor=None, climate_input_filesuffix='', output_filesuffix=''):
+def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical',
+                    temperature_bias=None, precipitation_factor=None,
+                    climate_input_filesuffix='', output_filesuffix=''):
 
     """Computes the ELA of a glacier for a for given number of year and climate.
 
@@ -3530,8 +3531,7 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     monthly_time = np.arange(np.floor(ys), np.floor(ye) + 1)
     yrs, months = floatyear_to_date(monthly_time)
-    cyrs, cmonths = hydrodate_to_calendardate(yrs, months,
-                                                    start_month=sm)
+    cyrs, cmonths = hydrodate_to_calendardate(yrs, months, start_month=sm)
 
     diag_path = gdir.get_filepath('model_diagnostics',
                                   filesuffix=output_filesuffix,
@@ -3544,8 +3544,8 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
         diag_ds['ELA'].attrs['description'] = 'Equilibrium Line Altitude'
         diag_ds['ELA'].attrs['unit'] = '[m]'
     else:
-        # Somehow these files can't be compiled (yet) with global_tasks.compile_run_output(), the ELA values
-        # get a nan value in that case.
+        # Somehow these files can't be compiled (yet) with global_tasks.compile_run_output(),
+        # the ELA values get a nan value in that case.
         diag_ds = xr.Dataset()
         diag_ds.coords['time'] = ('time', monthly_time)
         diag_ds.coords['hydro_year'] = ('time', yrs)
