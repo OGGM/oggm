@@ -1036,7 +1036,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             with xr.open_dataset(ppath) as ds_diag:
                 if 'volume_m3' in ds.data_vars.keys():
                     nt = - len(ds_diag.volume_m3.values)
-                else:
+                elif 'ELA' in ds.data_vars.keys():
                     nt = - len(ds_diag.ELA.values)
                 for vn, var in out_2d.items():
                     var['data'][nt:, i] = ds_diag[vn].values
@@ -3547,8 +3547,6 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
         diag_ds['ELA'].attrs['description'] = 'Equilibrium Line Altitude'
         diag_ds['ELA'].attrs['unit'] = '[m]'
     else:
-        # Somehow these files can't be compiled (yet) with global_tasks.compile_run_output(),
-        # the ELA values get a nan value in that case.
         diag_ds = xr.Dataset()
         diag_ds.coords['time'] = ('time', monthly_time)
         diag_ds.coords['hydro_year'] = ('time', yrs)
@@ -3569,4 +3567,11 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
     diag_path = gdir.get_filepath('model_diagnostics',
                                   filesuffix=output_filesuffix,
                                   delete=True)
-    diag_ds.to_netcdf(diag_path)
+
+    enc_var = {'dtype': 'float32'}
+    # if use_compression:
+    enc_var['complevel'] = 5
+    enc_var['zlib'] = True
+    encoding = {v: enc_var for v in diag_ds.data_vars}
+
+    diag_ds.to_netcdf(diag_path, encoding=encoding)
