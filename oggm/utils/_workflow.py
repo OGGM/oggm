@@ -1034,7 +1034,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                nt = - len(ds_diag.volume_m3.values)
+                if 'volume_m3' in ds.data_vars.keys():
+                    nt = - len(ds_diag.volume_m3.values)
+                else:
+                    nt = - len(ds_diag.ELA.values)
                 for vn, var in out_2d.items():
                     var['data'][nt:, i] = ds_diag[vn].values
                 for vn, var in out_3d.items():

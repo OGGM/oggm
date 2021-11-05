@@ -149,6 +149,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_cesm_data
     tasks.process_cmip5_data
     tasks.process_cmip_data
+    tasks.run_compute_ela
     tasks.prepare_for_inversion
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
