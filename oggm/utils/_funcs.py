@@ -313,11 +313,11 @@ def line_interpol(line, dx):
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
-        tdis = np.array([line.project(pb) for pb in pbs])
+        tdis = np.array([line.project(pb) for pb in pbs.geoms])
         p = np.where(tdis > refdis)[0]
         if len(p) == 0:
             break
-        points.append(pbs[int(p[0])])
+        points.append(pbs.geoms[int(p[0])])
 
     return points
 
@@ -467,16 +467,16 @@ def polygon_intersections(gdf):
                 continue
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
-            if len(mult_intersect) == 0:
+            if len(mult_intersect.geoms) == 0:
                 continue
-            mult_intersect = [m for m in mult_intersect if
+            mult_intersect = [m for m in mult_intersect.geoms if
                               not isinstance(m, shpg.Point)]
-            if len(mult_intersect) == 0:
+            if len(mult_intersect.geoms) == 0:
                 continue
             mult_intersect = linemerge(mult_intersect)
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
-            for line in mult_intersect:
+            for line in mult_intersect.geoms:
                 if not isinstance(line, shpg.linestring.LineString):
                     raise RuntimeError('polygon_intersections: we expect'
                                        'a LineString but got a '

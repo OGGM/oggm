@@ -344,7 +344,7 @@ def _filter_heads(heads, heads_height, radius, polygon):
 
             if inter_poly.type != 'LineString':
                 # keep the local polygon only
-                for sub_poly in inter_poly:
+                for sub_poly in inter_poly.geoms:
                     if sub_poly.intersects(head):
                         inter_poly = sub_poly
                         break
@@ -818,12 +818,12 @@ def _line_extend(uline, dline, dx):
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = dline.project(pref)
-        tdis = np.array([dline.project(pb) for pb in pbs])
+        tdis = np.array([dline.project(pb) for pb in pbs.geoms])
         p = np.where(tdis > refdis)[0]
         if len(p) == 0:
             break
-        points.append(pbs[int(p[0])])
-        dpoints.append(pbs[int(p[0])])
+        points.append(pbs.geoms[int(p[0])])
+        dpoints.append(pbs.geoms[int(p[0])])
 
     return shpg.LineString(points), shpg.LineString(dpoints)
 
@@ -1303,7 +1303,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     elif line.type in ['MultiLineString', 'GeometryCollection']:
         # Take the one that contains the centerline
         oline = None
-        for l in line:
+        for l in line.geoms:
             if l.type != 'LineString':
                 continue
             if l.intersects(centerline.line):
@@ -1337,7 +1337,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         raise InvalidGeometryError(extext)
 
     assert line.type == 'MultiLineString'
-    width = np.sum([l.length for l in line])
+    width = np.sum([l.length for l in line.geoms])
 
     return width, line
 
@@ -1387,7 +1387,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
                 continue
             xc = []
             yc = []
-            for dwl in wl:
+            for dwl in wl.geoms:
                 # we interpolate at high res and take the int coords
                 dwl = shpg.LineString([dwl.interpolate(x, normalized=True)
                                        for x in np.linspace(0., 1., num=100)])

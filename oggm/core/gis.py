@@ -198,9 +198,9 @@ def _polygon_to_pix(polygon):
     # sometimes the glacier gets cut out in parts
     if tmp.type == 'MultiPolygon':
         # If only small arms are cut out, remove them
-        area = np.array([_tmp.area for _tmp in tmp])
+        area = np.array([_tmp.area for _tmp in tmp.geoms])
         _tokeep = np.argmax(area).item()
-        tmp = tmp[_tokeep]
+        tmp = tmp.geoms[_tokeep]
 
         # check that the other parts really are small,
         # otherwise replace tmp with something better
