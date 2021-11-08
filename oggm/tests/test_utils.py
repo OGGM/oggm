@@ -2788,4 +2788,3 @@ class TestSkyIsFalling(unittest.TestCase):
     #     assert_allclose(run1.ELA, run2.ELA, rtol=1e-3)
     #     os.remove(diag_path_1)
     #     os.remove(diag_path_2)
-

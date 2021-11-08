@@ -3568,11 +3568,11 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
-    enc_var = {'dtype': 'float32'}
-    # if use_compression:
-    enc_var['complevel'] = 5
-    enc_var['zlib'] = True
-    encoding = {v: enc_var for v in diag_ds.data_vars}
-
-    diag_ds.to_netcdf(diag_path, encoding=encoding)
-    diag_ds.close()
+    # enc_var = {'dtype': 'float32'}
+    ## if use_compression:
+    # enc_var['complevel'] = 5
+    # enc_var['zlib'] = True
+    # encoding = {v: enc_var for v in diag_ds.data_vars}
+    # diag_ds.to_netcdf(diag_path, encoding=encoding)
+    diag_ds.to_netcdf(diag_path)
+    # diag_ds.close()
