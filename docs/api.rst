@@ -195,6 +195,7 @@ but might use multiprocessing internally.
     global_tasks.compile_glacier_statistics
     global_tasks.compile_fixed_geometry_mass_balance
     global_tasks.compile_climate_statistics
+    global_tasks.compile_ela
 
 
 Command line interface (CLI)

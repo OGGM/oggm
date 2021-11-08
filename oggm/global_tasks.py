@@ -22,3 +22,4 @@ from oggm.utils import compile_task_time
 from oggm.utils import compile_glacier_statistics
 from oggm.utils import compile_fixed_geometry_mass_balance
 from oggm.utils import compile_climate_statistics
+from oggm.utils import compile_ela

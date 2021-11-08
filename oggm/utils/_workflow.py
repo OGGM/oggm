@@ -58,7 +58,6 @@ except ImportError:
 # Locals
 from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
-                               floatyear_to_date, hydrodate_to_calendardate,
                                tolist, filter_rgi_name, parse_rgi_meta,
                                haversine, multipolygon_to_polygon, clip_scalar)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
@@ -1573,6 +1572,60 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         if path is True:
             fpath = os.path.join(cfg.PATHS['working_dir'],
                                  'fixed_geometry_mass_balance' + filesuffix)
+            if csv:
+                out.to_csv(fpath + '.csv')
+            else:
+                out.to_hdf(fpath + '.hdf', key='df')
+        else:
+            ext = os.path.splitext(path)[-1]
+            if ext.lower() == '.csv':
+                out.to_csv(path)
+            elif ext.lower() == '.hdf':
+                out.to_hdf(path, key='df')
+    return out
+
+@global_task(log)
+def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None):
+    """Compiles a table of ELA timeseries for all glaciers.
+
+    The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
+    to open it.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location (file
+        extension matters)
+    csv: bool
+        Set to store the data in csv instead of hdf.
+    ys : int
+        start year
+    ye : int
+        end year
+    years : array of ints
+        override ys and ye with the years of your choice
+    """
+    from oggm.workflow import execute_entity_task
+    from oggm.core.massbalance import run_compute_ela
+
+    out_df = execute_entity_task(run_compute_ela, gdirs, ys=ys, ye=ye, years=years)
+
+    for idx, s in enumerate(out_df):
+        if s is None:
+            out_df[idx] = pd.Series(np.NaN)
+
+    out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
+    out = out.dropna(axis=0, how='all')
+
+    if path:
+        if path is True:
+            fpath = os.path.join(cfg.PATHS['working_dir'],
+                                 'ELA' + filesuffix)
             if csv:
                 out.to_csv(fpath + '.csv')
             else:
@@ -3477,89 +3530,3 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
-
-
-# @entity_task(log)
-# def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical', temperature_bias=None,
-#                     precipitation_factor=None, climate_input_filesuffix='', output_filesuffix=''):
-#
-#     """Computes the ELA of a glacier for a for given number of year and climate.
-#         Parameters
-#     ----------
-#     gdir : :py:class:`oggm.GlacierDirectory`
-#         the glacier directory to process
-#     ys : int
-#         start year of the model run (default: from the glacier geometry
-#         date)
-#     ye : int
-#         end year of the model run (no default: needs to be set)
-#     climate_filename : str
-#         name of the climate file, e.g. 'climate_historical' (default) or
-#         'gcm_data'
-#     climate_input_filesuffix : str
-#         filesuffix for the input climate file
-#     output_filesuffix : str
-#         for the output file
-#     temperature_bias : float
-#         add a bias to the temperature timeseries
-#     precipitation_factor: float
-#         multiply a factor to the precipitation time series
-#         default is None and means that the precipitation factor from the
-#         calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
-#     Returns
-#     -------
-#     """
-#
-#     mbmod = oggm.core.massbalance.PastMassBalance(gdir, filename=climate_filename,
-#                                                   input_filesuffix=climate_input_filesuffix)
-#
-#     if temperature_bias is not None:
-#         mbmod.temp_bias = temperature_bias
-#     if precipitation_factor is not None:
-#         mbmod.prcp_fac = precipitation_factor
-#
-#     mbmod.valid_bounds = [-10000, 20000]
-#
-#     ela = []
-#     for yr in np.arange(ys, ye+1):
-#         ela = np.append(ela, mbmod.get_ela(year=yr))
-#
-#     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-#     monthly_time = np.arange(np.floor(ys), np.floor(ye) + 1)
-#     yrs, months = floatyear_to_date(monthly_time)
-#     cyrs, cmonths = hydrodate_to_calendardate(yrs, months, start_month=sm)
-#
-#     diag_path = gdir.get_filepath('model_diagnostics',
-#                                   filesuffix=output_filesuffix,
-#                                   delete=False)
-#
-#     if os.path.exists(diag_path):
-#         # This only works within the time bounds of the file you try to add the ELA to.
-#         diag_ds = xr.open_dataset(diag_path)
-#         diag_ds['ELA'] = ('time', ela)
-#         diag_ds['ELA'].attrs['description'] = 'Equilibrium Line Altitude'
-#         diag_ds['ELA'].attrs['unit'] = '[m]'
-#     else:
-#         # Somehow these files can't be compiled (yet) with global_tasks.compile_run_output(), the ELA values
-#         # get a nan value in that case.
-#         diag_ds = xr.Dataset()
-#         diag_ds.coords['time'] = ('time', monthly_time)
-#         diag_ds.coords['hydro_year'] = ('time', yrs)
-#         diag_ds.coords['hydro_month'] = ('time', months)
-#         diag_ds.coords['calendar_year'] = ('time', cyrs)
-#         diag_ds.coords['calendar_month'] = ('time', cmonths)
-#
-#         diag_ds['time'].attrs['description'] = 'Floating hydrological year'
-#         diag_ds['hydro_year'].attrs['description'] = 'Hydrological year'
-#         diag_ds['hydro_month'].attrs['description'] = 'Hydrological month'
-#         diag_ds['calendar_year'].attrs['description'] = 'Calendar year'
-#         diag_ds['calendar_month'].attrs['description'] = 'Calendar month'
-#
-#         diag_ds['ELA'] = ('time', ela)
-#         diag_ds['ELA'].attrs['description'] = 'Equilibrium Line Altitude'
-#         diag_ds['ELA'].attrs['unit'] = '[m]'
-#
-#     diag_path = gdir.get_filepath('model_diagnostics',
-#                                   filesuffix=output_filesuffix,
-#                                   delete=True)
-#     diag_ds.to_netcdf(diag_path)

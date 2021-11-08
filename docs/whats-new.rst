@@ -28,6 +28,10 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- Added the ELA back as a variable. Unlike before it is now a diagnostic
+  variable that can be computed independent of a model run with
+  ``global_tasks.compile_ela`` (:pull:`1333`).
+  By `Anouk Vlug <https://github.com/anoukvlug>`_
 - Added a ``prescribe_years`` kwarg to ``RandomMassBalance`` to control
   which years are picked instead of the random number generator (:pull:`1310`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
