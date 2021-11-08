@@ -3291,7 +3291,10 @@ class TestHEF:
                           dict(nyears=200, seed=5, mb_elev_feedback=feedback,
                                output_filesuffix=feedback,
                                store_monthly_step=True)))
-        workflow.execute_parallel_tasks(hef_gdir, tasks)
+        with warnings.catch_warnings():
+            # Waring about MB model update
+            warnings.filterwarnings("ignore", category=UserWarning)
+            workflow.execute_parallel_tasks(hef_gdir, tasks)
 
         out = []
         for feedback in feedbacks:

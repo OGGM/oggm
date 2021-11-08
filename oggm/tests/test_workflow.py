@@ -35,7 +35,7 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-def up_to_climate(reset=False, use_multiprocessing=None):
+def up_to_climate(reset=False, use_mp=None):
     """Run the tasks you want."""
 
     # test directory
@@ -52,10 +52,10 @@ def up_to_climate(reset=False, use_multiprocessing=None):
     cfg.initialize()
 
     # Use multiprocessing
-    if use_multiprocessing is None:
+    if use_mp is None:
         cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
     else:
-        cfg.PARAMS['use_multiprocessing'] = use_multiprocessing
+        cfg.PARAMS['use_multiprocessing'] = use_mp
 
     # Working dir
     cfg.PATHS['working_dir'] = _TEST_DIR
@@ -219,7 +219,7 @@ class TestFullRun(unittest.TestCase):
     @pytest.mark.slow
     def test_shapefile_output(self):
 
-        gdirs = up_to_climate(use_multiprocessing=True)
+        gdirs = up_to_climate(use_mp=True)
 
         fpath = os.path.join(_TEST_DIR, 'centerlines.shp')
         write_centerlines_to_shape(gdirs, path=fpath)

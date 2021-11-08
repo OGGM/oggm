@@ -2834,7 +2834,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     if store_monthly_step and (mb_elev_feedback == 'annual'):
         warnings.warn("The mass-balance used to drive the ice dynamics model "
                       "is updated yearly. If you want the output to be stored "
-                      "monthly and also reflect reflect monthly processes,"
+                      "monthly and also reflect monthly processes, "
                       "set store_monthly_step=True and "
                       "mb_elev_feedback='monthly'. This is not recommended "
                       "though: for monthly MB applications, we recommend to "
