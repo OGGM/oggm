@@ -65,7 +65,7 @@ from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-import oggm
+
 
 # Default RGI date (median per region in RGI6)
 RGI_DATE = {'01': 2009,
