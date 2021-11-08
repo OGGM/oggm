@@ -1585,8 +1585,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     return out
 
 @global_task(log)
-def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None):
-    """Compiles a table of ELA timeseries for all glaciers.
+def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None,
+                climate_filename='climate_historical', temperature_bias=None, precipitation_factor=None,
+                climate_input_filesuffix=''):
+    """Compiles a table of ELA timeseries for all glaciers for a given number of years, using the Pastmassbalance model.
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
     to open it.
@@ -1609,11 +1611,24 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
         end year
     years : array of ints
         override ys and ye with the years of your choice
+    climate_filename : str
+        name of the climate file, e.g. 'climate_historical' (default) or
+        'gcm_data'
+    climate_input_filesuffix : str
+        filesuffix for the input climate file
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
     """
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import run_compute_ela
 
-    out_df = execute_entity_task(run_compute_ela, gdirs, ys=ys, ye=ye, years=years)
+    out_df = execute_entity_task(run_compute_ela, gdirs, ys=ys, ye=ye, years=years, climate_filename=climate_filename,
+                                 climate_input_filesuffix=climate_input_filesuffix, temperature_bias=temperature_bias,
+                                 precipitation_factor=precipitation_factor)
 
     for idx, s in enumerate(out_df):
         if s is None:
