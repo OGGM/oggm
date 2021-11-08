@@ -300,7 +300,7 @@ def line_interpol(line, dx):
         elif pbs.type == 'GeometryCollection':
             # This is rare
             opbs = []
-            for p in pbs:
+            for p in pbs.geoms:
                 if p.type == 'Point':
                     opbs.append(p)
                 elif p.type == 'LineString':
@@ -311,13 +311,19 @@ def line_interpol(line, dx):
                 raise RuntimeError('line_interpol: we expect a MultiPoint '
                                    'but got a {}.'.format(pbs.type))
 
+        try:
+            # Shapely v2 compat
+            pbs = pbs.geoms
+        except AttributeError:
+            pass
+
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
-        tdis = np.array([line.project(pb) for pb in pbs.geoms])
+        tdis = np.array([line.project(pb) for pb in pbs])
         p = np.where(tdis > refdis)[0]
         if len(p) == 0:
             break
-        points.append(pbs.geoms[int(p[0])])
+        points.append(pbs[int(p[0])])
 
     return points
 
@@ -467,16 +473,23 @@ def polygon_intersections(gdf):
                 continue
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
-            if len(mult_intersect.geoms) == 0:
+
+            try:
+                # Shapely v2 compat
+                mult_intersect = mult_intersect.geoms
+            except AttributeError:
+                pass
+
+            if len(mult_intersect) == 0:
                 continue
-            mult_intersect = [m for m in mult_intersect.geoms if
+            mult_intersect = [m for m in mult_intersect if
                               not isinstance(m, shpg.Point)]
-            if len(mult_intersect.geoms) == 0:
+            if len(mult_intersect) == 0:
                 continue
             mult_intersect = linemerge(mult_intersect)
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
-            for line in mult_intersect.geoms:
+            for line in mult_intersect:
                 if not isinstance(line, shpg.linestring.LineString):
                     raise RuntimeError('polygon_intersections: we expect'
                                        'a LineString but got a '

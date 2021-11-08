@@ -324,7 +324,6 @@ environment from the following ``environment.yml`` file used to work::
       - cartopy
       - geopandas
       - rasterio
-      - descartes
       - seaborn
       - pytables
       - pip
@@ -396,7 +395,7 @@ Install some packages one by one::
 
    $ pip install numpy scipy pandas shapely matplotlib pyproj \
        rasterio Pillow geopandas netcdf4 scikit-image configobj joblib \
-       xarray progressbar2 pytest motionless dask bottleneck toolz descartes \
+       xarray progressbar2 pytest motionless dask bottleneck toolz \
        tables
 
 A pinning of the NetCDF4 package to 1.3.1 might be necessary on some systems

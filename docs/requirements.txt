@@ -19,7 +19,6 @@ tables
 motionless
 dask
 bottleneck
-descartes
 toolz
 ipython
 numpydoc

@@ -816,14 +816,20 @@ def _line_extend(uline, dline, dx):
         if pbs.type == 'Point':
             pbs = [pbs]
 
+        try:
+            # Shapely v2 compat
+            pbs = pbs.geoms
+        except AttributeError:
+            pass
+
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = dline.project(pref)
-        tdis = np.array([dline.project(pb) for pb in pbs.geoms])
+        tdis = np.array([dline.project(pb) for pb in pbs])
         p = np.where(tdis > refdis)[0]
         if len(p) == 0:
             break
-        points.append(pbs.geoms[int(p[0])])
-        dpoints.append(pbs.geoms[int(p[0])])
+        points.append(pbs[int(p[0])])
+        dpoints.append(pbs[int(p[0])])
 
     return shpg.LineString(points), shpg.LineString(dpoints)
 
