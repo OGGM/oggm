@@ -130,6 +130,12 @@ def tolist(arg, length=None):
         arg = [arg]
 
     try:
+        # Shapely stuff
+        arg = arg.geoms
+    except AttributeError:
+        pass
+
+    try:
         (e for e in arg)
     except TypeError:
         arg = [arg]
@@ -300,7 +306,7 @@ def line_interpol(line, dx):
         elif pbs.type == 'GeometryCollection':
             # This is rare
             opbs = []
-            for p in pbs:
+            for p in pbs.geoms:
                 if p.type == 'Point':
                     opbs.append(p)
                 elif p.type == 'LineString':
@@ -310,6 +316,12 @@ def line_interpol(line, dx):
             if pbs.type != 'MultiPoint':
                 raise RuntimeError('line_interpol: we expect a MultiPoint '
                                    'but got a {}.'.format(pbs.type))
+
+        try:
+            # Shapely v2 compat
+            pbs = pbs.geoms
+        except AttributeError:
+            pass
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = line.project(pref)
@@ -467,6 +479,13 @@ def polygon_intersections(gdf):
                 continue
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
+
+            try:
+                # Shapely v2 compat
+                mult_intersect = mult_intersect.geoms
+            except AttributeError:
+                pass
+
             if len(mult_intersect) == 0:
                 continue
             mult_intersect = [m for m in mult_intersect if
@@ -476,6 +495,13 @@ def polygon_intersections(gdf):
             mult_intersect = linemerge(mult_intersect)
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
+
+            try:
+                # Compat with shapely > 2.0
+                mult_intersect = mult_intersect.geoms
+            except AttributeError:
+                pass
+
             for line in mult_intersect:
                 if not isinstance(line, shpg.linestring.LineString):
                     raise RuntimeError('polygon_intersections: we expect'

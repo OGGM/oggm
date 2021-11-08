@@ -344,7 +344,7 @@ def _filter_heads(heads, heads_height, radius, polygon):
 
             if inter_poly.type != 'LineString':
                 # keep the local polygon only
-                for sub_poly in inter_poly:
+                for sub_poly in inter_poly.geoms:
                     if sub_poly.intersects(head):
                         inter_poly = sub_poly
                         break
@@ -418,7 +418,7 @@ def _filter_lines(lines, heads, k, r):
                 diff = l.difference(toremove)
                 if diff.type == 'MultiLineString':
                     # Remove the lines that have no head
-                    diff = list(diff)
+                    diff = list(diff.geoms)
                     for il in diff:
                         hashead = False
                         for h in heads:
@@ -815,6 +815,12 @@ def _line_extend(uline, dline, dx):
             pbs = pref.buffer(dx+1e-12).boundary.intersection(dline)
         if pbs.type == 'Point':
             pbs = [pbs]
+
+        try:
+            # Shapely v2 compat
+            pbs = pbs.geoms
+        except AttributeError:
+            pass
 
         # Out of the point(s) that we get, take the one farthest from the top
         refdis = dline.project(pref)
@@ -1303,7 +1309,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     elif line.type in ['MultiLineString', 'GeometryCollection']:
         # Take the one that contains the centerline
         oline = None
-        for l in line:
+        for l in line.geoms:
             if l.type != 'LineString':
                 continue
             if l.intersects(centerline.line):
@@ -1337,7 +1343,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         raise InvalidGeometryError(extext)
 
     assert line.type == 'MultiLineString'
-    width = np.sum([l.length for l in line])
+    width = np.sum([l.length for l in line.geoms])
 
     return width, line
 
@@ -1387,7 +1393,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
                 continue
             xc = []
             yc = []
-            for dwl in wl:
+            for dwl in wl.geoms:
                 # we interpolate at high res and take the int coords
                 dwl = shpg.LineString([dwl.interpolate(x, normalized=True)
                                        for x in np.linspace(0., 1., num=100)])

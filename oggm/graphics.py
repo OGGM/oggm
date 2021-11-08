@@ -486,7 +486,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
             else:
                 for wl, wi in zip(l.geometrical_widths, l.widths):
                     col = c if np.isfinite(wi) else 'grey'
-                    for w in wl:
+                    for w in wl.geoms:
                         smap.set_geometry(w, crs=crs, color=col,
                                           linewidth=0.6, zorder=50)
 
