@@ -58,4 +58,3 @@ from oggm.core.flowline import run_constant_climate
 from oggm.core.flowline import run_with_hydro
 from oggm.utils import copy_to_basedir
 from oggm.utils import gdir_to_tar
-from oggm.utils._workflow import run_compute_ela
