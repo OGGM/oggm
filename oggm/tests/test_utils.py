@@ -25,8 +25,6 @@ from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              DownloadVerificationFailedException)
-# from oggm.workflow import execute_entity_task
-# from oggm import global_tasks
 
 
 pytestmark = pytest.mark.test_env("utils")
@@ -2748,43 +2746,3 @@ class TestSkyIsFalling(unittest.TestCase):
         from salem.gis import transform_proj
         lon, lat = transform_proj(proj_in, proj_out, -2235000, -2235000)
         np.testing.assert_allclose(lon, 70.75731, atol=1e-5)
-
-
-# class TestELAComputation(unittest.TestCase):
-#
-#     def test_adding_data_to_diag_file(self):
-#         gdir = init_hef()
-#
-#         tasks.run_from_climate_data(gdir, ys=1990, ye=2000)
-#         tasks.run_compute_ela(gdir, ys=1990, ye=2000)
-#         tasks.run_compute_ela(gdir, ys=1990, ye=2000, output_filesuffix='_1')
-#
-#         diag_path_1 = gdir.get_filepath('model_diagnostics', delete=False)
-#         diag_path_2 = gdir.get_filepath('model_diagnostics', filesuffix='_1', delete=False)
-#
-#         run1 = xr.open_dataset(diag_path_1)
-#         run2 = xr.open_dataset(diag_path_2)
-#
-#         assert_allclose(run1.ELA, run2.ELA, rtol=1e-3)
-#
-#         os.remove(diag_path_1)
-#         os.remove(diag_path_2)
-
-    # def test_compile(self):
-    #     gdir = init_hef()
-    #
-    #     execute_entity_task(tasks.run_from_climate_data, gdir, ys=1990, ye=2000, store_model_geometry=False,
-    #                         store_fl_diagnostics=False)
-    #     execute_entity_task(tasks.run_compute_ela, gdir, ys=1990, ye=2000)
-    #     global_tasks.compile_run_output(gdir, input_filesuffix='')
-    #     execute_entity_task(tasks.run_compute_ela, gdir, ys=1990, ye=2000, output_filesuffix='_1')
-    #     global_tasks.compile_run_output(gdir, input_filesuffix='_1')
-    #
-    #     diag_path_1 = cfg.PATHS['working_dir'] + '/run_output.nc'
-    #     diag_path_2 = cfg.PATHS['working_dir'] + '/run_output_1.nc'
-    #     run1 = xr.open_dataset(diag_path_1)
-    #     run2 = xr.open_dataset(diag_path_2)
-    #
-    #     assert_allclose(run1.ELA, run2.ELA, rtol=1e-3)
-    #     os.remove(diag_path_1)
-    #     os.remove(diag_path_2)

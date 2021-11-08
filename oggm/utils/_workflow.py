@@ -1034,10 +1034,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=input_filesuffix)
             with xr.open_dataset(ppath) as ds_diag:
-                # if 'volume_m3' in ds.data_vars.keys():
                 nt = - len(ds_diag.volume_m3.values)
-                # elif 'ELA' in ds.data_vars.keys():
-                #     nt = - len(ds_diag.ELA.values)
                 for vn, var in out_2d.items():
                     var['data'][nt:, i] = ds_diag[vn].values
                 for vn, var in out_3d.items():
@@ -3568,11 +3565,4 @@ def run_compute_ela(gdir, ys=None, ye=None, climate_filename='climate_historical
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
-    # enc_var = {'dtype': 'float32'}
-    ## if use_compression:
-    # enc_var['complevel'] = 5
-    # enc_var['zlib'] = True
-    # encoding = {v: enc_var for v in diag_ds.data_vars}
-    # diag_ds.to_netcdf(diag_path, encoding=encoding)
     diag_ds.to_netcdf(diag_path)
-    # diag_ds.close()

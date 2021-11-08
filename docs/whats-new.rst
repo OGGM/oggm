@@ -28,9 +28,6 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
-- Added the ELA back as output variable that can be computed during post processing
-  (``run_compute_ela``), but also without doing a model run (:pull:`1333`).
-  By `Anouk Vlug <https://github.com/anoukvlug>`_
 - Added a ``prescribe_years`` kwarg to ``RandomMassBalance`` to control
   which years are picked instead of the random number generator (:pull:`1310`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
