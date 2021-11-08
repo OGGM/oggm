@@ -759,7 +759,7 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     olist = [o for o in olist if o is not None]
     odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
     odf = odf.sort_values(by='RGIID')
-    odf.crs = {'init': 'epsg:4326'}
+    odf.crs = 'epsg:4326'
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 

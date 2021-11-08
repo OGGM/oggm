@@ -130,6 +130,12 @@ def tolist(arg, length=None):
         arg = [arg]
 
     try:
+        # Shapely stuff
+        arg = arg.geoms
+    except AttributeError:
+        pass
+
+    try:
         (e for e in arg)
     except TypeError:
         arg = [arg]
@@ -489,6 +495,13 @@ def polygon_intersections(gdf):
             mult_intersect = linemerge(mult_intersect)
             if isinstance(mult_intersect, shpg.linestring.LineString):
                 mult_intersect = [mult_intersect]
+
+            try:
+                # Compat with shapely > 2.0
+                mult_intersect = mult_intersect.geoms
+            except AttributeError:
+                pass
+
             for line in mult_intersect:
                 if not isinstance(line, shpg.linestring.LineString):
                     raise RuntimeError('polygon_intersections: we expect'

@@ -418,7 +418,7 @@ def _filter_lines(lines, heads, k, r):
                 diff = l.difference(toremove)
                 if diff.type == 'MultiLineString':
                     # Remove the lines that have no head
-                    diff = list(diff)
+                    diff = list(diff.geoms)
                     for il in diff:
                         hashead = False
                         for h in heads:
