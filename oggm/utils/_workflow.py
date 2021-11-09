@@ -1588,7 +1588,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None,
                 climate_filename='climate_historical', temperature_bias=None, precipitation_factor=None,
                 climate_input_filesuffix=''):
-    """Compiles a table of ELA timeseries for all glaciers for a given number of years, using the Pastmassbalance model.
+    """Compiles a table of ELA timeseries for all glaciers for a given years, using the Pastmassbalance model.
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
     to open it.
