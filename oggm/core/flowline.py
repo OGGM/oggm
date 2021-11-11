@@ -52,7 +52,7 @@ class Flowline(Centerline):
 
     def __init__(self, line=None, dx=1, map_dx=None,
                  surface_h=None, bed_h=None, rgi_id=None,
-                 water_level=None):
+                 water_level=None, gdir=None):
         """ Initialize a Flowline
 
         Parameters
@@ -88,7 +88,11 @@ class Flowline(Centerline):
         self.bed_h = bed_h
         self.rgi_id = rgi_id
         self.water_level = water_level
-
+        self._point_lons = None
+        self._point_lats = None
+        self.map_trafo = None
+        if gdir is not None:
+            self.map_trafo = partial(gdir.grid.ij_to_crs, crs=salem.wgs84)
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
@@ -153,6 +157,26 @@ class Flowline(Centerline):
                 ix = -1
         return ix
 
+    def _compute_point_lls(self):
+        if self._point_lons is None:
+            if self.map_trafo is None:
+                raise AttributeError('Cannot compute lons and lats on this '
+                                     'flowline. It needs to be initialized '
+                                     'with a gdir kwarg.')
+            lons, lats = self.map_trafo(*self.line.xy)
+            self._point_lons = lons
+            self._point_lats = lats
+
+    @property
+    def point_lons(self):
+        self._compute_point_lls()
+        return self._point_lons
+
+    @property
+    def point_lats(self):
+        self._compute_point_lls()
+        return self._point_lats
+
     @property
     def volume_m3(self):
         return utils.clip_min(np.sum(self.section * self.dx_meter) -
@@ -206,6 +230,7 @@ class Flowline(Centerline):
 
     def _add_attrs_to_dataset(self, ds):
         """Add bed specific parameters."""
+        # This must be done by child classes
         raise NotImplementedError()
 
     def to_geometry_dataset(self):
@@ -271,7 +296,7 @@ class ParabolicBedFlowline(Flowline):
 
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, bed_shape=None, rgi_id=None,
-                 water_level=None):
+                 water_level=None, gdir=None):
         """ Instantiate.
 
         Parameters
@@ -282,7 +307,8 @@ class ParabolicBedFlowline(Flowline):
         super(ParabolicBedFlowline, self).__init__(line, dx, map_dx,
                                                    surface_h, bed_h,
                                                    rgi_id=rgi_id,
-                                                   water_level=water_level)
+                                                   water_level=water_level,
+                                                   gdir=gdir)
 
         assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
@@ -317,7 +343,7 @@ class RectangularBedFlowline(Flowline):
 
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, widths=None, rgi_id=None,
-                 water_level=None):
+                 water_level=None, gdir=None):
         """ Instantiate.
 
         Parameters
@@ -329,7 +355,8 @@ class RectangularBedFlowline(Flowline):
         super(RectangularBedFlowline, self).__init__(line, dx, map_dx,
                                                      surface_h, bed_h,
                                                      rgi_id=rgi_id,
-                                                     water_level=water_level)
+                                                     water_level=water_level,
+                                                     gdir=gdir)
 
         self._widths = widths
 
@@ -362,7 +389,7 @@ class TrapezoidalBedFlowline(Flowline):
 
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, widths=None, lambdas=None, rgi_id=None,
-                 water_level=None):
+                 water_level=None, gdir=None):
         """ Instantiate.
 
         Parameters
@@ -373,7 +400,8 @@ class TrapezoidalBedFlowline(Flowline):
         super(TrapezoidalBedFlowline, self).__init__(line, dx, map_dx,
                                                      surface_h, bed_h,
                                                      rgi_id=rgi_id,
-                                                     water_level=water_level)
+                                                     water_level=water_level,
+                                                     gdir=gdir)
 
         self._w0_m = widths * self.map_dx - lambdas * self.thick
 
@@ -423,7 +451,7 @@ class MixedBedFlowline(Flowline):
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, section=None, bed_shape=None,
                  is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None,
-                 water_level=None):
+                 water_level=None, gdir=None):
         """ Instantiate.
 
         Parameters
@@ -436,7 +464,8 @@ class MixedBedFlowline(Flowline):
                                                surface_h=surface_h.copy(),
                                                bed_h=bed_h.copy(),
                                                rgi_id=rgi_id,
-                                               water_level=water_level)
+                                               water_level=water_level,
+                                               gdir=gdir)
 
         # To speedup calculations if no trapezoid bed is present
         self._do_trapeze = np.any(is_trapezoid)
@@ -1156,7 +1185,7 @@ class FlowlineModel(object):
                     ds['area_m2'].attrs['description'] = 'Section area'
                     ds['area_m2'].attrs['unit'] = 'm 2'
                 if 'thickness' in ovars_fl:
-                    ds['thickness_m'] = (('time', 'dis_along_flowline'), width * 0)
+                    ds['thickness_m'] = (('time', 'dis_along_flowline'), width * np.NaN)
                     ds['thickness_m'].attrs['description'] = 'Section thickness'
                     ds['thickness_m'].attrs['unit'] = 'm'
                 if 'ice_velocity' in ovars_fl:
@@ -1164,7 +1193,7 @@ class FlowlineModel(object):
                         raise InvalidParamsError('This flowline model does not seem '
                                                  'to be able to provide surface '
                                                  'velocities.')
-                    ds['ice_velocity_myr'] = (('time', 'dis_along_flowline'), width * 0)
+                    ds['ice_velocity_myr'] = (('time', 'dis_along_flowline'), width * np.NaN)
                     ds['ice_velocity_myr'].attrs['description'] = 'Ice velocity at the surface'
                     ds['ice_velocity_myr'].attrs['unit'] = 'm yr-1'
                 if 'calving_bucket' in ovars_fl:
@@ -1227,7 +1256,8 @@ class FlowlineModel(object):
                             ds['volume_bsl_m3'].data[j, :] = fl.volume_bsl_m3
                         if 'volume_bwl' in ovars_fl:
                             ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3
-                        if 'ice_velocity' in ovars_fl:
+                        if 'ice_velocity' in ovars_fl and (yr > self.y0):
+                            # Velocity can only be computed with dynamics
                             var = self.u_stag[fl_id]
                             val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2 * self._surf_vel_fac
                             ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
@@ -1326,6 +1356,12 @@ class FlowlineModel(object):
                 ds.attrs['description'] = ('OGGM model output on flowlines. '
                                            'Check groups for data.')
                 ds.attrs['oggm_version'] = __version__
+                # This is useful to interpret the dataset afterwards
+                flows_to_id = []
+                for trib in self._tributary_indices:
+                    flows_to_id.append(trib[0] if trib[0] is not None else -1)
+                ds['flowlines'] = ('flowlines', np.arange(len(flows_to_id)))
+                ds['flows_to_id'] = ('flowlines', flows_to_id)
                 ds.to_netcdf(fl_diag_path, 'w')
                 for i, ds in enumerate(fl_diag_dss):
                     ds.to_netcdf(fl_diag_path, 'a', group='fl_{}'.format(i),
@@ -2722,7 +2758,8 @@ def init_present_time_glacier(gdir):
                                is_trapezoid=np.isfinite(lambdas),
                                lambdas=lambdas,
                                widths_m=widths_m,
-                               rgi_id=cl.rgi_id)
+                               rgi_id=cl.rgi_id,
+                               gdir=gdir)
 
         # Update attrs
         nfl.mu_star = cl.mu_star
