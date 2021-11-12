@@ -2615,7 +2615,7 @@ class GlacierDirectory(object):
                     # This may fail for very old gdirs
                     grid = self.grid
                 except InvalidWorkflowError:
-                    return  out
+                    return out
 
                 # Add the trafo
                 trafo = partial(grid.ij_to_crs, crs=salem.wgs84)

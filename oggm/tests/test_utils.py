@@ -761,10 +761,10 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         # Since we already verified this will error
         with pytest.raises(tarfile.ReadError):
-            gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                      from_prepro_level=4,
-                                                      prepro_rgi_version='61',
-                                                      prepro_border=20)
+            workflow.init_glacier_directories(['RGI60-11.00787'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=20)
 
         # This should retrigger a download and just work
         cfg.DL_VERIFIED.clear()
