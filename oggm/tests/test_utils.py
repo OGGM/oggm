@@ -16,7 +16,8 @@ from numpy.testing import assert_array_equal, assert_allclose
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
-from oggm.core.massbalance import  PastMassBalance, compute_ela
+import oggm
+from oggm.core.massbalance import PastMassBalance, compute_ela
 from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
@@ -2776,7 +2777,8 @@ class TestELAComputation(unittest.TestCase):
         global_tasks.compile_ela(gdir, csv=False, ys=ys, ye=ye)
         global_tasks.compile_ela(gdir, csv=True, ys=ys, ye=ye)
 
-        ELA1 = pd.read_csv(cfg.PATHS['working_dir'] + '/ELA.csv', index_col=0)
-        ELA2 = pd.read_hdf(cfg.PATHS['working_dir'] + '/ELA.hdf')
+        fpath = os.path.join(cfg.PATHS['working_dir'], 'ELA.csv')
+        ela1 = pd.read_csv(fpath, index_col=0)
+        ela2 = pd.read_hdf(fpath.replace('.csv', '.hdf'))
 
-        assert_allclose(ELA1, ELA2, rtol=1e-3)
+        assert_allclose(ela1, ela2, rtol=1e-3)
