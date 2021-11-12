@@ -732,6 +732,13 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+
+        # Check that flowlines have lon lat info
+        # Ah no this doesn't work on these old dirs unfortunately
+        fls = gdirs[0].read_pickle('model_flowlines')
+        with pytest.raises(AttributeError):
+            fls[-1].point_lons[0]
+
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
@@ -756,10 +763,10 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         # Since we already verified this will error
         with pytest.raises(tarfile.ReadError):
-            gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                      from_prepro_level=4,
-                                                      prepro_rgi_version='61',
-                                                      prepro_border=20)
+            workflow.init_glacier_directories(['RGI60-11.00787'],
+                                              from_prepro_level=4,
+                                              prepro_rgi_version='61',
+                                              prepro_border=20)
 
         # This should retrigger a download and just work
         cfg.DL_VERIFIED.clear()
