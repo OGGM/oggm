@@ -1432,7 +1432,7 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
 
 
 @entity_task(log)
-def run_compute_ela(gdir, ys=None, ye=None,  years=None, climate_filename='climate_historical',
+def compute_ela(gdir, ys=None, ye=None,  years=None, climate_filename='climate_historical',
                     temperature_bias=None, precipitation_factor=None, climate_input_filesuffix=''):
 
     """Computes the ELA of a glacier for a for given years and climate.
