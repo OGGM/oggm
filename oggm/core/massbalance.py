@@ -1433,7 +1433,7 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
 
 @entity_task(log)
 def compute_ela(gdir, ys=None, ye=None,  years=None, climate_filename='climate_historical',
-                    temperature_bias=None, precipitation_factor=None, climate_input_filesuffix=''):
+                temperature_bias=None, precipitation_factor=None, climate_input_filesuffix=''):
 
     """Computes the ELA of a glacier for a for given years and climate.
 
@@ -1461,7 +1461,8 @@ def compute_ela(gdir, ys=None, ye=None,  years=None, climate_filename='climate_h
     -------
     """
 
-    mbmod = PastMassBalance(gdir, filename=climate_filename, input_filesuffix=climate_input_filesuffix)
+    mbmod = PastMassBalance(gdir, filename=climate_filename,
+                            input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
         mbmod.temp_bias = temperature_bias

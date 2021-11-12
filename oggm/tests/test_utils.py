@@ -2749,6 +2749,7 @@ class TestSkyIsFalling(unittest.TestCase):
         lon, lat = transform_proj(proj_in, proj_out, -2235000, -2235000)
         np.testing.assert_allclose(lon, 70.75731, atol=1e-5)
 
+
 class TestELAComputation(unittest.TestCase):
     def test_computing_ela(self):
         gdir = init_hef()

@@ -1584,11 +1584,13 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                 out.to_hdf(path, key='df')
     return out
 
+
 @global_task(log)
 def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None,
-                climate_filename='climate_historical', temperature_bias=None, precipitation_factor=None,
-                climate_input_filesuffix=''):
-    """Compiles a table of ELA timeseries for all glaciers for a given years, using the Pastmassbalance model.
+                climate_filename='climate_historical', temperature_bias=None,
+                precipitation_factor=None, climate_input_filesuffix=''):
+    """Compiles a table of ELA timeseries for all glaciers for a given years,
+    using the PastMassBalance model.
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
     to open it.
@@ -1626,8 +1628,10 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import compute_ela
 
-    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years, climate_filename=climate_filename,
-                                 climate_input_filesuffix=climate_input_filesuffix, temperature_bias=temperature_bias,
+    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years,
+                                 climate_filename=climate_filename,
+                                 climate_input_filesuffix=climate_input_filesuffix,
+                                 temperature_bias=temperature_bias,
                                  precipitation_factor=precipitation_factor)
 
     for idx, s in enumerate(out_df):
