@@ -2778,6 +2778,6 @@ class TestELAComputation(unittest.TestCase):
 
         fpath = os.path.join(cfg.PATHS['working_dir'], 'ELA.csv')
         ela1 = pd.read_csv(fpath, index_col=0)
-        ELA2 = pd.read_hdf(cfg.PATHS['working_dir'] + '/ELA.hdf')
+        ela2 = pd.read_hdf(fpath.replace('.csv', '.hdf'))
 
         assert_allclose(ELA1, ELA2, rtol=1e-3)
