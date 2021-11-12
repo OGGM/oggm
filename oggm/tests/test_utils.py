@@ -16,7 +16,7 @@ from numpy.testing import assert_array_equal, assert_allclose
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
-import oggm
+from oggm.core.massbalance import PastMassBalance, compute_ela
 from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
@@ -2754,17 +2754,17 @@ class TestELAComputation(unittest.TestCase):
 
         ys = 1990
         ye = 2000
-        ELA1 = oggm.core.massbalance.run_compute_ela(gdir, ys=ys, ye=ye)
-        ELA2 = oggm.core.massbalance.run_compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
+        ELA1 = compute_ela(gdir, ys=ys, ye=ye)
+        ELA2 = compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
 
-        mbmod = oggm.core.massbalance.PastMassBalance(gdir)
+        mbmod = PastMassBalance(gdir)
 
         mb = []
         for yr in np.arange(ys, ye):
             height = ELA1[yr]
             mb = np.append(mb, mbmod.get_annual_mb([height], year=yr))
 
-        assert(np.isfinite(np.mean(ELA1)))
+        assert(np.all(np.isfinite(ELA1)))
         assert([ELA1 < ELA2])
         assert_allclose(np.mean(mb * SEC_IN_YEAR), 0, atol=1e-3)
 
