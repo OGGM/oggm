@@ -2755,7 +2755,7 @@ class TestELAComputation(unittest.TestCase):
         ys = 1990
         ye = 2000
         ELA1 = oggm.core.massbalance.run_compute_ela(gdir, ys=ys, ye=ye)
-        ELA2 = oggm.core.massbalance.run_compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
+        ELA2 = oggm.core.massbalance.compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
 
         mbmod = oggm.core.massbalance.PastMassBalance(gdir)
 
