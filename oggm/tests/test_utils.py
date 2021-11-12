@@ -16,7 +16,7 @@ from numpy.testing import assert_array_equal, assert_allclose
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
-from oggm.core.massbalance import PastMassBalance, compute_ela
+from oggm.core.massbalance import  PastMassBalance, compute_ela
 from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg

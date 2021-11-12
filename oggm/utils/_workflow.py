@@ -1626,7 +1626,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import run_compute_ela
 
-    out_df = execute_entity_task(run_compute_ela, gdirs, ys=ys, ye=ye, years=years, climate_filename=climate_filename,
+    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years, climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix, temperature_bias=temperature_bias,
                                  precipitation_factor=precipitation_factor)
 
