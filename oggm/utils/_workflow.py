@@ -1585,6 +1585,79 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     return out
 
 
+@global_task(log)
+def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None,
+                climate_filename='climate_historical', temperature_bias=None,
+                precipitation_factor=None, climate_input_filesuffix=''):
+    """Compiles a table of ELA timeseries for all glaciers for a given years,
+    using the PastMassBalance model.
+
+    The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
+    to open it.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location (file
+        extension matters)
+    csv: bool
+        Set to store the data in csv instead of hdf.
+    ys : int
+        start year
+    ye : int
+        end year
+    years : array of ints
+        override ys and ye with the years of your choice
+    climate_filename : str
+        name of the climate file, e.g. 'climate_historical' (default) or
+        'gcm_data'
+    climate_input_filesuffix : str
+        filesuffix for the input climate file
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+    """
+    from oggm.workflow import execute_entity_task
+    from oggm.core.massbalance import compute_ela
+
+    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years,
+                                 climate_filename=climate_filename,
+                                 climate_input_filesuffix=climate_input_filesuffix,
+                                 temperature_bias=temperature_bias,
+                                 precipitation_factor=precipitation_factor)
+
+    for idx, s in enumerate(out_df):
+        if s is None:
+            out_df[idx] = pd.Series(np.NaN)
+
+    out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
+    out = out.dropna(axis=0, how='all')
+
+    if path:
+        if path is True:
+            fpath = os.path.join(cfg.PATHS['working_dir'],
+                                 'ELA' + filesuffix)
+            if csv:
+                out.to_csv(fpath + '.csv')
+            else:
+                out.to_hdf(fpath + '.hdf', key='df')
+        else:
+            ext = os.path.splitext(path)[-1]
+            if ext.lower() == '.csv':
+                out.to_csv(path)
+            elif ext.lower() == '.hdf':
+                out.to_hdf(path, key='df')
+    return out
+
+
 @entity_task(log)
 def climate_statistics(gdir, add_climate_period=1995):
     """Gather as much statistics as possible about this glacier.

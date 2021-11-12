@@ -17,9 +17,11 @@ salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
 import oggm
-from oggm import utils, workflow, tasks
+from oggm.core.massbalance import PastMassBalance, compute_ela
+from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
+from oggm.cfg import SEC_IN_YEAR
 from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
@@ -2746,3 +2748,38 @@ class TestSkyIsFalling(unittest.TestCase):
         from salem.gis import transform_proj
         lon, lat = transform_proj(proj_in, proj_out, -2235000, -2235000)
         np.testing.assert_allclose(lon, 70.75731, atol=1e-5)
+
+
+class TestELAComputation(unittest.TestCase):
+    def test_computing_ela(self):
+        gdir = init_hef()
+
+        ys = 1990
+        ye = 2000
+        ELA1 = compute_ela(gdir, ys=ys, ye=ye)
+        ELA2 = compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
+
+        mbmod = PastMassBalance(gdir)
+
+        mb = []
+        for yr in np.arange(ys, ye):
+            height = ELA1[yr]
+            mb = np.append(mb, mbmod.get_annual_mb([height], year=yr))
+
+        assert(np.all(np.isfinite(ELA1)))
+        assert([ELA1 < ELA2])
+        assert_allclose(np.mean(mb * SEC_IN_YEAR), 0, atol=1e-3)
+
+    def test_compile(self):
+        gdir = init_hef()
+
+        ys = 1990
+        ye = 2000
+        global_tasks.compile_ela(gdir, csv=False, ys=ys, ye=ye)
+        global_tasks.compile_ela(gdir, csv=True, ys=ys, ye=ye)
+
+        fpath = os.path.join(cfg.PATHS['working_dir'], 'ELA.csv')
+        ela1 = pd.read_csv(fpath, index_col=0)
+        ela2 = pd.read_hdf(fpath.replace('.csv', '.hdf'))
+
+        assert_allclose(ela1, ela2, rtol=1e-3)

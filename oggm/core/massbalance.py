@@ -1429,3 +1429,54 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     odf = pd.Series(data=mb.get_specific_mb(year=years),
                     index=years)
     return odf
+
+
+@entity_task(log)
+def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_historical',
+                temperature_bias=None, precipitation_factor=None, climate_input_filesuffix=''):
+
+    """Computes the ELA of a glacier for a for given years and climate.
+
+        Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    ys : int
+        start year
+    ye : int
+        end year
+    years : array of ints
+        override ys and ye with the years of your choice
+    climate_filename : str
+        name of the climate file, e.g. 'climate_historical' (default) or
+        'gcm_data'
+    climate_input_filesuffix : str
+        filesuffix for the input climate file
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+    -------
+    """
+
+    mbmod = PastMassBalance(gdir, filename=climate_filename,
+                            input_filesuffix=climate_input_filesuffix)
+
+    if temperature_bias is not None:
+        mbmod.temp_bias = temperature_bias
+    if precipitation_factor is not None:
+        mbmod.prcp_fac = precipitation_factor
+
+    mbmod.valid_bounds = [-10000, 20000]
+
+    if years is None:
+        years = np.arange(ys, ye+1)
+
+    ela = []
+    for yr in years:
+        ela = np.append(ela, mbmod.get_ela(year=yr))
+
+    odf = pd.Series(data=ela, index=years)
+    return odf
