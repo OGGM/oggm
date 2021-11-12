@@ -2776,7 +2776,8 @@ class TestELAComputation(unittest.TestCase):
         global_tasks.compile_ela(gdir, csv=False, ys=ys, ye=ye)
         global_tasks.compile_ela(gdir, csv=True, ys=ys, ye=ye)
 
-        ELA1 = pd.read_csv(cfg.PATHS['working_dir'] + '/ELA.csv', index_col=0)
+        fpath = os.path.join(cfg.PATHS['working_dir'], 'ELA.csv')
+        ela1 = pd.read_csv(fpath, index_col=0)
         ELA2 = pd.read_hdf(cfg.PATHS['working_dir'] + '/ELA.hdf')
 
         assert_allclose(ELA1, ELA2, rtol=1e-3)
