@@ -2608,6 +2608,20 @@ class GlacierDirectory(object):
         with _open(fp, 'rb') as f:
             out = pickle.load(f)
 
+        # Some new attrs to add to old pre-processed directories
+        if filename == 'model_flowlines':
+            if getattr(out[0], 'map_trafo', None) is None:
+                try:
+                    # This may fail for very old gdirs
+                    grid = self.grid
+                except InvalidWorkflowError:
+                    return  out
+
+                # Add the trafo
+                trafo = partial(grid.ij_to_crs, crs=salem.wgs84)
+                for fl in out:
+                    fl.map_trafo = trafo
+
         return out
 
     def write_pickle(self, var, filename, use_compression=None, filesuffix=''):

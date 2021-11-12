@@ -730,6 +730,13 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+
+        # Check that flowlines have lon lat info
+        # Ah no this doesn't work on these old dirs unfortunately
+        fls = gdirs[0].read_pickle('model_flowlines')
+        with pytest.raises(AttributeError):
+            fls[-1].point_lons[0]
+
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 

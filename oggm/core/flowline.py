@@ -158,8 +158,8 @@ class Flowline(Centerline):
         return ix
 
     def _compute_point_lls(self):
-        if self._point_lons is None:
-            if self.map_trafo is None:
+        if getattr(self, '_point_lons', None) is None:
+            if getattr(self, 'map_trafo', None) is None:
                 raise AttributeError('Cannot compute lons and lats on this '
                                      'flowline. It needs to be initialized '
                                      'with a gdir kwarg.')
