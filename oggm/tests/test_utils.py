@@ -2780,4 +2780,4 @@ class TestELAComputation(unittest.TestCase):
         ela1 = pd.read_csv(fpath, index_col=0)
         ela2 = pd.read_hdf(fpath.replace('.csv', '.hdf'))
 
-        assert_allclose(ELA1, ELA2, rtol=1e-3)
+        assert_allclose(ela1, ela2, rtol=1e-3)
