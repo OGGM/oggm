@@ -3077,7 +3077,7 @@ class TestColumbiaCalving(unittest.TestCase):
     @pytest.mark.slow
     def test_find_calving_full_fl(self):
 
-        gdir = init_columbia(reset=True)
+        gdir = init_columbia('test_find_calving_full_fl')
 
         # For these tests we allow mu to 0
         cfg.PARAMS['calving_min_mu_star_frac'] = 0

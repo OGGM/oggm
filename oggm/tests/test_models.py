@@ -371,7 +371,7 @@ class TestMassBalanceModels:
           Attributes:
             - hemisphere: nh
             - rho: 900.0
-            - mu_star: 198.9489403133207
+            - mu_star: 198.95
             - bias: 0
             - t_solid: 0.0
             - t_liq: 2.0

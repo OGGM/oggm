@@ -326,14 +326,14 @@ environment from the following ``environment.yml`` file used to work::
       - rasterio
       - seaborn
       - pytables
+      - salem
+      - motionless
       - pip
       - pip:
         - joblib
         - progressbar2
-        - motionless
-        - git+https://github.com/fmaussion/salem.git
         - git+https://github.com/OGGM/pytest-mpl
-        - git+https://github.com/OGGM/oggm
+        - oggm
 
 
 See the
