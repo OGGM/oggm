@@ -1,10 +1,9 @@
 ###################################################
-# Dockerfile to build a Python 3.6 environment
-# with OGGM installed, based on Ubuntu 18.04.
+# Dockerfile to build a Python environment
+# with OGGM installed, based on latest Ubuntu.
 ###################################################
 
-FROM oggm/base:latest
-MAINTAINER Timo Rothenpieler
+FROM ghcr.io/oggm/base:latest
 
 ARG GITHUB_SHA=master
 ARG GITHUB_REPOSITORY=OGGM/oggm
