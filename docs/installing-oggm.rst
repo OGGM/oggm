@@ -326,14 +326,14 @@ environment from the following ``environment.yml`` file used to work::
       - rasterio
       - seaborn
       - pytables
+      - salem
+      - motionless
       - pip
       - pip:
         - joblib
         - progressbar2
-        - motionless
-        - git+https://github.com/fmaussion/salem.git
         - git+https://github.com/OGGM/pytest-mpl
-        - git+https://github.com/OGGM/oggm
+        - oggm
 
 
 See the
@@ -404,7 +404,7 @@ A pinning of the NetCDF4 package to 1.3.1 might be necessary on some systems
 Finally, install the pytest-mpl OGGM fork and salem libraries::
 
     $ pip install git+https://github.com/OGGM/pytest-mpl.git
-    $ pip install git+https://github.com/fmaussion/salem.git
+    $ pip install salem
 
 Install OGGM and run the tests
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

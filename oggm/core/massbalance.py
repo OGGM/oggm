@@ -47,7 +47,10 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         # Add all scalar attributes
         for k, v in self.__dict__.items():
             if np.isscalar(v) and not k.startswith('_'):
-                summary += ['    - {}: {}'.format(k, v)]
+                nbform = '    - {}: {}'
+                if k == 'mu_star':
+                    nbform = '    - {}: {:.2f}'
+                summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
 
     # TODO: remove this in OGGM v1.5

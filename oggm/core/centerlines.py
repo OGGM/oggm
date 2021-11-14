@@ -1342,7 +1342,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         extext = 'Geometry collection not expected: {}'.format(line.type)
         raise InvalidGeometryError(extext)
 
-    assert line.type == 'MultiLineString'
+    assert line.type == 'MultiLineString', 'Should be MultiLineString'
     width = np.sum([l.length for l in line.geoms])
 
     return width, line

@@ -1,4 +1,5 @@
 import os
+import warnings
 import numpy as np
 import oggm
 import geopandas as gpd
@@ -47,7 +48,9 @@ class hef_prepro:
         tasks.catchment_width_geom(gdir)
         tasks.catchment_width_correction(gdir)
         tasks.process_custom_climate_data(gdir)
-        tasks.glacier_mu_candidates(gdir)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            tasks.glacier_mu_candidates(gdir)
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
         tasks.local_t_star(gdir, tstar=res['t_star'],
