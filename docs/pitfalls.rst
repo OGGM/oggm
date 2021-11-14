@@ -91,21 +91,31 @@ RGI region level, so that you don't have to worry about it.
 
 .. _pitfalls.numerics:
 
-The numerical model in OGGM v1.2 and below was numerically unstable in some conditions
-======================================================================================
+The numerical model in OGGM is numerically unstable in some conditions
+======================================================================
+
+OGGM uses a CFL criterion to decide on the timestep to use during the
+ice dynamics model iteration. The numerical scheme of OGGM is fast and
+flexible (e.g. it allows to compute the ice flow on multiple flowlines),
+but it is not following textbook recommendations on numerical stability.
 
 See `this github issue <https://github.com/OGGM/oggm/issues/909>`_ for a
 discussion pointing this out, and `this example <https://github.com/OGGM/oggm/issues/860>`_.
 
-We now have fixed the most pressing issues.
+As of OGGM v1.2, we have fixed the most pressing issues.
 `This blog post <https://oggm.org/2020/01/18/stability-analysis/>`_ explains
-it in detail, for a summary:
+it in detail, but for a summary:
 
-- the previous algorithm was flawed, but did not result in significant errors
+- the old algorithm was flawed, but did not result in significant errors
   at large scales
 - the new algorithm is faster and more likely to be stable
 - we don't guarantee statibility in 100% of the cases, but when the model
-  becomes unstable it should stop
+  becomes unstable it will raise an error.
+
+**We test OGGM for mass-conservation in several use cases**. What might happen,
+however, is that the calculated velocities display "wobbles" or artifacts,
+which are a sign of instability. If this occurs, set the global parameter
+``cfg.PARAMS['cfl_number']`` to a lower value (0.01 or 0.005 are worth a try).
 
 
 The mass-balance model of OGGM is not calibrated with remote sensing data on individual glaciers

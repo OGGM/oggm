@@ -191,6 +191,8 @@ The resulting glacier flowlines can be understood as a "bulk" representation
 of the glacier, representing the average size and slope of each
 elevation band.
 
+.. _fl_compat:
+
 Compatibility within the OGGM framework
 ---------------------------------------
 

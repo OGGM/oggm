@@ -1,4 +1,5 @@
 import os
+import warnings
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,7 +36,9 @@ tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
 tasks.process_histalp_data(gdir)
-mu_yr_clim = tasks.glacier_mu_candidates(gdir)
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    mu_yr_clim = tasks.glacier_mu_candidates(gdir)
 
 mbdf = gdir.get_ref_mb_data()
 res = t_star_from_refmb(gdir, mbdf=mbdf.ANNUAL_BALANCE)

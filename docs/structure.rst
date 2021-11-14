@@ -172,16 +172,39 @@ Depending on the desired set-up, tasks can be replaced by others
 omitted (for example, users can choose whether a quality check filter
 should be applied to the climate timeseries or not).
 
-.. figure:: _static/flowchart_flowlines.png
-    :align: left
+See :ref:`this example <fl_compat>` from the documentation about how tasks
+can't be interchanged to run OGGM with different types of flowlines.
 
-    Example flowchart illustrating how OGGM implemented support for
-    two kinds of flowline representations for a glacier: centerlines on the
-    left (OGGM’s default) and binned elevation bands flowlines on the right
-    (after `Huss & Farinotti (2012) <https://doi.org/10.1029/2012JF002523>`_).
+Modularity
+----------
 
+Modularity in OGGM is achieved in two major ways:
 
-Coupling of climatic mass-balance and geometry evolution models
----------------------------------------------------------------
+- **object oriented programming (OOP) interfaces**: OGGM relies on object
+  interfaces to couple modelling elements between each other. A typical example
+  are the ``FlowlineModel`` and ``MassBalanceModel`` classes which are use
+  to couple the two models without enforcing any particular way to solve the
+  glacier geometry evolution or the climatic mass-balance.
+- **persistence on disk with Glacier Directories**: as explained in the previous
+  chapter, :ref:`tasks can be interchanged <fl_compat>` during a processing
+  workflow, allowing modularity as long as all tasks agree on the format
+  of the file written on disk.
 
-(in construction)
+The object interfaces in particular are fundamental for anyone wanting to
+extend OGGM with their own parameterization. The
+`OGGM-contrib <https://github.com/OGGM/oggmcontrib>`_ repository illustrates
+how anyone can add a parameterization to OGGM without changing the OGGM
+codebase.
+
+Preprocessing
+-------------
+
+If you are looking for only ONE reason to use OGGM and create your own model
+on top of it, the OGGM pre-processing capabilities are probably it.
+
+OGGM is designed for large-scale applications, i.e. we have pre-downloaded and
+pre-processed a large number of datasets that are ready to use from within the
+OGGM framework.
+
+Visit :ref:`shop` to learn all you need to know about the data we have
+prepared for you!

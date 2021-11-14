@@ -13,7 +13,7 @@ when modelling a large number of glaciers. Here is a non-exhaustive list of
 its features:
 
 .. admonition:: **OGGM features**
-    :class: warning
+    :class: info
 
     Data preprocessing
       Acquisition, download and processing of a large number of digital

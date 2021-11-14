@@ -72,6 +72,7 @@ Enhancements
   geometry file for the computations, i.e. allowing for continuous
   historical to projections outputs (if needed).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The package "descartes" is no longer a required dependency for oggm.
 
 Bug fixes
 ~~~~~~~~~

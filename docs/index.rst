@@ -38,7 +38,6 @@ Core principles and structure of the OGGM modelling framework.
 
 * :doc:`introduction`
 * :doc:`structure`
-* :doc:`preprocessing`
 * :doc:`flowlines`
 * :doc:`mass-balance`
 * :doc:`geometry-evolution`
@@ -53,7 +52,6 @@ Core principles and structure of the OGGM modelling framework.
     introduction.rst
     structure.rst
     flowlines.rst
-    preprocessing.rst
     mass-balance.rst
     geometry-evolution.rst
     inversion.rst
