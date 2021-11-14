@@ -24,11 +24,11 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - oggm/untested_base:20210808
-          - oggm/untested_base:py37
-          - oggm/untested_base:py39
+          - ghcr.io/oggm/untested_base:20211114
+          - ghcr.io/oggm/untested_base:py3.7
+          - ghcr.io/oggm/untested_base:py3.9
         include:
-          - container: python:3.8-slim
+          - container: python:3.9-slim
             test-env: minimal
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}
@@ -45,7 +45,7 @@ jobs:
         if: ${{ !contains(matrix.container, 'py3') }}
         continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           COVERALLS_SERVICE_NAME: github
           COVERALLS_PARALLEL: true
         run: coveralls
@@ -53,12 +53,12 @@ jobs:
     name: Coveralls Finished
     needs: test
     runs-on: ubuntu-latest
-    container: python:3-slim
+    container: python:3.9-slim
     continue-on-error: true
     steps:
     - name: Coveralls Finished
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ github.token }}
         COVERALLS_SERVICE_NAME: github
       run: |
         pip3 install --upgrade coveralls &&
