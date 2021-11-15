@@ -139,20 +139,20 @@ you. They are highly configurable, and come in many flavors.
 
 The OGGM team (mostly `Timo <https://github.com/TimoRoth>`_) provides,
 maintains and updates a `Docker <https://www.docker.com/>`_ container.
-You can see all OGGM containers `here <https://hub.docker.com/u/oggm>`_.
+You can see all OGGM containers `here <https://github.com/orgs/OGGM/packages>`_.
 Our most important repositories are:
 
-- `untested_base <https://hub.docker.com/r/oggm/untested_base>`_ is a
-  container based on Ubuntu 18.04 and shipping with all OGGM dependencies
+- `untested_base <https://github.com/OGGM/OGGM-Docker/pkgs/container/untested_base>`_ is a
+  container based on Ubuntu and shipping with all OGGM dependencies
   installed on it. **OGGM is not guaranteed to run on these**, but we
   use them for our tests on
   `GitHub Actions <https://github.com/OGGM/oggm/actions/workflows/run-tests.yml>`_.
-- `base <https://hub.docker.com/r/oggm/base>`_ is built upon ``untested_base``,
+- `base <https://github.com/OGGM/OGGM-Docker/pkgs/container/base>`_ is built upon ``untested_base``,
   but is **pushed online only after the OGGM tests have run successfully
   on it**. Therefore, is provides a more secure base for the model, although
   we cannot guarantee that past or future version of the model will always
   work on it.
-- `oggm <https://hub.docker.com/r/oggm/oggm>`_ is built upon ``base`` each
+- `oggm <https://github.com/OGGM/oggm/pkgs/container/oggm>`_ is built upon ``base`` each
   time that a new change is made to the OGGM codebase. They have OGGM
   installed, and **are guaranteed to run the OGGM version they ship with**.
   We cannot guarantee that past or future version of the model will always
@@ -165,10 +165,10 @@ if you want to install your own OGGM version (don't forget to test it
 afterwards!), and use ``oggm`` if you know which OGGM version you want.
 
 As an example, here is how we run a given fixed version of OGGM on our 
-own cluster. First we pull the image we want to run from docker hub somewhere
+own cluster. First we pull the image we want to run from GitHub somewhere
 on your system::
 
-    $ singularity pull docker://oggm/oggm:20191122
+    $ singularity pull docker://ghcr.io/oggm/oggm:20211115
 
 This will store the image in your current directory and needs to be done only once per image.
 
@@ -181,7 +181,7 @@ This will store the image in your current directory and needs to be done only on
 Then, in your script, so something similar to::
 
     # All commands in the EOF block run inside of the container
-    singularity exec /path/to/oggm/image/oggm_20191122.sif bash -s <<EOF
+    singularity exec /path/to/oggm/image/oggm_20211115.sif bash -s <<EOF
       set -e
       # Setup a fake home dir inside of our workdir, so we don't clutter the
       # actual shared homedir with potentially incompatible stuff
@@ -214,7 +214,7 @@ Some explanations:
   use and run singularity with `srun -n 1 -c X singularity exec ...`:
   this might vary on your cluster.
 - we fix the container version we want to use to a certain
-  `tag <https://hub.docker.com/r/oggm/oggm/tags>`_. With this, we are
+  `tag <https://github.com/OGGM/oggm/pkgs/container/oggm/versions>`_. With this, we are
   guaranteed to always use the same software versions across runs.
 - it follows a number of commands to make sure we don't mess around with
   the system settings. Here we use an `$OGGM_WORKDIR` variable which is 
