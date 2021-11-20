@@ -622,10 +622,23 @@ def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
 
 
 @entity_task(log)
-def _get_centerline_lonlat(gdir, flowlines_output=False,
-                           geometrical_widths_output=False,
-                           corrected_widths_output=False):
-    """Quick n dirty solution to write the centerlines as a shapefile"""
+def get_centerline_lonlat(gdir,
+                          flowlines_output=False,
+                          geometrical_widths_output=False,
+                          corrected_widths_output=False):
+    """Helper task to convert the centerlines to a shapefile
+
+    Parameters
+    ----------
+    gdir : the glacier directory
+    flowlines_output : create a shapefile for the flowlines
+    geometrical_widths_output : for the geometrical witdths
+    corrected_widths_output : for the corrected widths
+
+    Returns
+    -------
+    a shapefile
+    """
 
     if flowlines_output or geometrical_widths_output or corrected_widths_output:
         cls = gdir.read_pickle('inversion_flowlines')
@@ -751,7 +764,7 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
 
     log.workflow('write_centerlines_to_shape on {} ...'.format(path))
 
-    olist = execute_entity_task(_get_centerline_lonlat, gdirs,
+    olist = execute_entity_task(get_centerline_lonlat, gdirs,
                                 flowlines_output=flowlines_output,
                                 geometrical_widths_output=geometrical_widths_output,
                                 corrected_widths_output=corrected_widths_output)

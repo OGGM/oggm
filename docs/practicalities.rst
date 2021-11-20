@@ -174,9 +174,9 @@ This will store the image in your current directory and needs to be done only on
 
 .. important::
 
-    **Please do NOT pull from docker hub in scheduled scripts**. Docker hub
-    recently changed their policies and the free version is capped to
-    `100 pulls per 6 hours <https://www.docker.com/blog/scaling-docker-to-serve-millions-more-developers-network-egress/>`_.
+    **Please do NOT pull from docker hub or ghcr.io in scheduled scripts**.
+    This is highly inefficient since it downloads the same file over and over
+    again, and ghcr.io might put a cap on downloads if we do that too often.
 
 Then, in your script, so something similar to::
 

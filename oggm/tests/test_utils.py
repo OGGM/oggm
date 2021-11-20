@@ -1326,7 +1326,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
-                          max_level=5)
+                          logging_level='INFO', max_level=5)
 
         assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
@@ -1366,6 +1366,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
+                          logging_level='INFO',
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
