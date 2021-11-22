@@ -330,7 +330,7 @@ def test_catch_areas():
 
 @pytest.mark.slow
 @pytest.mark.graphic
-@mpl_image_compare()
+@mpl_image_compare(multi=True)
 def test_chhota_shigri():
 
     testdir = os.path.join(get_test_dir(), 'tmp_chhota')

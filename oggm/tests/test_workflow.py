@@ -359,7 +359,7 @@ class TestFullRun(unittest.TestCase):
 
 @pytest.mark.slow
 @pytest.mark.graphic
-@mpl_image_compare(remove_text=True)
+@mpl_image_compare(remove_text=True, multi=True)
 def test_plot_region_inversion():
 
     gdirs = up_to_inversion()
@@ -382,7 +382,7 @@ def test_plot_region_inversion():
 
 @pytest.mark.slow
 @pytest.mark.graphic
-@mpl_image_compare(remove_text=True)
+@mpl_image_compare(remove_text=True, multi=True)
 def test_plot_region_model():
 
     gdirs = random_for_plot()
