@@ -1,9 +1,9 @@
 import logging
-import warnings
 
 # External libs
 import numpy as np
 import xarray as xr
+import pandas as pd
 
 # Optional libs
 try:
@@ -33,6 +33,11 @@ BASENAMES = {
         'pre': 'era5-land/monthly/v1.0/era5_land_monthly_prcp_1981-2018_flat'
                '.nc',
         'tmp': 'era5-land/monthly/v1.0/era5_land_monthly_t2m_1981-2018_flat.nc'
+    },
+    'ERA5L-HMA': {
+        'inv': 'era5-land/monthly/vhma/era5_land_invariant_flat_HMA.nc',
+        'pre': 'era5-land/monthly/vhma/era5_land_monthly_prcp_1950-2020_flat_HMA.nc',
+        'tmp': 'era5-land/monthly/vhma/era5_land_monthly_t2m_1950-2020_flat_HMA.nc'
     },
     'CERA': {
         'inv': 'cera-20c/monthly/v1.0/cera-20c_invariant.nc',
@@ -64,7 +69,7 @@ def get_ecmwf_file(dataset='ERA5', var=None):
     Parameters
     ----------
     dataset : str
-        'ERA5', 'ERA5L', 'CERA'
+        'ERA5', 'ERA5L', 'CERA', 'ERA5L-HMA', 'ERA5dr'
     var : str
         'inv' for invariant
         'tmp' for temperature
@@ -87,6 +92,15 @@ def get_ecmwf_file(dataset='ERA5', var=None):
 
     # File to look for
     return utils.file_downloader(ECMWF_SERVER + BASENAMES[dataset][var])
+
+
+def _check_ds_validity(ds):
+    if 'time' in ds.variables and np.any(ds['time.day'] != 1):
+        # Mid-month timestamps need to be corrected
+        ds['time'] = pd.to_datetime({'year': ds['time.year'],
+                                     'month': ds['time.month'],
+                                     'day': 1})
+    assert ds.longitude.min() >= 0
 
 
 @entity_task(log, writes=['climate_historical'])
@@ -123,7 +137,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon
     lat = gdir.cenlat
     with xr.open_dataset(get_ecmwf_file(dataset, 'tmp')) as ds:
-        assert ds.longitude.min() >= 0
+        _check_ds_validity(ds)
         # set temporal subset for the ts data (hydro years)
         sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
         em = sm - 1 if (sm > 1) else 12
@@ -151,7 +165,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         ref_lon = ref_lon - 360 if ref_lon > 180 else ref_lon
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
-        assert ds.longitude.min() >= 0
+        _check_ds_validity(ds)
         ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
                                '{}-{:02d}-01'.format(y1, em)))
         if dataset == 'CERA':
@@ -164,7 +178,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             ds = ds.isel(points=np.argmin(c.data))
         prcp = ds['tp'].data * 1000 * ds['time.daysinmonth']
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
-        assert ds.longitude.min() >= 0
+        _check_ds_validity(ds)
         ds = ds.isel(time=0)
         try:
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
@@ -183,14 +197,14 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
                                   'implemented yet')
     if dataset == 'ERA5dr':
         with xr.open_dataset(get_ecmwf_file(dataset, 'lapserates')) as ds:
-            assert ds.longitude.min() >= 0
+            _check_ds_validity(ds)
             ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
                                    '{}-{:02d}-01'.format(y1, em)))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             gradient = ds['lapserate'].data
 
         with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
-            assert ds.longitude.min() >= 0
+            _check_ds_validity(ds)
             ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
                                    '{}-{:02d}-01'.format(y1, em)))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
