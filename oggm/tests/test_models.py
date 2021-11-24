@@ -37,7 +37,8 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 ParabolicBedFlowline, MixedBedFlowline,
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
-                                run_from_climate_data, equilibrium_stop_criterion)
+                                run_from_climate_data, equilibrium_stop_criterion,
+                                run_dynamic_spinup)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -3173,6 +3174,51 @@ class TestHEF:
         fmod = FileModel(fp)
         assert fmod.y0 == 2002
         assert fmod.last_yr == 2004
+
+    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    def test_dynamic_spinup(self, hef_gdir, minimise_for):
+
+        # value we want to match after dynamic spinup
+        fls = hef_gdir.read_pickle('model_flowlines')
+        ref_value = 0
+        if minimise_for == 'area':
+            var_name = 'area_km2'
+        elif minimise_for == 'volume':
+            var_name = 'volume_km3'
+        else:
+            raise ValueError('Unknown variable to minimise for!')
+        for fl in fls:
+            ref_value += getattr(fl, var_name)
+
+        precision_percent = 1
+        assert hef_gdir.rgi_date == 2003
+        yr_rgi_date = 2003  # is needed because the test climate dataset has ye = 2003 (in hydro years would be 2004)
+        model_dynamic_spinup = run_dynamic_spinup(hef_gdir, init_model_filesuffix=None,
+                                                  init_model_fls=None,
+                                                  climate_input_filesuffix='',
+                                                  evolution_model=FluxBasedModel,
+                                                  yr_spinup=1980, yr_rgi_date=yr_rgi_date,
+                                                  minimise_for=minimise_for, precision_percent=precision_percent,
+                                                  first_guess_t_bias=-2, maxiter=10,
+                                                  output_filesuffix='_dynamic_spinup',
+                                                  store_model_geometry=True, store_fl_diagnostics=False)
+
+        # check if resulting model match wanted value with prescribed precision
+        assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value, rtol=precision_percent/100, atol=0)
+        assert model_dynamic_spinup.yr == yr_rgi_date
+        assert len(model_dynamic_spinup.fls) == len(fls)
+        # but surface_h should not be the same (also checks all individual flowlines has same number of grid points)
+        assert not np.allclose(model_dynamic_spinup.fls[0].surface_h, fls[0].surface_h)
+        assert not np.allclose(model_dynamic_spinup.fls[1].surface_h, fls[1].surface_h)
+        assert not np.allclose(model_dynamic_spinup.fls[2].surface_h, fls[2].surface_h)
+
+        # check if model geometry is correctly saved in gdir
+        fp = hef_gdir.get_filepath('model_geometry',
+                                   filesuffix='_dynamic_spinup')
+        fmod = FileModel(fp)
+        assert np.isclose(getattr(model_dynamic_spinup, var_name), getattr(fmod, var_name))
+        assert fmod.last_yr == yr_rgi_date
+        assert len(model_dynamic_spinup.fls) == len(fmod.fls)
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):

@@ -3739,6 +3739,234 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     ods.to_netcdf(fpath, mode='a')
 
 
+@entity_task(log)
+def run_dynamic_spinup(gdir, init_model_filesuffix=None,
+                       init_model_fls=None,
+                       climate_input_filesuffix='',
+                       evolution_model=FluxBasedModel,
+                       yr_spinup=1980, yr_rgi_date=None,
+                       minimise_for='area', precision_percent=1,
+                       first_guess_t_bias=-2, maxiter=10,
+                       output_filesuffix='_dynamic_spinup',
+                       store_model_geometry=True, store_fl_diagnostics=False):
+    """Dynamically spinup glacier to match area or volume at rgi_date. Caution volume should already by calibrated to
+    consensus before using this function!
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    init_model_filesuffix : str or None
+        if you want to start from a previous model run state. This state
+        should be at time yr_rgi_date.
+    init_model_fls : []
+        list of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory).
+        Ignored if `init_model_filesuffix` is set
+    climate_input_filesuffix : str
+        filesuffix for the input climate file
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: FluxBasedModel
+    yr_spinup : int
+        The year where the spinup ends and the actual historical model run starts. Must be smaller than yr_rgi_date.
+        The default is 1980
+    yr_rgi_date : int
+        The rgi date, where we want to match area or volume. If None the gdir.rgi_date + 1 is used.
+    minimise_for : str
+        The variable we want to match at yr_rgi_date. Default is 'area'. Options are 'area' or 'volume'.
+    precision_percent : float
+        Gives the precision we want to match in percent. Default is 1, meaning the difference must be within 1% of the
+        given value (area or volume).
+    first_guess_t_bias : float
+        The initial guess for the temperature bias for the spinup MassBalanceModel in °C. Default is -2.
+    maxiter : int
+        Maximum number of minimisation iterations. If reached error is raised. Default is 10.
+    output_filesuffix : str
+        for the output file
+    store_model_geometry : bool
+        whether to store the full model geometry run file to disk or not. Default is True.
+    store_fl_diagnostics : bool
+        whether to store the model flowline diagnostics to disk or not. Default is False.
+
+    Returns
+    -------
+    :py:class:`oggm.core.flowline.evolution_model`
+        The final dynamically spined-up model. Type depends on the selected evolution_model.
+        By default a FluxBasedModel.
+    """
+
+    if yr_rgi_date is None:
+        yr_rgi_date = gdir.rgi_date + 1  # + 1 for conversation to hydro years
+
+    if init_model_filesuffix is not None:
+        fp = gdir.get_filepath('model_geometry',
+                               filesuffix=init_model_filesuffix)
+        fmod = FileModel(fp)
+        init_model_fls = fmod.fls
+
+    if init_model_fls is None:
+        fls_spinup = gdir.read_pickle('model_flowlines')
+    else:
+        fls_spinup = copy.deepcopy(init_model_fls)
+
+    # here we define the flowline we want to match, it is assumed that during the inversion the volume was calibrated
+    # towards the consensus estimate (as it is by default), but this means the volume is matched on a regional scale,
+    # maybe we could use here the individual glacier volume
+    fls_ref = copy.deepcopy(fls_spinup)
+
+    # define spinup MassBalance
+    # spinup is running for 'yr_rgi_date - yr_spinup' years, using a ConstantMassBalance of this period
+    y0_spinup = int((yr_spinup + yr_rgi_date) / 2)
+    halfsize_spinup = yr_rgi_date - y0_spinup
+    mb_spinup = MultipleFlowlineMassBalance(gdir,
+                                            fls=fls_spinup,
+                                            mb_model_class=ConstantMassBalance,
+                                            filename='climate_historical',
+                                            input_filesuffix=climate_input_filesuffix,
+                                            y0=y0_spinup,
+                                            halfsize=halfsize_spinup)
+
+    # MassBalance for actual run from yr_spinup to yr_rgi_date
+    mb_historical = MultipleFlowlineMassBalance(gdir,
+                                                fls=fls_spinup,
+                                                mb_model_class=PastMassBalance,
+                                                filename='climate_historical',
+                                                input_filesuffix=climate_input_filesuffix)
+
+    # the actual spinup run
+    def run_model_with_spinup_to_rgi_date(t_bias):
+
+        # with t_bias the glacier state after spinup is changed between iterations
+        mb_spinup.temp_bias = t_bias
+        # run the spinup
+        model_spinup = evolution_model(copy.deepcopy(fls_spinup),
+                                       mb_spinup,
+                                       y0=0)
+        model_spinup.run_until(2 * halfsize_spinup)
+
+        # if glacier is completely gone stop here and return 'ice-free' model
+        if np.isclose(model_spinup.volume_km3, 0.):
+            return model_spinup
+
+        # Now conduct the actual model run to the rgi date
+        model_historical = evolution_model(model_spinup.fls,
+                                           mb_historical,
+                                           y0=yr_spinup)
+        model_historical.run_until(yr_rgi_date)
+
+        return model_historical
+
+    def cost_fct(t_bias, model_dynamic_spinup_end):
+
+        # actual model run
+        model_dynamic_spinup = run_model_with_spinup_to_rgi_date(t_bias)
+
+        # check if glacier is completely gone (after spinup)
+        if np.isclose(model_dynamic_spinup.volume_km3, 0.):
+            return 'no ice after spinup!'
+
+        # save the final model for later
+        model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
+
+        if minimise_for == 'area':
+            cost_var = 'area_km2'
+        elif minimise_for == 'volume':
+            cost_var = 'volume_km3'
+        else:
+            raise NotImplementedError
+
+        value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
+        value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
+
+        # calculate the mismatch in percent
+        cost = (value_ref - value_dynamic_spinup) / value_ref * 100
+
+        return cost
+
+    def init_cost_fct():
+        model_dynamic_spinup_end = []
+
+        def c_fun(t_bias):
+            return cost_fct(t_bias, model_dynamic_spinup_end)
+
+        return c_fun, model_dynamic_spinup_end
+
+    # adapted from method described in Zekollari et al. 2019
+    def minimise_with_polynomial_fit(fct_to_minimise):
+        # first guess must be given
+        t_bias_guess = [first_guess_t_bias]
+        mismatch = [fct_to_minimise(t_bias_guess[0])]
+
+        if abs(mismatch[-1]) < precision_percent:
+            return t_bias_guess, mismatch
+
+        # second guess is given depending on the outcome of first guess,
+        # when mismatch is 100% t_bias is changed for 2°C (arbitrary)
+        step = mismatch[-1] * 0.02
+        t_bias_guess.append(t_bias_guess[0] - step)
+        mismatch.append(fct_to_minimise(t_bias_guess[-1]))
+
+        # check if the step was to large and no glacier is left after spinup, otherwise try with smaller step
+        partial_step = 0.9
+        while mismatch[-1] == 'no ice after spinup!':
+            t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
+            mismatch[-1] = fct_to_minimise(t_bias_guess[-1])
+            partial_step -= 0.1
+
+        if abs(mismatch[-1]) < precision_percent:
+            return t_bias_guess, mismatch
+
+        # Now start with polynomial fit for guessing
+        while len(t_bias_guess) < maxiter:
+            # get next guess from polyfit (fit function to previously calculated (mismatch, t_bias) pairs and get
+            # t_bias value where mismatch=0 from this fitted curve;
+            # the degree of the fitted curve is the number of value pairs - 1)
+            t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess, len(mismatch) - 1), 0))
+            mismatch.append(fct_to_minimise(t_bias_guess[-1]))
+
+            if mismatch[-1] == 'no ice after spinup!':
+                raise ValueError('During dynamic spinup the glacier disappeared!')
+
+            if abs(mismatch[-1]) < precision_percent:
+                return t_bias_guess, mismatch
+
+        raise ValueError('Dynamic spinup could not find satisfying match after ' + str(maxiter) +
+                         ' iterations! Could try again with more iterations or a larger precision.')
+
+    # here do the actual minimisation
+    c_fun, model_dynamic_spinup_end = init_cost_fct()
+    t_bias_guess, mismatch = minimise_with_polynomial_fit(c_fun)  # TODO: save somewhere t_bias and mismatch
+
+    # store the outcome
+    if store_model_geometry:
+        geom_path = gdir.get_filepath('model_geometry',
+                                      filesuffix=output_filesuffix,
+                                      delete=True)
+    else:
+        geom_path = False
+
+    if store_fl_diagnostics:
+        fl_diag_path = gdir.get_filepath('fl_diagnostics',
+                                         filesuffix=output_filesuffix,
+                                         delete=True)
+    else:
+        fl_diag_path = False
+
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
+                                  delete=True)
+
+    with np.warnings.catch_warnings():
+        # For operational runs we ignore the warnings
+        np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+        model_dynamic_spinup_end[-1].run_until_and_store(yr_rgi_date,
+                                                         geom_path=geom_path,
+                                                         diag_path=diag_path,
+                                                         fl_diag_path=fl_diag_path,)
+
+    return model_dynamic_spinup_end[-1]
+
+
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
     """Stop the simulation when the glacier volume is zero for a given period
 
