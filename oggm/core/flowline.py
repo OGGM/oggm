@@ -3749,8 +3749,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        first_guess_t_bias=-2, maxiter=10,
                        output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False):
-    """Dynamically spinup glacier to match area or volume at rgi_date. Caution volume should already by calibrated to
-    consensus before using this function!
+    """Dynamically spinup glacier to match area or volume at rgi_date. Caution volume should
+    already by calibrated to consensus before using this function!
 
     Parameters
     ----------
@@ -3768,17 +3768,19 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
     yr_spinup : int
-        The year where the spinup ends and the actual historical model run starts. Must be smaller than yr_rgi_date.
-        The default is 1980
+        The year where the spinup ends and the actual historical model run starts. Must be smaller
+        than yr_rgi_date. The default is 1980
     yr_rgi_date : int
         The rgi date, where we want to match area or volume. If None the gdir.rgi_date + 1 is used.
     minimise_for : str
-        The variable we want to match at yr_rgi_date. Default is 'area'. Options are 'area' or 'volume'.
+        The variable we want to match at yr_rgi_date. Default is 'area'. Options are 'area' or
+        'volume'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 1, meaning the difference must be within 1% of the
-        given value (area or volume).
+        Gives the precision we want to match in percent. Default is 1, meaning the difference must
+        be within 1% of the given value (area or volume).
     first_guess_t_bias : float
-        The initial guess for the temperature bias for the spinup MassBalanceModel in °C. Default is -2.
+        The initial guess for the temperature bias for the spinup MassBalanceModel in °C. Default
+        is -2.
     maxiter : int
         Maximum number of minimisation iterations. If reached error is raised. Default is 10.
     output_filesuffix : str
@@ -3809,13 +3811,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     else:
         fls_spinup = copy.deepcopy(init_model_fls)
 
-    # here we define the flowline we want to match, it is assumed that during the inversion the volume was calibrated
-    # towards the consensus estimate (as it is by default), but this means the volume is matched on a regional scale,
-    # maybe we could use here the individual glacier volume
+    # here we define the flowline we want to match, it is assumed that during the inversion the
+    # volume was calibrated towards the consensus estimate (as it is by default), but this means
+    # the volume is matched on a regional scale, maybe we could use here the individual glacier
+    # volume
     fls_ref = copy.deepcopy(fls_spinup)
 
     # define spinup MassBalance
-    # spinup is running for 'yr_rgi_date - yr_spinup' years, using a ConstantMassBalance of this period
+    # spinup is running for 'yr_rgi_date - yr_spinup' years, using a ConstantMassBalance
     y0_spinup = int((yr_spinup + yr_rgi_date) / 2)
     halfsize_spinup = yr_rgi_date - y0_spinup
     mb_spinup = MultipleFlowlineMassBalance(gdir,
@@ -3906,7 +3909,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         t_bias_guess.append(t_bias_guess[0] - step)
         mismatch.append(fct_to_minimise(t_bias_guess[-1]))
 
-        # check if the step was to large and no glacier is left after spinup, otherwise try with smaller step
+        # check if the step was to large and no glacier is left after spinup,
+        # otherwise try with smaller step
         partial_step = 0.9
         while mismatch[-1] == 'no ice after spinup!':
             t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
@@ -3918,10 +3922,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
         # Now start with polynomial fit for guessing
         while len(t_bias_guess) < maxiter:
-            # get next guess from polyfit (fit function to previously calculated (mismatch, t_bias) pairs and get
-            # t_bias value where mismatch=0 from this fitted curve;
-            # the degree of the fitted curve is the number of value pairs - 1)
-            t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess, len(mismatch) - 1), 0))
+            # get next guess from polyfit (fit function to previously calculated
+            # (mismatch, t_bias) pairs and get t_bias value where mismatch=0 from this fitted
+            # curve; the degree of the fitted curve is the number of value pairs - 1)
+            t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess, len(mismatch) - 1),
+                                           0))
             mismatch.append(fct_to_minimise(t_bias_guess[-1]))
 
             if mismatch[-1] == 'no ice after spinup!':
@@ -3931,11 +3936,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                 return t_bias_guess, mismatch
 
         raise ValueError('Dynamic spinup could not find satisfying match after ' + str(maxiter) +
-                         ' iterations! Could try again with more iterations or a larger precision.')
+                         ' iterations! Could try again with more iterations or a larger precision.'
+                         )
 
     # here do the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
-    t_bias_guess, mismatch = minimise_with_polynomial_fit(c_fun)  # TODO: save somewhere t_bias and mismatch
+    t_bias_guess, mismatch = minimise_with_polynomial_fit(c_fun)
+    # TODO: save somewhere t_bias and mismatch
 
     # store the outcome
     if store_model_geometry:

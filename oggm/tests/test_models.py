@@ -3192,22 +3192,27 @@ class TestHEF:
 
         precision_percent = 1
         assert hef_gdir.rgi_date == 2003
-        yr_rgi_date = 2003  # is needed because the test climate dataset has ye = 2003 (in hydro years would be 2004)
+        # is needed because the test climate dataset has ye = 2003 (in hydro years would be 2004)
+        yr_rgi_date = 2003
         model_dynamic_spinup = run_dynamic_spinup(hef_gdir, init_model_filesuffix=None,
                                                   init_model_fls=None,
                                                   climate_input_filesuffix='',
                                                   evolution_model=FluxBasedModel,
                                                   yr_spinup=1980, yr_rgi_date=yr_rgi_date,
-                                                  minimise_for=minimise_for, precision_percent=precision_percent,
+                                                  minimise_for=minimise_for,
+                                                  precision_percent=precision_percent,
                                                   first_guess_t_bias=-2, maxiter=10,
                                                   output_filesuffix='_dynamic_spinup',
-                                                  store_model_geometry=True, store_fl_diagnostics=False)
+                                                  store_model_geometry=True,
+                                                  store_fl_diagnostics=False)
 
         # check if resulting model match wanted value with prescribed precision
-        assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value, rtol=precision_percent/100, atol=0)
+        assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value,
+                          rtol=precision_percent/100, atol=0)
         assert model_dynamic_spinup.yr == yr_rgi_date
         assert len(model_dynamic_spinup.fls) == len(fls)
-        # but surface_h should not be the same (also checks all individual flowlines has same number of grid points)
+        # but surface_h should not be the same
+        # (also checks all individual flowlines has same number of grid points)
         assert not np.allclose(model_dynamic_spinup.fls[0].surface_h, fls[0].surface_h)
         assert not np.allclose(model_dynamic_spinup.fls[1].surface_h, fls[1].surface_h)
         assert not np.allclose(model_dynamic_spinup.fls[2].surface_h, fls[2].surface_h)
