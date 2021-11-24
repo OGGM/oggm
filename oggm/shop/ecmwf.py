@@ -95,7 +95,7 @@ def get_ecmwf_file(dataset='ERA5', var=None):
 
 
 def _check_ds_validity(ds):
-    if np.any(ds['time.day'] != 1):
+    if 'time' in ds.variables and np.any(ds['time.day'] != 1):
         # Mid-month timestamps need to be corrected
         ds['time'] = pd.to_datetime({'year': ds['time.year'],
                                      'month': ds['time.month'],
