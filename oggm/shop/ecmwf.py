@@ -97,9 +97,9 @@ def get_ecmwf_file(dataset='ERA5', var=None):
 def _check_ds_validity(ds):
     if 'time' in ds.variables and np.any(ds['time.day'] != 1):
         # Mid-month timestamps need to be corrected
-        ds['time'] = pd.to_datetime({'year': ds['time.year'],
-                                     'month': ds['time.month'],
-                                     'day': 1})
+        ds['time'].data[:] = pd.to_datetime({'year': ds['time.year'],
+                                             'month': ds['time.month'],
+                                             'day': 1})
     assert ds.longitude.min() >= 0
 
 
@@ -113,7 +113,8 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     Parameters
     ----------
     dataset : str
-        'ERA5', 'ERA5L', 'CERA'. Defaults to cfg.PARAMS['baseline_climate']
+        'ERA5', 'ERA5L', 'CERA', 'ERA5L-HMA', 'ERA5dr'.
+        Defaults to cfg.PARAMS['baseline_climate']
     ensemble_member : int
         for CERA, pick an ensemble member number (0-9). We might make this
         more of a clever pick later.
