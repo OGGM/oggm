@@ -3744,13 +3744,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
-                       yr_spinup=1980, yr_rgi_date=None,
+                       yr_spinup=1980, yr_rgi=None,
                        minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, maxiter=10,
                        output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False):
-    """Dynamically spinup glacier to match area or volume at rgi_date. Caution volume should
-    already by calibrated to consensus before using this function!
+    """Dynamically spinup the glacier to match area or volume at the RGI date.
+
+    This task allows to do simulations in the recent past (before the glacier
+    inventory date), when the state of the glacier was unkown. This is a
+    very difficult task the longer further back in time one goes
+    (see publications by Eis et al. for a theretical background), but can
+    work quite well for short periods. Note that the solution is not unique.
 
     Parameters
     ----------
@@ -3768,37 +3773,42 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
     yr_spinup : int
-        The year where the spinup ends and the actual historical model run starts. Must be smaller
-        than yr_rgi_date. The default is 1980
-    yr_rgi_date : int
-        The rgi date, where we want to match area or volume. If None the gdir.rgi_date + 1 is used.
+        The year where the spinup ends and the actual historical model run starts.
+        Must be smaller than yr_rgi. The default is 1980.
+    yr_rgi : int
+        The rgi date, at which we want to match area or volume.
+        If None, gdir.rgi_date + 1 is used (the default).
     minimise_for : str
-        The variable we want to match at yr_rgi_date. Default is 'area'. Options are 'area' or
-        'volume'.
+        The variable we want to match at yr_rgi. Default is 'area'.
+        Options are 'area' or 'volume'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 1, meaning the difference must
-        be within 1% of the given value (area or volume).
+        Gives the precision we want to match in percent. Default is 1,
+        meaning the difference must be within 1% of the given value
+        (area or volume).
     first_guess_t_bias : float
-        The initial guess for the temperature bias for the spinup MassBalanceModel in °C. Default
-        is -2.
+        The initial guess for the temperature bias for the spinup
+        MassBalanceModel in °C. Default is -2.
     maxiter : int
-        Maximum number of minimisation iterations. If reached error is raised. Default is 10.
+        Maximum number of minimisation iterations. If reached an error is
+        raised. Default is 10.
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
-        whether to store the full model geometry run file to disk or not. Default is True.
+        whether to store the full model geometry run file to disk or not.
+        Default is True.
     store_fl_diagnostics : bool
-        whether to store the model flowline diagnostics to disk or not. Default is False.
+        whether to store the model flowline diagnostics to disk or not.
+        Default is False.
 
     Returns
     -------
     :py:class:`oggm.core.flowline.evolution_model`
-        The final dynamically spined-up model. Type depends on the selected evolution_model.
-        By default a FluxBasedModel.
+        The final dynamically spined-up model. Type depends on the selected
+        evolution_model, by default a FluxBasedModel.
     """
 
-    if yr_rgi_date is None:
-        yr_rgi_date = gdir.rgi_date + 1  # + 1 for conversation to hydro years
+    if yr_rgi is None:
+        yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
@@ -3811,16 +3821,16 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     else:
         fls_spinup = copy.deepcopy(init_model_fls)
 
-    # here we define the flowline we want to match, it is assumed that during the inversion the
-    # volume was calibrated towards the consensus estimate (as it is by default), but this means
-    # the volume is matched on a regional scale, maybe we could use here the individual glacier
-    # volume
+    # here we define the flowline we want to match, it is assumed that during
+    # the inversion the volume was calibrated towards the consensus estimate
+    # (as it is by default), but this means the volume is matched on a
+    # regional scale, maybe we could use here the individual glacier volume
     fls_ref = copy.deepcopy(fls_spinup)
 
     # define spinup MassBalance
-    # spinup is running for 'yr_rgi_date - yr_spinup' years, using a ConstantMassBalance
-    y0_spinup = int((yr_spinup + yr_rgi_date) / 2)
-    halfsize_spinup = yr_rgi_date - y0_spinup
+    # spinup is running for 'yr_rgi - yr_spinup' years, using a ConstantMassBalance
+    y0_spinup = int((yr_spinup + yr_rgi) / 2)
+    halfsize_spinup = yr_rgi - y0_spinup
     mb_spinup = MultipleFlowlineMassBalance(gdir,
                                             fls=fls_spinup,
                                             mb_model_class=ConstantMassBalance,
@@ -3829,7 +3839,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                             y0=y0_spinup,
                                             halfsize=halfsize_spinup)
 
-    # MassBalance for actual run from yr_spinup to yr_rgi_date
+    # MassBalance for actual run from yr_spinup to yr_rgi
     mb_historical = MultipleFlowlineMassBalance(gdir,
                                                 fls=fls_spinup,
                                                 mb_model_class=PastMassBalance,
@@ -3855,7 +3865,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         model_historical = evolution_model(model_spinup.fls,
                                            mb_historical,
                                            y0=yr_spinup)
-        model_historical.run_until(yr_rgi_date)
+        model_historical.run_until(yr_rgi)
 
         return model_historical
 
@@ -3925,8 +3935,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # get next guess from polyfit (fit function to previously calculated
             # (mismatch, t_bias) pairs and get t_bias value where mismatch=0 from this fitted
             # curve; the degree of the fitted curve is the number of value pairs - 1)
-            t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess, len(mismatch) - 1),
-                                           0))
+            t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess,
+                                                      len(mismatch) - 1), 0))
             mismatch.append(fct_to_minimise(t_bias_guess[-1]))
 
             if mismatch[-1] == 'no ice after spinup!':
@@ -3935,9 +3945,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             if abs(mismatch[-1]) < precision_percent:
                 return t_bias_guess, mismatch
 
-        raise ValueError('Dynamic spinup could not find satisfying match after ' + str(maxiter) +
-                         ' iterations! Could try again with more iterations or a larger precision.'
-                         )
+        raise ValueError(f'Dynamic spinup could not find satisfying match after {maxiter}'
+                         ' iterations! Could try again with more iterations '
+                         'or a larger precision.')
 
     # here do the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
@@ -3966,7 +3976,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     with np.warnings.catch_warnings():
         # For operational runs we ignore the warnings
         np.warnings.filterwarnings('ignore', category=RuntimeWarning)
-        model_dynamic_spinup_end[-1].run_until_and_store(yr_rgi_date,
+        model_dynamic_spinup_end[-1].run_until_and_store(yr_rgi,
                                                          geom_path=geom_path,
                                                          diag_path=diag_path,
                                                          fl_diag_path=fl_diag_path,)
