@@ -3952,7 +3952,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # here do the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
     t_bias_guess, mismatch = minimise_with_polynomial_fit(c_fun)
-    # TODO: save somewhere t_bias and mismatch
+
+    # save the final values
+    gdir.add_to_diagnostics('temp_bias_dynamic_spinup', t_bias_guess[-1])
+    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup', mismatch[-1])
 
     # store the outcome
     if store_model_geometry:

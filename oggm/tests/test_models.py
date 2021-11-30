@@ -3217,6 +3217,13 @@ class TestHEF:
         assert not np.allclose(model_dynamic_spinup.fls[1].surface_h, fls[1].surface_h)
         assert not np.allclose(model_dynamic_spinup.fls[2].surface_h, fls[2].surface_h)
 
+        # check if temp_bias and mismatch is saved in model diagnostics
+        gdir_diagnostics = hef_gdir.get_diagnostics()
+        assert 'temp_bias_dynamic_spinup' in gdir_diagnostics.keys()
+        mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup'
+        assert mismatch_key in gdir_diagnostics.keys()
+        assert gdir_diagnostics[mismatch_key] < precision_percent
+
         # check if model geometry is correctly saved in gdir
         fp = hef_gdir.get_filepath('model_geometry',
                                    filesuffix='_dynamic_spinup')
