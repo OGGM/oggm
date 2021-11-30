@@ -3910,6 +3910,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         t_bias_guess = [first_guess_t_bias]
         mismatch = [fct_to_minimise(t_bias_guess[0])]
 
+        if mismatch[-1] == 'no ice after spinup!':
+            raise ValueError('During dynamic spinup the glacier disappeared using the first '
+                             'guess temperautre bias! Try again with new (colder) first guess!')
+
         if abs(mismatch[-1]) < precision_percent:
             return t_bias_guess, mismatch
 
