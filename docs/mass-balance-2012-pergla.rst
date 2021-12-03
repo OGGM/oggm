@@ -7,8 +7,10 @@ Temperature index model calibrated on geodetic MB data
 
 As of OGGM v1.5.3, we implemented a simple mass-balance model that can be
 calibrated on the geodetic mass-balance data from
-`Hugonnet et al., 2021 <https://www.nature.com/articles/s41586-021-03436-z>_`
-(see also: :ref:`shop-geod`).
+`Hugonnet et al., 2021`_ (see also: :ref:`shop-geod`).
+
+.. _Hugonnet et al., 2021: https://www.nature.com/articles/s41586-021-03436-z
+
 
 This can be seen as a temporary improvement of the :ref:`mass-balance-2012`
 until the `sandbox models <https://github.com/OGGM/massbalance-sandbox>`_ become
@@ -50,10 +52,12 @@ and the precipitation correction factor :math:`P_f`.
 How can I use this model instead of the old one?
 ------------------------------------------------
 
-Since the model equations are the same, it can be used readily within OGGM.
-Only the calibration steps are different (and simpler!). Have a look at our
-tutorials for more information, or use our :ref:`preprodir` with precalibrated
-parameters.
+Since the model equations are the same, it can be used readily within OGGM
+(:py:func:`oggm.core.climate.mu_star_calibration_from_geodetic_mb`). Only the calibration steps
+are different (and simpler!). Check out the
+[run_prepro_levels](https://docs.oggm.org/en/latest/_modules/oggm/cli/prepro_levels.html#run_prepro_levels)
+under level 3 when match_geodetic_mb_per_glacier is set to True or use our :ref:`preprodir` with precalibrated
+parameters (path index: *match_geod_pergla*).
 
 Notes
 -----
