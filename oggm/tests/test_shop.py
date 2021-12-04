@@ -327,7 +327,7 @@ class Test_climate_datasets:
 
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
-        exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'ERA5L-HMA', 'CERA']
+        exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'ERA5L-HMA', 'ERA5dr', 'CERA']
         ref_hgts = []
         dft = []
         dfp = []
