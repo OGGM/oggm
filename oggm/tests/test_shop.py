@@ -323,11 +323,11 @@ class Test_climate_datasets:
         cfg.PATHS['working_dir'] = class_case_dir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
 
-        hef_file = get_demo_file('RGI60-14.03439.shp')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
 
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
-        exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'ERA5L-HMA', 'CERA']
+        exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
         ref_hgts = []
         dft = []
         dfp = []
