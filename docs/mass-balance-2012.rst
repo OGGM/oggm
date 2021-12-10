@@ -167,6 +167,8 @@ resulting changes in calibrated :math:`\mu^*` will be comparatively small
 (again, because of the local constraints on :math:`\mu`). The MB observations,
 however, play a major role for the assessment of model uncertainty.
 
+.. _regional-match-calib:
+
 Regional calibration
 --------------------
 
@@ -181,7 +183,7 @@ Regional calibration
    unrealistic results at the single glacier scale (but it is very useful
    for global studies). An overview of the regional shifts for all regions
    and presently available set-ups can be assessed via
-   `this notebook <https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/compare_with_geod.html>`_.
+   `this notebook <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/compare_with_geod.ipynb?flush_cache=true>`_.
    In the preprocessed directories, it is available under the path index *match_geod*.
 
 References

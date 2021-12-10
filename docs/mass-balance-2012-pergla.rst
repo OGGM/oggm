@@ -42,7 +42,7 @@ The glacier per glacier calibration is done for two parameters:
   glacier, and is calibrated to match the geodetic mass-balance data over the
   reference period.
 - if the resulting :math:`\mu ^{*}` is outside of predefined bounds
-  (for example [20, 600] :math:`mm w.e. K^{-1} mth^{-1}`), then the temperature
+  (for example [20, 600] :math:`mm\,w.e.\,K^{-1}\,mth^{-1}`), then the temperature
   is bias corrected until a physically reasonable :math:`\mu ^{*}` is found.
 
 Like for the previous model, several parameters ("hyper parameters") are
@@ -52,10 +52,10 @@ and the precipitation correction factor :math:`P_f`.
 How can I use this model instead of the old one?
 ------------------------------------------------
 
-Since the model equations are the same, it can be used readily within OGGM
-(:py:func:`oggm.core.climate.mu_star_calibration_from_geodetic_mb`). Only the calibration steps
+Since the model equations are the same, it can be used readily within OGGM with
+:py:func:`oggm.core.climate.mu_star_calibration_from_geodetic_mb`. Only the calibration steps
 are different (and simpler!). Check out the
-[run_prepro_levels](https://docs.oggm.org/en/latest/_modules/oggm/cli/prepro_levels.html#run_prepro_levels)
+`run_prepro_levels <https://docs.oggm.org/en/latest/_modules/oggm/cli/prepro_levels.html#run_prepro_levels>`_
 under level 3 when match_geodetic_mb_per_glacier is set to True or use our :ref:`preprodir` with precalibrated
 parameters (path index: *match_geod_pergla*).
 

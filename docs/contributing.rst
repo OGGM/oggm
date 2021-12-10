@@ -210,18 +210,19 @@ Requirements
 ~~~~~~~~~~~~
 
 There are some extra requirements to build the docs: you will need to
-have ``sphinx``, ``sphinx_rtd_theme``, ``numpydoc`` and ``ipython`` installed.
+have ``sphinx``, ``sphinx_rtd_theme``, ``sphinx-togglebutton``, ``sphinx-book-theme``, ``numpydoc``
+and ``ipython`` installed.
 
 If you have a conda environment named ``oggm_env``, you can install the extra
 requirements with::
 
       conda install -n oggm_env sphinx sphinx_rtd_theme ipython numpydoc
+      conda install -c conda-forge sphinx-togglebutton sphinx-book-theme
 
 If you use pip, activate your python environment and install the requirements
 with::
 
-      pip install sphinx sphinx_rtd_theme ipython numpydoc
-
+      pip install sphinx sphinx_rtd_theme sphinx-togglebutton sphinx-book-theme ipython numpydoc
 
 Building the documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -367,3 +368,4 @@ branch has not actually been merged.
 The branch will still exist on GitHub, so to delete it there do::
 
     git push origin --delete shiny-new-feature
+
