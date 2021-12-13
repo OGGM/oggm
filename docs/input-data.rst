@@ -171,7 +171,7 @@ Available pre-processed configurations
     argument in your call to :py:func:`workflow.init_glacier_directories`,
     and set it to one of the urls listed below.
 
-    See `this tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_
+    See `this tutorial <https://oggm.org/tutorials/stable/notebooks/elevation_bands_vs_centerlines.html>`_
     for an example.
 
 
@@ -184,10 +184,12 @@ directories from the default urls. Here is a summary of the default configuratio
 
 - model parameters as of the ``oggm/params.cfg`` file at the published model version
 - flowline glaciers computed from the geometrical centerlines (including tributaries)
-- baseline climate from CRU (not available for Antarctica)
-- baseline climate quality checked with :py:func:`tasks.historical_climate_qc` with ``N=3``
-- mass-balance parameters calibrated with the standard OGGM procedure. No calibration
-  against geodetic MB (see options below for regional calibration)
+- baseline climate from CRU (not available for Antarctica) using a global precipitation factor of 2.5 (path index: *pcp2.5*)
+- baseline climate quality checked and corrected if needed with :py:func:`tasks.historical_climate_qc` with ``N=3``.
+  If the condition of at least 3 months of melt per year at the terminus and 3 months of accumulation
+  at the glacier top is not reached, temperatures are shifted (path index: *qc3*).
+- mass-balance parameters calibrated with the standard OGGM procedure (:ref:`mass-balance-2012`, path index: *no_match*).
+  No calibration against geodetic MB (see options below for regional calibration).
 - ice volume inversion calibrated to match the ice volume from [Farinotti_etal_2019]_
   **at the RGI region level**, i.e. glacier estimates might differ. If not specified otherwise,
   it's also the precalibrated parameters that will be used for the dynamical run.
@@ -239,21 +241,72 @@ flowlines:
 - `L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/centerlines/qc3/pcp1.6/no_match/>`_ for ERA5 + centerlines
 - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for ERA5 + elevation bands
 
-D. Further set-ups
+Note that the globally calibrated multiplicative precipitation factor (pcp) depends on the used baseline climate
+(e.g. pcp is 2.5 for CRU and 1.6 for ERA5). If you want to use another baseline climate, you have to calibrate the
+precipitation factor yourself. Please get in touch with us in that case!
+
+D. Option: Mass-balance calibration method
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are different mass-balance calibration options available in the preprocessed directories:
+
+-   **no_match**: This is the default calibration option. For calibration, the direct glaciological WGMS data is used
+    and the `Marzeion et al., 2012`_ *tstar* method is applied to interpolate to glaciers without measurements
+    (see also :ref:`mass-balance-2012`). With this method, the geodetic estimates are not matched.
+-   **match_geod**: The default calibration with direct glaciological WGMS data is still applied on the glacier per
+    glacier level, but on the regional level the epsilon (residual) is corrected to match the geodetic estimates
+    from `Hugonnet et al., 2021`_ (using :py:func:`oggm.workflow.match_regional_geodetic_mb`, see also
+    :ref:`regional-match-calib`). For example:
+
+    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances
+    - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances
+
+-   **match_geod_pergla**: Only the per-glacier geodetic estimates from `Hugonnet et al., 2021`_
+    (mean mass-balance change between 2000 and 2020) are used for calibration. The mass-balance model parameter
+    :math:`\mu ^{*}` of each glacier is calibrated to match individually the geodetic estimates (using
+    :py:func:`oggm.core.climate.mustar_calibration_from_geodetic_mb`, more in :ref:`mass-balance-2012-pergla`). It
+    only works for elevation band flowlines at the moment. match_geod_pergla makes only sense without "external" climate
+    quality check and correction (i.e. qc0) as this is already done internally. For example:
+
+    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass-balances on individual glacier level
+
+.. _Marzeion et al., 2012: http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
+
+E. Further set-ups
 ^^^^^^^^^^^^^^^^^^
 
-Here is the current list of available configurations at the time of writing (explore the server for more!):
+Here is a list of other available configurations at the time of writing (explore the server for more!):
 
-- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for CERA+ERA5 + elevation bands
-- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for CERA+ERA5 + elevation bands + matched on regional geodetic mass-balances
-- `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/>`_ for CRU + elevation bands + matched on regional geodetic mass-balances
-- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for ERA5 + elevation bands + matched on regional geodetic mass-balances
+- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for CERA+ERA5 + elevation bands flowlines
+- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for CERA+ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances
 - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + precipitation factor 1.8
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + no climate quality check
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match/>`_ for CRU + elevation bands flowlines + no climate quality check
+- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/>`_ for ERA5 + elevation bands flowlines + matched geodetic mass-balances on individual glacier level + "wrong" qc3
+- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla_massredis/>`_ for ERA5 + elevation bands flowlines + mass redistribution instead of SIA (see: :ref:`mass-redistribution`)
 
 Note: the additional set-ups might not always have all map sizes available. Please
-get in touch if you have interest in a specific set-up.
+get in touch if you have interest in a specific set-up. Remember that per default, the climate quality check
+and correction (:py:func:`oggm.tasks.historical_climate_qc`) is applied (*qc3*). However, if the pre-processed directory
+has the path index "*qc0*", it was not applied. At the moment, there are still preprocessed gdirs using
+match_geod_pergla and qc3, this makes not really sense as it is reset anyways internally. We will replace them with
+"qc0" soon, but do not expect any significant differences.
+
+
+F. Error analysis and further volume and mass change comparison for different pre-processed glacier directories
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. figure:: _static/relative_failing_glacier_area.png
+    :width: 100%
+    :align: left
+
+A more detailed analysis about the type, amount and relative failing glacier area (in total and per RGI region) can be
+found in this `error analysis jupyter notebook <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~lschuster/error_analysis/error_analysis_v1.ipynb?flush_cache=true>`_.
+
+If you are also interested in how the "common" non-failing glaciers differ in terms of historical volume change, total
+mass change and specific mass balance between different pre-processed glacier directories,
+you can check out this
+`jupyter notebook <https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~lschuster/error_analysis/working_glacier_gdirs_comparison.ipynb?flush_cache=true>`_.
 
 Climate data
 ------------
@@ -412,7 +465,7 @@ Geodetic MB data
 OGGM ships with a geodetic mass-balance table containing MB information for all
 of the world's glaciers as obtained from `Hugonnet et al., 2021`_.
 
-The original, raw data have been modified in three ways (`code <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb>`_):
+The original, raw data have been modified in three ways (`code <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb?flush_cache=true>`_):
 
 - the glaciers in RGI region 12 (Caucasus) had to be manually linked to the product by
   Hugonnet because of large errors in the RGI outlines. The resulting product

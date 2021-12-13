@@ -167,6 +167,8 @@ resulting changes in calibrated :math:`\mu^*` will be comparatively small
 (again, because of the local constraints on :math:`\mu`). The MB observations,
 however, play a major role for the assessment of model uncertainty.
 
+.. _regional-match-calib:
+
 Regional calibration
 --------------------
 
@@ -174,14 +176,15 @@ Regional calibration
 
    As of version 1.4, we now also offer to calibrate the mass-balance at the
    regional level (RGI regions) based on geodetic mass-balance products
-   ([Zemp_et_al_2019]_ or [Hugonnet_et_al_2020]_). This is done by correcting
-   (shifting) the residual for each glacier (:math:`\epsilon` in the equation
+   ([Zemp_et_al_2019]_ or [Hugonnet_et_al_2021]_, see :py:func:`oggm.workflow.match_regional_geodetic_mb`).
+   This is done by correcting (shifting) the residual for each glacier (:math:`\epsilon` in the equation
    above) by a constant value so that the regional estimates match the
    observations. This is not applied per default, as it might lead to
    unrealistic results at the single glacier scale (but it is very useful
    for global studies). An overview of the regional shifts for all regions
    and presently available set-ups can be assessed via
-   `this notebook <https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/compare_with_geod.html>`_.
+   `this notebook <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/compare_with_geod.ipynb?flush_cache=true>`_.
+   In the preprocessed directories, it is available under the path index *match_geod*.
 
 References
 ----------
@@ -195,7 +198,8 @@ References
    - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
    623–642. https://doi.org/10.1002/joc.3711
 
-.. [Hugonnet_et_al_2020] Hugonnet et al., accepted.
+.. [Hugonnet_et_al_2021] Hugonnet, R., McNabb, R., Berthier, E. et al. Accelerated global glacier mass loss in the
+   early twenty-first century, Nature 592, 726–731 (2021). https://doi.org/10.1038/s41586-021-03436-z
 
 .. [Zemp_et_al_2019] Zemp, M., Huss, M., Thibert, E., Eckert, N., McNabb, R.,
    Huber, J., Barandun, M., Machguth, H., Nussbaumer, S. U., Gärtner-Roer, I.,
