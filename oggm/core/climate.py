@@ -512,7 +512,11 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     if year_range is not None:
         sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
         em = sm - 1 if (sm > 1) else 12
-        t0 = datetime.datetime(year_range[0]-1, sm, 1)
+        if sm != 1:
+            t0 = datetime.datetime(year_range[0] - 1, sm, 1)
+        else:
+            # hydrological year is the calendar year!!!
+            t0 = datetime.datetime(year_range[0], sm, 1)
         t1 = datetime.datetime(year_range[1], em, 1)
         return mb_climate_on_height(gdir, heights, time_range=[t0, t1])
 
