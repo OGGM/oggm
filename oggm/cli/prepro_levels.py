@@ -746,6 +746,9 @@ def parse_args(args):
                              'against a hash sum.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
+    parser.add_argument('--dynamic_spinup', type=str, default='',
+                        help="include a dynamic spinup for matching 'area' OR "
+                             "'volume' at the RGI-date")
     args = parser.parse_args(args)
 
     # Check input
@@ -797,6 +800,7 @@ def parse_args(args):
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
+                dynamic_spinup=args.dynamic_spinup,
                 )
 
 
