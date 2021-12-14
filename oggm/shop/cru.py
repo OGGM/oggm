@@ -94,7 +94,7 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
     y1 : int
-        the starting year of the timeseries to write. The default is to take
+        the end year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
     output_filesuffix : str

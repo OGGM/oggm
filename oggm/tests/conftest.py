@@ -146,8 +146,11 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
-            'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url
+            'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
+            'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+            'L1-L2_files/elev_bands' in url
             )
+    # elev_bands url added in order that test_models/test_hef_mu_star_calibration_from_geodetic_mb works!!!
     return oggm_urlretrieve(url, *args, **kwargs)
 
 
