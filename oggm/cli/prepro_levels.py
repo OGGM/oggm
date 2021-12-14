@@ -82,6 +82,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
+                      dynamic_spinup=False,
                       continue_on_error=True):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -151,6 +152,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         a dict of parameters to override.
     disable_dl_verify : bool
         disable the hash verification of OGGM downloads
+    dynamic_spinup: str
+        include a dynamic spinup matching 'area' OR 'volume' at the RGI-date
     """
 
     # Input check
@@ -177,6 +180,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if evolution_model not in ['fl_sia', 'massredis']:
         raise InvalidParamsError('evolution_model should be one of '
                                  "['fl_sia', 'massredis'].")
+
+    if dynamic_spinup and dynamic_spinup not in ['area', 'volume']:
+        raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
+                                 "not supported")
+
+    if dynamic_spinup and evolution_model == 'massredis':
+        raise InvalidParamsError("Dynamic spinup is not working with massredis!")
 
     # Time
     start = time.time()
@@ -586,9 +596,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         evolution_model = FluxBasedModel
 
     # OK - run
+    if dynamic_spinup:
+        workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
+                                     evolution_model=evolution_model,
+                                     minimise_for=dynamic_spinup,
+                                     precision_percent=1,
+                                     first_guess_t_bias=-2, maxiter=10,
+                                     output_filesuffix='_dynamic_spinup'
+                                     )
+
+        climate_init_model_filesuffix = '_dynamic_spinup'
+    else:
+        climate_init_model_filesuffix = None
+
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
                                  evolution_model=evolution_model,
+                                 init_model_filesuffix=climate_init_model_filesuffix,
                                  output_filesuffix='_historical')
 
     # Now compile the output
