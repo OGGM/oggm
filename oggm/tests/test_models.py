@@ -971,16 +971,18 @@ class TestMassBalanceModels:
 
         pd_geodetic = utils.get_geodetic_mb_dataframe()[
             utils.get_geodetic_mb_dataframe().period == '2000-01-01_2020-01-01']
-        gdir = hef_gdir  # hef_gdir is of RGI50, but geodetic of RGI60, it won't matter here for the test
+        # hef_gdir is of RGI50, geodetic of RGI60, it won't matter here for the test
+        gdir = hef_gdir
         df = ['RGI60-11.00897']
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
         ref_mb_geodetic = pd_geodetic.loc[df[0]].dmdtda * 1000
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        # the test CRU climate goes only until end of 2014, but we can create instead a fake climate for 2000-2019
+        # the test CRU climate goes only until end of 2014, but we can create
+        # instead a fake climate for 2000-2019
         tasks.process_dummy_cru_file(gdir, y0=2000, y1=2019)
-        #tasks.process_cru_data(gdir)  # , y0=2000, y1=2019)
+        # tasks.process_cru_data(gdir)  # , y0=2000, y1=2019)
         cfg.PARAMS['max_mu_star'] = 600
         climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
                                                      ref_period='2000-01-01_2020-01-01',
