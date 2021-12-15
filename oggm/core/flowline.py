@@ -3858,6 +3858,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                 filename='climate_historical',
                                                 input_filesuffix=climate_input_filesuffix)
 
+    # global variable for reference value what is tried to matched (to log
+    # the absolute mismatch at the end)
+    reference_value = np.Nan
+
     # the actual spinup run
     def run_model_with_spinup_to_rgi_date(t_bias):
 
@@ -3883,6 +3887,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
     def cost_fct(t_bias, model_dynamic_spinup_end):
 
+        global reference_value
+
         # actual model run
         model_dynamic_spinup = run_model_with_spinup_to_rgi_date(t_bias)
 
@@ -3901,6 +3907,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             raise NotImplementedError
 
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
+        if np.isnan(reference_value):
+            reference_value = value_ref
         value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
 
         # calculate the mismatch in percent
@@ -3971,7 +3979,16 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
     # save the final values
     gdir.add_to_diagnostics('temp_bias_dynamic_spinup', t_bias_guess[-1])
-    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup', mismatch[-1])
+    if minimise_for == 'area':
+        unit='km2'
+        cost_var = 'area_km2'
+    elif minimise_for == 'volume':
+        unit='km3'
+        cost_var = 'volume_km3'
+    else:
+        raise NotImplementedError(f'{minimise_for}')
+    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
+                            mismatch[-1] / 100 * reference_value)
 
     # store the outcome
     if store_model_geometry:
