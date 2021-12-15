@@ -3283,11 +3283,12 @@ class TestHEF:
         fls = hef_gdir.read_pickle('model_flowlines')
         ref_value = 0
         if minimise_for == 'area':
-            var_name = 'area_km2'
+            unit = 'km2'
         elif minimise_for == 'volume':
-            var_name = 'volume_km3'
+            unit = 'km3'
         else:
             raise ValueError('Unknown variable to minimise for!')
+        var_name = f'{minimise_for}_{unit}'
         for fl in fls:
             ref_value += getattr(fl, var_name)
 
@@ -3321,9 +3322,11 @@ class TestHEF:
         # check if temp_bias and mismatch is saved in model diagnostics
         gdir_diagnostics = hef_gdir.get_diagnostics()
         assert 'temp_bias_dynamic_spinup' in gdir_diagnostics.keys()
-        mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup'
+        mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}'
         assert mismatch_key in gdir_diagnostics.keys()
-        assert gdir_diagnostics[mismatch_key] < precision_percent
+        limit = gdir_diagnostics[f'reference_{minimise_for}_dynamic_spinup_{unit}'] * \
+            precision_percent / 100
+        assert gdir_diagnostics[mismatch_key] < limit
 
         # check if model geometry is correctly saved in gdir
         fp = hef_gdir.get_filepath('model_geometry',

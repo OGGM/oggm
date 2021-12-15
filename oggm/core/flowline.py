@@ -3838,6 +3838,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # (as it is by default), but this means the volume is matched on a
     # regional scale, maybe we could use here the individual glacier volume
     fls_ref = copy.deepcopy(fls_spinup)
+    if minimise_for == 'area':
+        unit = 'km2'
+    elif minimise_for == 'volume':
+        unit = 'km3'
+    else:
+        raise NotImplementedError
+    cost_var = f'{minimise_for}_{unit}'
+    reference_value = np.sum([getattr(f, cost_var) for f in fls_ref])
 
     # define spinup MassBalance
     # spinup is running for 'yr_rgi - yr_spinup' years, using a ConstantMassBalance
@@ -3858,10 +3866,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                 filename='climate_historical',
                                                 input_filesuffix=climate_input_filesuffix)
 
-    # global variable for reference value what is tried to matched (to log
-    # the absolute mismatch at the end)
-    reference_value = np.Nan
-
     # the actual spinup run
     def run_model_with_spinup_to_rgi_date(t_bias):
 
@@ -3873,9 +3877,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                        y0=0)
         model_spinup.run_until(2 * halfsize_spinup)
 
-        # if glacier is completely gone stop here and return 'ice-free' model
+        # if glacier is completely gone return information in ice-free
+        ice_free = False
         if np.isclose(model_spinup.volume_km3, 0.):
-            return model_spinup
+            ice_free = True
 
         # Now conduct the actual model run to the rgi date
         model_historical = evolution_model(model_spinup.fls,
@@ -3883,38 +3888,24 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                            y0=yr_spinup)
         model_historical.run_until(yr_rgi)
 
-        return model_historical
+        return model_historical, ice_free
 
     def cost_fct(t_bias, model_dynamic_spinup_end):
 
-        global reference_value
-
         # actual model run
-        model_dynamic_spinup = run_model_with_spinup_to_rgi_date(t_bias)
-
-        # check if glacier is completely gone (after spinup)
-        if np.isclose(model_dynamic_spinup.volume_km3, 0.):
-            return 'no ice after spinup!'
+        model_dynamic_spinup, ice_free = run_model_with_spinup_to_rgi_date(t_bias)
 
         # save the final model for later
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
-        if minimise_for == 'area':
-            cost_var = 'area_km2'
-        elif minimise_for == 'volume':
-            cost_var = 'volume_km3'
-        else:
-            raise NotImplementedError
 
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
-        if np.isnan(reference_value):
-            reference_value = value_ref
         value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
 
         # calculate the mismatch in percent
         cost = (value_ref - value_dynamic_spinup) / value_ref * 100
 
-        return cost
+        return cost, ice_free
 
     def init_cost_fct():
         model_dynamic_spinup_end = []
@@ -3928,9 +3919,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     def minimise_with_polynomial_fit(fct_to_minimise):
         # first guess must be given
         t_bias_guess = [first_guess_t_bias]
-        mismatch = [fct_to_minimise(t_bias_guess[0])]
+        first_mismatch, ice_free = fct_to_minimise(t_bias_guess[0])
+        mismatch = [first_mismatch]
 
-        if mismatch[-1] == 'no ice after spinup!':
+        if ice_free:
             raise ValueError('During dynamic spinup the glacier disappeared using the first '
                              'guess temperautre bias! Try again with new (colder) first guess!')
 
@@ -3941,14 +3933,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # when mismatch is 100% t_bias is changed for 2°C (arbitrary)
         step = mismatch[-1] * 0.02
         t_bias_guess.append(t_bias_guess[0] - step)
-        mismatch.append(fct_to_minimise(t_bias_guess[-1]))
+        new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+        mismatch.append(new_mismatch)
 
         # check if the step was to large and no glacier is left after spinup,
         # otherwise try with smaller step
         partial_step = 0.9
-        while mismatch[-1] == 'no ice after spinup!':
+        while ice_free:
             t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
-            mismatch[-1] = fct_to_minimise(t_bias_guess[-1])
+            mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
             partial_step -= 0.1
 
         if abs(mismatch[-1]) < precision_percent:
@@ -3961,37 +3954,44 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # curve; the degree of the fitted curve is the number of value pairs - 1)
             t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess,
                                                       len(mismatch) - 1), 0))
-            mismatch.append(fct_to_minimise(t_bias_guess[-1]))
+            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+            mismatch.append(new_mismatch)
 
-            if mismatch[-1] == 'no ice after spinup!':
-                raise ValueError('During dynamic spinup the glacier disappeared!')
+            if ice_free:
+                # ok unfortunately ice completly disapperad during spinup,
+                # this leads to discontinuities and the polynomial fit is not
+                # working with this, therefore stop here and indicate in mismatch
+                mismatch.append('ice free during spinup')
+                return t_bias_guess, mismatch
 
             if abs(mismatch[-1]) < precision_percent:
                 return t_bias_guess, mismatch
 
-        raise ValueError(f'Dynamic spinup could not find satisfying match after {maxiter}'
-                         ' iterations! Could try again with more iterations '
-                         'or a larger precision.')
+        # Ok when we end here the spinup could not find satifying match, so
+        # return what was calculated so far and indicate
+        mismatch.append('no satisfying match after maxiter')
+        return t_bias_guess, mismatch
 
     # here do the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
     t_bias_guess, mismatch = minimise_with_polynomial_fit(c_fun)
 
+    # find the best guess in this cases
+    error = ''
+    best_index = -1
+    if type(mismatch[-1]) == str:
+        error = mismatch.pop()
+        best_index = np.argmin(mismatch)
+
     # save the final values
-    gdir.add_to_diagnostics('temp_bias_dynamic_spinup', t_bias_guess[-1])
-    if minimise_for == 'area':
-        unit='km2'
-        cost_var = 'area_km2'
-    elif minimise_for == 'volume':
-        unit='km3'
-        cost_var = 'volume_km3'
-    else:
-        raise NotImplementedError(f'{minimise_for}')
+    gdir.add_to_diagnostics('temp_bias_dynamic_spinup', t_bias_guess[best_index])
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
-                            mismatch[-1] / 100 * reference_value)
-    # also add the reference value for the analyses later on
-    gdir.add_to_diagnostics(f'reference{minimise_for}_dynamic_spinup_{unit}',
+                            mismatch[best_index] / 100 * reference_value)
+    # also add some stuff for testing
+    gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
                             reference_value)
+    gdir.add_to_diagnostics('dynamic_spinup_iterations', len(mismatch))
+    gdir.add_to_diagnostics('dynamic_spinup_error', error)
 
     # store the outcome
     if store_model_geometry:
@@ -4015,12 +4015,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     with np.warnings.catch_warnings():
         # For operational runs we ignore the warnings
         np.warnings.filterwarnings('ignore', category=RuntimeWarning)
-        model_dynamic_spinup_end[-1].run_until_and_store(yr_rgi,
-                                                         geom_path=geom_path,
-                                                         diag_path=diag_path,
-                                                         fl_diag_path=fl_diag_path,)
+        model_dynamic_spinup_end[best_index].run_until_and_store(
+            yr_rgi,
+            geom_path=geom_path,
+            diag_path=diag_path,
+            fl_diag_path=fl_diag_path, )
 
-    return model_dynamic_spinup_end[-1]
+    return model_dynamic_spinup_end[best_index]
 
 
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
