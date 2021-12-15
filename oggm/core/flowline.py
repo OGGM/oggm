@@ -3989,6 +3989,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         raise NotImplementedError(f'{minimise_for}')
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
                             mismatch[-1] / 100 * reference_value)
+    # also add the reference value for the analyses later on
+    gdir.add_to_diagnostics(f'reference{minimise_for}_dynamic_spinup_{unit}',
+                            reference_value)
 
     # store the outcome
     if store_model_geometry:
