@@ -82,7 +82,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
-                      dynamic_spinup=False,
+                      dynamic_spinup=False, dynamic_spinup_options={},
                       continue_on_error=True):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -597,11 +597,24 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # OK - run
     if dynamic_spinup:
+        dynamic_spinup_options_used = {}
+        for key, default in zip(['first_guess_t_bias', 'precision_percent',
+                                 'maxiter'],
+                                [-2, 1, 10]):
+            if key in dynamic_spinup_options.keys():
+                dynamic_spinup_options_used[key] = dynamic_spinup_options[key]
+            else:
+                dynamic_spinup_options_used[key] = default
+
         workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
                                      evolution_model=evolution_model,
                                      minimise_for=dynamic_spinup,
-                                     precision_percent=1,
-                                     first_guess_t_bias=-2, maxiter=10,
+                                     precision_percent=
+                                     dynamic_spinup_options_used['precision_percent'],
+                                     first_guess_t_bias=
+                                     dynamic_spinup_options_used['first_guess_t_bias'],
+                                     maxiter=
+                                     dynamic_spinup_options_used['maxiter'],
                                      output_filesuffix='_dynamic_spinup'
                                      )
 
@@ -749,6 +762,17 @@ def parse_args(args):
     parser.add_argument('--dynamic_spinup', type=str, default='',
                         help="include a dynamic spinup for matching 'area' OR "
                              "'volume' at the RGI-date")
+
+    class ParseKwargs(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            setattr(namespace, self.dest, dict())
+            for value in values:
+                key, value = value.split('=')
+                getattr(namespace, self.dest)[key] = value
+
+    parser.add_argument('--dynamic_spinup_options', nargs='*', default={},
+                        action=ParseKwargs)
+
     args = parser.parse_args(args)
 
     # Check input
@@ -801,6 +825,7 @@ def parse_args(args):
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
                 dynamic_spinup=args.dynamic_spinup,
+                dynamic_spinup_options=args.dynamic_spinup_options,
                 )
 
 
