@@ -3956,15 +3956,19 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
             mismatch.append(new_mismatch)
 
-            if ice_free:
-                # ok unfortunately ice completly disapperad during spinup,
-                # this leads to discontinuities and the polynomial fit is not
-                # working with this, therefore stop here and indicate in mismatch
-                mismatch.append('ice free during spinup')
-                return t_bias_guess, mismatch
-
             if abs(mismatch[-1]) < precision_percent:
                 return t_bias_guess, mismatch
+
+            # we have to check for ice free states after spinup because this
+            # creates a discontinuity and polyfit is not working anymore
+            if ice_free:
+                # so we need to take a smaller step to avoid ice_free states
+                step = t_bias_guess[-1] - t_bias_guess[-2]
+                partial_step = 0.9
+                while ice_free:
+                    t_bias_guess[-1] = t_bias_guess[-2] + step * partial_step
+                    mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                    partial_step -= 0.1
 
         # Ok when we end here the spinup could not find satifying match, so
         # return what was calculated so far and indicate
