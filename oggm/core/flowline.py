@@ -3898,7 +3898,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # save the final model for later
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
-
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
         value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
 

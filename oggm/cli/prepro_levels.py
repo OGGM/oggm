@@ -768,7 +768,7 @@ def parse_args(args):
             setattr(namespace, self.dest, dict())
             for value in values:
                 key, value = value.split('=')
-                getattr(namespace, self.dest)[key] = value
+                getattr(namespace, self.dest)[key] = float(value)
 
     parser.add_argument('--dynamic_spinup_options', nargs='*', default={},
                         action=ParseKwargs)
