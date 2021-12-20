@@ -3866,8 +3866,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                 filename='climate_historical',
                                                 input_filesuffix=climate_input_filesuffix)
 
+    forward_model_runs = [0]
+
     # the actual spinup run
     def run_model_with_spinup_to_rgi_date(t_bias):
+        forward_model_runs.append(forward_model_runs[-1] + 1)
 
         # with t_bias the glacier state after spinup is changed between iterations
         mb_spinup.temp_bias = t_bias
@@ -3964,10 +3967,57 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # get next guess from polyfit (fit function to previously calculated
             # (mismatch, t_bias) pairs and get t_bias value where mismatch=0 from this fitted
             # curve; the degree of the fitted curve is the number of value pairs - 1)
-            t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess,
-                                                      len(mismatch) - 1), 0))
-            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
-            mismatch.append(new_mismatch)
+            with warnings.catch_warnings():
+                try:
+                    t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess,
+                                                              len(mismatch) - 1), 0))
+                    new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+                    mismatch.append(new_mismatch)
+                except Warning:
+                    # ok unfortunately polyfit got stuck, so try with bisection (if possible)
+                    if (np.any(np.array(mismatch) > 0) and
+                       np.any(np.array(mismatch) < 0)):
+                        min_index = np.where(np.array(mismatch) < 0,
+                                             np.array(mismatch),
+                                             -np.inf).argmax()
+                        max_index = np.where(np.array(mismatch) > 0,
+                                             np.array(mismatch),
+                                             np.inf).argmin()
+
+                        def my_bisection(f, a, b, tol):
+                            # approximates a root, R, of f bounded
+                            # by a and b to within tolerance
+                            # | f(m) | < tol with m the midpoint
+                            # between a and b Recursive implementation
+
+                            # check if a and b bound a root
+                            if np.sign(f(a)[0]) == np.sign(f(b)[0]):
+                                raise Exception(
+                                    "The scalars a and b do not bound a root")
+
+                            # get midpoint
+                            m = (a + b) / 2
+
+                            if np.abs(f(m)[0]) < tol:
+                                # stopping condition, report m as root
+                                return m
+                            elif np.sign(f(a)[0]) == np.sign(f(m)[0]):
+                                # case where m is an improvement on a.
+                                # Make recursive call with a = m
+                                return my_bisection(f, m, b, tol)
+                            elif np.sign(f(b)[0]) == np.sign(f(m)[0]):
+                                # case where m is an improvement on b.
+                                # Make recursive call with b = m
+                                return my_bisection(f, a, m, tol)
+
+                        t_bias_guess[-1] = my_bisection(fct_to_minimise,
+                                                        t_bias_guess[min_index],
+                                                        t_bias_guess[max_index],
+                                                        precision_percent)
+                        mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                        return t_bias_guess, mismatch
+                    else:
+                        break
 
             if abs(mismatch[-1]) < precision_percent:
                 return t_bias_guess, mismatch
@@ -4017,6 +4067,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             reference_value)
     gdir.add_to_diagnostics('dynamic_spinup_iterations', len(mismatch))
     gdir.add_to_diagnostics('dynamic_spinup_error', error)
+    gdir.add_to_diagnostics('dynamic_forward_model_runs', forward_model_runs[-1])
 
     # store the outcome
     if store_model_geometry:
