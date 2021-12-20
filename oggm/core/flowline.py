@@ -3968,6 +3968,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # (mismatch, t_bias) pairs and get t_bias value where mismatch=0 from this fitted
             # curve; the degree of the fitted curve is the number of value pairs - 1)
             with warnings.catch_warnings():
+                warnings.filterwarnings('error')
                 try:
                     t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess,
                                                               len(mismatch) - 1), 0))
