@@ -3840,12 +3840,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     fls_ref = copy.deepcopy(fls_spinup)
     if minimise_for == 'area':
         unit = 'km2'
+        other_variable = 'volume'
+        other_unit = 'km3'
     elif minimise_for == 'volume':
         unit = 'km3'
+        other_variable = 'area'
+        other_unit = 'km2'
     else:
         raise NotImplementedError
     cost_var = f'{minimise_for}_{unit}'
     reference_value = np.sum([getattr(f, cost_var) for f in fls_ref])
+    other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
+                                    for f in fls_ref])
 
     # define spinup MassBalance
     # spinup is running for 'yr_rgi - yr_spinup' years, using a ConstantMassBalance
@@ -4059,6 +4065,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     gdir.add_to_diagnostics('dynamic_spinup_iterations', len(mismatch))
     gdir.add_to_diagnostics('dynamic_spinup_error', error)
     gdir.add_to_diagnostics('dynamic_forward_model_runs', forward_model_runs[-1])
+    gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
+                            other_reference_value)
+    other_mismatch = (other_reference_value -
+                      getattr(model_dynamic_spinup_end[best_index],
+                              f'{other_variable}_{other_unit}'))
+    gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable',
+                            other_mismatch)
 
     # store the outcome
     if store_model_geometry:
