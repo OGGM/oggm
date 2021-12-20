@@ -3929,19 +3929,32 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             return t_bias_guess, mismatch
 
         # second guess is given depending on the outcome of first guess,
-        # when mismatch is 100% t_bias is changed for 2°C (arbitrary)
-        step = mismatch[-1] * 0.02
+        # when mismatch is 100% t_bias is changed for 3°C (arbitrary)
+        step = mismatch[-1] * 0.03
         t_bias_guess.append(t_bias_guess[0] - step)
         new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
         mismatch.append(new_mismatch)
 
-        # check if the step was to large and no glacier is left after spinup,
-        # otherwise try with smaller step
-        partial_step = 0.9
-        while ice_free:
-            t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
-            mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-            partial_step -= 0.1
+        if abs(mismatch[-1]) < precision_percent:
+            return t_bias_guess, mismatch
+
+        if ice_free:
+            # check if the step was to large and no glacier is left after spinup,
+            # otherwise try with smaller step
+            partial_step = 0.9
+            while ice_free:
+                t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
+                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                partial_step -= 0.1
+        else:
+            # check that second guess mismatch is not to close to first one,
+            # otherwise this could lead polyfit into a wrong direction
+            min_distance = 5  # in %, arbitrary
+            partial_step = 2
+            while abs(mismatch[0] - mismatch[1]) < min_distance:
+                t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
+                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                partial_step += 1
 
         if abs(mismatch[-1]) < precision_percent:
             return t_bias_guess, mismatch
