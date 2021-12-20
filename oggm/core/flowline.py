@@ -3983,6 +3983,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
                     partial_step -= 0.1
 
+            # secures a minimum distance between two guesses to prevent polyfit
+            # to get stuck at one value, 1 % is arbitrary
+            if abs(mismatch[-2] - mismatch[-1]) < 1:
+                t_bias_guess[-1] = (t_bias_guess[-3] + t_bias_guess[-2]) / 2
+                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+
+            if abs(mismatch[-1]) < precision_percent:
+                return t_bias_guess, mismatch
+
         # Ok when we end here the spinup could not find satifying match, so
         # return what was calculated so far and indicate
         mismatch.append('no satisfying match after maxiter')
