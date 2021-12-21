@@ -16,6 +16,7 @@ import warnings
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
+from scipy import interpolate
 
 # Optional libs
 try:
@@ -4065,9 +4066,77 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         mismatch.append('no satisfying match after maxiter')
         return t_bias_guess, mismatch
 
+    def minimise_with_spline_fit(fct_to_minimise):
+        # first guess must be given
+        t_bias_guess = [first_guess_t_bias]
+        first_mismatch, ice_free = fct_to_minimise(t_bias_guess[0])
+        mismatch = [first_mismatch]
+
+        if ice_free:
+            raise ValueError('During dynamic spinup the glacier disappeared using the first '
+                             'guess temperautre bias! Try again with new (colder) first guess!')
+
+        if abs(mismatch[-1]) < precision_percent:
+            return t_bias_guess, mismatch
+
+        # second guess is given depending on the outcome of first guess,
+        # when mismatch is 100% t_bias is changed for 3°C (arbitrary)
+        step = mismatch[-1] * 0.03
+        t_bias_guess.append(t_bias_guess[0] + step)
+        new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+        mismatch.append(new_mismatch)
+
+        if abs(mismatch[-1]) < precision_percent:
+            return t_bias_guess, mismatch
+
+        if ice_free:
+            # check if the step was to large and no glacier is left after spinup,
+            # otherwise try with smaller step
+            partial_step = 0.9
+            while ice_free:
+                t_bias_guess[-1] = t_bias_guess[0] + step * partial_step
+                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                partial_step -= 0.1
+        else:
+            # check that second guess mismatch is not to close to first one,
+            # otherwise this could lead into a wrong direction
+            min_distance = 5  # in %, arbitrary
+            partial_step = 2
+            while abs(mismatch[0] - mismatch[1]) < min_distance:
+                t_bias_guess[-1] = t_bias_guess[0] + step * partial_step
+                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                partial_step += 1
+
+        if abs(mismatch[-1]) < precision_percent:
+            return t_bias_guess, mismatch
+
+        # Now start with splin fit for guessing
+        while len(t_bias_guess) < maxiter:
+            # get next guess from splin (fit partial linear function to previously
+            # calculated (mismatch, t_bias) pairs and get t_bias value where
+            # mismatch=0 from this fitted curve)
+            sort_index = np.argsort(np.array(mismatch))
+            tck = interpolate.splrep(np.array(mismatch)[sort_index],
+                                     np.array(t_bias_guess)[sort_index],
+                                     k=1)
+            t_bias_guess.append(float(interpolate.splev(0, tck)))
+            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+            mismatch.append(new_mismatch)
+
+            if abs(mismatch[-1]) < precision_percent:
+                return t_bias_guess, mismatch
+
+        # Ok when we end here the spinup could not find satifying match, so
+        # return what was calculated so far and indicate
+        if ice_free:
+            mismatch.append('ice free during spinup')
+        else:
+            mismatch.append('no satisfying match after maxiter')
+        return t_bias_guess, mismatch
+
     # here do the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
-    t_bias_guess, mismatch = minimise_with_polynomial_fit(c_fun)
+    t_bias_guess, mismatch = minimise_with_spline_fit(c_fun)
 
     # find the best guess in this cases
     error = ''
