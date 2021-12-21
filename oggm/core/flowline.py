@@ -3911,7 +3911,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
 
         # calculate the mismatch in percent
-        cost = (value_ref - value_dynamic_spinup) / value_ref * 100
+        cost = (value_dynamic_spinup - value_ref) / value_ref * 100
 
         return cost, ice_free
 
@@ -3940,7 +3940,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # second guess is given depending on the outcome of first guess,
         # when mismatch is 100% t_bias is changed for 3°C (arbitrary)
         step = mismatch[-1] * 0.03
-        t_bias_guess.append(t_bias_guess[0] - step)
+        t_bias_guess.append(t_bias_guess[0] + step)
         new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
         mismatch.append(new_mismatch)
 
@@ -3952,7 +3952,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # otherwise try with smaller step
             partial_step = 0.9
             while ice_free:
-                t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
+                t_bias_guess[-1] = t_bias_guess[0] + step * partial_step
                 mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
                 partial_step -= 0.1
         else:
@@ -3961,7 +3961,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             min_distance = 5  # in %, arbitrary
             partial_step = 2
             while abs(mismatch[0] - mismatch[1]) < min_distance:
-                t_bias_guess[-1] = t_bias_guess[0] - step * partial_step
+                t_bias_guess[-1] = t_bias_guess[0] + step * partial_step
                 mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
                 partial_step += 1
 
@@ -4002,14 +4002,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             max_index = np.where(np.array(mismatch) > 0,
                                                  np.array(mismatch),
                                                  np.inf).argmin()
-                            t_bias_guess.append(t_bias_guess[max_index] - 0.5)
+                            t_bias_guess.append(t_bias_guess[max_index] + 0.5)
                             new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                             mismatch.append(new_mismatch)
                         elif np.any(np.array(mismatch) < 0):
                             min_index = np.where(np.array(mismatch) < 0,
                                                  np.array(mismatch),
                                                  -np.inf).argmax()
-                            t_bias_guess.append(t_bias_guess[min_index] + 0.5)
+                            t_bias_guess.append(t_bias_guess[min_index] - 0.5)
                             new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                             mismatch.append(new_mismatch)
                         else:
@@ -4069,9 +4069,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     gdir.add_to_diagnostics('dynamic_forward_model_runs', forward_model_runs[-1])
     gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
                             other_reference_value)
-    other_mismatch = (other_reference_value -
-                      getattr(model_dynamic_spinup_end[best_index],
-                              f'{other_variable}_{other_unit}'))
+    other_mismatch = (getattr(model_dynamic_spinup_end[best_index],
+                              f'{other_variable}_{other_unit}') -
+                      other_reference_value)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable',
                             other_mismatch)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
