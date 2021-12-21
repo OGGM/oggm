@@ -3981,20 +3981,35 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                               len(mismatch) - 1), 0))
                     new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                     mismatch.append(new_mismatch)
-                except np.RankWarning:
-                    # ok unfortunately polyfit got stuck, so we try by hand
-                    do_polyfit = False
+                except (np.RankWarning, RuntimeError) as e:
+                    if isinstance(e, RuntimeError):
+                        # check if glacier grow to large
+                        if 'Glacier exceeds domain boundaries, at year:' in f'{e}':
+                            # ok so we try to make one guess by hand and
+                            # return to polyfit
+                            guess_exception = 'out of boundaries'
+                        else:
+                            # otherwise this error can not be handled here
+                            raise RuntimeError(e)
+                    else:
+                        # ok unfortunately polyfit got stuck, so we try by hand
+                        do_polyfit = False
+                        guess_exception = 'polyfit error'
+
                     if (np.any(np.array(mismatch) > 0) and
-                       np.any(np.array(mismatch) < 0)):
+                            np.any(np.array(mismatch) < 0)):
                         min_index = np.where(np.array(mismatch) < 0,
                                              np.array(mismatch),
                                              -np.inf).argmax()
                         max_index = np.where(np.array(mismatch) > 0,
                                              np.array(mismatch),
                                              np.inf).argmin()
-                        t_bias_guess.append(
-                            (t_bias_guess[min_index] +
-                             t_bias_guess[max_index]) / 2)
+                        new_t_bias_guess = ((t_bias_guess[min_index] +
+                                             t_bias_guess[max_index]) / 2)
+                        if guess_exception == 'polyfit error':
+                            t_bias_guess.append(new_t_bias_guess)
+                        else:
+                            t_bias_guess[-1] = new_t_bias_guess
                         new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                         mismatch.append(new_mismatch)
                     else:
@@ -4002,14 +4017,20 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             max_index = np.where(np.array(mismatch) > 0,
                                                  np.array(mismatch),
                                                  np.inf).argmin()
-                            t_bias_guess.append(t_bias_guess[max_index] + 0.5)
+                            if guess_exception == 'polyfit error':
+                                t_bias_guess.append(t_bias_guess[max_index] + 0.5)
+                            else:
+                                t_bias_guess[-1] = t_bias_guess[max_index] + 0.5
                             new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                             mismatch.append(new_mismatch)
                         elif np.any(np.array(mismatch) < 0):
                             min_index = np.where(np.array(mismatch) < 0,
                                                  np.array(mismatch),
                                                  -np.inf).argmax()
-                            t_bias_guess.append(t_bias_guess[min_index] - 0.5)
+                            if guess_exception == 'polyfit error':
+                                t_bias_guess.append(t_bias_guess[min_index] - 0.5)
+                            else:
+                                t_bias_guess[-1] = t_bias_guess[min_index] - 0.5
                             new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                             mismatch.append(new_mismatch)
                         else:
