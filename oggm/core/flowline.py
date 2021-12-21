@@ -3963,6 +3963,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             return t_bias_guess, mismatch
 
         # Now start with polynomial fit for guessing
+        do_polyfit = True
         while len(t_bias_guess) < maxiter:
             # get next guess from polyfit (fit function to previously calculated
             # (mismatch, t_bias) pairs and get t_bias value where mismatch=0 from this fitted
@@ -3974,8 +3975,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                               len(mismatch) - 1), 0))
                     new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
                     mismatch.append(new_mismatch)
-                except Warning:
-                    # ok unfortunately polyfit got stuck, so try with bisection (if possible)
+                except np.RankWarning:
+                    # ok unfortunately polyfit got stuck, so we try by hand
+                    do_polyfit = False
                     if (np.any(np.array(mismatch) > 0) and
                        np.any(np.array(mismatch) < 0)):
                         min_index = np.where(np.array(mismatch) < 0,
@@ -3984,64 +3986,52 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         max_index = np.where(np.array(mismatch) > 0,
                                              np.array(mismatch),
                                              np.inf).argmin()
-
-                        def my_bisection(f, a, b, tol):
-                            # approximates a root, R, of f bounded
-                            # by a and b to within tolerance
-                            # | f(m) | < tol with m the midpoint
-                            # between a and b Recursive implementation
-
-                            # check if a and b bound a root
-                            if np.sign(f(a)[0]) == np.sign(f(b)[0]):
-                                raise Exception(
-                                    "The scalars a and b do not bound a root")
-
-                            # get midpoint
-                            m = (a + b) / 2
-
-                            if np.abs(f(m)[0]) < tol:
-                                # stopping condition, report m as root
-                                return m
-                            elif np.sign(f(a)[0]) == np.sign(f(m)[0]):
-                                # case where m is an improvement on a.
-                                # Make recursive call with a = m
-                                return my_bisection(f, m, b, tol)
-                            elif np.sign(f(b)[0]) == np.sign(f(m)[0]):
-                                # case where m is an improvement on b.
-                                # Make recursive call with b = m
-                                return my_bisection(f, a, m, tol)
-
-                        t_bias_guess[-1] = my_bisection(fct_to_minimise,
-                                                        t_bias_guess[min_index],
-                                                        t_bias_guess[max_index],
-                                                        precision_percent)
-                        mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-                        return t_bias_guess, mismatch
+                        t_bias_guess.append(
+                            (t_bias_guess[min_index] +
+                             t_bias_guess[max_index]) / 2)
+                        new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+                        mismatch.append(new_mismatch)
                     else:
-                        break
+                        if np.any(np.array(mismatch) > 0):
+                            max_index = np.where(np.array(mismatch) > 0,
+                                                 np.array(mismatch),
+                                                 np.inf).argmin()
+                            t_bias_guess.append(t_bias_guess[max_index] - 0.5)
+                            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+                            mismatch.append(new_mismatch)
+                        elif np.any(np.array(mismatch) < 0):
+                            min_index = np.where(np.array(mismatch) < 0,
+                                                 np.array(mismatch),
+                                                 -np.inf).argmax()
+                            t_bias_guess.append(t_bias_guess[min_index] + 0.5)
+                            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
+                            mismatch.append(new_mismatch)
+                        else:
+                            break
 
             if abs(mismatch[-1]) < precision_percent:
                 return t_bias_guess, mismatch
 
-            # we have to check for ice free states after spinup because this
-            # creates a discontinuity and polyfit is not working anymore
-            if ice_free:
-                # so we need to take a smaller step to avoid ice_free states
-                step = t_bias_guess[-1] - t_bias_guess[-2]
-                partial_step = 0.9
-                while ice_free:
-                    t_bias_guess[-1] = t_bias_guess[-2] + step * partial_step
+            if do_polyfit:
+                # we have to check for ice free states after spinup because this
+                # creates a discontinuity and polyfit is not working anymore
+                if ice_free:
+                    # so we need to take a smaller step to avoid ice_free states
+                    step = t_bias_guess[-1] - t_bias_guess[-2]
+                    partial_step = 0.9
+                    while ice_free:
+                        t_bias_guess[-1] = t_bias_guess[-2] + step * partial_step
+                        mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
+                        partial_step -= 0.1
+
+                # secures a minimum distance between two guesses to prevent polyfit
+                # to get stuck at one value, 1 % is arbitrary
+                if abs(mismatch[-2] - mismatch[-1]) < 1:
+                    t_bias_guess[-1] = (t_bias_guess[-3] + t_bias_guess[-2]) / 2
                     mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-                    partial_step -= 0.1
 
-            # secures a minimum distance between two guesses to prevent polyfit
-            # to get stuck at one value, 1 % is arbitrary
-            if abs(mismatch[-2] - mismatch[-1]) < 1:
-                t_bias_guess[-1] = (t_bias_guess[-3] + t_bias_guess[-2]) / 2
-                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-
-            if abs(mismatch[-1]) < precision_percent:
-                return t_bias_guess, mismatch
+                if abs(mismatch[-1]) < precision_percent:
+                    return t_bias_guess, mismatch
 
         # Ok when we end here the spinup could not find satifying match, so
         # return what was calculated so far and indicate
