@@ -264,11 +264,21 @@ There are different mass-balance calibration options available in the preprocess
 -   **match_geod_pergla**: Only the per-glacier geodetic estimates from `Hugonnet et al., 2021`_
     (mean mass-balance change between 2000 and 2020) are used for calibration. The mass-balance model parameter
     :math:`\mu ^{*}` of each glacier is calibrated to match individually the geodetic estimates (using
-    :py:func:`oggm.core.climate.mustar_calibration_from_geodetic_mb`, more in :ref:`mass-balance-2012-pergla`). It
-    only works for elevation band flowlines at the moment. match_geod_pergla makes only sense without "external" climate
-    quality check and correction (i.e. qc0) as this is already done internally. For example:
+    :py:func:`oggm.core.climate.mustar_calibration_from_geodetic_mb`). For the preprocessed glacier directories, the
+    allowed :math:`\mu ^{*}` range is set to 20--600 (more in :ref:`mass-balance-2012-pergla`).
+    This option only works for elevation band flowlines at the moment. match_geod_pergla makes only sense without
+    "external" climate quality check and correction (i.e. qc0) as this is already done internally. For example:
 
-    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass-balances on individual glacier level
+    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass-balances on individual glacier level
+    - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass-balances on individual glacier level
+
+    .. warning::
+        make sure that you use the oggm_v1.6 directory for match_geod_pergla and match_geod_pergla_massredis!
+        In the `gdirs/oggm_v1.4 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ folder from the OGGM
+        server, the `match_geod_pergla` preprocessed directories have a minor bug in the calibration
+        (`see this GitHUB issue <https://github.com/OGGM/oggm/pull/1351>`_). This bug is removed in the latest OGGM
+        version and the corrected preprocessed glacier directories are inside the
+        `gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/>`_ folder.
 
 .. _Marzeion et al., 2012: http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
@@ -282,15 +292,13 @@ Here is a list of other available configurations at the time of writing (explore
 - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + precipitation factor 1.8
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + no climate quality check
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match/>`_ for CRU + elevation bands flowlines + no climate quality check
-- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/>`_ for ERA5 + elevation bands flowlines + matched geodetic mass-balances on individual glacier level + "wrong" qc3
-- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla_massredis/>`_ for ERA5 + elevation bands flowlines + mass redistribution instead of SIA (see: :ref:`mass-redistribution`)
+- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla_massredis/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + mass redistribution instead of SIA (see: :ref:`mass-redistribution`)
+- `L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla_massredis/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + mass redistribution instead of SIA
 
 Note: the additional set-ups might not always have all map sizes available. Please
 get in touch if you have interest in a specific set-up. Remember that per default, the climate quality check
 and correction (:py:func:`oggm.tasks.historical_climate_qc`) is applied (*qc3*). However, if the pre-processed directory
-has the path index "*qc0*", it was not applied. At the moment, there are still preprocessed gdirs using
-match_geod_pergla and qc3, this makes not really sense as it is reset anyways internally. We will replace them with
-"qc0" soon, but do not expect any significant differences.
+has the path index "*qc0*", it was not applied (except for match_geod_pergla where it is applied internally).
 
 
 F. Error analysis and further volume and mass change comparison for different pre-processed glacier directories
@@ -299,6 +307,9 @@ F. Error analysis and further volume and mass change comparison for different pr
 .. figure:: _static/relative_failing_glacier_area.png
     :width: 100%
     :align: left
+
+    Overall, calibrating with ERA5 using a precipitation factor of 1.6 results in much less errors than CRU with pf=2.5.
+    In addition, less errors occur for elevation bands and when using the match_geod_pergla option.
 
 A more detailed analysis about the type, amount and relative failing glacier area (in total and per RGI region) can be
 found in this `error analysis jupyter notebook <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~lschuster/error_analysis/error_analysis_v1.ipynb?flush_cache=true>`_.
