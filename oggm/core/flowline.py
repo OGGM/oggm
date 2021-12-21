@@ -4060,6 +4060,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
                             mismatch[best_index] / 100 * reference_value)
     # also add some stuff for testing
+    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent',
+                            mismatch[best_index])
     gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
                             reference_value)
     gdir.add_to_diagnostics('dynamic_spinup_iterations', len(mismatch))
@@ -4072,6 +4074,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                               f'{other_variable}_{other_unit}'))
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable',
                             other_mismatch)
+    gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
+                            other_mismatch / other_reference_value * 100)
 
     # store the outcome
     if store_model_geometry:
