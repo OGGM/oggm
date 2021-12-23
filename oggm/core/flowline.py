@@ -4091,6 +4091,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         was_errors = [was_out_of_domain, was_ice_free]
 
         def get_mismatch(t_bias):
+            t_bias = copy.deepcopy(t_bias)
             # first check if the new t_bias is in limits
             if t_bias < t_bias_limits[0]:
                 # was the smaller limit already executed, if not first do this
@@ -4180,7 +4181,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                 elif define_new_upper_limit:
                     t_bias_limits[1] = copy.deepcopy(t_bias)
 
-            return tmp_mismatch, t_bias
+            return tmp_mismatch, float(t_bias)
 
         # first guess
         new_mismatch, new_t_bias = get_mismatch(first_guess_t_bias)
@@ -4225,18 +4226,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
     # here do the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
-    t_bias_guess, mismatch = minimise_with_spline_fit(c_fun)
+    final_t_bias_guess, final_mismatch = minimise_with_spline_fit(c_fun)
 
     # save the final values
-    gdir.add_to_diagnostics('temp_bias_dynamic_spinup', t_bias_guess[-1])
+    gdir.add_to_diagnostics('temp_bias_dynamic_spinup', final_t_bias_guess[-1])
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
-                            mismatch[-1] / 100 * reference_value)
+                            final_mismatch[-1] / 100 * reference_value)
     # also add some stuff for testing
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent',
-                            mismatch[-1])
+                            final_mismatch[-1])
     gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
                             reference_value)
-    gdir.add_to_diagnostics('dynamic_spinup_iterations', len(mismatch))
+    gdir.add_to_diagnostics('dynamic_spinup_iterations', len(final_mismatch))
     gdir.add_to_diagnostics('dynamic_forward_model_runs', forward_model_runs[-1])
     gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
                             other_reference_value)
