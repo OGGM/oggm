@@ -3300,7 +3300,7 @@ class TestHEF:
                                                   init_model_fls=None,
                                                   climate_input_filesuffix='',
                                                   evolution_model=FluxBasedModel,
-                                                  yr_spinup=1980, yr_rgi=yr_rgi,
+                                                  spinup_period=20, yr_rgi=yr_rgi,
                                                   minimise_for=minimise_for,
                                                   precision_percent=precision_percent,
                                                   first_guess_t_bias=-2, maxiter=10,

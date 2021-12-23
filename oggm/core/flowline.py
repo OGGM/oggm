@@ -3757,7 +3757,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
-                       yr_spinup=1980, yr_rgi=None,
+                       spinup_period=20, yr_rgi=None,
                        minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, min_t_bias=-4, max_t_bias=2,
                        maxiter=10, output_filesuffix='_dynamic_spinup',
@@ -3785,9 +3785,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
-    yr_spinup : int
-        The year where the spinup ends and the actual historical model run starts.
-        Must be smaller than yr_rgi. The default is 1980.
+    spinup_period : int
+        The period how long the spinup should run. Start date of historical run
+        is defined "yr_rgi - spinup_period".
+        Default is 20.
     yr_rgi : int
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
@@ -3833,6 +3834,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
+
+    yr_spinup = yr_rgi - spinup_period
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
