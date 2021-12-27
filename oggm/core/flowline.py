@@ -3759,15 +3759,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        evolution_model=FluxBasedModel,
                        spinup_period=20, yr_rgi=None,
                        minimise_for='area', precision_percent=1,
-                       first_guess_t_bias=-2, min_t_bias=-4, max_t_bias=2,
+                       first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=10, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
-    inventory date), when the state of the glacier was unkown. This is a
+    inventory date), when the state of the glacier was unknown. This is a
     very difficult task the longer further back in time one goes
-    (see publications by Eis et al. for a theretical background), but can
+    (see publications by Eis et al. for a theoretical background), but can
     work quite well for short periods. Note that the solution is not unique.
 
     Parameters
@@ -3803,16 +3803,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
         Default is -2.
-    min_t_bias: float
-        Defines a minimum for the used t_bias in °C. This is useful to prevent
-        too large steps in the wrong direction, leading to a glacier growing
-        outside the domain. Is adapted during run if needed.
-        Default is -4.
-    max_t_bias: float
-        Defines a maximum for the used t_bias in °C. This is useful to prevent
-        too large steps in the wrong direction, leading to an ice free glacier
-        after initial spinup. Is adapted during run if needed.
-        Default is 2.
+    t_bias_max_step_length: float
+        Defines the maximums allowed change of t_bias between two iteratons. Is
+        needed to avoid to large changes.
+        Default is 2
     maxiter : int
         Maximum number of minimisation iterations. If reached an error is
         raised. Default is 10.
@@ -3938,150 +3932,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
         return c_fun, model_dynamic_spinup_end
 
-    # adapted from method described in Zekollari et al. 2019
-    def minimise_with_polynomial_fit(fct_to_minimise):
-        # first guess must be given
-        t_bias_guess = [first_guess_t_bias]
-        first_mismatch, ice_free = fct_to_minimise(t_bias_guess[0])
-        mismatch = [first_mismatch]
-
-        if ice_free:
-            raise ValueError('During dynamic spinup the glacier disappeared using the first '
-                             'guess temperautre bias! Try again with new (colder) first guess!')
-
-        if abs(mismatch[-1]) < precision_percent:
-            return t_bias_guess, mismatch
-
-        # second guess is given depending on the outcome of first guess,
-        # when mismatch is 100% t_bias is changed for 3°C (arbitrary)
-        step = mismatch[-1] * 0.03
-        t_bias_guess.append(t_bias_guess[0] + step)
-        new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
-        mismatch.append(new_mismatch)
-
-        if abs(mismatch[-1]) < precision_percent:
-            return t_bias_guess, mismatch
-
-        if ice_free:
-            # check if the step was to large and no glacier is left after spinup,
-            # otherwise try with smaller step
-            partial_step = 0.9
-            while ice_free:
-                t_bias_guess[-1] = t_bias_guess[0] + step * partial_step
-                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-                partial_step -= 0.1
-        else:
-            # check that second guess mismatch is not to close to first one,
-            # otherwise this could lead polyfit into a wrong direction
-            min_distance = 5  # in %, arbitrary
-            partial_step = 2
-            while abs(mismatch[0] - mismatch[1]) < min_distance:
-                t_bias_guess[-1] = t_bias_guess[0] + step * partial_step
-                mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-                partial_step += 1
-
-        if abs(mismatch[-1]) < precision_percent:
-            return t_bias_guess, mismatch
-
-        # Now start with polynomial fit for guessing
-        do_polyfit = True
-        while len(t_bias_guess) < maxiter:
-            # get next guess from polyfit (fit function to previously calculated
-            # (mismatch, t_bias) pairs and get t_bias value where mismatch=0 from this fitted
-            # curve; the degree of the fitted curve is the number of value pairs - 1)
-            with warnings.catch_warnings():
-                warnings.filterwarnings('error')
-                try:
-                    t_bias_guess.append(np.polyval(np.polyfit(mismatch, t_bias_guess,
-                                                              len(mismatch) - 1), 0))
-                    new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
-                    mismatch.append(new_mismatch)
-                except (np.RankWarning, RuntimeError) as e:
-                    if isinstance(e, RuntimeError):
-                        # check if glacier grow to large
-                        if 'Glacier exceeds domain boundaries, at year:' in f'{e}':
-                            # ok so we try to make one guess by hand and
-                            # return to polyfit
-                            guess_exception = 'out of boundaries'
-                        else:
-                            # otherwise this error can not be handled here
-                            raise RuntimeError(e)
-                    else:
-                        # ok unfortunately polyfit got stuck, so we try by hand
-                        do_polyfit = False
-                        guess_exception = 'polyfit error'
-
-                    if (np.any(np.array(mismatch) > 0) and
-                            np.any(np.array(mismatch) < 0)):
-                        min_index = np.where(np.array(mismatch) < 0,
-                                             np.array(mismatch),
-                                             -np.inf).argmax()
-                        max_index = np.where(np.array(mismatch) > 0,
-                                             np.array(mismatch),
-                                             np.inf).argmin()
-                        new_t_bias_guess = ((t_bias_guess[min_index] +
-                                             t_bias_guess[max_index]) / 2)
-                        if guess_exception == 'polyfit error':
-                            t_bias_guess.append(new_t_bias_guess)
-                        else:
-                            t_bias_guess[-1] = new_t_bias_guess
-                        new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
-                        mismatch.append(new_mismatch)
-                    else:
-                        if np.any(np.array(mismatch) > 0):
-                            max_index = np.where(np.array(mismatch) > 0,
-                                                 np.array(mismatch),
-                                                 np.inf).argmin()
-                            if guess_exception == 'polyfit error':
-                                t_bias_guess.append(t_bias_guess[max_index] + 0.5)
-                            else:
-                                t_bias_guess[-1] = t_bias_guess[max_index] + 0.5
-                            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
-                            mismatch.append(new_mismatch)
-                        elif np.any(np.array(mismatch) < 0):
-                            min_index = np.where(np.array(mismatch) < 0,
-                                                 np.array(mismatch),
-                                                 -np.inf).argmax()
-                            if guess_exception == 'polyfit error':
-                                t_bias_guess.append(t_bias_guess[min_index] - 0.5)
-                            else:
-                                t_bias_guess[-1] = t_bias_guess[min_index] - 0.5
-                            new_mismatch, ice_free = fct_to_minimise(t_bias_guess[-1])
-                            mismatch.append(new_mismatch)
-                        else:
-                            break
-
-            if abs(mismatch[-1]) < precision_percent:
-                return t_bias_guess, mismatch
-
-            if do_polyfit:
-                # we have to check for ice free states after spinup because this
-                # creates a discontinuity and polyfit is not working anymore
-                if ice_free:
-                    # so we need to take a smaller step to avoid ice_free states
-                    step = t_bias_guess[-1] - t_bias_guess[-2]
-                    partial_step = 0.9
-                    while ice_free:
-                        t_bias_guess[-1] = t_bias_guess[-2] + step * partial_step
-                        mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-                        partial_step -= 0.1
-
-                # secures a minimum distance between two guesses to prevent polyfit
-                # to get stuck at one value, 1 % is arbitrary
-                if abs(mismatch[-2] - mismatch[-1]) < 1:
-                    t_bias_guess[-1] = (t_bias_guess[-3] + t_bias_guess[-2]) / 2
-                    mismatch[-1], ice_free = fct_to_minimise(t_bias_guess[-1])
-
-                if abs(mismatch[-1]) < precision_percent:
-                    return t_bias_guess, mismatch
-
-        # Ok when we end here the spinup could not find satifying match, so
-        # return what was calculated so far and indicate
-        mismatch.append('no satisfying match after maxiter')
-        return t_bias_guess, mismatch
-
     def minimise_with_spline_fit(fct_to_minimise):
-        t_bias_limits = [min_t_bias, max_t_bias]
+        # defines limits of t_bias in accordance to maximal allowed change
+        # between iterations
+        t_bias_limits = [first_guess_t_bias - t_bias_max_step_length,
+                         first_guess_t_bias + t_bias_max_step_length]
         t_bias_guess = []
         mismatch = []
         # this two variables indicate that the limits were already adapted to
@@ -4098,41 +3953,46 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                 if t_bias_limits[0] not in t_bias_guess:
                     t_bias = t_bias_limits[0]
                 else:
-                    # smaller limit was already executed, check if it was
-                    # already new defined with glacier exceeding domain
+                    # smaller limit was already used, check if it was
+                    # already newly defined with glacier exceeding domain
                     if was_errors[0]:
                         raise RuntimeError('Not able to minimise without '
                                            'exceeding the domain! Best '
                                            f'mismatch '
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
-                        # ok we set a new lower limit (1°C arbitrary)
-                        t_bias_limits[0] = t_bias_limits[0] - 1
+                        # ok we set a new lower limit
+                        t_bias_limits[0] = t_bias_limits[0] - t_bias_max_step_length
             elif t_bias > t_bias_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if t_bias_limits[1] not in t_bias_guess:
                     t_bias = t_bias_limits[1]
                 else:
-                    # smaller limit was already executed, check if it was
-                    # already new defined with ice free glacier
+                    # larger limit was already used, check if it was
+                    # already newly defined with ice free glacier
                     if was_errors[1]:
                         raise RuntimeError('Not able to minimise without ice '
-                                           'free glacier!B est mismatch '
+                                           'free glacier! Best mismatch '
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
-                        # ok we set a new upper limit (1°C arbitrary)
-                        t_bias_limits[1] = t_bias_limits[1] + 1
+                        # ok we set a new upper limit
+                        t_bias_limits[1] = t_bias_limits[1] + t_bias_max_step_length
 
             # now clip t_bias with limits
             t_bias = np.clip(t_bias, t_bias_limits[0], t_bias_limits[1])
 
             # now start with mismatch calculation
-            max_iterations = 20  # defines maximal search of 2°C for new limit
+
+            # if error during spinup (ice_free or out_of_domain) this defines
+            # how much t_bias is changed to look for an error free glacier spinup
+            t_bias_search_change = 0.1
+            # maximum number of changes to look for an error free glacier
+            max_iterations = int(t_bias_max_step_length / t_bias_search_change)
             is_out_of_domain = True
             is_ice_free = True
             define_new_lower_limit = False
             define_new_upper_limit = False
-            iteration = 1
+            iteration = 0
 
             while (is_out_of_domain | is_ice_free) & (iteration < max_iterations):
                 try:
@@ -4142,11 +4002,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     is_out_of_domain = False
 
                     # here check if we are ice_free, if so we search for a new
-                    # upper limit for t_bias in 0.1 °C steps
+                    # upper limit for t_bias
                     if is_ice_free:
                         was_errors[1] = True
                         define_new_upper_limit = True
-                        t_bias -= 0.1
+                        t_bias = np.round(t_bias - t_bias_search_change,
+                                          decimals=1)
+                        if t_bias in t_bias_guess:
+                            iteration = copy.deepcopy(max_iterations)
+
                 except RuntimeError as e:
                     # check if glacier grow to large
                     if 'Glacier exceeds domain boundaries, at year:' in f'{e}':
@@ -4155,22 +4019,28 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         is_out_of_domain = True
                         define_new_lower_limit = True
                         was_errors[0] = True
-                        t_bias += 0.1
+                        t_bias = np.round(t_bias + t_bias_search_change,
+                                          decimals=1)
+                        if t_bias in t_bias_guess:
+                            iteration = copy.deepcopy(max_iterations)
+
                     else:
                         # otherwise this error can not be handled here
                         raise RuntimeError(e)
 
                 iteration += 1
 
-            if iteration == max_iterations:
+            if iteration >= max_iterations:
                 # ok we were not able to define new limits
                 if define_new_lower_limit:
-                    raise RuntimeError('Could not find new limit for t_bias '
-                                       'with glacier not exceeding boundary!')
+                    raise RuntimeError('Not able to minimise without '
+                                       'exceeding the domain! Best '
+                                       f'mismatch '
+                                       f'{np.min(np.abs(mismatch))}%')
                 elif define_new_upper_limit:
-                    raise RuntimeError('Could not find new limit for t_bias '
-                                       'with no ice free glacier after initial '
-                                       'spinup!')
+                    raise RuntimeError('Not able to minimise without ice '
+                                       'free glacier! Best mismatch '
+                                       f'{np.min(np.abs(mismatch))}%')
                 else:
                     raise RuntimeError('Something unexpected happened during '
                                        'definition of new t_bias limits!')
@@ -4221,7 +4091,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # maxiter(ations)
         raise RuntimeError(f'Could not find mismatch smaller '
                            f'{precision_percent}% (only '
-                           f'{np.min(np.abs(mismatch))}) in {maxiter}'
+                           f'{np.min(np.abs(mismatch))}%) in {maxiter}'
                            f'Iterations!')
 
     # here do the actual minimisation
