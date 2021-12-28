@@ -3951,7 +3951,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             if t_bias < t_bias_limits[0]:
                 # was the smaller limit already executed, if not first do this
                 if t_bias_limits[0] not in t_bias_guess:
-                    t_bias = t_bias_limits[0]
+                    t_bias = copy.deepcopy(t_bias_limits[0])
                 else:
                     # smaller limit was already used, check if it was
                     # already newly defined with glacier exceeding domain
@@ -3966,7 +3966,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             elif t_bias > t_bias_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if t_bias_limits[1] not in t_bias_guess:
-                    t_bias = t_bias_limits[1]
+                    t_bias = copy.deepcopy(t_bias_limits[1])
                 else:
                     # larger limit was already used, check if it was
                     # already newly defined with ice free glacier
@@ -3989,27 +3989,43 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # maximum number of changes to look for an error free glacier
             max_iterations = int(t_bias_max_step_length / t_bias_search_change)
             is_out_of_domain = True
-            is_ice_free = True
+            is_ice_free_spinup = True
+            is_ice_free_end = True
             define_new_lower_limit = False
             define_new_upper_limit = False
             iteration = 0
 
-            while (is_out_of_domain | is_ice_free) & (iteration < max_iterations):
+            while ((is_out_of_domain | is_ice_free_spinup | is_ice_free_end) &
+                   (iteration < max_iterations)):
                 try:
-                    tmp_mismatch, is_ice_free = fct_to_minimise(t_bias)
+                    tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
 
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
 
-                    # here check if we are ice_free, if so we search for a new
-                    # upper limit for t_bias
-                    if is_ice_free:
+                    # check if we are ice_free after spinup, if so we search
+                    # for a new upper limit for t_bias
+                    if is_ice_free_spinup:
                         was_errors[1] = True
                         define_new_upper_limit = True
                         t_bias = np.round(t_bias - t_bias_search_change,
                                           decimals=1)
-                        if t_bias in t_bias_guess:
+                        if np.isclose(t_bias, t_bias_guess).any():
                             iteration = copy.deepcopy(max_iterations)
+
+                    # check if we are ice_free at the end of the model run, if
+                    # so we use the lower t_bias limit and change the limit if
+                    # needed
+                    if np.isclose(tmp_mismatch, -100.):
+                        is_ice_free_end = True
+                        # if lower limit was already used change it
+                        if t_bias == t_bias_limits[0]:
+                            t_bias_limits[0] = t_bias_limits[0] - t_bias_max_step_length
+
+                        # for next iteration use (new or old) lower limit
+                        t_bias = copy.deepcopy(t_bias_limits[0])
+                    else:
+                        is_ice_free_end = False
 
                 except RuntimeError as e:
                     # check if glacier grow to large
@@ -4021,7 +4037,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         was_errors[0] = True
                         t_bias = np.round(t_bias + t_bias_search_change,
                                           decimals=1)
-                        if t_bias in t_bias_guess:
+                        if np.isclose(t_bias, t_bias_guess).any():
                             iteration = copy.deepcopy(max_iterations)
 
                     else:
@@ -4041,6 +4057,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     raise RuntimeError('Not able to minimise without ice '
                                        'free glacier! Best mismatch '
                                        f'{np.min(np.abs(mismatch))}%')
+                elif is_ice_free_end:
+                    raise RuntimeError('Not able to find a t_bias so that '
+                                       'glacier is not ice free at the end! '
+                                       '(Last t_bias '
+                                       f'{t_bias + t_bias_max_step_length} °C)')
                 else:
                     raise RuntimeError('Something unexpected happened during '
                                        'definition of new t_bias limits!')
