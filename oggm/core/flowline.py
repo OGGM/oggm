@@ -3962,7 +3962,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
                         # ok we set a new lower limit
-                        t_bias_limits[0] = t_bias_limits[0] - t_bias_max_step_length
+                        t_bias_limits[0] = t_bias_limits[0] - \
+                                           t_bias_max_step_length
             elif t_bias > t_bias_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if t_bias_limits[1] not in t_bias_guess:
@@ -3972,11 +3973,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     # already newly defined with ice free glacier
                     if was_errors[1]:
                         raise RuntimeError('Not able to minimise without ice '
-                                           'free glacier! Best mismatch '
+                                           'free glacier after spinup! Best '
+                                           'mismatch '
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
                         # ok we set a new upper limit
-                        t_bias_limits[1] = t_bias_limits[1] + t_bias_max_step_length
+                        t_bias_limits[1] = t_bias_limits[1] + \
+                                           t_bias_max_step_length
 
             # now clip t_bias with limits
             t_bias = np.clip(t_bias, t_bias_limits[0], t_bias_limits[1])
@@ -4018,12 +4021,16 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     # needed
                     if np.isclose(tmp_mismatch, -100.):
                         is_ice_free_end = True
-                        # if lower limit was already used change it
+                        # if lower limit was already used change it and use it
                         if t_bias == t_bias_limits[0]:
-                            t_bias_limits[0] = t_bias_limits[0] - t_bias_max_step_length
+                            t_bias_limits[0] = t_bias_limits[0] - \
+                                               t_bias_max_step_length
+                            t_bias = copy.deepcopy(t_bias_limits[0])
+                        else:
+                            # otherwiese just try with a colder t_bias
+                            t_bias = np.round(t_bias - t_bias_search_change,
+                                              decimals=1)
 
-                        # for next iteration use (new or old) lower limit
-                        t_bias = copy.deepcopy(t_bias_limits[0])
                     else:
                         is_ice_free_end = False
 
@@ -4055,7 +4062,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                        f'{np.min(np.abs(mismatch))}%')
                 elif define_new_upper_limit:
                     raise RuntimeError('Not able to minimise without ice '
-                                       'free glacier! Best mismatch '
+                                       'free glacier after spinup! Best mismatch '
                                        f'{np.min(np.abs(mismatch))}%')
                 elif is_ice_free_end:
                     raise RuntimeError('Not able to find a t_bias so that '
