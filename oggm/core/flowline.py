@@ -3996,6 +3996,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             is_ice_free_end = True
             is_first_guess_ice_free = False
             is_first_guess_out_of_domain = False
+            doing_first_guess = (len(mismatch) == 0)
             define_new_lower_limit = False
             define_new_upper_limit = False
             iteration = 0
@@ -4014,11 +4015,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         was_errors[1] = True
                         define_new_upper_limit = True
                         # special treatment if it is the first guess
-                        if np.isclose(t_bias, first_guess_t_bias):
+                        if np.isclose(t_bias, first_guess_t_bias) & \
+                                doing_first_guess:
                             is_first_guess_ice_free = True
                             # here directly jump to the smaller limit
                             t_bias = copy.deepcopy(t_bias_limits[0])
-                        elif is_first_guess_ice_free:
+                        elif is_first_guess_ice_free & doing_first_guess:
                             # make large steps if it is first guess
                             t_bias = t_bias - t_bias_max_step_length
                         else:
@@ -4030,16 +4032,17 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     # check if we are ice_free at the end of the model run, if
                     # so we use the lower t_bias limit and change the limit if
                     # needed
-                    if np.isclose(tmp_mismatch, -100.):
+                    elif np.isclose(tmp_mismatch, -100.):
                         is_ice_free_end = True
                         was_errors[1] = True
                         define_new_upper_limit = True
                         # special treatment if it is the first guess
-                        if np.isclose(t_bias, first_guess_t_bias):
+                        if np.isclose(t_bias, first_guess_t_bias) &\
+                                doing_first_guess:
                             is_first_guess_ice_free = True
                             # here directly jump to the smaller limit
                             t_bias = copy.deepcopy(t_bias_limits[0])
-                        elif is_first_guess_ice_free:
+                        elif is_first_guess_ice_free & doing_first_guess:
                             # make large steps if it is first guess
                             t_bias = t_bias - t_bias_max_step_length
                         else:
@@ -4065,11 +4068,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         define_new_lower_limit = True
                         was_errors[0] = True
                         # special treatment if it is the first guess
-                        if np.isclose(t_bias, first_guess_t_bias):
+                        if np.isclose(t_bias, first_guess_t_bias) &\
+                                doing_first_guess:
                             is_first_guess_out_of_domain = True
                             # here directly jump to the larger limit
                             t_bias = t_bias_limits[1]
-                        elif is_first_guess_out_of_domain:
+                        elif is_first_guess_out_of_domain & doing_first_guess:
                             # make large steps if it is first guess
                             t_bias = t_bias + t_bias_max_step_length
                         else:
