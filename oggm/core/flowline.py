@@ -4006,6 +4006,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                 try:
                     tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
 
+                    # check if mismatch is inf -> reference value is 0
+                    if np.isinf(tmp_mismatch):
+                        raise RuntimeError('Mismatch is INF, this indicates '
+                                           'that the reference value is 0.!')
+
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
 
@@ -4188,6 +4193,24 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             tck = interpolate.splrep(np.array(mismatch)[sort_index],
                                      np.array(t_bias_guess)[sort_index],
                                      k=1)
+            # here we catch interpolation errors (two different t_bias with
+            # same mismatch), could happen if one t_bias was close to a newly
+            # defined limit
+            if np.isnan(tck[1]).any():
+                if was_errors[0]:
+                    raise RuntimeError('Not able to minimise without '
+                                       'exceeding the domain! Best '
+                                       f'mismatch '
+                                       f'{np.min(np.abs(mismatch))}%')
+                elif was_errors[1]:
+                    raise RuntimeError('Not able to minimise without ice '
+                                       'free glacier! Best mismatch '
+                                       f'{np.min(np.abs(mismatch))}%')
+                else:
+                    raise RuntimeError('Not able to minimise! Problem is '
+                                       'unknown, need to check by hand! Best '
+                                       'mismatch '
+                                       f'{np.min(np.abs(mismatch))}%')
             new_mismatch, new_t_bias = get_mismatch(float(interpolate.splev(0, tck)))
             t_bias_guess.append(new_t_bias)
             mismatch.append(new_mismatch)
