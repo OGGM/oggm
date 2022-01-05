@@ -73,7 +73,15 @@ Enhancements
   historical to projections outputs (if needed).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The package "descartes" is no longer a required dependency for oggm.
-- Added a new entity task ``run_dynamic_spinup``. This task dynamically spinup the glacier to match the area or volume at the RGI date. To do so the glacier is simulated from the recent past (default 1980) to the RGI date. The unknown glacier geometry at the start of the simulation is iteratively changed with a short constant climate run with a varying temperature bias (:pull:`1342`). By `Patrick Schmitt <https://github.com/pat-schmitt/>`_
+- Added a new entity task ``run_dynamic_spinup``. This task dynamically spinup
+  the glacier to match the area or volume at the RGI date. To do so the glacier
+  is simulated from the recent past (default 1980) to the RGI date. The unknown
+  glacier geometry at the start of the simulation is iteratively changed with
+  a short constant climate run with a varying temperature bias (:pull:`1342`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt/>`_
+- Added new options to `write_centerlines_to_shape` which allow to output
+  smoother and more correct centerlines (:pull:`1357`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
