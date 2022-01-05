@@ -231,6 +231,25 @@ class TestFullRun(unittest.TestCase):
         self.assertEqual(len(shp), 3)
         self.assertEqual(shp.loc[shp.LE_SEGMENT.idxmax()].MAIN, 1)
 
+        fpath = os.path.join(_TEST_DIR, 'centerlines_ext.shp')
+        write_centerlines_to_shape(gdirs, path=fpath,
+                                   ensure_exterior_match=True)
+        shp_ext = salem.read_shapefile(fpath)
+        # We check the length of the segment for a change
+        shp_ext = shp_ext.to_crs('EPSG:32632')
+        assert_allclose(shp_ext.geometry.length, shp_ext['LE_SEGMENT'],
+                        rtol=1e-3)
+
+        fpath = os.path.join(_TEST_DIR, 'centerlines_ext_smooth.shp')
+        write_centerlines_to_shape(gdirs, path=fpath,
+                                   ensure_exterior_match=True,
+                                   simplify_line=0.2,
+                                   corner_cutting=3)
+        shp_ext_smooth = salem.read_shapefile(fpath)
+        # This is a bit different of course
+        assert_allclose(shp_ext['LE_SEGMENT'], shp_ext_smooth['LE_SEGMENT'],
+                        rtol=2)
+
         fpath = os.path.join(_TEST_DIR, 'flowlines.shp')
         write_centerlines_to_shape(gdirs, path=fpath, flowlines_output=True)
         shp_f = salem.read_shapefile(fpath)

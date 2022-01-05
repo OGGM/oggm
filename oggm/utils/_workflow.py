@@ -32,6 +32,7 @@ import numpy as np
 from scipy import stats
 import xarray as xr
 import shapely.geometry as shpg
+import shapely.affinity as shpa
 from shapely.ops import transform as shp_trafo
 import netCDF4
 
@@ -621,17 +622,45 @@ def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
     return ref_gdirs
 
 
+def _chaikins_corner_cutting(line, refinements=5):
+    """Some magic here.
+
+    https://stackoverflow.com/questions/47068504/where-to-find-python-
+    implementation-of-chaikins-corner-cutting-algorithm
+    """
+    coords = np.array(line.coords)
+
+    for _ in range(refinements):
+        L = coords.repeat(2, axis=0)
+        R = np.empty_like(L)
+        R[0] = L[0]
+        R[2::2] = L[1:-1:2]
+        R[1:-1:2] = L[2::2]
+        R[-1] = L[-1]
+        coords = L * 0.75 + R * 0.25
+
+    return shpg.LineString(coords)
+
+
 @entity_task(log)
 def get_centerline_lonlat(gdir,
+                          keep_main_only=False,
                           flowlines_output=False,
+                          ensure_exterior_match=False,
                           geometrical_widths_output=False,
-                          corrected_widths_output=False):
+                          corrected_widths_output=False,
+                          to_crs='wgs84',
+                          simplify_line=0,
+                          corner_cutting=0):
     """Helper task to convert the centerlines to a shapefile
 
     Parameters
     ----------
     gdir : the glacier directory
     flowlines_output : create a shapefile for the flowlines
+    ensure_exterior_match : per design, OGGM centerlines match the underlying
+    DEM grid. This may imply that they do not "touch" the exterior outlines
+    of the glacier in vector space. Set this to True to correct for that.
     geometrical_widths_output : for the geometrical witdths
     corrected_widths_output : for the corrected widths
 
@@ -639,17 +668,25 @@ def get_centerline_lonlat(gdir,
     -------
     a shapefile
     """
-
     if flowlines_output or geometrical_widths_output or corrected_widths_output:
         cls = gdir.read_pickle('inversion_flowlines')
     else:
         cls = gdir.read_pickle('centerlines')
 
-    tra_func = partial(gdir.grid.ij_to_crs, crs=wgs84)
+    exterior = None
+    if ensure_exterior_match:
+        exterior = gdir.read_shapefile('outlines')
+        # Transform to grid
+        tra_func = partial(gdir.grid.transform, crs=exterior.crs)
+        exterior = shpg.Polygon(shp_trafo(tra_func, exterior.geometry[0].exterior))
+
+    tra_func = partial(gdir.grid.ij_to_crs, crs=to_crs)
 
     olist = []
     for j, cl in enumerate(cls):
         mm = 1 if j == (len(cls)-1) else 0
+        if keep_main_only and mm == 0:
+            continue
         if corrected_widths_output:
             le_segment = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
             for wi, cur, (n1, n2), wi_m in zip(cl.widths, cl.line.coords,
@@ -681,7 +718,38 @@ def get_centerline_lonlat(gdir,
             gs['SEGMENT_ID'] = j
             gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
             gs['MAIN'] = mm
-            gs['geometry'] = shp_trafo(tra_func, cl.line)
+            line = cl.line
+            if ensure_exterior_match:
+                # Extend line at the start by 10
+                fs = shpg.LineString(line.coords[:2])
+                # First check if this is necessary - this segment should
+                # be within the geometry or it's already good to go
+                if fs.within(exterior):
+                    fs = shpa.scale(fs, xfact=3, yfact=3, origin=fs.boundary[1])
+                    line = shpg.LineString([*fs.coords, *line.coords[2:]])
+                # If last also extend at the end
+                if mm == 1:
+                    ls = shpg.LineString(line.coords[-2:])
+                    if ls.within(exterior):
+                        ls = shpa.scale(ls, xfact=3, yfact=3, origin=ls.boundary[0])
+                        line = shpg.LineString([*line.coords[:-2], *ls.coords])
+
+                # Simplify and smooth?
+                if simplify_line:
+                    line = line.simplify(simplify_line)
+                if corner_cutting:
+                    line = _chaikins_corner_cutting(line, corner_cutting)
+
+                # Intersect with exterior geom
+                line = line.intersection(exterior)
+                if line.type == 'MultiLineString':
+                    # Take the longest
+                    lens = [il.length for il in line.geoms]
+                    line = line.geoms[np.argmax(lens)]
+
+                # Recompute length
+                gs['LE_SEGMENT'] = np.rint(line.length * gdir.grid.dx)
+            gs['geometry'] = shp_trafo(tra_func, line)
             olist.append(gs)
 
     return olist
@@ -733,28 +801,52 @@ def _write_shape_to_disk(gdf, fpath, to_tar=False):
 
 @global_task(log)
 def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
+                               to_crs='EPSG:4326',
                                filesuffix='', flowlines_output=False,
+                               ensure_exterior_match=False,
                                geometrical_widths_output=False,
-                               corrected_widths_output=False):
-    """Write the centerlines in a shapefile.
+                               corrected_widths_output=False,
+                               keep_main_only=False,
+                               simplify_line=0,
+                               corner_cutting=0):
+    """Write the centerlines to a shapefile.
 
     Parameters
     ----------
-    gdirs: the list of GlacierDir to process.
-    path:
-        Set to "True" in order  to store the info in the working directory
-        Set to a path to store the file to your chosen location
+    gdirs:
+        the list of GlacierDir to process.
+    path: str or bool
+        Set to "True" in order  to store the shape in the working directory
+        Set to a str path to store the file to your chosen location
     to_tar : bool
         put the files in a .tar file. If cfg.PARAMS['use_compression'],
         also compress to .gz
     filesuffix : str
-        add suffix to output file
+        add a suffix to the output file
     flowlines_output : bool
-        output the flowlines instead of the centerlines
+        output the OGGM flowlines instead of the centerlines
     geometrical_widths_output : bool
         output the geometrical widths instead of the centerlines
     corrected_widths_output : bool
         output the corrected widths instead of the centerlines
+    ensure_exterior_match : bool
+        per design, the centerlines will match the underlying DEM grid.
+        This may imply that they do not "touch" the exterior outlines of the
+        glacier in vector space. Set this to True to correct for that.
+    to_crs : str
+        write the shape to another coordinate reference system (CRS)
+    keep_main_only : bool
+        write only the main flowlines to the output files
+    simplify_line : float
+        apply shapely's `simplify` method to the line before writing. It is
+        a purely cosmetic option, although glacier length will be affected.
+        All points in the simplified object will be within the tolerance
+        distance of the original geometry (units: grid points). A good
+        value to test first is 0.5
+    corner_cutting : int
+        apply the Chaikin's corner cutting algorithm to the geometry before
+        writing. The integer represents the number of refinements to apply.
+        A good first value to test is 5.
     """
     from oggm.workflow import execute_entity_task
 
@@ -762,17 +854,26 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         path = os.path.join(cfg.PATHS['working_dir'],
                             'glacier_centerlines' + filesuffix + '.shp')
 
+    _to_crs = salem.check_crs(to_crs)
+    if not _to_crs:
+        raise InvalidParamsError(f'CRS not understood: {to_crs}')
+
     log.workflow('write_centerlines_to_shape on {} ...'.format(path))
 
     olist = execute_entity_task(get_centerline_lonlat, gdirs,
                                 flowlines_output=flowlines_output,
+                                ensure_exterior_match=ensure_exterior_match,
                                 geometrical_widths_output=geometrical_widths_output,
-                                corrected_widths_output=corrected_widths_output)
+                                corrected_widths_output=corrected_widths_output,
+                                keep_main_only=keep_main_only,
+                                simplify_line=simplify_line,
+                                corner_cutting=corner_cutting,
+                                to_crs=_to_crs)
     # filter for none
     olist = [o for o in olist if o is not None]
     odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
     odf = odf.sort_values(by='RGIID')
-    odf.crs = 'epsg:4326'
+    odf.crs = to_crs
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
