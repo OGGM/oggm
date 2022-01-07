@@ -47,7 +47,9 @@ Enhancements
 - Added a new ``mu_star_calibration_from_geodetic_mb`` task which now calibrates
   each glacier individually from the reference geodetic MB data. This is a rather
   quick solution for now, but it opens new avenues (:pull:`1286`).
-  By `Fabien Maussion <https://github.com/fmaussion>`_
+  A bug in the new feature was later corrected (:pull:`1351`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Lilian Schuster <https://github.com/lilianschuster>`_
 - Added a new ``utils.get_geodetic_mb_dataframe`` which returns the
   reference geodetic MB data, currently from Hugonnet et al 2021.
   Also changed the behavior of ``cfg.DATA`` to be shared

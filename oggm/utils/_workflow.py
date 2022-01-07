@@ -1055,16 +1055,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
     # To find the longest time, we have to open all files unfortunately
     time_info = {}
+    time_keys = ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']
     for gd in gdirs:
         fp = gd.get_filepath('model_diagnostics', filesuffix=input_filesuffix)
         try:
             with ncDataset(fp) as ds:
                 time = ds.variables['time'][:]
                 if 'time' not in time_info:
-                   time_info['time'] = time
-                   for cn in ['hydro_year', 'hydro_month',
-                              'calendar_year', 'calendar_month']:
-                       time_info[cn] = ds.variables[cn][:]
+                    time_info['time'] = time
+                    for cn in time_keys:
+                        time_info[cn] = ds.variables[cn][:]
                 else:
                     # Here we may need to append or add stuff
                     ot = time_info['time']
@@ -1074,15 +1074,13 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                     if time[-1] > ot[-1]:
                         p = np.nonzero(time == ot[-1])[0][0] + 1
                         time_info['time'] = np.append(ot, time[p:])
-                        for cn in ['hydro_year', 'hydro_month',
-                                   'calendar_year', 'calendar_month']:
+                        for cn in time_keys:
                             time_info[cn] = np.append(time_info[cn],
                                                       ds.variables[cn][p:])
                     if time[0] < ot[0]:
                         p = np.nonzero(time == ot[0])[0][0]
                         time_info['time'] = np.append(time[:p], ot)
-                        for cn in ['hydro_year', 'hydro_month',
-                                   'calendar_year', 'calendar_month']:
+                        for cn in time_keys:
                             time_info[cn] = np.append(ds.variables[cn][:p],
                                                       time_info[cn])
 
