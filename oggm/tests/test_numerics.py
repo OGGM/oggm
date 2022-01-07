@@ -1259,11 +1259,11 @@ class TestIdealisedCases(unittest.TestCase):
         fl_ds = fl_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
         dh_ds = dh_model.run_until_and_store(1000, stop_criterion=zero_glacier_stop_criterion)
 
-        assert fl_ds.volume_m3.isnull().sum() > 800
-        assert dh_ds.volume_m3.isnull().sum() > 450
+        assert fl_ds.volume_m3.isnull().sum() == 0
+        assert dh_ds.volume_m3.isnull().sum() == 0
 
-        fl_ds = fl_ds.volume_m3.isel(time=~fl_ds.volume_m3.isnull())
-        dh_ds = dh_ds.volume_m3.isel(time=~dh_ds.volume_m3.isnull())
+        fl_ds = fl_ds.volume_m3
+        dh_ds = dh_ds.volume_m3
 
         assert fl_ds.isel(time=-5) == 0
         assert dh_ds.isel(time=-5) == 0
@@ -1287,11 +1287,11 @@ class TestIdealisedCases(unittest.TestCase):
         fl_ds_ns = fl_model.run_until_and_store(800)
         dh_ds_ns = dh_model.run_until_and_store(800)
 
-        assert fl_ds.volume_m3.isnull().sum() > 600
-        assert dh_ds.volume_m3.isnull().sum() > 600
+        assert fl_ds.volume_m3.isnull().sum() == 0
+        assert dh_ds.volume_m3.isnull().sum() == 0
 
-        fl_ds = fl_ds.volume_m3.isel(time=~fl_ds.volume_m3.isnull())
-        dh_ds = dh_ds.volume_m3.isel(time=~dh_ds.volume_m3.isnull())
+        fl_ds = fl_ds.volume_m3
+        dh_ds = dh_ds.volume_m3
 
         fl_ds_ns = fl_ds_ns.volume_m3
         dh_ds_ns = dh_ds_ns.volume_m3
