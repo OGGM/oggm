@@ -3829,9 +3829,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
 
-    # TODO: check if rgi_date < 1980 -> conduct no dynamic spinup,
-    #  indicate in logging
-
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
                                filesuffix=init_model_filesuffix)
@@ -3842,6 +3839,60 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         fls_spinup = gdir.read_pickle('model_flowlines')
     else:
         fls_spinup = copy.deepcopy(init_model_fls)
+
+    # MassBalance for actual run from yr_spinup to yr_rgi
+    mb_historical = MultipleFlowlineMassBalance(gdir,
+                                                fls=fls_spinup,
+                                                mb_model_class=
+                                                PastMassBalance,
+                                                filename='climate_historical',
+                                                input_filesuffix=
+                                                climate_input_filesuffix)
+
+    # here we define the file-paths for the output as they are needed here at
+    # the start if rgi date < 1980
+    if store_model_geometry:
+        geom_path = gdir.get_filepath('model_geometry',
+                                      filesuffix=output_filesuffix,
+                                      delete=True)
+    else:
+        geom_path = False
+
+    if store_fl_diagnostics:
+        fl_diag_path = gdir.get_filepath('fl_diagnostics',
+                                         filesuffix=output_filesuffix,
+                                         delete=True)
+    else:
+        fl_diag_path = False
+
+    diag_path = gdir.get_filepath('model_diagnostics',
+                                  filesuffix=output_filesuffix,
+                                  delete=True)
+
+    if yr_rgi < 1980:
+        log.warning('The provided rgi_date is smaller than 1980, therefore no '
+                    'dynamic spinup is conducted and the original flowlines '
+                    'are saved at the provided rgi_date or the start year '
+                    'of the provided climate data (if yr_start_climate > yr_rgi)')
+        # do not conduct a dynamic spinup and save the original glacier with
+        # the provided output_filesuffix at the rgi year or the start year of
+        # the provided climate data
+        yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+        yr_use = np.clip(yr_rgi, yr_min, None)
+        model_dynamic_spinup_end = evolution_model(fls_spinup,
+                                                   mb_historical,
+                                                   y0=yr_use)
+
+        with np.warnings.catch_warnings():
+            # For operational runs we ignore the warnings
+            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+            model_dynamic_spinup_end.run_until_and_store(
+                yr_use,
+                geom_path=geom_path,
+                diag_path=diag_path,
+                fl_diag_path=fl_diag_path, )
+
+        return model_dynamic_spinup_end
 
     # here we define the flowline we want to match, it is assumed that during
     # the inversion the volume was calibrated towards the consensus estimate
@@ -4241,15 +4292,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                 y0=y0_spinup,
                                                 halfsize=halfsize_spinup)
 
-        # MassBalance for actual run from yr_spinup to yr_rgi
-        mb_historical = MultipleFlowlineMassBalance(gdir,
-                                                    fls=fls_spinup,
-                                                    mb_model_class=
-                                                    PastMassBalance,
-                                                    filename='climate_historical',
-                                                    input_filesuffix=
-                                                    climate_input_filesuffix)
-
         # try to conduct minimisation, if an error occurred try shorter spinup
         # period
         try:
@@ -4282,25 +4324,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             other_mismatch)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
                             other_mismatch / other_reference_value * 100)
-
-    # store the outcome
-    if store_model_geometry:
-        geom_path = gdir.get_filepath('model_geometry',
-                                      filesuffix=output_filesuffix,
-                                      delete=True)
-    else:
-        geom_path = False
-
-    if store_fl_diagnostics:
-        fl_diag_path = gdir.get_filepath('fl_diagnostics',
-                                         filesuffix=output_filesuffix,
-                                         delete=True)
-    else:
-        fl_diag_path = False
-
-    diag_path = gdir.get_filepath('model_diagnostics',
-                                  filesuffix=output_filesuffix,
-                                  delete=True)
 
     with np.warnings.catch_warnings():
         # For operational runs we ignore the warnings
