@@ -618,14 +618,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      output_filesuffix='_dynamic_spinup'
                                      )
 
-        climate_init_model_filesuffix = '_dynamic_spinup'
+        init_model_filesuffix = '_dynamic_spinup'
     else:
-        climate_init_model_filesuffix = None
+        init_model_filesuffix = None
 
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
                                  evolution_model=evolution_model,
-                                 init_model_filesuffix=climate_init_model_filesuffix,
+                                 init_model_filesuffix=init_model_filesuffix,
                                  output_filesuffix='_historical')
 
     # Now compile the output

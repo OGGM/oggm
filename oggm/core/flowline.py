@@ -3787,7 +3787,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         which evolution model to use. Default: FluxBasedModel
     spinup_period : int
         The period how long the spinup should run. Start date of historical run
-        is defined "yr_rgi - spinup_period".
+        is defined "yr_rgi - spinup_period". Minimum allowed value is 10.
         Default is 20.
     yr_rgi : int
         The rgi date, at which we want to match area or volume.
@@ -3829,7 +3829,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
 
-    yr_spinup = yr_rgi - spinup_period
+    # TODO: check if rgi_date < 1980 -> conduct no dynamic spinup,
+    #  indicate in logging
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
@@ -3862,25 +3863,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
                                     for f in fls_ref])
 
-    # define spinup MassBalance
-    # spinup is running for 'yr_rgi - yr_spinup' years, using a ConstantMassBalance
-    y0_spinup = int((yr_spinup + yr_rgi) / 2)
-    halfsize_spinup = yr_rgi - y0_spinup
-    mb_spinup = MultipleFlowlineMassBalance(gdir,
-                                            fls=fls_spinup,
-                                            mb_model_class=ConstantMassBalance,
-                                            filename='climate_historical',
-                                            input_filesuffix=climate_input_filesuffix,
-                                            y0=y0_spinup,
-                                            halfsize=halfsize_spinup)
-
-    # MassBalance for actual run from yr_spinup to yr_rgi
-    mb_historical = MultipleFlowlineMassBalance(gdir,
-                                                fls=fls_spinup,
-                                                mb_model_class=PastMassBalance,
-                                                filename='climate_historical',
-                                                input_filesuffix=climate_input_filesuffix)
-
+    # only used to check performance of function
     forward_model_runs = [0]
 
     # the actual spinup run
@@ -4225,9 +4208,59 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                            f'{np.min(np.abs(mismatch))}%) in {maxiter}'
                            f'Iterations!')
 
-    # here do the actual minimisation
+    # define function for the actual minimisation
     c_fun, model_dynamic_spinup_end = init_cost_fct()
-    final_t_bias_guess, final_mismatch = minimise_with_spline_fit(c_fun)
+
+    # define the MassBalanceModels for different spinup periods and try to
+    # to minimise, if minimisation fails a shorter spinup period is used
+    # (first a spinup period between initial period and 10 years and the second
+    # try is to use a period of 10 years, if it still fails the actual error is
+    # raised)
+    spinup_period_initial = copy.deepcopy(spinup_period)
+    if spinup_period_initial <= 10.:
+        spinup_periods_to_try = [10.]
+    else:
+        spinup_periods_to_try = [spinup_period_initial,
+                                 (spinup_period_initial + 10.) / 2., 10.]
+
+    for spinup_period in spinup_periods_to_try:
+        yr_spinup = yr_rgi - spinup_period
+
+        # define spinup MassBalance
+        # spinup is running for 'yr_rgi - yr_spinup' years, using a
+        # ConstantMassBalance
+        y0_spinup = int((yr_spinup + yr_rgi) / 2)
+        halfsize_spinup = yr_rgi - y0_spinup
+        mb_spinup = MultipleFlowlineMassBalance(gdir,
+                                                fls=fls_spinup,
+                                                mb_model_class=
+                                                ConstantMassBalance,
+                                                filename='climate_historical',
+                                                input_filesuffix=
+                                                climate_input_filesuffix,
+                                                y0=y0_spinup,
+                                                halfsize=halfsize_spinup)
+
+        # MassBalance for actual run from yr_spinup to yr_rgi
+        mb_historical = MultipleFlowlineMassBalance(gdir,
+                                                    fls=fls_spinup,
+                                                    mb_model_class=
+                                                    PastMassBalance,
+                                                    filename='climate_historical',
+                                                    input_filesuffix=
+                                                    climate_input_filesuffix)
+
+        # try to conduct minimisation, if an error occurred try shorter spinup
+        # period
+        try:
+            final_t_bias_guess, final_mismatch = minimise_with_spline_fit(c_fun)
+            # ok no error occurred so we succeeded
+            break
+        except RuntimeError as e:
+            # if the last spinup period was 10 raise the error, otherwise try
+            # out the next spinup period
+            if spinup_period == 10.:
+                raise RuntimeError(e)
 
     # save the final values
     gdir.add_to_diagnostics('temp_bias_dynamic_spinup', final_t_bias_guess[-1])
