@@ -4277,7 +4277,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         spinup_periods_to_try = [10.]
     else:
         spinup_periods_to_try = [spinup_period_initial,
-                                 (spinup_period_initial + 10.) / 2., 10.]
+                                 int((spinup_period_initial + 10.) / 2.), 10.]
 
     for spinup_period in spinup_periods_to_try:
         yr_spinup = yr_rgi - spinup_period
@@ -4285,7 +4285,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # define spinup MassBalance
         # spinup is running for 'yr_rgi - yr_spinup' years, using a
         # ConstantMassBalance
-        y0_spinup = int((yr_spinup + yr_rgi) / 2)
+        y0_spinup = (yr_spinup + yr_rgi) / 2
         halfsize_spinup = yr_rgi - y0_spinup
         mb_spinup = MultipleFlowlineMassBalance(gdir,
                                                 fls=fls_spinup,
