@@ -3787,7 +3787,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         which evolution model to use. Default: FluxBasedModel
     spinup_period : int
         The period how long the spinup should run. Start date of historical run
-        is defined "yr_rgi - spinup_period". Minimum allowed value is 10.
+        is defined "yr_rgi - spinup_period". Minimum allowed value is 10. If
+        the provided climate data starts at year later than
+        (yr_rgi - spinup_period) the spinup_period is set to
+        (yr_rgi - yr_climate_start)
         Default is 20.
     yr_rgi : int
         The rgi date, at which we want to match area or volume.
@@ -3850,7 +3853,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                 climate_input_filesuffix)
 
     # here we define the file-paths for the output as they are needed here at
-    # the start if rgi date < 1980
+    # the start if rgi date < yr_min + 10.
     if store_model_geometry:
         geom_path = gdir.get_filepath('model_geometry',
                                       filesuffix=output_filesuffix,
@@ -3869,15 +3872,17 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
-    if yr_rgi < 1980:
-        log.warning('The provided rgi_date is smaller than 1980, therefore no '
-                    'dynamic spinup is conducted and the original flowlines '
-                    'are saved at the provided rgi_date or the start year '
-                    'of the provided climate data (if yr_start_climate > yr_rgi)')
+    yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+
+    if yr_rgi < yr_min + 10.:
+        log.warning('The provided rgi_date is smaller than yr_climate_start + 10., '
+                    'therefore no dynamic spinup is conducted and the original '
+                    'flowlines are saved at the provided rgi_date or the start '
+                    'year of the provided climate data (if yr_climate_start > '
+                    'yr_rgi)')
         # do not conduct a dynamic spinup and save the original glacier with
         # the provided output_filesuffix at the rgi year or the start year of
         # the provided climate data
-        yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
@@ -4263,11 +4268,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     c_fun, model_dynamic_spinup_end = init_cost_fct()
 
     # define the MassBalanceModels for different spinup periods and try to
-    # to minimise, if minimisation fails a shorter spinup period is used
+    # minimise, if minimisation fails a shorter spinup period is used
     # (first a spinup period between initial period and 10 years and the second
     # try is to use a period of 10 years, if it still fails the actual error is
     # raised)
-    spinup_period_initial = copy.deepcopy(spinup_period)
+    spinup_period_initial = min(spinup_period, yr_rgi - yr_min)
     if spinup_period_initial <= 10.:
         spinup_periods_to_try = [10.]
     else:
