@@ -3336,7 +3336,7 @@ class TestHEF:
                gdir_diagnostics.keys()
         assert 'dynamic_spinup_mismatch_other_variable_percent' in \
                gdir_diagnostics.keys()
-        limit = gdir_diagnostics[f'reference_{minimise_for}_dynamic_spinup_' \
+        limit = gdir_diagnostics[f'reference_{minimise_for}_dynamic_spinup_'
                                  f'{unit}'] * \
             precision_percent / 100
         assert gdir_diagnostics[mismatch_key] < limit

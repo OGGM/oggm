@@ -3859,11 +3859,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # MassBalance for actual run from yr_spinup to yr_rgi
     mb_historical = MultipleFlowlineMassBalance(gdir,
                                                 fls=fls_spinup,
-                                                mb_model_class=
-                                                PastMassBalance,
+                                                mb_model_class=PastMassBalance,
                                                 filename='climate_historical',
-                                                input_filesuffix=
-                                                climate_input_filesuffix)
+                                                input_filesuffix=climate_input_filesuffix)
 
     # here we define the file-paths for the output
     if store_model_geometry:
@@ -4021,7 +4019,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     else:
                         # ok we set a new lower limit
                         t_bias_limits[0] = t_bias_limits[0] - \
-                                           t_bias_max_step_length
+                            t_bias_max_step_length
             elif t_bias > t_bias_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if t_bias_limits[1] not in t_bias_guess:
@@ -4037,7 +4035,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     else:
                         # ok we set a new upper limit
                         t_bias_limits[1] = t_bias_limits[1] + \
-                                           t_bias_max_step_length
+                            t_bias_max_step_length
 
             # now clip t_bias with limits
             t_bias = np.clip(t_bias, t_bias_limits[0], t_bias_limits[1])
@@ -4112,7 +4110,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             # if lower limit was already used change it and use
                             if t_bias == t_bias_limits[0]:
                                 t_bias_limits[0] = t_bias_limits[0] - \
-                                                   t_bias_max_step_length
+                                    t_bias_max_step_length
                                 t_bias = copy.deepcopy(t_bias_limits[0])
                             else:
                                 # otherwise just try with a colder t_bias
@@ -4195,11 +4193,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     if t_bias <= t_bias_limits[0]:
                         t_bias_limits[0] = t_bias
                         t_bias_limits[1] = t_bias_limits[0] + \
-                                           t_bias_max_step_length
+                            t_bias_max_step_length
                     elif t_bias >= t_bias_limits[1]:
                         t_bias_limits[1] = t_bias
                         t_bias_limits[0] = t_bias_limits[1] - \
-                                           t_bias_max_step_length
+                            t_bias_max_step_length
                     else:
                         if is_first_guess_ice_free:
                             t_bias_limits[1] = t_bias
@@ -4213,14 +4211,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         # this happens when the first guess was out of domain
                         was_errors[0] = False
                         t_bias_limits[1] = t_bias_limits[0] + \
-                                           t_bias_max_step_length
+                            t_bias_max_step_length
                 elif define_new_upper_limit:
                     t_bias_limits[1] = copy.deepcopy(t_bias)
                     if t_bias <= t_bias_limits[0]:
                         # this happens when the first guess was ice free
                         was_errors[1] = False
                         t_bias_limits[0] = t_bias_limits[1] - \
-                                           t_bias_max_step_length
+                            t_bias_max_step_length
 
             return tmp_mismatch, float(t_bias)
 
@@ -4314,11 +4312,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         halfsize_spinup = yr_rgi - y0_spinup
         mb_spinup = MultipleFlowlineMassBalance(gdir,
                                                 fls=fls_spinup,
-                                                mb_model_class=
-                                                ConstantMassBalance,
+                                                mb_model_class=ConstantMassBalance,
                                                 filename='climate_historical',
-                                                input_filesuffix=
-                                                climate_input_filesuffix,
+                                                input_filesuffix=climate_input_filesuffix,
                                                 y0=y0_spinup,
                                                 halfsize=halfsize_spinup)
 
