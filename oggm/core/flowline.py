@@ -3761,7 +3761,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=10, output_filesuffix='_dynamic_spinup',
-                       store_model_geometry=True, store_fl_diagnostics=False):
+                       store_model_geometry=True, store_fl_diagnostics=False,
+                       ignore_errors=True):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -3821,6 +3822,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
         Default is False.
+    ignore_errors : bool
+        If True the function saves the model without a dynamic spinup using
+        the 'output_filesuffix', if an error during the dynamic spinup occurs.
+        This is useful if you want to keep glaciers for the following tasks.
+        Default is True.
 
     Returns
     -------
@@ -3877,6 +3883,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
     def save_model_without_dynamic_spinup():
+        gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
@@ -3899,7 +3906,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     'flowlines are saved at the provided rgi_date or the start '
                     'year of the provided climate data (if yr_climate_start > '
                     'yr_rgi)')
-        save_model_without_dynamic_spinup()
+        if ignore_errors:
+            save_model_without_dynamic_spinup()
+        else:
+            raise RuntimeError('The difference between the rgi_date and the '
+                               'start year of the climate data is to small to '
+                               'run a dynamic spinup!')
 
     # here we define the flowline we want to match, it is assumed that during
     # the inversion the volume was calibrated towards the consensus estimate
@@ -4313,9 +4325,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             'original model with no spinup is saved using the '
                             f'provided output_filesuffix "{output_filesuffix}". '
                             f'The error message of the dynamic spinup is: {e}')
-                save_model_without_dynamic_spinup()
+                if ignore_errors:
+                    save_model_without_dynamic_spinup()
+                else:
+                    raise RuntimeError(e)
 
     # save the final values
+    gdir.add_to_diagnostics('run_dynamic_spinup_success', True)
     gdir.add_to_diagnostics('temp_bias_dynamic_spinup', final_t_bias_guess[-1])
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
                             final_mismatch[-1] / 100 * reference_value)
