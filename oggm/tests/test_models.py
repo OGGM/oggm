@@ -3294,16 +3294,19 @@ class TestHEF:
 
         precision_percent = 1
         assert hef_gdir.rgi_date == 2003
-        # is needed because the test climate dataset has ye = 2003 (in hydro years would be 2004)
+        # is needed because the test climate dataset has ye = 2003 (in hydro
+        # years would be 2004)
         yr_rgi = 2003
-        model_dynamic_spinup = run_dynamic_spinup(hef_gdir, init_model_filesuffix=None,
+        model_dynamic_spinup = run_dynamic_spinup(hef_gdir,
+                                                  init_model_filesuffix=None,
                                                   init_model_fls=None,
                                                   climate_input_filesuffix='',
                                                   evolution_model=FluxBasedModel,
                                                   spinup_period=20, yr_rgi=yr_rgi,
                                                   minimise_for=minimise_for,
                                                   precision_percent=precision_percent,
-                                                  first_guess_t_bias=-2, maxiter=10,
+                                                  first_guess_t_bias=-2,
+                                                  maxiter=10,
                                                   output_filesuffix='_dynamic_spinup',
                                                   store_model_geometry=True,
                                                   store_fl_diagnostics=False)
@@ -3315,16 +3318,26 @@ class TestHEF:
         assert len(model_dynamic_spinup.fls) == len(fls)
         # but surface_h should not be the same
         # (also checks all individual flowlines has same number of grid points)
-        assert not np.allclose(model_dynamic_spinup.fls[0].surface_h, fls[0].surface_h)
-        assert not np.allclose(model_dynamic_spinup.fls[1].surface_h, fls[1].surface_h)
-        assert not np.allclose(model_dynamic_spinup.fls[2].surface_h, fls[2].surface_h)
+        assert not np.allclose(model_dynamic_spinup.fls[0].surface_h,
+                               fls[0].surface_h)
+        assert not np.allclose(model_dynamic_spinup.fls[1].surface_h,
+                               fls[1].surface_h)
+        assert not np.allclose(model_dynamic_spinup.fls[2].surface_h,
+                               fls[2].surface_h)
 
-        # check if temp_bias and mismatch is saved in model diagnostics
+        # check if stuff is saved in model diagnostics
         gdir_diagnostics = hef_gdir.get_diagnostics()
         assert 'temp_bias_dynamic_spinup' in gdir_diagnostics.keys()
-        mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}'
+        assert 'temp_bias_dynamic_spinup_period' in gdir_diagnostics.keys()
+        assert 'dynamic_spinup_forward_model_runs' in gdir_diagnostics.keys()
+        mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent'
         assert mismatch_key in gdir_diagnostics.keys()
-        limit = gdir_diagnostics[f'reference_{minimise_for}_dynamic_spinup_{unit}'] * \
+        assert 'dynamic_spinup_other_variable_reference' in \
+               gdir_diagnostics.keys()
+        assert 'dynamic_spinup_mismatch_other_variable_percent' in \
+               gdir_diagnostics.keys()
+        limit = gdir_diagnostics[f'reference_{minimise_for}_dynamic_spinup_' \
+                                 f'{unit}'] * \
             precision_percent / 100
         assert gdir_diagnostics[mismatch_key] < limit
 
@@ -3332,7 +3345,8 @@ class TestHEF:
         fp = hef_gdir.get_filepath('model_geometry',
                                    filesuffix='_dynamic_spinup')
         fmod = FileModel(fp)
-        assert np.isclose(getattr(model_dynamic_spinup, var_name), getattr(fmod, var_name))
+        assert np.isclose(getattr(model_dynamic_spinup, var_name),
+                          getattr(fmod, var_name))
         assert fmod.last_yr == yr_rgi
         assert len(model_dynamic_spinup.fls) == len(fmod.fls)
 

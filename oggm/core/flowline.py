@@ -3757,8 +3757,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
-                       spinup_period=20, yr_rgi=None,
-                       minimise_for='area', precision_percent=1,
+                       spinup_period=20, min_spinup_period=10, yr_rgi=None,
+                       minimise_for='area', precision_percent=10,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=10, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False,
@@ -3793,6 +3793,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         (yr_rgi - spinup_period) the spinup_period is set to
         (yr_rgi - yr_climate_start)
         Default is 20.
+    min_spinup_period: int
+        If the dynamic spinup function fails with the initial 'spinup_period'
+        a shorter period is tried. Here you can define the minimum period to
+        try.
+        Default is 10.
     yr_rgi : int
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
@@ -3800,8 +3805,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The variable we want to match at yr_rgi. Default is 'area'.
         Options are 'area' or 'volume'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 1,
-        meaning the difference must be within 1% of the given value
+        Gives the precision we want to match in percent. Default is 10,
+        meaning the difference must be within 10% of the given value
         (area or volume).
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
@@ -3812,8 +3817,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         needed to avoid to large changes.
         Default is 2
     maxiter : int
-        Maximum number of minimisation iterations. If reached an error is
-        raised. Default is 10.
+        Maximum number of minimisation iterations per spinup period. If reached
+        and 'ignore_errors=False' an error is raised. Default is 10.
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
@@ -3900,12 +3905,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
         return model_dynamic_spinup_end
 
-    if yr_rgi < yr_min + 10.:
-        log.warning('The provided rgi_date is smaller than yr_climate_start + 10., '
-                    'therefore no dynamic spinup is conducted and the original '
-                    'flowlines are saved at the provided rgi_date or the start '
-                    'year of the provided climate data (if yr_climate_start > '
-                    'yr_rgi)')
+    if yr_rgi < yr_min + min_spinup_period:
+        log.warning('The provided rgi_date is smaller than yr_climate_start + '
+                    'min_spinup_period, therefore no dynamic spinup is '
+                    'conducted and the original flowlines are saved at the '
+                    'provided rgi_date or the start year of the provided '
+                    'climate data (if yr_climate_start > yr_rgi)')
         if ignore_errors:
             save_model_without_dynamic_spinup()
         else:
@@ -4227,9 +4232,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         if abs(mismatch[-1]) < precision_percent:
             return t_bias_guess, mismatch
 
-        # second guess is given depending on the outcome of first guess,
-        # when mismatch is 100% t_bias is changed for 2°C (arbitrary)
-        step = mismatch[-1] * 0.02
+        # second (arbitrary) guess is given depending on the outcome of first
+        # guess, when mismatch is 100% t_bias is changed for
+        # t_bias_max_step_length
+        step = mismatch[-1] * t_bias_max_step_length / 100
         new_mismatch, new_t_bias = get_mismatch(t_bias_guess[0] + step)
         t_bias_guess.append(new_t_bias)
         mismatch.append(new_mismatch)
@@ -4264,7 +4270,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                        'unknown, need to check by hand! Best '
                                        'mismatch '
                                        f'{np.min(np.abs(mismatch))}%')
-            new_mismatch, new_t_bias = get_mismatch(float(interpolate.splev(0, tck)))
+            new_mismatch, new_t_bias = get_mismatch(float(interpolate.splev(0,
+                                                                            tck)
+                                                          ))
             t_bias_guess.append(new_t_bias)
             mismatch.append(new_mismatch)
 
@@ -4287,11 +4295,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # try is to use a period of 10 years, if it still fails the actual error is
     # raised)
     spinup_period_initial = min(spinup_period, yr_rgi - yr_min)
-    if spinup_period_initial <= 10.:
-        spinup_periods_to_try = [10.]
+    if spinup_period_initial <= min_spinup_period:
+        spinup_periods_to_try = [min_spinup_period]
     else:
+        # try out a maximum of three different spinup_periods
         spinup_periods_to_try = [spinup_period_initial,
-                                 int((spinup_period_initial + 10.) / 2.), 10.]
+                                 int((spinup_period_initial + min_spinup_period)
+                                     / 2.),
+                                 min_spinup_period]
 
     for spinup_period in spinup_periods_to_try:
         yr_spinup = yr_rgi - spinup_period
@@ -4318,9 +4329,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # ok no error occurred so we succeeded
             break
         except RuntimeError as e:
-            # if the last spinup period was 10 save the original model without
-            # a dynamic spinup
-            if spinup_period == 10.:
+            # if the last spinup period was min_spinup_period the dynamic
+            # spinup failed
+            if spinup_period == min_spinup_period:
                 log.warning('No dynamic spinup could be conducted and the'
                             'original model with no spinup is saved using the '
                             f'provided output_filesuffix "{output_filesuffix}". '
@@ -4330,25 +4341,25 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                 else:
                     raise RuntimeError(e)
 
-    # save the final values
+    # hurray, dynamic spinup successfully
     gdir.add_to_diagnostics('run_dynamic_spinup_success', True)
+
+    # also save some other stuff
     gdir.add_to_diagnostics('temp_bias_dynamic_spinup', final_t_bias_guess[-1])
-    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}',
-                            final_mismatch[-1] / 100 * reference_value)
-    # also add some stuff for testing
-    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent',
+    gdir.add_to_diagnostics('temp_bias_dynamic_spinup_period',
+                            spinup_period)
+    gdir.add_to_diagnostics('dynamic_spinup_forward_model_runs',
+                            forward_model_runs[-1])
+    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_'
+                            f'percent',
                             final_mismatch[-1])
     gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
                             reference_value)
-    gdir.add_to_diagnostics('dynamic_spinup_iterations', len(final_mismatch))
-    gdir.add_to_diagnostics('dynamic_forward_model_runs', forward_model_runs[-1])
     gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
                             other_reference_value)
     other_mismatch = (getattr(model_dynamic_spinup_end[-1],
                               f'{other_variable}_{other_unit}') -
                       other_reference_value)
-    gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable',
-                            other_mismatch)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
                             other_mismatch / other_reference_value * 100)
 
