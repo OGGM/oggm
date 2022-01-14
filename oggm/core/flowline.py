@@ -3910,7 +3910,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     'provided rgi_date or the start year of the provided '
                     'climate data (if yr_climate_start > yr_rgi)')
         if ignore_errors:
-            save_model_without_dynamic_spinup()
+            model_dynamic_spinup_end = save_model_without_dynamic_spinup()
+            return model_dynamic_spinup_end
         else:
             raise RuntimeError('The difference between the rgi_date and the '
                                'start year of the climate data is to small to '
@@ -4289,9 +4290,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
     # define the MassBalanceModels for different spinup periods and try to
     # minimise, if minimisation fails a shorter spinup period is used
-    # (first a spinup period between initial period and 10 years and the second
-    # try is to use a period of 10 years, if it still fails the actual error is
-    # raised)
+    # (first a spinup period between initial period and 'min_spinup_period'
+    # years and the second try is to use a period of 'min_spinup_period' years,
+    # if it still fails the actual error is raised)
     spinup_period_initial = min(spinup_period, yr_rgi - yr_min)
     if spinup_period_initial <= min_spinup_period:
         spinup_periods_to_try = [min_spinup_period]
@@ -4328,12 +4329,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
             # if the last spinup period was min_spinup_period the dynamic
             # spinup failed
             if spinup_period == min_spinup_period:
-                log.warning('No dynamic spinup could be conducted and the'
+                log.warning('No dynamic spinup could be conducted and the '
                             'original model with no spinup is saved using the '
                             f'provided output_filesuffix "{output_filesuffix}". '
                             f'The error message of the dynamic spinup is: {e}')
                 if ignore_errors:
-                    save_model_without_dynamic_spinup()
+                    model_dynamic_spinup_end = save_model_without_dynamic_spinup()
+                    return model_dynamic_spinup_end
                 else:
                     raise RuntimeError(e)
 
@@ -4341,23 +4343,24 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     gdir.add_to_diagnostics('run_dynamic_spinup_success', True)
 
     # also save some other stuff
-    gdir.add_to_diagnostics('temp_bias_dynamic_spinup', final_t_bias_guess[-1])
-    gdir.add_to_diagnostics('temp_bias_dynamic_spinup_period',
-                            spinup_period)
+    gdir.add_to_diagnostics('temp_bias_dynamic_spinup',
+                            float(final_t_bias_guess[-1]))
+    gdir.add_to_diagnostics('dynamic_spinup_period',
+                            int(spinup_period))
     gdir.add_to_diagnostics('dynamic_spinup_forward_model_runs',
-                            forward_model_runs[-1])
+                            int(forward_model_runs[-1]))
     gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_'
                             f'percent',
-                            final_mismatch[-1])
+                            float(final_mismatch[-1]))
     gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
-                            reference_value)
+                            float(reference_value))
     gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
-                            other_reference_value)
+                            float(other_reference_value))
     other_mismatch = (getattr(model_dynamic_spinup_end[-1],
                               f'{other_variable}_{other_unit}') -
                       other_reference_value)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
-                            other_mismatch / other_reference_value * 100)
+                            float(other_mismatch / other_reference_value * 100))
 
     with np.warnings.catch_warnings():
         # For operational runs we ignore the warnings
