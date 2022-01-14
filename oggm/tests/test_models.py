@@ -3328,7 +3328,7 @@ class TestHEF:
         # check if stuff is saved in model diagnostics
         gdir_diagnostics = hef_gdir.get_diagnostics()
         assert 'temp_bias_dynamic_spinup' in gdir_diagnostics.keys()
-        assert 'temp_bias_dynamic_spinup_period' in gdir_diagnostics.keys()
+        assert 'dynamic_spinup_period' in gdir_diagnostics.keys()
         assert 'dynamic_spinup_forward_model_runs' in gdir_diagnostics.keys()
         mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent'
         assert mismatch_key in gdir_diagnostics.keys()
