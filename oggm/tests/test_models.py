@@ -3292,24 +3292,17 @@ class TestHEF:
         for fl in fls:
             ref_value += getattr(fl, var_name)
 
-        precision_percent = 1
+        precision_percent = 10
         assert hef_gdir.rgi_date == 2003
         # is needed because the test climate dataset has ye = 2003 (in hydro
         # years would be 2004)
         yr_rgi = 2003
         model_dynamic_spinup = run_dynamic_spinup(hef_gdir,
-                                                  init_model_filesuffix=None,
-                                                  init_model_fls=None,
-                                                  climate_input_filesuffix='',
-                                                  evolution_model=FluxBasedModel,
-                                                  spinup_period=20, yr_rgi=yr_rgi,
+                                                  yr_rgi=yr_rgi,
                                                   minimise_for=minimise_for,
                                                   precision_percent=precision_percent,
-                                                  first_guess_t_bias=-2,
-                                                  maxiter=10,
                                                   output_filesuffix='_dynamic_spinup',
-                                                  store_model_geometry=True,
-                                                  store_fl_diagnostics=False)
+                                                  )
 
         # check if resulting model match wanted value with prescribed precision
         assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value,
@@ -3336,10 +3329,6 @@ class TestHEF:
                gdir_diagnostics.keys()
         assert 'dynamic_spinup_mismatch_other_variable_percent' in \
                gdir_diagnostics.keys()
-        limit = gdir_diagnostics[f'reference_{minimise_for}_dynamic_spinup_'
-                                 f'{unit}'] * \
-            precision_percent / 100
-        assert gdir_diagnostics[mismatch_key] < limit
 
         # check if model geometry is correctly saved in gdir
         fp = hef_gdir.get_filepath('model_geometry',
@@ -3349,6 +3338,75 @@ class TestHEF:
                           getattr(fmod, var_name))
         assert fmod.last_yr == yr_rgi
         assert len(model_dynamic_spinup.fls) == len(fmod.fls)
+
+        # Here start with test if errors are handled correctly by the dynamic
+        # spinup function and if 'ignore_errors' works
+
+        # define test glaciers and indicate which error is expected
+        rgi_ids = {
+            'RGI60-04.00044': 'Not able to minimise without ice '
+                              'free glacier',
+            'RGI60-02.09397': 'Not able to minimise without '
+                              'exceeding the domain!',
+            'RGI60-04.05259': 'The difference between the rgi_date '
+                              'and the start year of the climate data is to '
+                              'small to run a dynamic spinup!',
+            'RGI60-04.00381': 'Mismatch is INF, this indicates '
+                              'that the reference value is 0.!',
+            'RGI60-04.00331': 'Could not find mismatch smaller'
+                              f' {precision_percent}%',
+        }
+
+        # change settings to match used prepro directory
+        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids.keys(), from_prepro_level=4, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')
+
+        # Test that the correct error is raised
+        ignore_errors = False
+        for gdir in gdirs:
+            try:
+                run_dynamic_spinup(gdir,
+                                   minimise_for=minimise_for,
+                                   precision_percent=precision_percent,
+                                   output_filesuffix='_dynamic_spinup',
+                                   ignore_errors=ignore_errors
+                                   )
+            except RuntimeError as e:
+                assert rgi_ids[gdir.rgi_id] in f'{e}'
+
+        # check that ignore_error is working correctly
+        ignore_errors=True
+        for gdir in gdirs:
+            model_dynamic_spinup = run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                precision_percent=precision_percent,
+                output_filesuffix='_dynamic_spinup',
+                ignore_errors=ignore_errors
+                )
+
+            # check if model geometry is correctly saved in gdir
+            fp = gdir.get_filepath('model_geometry',
+                                   filesuffix='_dynamic_spinup')
+            fmod = FileModel(fp)
+            assert np.isclose(getattr(model_dynamic_spinup, var_name),
+                              getattr(fmod, var_name))
+            yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+            yr_rgi = gdir.rgi_date + 1  # convert to hydro year
+            assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
+            assert len(model_dynamic_spinup.fls) == len(fmod.fls)
+
+        # change settings back to default
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
