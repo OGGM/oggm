@@ -3382,15 +3382,14 @@ class TestHEF:
                 assert rgi_ids[gdir.rgi_id] in f'{e}'
 
         # check that ignore_error is working correctly
-        ignore_errors=True
+        ignore_errors = True
         for gdir in gdirs:
             model_dynamic_spinup = run_dynamic_spinup(
                 gdir,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 output_filesuffix='_dynamic_spinup',
-                ignore_errors=ignore_errors
-                )
+                ignore_errors=ignore_errors)
 
             # check if model geometry is correctly saved in gdir
             fp = gdir.get_filepath('model_geometry',
