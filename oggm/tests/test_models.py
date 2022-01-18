@@ -3355,6 +3355,11 @@ class TestHEF:
                               'that the reference value is 0.!',
             'RGI60-04.00331': 'Could not find mismatch smaller'
                               f' {precision_percent}%',
+            'RGI60-04.07198': '',  # for code coverage (ice free at end case)
+            'RGI60-04.05361': 'Not able to conduct one error free run. '
+                              'Error is "out_of_domain"',
+            'RGI60-04.03244': 'Not able to conduct one error free run. '
+                              'Error is "ice_free"'
         }
 
         # change settings to match used prepro directory
@@ -3372,11 +3377,18 @@ class TestHEF:
         ignore_errors = False
         for gdir in gdirs:
             try:
+                # need the min spinup period to force error
+                if gdir.rgi_id in ['RGI60-04.05361', 'RGI60-04.05361',
+                                   'RGI60-04.03244']:
+                    min_spinup_period = 20
+                else:
+                    min_spinup_period = 10
                 run_dynamic_spinup(gdir,
                                    minimise_for=minimise_for,
                                    precision_percent=precision_percent,
                                    output_filesuffix='_dynamic_spinup',
-                                   ignore_errors=ignore_errors
+                                   ignore_errors=ignore_errors,
+                                   min_spinup_period=min_spinup_period,
                                    )
             except RuntimeError as e:
                 assert rgi_ids[gdir.rgi_id] in f'{e}'
