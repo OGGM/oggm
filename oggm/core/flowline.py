@@ -3760,7 +3760,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        spinup_period=20, min_spinup_period=10, yr_rgi=None,
                        minimise_for='area', precision_percent=10,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
-                       maxiter=10, output_filesuffix='_dynamic_spinup',
+                       maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False,
                        ignore_errors=True):
     """Dynamically spinup the glacier to match area or volume at the RGI date.

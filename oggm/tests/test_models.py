@@ -3355,7 +3355,8 @@ class TestHEF:
                               'that the reference value is 0.!',
             'RGI60-04.00331': 'Could not find mismatch smaller'
                               f' {precision_percent}%',
-            'RGI60-04.07198': '',  # for code coverage (ice free at end case)
+            'RGI60-04.07198': 'Not able to minimise! Problem is unknown, '
+                              'need to check by hand!',
             'RGI60-04.05361': 'Not able to conduct one error free run. '
                               'Error is "out_of_domain"',
             'RGI60-04.03244': 'Not able to conduct one error free run. '
@@ -3376,31 +3377,55 @@ class TestHEF:
         # Test that the correct error is raised
         ignore_errors = False
         for gdir in gdirs:
-            try:
-                # need the min spinup period to force error
-                if gdir.rgi_id in ['RGI60-04.05361', 'RGI60-04.05361',
-                                   'RGI60-04.03244']:
-                    min_spinup_period = 20
-                else:
-                    min_spinup_period = 10
+            # need different min spinup periods to force error
+            if gdir.rgi_id in ['RGI60-04.05361', 'RGI60-04.05361',
+                               'RGI60-04.03244']:
+                min_spinup_period = 20
+            else:
+                min_spinup_period = 10
+
+            # not all combinations raise an error, but still test special cases
+            if (((minimise_for == 'area') &
+                 (gdir.rgi_id == 'RGI60-04.07198')) |
+                ((minimise_for == 'volume') &
+                 (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
+                                  'RGI60-04.00331']))):
                 run_dynamic_spinup(gdir,
                                    minimise_for=minimise_for,
                                    precision_percent=precision_percent,
                                    output_filesuffix='_dynamic_spinup',
+                                   maxiter=10,
                                    ignore_errors=ignore_errors,
                                    min_spinup_period=min_spinup_period,
                                    )
-            except RuntimeError as e:
-                assert rgi_ids[gdir.rgi_id] in f'{e}'
+            else:
+                with pytest.raises(RuntimeError,
+                                   match=rgi_ids[gdir.rgi_id]):
+                    run_dynamic_spinup(gdir,
+                                       minimise_for=minimise_for,
+                                       precision_percent=precision_percent,
+                                       output_filesuffix='_dynamic_spinup',
+                                       maxiter=10,
+                                       ignore_errors=ignore_errors,
+                                       min_spinup_period=min_spinup_period,
+                                       )
 
         # check that ignore_error is working correctly
         ignore_errors = True
         for gdir in gdirs:
+            if gdir.rgi_id in ['RGI60-04.05361', 'RGI60-04.05361',
+                               'RGI60-04.03244']:
+                min_spinup_period = 20
+            else:
+                min_spinup_period = 10
+
             model_dynamic_spinup = run_dynamic_spinup(
                 gdir,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 output_filesuffix='_dynamic_spinup',
+                maxiter=10,
+                min_spinup_period=min_spinup_period,
                 ignore_errors=ignore_errors)
 
             # check if model geometry is correctly saved in gdir
