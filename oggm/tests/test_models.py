@@ -150,7 +150,7 @@ class TestInitPresentDayFlowline:
 
         mb_profile_constant_dh = gdir.get_ref_mb_profile(constant_dh=True)
         step_dh = mb_profile_constant_dh.columns[1:] - mb_profile_constant_dh.columns[:-1]
-        assert np.all(step_dh==50)
+        assert np.all(step_dh == 50)
         mb_profile_raw = gdir.get_ref_mb_profile()
 
         # Gradient
