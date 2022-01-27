@@ -3280,7 +3280,7 @@ class GlacierDirectory(object):
             else:
                 # Some files are just empty
                 out = self._mbprofdf
-        elif constant_dh is True:
+        else:
             if len(self._mbprofdf_cte_dh) > 1:
                 out = self._mbprofdf_cte_dh.loc[y0:y1]
             else:
