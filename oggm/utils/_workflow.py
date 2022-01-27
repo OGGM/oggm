@@ -3252,7 +3252,7 @@ class GlacierDirectory(object):
             # list of years
             self._mbprofdf = pd.read_csv(reff, index_col=0)
 
-        elif self._mbprofdf_cte_dh is None and constant_dh is True:
+        if self._mbprofdf_cte_dh is None and constant_dh:
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
