@@ -3274,7 +3274,7 @@ class GlacierDirectory(object):
             raise RuntimeError('Please process some climate data before call')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
-        if constant_dh is False:
+        if not constant_dh:
             if len(self._mbprofdf) > 1:
                 out = self._mbprofdf.loc[y0:y1]
             else:
