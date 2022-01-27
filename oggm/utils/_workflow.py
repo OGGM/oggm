@@ -3235,7 +3235,7 @@ class GlacierDirectory(object):
             elevation-dependent point MB
         """
 
-        if self._mbprofdf is None and constant_dh is False:
+        if self._mbprofdf is None and not constant_dh:
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
