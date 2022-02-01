@@ -34,7 +34,7 @@ def init_glacier_directories_from_rgitopo(rgidf=None, dem_source=None,
     a default source for you (if not set manually with `dem_source`).
 
     The default source is NASADEM for all latitudes between 60N and 56S,
-    and COPDEM elsewhere.
+    and COPDEM90 elsewhere.
 
     Parameters
     ----------
@@ -48,7 +48,7 @@ def init_glacier_directories_from_rgitopo(rgidf=None, dem_source=None,
         setting `reset=True` will trigger a yes/no question to the user. Set
         `force=True` to avoid this.
     dem_source : str
-        the source to pick from (default: NASADEM and COPDEM)
+        the source to pick from (default: NASADEM and COPDEM90)
     keep_dem_folders : bool
         the default is to delete the other DEM directories to save space.
         Set this to True to prevent that (e.g. for sensitivity tests)
@@ -95,7 +95,7 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory
     dem_source : str
-        the source to pick from (default: NASADEM and COPDEM)
+        the source to pick from (default: NASADEM and COPDEM90)
     keep_dem_folders : bool
         the default is to delete the other DEM directories to save space.
         Set this to True to prevent that (e.g. for sensitivity tests)
@@ -111,7 +111,7 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
                and not f.name.startswith('.')]
 
     if dem_source is None:
-        for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
+        for s in ['NASADEM', 'COPDEM90', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
             if s in sources:
                 dem_source = s
 

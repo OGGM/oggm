@@ -1175,10 +1175,10 @@ def _download_copdem_file_unlocked(cppfile, tilename, version):
     # check if extracted file exists already
     if os.path.exists(demfile):
         return demfile
-    
+
     # Did we download it yet?
     ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-{}-DGED/2019_1/'.format(version) +
+               'datasets/COP-DEM_GLO-{}-DGED/2021_1/'.format(version) +
                cppfile)
 
     dest_file = download_with_authentication(ftpfile,
@@ -1528,29 +1528,40 @@ def alaska_dem_zone(lon_ex, lat_ex):
     return gdf.tile.values if len(gdf) > 0 else []
 
 
-def copdem_zone(lon_ex, lat_ex, version):
+def copdem_zone(lon_ex, lat_ex, version='90'):
     """Returns a list of Copernicus DEM tarfile and tilename tuples
     """
-
+    
+    # because we use both meters and arc secs in our filenames...
+    if version == '90':
+        asec = '30'
+    elif version  == '30':
+        asec = '10'
+    else:
+        raise InvalidDEMError('COPDEM Version not valid.')
+    
     # path to the lookup shapefiles
-    gdf = gpd.read_file(get_demo_file('RGI60_COPDEM{}_lookup.shp'.format(version)))
+    df = pd.read_csv(get_demo_file('copdem{}_2021_1.csv'.format(version)))
+    
+    # adding small buffer for unlikely case where one lon/lat_ex == xx.0
+    lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
+    lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
 
-    # intersect with lat lon extents
-    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
-    gdf = gdf.loc[gdf.intersects(p)]
-
-    # COPDEM is global, if we miss all tiles it is worth an error
-    if len(gdf) == 0:
-        raise InvalidDEMError('Could not find any Copernicus DEM {} tile.'.format(version))
     flist = []
-    for _, g in gdf.iterrows():
-        cpp = g['CPP File']
-        eop = g['Eop Id']
-        eop = eop.split(':')[-2]
-        assert 'Copernicus' in eop
-
-        flist.append((cpp, eop))
-
+    for lat in lats:
+        # north or south?
+        ns = 'S' if lat < 0 else 'N'
+        for lon in lons:
+            # east or west?
+            ew = 'W' if lon < 0 else 'E'
+            Lat = '{}{:02.0f}'.format(ns, abs(lat))
+            Lon = '{}{:03.0f}'.format(ew, abs(lon))
+            # COPDEM is global, if we miss tiles it is worth an error
+            try:
+                filename = df.loc[(df['Long']==Lon) & (df['Lat']==Lat)]['CPP filename'].iloc[0]
+                flist.append((filename, 'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, Lat, Lon)))
+            except IndexError:
+                raise InvalidDEMError('Could not find a matching Copernicus DEM file.')
     return flist
 
 
@@ -2159,7 +2170,7 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
     elif source == 'SRTM':
         return np.max(np.abs(lat_ex)) < 60
-    elif (source == 'COPDEM30') or (source == 'COPDEM90'):
+    elif source in ['COPDEM30', 'COPDEM90']:
         return True
     elif source == 'NASADEM':
         return (np.min(lat_ex) > -56) and (np.max(lat_ex) < 60)
@@ -2328,7 +2339,7 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
         for z in zones:
             files.append(_download_srtm_file(z))
 
-    if (source == 'COPDEM30') or (source == 'COPDEM90'):
+    if source in ['COPDEM30', 'COPDEM90']:
         version = source[-2:]
         filetuple = copdem_zone(lon_ex, lat_ex, version)
         for cpp, eop in filetuple:

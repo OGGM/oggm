@@ -446,8 +446,8 @@ class TestGIS(unittest.TestCase):
     def test_dem_source_text(self):
 
         for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER', 'SRTM',
-                  'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA', 'COPDEM',
-                  'NASADEM', 'ALASKA']:
+                  'RAMP', 'GIMP', 'ARCTICDEM', 'DEM3', 'REMA', 'COPDEM30',
+                  'COPDEM90', 'NASADEM', 'ALASKA']:
             assert s in gis.DEM_SOURCE_INFO.keys()
 
     def test_dem_daterange_dateinfo(self):
