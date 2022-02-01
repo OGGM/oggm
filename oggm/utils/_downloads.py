@@ -1554,13 +1554,14 @@ def copdem_zone(lon_ex, lat_ex, version='90'):
         for lon in lons:
             # east or west?
             ew = 'W' if lon < 0 else 'E'
-            Lat = '{}{:02.0f}'.format(ns, abs(lat))
-            Lon = '{}{:03.0f}'.format(ew, abs(lon))
+            lat_str = '{}{:02.0f}'.format(ns, abs(lat))
+            lon_str = '{}{:03.0f}'.format(ew, abs(lon))
             # COPDEM is global, if we miss tiles it is worth an error
             try:
-                filename = df.loc[(df['Long'] == Lon) &
-                                  (df['Lat'] == Lat)]['CPP filename'].iloc[0]
-                flist.append((filename, 'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, Lat, Lon)))
+                filename = df.loc[(df['Long'] == lon_str) &
+                                  (df['Lat'] == lat_str)]['CPP filename'].iloc[0]
+                flist.append((filename,
+                              'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str)))
             except IndexError:
                 raise InvalidDEMError('Could not find a matching Copernicus DEM file.')
     return flist

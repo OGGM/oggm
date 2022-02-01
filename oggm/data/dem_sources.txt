@@ -264,7 +264,7 @@ Any usage or publication must include the following statement:
 the European Union and ESA, all rights reserved”.
 
 Please also read and agree to the full ESA user license:
-https://spacedata.copernicus.eu/documents/12833/14545/CSCDA_ESA_User_Licence
+https://spacedata.copernicus.eu/documents/20126/0/CSCDA_ESA_User_Licence_2021_11_17.pdf
 
 [COPDEM30]
 Copernicus DEM GLO-30
@@ -279,7 +279,7 @@ Any usage or publication must include the following statement:
 the European Union and ESA, all rights reserved”.
 
 Please also read and agree to the full ESA user license:
-https://spacedata.copernicus.eu/documents/12833/14545/CSCDA_ESA_User_Licence
+https://spacedata.copernicus.eu/documents/20126/0/CSCDA_ESA_User_Licence_2021_11_17.pdf
 
 [NASADEM]
 NASADEM Merged DEM Global
