@@ -2412,7 +2412,7 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual(('DEM1_SAR_DGE_90_20110427T104941_20140819T105300_'
                           'ADS_000000_7913.DEM.tar'), z[0][0])
         self.assertEqual('Copernicus_DSM_30_S10_00_W078_00', z[0][1])
-        
+
         z = utils.copdem_zone(lat_ex=[-9.8, -9.5], lon_ex=[-77.6, -77.3], version='30')
         self.assertTrue(len(z) == 1)
         self.assertEqual(('DEM1_SAR_DGE_30_20110427T104941_20140819T105300_'
@@ -2425,7 +2425,7 @@ class TestDataFiles(unittest.TestCase):
                         [z[0][1], z[1][1]])
         self.assertTrue('Copernicus_DSM_30_N46_00_E007_00' in
                         [z[0][1], z[1][1]])
-        
+
         z = utils.copdem_zone(lat_ex=[46.37, 46.59], lon_ex=[7.89, 8.12], version='30')
         self.assertTrue(len(z) == 2)
         self.assertTrue('Copernicus_DSM_10_N46_00_E008_00' in
@@ -2453,7 +2453,7 @@ class TestDataFiles(unittest.TestCase):
 
         assert utils.default_dem_source('RGI60-11.00897') == 'NASADEM'
         assert utils.default_dem_source('RGI60-11.00897_merged') == 'NASADEM'
-        assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM90'
+        assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM'
         assert utils.default_dem_source('RGI60-19.00970') == 'REMA'
         assert utils.default_dem_source('RGI60-05.10315') == 'GIMP'
         assert utils.default_dem_source('RGI60-19.01820') == 'MAPZEN'
@@ -2604,7 +2604,7 @@ class TestDataFiles(unittest.TestCase):
         tilename = 'Copernicus_DSM_30_N78_00_E102_00'
         fp = _download_copdem_file(cppfile, tilename, '90')
         self.assertTrue(os.path.exists(fp))
-        
+
         # same for 30m version, but not so small anymore
         cppfile30 = ('DEM1_SAR_DGE_30_20110109T094723_20140326T001716_ADS_'
                      '000000_6QcB.DEM.tar')

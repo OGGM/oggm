@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'df250ee69405c2108b6782781d6aa6c22aa3919d'
+SAMPLE_DATA_COMMIT = 'ec2929a471a09b2b0f1e30a7ab2f9d1fb6e79098'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -1531,18 +1531,18 @@ def alaska_dem_zone(lon_ex, lat_ex):
 def copdem_zone(lon_ex, lat_ex, version='90'):
     """Returns a list of Copernicus DEM tarfile and tilename tuples
     """
-    
+
     # because we use both meters and arc secs in our filenames...
     if version == '90':
         asec = '30'
-    elif version  == '30':
+    elif version == '30':
         asec = '10'
     else:
         raise InvalidDEMError('COPDEM Version not valid.')
-    
+
     # path to the lookup shapefiles
     df = pd.read_csv(get_demo_file('copdem{}_2021_1.csv'.format(version)))
-    
+
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0
     lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
     lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
@@ -1558,7 +1558,8 @@ def copdem_zone(lon_ex, lat_ex, version='90'):
             Lon = '{}{:03.0f}'.format(ew, abs(lon))
             # COPDEM is global, if we miss tiles it is worth an error
             try:
-                filename = df.loc[(df['Long']==Lon) & (df['Lat']==Lat)]['CPP filename'].iloc[0]
+                filename = df.loc[(df['Long'] == Lon) &
+                                  (df['Lat'] == Lat)]['CPP filename'].iloc[0]
                 flist.append((filename, 'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, Lat, Lon)))
             except IndexError:
                 raise InvalidDEMError('Could not find a matching Copernicus DEM file.')
@@ -2199,7 +2200,7 @@ def default_dem_source(rgi_id):
         cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp, key=rgi_reg)
 
     sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
-    for s in ['NASADEM', 'COPDEM90', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
+    for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
         if sel.loc[s] > 0.75:
             return s
 
