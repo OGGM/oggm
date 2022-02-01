@@ -148,16 +148,33 @@ class TestInitPresentDayFlowline:
         # Bias
         assert np.abs(utils.md(tot_mb, refmb)) < 50
 
+        mb_profile_constant_dh = gdir.get_ref_mb_profile(constant_dh=True)
+        step_dh = mb_profile_constant_dh.columns[1:] - mb_profile_constant_dh.columns[:-1]
+        assert np.all(step_dh == 50)
+        mb_profile_raw = gdir.get_ref_mb_profile()
+
         # Gradient
-        dfg = gdir.get_ref_mb_profile().mean()
+        dfg = mb_profile_raw.mean()
+        dfg_constant_dh = mb_profile_constant_dh.mean()
+
 
         # Take the altitudes below 3100 and fit a line
-        dfg = dfg[dfg.index < 3100]
         pok = np.where(hgts < 3100)
+        pok_constant_dh = np.where(dfg_constant_dh.index < 3100)
+
+        dfg = dfg[dfg.index < 3100]
+        dfg_constant_dh = dfg_constant_dh[dfg_constant_dh.index < 3100]
+
         from scipy.stats import linregress
         slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
+        slope_obs_constant_dh, _, _, _, _ = linregress(dfg_constant_dh.index,
+                                                       dfg_constant_dh.values)
         slope_our, _, _, _, _ = linregress(hgts[pok], grads[pok])
+
         np.testing.assert_allclose(slope_obs, slope_our, rtol=0.15)
+        # the observed MB gradient and the interpolated observed one (with
+        # constant dh) should be very similar!
+        np.testing.assert_allclose(slope_obs, slope_obs_constant_dh, rtol=0.01)
 
 
 @pytest.fixture(scope='class')

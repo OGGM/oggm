@@ -2482,6 +2482,7 @@ class GlacierDirectory(object):
         # Optimization
         self._mbdf = None
         self._mbprofdf = None
+        self._mbprofdf_cte_dh = None
 
     def __repr__(self):
 
@@ -3216,7 +3217,7 @@ class GlacierDirectory(object):
             out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
-    def get_ref_mb_profile(self, input_filesuffix=''):
+    def get_ref_mb_profile(self, input_filesuffix='', constant_dh=False):
         """Get the reference mb profile data from WGMS (if available!).
 
         Returns None if this glacier has no profile and an Error if it isn't
@@ -3227,10 +3228,14 @@ class GlacierDirectory(object):
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used. The
             default is to take the climate_historical without input_filesuffix
-
+        constant_dh : boolean
+            If set to True, it outputs the MB profiles with a constant step size
+            of dh=50m by using interpolation. This can be useful for comparisons
+            between years. Default is False which gives the raw
+            elevation-dependent point MB
         """
 
-        if self._mbprofdf is None:
+        if self._mbprofdf is None and not constant_dh:
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
@@ -3247,16 +3252,40 @@ class GlacierDirectory(object):
             # list of years
             self._mbprofdf = pd.read_csv(reff, index_col=0)
 
+        if self._mbprofdf_cte_dh is None and constant_dh:
+            flink, mbdatadir = get_wgms_files()
+            c = 'RGI{}0_ID'.format(self.rgi_version[0])
+            wid = flink.loc[flink[c] == self.rgi_id]
+            if len(wid) == 0:
+                raise RuntimeError('Not a reference glacier!')
+            wid = wid.WGMS_ID.values[0]
+
+            # file
+            mbdatadir = os.path.join(os.path.dirname(mbdatadir), 'mb_profiles_constant_dh')
+            reff = os.path.join(mbdatadir,
+                                'profile_constant_dh_WGMS-{:05d}.csv'.format(wid))
+            if not os.path.exists(reff):
+                return None
+            # list of years
+            self._mbprofdf_cte_dh = pd.read_csv(reff, index_col=0)
+
         ci = self.get_climate_info(input_filesuffix=input_filesuffix)
         if 'baseline_hydro_yr_0' not in ci:
             raise RuntimeError('Please process some climate data before call')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
-        if len(self._mbprofdf) > 1:
-            out = self._mbprofdf.loc[y0:y1]
+        if not constant_dh:
+            if len(self._mbprofdf) > 1:
+                out = self._mbprofdf.loc[y0:y1]
+            else:
+                # Some files are just empty
+                out = self._mbprofdf
         else:
-            # Some files are just empty
-            out = self._mbprofdf
+            if len(self._mbprofdf_cte_dh) > 1:
+                out = self._mbprofdf_cte_dh.loc[y0:y1]
+            else:
+                # Some files are just empty
+                out = self._mbprofdf_cte_dh
         out.columns = [float(c) for c in out.columns]
         return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
