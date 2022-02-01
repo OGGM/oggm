@@ -1658,7 +1658,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location (file
         extension matters)
-    csv: bool
+    csv : bool
         Set to store the data in csv instead of hdf.
     use_inversion_flowlines : bool
         whether to use the inversion flowlines or the model flowlines
@@ -1669,7 +1669,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         end year of the model run (default: from the climate file)
     years : array of ints
         override ys and ye with the years of your choice
-     climate_filename : str
+    climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
     climate_input_filesuffix: str
