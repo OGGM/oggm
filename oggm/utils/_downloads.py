@@ -1151,16 +1151,17 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
-def _download_copdem_file(cppfile, tilename, version):
+def _download_copdem_file(cppfile, tilename, source):
     with get_lock():
-        return _download_copdem_file_unlocked(cppfile, tilename, version)
+        return _download_copdem_file_unlocked(cppfile, tilename, source)
 
 
-def _download_copdem_file_unlocked(cppfile, tilename, version):
+def _download_copdem_file_unlocked(cppfile, tilename, source):
     """Checks if Copernicus DEM file is in the directory, if not download it.
 
     cppfile : name of the tarfile to download
     tilename : name of folder and tif file within the cppfile
+    source : either 'COPDEM90' or 'COPDEM30'
 
     """
 
@@ -1178,7 +1179,7 @@ def _download_copdem_file_unlocked(cppfile, tilename, version):
 
     # Did we download it yet?
     ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-{}-DGED/2021_1/'.format(version) +
+               'datasets/COP-DEM_GLO-{}-DGED/2021_1/'.format(source[-2:]) +
                cppfile)
 
     dest_file = download_with_authentication(ftpfile,
@@ -1528,20 +1529,24 @@ def alaska_dem_zone(lon_ex, lat_ex):
     return gdf.tile.values if len(gdf) > 0 else []
 
 
-def copdem_zone(lon_ex, lat_ex, version='90'):
+def copdem_zone(lon_ex, lat_ex, source):
     """Returns a list of Copernicus DEM tarfile and tilename tuples
     """
 
     # because we use both meters and arc secs in our filenames...
-    if version == '90':
+    if source[-2:] == '90':
         asec = '30'
-    elif version == '30':
+    elif source[-2:] == '30':
         asec = '10'
     else:
         raise InvalidDEMError('COPDEM Version not valid.')
 
-    # path to the lookup shapefiles
-    df = pd.read_csv(get_demo_file('copdem{}_2021_1.csv'.format(version)))
+    # either reuse or load lookup table
+    if source in cfg.DATA:
+        df = cfg.DATA[source]
+    else:
+        df = pd.read_csv(get_demo_file('{}_2021_1.csv'.format(source.lower())))
+        cfg.DATA[source] = df
 
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0
     lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
@@ -2345,10 +2350,9 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
             files.append(_download_srtm_file(z))
 
     if source in ['COPDEM30', 'COPDEM90']:
-        version = source[-2:]
-        filetuple = copdem_zone(lon_ex, lat_ex, version)
+        filetuple = copdem_zone(lon_ex, lat_ex, source)
         for cpp, eop in filetuple:
-            files.append(_download_copdem_file(cpp, eop, version))
+            files.append(_download_copdem_file(cpp, eop, source))
 
     if source == 'NASADEM':
         zones = nasadem_zone(lon_ex, lat_ex)

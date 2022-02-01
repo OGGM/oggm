@@ -2407,26 +2407,26 @@ class TestDataFiles(unittest.TestCase):
         self.assertEqual(ref, z)
 
     def test_copdemzone(self):
-        z = utils.copdem_zone(lat_ex=[-9.8, -9.5], lon_ex=[-77.6, -77.3], version='90')
+        z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM90')
         self.assertTrue(len(z) == 1)
         self.assertEqual(('DEM1_SAR_DGE_90_20110427T104941_20140819T105300_'
                           'ADS_000000_7913.DEM.tar'), z[0][0])
         self.assertEqual('Copernicus_DSM_30_S10_00_W078_00', z[0][1])
 
-        z = utils.copdem_zone(lat_ex=[-9.8, -9.5], lon_ex=[-77.6, -77.3], version='30')
+        z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM30')
         self.assertTrue(len(z) == 1)
         self.assertEqual(('DEM1_SAR_DGE_30_20110427T104941_20140819T105300_'
                           'ADS_000000_elyt.DEM.tar'), z[0][0])
         self.assertEqual('Copernicus_DSM_10_S10_00_W078_00', z[0][1])
 
-        z = utils.copdem_zone(lat_ex=[46.37, 46.59], lon_ex=[7.89, 8.12], version='90')
+        z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM90')
         self.assertTrue(len(z) == 2)
         self.assertTrue('Copernicus_DSM_30_N46_00_E008_00' in
                         [z[0][1], z[1][1]])
         self.assertTrue('Copernicus_DSM_30_N46_00_E007_00' in
                         [z[0][1], z[1][1]])
 
-        z = utils.copdem_zone(lat_ex=[46.37, 46.59], lon_ex=[7.89, 8.12], version='30')
+        z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM30')
         self.assertTrue(len(z) == 2)
         self.assertTrue('Copernicus_DSM_10_N46_00_E008_00' in
                         [z[0][1], z[1][1]])
@@ -2435,7 +2435,7 @@ class TestDataFiles(unittest.TestCase):
 
         # we want an error if copdem does not find all or any
         self.assertRaises(InvalidDEMError, utils.copdem_zone,
-                          lat_ex=[0, 1], lon_ex=[0, 1])
+                          [0, 1], [0, 1], 'COPDEM90')
 
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
@@ -2602,14 +2602,14 @@ class TestDataFiles(unittest.TestCase):
         cppfile = ('DEM1_SAR_DGE_90_20110109T094723_20140326T001716_ADS_'
                    '000000_5845.DEM.tar')
         tilename = 'Copernicus_DSM_30_N78_00_E102_00'
-        fp = _download_copdem_file(cppfile, tilename, '90')
+        fp = _download_copdem_file(cppfile, tilename, 'COPDEM90')
         self.assertTrue(os.path.exists(fp))
 
         # same for 30m version, but not so small anymore
         cppfile30 = ('DEM1_SAR_DGE_30_20110109T094723_20140326T001716_ADS_'
                      '000000_6QcB.DEM.tar')
         tilename30 = 'Copernicus_DSM_10_N78_00_E102_00'
-        fp30 = _download_copdem_file(cppfile30, tilename30, '30')
+        fp30 = _download_copdem_file(cppfile30, tilename30, 'COPDEM30')
         self.assertTrue(os.path.exists(fp30))
 
     @pytest.mark.creds
