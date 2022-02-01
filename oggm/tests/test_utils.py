@@ -1878,7 +1878,7 @@ class TestFakeDownloads(unittest.TestCase):
         # Make a fake topo file
         deep_path = os.path.join(self.dldir,
                                  'DEM1_SAR_DGE_90_20110517T170701_20140817T170857'
-                                 '857_ADS_000000_3682.DEM',
+                                 '_ADS_000000_3682.DEM',
                                  'Copernicus_DSM_30_N46_00_E010_00', 'DEM')
         utils.mkdir(deep_path)
         upper_path = os.path.dirname(os.path.dirname(deep_path))
@@ -1908,7 +1908,7 @@ class TestFakeDownloads(unittest.TestCase):
         # Make a fake topo file
         deep_path = os.path.join(self.dldir,
                                  'DEM1_SAR_DGE_30_20110517T170701_20140817T170857'
-                                 '857_ADS_000000_bma2.DEM',
+                                 '_ADS_000000_bma2.DEM',
                                  'Copernicus_DSM_10_N46_00_E010_00', 'DEM')
         utils.mkdir(deep_path)
         upper_path = os.path.dirname(os.path.dirname(deep_path))
