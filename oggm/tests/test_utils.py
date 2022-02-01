@@ -2453,7 +2453,7 @@ class TestDataFiles(unittest.TestCase):
 
         assert utils.default_dem_source('RGI60-11.00897') == 'NASADEM'
         assert utils.default_dem_source('RGI60-11.00897_merged') == 'NASADEM'
-        assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM'
+        assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM90'
         assert utils.default_dem_source('RGI60-19.00970') == 'REMA'
         assert utils.default_dem_source('RGI60-05.10315') == 'GIMP'
         assert utils.default_dem_source('RGI60-19.01820') == 'MAPZEN'

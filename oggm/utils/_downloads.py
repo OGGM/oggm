@@ -2202,6 +2202,9 @@ def default_dem_source(rgi_id):
     sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
     for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
         if sel.loc[s] > 0.75:
+            # this can go as soon as 'rgi62_dem_frac.h5' is updated:
+            if s == 'COPDEM':
+                s = 'COPDEM90'
             return s
 
     return None
