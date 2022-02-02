@@ -23,6 +23,8 @@ Breaking changes
   or similar), your code will fail with ``FileNotFoundError`` for the
   ``model_geometry`` files. Setting ``cfg.PARAMS['store_model_geometry']``
   back to ``True`` should solve the issue.
+- Copernicus DEM 90m is now called ``'COPDEM90'`` instead of ``'COPDEM'`` and also uses the
+  2021 release with additional data corrections (:pull:`1364`).
 
 
 Enhancements
@@ -82,6 +84,11 @@ Enhancements
 - Added new options to `write_centerlines_to_shape` which allow to output
   smoother and more correct centerlines (:pull:`1357`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added the 30m version of the
+  `Copernicus DEM <https://spacedata.copernicus.eu/web/cscda/dataset-details?articleId=394198>`_.
+  This DEM can be set with ``source='COPDEM30'`` and can be usefull for smaller sized glaciers.
+  An account with Copernicus is required to access the DEM (free for academics).
+  (:pull:`1364`). By `Matthias Dusch <https://github.com/matthiasdusch>`_
 
 Bug fixes
 ~~~~~~~~~

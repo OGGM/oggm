@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'b3777c843a6b44a3bd288a680315adbffbe2e6bb'
+SAMPLE_DATA_COMMIT = 'ec2929a471a09b2b0f1e30a7ab2f9d1fb6e79098'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -86,8 +86,8 @@ CHECKSUM_LIFETIME = 24 * 60 * 60
 WEB_N_PIX = 256
 WEB_EARTH_RADUIS = 6378137.
 
-DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN',
-               'DEM3', 'ASTER', 'SRTM', 'REMA', 'ALASKA', 'COPDEM', 'NASADEM']
+DEM_SOURCES = ['GIMP', 'ARCTICDEM', 'RAMP', 'TANDEM', 'AW3D30', 'MAPZEN', 'DEM3',
+               'ASTER', 'SRTM', 'REMA', 'ALASKA', 'COPDEM30', 'COPDEM90', 'NASADEM']
 DEM_SOURCES_PER_GLACIER = None
 
 _RGI_METADATA = dict()
@@ -1151,16 +1151,17 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
-def _download_copdem_file(cppfile, tilename):
+def _download_copdem_file(cppfile, tilename, source):
     with get_lock():
-        return _download_copdem_file_unlocked(cppfile, tilename)
+        return _download_copdem_file_unlocked(cppfile, tilename, source)
 
 
-def _download_copdem_file_unlocked(cppfile, tilename):
+def _download_copdem_file_unlocked(cppfile, tilename, source):
     """Checks if Copernicus DEM file is in the directory, if not download it.
 
     cppfile : name of the tarfile to download
     tilename : name of folder and tif file within the cppfile
+    source : either 'COPDEM90' or 'COPDEM30'
 
     """
 
@@ -1178,7 +1179,7 @@ def _download_copdem_file_unlocked(cppfile, tilename):
 
     # Did we download it yet?
     ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-90-DGED/2019_1/' +
+               'datasets/COP-DEM_GLO-{}-DGED/2021_1/'.format(source[-2:]) +
                cppfile)
 
     dest_file = download_with_authentication(ftpfile,
@@ -1528,29 +1529,46 @@ def alaska_dem_zone(lon_ex, lat_ex):
     return gdf.tile.values if len(gdf) > 0 else []
 
 
-def copdem_zone(lon_ex, lat_ex):
+def copdem_zone(lon_ex, lat_ex, source):
     """Returns a list of Copernicus DEM tarfile and tilename tuples
     """
 
-    # path to the lookup shapefiles
-    gdf = gpd.read_file(get_demo_file('RGI60_COPDEM_lookup.shp'))
+    # because we use both meters and arc secs in our filenames...
+    if source[-2:] == '90':
+        asec = '30'
+    elif source[-2:] == '30':
+        asec = '10'
+    else:
+        raise InvalidDEMError('COPDEM Version not valid.')
 
-    # intersect with lat lon extents
-    p = _extent_to_polygon(lon_ex, lat_ex, to_crs=gdf.crs)
-    gdf = gdf.loc[gdf.intersects(p)]
+    # either reuse or load lookup table
+    if source in cfg.DATA:
+        df = cfg.DATA[source]
+    else:
+        df = pd.read_csv(get_demo_file('{}_2021_1.csv'.format(source.lower())))
+        cfg.DATA[source] = df
 
-    # COPDEM is global, if we miss all tiles it is worth an error
-    if len(gdf) == 0:
-        raise InvalidDEMError('Could not find any Copernicus DEM tile.')
+    # adding small buffer for unlikely case where one lon/lat_ex == xx.0
+    lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
+    lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
+
     flist = []
-    for _, g in gdf.iterrows():
-        cpp = g['CPP File']
-        eop = g['Eop Id']
-        eop = eop.split(':')[-2]
-        assert 'Copernicus' in eop
-
-        flist.append((cpp, eop))
-
+    for lat in lats:
+        # north or south?
+        ns = 'S' if lat < 0 else 'N'
+        for lon in lons:
+            # east or west?
+            ew = 'W' if lon < 0 else 'E'
+            lat_str = '{}{:02.0f}'.format(ns, abs(lat))
+            lon_str = '{}{:03.0f}'.format(ew, abs(lon))
+            # COPDEM is global, if we miss tiles it is worth an error
+            try:
+                filename = df.loc[(df['Long'] == lon_str) &
+                                  (df['Lat'] == lat_str)]['CPP filename'].iloc[0]
+                flist.append((filename,
+                              'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str)))
+            except IndexError:
+                raise InvalidDEMError('Could not find a matching Copernicus DEM file.')
     return flist
 
 
@@ -2159,7 +2177,7 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
     elif source == 'SRTM':
         return np.max(np.abs(lat_ex)) < 60
-    elif source == 'COPDEM':
+    elif source in ['COPDEM30', 'COPDEM90']:
         return True
     elif source == 'NASADEM':
         return (np.min(lat_ex) > -56) and (np.max(lat_ex) < 60)
@@ -2190,6 +2208,9 @@ def default_dem_source(rgi_id):
     sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
     for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
         if sel.loc[s] > 0.75:
+            # this can go as soon as 'rgi62_dem_frac.h5' is updated:
+            if s == 'COPDEM':
+                s = 'COPDEM90'
             return s
 
     return None
@@ -2328,10 +2349,10 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
         for z in zones:
             files.append(_download_srtm_file(z))
 
-    if source == 'COPDEM':
-        filetuple = copdem_zone(lon_ex, lat_ex)
+    if source in ['COPDEM30', 'COPDEM90']:
+        filetuple = copdem_zone(lon_ex, lat_ex, source)
         for cpp, eop in filetuple:
-            files.append(_download_copdem_file(cpp, eop))
+            files.append(_download_copdem_file(cpp, eop, source))
 
     if source == 'NASADEM':
         zones = nasadem_zone(lon_ex, lat_ex)

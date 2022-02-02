@@ -665,14 +665,14 @@ hope). They are listed on the
 The current default is to use the following datasets:
 
 - NASADEM: 60°S-60°N
-- COPDEM: Global, with missing regions (islands, etc.)
+- COPDEM90: Global, with missing regions (islands, etc.)
 - GIMP, REMA: Regional datasets
 - TANDEM: Global, with artefacts / missing data
 - MAPZEN: Global, when all other things failed
 
 These data are chosen in the provided order. If a dataset is not available,
 the next on the list will be tested: if the tested dataset covers
-75% of the glacier area, it is selected. In practice, NASADEM and COPDEM
+75% of the glacier area, it is selected. In practice, NASADEM and COPDEM90
 are sufficient for all but about 300 of the world's glaciers.
 
 These data are downloaded only when needed (i.e. during an OGGM run)

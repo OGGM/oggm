@@ -321,7 +321,8 @@ def define_glacier_region(gdir, entity=None, source=None):
           - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
           - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
           - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
-          - 'COPDEM' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
+          - 'COPDEM30' : Copernicus DEM GLO-30 https://bit.ly/2T98qqs
+          - 'COPDEM90' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
           - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
     """
 
