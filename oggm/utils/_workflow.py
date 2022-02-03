@@ -1053,21 +1053,44 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
 
-    # To find the longest time, sort the gdirs by date
-    sorted_gdir = sorted(gdirs, key=lambda gdir: gdir.rgi_date)
-    # The first gdir might have blown up, try some others
-    i = 0
-    while True:
-        if i >= len(sorted_gdir):
-            raise RuntimeError('Found no valid glaciers!')
+    # To find the longest time, we have to open all files unfortunately
+    time_info = {}
+    time_keys = ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']
+    for gd in gdirs:
+        fp = gd.get_filepath('model_diagnostics', filesuffix=input_filesuffix)
         try:
-            ppath = sorted_gdir[i].get_filepath('model_diagnostics',
-                                                filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath) as ds_diag:
-                ds_diag.time.values
-            break
-        except BaseException:
-            i += 1
+            with ncDataset(fp) as ds:
+                time = ds.variables['time'][:]
+                if 'time' not in time_info:
+                    time_info['time'] = time
+                    for cn in time_keys:
+                        time_info[cn] = ds.variables[cn][:]
+                else:
+                    # Here we may need to append or add stuff
+                    ot = time_info['time']
+                    if time[0] > ot[-1] or ot[-1] < time[0]:
+                        raise InvalidWorkflowError('Trying to compile output '
+                                                   'without overlap.')
+                    if time[-1] > ot[-1]:
+                        p = np.nonzero(time == ot[-1])[0][0] + 1
+                        time_info['time'] = np.append(ot, time[p:])
+                        for cn in time_keys:
+                            time_info[cn] = np.append(time_info[cn],
+                                                      ds.variables[cn][p:])
+                    if time[0] < ot[0]:
+                        p = np.nonzero(time == ot[0])[0][0]
+                        time_info['time'] = np.append(time[:p], ot)
+                        for cn in time_keys:
+                            time_info[cn] = np.append(ds.variables[cn][:p],
+                                                      time_info[cn])
+
+            # If this worked, keep it as template
+            ppath = fp
+        except FileNotFoundError:
+            pass
+
+    if 'time' not in time_info:
+        raise RuntimeError('Found no valid glaciers!')
 
     # OK found it, open it and prepare the output
     with xr.open_dataset(ppath) as ds_diag:
@@ -1082,7 +1105,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds.attrs['creation_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
         # Copy coordinates
-        time = ds_diag.time.values
+        time = time_info['time']
         ds.coords['time'] = ('time', time)
         ds['time'].attrs['description'] = 'Floating hydrological year'
         # New coord
@@ -1091,7 +1114,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         # This is just taken from there
         for cn in ['hydro_year', 'hydro_month',
                    'calendar_year', 'calendar_month']:
-            ds.coords[cn] = ('time', ds_diag[cn].values)
+            ds.coords[cn] = ('time', time_info[cn])
             ds[cn].attrs['description'] = ds_diag[cn].attrs['description']
 
         # We decide on the name of "3d" variables in case we have daily
@@ -1146,15 +1169,17 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         try:
             ppath = gdir.get_filepath('model_diagnostics',
                                       filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath) as ds_diag:
-                nt = - len(ds_diag.volume_m3.values)
+            with ncDataset(ppath) as ds_diag:
+                it = ds_diag.variables['time'][:]
+                a = np.nonzero(time == it[0])[0][0]
+                b = np.nonzero(time == it[-1])[0][0] + 1
                 for vn, var in out_2d.items():
-                    var['data'][nt:, i] = ds_diag[vn].values
+                    var['data'][a:b, i] = ds_diag.variables[vn][:]
                 for vn, var in out_3d.items():
-                    var['data'][nt:, :, i] = ds_diag[vn].values
+                    var['data'][a:b, :, i] = ds_diag.variables[vn][:]
                 for vn, var in out_1d.items():
-                    var['data'][i] = ds_diag.attrs[vn]
-        except BaseException:
+                    var['data'][i] = ds_diag.getncattr(vn)
+        except FileNotFoundError:
             pass
 
     # To xarray

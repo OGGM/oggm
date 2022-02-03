@@ -22,7 +22,7 @@ from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
-from oggm.tests.funcs import get_test_dir, apply_test_ref_tstars
+from oggm.tests.funcs import get_test_dir
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed, bu_tidewater_bed,
@@ -38,7 +38,7 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_dynamic_spinup)
+                                run_dynamic_spinup, run_with_hydro)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -2850,11 +2850,14 @@ class TestHEF:
 
     @pytest.mark.slow
     def test_stop_criterion(self, hef_gdir, inversion_params):
-
         # As long as hef_gdir uses 1, we need to use 1 here as well
         cfg.PARAMS['trapezoid_lambdas'] = 1
         init_present_time_glacier(hef_gdir)
         cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        # Check more output
+        cfg.PARAMS['store_fl_diagnostics'] = True
+        cfg.PARAMS['store_model_geometry'] = True
 
         run_random_climate(hef_gdir, y0=1985, nyears=200,
                            stop_criterion=equilibrium_stop_criterion,
@@ -2862,25 +2865,76 @@ class TestHEF:
         run_random_climate(hef_gdir, y0=1985, nyears=200,
                            output_filesuffix='_nostop', seed=1)
 
-        fp = hef_gdir.get_filepath('model_diagnostics', filesuffix='_stop')
+        ft = 'fl_diagnostics'
+        fp = hef_gdir.get_filepath(ft, filesuffix='_stop')
+        with xr.open_dataset(fp, group='fl_2') as ds:
+            ds_stop = ds.load()
+        fp = hef_gdir.get_filepath(ft, filesuffix='_nostop')
+        with xr.open_dataset(fp, group='fl_2') as ds:
+            ds_nostop = ds.load()
+
+        ds_stop = ds_stop.volume_m3.sum(dim='dis_along_flowline')
+        ds_nostop = ds_nostop.volume_m3.sum(dim='dis_along_flowline')
+
+        assert ds_stop.isnull().sum() == 0
+        assert ds_nostop.isnull().sum() == 0
+
+        assert_allclose(ds_stop.isel(time=-1), ds_nostop.isel(time=-1), rtol=0.2)
+        assert ds_stop.time[-1] < 150
+
+        ft = 'model_diagnostics'
+        fp = hef_gdir.get_filepath(ft, filesuffix='_stop')
         with xr.open_dataset(fp) as ds:
             ds_stop = ds.load()
-        fp = hef_gdir.get_filepath('model_diagnostics', filesuffix='_nostop')
+        fp = hef_gdir.get_filepath(ft, filesuffix='_nostop')
         with xr.open_dataset(fp) as ds:
             ds_nostop = ds.load()
 
-        assert ds_stop.volume_m3.isnull().sum() > 50
+        assert ds_stop.volume_m3.isnull().sum() == 0
         assert ds_nostop.volume_m3.isnull().sum() == 0
 
-        ds_stop = ds_stop.volume_m3.isel(time=~ds_stop.volume_m3.isnull())
+        ds_stop = ds_stop.volume_m3
         ds_nostop = ds_nostop.volume_m3
         assert_allclose(ds_stop.isel(time=-1), ds_nostop.isel(time=-1), rtol=0.2)
+        assert ds_stop.time[-1] < 150
 
         if do_plot:
             ds_nostop.plot(label='NoStop')
             ds_stop.plot(label='Stop')
             plt.legend()
             plt.show()
+
+    @pytest.mark.slow
+    def test_compile_time_workflow(self, hef_gdir, hef_copy_gdir, inversion_params):
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        cfg.PARAMS['store_model_geometry'] = True
+
+        run_with_hydro(hef_gdir, run_task=run_from_climate_data,
+                       ys=1985, ye=1995, store_monthly_hydro=True)
+        run_with_hydro(hef_copy_gdir, run_task=run_from_climate_data,
+                       ys=1985, ye=1995, store_monthly_hydro=True)
+
+        # Roundtrip
+        ds1 = utils.compile_run_output([hef_gdir, hef_copy_gdir])
+        ds2 = utils.compile_run_output([hef_copy_gdir, hef_gdir])
+        xr.testing.assert_allclose(ds1.sum(dim='rgi_id'), ds2.sum(dim='rgi_id'))
+
+        # If we were using xarray (which we should), we get:
+        fps = [gd.get_filepath('model_diagnostics') for gd in [hef_gdir, hef_copy_gdir]]
+        ds = xr.open_mfdataset(fps, combine='nested', concat_dim='rgi_id')
+        assert_allclose(ds.volume_m3.T, ds1.volume)
+        assert_allclose(ds.area_m2.T, ds1.area)
+        assert_allclose(ds.calving_m3.T, ds1.calving)
+
+        fps = [gd.get_filepath('model_diagnostics') for gd in [hef_copy_gdir, hef_gdir]]
+        ds = xr.open_mfdataset(fps, combine='nested', concat_dim='rgi_id')
+        assert_allclose(ds.volume_m3.T, ds2.volume)
+        assert_allclose(ds.area_m2.T, ds2.area)
+        assert_allclose(ds.calving_m3.T, ds2.calving)
 
     @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
@@ -4113,7 +4167,8 @@ def merged_hef_cfg(class_case_dir):
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
-class TestMergedHEF():
+class TestMergedHEF:
+
     @pytest.mark.slow
     def test_merged_simulation(self):
         import geopandas as gpd

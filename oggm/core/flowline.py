@@ -1231,7 +1231,7 @@ class FlowlineModel(object):
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
 
             if yr > self.yr:
-                # Here we model run - otherwize (for spinup) we
+                # Here we model run - otherwise (for spinup) we
                 # constantly store the same data
                 self.run_until(yr)
 
@@ -1325,6 +1325,11 @@ class FlowlineModel(object):
                                                 coords=varcoords)
                 ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
                                                           coords=varcoords)
+
+                if stop_criterion is not None:
+                    # Remove probable NaNs
+                    ds = ds.dropna('time')
+
                 geom_ds.append(ds)
 
         # Add the spinup volume to the diag
@@ -1335,15 +1340,22 @@ class FlowlineModel(object):
                                           'not implemented yet.')
             diag_ds['volume_m3'].data[:] += spinup_vol
 
+        if stop_criterion is not None:
+            # Remove probable NaNs
+            diag_ds = diag_ds.dropna('time')
+
         # write output?
         if do_fl_diag:
             # Unit conversions for these
-            for ds in fl_diag_dss:
+            for i, ds in enumerate(fl_diag_dss):
                 dx = ds.attrs['map_dx'] * ds.attrs['dx']
                 # No inplace because the other dataset uses them
                 # These variables are always there (see above)
                 ds['volume_m3'] = ds['volume_m3'] * dx
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
+                if stop_criterion is not None:
+                    # Remove probable NaNs
+                    fl_diag_dss[i] = ds.dropna('time')
 
             # Write out?
             if fl_diag_path not in [True, None]:

@@ -1,5 +1,5 @@
 """Pytest fixtures to be used in other test modules"""
-
+import copy
 import os
 import shutil
 import logging
@@ -243,6 +243,18 @@ def hef_gdir_base(request, test_dir):
         return init_hef()
 
 
+@pytest.fixture(scope='module')
+def hef_copy_gdir_base(request, test_dir):
+    """same as hef_gdir but with another RGI ID (for workflow testing)
+    """
+    try:
+        module = request.module
+        border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
+        return init_hef(border=border, rgi_id='RGI50-11.99999')
+    except AttributeError:
+        return init_hef(rgi_id='RGI50-11.99999')
+
+
 @pytest.fixture(scope='class')
 def hef_gdir(hef_gdir_base, class_case_dir):
     """ Provides a copy of the base Hintereisenferner glacier directory in
@@ -250,4 +262,12 @@ def hef_gdir(hef_gdir_base, class_case_dir):
         the test class will use the same copy of this glacier directory.
     """
     return tasks.copy_to_basedir(hef_gdir_base, base_dir=class_case_dir,
+                                 setup='all')
+
+
+@pytest.fixture(scope='class')
+def hef_copy_gdir(hef_copy_gdir_base, class_case_dir):
+    """Same as hef_gdir but with another RGI ID (for testing)
+    """
+    return tasks.copy_to_basedir(hef_copy_gdir_base, base_dir=class_case_dir,
                                  setup='all')

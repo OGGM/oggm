@@ -326,13 +326,16 @@ def get_test_dir():
     return _TEST_DIR
 
 
-def init_hef(reset=False, border=40, logging_level='INFO'):
+def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
 
     from oggm.core import gis, inversion, climate, centerlines, flowline
     import geopandas as gpd
 
     # test directory
     testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
+    if rgi_id is not None:
+        testdir = os.path.join(get_test_dir(), f'tmp_border{border}_{rgi_id}')
+
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -349,6 +352,9 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
+
+    if rgi_id is not None:
+        entity['RGIId'] = rgi_id
 
     gdir = oggm.GlacierDirectory(entity, reset=reset)
 
@@ -370,7 +376,12 @@ def init_hef(reset=False, border=40, logging_level='INFO'):
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
     climate.process_custom_climate_data(gdir)
-    mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+    if rgi_id is not None:
+        gdir.rgi_id = 'RGI50-11.00897'
+        mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+        gdir.rgi_id = rgi_id
+    else:
+        mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
     res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
     climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
     climate.mu_star_calibration(gdir)
