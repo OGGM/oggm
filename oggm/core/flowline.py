@@ -1355,7 +1355,7 @@ class FlowlineModel(object):
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
                 if stop_criterion is not None:
                     # Remove probable NaNs
-                    fl_diag_dss[i] = ds.dropna('time', inplace=True)
+                    fl_diag_dss[i] = ds.dropna('time')
 
             # Write out?
             if fl_diag_path not in [True, None]:

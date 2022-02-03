@@ -2838,16 +2838,38 @@ class TestHEF:
         init_present_time_glacier(hef_gdir)
         cfg.PARAMS['min_ice_thick_for_length'] = 1
 
+        # Check more output
+        cfg.PARAMS['store_fl_diagnostics'] = True
+        cfg.PARAMS['store_model_geometry'] = True
+
         run_random_climate(hef_gdir, y0=1985, nyears=200,
                            stop_criterion=equilibrium_stop_criterion,
                            output_filesuffix='_stop', seed=1)
         run_random_climate(hef_gdir, y0=1985, nyears=200,
                            output_filesuffix='_nostop', seed=1)
 
-        fp = hef_gdir.get_filepath('model_diagnostics', filesuffix='_stop')
+        ft = 'fl_diagnostics'
+        fp = hef_gdir.get_filepath(ft, filesuffix='_stop')
+        with xr.open_dataset(fp, group='fl_2') as ds:
+            ds_stop = ds.load()
+        fp = hef_gdir.get_filepath(ft, filesuffix='_nostop')
+        with xr.open_dataset(fp, group='fl_2') as ds:
+            ds_nostop = ds.load()
+
+        ds_stop = ds_stop.volume_m3.sum(dim='dis_along_flowline')
+        ds_nostop = ds_nostop.volume_m3.sum(dim='dis_along_flowline')
+
+        assert ds_stop.isnull().sum() == 0
+        assert ds_nostop.isnull().sum() == 0
+
+        assert_allclose(ds_stop.isel(time=-1), ds_nostop.isel(time=-1), rtol=0.2)
+        assert ds_stop.time[-1] < 150
+
+        ft = 'model_diagnostics'
+        fp = hef_gdir.get_filepath(ft, filesuffix='_stop')
         with xr.open_dataset(fp) as ds:
             ds_stop = ds.load()
-        fp = hef_gdir.get_filepath('model_diagnostics', filesuffix='_nostop')
+        fp = hef_gdir.get_filepath(ft, filesuffix='_nostop')
         with xr.open_dataset(fp) as ds:
             ds_nostop = ds.load()
 
