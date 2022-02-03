@@ -597,13 +597,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # OK - run
     if dynamic_spinup:
+        init_model_filesuffix = '_dynamic_spinup'
         workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
                                      evolution_model=evolution_model,
                                      minimise_for=dynamic_spinup,
-                                     output_filesuffix='_dynamic_spinup',
+                                     output_filesuffix=init_model_filesuffix,
                                      )
-
-        init_model_filesuffix = '_dynamic_spinup'
     else:
         init_model_filesuffix = None
 
@@ -616,8 +615,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Now compile the output
     sum_dir = os.path.join(output_base_dir, 'L5', 'summary')
     utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+    opath = os.path.join(sum_dir, f'historical_run_output_{rgi_reg}.nc')
     utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
+
+    if dynamic_spinup:
+        opath = os.path.join(sum_dir, f'dynamic_spinup_run_output_{rgi_reg}.nc')
+        utils.compile_run_output(gdirs, path=opath, input_filesuffix='_dynamic_spinup')
 
     # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))

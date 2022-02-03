@@ -4299,8 +4299,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     else:
         # try out a maximum of three different spinup_periods
         spinup_periods_to_try = [spinup_period_initial,
-                                 int((spinup_period_initial + min_spinup_period)
-                                     / 2.),
+                                 int((spinup_period_initial + min_spinup_period) / 2),
                                  min_spinup_period]
 
     for spinup_period in spinup_periods_to_try:

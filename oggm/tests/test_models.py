@@ -3277,6 +3277,7 @@ class TestHEF:
         assert fmod.last_yr == 2004
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.slow
     def test_dynamic_spinup(self, hef_gdir, minimise_for):
 
         # value we want to match after dynamic spinup
