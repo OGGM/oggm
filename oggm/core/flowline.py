@@ -3762,7 +3762,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False,
-                       ignore_errors=True):
+                       store_model_evolution=True, ignore_errors=True):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -3827,6 +3827,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
         Default is False.
+    store_model_evolution : bool
+        if True the complete dynamic spinup run is saved (complete evolution
+        of the model during the dynamic spinup), if False only the final model
+        state after the dynamic spinup run is saved. (Hint: if
+        store_model_evolution = True and ignore_errors = True and an Error
+        during the dynamic spinup occurs the stored model evolution is only one
+        year long)
+        Default is True.
     ignore_errors : bool
         If True the function saves the model without a dynamic spinup using
         the 'output_filesuffix', if an error during the dynamic spinup occurs.
@@ -3961,7 +3969,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         model_historical = evolution_model(model_spinup.fls,
                                            mb_historical,
                                            y0=yr_spinup)
-        model_historical.run_until(yr_rgi)
+        if store_model_evolution:
+            model_historical.run_until_and_store(
+                yr_rgi,
+                geom_path=geom_path,
+                diag_path=diag_path,
+                fl_diag_path=fl_diag_path, )
+        else:
+            model_historical.run_until(yr_rgi)
 
         return model_historical, ice_free
 
@@ -4336,6 +4351,17 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     model_dynamic_spinup_end = save_model_without_dynamic_spinup()
                     return model_dynamic_spinup_end
                 else:
+                    # delete all files which could be saved during the previous
+                    # iterations
+                    if geom_path and os.path.exists(geom_path):
+                        os.remove(geom_path)
+
+                    if fl_diag_path and os.path.exists(fl_diag_path):
+                        os.remove(fl_diag_path)
+
+                    if diag_path and os.path.exists(diag_path):
+                        os.remove(diag_path)
+
                     raise RuntimeError(e)
 
     # hurray, dynamic spinup successfully
@@ -4361,14 +4387,16 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
                             float(other_mismatch / other_reference_value * 100))
 
-    with np.warnings.catch_warnings():
-        # For operational runs we ignore the warnings
-        np.warnings.filterwarnings('ignore', category=RuntimeWarning)
-        model_dynamic_spinup_end[-1].run_until_and_store(
-            yr_rgi,
-            geom_path=geom_path,
-            diag_path=diag_path,
-            fl_diag_path=fl_diag_path, )
+    # here only save the final model state if store_model_evolution = False
+    if not store_model_evolution:
+        with np.warnings.catch_warnings():
+            # For operational runs we ignore the warnings
+            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+            model_dynamic_spinup_end[-1].run_until_and_store(
+                yr_rgi,
+                geom_path=geom_path,
+                diag_path=diag_path,
+                fl_diag_path=fl_diag_path, )
 
     return model_dynamic_spinup_end[-1]
 
