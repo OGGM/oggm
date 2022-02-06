@@ -3307,8 +3307,7 @@ class TestHEF:
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 output_filesuffix='_dynamic_spinup',
-                store_model_evolution=store_model_evolution
-                )
+                store_model_evolution=store_model_evolution)
 
             # check if resulting model match wanted value with prescribed precision
             assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value,
