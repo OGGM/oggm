@@ -2552,7 +2552,7 @@ class TestDataFiles(unittest.TestCase):
         zone = '41_20'
         self.assertTrue(_download_srtm_file(zone) is None)
 
-    # @pytest.mark.download
+    @pytest.mark.download
     def test_nasadownload(self):
         from oggm.utils._downloads import _download_nasadem_file
 
@@ -2612,7 +2612,7 @@ class TestDataFiles(unittest.TestCase):
         fp30 = _download_copdem_file(cppfile30, tilename30, 'COPDEM30')
         self.assertTrue(os.path.exists(fp30))
 
-    # @pytest.mark.creds
+    @pytest.mark.creds
     def test_asterdownload(self):
         from oggm.utils._downloads import _download_aster_file
 
@@ -2630,7 +2630,7 @@ class TestDataFiles(unittest.TestCase):
         fp = _download_mapzen_file(zone)
         self.assertTrue(os.path.exists(fp))
 
-    # @pytest.mark.download
+    @pytest.mark.download
     def test_gimp(self):
         fp, z = utils.get_topo_file([-25], [72], source='GIMP')
         self.assertTrue(os.path.exists(fp[0]))
