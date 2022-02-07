@@ -1667,7 +1667,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                         use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None,
                                         climate_filename='climate_historical',
-                                        climate_input_filesuffix=''):
+                                        climate_input_filesuffix='',
+                                        temperature_bias=None,
+                                        precipitation_factor=None):
+
     """Compiles a table of specific mass-balance timeseries for all glaciers.
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
@@ -1699,14 +1702,23 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
     """
+
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import fixed_geometry_mass_balance
 
     out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
                                  use_inversion_flowlines=use_inversion_flowlines,
                                  ys=ys, ye=ye, years=years, climate_filename=climate_filename,
-                                 climate_input_filesuffix=climate_input_filesuffix)
+                                 climate_input_filesuffix=climate_input_filesuffix,
+                                 temperature_bias=temperature_bias,
+                                 precipitation_factor=precipitation_factor)
 
     for idx, s in enumerate(out_df):
         if s is None:
