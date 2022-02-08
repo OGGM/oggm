@@ -1388,7 +1388,10 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
                                 monthly_step=False,
                                 use_inversion_flowlines=True,
                                 climate_filename='climate_historical',
-                                climate_input_filesuffix=''):
+                                climate_input_filesuffix='',
+                                temperature_bias=None,
+                                precipitation_factor=None):
+
     """Computes the mass-balance with climate input from e.g. CRU or a GCM.
 
     Parameters
@@ -1412,24 +1415,36 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
         'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
+    temperature_bias : float
+        add a bias to the temperature timeseries
+    precipitation_factor: float
+        multiply a factor to the precipitation time series
+        default is None and means that the precipitation factor from the
+        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
     """
 
     if monthly_step:
         raise NotImplementedError('monthly_step not implemented yet')
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+    mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
                                      filename=climate_filename,
                                      use_inversion_flowlines=use_inversion_flowlines,
                                      input_filesuffix=climate_input_filesuffix)
 
+    if temperature_bias is not None:
+        mbmod.temp_bias = temperature_bias
+    if precipitation_factor is not None:
+        mbmod.prcp_fac = precipitation_factor
+
+
     if years is None:
         if ys is None:
-            ys = mb.flowline_mb_models[0].ys
+            ys = mbmod.flowline_mb_models[0].ys
         if ye is None:
-            ye = mb.flowline_mb_models[0].ye
+            ye = mbmod.flowline_mb_models[0].ye
         years = np.arange(ys, ye + 1)
 
-    odf = pd.Series(data=mb.get_specific_mb(year=years),
+    odf = pd.Series(data=mbmod.get_specific_mb(year=years),
                     index=years)
     return odf
 
