@@ -2042,7 +2042,7 @@ class TestFakeDownloads(unittest.TestCase):
                               fakefile='ASTGTMV003_S89W121_dem.tif')
 
         def down_check(url, *args, **kwargs):
-            expect = ('https://e4ftl01.cr.usgs.gov/ASTER_B/ASTT/ASTGTM.003/' +
+            expect = ('https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/' +
                       '2000.03.01/ASTGTMV003_S89W121.zip')
             self.assertEqual(url, expect)
             return tf
@@ -2632,7 +2632,7 @@ class TestDataFiles(unittest.TestCase):
 
     @pytest.mark.download
     def test_gimp(self):
-        fp, z = utils.get_topo_file([], [], source='GIMP')
+        fp, z = utils.get_topo_file([-25], [72], source='GIMP')
         self.assertTrue(os.path.exists(fp[0]))
         self.assertEqual(z, 'GIMP')
 
@@ -2775,7 +2775,7 @@ class TestDataFiles(unittest.TestCase):
         gdirs = workflow.init_glacier_directories(rgidf.iloc[:2],
                                                   from_prepro_level=1,
                                                   prepro_rgi_version='61',
-                                                  prepro_border=10)
+                                                  prepro_border=20)
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')

@@ -131,14 +131,14 @@ def cli():
     print('This will store login credentials in a local .netrc file.\n'
           'Enter the number or the service you want to add credentials for, '
           'this might override existing credentials in the .netrc file!\n\n'
-          '[0] urs.earthdata.nasa.gov, ASTER DEM\n'
+          '[0] urs.earthdata.nasa.gov, ASTER DEM or NASADEM\n'
           '[1] geoservice.dlr.de, TanDEM-X\n'
           '[2] spacedata.copernicus.eu, Copernicus DEM Glo-90\n\n')
     nr = input("Number: ")
 
     if nr == '0':
         key = 'urs.earthdata.nasa.gov'
-        testurl = ('https://e4ftl01.cr.usgs.gov//ASTER_B/ASTT/ASTGTM.003/' +
+        testurl = ('https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/' +
                    '2000.03.01/ASTGTMV003_S09W158.zip')
 
     elif nr == '1':
