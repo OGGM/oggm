@@ -82,7 +82,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
-                      continue_on_error=True):
+                      dynamic_spinup=False, continue_on_error=True):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -151,6 +151,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         a dict of parameters to override.
     disable_dl_verify : bool
         disable the hash verification of OGGM downloads
+    dynamic_spinup: str
+        include a dynamic spinup matching 'area' OR 'volume' at the RGI-date
     """
 
     # Input check
@@ -177,6 +179,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if evolution_model not in ['fl_sia', 'massredis']:
         raise InvalidParamsError('evolution_model should be one of '
                                  "['fl_sia', 'massredis'].")
+
+    if dynamic_spinup and dynamic_spinup not in ['area', 'volume']:
+        raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
+                                 "not supported")
+
+    if dynamic_spinup and evolution_model == 'massredis':
+        raise InvalidParamsError("Dynamic spinup is not working/tested"
+                                 "with massredis!")
 
     # Time
     start = time.time()
@@ -586,16 +596,31 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         evolution_model = FluxBasedModel
 
     # OK - run
+    if dynamic_spinup:
+        init_model_filesuffix = '_dynamic_spinup'
+        workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
+                                     evolution_model=evolution_model,
+                                     minimise_for=dynamic_spinup,
+                                     output_filesuffix=init_model_filesuffix,
+                                     )
+    else:
+        init_model_filesuffix = None
+
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
                                  evolution_model=evolution_model,
+                                 init_model_filesuffix=init_model_filesuffix,
                                  output_filesuffix='_historical')
 
     # Now compile the output
     sum_dir = os.path.join(output_base_dir, 'L5', 'summary')
     utils.mkdir(sum_dir)
-    opath = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+    opath = os.path.join(sum_dir, f'historical_run_output_{rgi_reg}.nc')
     utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
+
+    if dynamic_spinup:
+        opath = os.path.join(sum_dir, f'dynamic_spinup_run_output_{rgi_reg}.nc')
+        utils.compile_run_output(gdirs, path=opath, input_filesuffix='_dynamic_spinup')
 
     # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
@@ -722,6 +747,10 @@ def parse_args(args):
                              'against a hash sum.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
+    parser.add_argument('--dynamic_spinup', type=str, default='',
+                        help="include a dynamic spinup for matching 'area' OR "
+                             "'volume' at the RGI-date")
+
     args = parser.parse_args(args)
 
     # Check input
@@ -773,6 +802,8 @@ def parse_args(args):
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
+                dynamic_spinup=False if args.dynamic_spinup == '' else
+                args.dynamic_spinup,
                 )
 
 

@@ -1122,7 +1122,7 @@ class TestPreproCLI(unittest.TestCase):
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_run(self):
+    def test_elev_bands_and_spinup_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1134,37 +1134,40 @@ class TestPreproCLI(unittest.TestCase):
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+        border = 80
+        bstr = 'b_080'
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter,
+                          dynamic_spinup='area', test_rgidf=rgidf,
+                          test_intersects_file=inter,
                           test_topofile=topof, elev_bands=True)
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'glacier_type' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'dem_source' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L2', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'main_flowline_length' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L3', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'inv_volume_km3' in df
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L3', 'summary',
                                       'climate_statistics_11.csv'))
         assert '1980-2010_avg_prcp' in df
 
-        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
+        assert os.path.isfile(os.path.join(odir, 'RGI61', bstr,
                                            'package_versions.txt'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L1'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L2'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L3'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L4'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L5'))
 
         # See if we can start from L3 and L4
         from oggm import tasks
@@ -1174,7 +1177,7 @@ class TestPreproCLI(unittest.TestCase):
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L3
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
+        tarf = os.path.join(odir, 'RGI61', bstr, 'L3',
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
@@ -1182,7 +1185,7 @@ class TestPreproCLI(unittest.TestCase):
         assert isinstance(model, FlowlineModel)
 
         # L4
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
+        tarf = os.path.join(odir, 'RGI61', bstr, 'L4',
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
@@ -1193,7 +1196,7 @@ class TestPreproCLI(unittest.TestCase):
             tasks.init_present_time_glacier(gdir)
 
         # L5
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+        tarf = os.path.join(odir, 'RGI61', bstr, 'L5',
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
@@ -1204,6 +1207,43 @@ class TestPreproCLI(unittest.TestCase):
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
+
+        # Summary
+        hf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
+                          'historical_run_output_11.nc')
+        ef = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
+                          'historical_run_output_extended_11.nc')
+        sf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
+                          'dynamic_spinup_run_output_11.nc')
+
+        import matplotlib.pyplot as plt
+        with xr.open_dataset(hf) as dsh:
+            dsh = dsh.load()
+        with xr.open_dataset(ef) as dse:
+            dse = dse.load()
+        with xr.open_dataset(sf) as dss:
+            dss = dss.load()
+
+        # Time of the two runs match
+        assert dsh.time[0] == dss.time[-1]
+        assert_allclose(dsh.isel(time=0).volume, dss.isel(time=-1).volume)
+        assert_allclose(dsh.isel(time=0).area, dss.isel(time=-1).area)
+
+        # Concat them to comparison with fixed geometry spinup
+        dsall = xr.concat([dss.isel(time=slice(0, -1)), dsh], dim='time')
+        dse = dse.sel(time=slice(dsall.time[0], dsall.time[-1]))
+
+        # After RGI date they are perfect
+        assert_allclose(dsall.sel(time=slice(2004, 2015)).volume,
+                        dse.sel(time=slice(2004, 2015)).volume)
+        assert_allclose(dsall.sel(time=slice(2004, 2015)).area,
+                        dse.sel(time=slice(2004, 2015)).area)
+
+        # After RGI date they are... close enough
+        assert_allclose(dsall.sel(time=slice(1985, 2004)).volume,
+                        dse.sel(time=slice(1985, 2004)).volume, rtol=0.06)
+        assert_allclose(dsall.sel(time=slice(1985, 2004)).area,
+                        dse.sel(time=slice(1985, 2004)).area, rtol=0.03)
 
     @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):
