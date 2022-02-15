@@ -156,7 +156,7 @@ class TestInitPresentDayFlowline:
         mb_profile_constant_dh_filtered_0_6 = gdir.get_ref_mb_profile(constant_dh=True,
                                                                       obs_ratio_needed=0.6)
         mb_profile_constant_dh_filtered_1 = gdir.get_ref_mb_profile(constant_dh=True,
-                                                                   obs_ratio_needed=1)
+                                                                    obs_ratio_needed=1)
         n = len(mb_profile_constant_dh.index)
         n_obs_h_0_6 = mb_profile_constant_dh_filtered_0_6.describe().loc['count']
         n_obs_h_1 = mb_profile_constant_dh_filtered_1.describe().loc['count']
