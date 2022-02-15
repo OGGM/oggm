@@ -3292,7 +3292,7 @@ class GlacierDirectory(object):
         if obs_ratio_needed != 0 and constant_dh is False:
             raise InvalidParamsError('If a filter is applied, you have to set'
                                      ' constant_dh to True')
-        if obs_ratio_needed<0 or obs_ratio_needed>1:
+        if obs_ratio_needed < 0 or obs_ratio_needed > 1:
             raise InvalidParamsError('obs_ratio_needed is the ratio of necessary relative amount'
                                      'of observations per elevation band. It has to be between'
                                      '0 and 1!')
