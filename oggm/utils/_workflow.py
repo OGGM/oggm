@@ -3281,7 +3281,7 @@ class GlacierDirectory(object):
         obs_ratio_needed : float
             necessary relative amount of observations per elevation band in order
             to be included in the MB profile (0<=obs_ratio_needed<=1).
-            If obs_ratio_needed set to 0, the ouput shows all elevation-band
+            If obs_ratio_needed set to 0, the output shows all elevation-band
             observations (default is 0).
             When estimating mean MB profiles, it is advisable to set obs_ratio_needed
             to 0.6. E.g. if there are in total 5 years of measurements only those elevation
