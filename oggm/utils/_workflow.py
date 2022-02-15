@@ -3262,7 +3262,7 @@ class GlacierDirectory(object):
             out = self._mbdf
         return out.dropna(subset=['ANNUAL_BALANCE'])
 
-    def get_ref_mb_profile(self, input_filesuffix='', constant_dh=False):
+    def get_ref_mb_profile(self, input_filesuffix='', constant_dh=False, obs_ratio_needed=0):
         """Get the reference mb profile data from WGMS (if available!).
 
         Returns None if this glacier has no profile and an Error if it isn't
@@ -3278,7 +3278,24 @@ class GlacierDirectory(object):
             of dh=50m by using interpolation. This can be useful for comparisons
             between years. Default is False which gives the raw
             elevation-dependent point MB
+        obs_ratio_needed : float
+            necessary relative amount of observations per elevation band in order
+            to be included in the MB profile (0<=obs_ratio_needed<=1).
+            If obs_ratio_needed set to 0, the output shows all elevation-band
+            observations (default is 0).
+            When estimating mean MB profiles, it is advisable to set obs_ratio_needed
+            to 0.6. E.g. if there are in total 5 years of measurements only those elevation
+            bands with at least 3 years of measurements are used. If obs_ratio_needed is not
+            0, constant_dh has to be set to True.
         """
+
+        if obs_ratio_needed != 0 and constant_dh is False:
+            raise InvalidParamsError('If a filter is applied, you have to set'
+                                     ' constant_dh to True')
+        if obs_ratio_needed < 0 or obs_ratio_needed > 1:
+            raise InvalidParamsError('obs_ratio_needed is the ratio of necessary relative amount'
+                                     'of observations per elevation band. It has to be between'
+                                     '0 and 1!')
 
         if self._mbprofdf is None and not constant_dh:
             flink, mbdatadir = get_wgms_files()
@@ -3328,11 +3345,23 @@ class GlacierDirectory(object):
         else:
             if len(self._mbprofdf_cte_dh) > 1:
                 out = self._mbprofdf_cte_dh.loc[y0:y1]
+                if obs_ratio_needed != 0:
+                    # amount of years with any observation
+                    n_obs = len(out.index)
+                    # amount of years with observations for each elevation band
+                    n_obs_h = out.describe().loc['count']
+                    # relative amount of observations per elevation band
+                    rel_obs_h = n_obs_h / n_obs
+                    # select only those elevation bands with a specific ratio
+                    # of years with available measurements
+                    out = out[rel_obs_h[rel_obs_h >= obs_ratio_needed].index]
+
             else:
                 # Some files are just empty
                 out = self._mbprofdf_cte_dh
         out.columns = [float(c) for c in out.columns]
         return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
+
 
     def get_ref_length_data(self):
         """Get the glacier length data from P. Leclercq's data base.

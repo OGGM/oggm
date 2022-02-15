@@ -153,29 +153,48 @@ class TestInitPresentDayFlowline:
         assert np.all(step_dh == 50)
         mb_profile_raw = gdir.get_ref_mb_profile()
 
+        mb_profile_constant_dh_filtered_0_6 = gdir.get_ref_mb_profile(constant_dh=True,
+                                                                      obs_ratio_needed=0.6)
+        mb_profile_constant_dh_filtered_1 = gdir.get_ref_mb_profile(constant_dh=True,
+                                                                    obs_ratio_needed=1)
+        n = len(mb_profile_constant_dh.index)
+        n_obs_h_0_6 = mb_profile_constant_dh_filtered_0_6.describe().loc['count']
+        n_obs_h_1 = mb_profile_constant_dh_filtered_1.describe().loc['count']
+        assert np.all(n_obs_h_0_6 / n >= 0.6)
+        assert np.all(n_obs_h_1 / n >= 1)
+
+        # fake "filter" that is not really filtering should give
+        # the same estimate as default (filter = 0)
+        mb_profile_constant_dh_filtered_0 = gdir.get_ref_mb_profile(constant_dh=True,
+                                                                    obs_ratio_needed=0.00001)
+        np.testing.assert_allclose(mb_profile_constant_dh_filtered_0, mb_profile_constant_dh)
+
         # Gradient
         dfg = mb_profile_raw.mean()
         dfg_constant_dh = mb_profile_constant_dh.mean()
-
+        dfg_constant_dh_0_6 = mb_profile_constant_dh_filtered_0_6.mean()
 
         # Take the altitudes below 3100 and fit a line
         pok = np.where(hgts < 3100)
-        pok_constant_dh = np.where(dfg_constant_dh.index < 3100)
-
         dfg = dfg[dfg.index < 3100]
         dfg_constant_dh = dfg_constant_dh[dfg_constant_dh.index < 3100]
+        dfg_constant_dh_0_6 = dfg_constant_dh_0_6[dfg_constant_dh_0_6.index < 3100]
 
         from scipy.stats import linregress
         slope_obs, _, _, _, _ = linregress(dfg.index, dfg.values)
         slope_obs_constant_dh, _, _, _, _ = linregress(dfg_constant_dh.index,
                                                        dfg_constant_dh.values)
+        slope_obs_constant_dh_0_6, _, _, _, _ = linregress(dfg_constant_dh_0_6.index,
+                                                           dfg_constant_dh_0_6.values)
         slope_our, _, _, _, _ = linregress(hgts[pok], grads[pok])
 
         np.testing.assert_allclose(slope_obs, slope_our, rtol=0.15)
         # the observed MB gradient and the interpolated observed one (with
         # constant dh) should be very similar!
         np.testing.assert_allclose(slope_obs, slope_obs_constant_dh, rtol=0.01)
-
+        # the filtered slope with obs_ratio_0_6 should be at least a bit similar to
+        # the one where all elevation band measurements are taken into account
+        np.testing.assert_allclose(slope_obs_constant_dh, slope_obs_constant_dh_0_6, rtol=0.2)
 
 @pytest.fixture(scope='class')
 def other_glacier_cfg():
