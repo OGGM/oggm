@@ -1140,8 +1140,6 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           dynamic_spinup='area', test_rgidf=rgidf,
                           test_intersects_file=inter,
-                          disable_mp=True,  # I need this because my PyCharm is buggy
-                          logging_level='INFO',  # I want to see what the log says
                           test_topofile=topof, elev_bands=True)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
@@ -1225,8 +1223,27 @@ class TestPreproCLI(unittest.TestCase):
             dse = dse.load()
         with xr.open_dataset(sf) as dss:
             dss = dss.load()
-        assert len(dss.time) > 1
 
+        # Time of the two runs match
+        assert dsh.time[0] == dss.time[-1]
+        assert_allclose(dsh.isel(time=0).volume, dss.isel(time=-1).volume)
+        assert_allclose(dsh.isel(time=0).area, dss.isel(time=-1).area)
+
+        # Concat them to comparison with fixed geometry spinup
+        dsall = xr.concat([dss.isel(time=slice(0, -1)), dsh], dim='time')
+        dse = dse.sel(time=slice(dsall.time[0], dsall.time[-1]))
+
+        # After RGI date they are perfect
+        assert_allclose(dsall.sel(time=slice(2004, 2015)).volume,
+                        dse.sel(time=slice(2004, 2015)).volume)
+        assert_allclose(dsall.sel(time=slice(2004, 2015)).area,
+                        dse.sel(time=slice(2004, 2015)).area)
+
+        # After RGI date they are... close enough
+        assert_allclose(dsall.sel(time=slice(1985, 2004)).volume,
+                        dse.sel(time=slice(1985, 2004)).volume, rtol=0.06)
+        assert_allclose(dsall.sel(time=slice(1985, 2004)).area,
+                        dse.sel(time=slice(1985, 2004)).area, rtol=0.03)
 
     @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):
