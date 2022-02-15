@@ -3297,7 +3297,7 @@ class GlacierDirectory(object):
                                      'of observations per elevation band. It has to be between'
                                      '0 and 1!')
 
-        if self._mbprofdf is None and constant_dh is False:
+        if self._mbprofdf is None and not constant_dh:
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
@@ -3314,7 +3314,7 @@ class GlacierDirectory(object):
             # list of years
             self._mbprofdf = pd.read_csv(reff, index_col=0)
 
-        elif self._mbprofdf_cte_dh is None and constant_dh is True:
+        if self._mbprofdf_cte_dh is None and constant_dh:
             flink, mbdatadir = get_wgms_files()
             c = 'RGI{}0_ID'.format(self.rgi_version[0])
             wid = flink.loc[flink[c] == self.rgi_id]
@@ -3336,13 +3336,13 @@ class GlacierDirectory(object):
             raise RuntimeError('Please process some climate data before call')
         y0 = ci['baseline_hydro_yr_0']
         y1 = ci['baseline_hydro_yr_1']
-        if constant_dh is False:
+        if not constant_dh:
             if len(self._mbprofdf) > 1:
                 out = self._mbprofdf.loc[y0:y1]
             else:
                 # Some files are just empty
                 out = self._mbprofdf
-        elif constant_dh is True:
+        else:
             if len(self._mbprofdf_cte_dh) > 1:
                 out = self._mbprofdf_cte_dh.loc[y0:y1]
                 if obs_ratio_needed != 0:
