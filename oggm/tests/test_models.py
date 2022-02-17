@@ -4044,6 +4044,86 @@ class TestHydro:
         assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=1e-4)
 
     @pytest.mark.slow
+    def test_hydro_dynamical_spinup(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+
+        # Add debug vars
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
+
+        init_present_time_glacier(gdir)
+        tasks.run_with_hydro(gdir, run_task=tasks.run_dynamic_spinup,
+                             store_monthly_hydro=False,
+                             ref_area_from_y0=True,
+                             output_filesuffix='_spinup')
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                             store_monthly_hydro=False,
+                             init_model_filesuffix='_spinup',
+                             ref_geometry_filesuffix='_spinup',
+                             ref_area_from_y0=True,
+                             output_filesuffix='_run')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_spinup')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf_hist = ds[sel_vars].to_dataframe()
+            # This is for the mass-conservation check
+            mass_in_snow_t1 = odf_hist['snow_bucket'].iloc[-1]
+            odf_hist = odf_hist.iloc[:-1]
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_run')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf_run = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        assert odf_hist.index[0] == 1971
+        assert odf_hist.index[-1] == 1990
+        assert odf_run.index[0] == 1991
+
+        odf = pd.concat([odf_hist, odf_run])
+
+        # Domain area is constant and equal to the first year
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+        # assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=1e-4)
+
+        # Sanity checks
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        reconstructed_vol = (odf['model_mb'].cumsum() / cfg.PARAMS['ice_density'] +
+                             odf['volume_m3'].iloc[0])
+        assert_allclose(odf['volume_m3'].iloc[1:], reconstructed_vol.iloc[:-1])
+
+        # Ensure mass-conservation even at junction?
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf['snow_bucket'].iloc[-1] + mass_in_snow_t1
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # Residual MB should not be crazy large
+        frac = odf['residual_mb'] / odf['melt_on_glacier']
+        assert_allclose(frac, 0, atol=0.05)
+
+    @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
     def test_hydro_out_random(self, hef_gdir, inversion_params, store_monthly_hydro):
 

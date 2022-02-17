@@ -3330,7 +3330,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                    fixed_geometry_spinup_yr=None, ref_area_from_y0=False,
                    ref_area_yr=None, ref_geometry_filesuffix=None,
                    **kwargs):
-    """Run the flowline model and add hydro diagnostics (experimental!).
+    """Run the flowline model and add hydro diagnostics.
 
     TODOs:
         - Add the possibility to record MB during run to improve performance
@@ -3344,7 +3344,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         The mass-balance model used needs to have the `add_climate` output
         kwarg available though.
     store_monthly_hydro : bool
-        also compute monthly hydrological diagnostics. The monthly ouptputs
+        also compute monthly hydrological diagnostics. The monthly outputs
         are stored in 2D fields (years, months)
     ref_area_yr : int
         the hydrological output is computed over a reference area, which
@@ -3384,8 +3384,11 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                                  "PARAMS['store_model_geometry'] = True "
                                  "for now.")
 
-    out = run_task(gdir, fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
-                   **kwargs)
+    if fixed_geometry_spinup_yr is not None:
+        kwargs['fixed_geometry_spinup_yr'] = fixed_geometry_spinup_yr
+
+    out = run_task(gdir, **kwargs)
+
     if out is None:
         raise InvalidWorkflowError('The run task ({}) did not run '
                                    'successfully.'.format(run_task.__name__))
