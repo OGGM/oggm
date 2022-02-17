@@ -3371,13 +3371,13 @@ class TestHEF:
         # test if ys is handled correctly
         ys = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
-                hef_gdir,
-                spinup_period=None,
-                ys=ys,
-                yr_rgi=yr_rgi,
-                minimise_for=minimise_for,
-                precision_percent=precision_percent,
-                output_filesuffix='_dynamic_spinup_ys',)
+            hef_gdir,
+            spinup_period=None,
+            ys=ys,
+            yr_rgi=yr_rgi,
+            minimise_for=minimise_for,
+            precision_percent=precision_percent,
+            output_filesuffix='_dynamic_spinup_ys',)
         # check that is the same if we provide ys instead of spinup_period
         assert np.isclose(model_dynamic_spinup_ys.volume_km3,
                           model_dynamic_spinup.volume_km3)
