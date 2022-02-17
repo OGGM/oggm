@@ -81,7 +81,8 @@ Enhancements
   the glacier to match the area or volume at the RGI date. To do so the glacier
   is simulated from the recent past (default 1980) to the RGI date. The unknown
   glacier geometry at the start of the simulation is iteratively changed with
-  a short constant climate run with a varying temperature bias (:pull:`1342`).
+  a short constant climate run with a varying temperature bias
+  (:pull:`1342`, :pull:`1361`).
   By `Patrick Schmitt <https://github.com/pat-schmitt/>`_
 - Added new options to `write_centerlines_to_shape` which allow to output
   smoother and more correct centerlines (:pull:`1357`).
