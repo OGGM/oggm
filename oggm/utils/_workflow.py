@@ -1026,11 +1026,80 @@ class compile_to_netcdf(object):
         return _compile_to_netcdf
 
 
+@entity_task(log)
+def merge_consecutive_run_outputs(gdir,
+                                  input_filesuffix_1=None,
+                                  input_filesuffix_2=None,
+                                  output_filesuffix=None,
+                                  delete_input=False):
+    """Merges the output of two model_diagnostics files into one.
+
+    It assumes that the last time of file1 is equal to the first time of file2.
+
+    Parameters
+    ----------
+    gdir : the glacier directory
+    input_filesuffix_1 : str
+        how to recognize the first file
+    input_filesuffix_2 : str
+        how to recognize the second file
+    output_filesuffix : str
+        where to write the output (default: no suffix)
+
+    Returns
+    -------
+    The merged dataset
+    """
+
+    # Read in the input files and check
+    fp1 = gdir.get_filepath('model_diagnostics', filesuffix=input_filesuffix_1)
+    with xr.open_dataset(fp1) as ds:
+        ds1 = ds.load()
+    fp2 = gdir.get_filepath('model_diagnostics', filesuffix=input_filesuffix_2)
+    with xr.open_dataset(fp2) as ds:
+        ds2 = ds.load()
+    if ds1.time[-1] != ds2.time[0]:
+        raise InvalidWorkflowError('The two files are incompatible by time')
+
+    # Samity check for all variables as well
+    for v in ds1:
+        if not np.all(np.isfinite(ds1[v].data[-1])):
+            # This is the last year of hydro output - we will discard anyway
+            continue
+        if np.allclose(ds1[v].data[-1], ds2[v].data[0]):
+            # This means that we're OK - the two match
+            continue
+
+        # This has to be a bucket of some sort, probably snow or calving
+        if len(ds2[v].data.shape) == 1:
+            if ds2[v].data[0] != 0:
+                raise InvalidWorkflowError('The two files seem incompatible '
+                                           f'by data on variable : {v}')
+            bucket = ds1[v].data[-1]
+        elif len(ds2[v].data.shape) == 2:
+            if ds2[v].data[0, 0] != 0:
+                raise InvalidWorkflowError('The two files seem incompatible '
+                                           f'by data on variable : {v}')
+            bucket = ds1[v].data[-1, -1]
+        # Carry it to the rest
+        ds2[v] = ds2[v] + bucket
+
+    # Merge by removing the last step of file 1 and delete the files if asked
+    out_ds = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+    if delete_input:
+        os.remove(fp1)
+        os.remove(fp2)
+    # Write out and return
+    fp = gdir.get_filepath('model_diagnostics', filesuffix=output_filesuffix)
+    out_ds.to_netcdf(fp)
+    return out_ds
+
+
 @global_task(log)
 @compile_to_netcdf(log)
 def compile_run_output(gdirs, path=True, input_filesuffix='',
                        use_compression=True):
-    """Merge the output of the model runs of several gdirs into one file.
+    """Compiles the output of the model runs of several gdirs into one file.
 
     Parameters
     ----------

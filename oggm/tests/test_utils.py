@@ -1209,41 +1209,27 @@ class TestPreproCLI(unittest.TestCase):
             tasks.init_present_time_glacier(gdir)
 
         # Summary
-        hf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
-                          'historical_run_output_11.nc')
         ef = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
                           'historical_run_output_extended_11.nc')
         sf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
-                          'dynamic_spinup_run_output_11.nc')
+                          'historical_spinup_run_output_11.nc')
 
-        import matplotlib.pyplot as plt
-        with xr.open_dataset(hf) as dsh:
-            dsh = dsh.load()
         with xr.open_dataset(ef) as dse:
             dse = dse.load()
         with xr.open_dataset(sf) as dss:
             dss = dss.load()
 
-        # Time of the two runs match
-        assert dsh.time[0] == dss.time[-1]
-        assert_allclose(dsh.isel(time=0).volume, dss.isel(time=-1).volume)
-        assert_allclose(dsh.isel(time=0).area, dss.isel(time=-1).area)
+        # comparison with fixed geometry spinup
+        dse = dse.sel(time=slice(dss.time[0], dss.time[-1]))
 
-        # Concat them to comparison with fixed geometry spinup
-        dsall = xr.concat([dss.isel(time=slice(0, -1)), dsh], dim='time')
-        dse = dse.sel(time=slice(dsall.time[0], dsall.time[-1]))
+        # Around RGI date they are close
+        assert_allclose(dss.sel(time=2004).area, dse.sel(time=2004).area, rtol=0.01)
+        assert_allclose(dss.sel(time=2004).length, dse.sel(time=2004).length, atol=401)
+        assert_allclose(dss.sel(time=2004).volume, dse.sel(time=2004).volume, rtol=0.2)
 
-        # After RGI date they are perfect
-        assert_allclose(dsall.sel(time=slice(2004, 2015)).volume,
-                        dse.sel(time=slice(2004, 2015)).volume)
-        assert_allclose(dsall.sel(time=slice(2004, 2015)).area,
-                        dse.sel(time=slice(2004, 2015)).area)
-
-        # After RGI date they are... close enough
-        assert_allclose(dsall.sel(time=slice(1985, 2004)).volume,
-                        dse.sel(time=slice(1985, 2004)).volume, rtol=0.06)
-        assert_allclose(dsall.sel(time=slice(1985, 2004)).area,
-                        dse.sel(time=slice(1985, 2004)).area, rtol=0.03)
+        # Over the period they are... close enough
+        assert_allclose(dss.volume, dse.volume, rtol=0.3)
+        assert_allclose(dss.area, dse.area, rtol=0.2)
 
     @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):

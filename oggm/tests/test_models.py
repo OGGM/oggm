@@ -4056,38 +4056,28 @@ class TestHydro:
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_dynamic_spinup,
-                             store_monthly_hydro=False,
+                             store_monthly_hydro=True,
                              ref_area_from_y0=True,
                              output_filesuffix='_spinup')
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
-                             store_monthly_hydro=False,
+                             store_monthly_hydro=True,
                              init_model_filesuffix='_spinup',
                              ref_geometry_filesuffix='_spinup',
                              ref_area_from_y0=True,
                              output_filesuffix='_run')
 
-        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
-                                               filesuffix='_spinup')) as ds:
-            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
-            odf_hist = ds[sel_vars].to_dataframe()
-            # This is for the mass-conservation check
-            mass_in_snow_t1 = odf_hist['snow_bucket'].iloc[-1]
-            odf_hist = odf_hist.iloc[:-1]
+        utils.merge_consecutive_run_outputs(gdir,
+                                            input_filesuffix_1='_spinup',
+                                            input_filesuffix_2='_run',
+                                            output_filesuffix='_merged')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
-                                               filesuffix='_run')) as ds:
+                                               filesuffix='_merged')) as ds:
             sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
-            odf_run = ds[sel_vars].to_dataframe().iloc[:-1]
-
-        assert odf_hist.index[0] == 1971
-        assert odf_hist.index[-1] == 1990
-        assert odf_run.index[0] == 1991
-
-        odf = pd.concat([odf_hist, odf_run])
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
 
         # Domain area is constant and equal to the first year
         odf['dom_area'] = odf['on_area'] + odf['off_area']
-        # assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=1e-4)
 
         # Sanity checks
         odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
@@ -4112,7 +4102,7 @@ class TestHydro:
         mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
         mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
 
-        mass_in_snow = odf['snow_bucket'].iloc[-1] + mass_in_snow_t1
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
         mass_in = odf['tot_prcp'].iloc[:-1].sum()
         mass_out = odf['runoff'].iloc[:-1].sum()
         assert_allclose(mass_in_glacier_end,

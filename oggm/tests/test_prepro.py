@@ -3251,10 +3251,20 @@ class TestColumbiaCalving(unittest.TestCase):
 
         np.testing.assert_allclose(mb - cal, rdf.dmdtda * 1000)
 
-        # OK - run
+        # OK - run - with merge to see if it works
         tasks.init_present_time_glacier(gdir)
-        tasks.run_from_climate_data(gdir, min_ys=1980, ye=2019,
-                                    output_filesuffix='_hist')
+        tasks.run_from_climate_data(gdir, min_ys=1980, ye=2012,
+                                    output_filesuffix='_hist1',
+                                    store_model_geometry=True)
+
+        tasks.run_from_climate_data(gdir, init_model_filesuffix='_hist1',
+                                    output_filesuffix='_hist2')
+
+        utils.merge_consecutive_run_outputs(gdir,
+                                            input_filesuffix_1='_hist1',
+                                            input_filesuffix_2='_hist2',
+                                            output_filesuffix='_hist',
+                                            delete_input=True)
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
