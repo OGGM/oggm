@@ -597,19 +597,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # OK - run
     if dynamic_spinup:
-        init_model_filesuffix = '_dynamic_spinup'
         workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
                                      evolution_model=evolution_model,
                                      minimise_for=dynamic_spinup,
-                                     output_filesuffix=init_model_filesuffix,
+                                     precision_percent=1,
+                                     output_filesuffix='_dynamic_spinup',
                                      )
-    else:
-        init_model_filesuffix = None
+        workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
+                                     min_ys=y0, ye=ye,
+                                     evolution_model=evolution_model,
+                                     init_model_filesuffix='_dynamic_spinup',
+                                     output_filesuffix='_hist_spin')
+        workflow.execute_entity_task(tasks.merge_consecutive_run_outputs, gdirs,
+                                     input_filesuffix_1='_dynamic_spinup',
+                                     input_filesuffix_2='_hist_spin',
+                                     output_filesuffix='_historical_spinup',
+                                     delete_input=True)
 
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
                                  evolution_model=evolution_model,
-                                 init_model_filesuffix=init_model_filesuffix,
                                  output_filesuffix='_historical')
 
     # Now compile the output
@@ -619,8 +626,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
 
     if dynamic_spinup:
-        opath = os.path.join(sum_dir, f'dynamic_spinup_run_output_{rgi_reg}.nc')
-        utils.compile_run_output(gdirs, path=opath, input_filesuffix='_dynamic_spinup')
+        opath = os.path.join(sum_dir, f'historical_spinup_run_output_{rgi_reg}.nc')
+        utils.compile_run_output(gdirs, path=opath,
+                                 input_filesuffix='_historical_spinup')
 
     # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))

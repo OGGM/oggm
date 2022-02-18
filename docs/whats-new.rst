@@ -92,6 +92,11 @@ Enhancements
   This DEM can be set with ``source='COPDEM30'`` and can be usefull for smaller sized glaciers.
   An account with Copernicus is required to access the DEM (free for academics).
   (:pull:`1364`). By `Matthias Dusch <https://github.com/matthiasdusch>`_
+- Added a new `merge_consecutive_run_outputs` entity task which allows to merge
+  two output files together (:pull:`1379`). This is useful to merge e.g.
+  spinup + historical or historical + projection runs in post-processing.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~

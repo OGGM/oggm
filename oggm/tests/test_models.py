@@ -4056,11 +4056,11 @@ class TestHydro:
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_dynamic_spinup,
-                             store_monthly_hydro=False,
+                             store_monthly_hydro=True,
                              ref_area_from_y0=True,
                              output_filesuffix='_spinup')
         tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
-                             store_monthly_hydro=False,
+                             store_monthly_hydro=True,
                              init_model_filesuffix='_spinup',
                              ref_geometry_filesuffix='_spinup',
                              ref_area_from_y0=True,
