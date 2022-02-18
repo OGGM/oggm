@@ -1140,7 +1140,6 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           dynamic_spinup='area', test_rgidf=rgidf,
                           test_intersects_file=inter,
-                          disable_mp=True,
                           test_topofile=topof, elev_bands=True)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
