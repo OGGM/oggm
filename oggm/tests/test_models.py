@@ -3297,7 +3297,7 @@ class TestHEF:
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
-    def test_dynamic_spinup(self, hef_gdir, minimise_for):
+    def test_dynamic_spinup(self, hef_gdir, hef_copy_gdir, minimise_for):
 
         # value we want to match after dynamic spinup
         fls = hef_gdir.read_pickle('model_flowlines')
@@ -3385,17 +3385,19 @@ class TestHEF:
                           model_dynamic_spinup.area_km2)
         assert np.isclose(model_dynamic_spinup_ys.yr,
                           model_dynamic_spinup.yr)
-        # check that the right errors are raised if none or if both are given
+        # check that the right errors are raised if none or if both are given,
+        # using hef_copy_gdir here to not generate a 'error_msg' in hef_gdir,
+        # this would cause the test_output_management to fail
         with pytest.raises(InvalidParamsError,
                            match='Only spinup_period OR ys is allowed!'):
-            run_dynamic_spinup(hef_gdir,
+            run_dynamic_spinup(hef_copy_gdir,
                                spinup_period=20,
                                ys=ys,
                                yr_rgi=yr_rgi,
                                minimise_for=minimise_for,)
         with pytest.raises(InvalidParamsError,
                            match='One of spinup_period OR ys must be provided!'):
-            run_dynamic_spinup(hef_gdir,
+            run_dynamic_spinup(hef_copy_gdir,
                                spinup_period=None,
                                ys=None,
                                yr_rgi=yr_rgi,
