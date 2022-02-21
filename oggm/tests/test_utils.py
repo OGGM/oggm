@@ -1219,6 +1219,7 @@ class TestPreproCLI(unittest.TestCase):
         with xr.open_dataset(sf) as dss:
             dss = dss.load()
 
+        assert dss.time[0] == 1979
         # comparison with fixed geometry spinup
         dse = dse.sel(time=slice(dss.time[0], dss.time[-1]))
 
