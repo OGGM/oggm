@@ -82,7 +82,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
-                      dynamic_spinup=False, continue_on_error=True):
+                      dynamic_spinup=False, dynamic_spinup_start_year=1979,
+                      continue_on_error=True):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -153,6 +154,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         disable the hash verification of OGGM downloads
     dynamic_spinup: str
         include a dynamic spinup matching 'area' OR 'volume' at the RGI-date
+    dynamic_spinup_start_year : int
+        if dynamic_spinup is set, define the starting year for the simulation.
+        The default is 1979, unless the climate data starts later.
     """
 
     # Input check
@@ -597,10 +601,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # OK - run
     if dynamic_spinup:
+        if y0 > dynamic_spinup_start_year:
+            dynamic_spinup_start_year = y0
         workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
                                      evolution_model=evolution_model,
                                      minimise_for=dynamic_spinup,
-                                     precision_percent=1,
+                                     ys=dynamic_spinup_start_year,
+                                     spinup_period=None,
                                      output_filesuffix='_dynamic_spinup',
                                      )
         workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
@@ -758,6 +765,10 @@ def parse_args(args):
     parser.add_argument('--dynamic_spinup', type=str, default='',
                         help="include a dynamic spinup for matching 'area' OR "
                              "'volume' at the RGI-date")
+    parser.add_argument('--dynamic_spinup_start_year', type=int, default=1979,
+                        help="if --dynamic_spinup is set, define the starting"
+                             "year for the simulation. The default is 1979, "
+                             "unless the climate data starts later.")
 
     args = parser.parse_args(args)
 
@@ -794,6 +805,8 @@ def parse_args(args):
     output_folder = os.path.abspath(output_folder)
     working_dir = os.path.abspath(working_dir)
 
+    dynamic_spinup = False if args.dynamic_spinup == '' else args.dynamic_spinup
+
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
@@ -810,8 +823,8 @@ def parse_args(args):
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
-                dynamic_spinup=False if args.dynamic_spinup == '' else
-                args.dynamic_spinup,
+                dynamic_spinup=dynamic_spinup,
+                dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 )
 
 
