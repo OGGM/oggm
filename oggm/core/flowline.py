@@ -3760,7 +3760,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
-                       spinup_period=20, ys=None, min_spinup_period=10,
+                       spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
@@ -3789,18 +3789,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
-    spinup_period : int or None
+    spinup_period : int
         The period how long the spinup should run. Start date of historical run
         is defined "yr_rgi - spinup_period". Minimum allowed value is 10. If
         the provided climate data starts at year later than
         (yr_rgi - spinup_period) the spinup_period is set to
-        (yr_rgi - yr_climate_start). Caution only spinup_period OR ys can be
-        given (the other must be None).
+        (yr_rgi - yr_climate_start). Caution if spinup_start_yr is set the
+        spinup_period is ignored.
         Default is 20.
-    ys : int or None
+    spinup_start_yr : int or None
         The start year of the dynamic spinup. If the provided year is before
         the provided climate data starts the year of the climate data is used.
-        Caution only spinup_period OR ys can be given (the other must be None).
+        If set it overrides the spinup_period.
         Default is None.
     min_spinup_period : int
         If the dynamic spinup function fails with the initial 'spinup_period'
@@ -3856,12 +3856,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The final dynamically spined-up model. Type depends on the selected
         evolution_model, by default a FluxBasedModel.
     """
-
-    # Check that only one of spinup_period OR ys is given
-    if spinup_period is not None and ys is not None:
-        raise InvalidParamsError('Only spinup_period OR ys is allowed!')
-    if spinup_period is None and ys is None:
-        raise InvalidParamsError('One of spinup_period OR ys must be provided!')
 
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
@@ -4323,10 +4317,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # (first a spinup period between initial period and 'min_spinup_period'
     # years and the second try is to use a period of 'min_spinup_period' years,
     # if it still fails the actual error is raised)
-    if spinup_period is not None:
-        spinup_period_initial = min(spinup_period, yr_rgi - yr_min)
+    if spinup_start_yr is not None:
+        spinup_period_initial = min(yr_rgi - spinup_start_yr, yr_rgi - yr_min)
     else:
-        spinup_period_initial = min(yr_rgi - ys, yr_rgi - yr_min)
+        spinup_period_initial = min(spinup_period, yr_rgi - yr_min)
     if spinup_period_initial <= min_spinup_period:
         spinup_periods_to_try = [min_spinup_period]
     else:

@@ -606,7 +606,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
                                      evolution_model=evolution_model,
                                      minimise_for=dynamic_spinup,
-                                     ys=dynamic_spinup_start_year,
+                                     spinup_start_yr=dynamic_spinup_start_year,
                                      spinup_period=None,
                                      output_filesuffix='_dynamic_spinup',
                                      )
