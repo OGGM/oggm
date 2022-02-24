@@ -22,6 +22,8 @@ from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
 
 # Module logger
+from oggm.utils import get_prepro_base_url, file_downloader
+
 log = logging.getLogger(__name__)
 
 
@@ -164,8 +166,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
 
     if start_level is not None:
-        if start_level not in [0, 1, 2, 4]:
-            raise InvalidParamsError('start_level should be one of [0, 1, 2, 4]')
+        if start_level not in [0, 1, 2, 3, 4]:
+            raise InvalidParamsError('start_level should be one of [0, 1, 2, 3, 4]')
         if start_level > 0 and start_base_url is None:
             raise InvalidParamsError('With start_level, please also indicate '
                                      'start_base_url')
@@ -547,15 +549,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             _time_log()
             return
 
-        # L4 - No tasks: add some stats for consistency and make the dirs small
+        # is needed to copy some files for L4 and L5
         sum_dir_L3 = sum_dir
+
+    # L4 - No tasks: add some stats for consistency and make the dirs small
+    if start_level <= 3:
         sum_dir = os.path.join(output_base_dir, 'L4', 'summary')
         utils.mkdir(sum_dir)
 
         # Copy L3 files for consistency
         for bn in ['glacier_statistics', 'climate_statistics',
                    'fixed_geometry_mass_balance']:
-            ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+            if start_level < 3:
+                ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+            else:
+                ipath = file_downloader(os.path.join(
+                    get_prepro_base_url(base_url=start_base_url,
+                                        rgi_version=rgi_version, border=border,
+                                        prepro_level=start_level), 'summary',
+                    bn + '_{}.csv'.format(rgi_reg)))
+
             opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
             shutil.copyfile(ipath, opath)
 
@@ -644,7 +657,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Other stats for consistency
     for bn in ['climate_statistics', 'fixed_geometry_mass_balance']:
-        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        if start_level < 3:
+            ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        else:
+            ipath = file_downloader(os.path.join(
+                get_prepro_base_url(base_url=start_base_url,
+                                    rgi_version=rgi_version, border=border,
+                                    prepro_level=start_level), 'summary',
+                bn + '_{}.csv'.format(rgi_reg)))
         opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
         shutil.copyfile(ipath, opath)
 
@@ -652,7 +672,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
     mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
     # This is crucial - extending calving only possible with L3 data!!!
-    sf = os.path.join(sum_dir_L3, 'glacier_statistics_{}.csv'.format(rgi_reg))
+    if start_level < 3:
+        sf = os.path.join(sum_dir_L3, 'glacier_statistics_{}.csv'.format(rgi_reg))
+    else:
+        sf = file_downloader(os.path.join(
+            get_prepro_base_url(base_url=start_base_url,
+                                rgi_version=rgi_version, border=border,
+                                prepro_level=start_level), 'summary',
+            'glacier_statistics_{}.csv'.format(rgi_reg)))
     opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
     utils.extend_past_climate_run(past_run_file=pf,
                                   fixed_geometry_mb_file=mf,
