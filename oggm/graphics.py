@@ -31,9 +31,7 @@ def set_oggm_cmaps():
     # Set global colormaps
     global OGGM_CMAPS
     OGGM_CMAPS['terrain'] = colormap.terrain
-    OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlGnBu')
     OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
-    OGGM_CMAPS['glacier_velocity'] = plt.cm.get_cmap('YlGn')
 
 
 set_oggm_cmaps()
@@ -508,8 +506,10 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
 
 @_plot_map
-def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
-    """Plots the result of the inversion out of a glacier directory."""
+def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None, plot_var='thick', cbar_label='Section thickness (m)', color_map = 'YlGnBu'):
+    """Plots the result of the inversion out of a glacier directory.
+       Default is thickness (m). 
+       Change plot_var to u_surface or u_integrated for velocity (m/yr)."""    
 
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -521,64 +521,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None):
     except ValueError:
         pass
 
-    toplot_th = np.array([])
-    toplot_lines = []
-    toplot_crs = []
-    vol = []
-    for gdir in gdirs:
-        crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
-        inv = gdir.read_pickle('inversion_output')
-        # Plot boundaries
-        poly_pix = geom['polygon_pix']
-        smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
-                          linewidth=.2)
-        for l in poly_pix.interiors:
-            smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
-
-        # plot Centerlines
-        cls = gdir.read_pickle('inversion_flowlines')
-        for l, c in zip(cls, inv):
-
-            smap.set_geometry(l.line, crs=crs, color='gray',
-                              linewidth=1.2, zorder=50)
-            toplot_th = np.append(toplot_th, c['thick'])
-            for wi, cur, (n1, n2) in zip(l.widths, l.line.coords, l.normals):
-                line = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
-                                        shpg.Point(cur + wi / 2. * n2)])
-                toplot_lines.append(line)
-                toplot_crs.append(crs)
-            vol.extend(c['volume'])
-
-    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'],
-                          data=toplot_th, vmin=0, vmax=vmax)
-    colors = dl.to_rgb()
-    for l, c, crs in zip(toplot_lines, colors, toplot_crs):
-        smap.set_geometry(l, crs=crs, color=c,
-                          linewidth=linewidth, zorder=50)
-
-    smap.plot(ax)
-    return dict(cbar_label='Section thickness [m]',
-                cbar_primitive=dl,
-                title_comment=' ({:.2f} km3)'.format(np.nansum(vol) * 1e-9))
-
-
-@_plot_map
-def plot_velocity(gdirs, ax=None, smap=None, linewidth=3, vmax=None, plot_var='u_surface', cbar_label='Surface velocity (m yr$^{-1}$)'):
-    """Same as 'plot_inversion' above. Plots the velocity after the inversion.
-       Default is u_surface. Or change to u_integrated."""
-
-    gdir = gdirs[0]
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
-
-    # Dirty optim
-    try:
-        smap.set_topography(topo)
-    except ValueError:
-        pass
-
-    toplot_v = np.array([])
+    toplot_var = np.array([])
     toplot_lines = []
     toplot_crs = []
     vol = []
@@ -599,8 +542,8 @@ def plot_velocity(gdirs, ax=None, smap=None, linewidth=3, vmax=None, plot_var='u
 
             smap.set_geometry(l.line, crs=crs, color='gray',
                               linewidth=1.2, zorder=50)
-#            print(c.keys())                  
-            toplot_v = np.append(toplot_v, c[plot_var])
+            
+            toplot_var = np.append(toplot_var, c[plot_var])
             for wi, cur, (n1, n2) in zip(l.widths, l.line.coords, l.normals):
                 line = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
                                         shpg.Point(cur + wi / 2. * n2)])
@@ -608,8 +551,8 @@ def plot_velocity(gdirs, ax=None, smap=None, linewidth=3, vmax=None, plot_var='u
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
-    dl = salem.DataLevels(cmap=OGGM_CMAPS['glacier_velocity'],
-                          data=toplot_v, vmin=0, vmax=vmax)
+    dl = salem.DataLevels(cmap = plt.get_cmap(color_map),
+                          data=toplot_var, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
         smap.set_geometry(l, crs=crs, color=c,
@@ -618,7 +561,6 @@ def plot_velocity(gdirs, ax=None, smap=None, linewidth=3, vmax=None, plot_var='u
     smap.plot(ax)
     return dict(cbar_label=cbar_label,
                 cbar_primitive=dl)
-
 
 
 @_plot_map
