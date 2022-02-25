@@ -506,12 +506,12 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
 
 @_plot_map
-def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None, 
-                   plot_var='thick', cbar_label='Section thickness (m)', 
+def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
+                   plot_var='thick', cbar_label='Section thickness (m)',
                    color_map='YlGnBu'):
     """Plots the result of the inversion out of a glacier directory.
-       Default is thickness (m). Change plot_var to u_surface or u_integrated 
-       for velocity (m/yr)."""    
+       Default is thickness (m). Change plot_var to u_surface or u_integrated
+       for velocity (m/yr)."""
 
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -543,8 +543,8 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
         for l, c in zip(cls, inv):
 
             smap.set_geometry(l.line, crs=crs, color='gray',
-                              linewidth=1.2, zorder=50)         
-            
+                              linewidth=1.2, zorder=50)
+
             toplot_var = np.append(toplot_var, c[plot_var])
             for wi, cur, (n1, n2) in zip(l.widths, l.line.coords, l.normals):
                 line = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
