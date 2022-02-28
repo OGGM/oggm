@@ -561,8 +561,13 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
                           linewidth=linewidth, zorder=50)
 
     smap.plot(ax)
-    return dict(cbar_label=cbar_label,
+    out = dict(cbar_label=cbar_label,
                 cbar_primitive=dl)
+
+    if plot_var == 'thick':
+        out['title_comment'] = ' ({:.2f} km3)'.format(np.nansum(vol) * 1e-9)
+
+    return out
 
 
 @_plot_map
