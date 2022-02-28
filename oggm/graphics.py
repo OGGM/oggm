@@ -31,6 +31,7 @@ def set_oggm_cmaps():
     # Set global colormaps
     global OGGM_CMAPS
     OGGM_CMAPS['terrain'] = colormap.terrain
+    OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlGnBu')
     OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
 
 
