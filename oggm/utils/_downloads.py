@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'ec2929a471a09b2b0f1e30a7ab2f9d1fb6e79098'
+SAMPLE_DATA_COMMIT = '1ec518d2467874e246a570c4d8651b3fadbdd45f'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -1802,7 +1802,7 @@ def get_wgms_files():
     datadir = os.path.join(sdir, 'mbdata')
     assert os.path.exists(datadir)
 
-    outf = os.path.join(sdir, 'rgi_wgms_links_20200415.csv')
+    outf = os.path.join(sdir, 'rgi_wgms_links_20220112.csv')
     outf = pd.read_csv(outf, dtype={'RGI_REG': object})
 
     return outf, datadir
