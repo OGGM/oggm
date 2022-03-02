@@ -2974,6 +2974,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
                        climate_filename='climate_historical',
+                       mb=None,
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        init_model_filesuffix=None,
@@ -3024,6 +3025,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb : str
+        User-povided mass balance model. The default option is mass balance
+        computed from preprocessed directories on model flowlines   
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3049,12 +3053,13 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
-                                     y0=y0, halfsize=halfsize,
-                                     bias=bias, seed=seed,
-                                     filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix,
-                                     unique_samples=unique_samples)
+    if mb is None:   
+        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
+                                         y0=y0, halfsize=halfsize,
+                                         bias=bias, seed=seed,
+                                         filename=climate_filename,
+                                         input_filesuffix=climate_input_filesuffix,
+                                         unique_samples=unique_samples)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
@@ -3084,6 +3089,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
+                         mb=None,
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
@@ -3136,6 +3142,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb : str
+        User-povided mass balance model. The default option is mass balance
+        computed from preprocessed directories on model flowlines
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3158,10 +3167,11 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     else:
         mb_model = ConstantMassBalance
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model,
-                                     y0=y0, halfsize=halfsize,
-                                     bias=bias, filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix)
+    if mb is None:
+        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model,
+                                         y0=y0, halfsize=halfsize,
+                                         bias=bias, filename=climate_filename,
+                                         input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
@@ -3186,7 +3196,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_monthly_step=False,
                           store_model_geometry=None,
                           store_fl_diagnostics=None,
-                          climate_filename='climate_historical',
+                          climate_filename='climate_historical', mb=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
@@ -3227,6 +3237,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb : str
+        User-povided mass balance model. The default option is mass balance
+        computed from preprocessed directories on model flowlines
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3301,9 +3314,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     if max_ys is not None:
         ys = ys if ys < max_ys else max_ys
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                     filename=climate_filename, bias=bias,
-                                     input_filesuffix=climate_input_filesuffix)
+    if mb is None:    
+        mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
+                                         filename=climate_filename, bias=bias,
+                                         input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
         mb.temp_bias = temperature_bias
@@ -3759,7 +3773,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
 def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
-                       evolution_model=FluxBasedModel,
+                       evolution_model=FluxBasedModel, mb_historical=None,
                        spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
@@ -3789,6 +3803,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
+    mb_historical : str
+        User-povided mass balance model. The default option is mass balance
+        computed from preprocessed directories on model flowlines
     spinup_period : int
         The period how long the spinup should run. Start date of historical run
         is defined "yr_rgi - spinup_period". Minimum allowed value is 10. If
@@ -3874,11 +3891,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         fls_spinup = copy.deepcopy(init_model_fls)
 
     # MassBalance for actual run from yr_spinup to yr_rgi
-    mb_historical = MultipleFlowlineMassBalance(gdir,
-                                                fls=fls_spinup,
-                                                mb_model_class=PastMassBalance,
-                                                filename='climate_historical',
-                                                input_filesuffix=climate_input_filesuffix)
+    if mb_historical is None:
+        mb_historical = MultipleFlowlineMassBalance(gdir,
+                                                    fls=fls_spinup,
+                                                    mb_model_class=PastMassBalance,
+                                                    filename='climate_historical',
+                                                    input_filesuffix=climate_input_filesuffix)
 
     # here we define the file-paths for the output
     if store_model_geometry:
