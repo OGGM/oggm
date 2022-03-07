@@ -3764,7 +3764,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
-                       store_model_geometry=True, store_fl_diagnostics=False,
+                       store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=True):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
@@ -3833,9 +3833,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
         Default is True.
-    store_fl_diagnostics : bool
+    store_fl_diagnostics : bool or None
         whether to store the model flowline diagnostics to disk or not.
-        Default is False.
+        Default is None.
     store_model_evolution : bool
         if True the complete dynamic spinup run is saved (complete evolution
         of the model during the dynamic spinup), if False only the final model
@@ -3887,6 +3887,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                       delete=True)
     else:
         geom_path = False
+
+    if store_fl_diagnostics is None:
+        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
 
     if store_fl_diagnostics:
         fl_diag_path = gdir.get_filepath('fl_diagnostics',
