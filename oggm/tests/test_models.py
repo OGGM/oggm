@@ -3299,6 +3299,11 @@ class TestHEF:
     @pytest.mark.slow
     def test_dynamic_spinup(self, hef_gdir, minimise_for):
 
+        # reset kcalving for this test and set it back to the previous value
+        # after the test
+        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        cfg.PARAMS['use_kcalving_for_run'] = False
+
         # value we want to match after dynamic spinup
         fls = hef_gdir.read_pickle('model_flowlines')
         ref_value = 0
@@ -3497,6 +3502,7 @@ class TestHEF:
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
     @pytest.mark.slow
     def test_cesm(self, hef_gdir):
