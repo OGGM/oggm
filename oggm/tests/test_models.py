@@ -4070,6 +4070,11 @@ class TestHydro:
     @pytest.mark.slow
     def test_hydro_dynamical_spinup(self, hef_gdir, inversion_params):
 
+        # reset kcalving for this test and set it back to the previous value
+        # after the test
+        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        cfg.PARAMS['use_kcalving_for_run'] = False
+
         gdir = hef_gdir
         gdir.rgi_date = 1990
 
@@ -4136,6 +4141,9 @@ class TestHydro:
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
+
+        # set back to previous value
+        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
