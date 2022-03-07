@@ -3916,6 +3916,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
 
+    mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
+    if mb_elev_feedback != 'annual':
+        raise InvalidParamsError('Only use annual mb_elev_feedback with the '
+                                 'dynamic spinup function!')
+
+    if cfg.PARAMS['use_kcalving_for_run']:
+        raise InvalidParamsError('Dynamic spinup not tested with '
+                                 "cfg.PARAMS['use_kcalving_for_run'] is `True`!")
+
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
