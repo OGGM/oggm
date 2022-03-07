@@ -3850,6 +3850,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         the 'output_filesuffix', if an error during the dynamic spinup occurs.
         This is useful if you want to keep glaciers for the following tasks.
         Default is True.
+    kwargs : dict
+        kwargs to pass to the evolution_model instance
 
     Returns
     -------
