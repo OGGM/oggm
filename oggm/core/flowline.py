@@ -3899,6 +3899,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
+    if cfg.PARAMS['use_inversion_params_for_run']:
+        diag = gdir.get_diagnostics()
+        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
+        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
+    else:
+        fs = cfg.PARAMS['fs']
+        glen_a = cfg.PARAMS['glen_a']
+
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
@@ -3907,7 +3915,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
-                                                   y0=yr_use)
+                                                   y0=yr_use,
+                                                   fs=fs,
+                                                   glen_a=glen_a,)
 
         with np.warnings.catch_warnings():
             # For operational runs we ignore the warnings
@@ -3966,7 +3976,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # run the spinup
         model_spinup = evolution_model(copy.deepcopy(fls_spinup),
                                        mb_spinup,
-                                       y0=0)
+                                       y0=0,
+                                       fs=fs,
+                                       glen_a=glen_a,)
         model_spinup.run_until(2 * halfsize_spinup)
 
         # if glacier is completely gone return information in ice-free
@@ -3977,7 +3989,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # Now conduct the actual model run to the rgi date
         model_historical = evolution_model(model_spinup.fls,
                                            mb_historical,
-                                           y0=yr_spinup)
+                                           y0=yr_spinup,
+                                           fs=fs,
+                                           glen_a=glen_a,)
         if store_model_evolution:
             model_historical.run_until_and_store(
                 yr_rgi,
