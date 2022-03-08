@@ -3764,8 +3764,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
-                       store_model_geometry=True, store_fl_diagnostics=False,
-                       store_model_evolution=True, ignore_errors=True):
+                       store_model_geometry=True, store_fl_diagnostics=None,
+                       store_model_evolution=True, ignore_errors=True,
+                       **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -3833,9 +3834,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
         Default is True.
-    store_fl_diagnostics : bool
+    store_fl_diagnostics : bool or None
         whether to store the model flowline diagnostics to disk or not.
-        Default is False.
+        Default is None.
     store_model_evolution : bool
         if True the complete dynamic spinup run is saved (complete evolution
         of the model during the dynamic spinup), if False only the final model
@@ -3849,6 +3850,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         the 'output_filesuffix', if an error during the dynamic spinup occurs.
         This is useful if you want to keep glaciers for the following tasks.
         Default is True.
+    kwargs : dict
+        kwargs to pass to the evolution_model instance
 
     Returns
     -------
@@ -3888,6 +3891,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     else:
         geom_path = False
 
+    if store_fl_diagnostics is None:
+        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
+
     if store_fl_diagnostics:
         fl_diag_path = gdir.get_filepath('fl_diagnostics',
                                          filesuffix=output_filesuffix,
@@ -3899,6 +3905,26 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
+    if cfg.PARAMS['use_inversion_params_for_run']:
+        diag = gdir.get_diagnostics()
+        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
+        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
+    else:
+        fs = cfg.PARAMS['fs']
+        glen_a = cfg.PARAMS['glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
+    if mb_elev_feedback != 'annual':
+        raise InvalidParamsError('Only use annual mb_elev_feedback with the '
+                                 'dynamic spinup function!')
+
+    if cfg.PARAMS['use_kcalving_for_run']:
+        raise InvalidParamsError('Dynamic spinup not tested with '
+                                 "cfg.PARAMS['use_kcalving_for_run'] is `True`!")
+
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
@@ -3907,7 +3933,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
-                                                   y0=yr_use)
+                                                   y0=yr_use,
+                                                   **kwargs)
 
         with np.warnings.catch_warnings():
             # For operational runs we ignore the warnings
@@ -3966,7 +3993,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # run the spinup
         model_spinup = evolution_model(copy.deepcopy(fls_spinup),
                                        mb_spinup,
-                                       y0=0)
+                                       y0=0,
+                                       **kwargs)
         model_spinup.run_until(2 * halfsize_spinup)
 
         # if glacier is completely gone return information in ice-free
@@ -3977,7 +4005,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # Now conduct the actual model run to the rgi date
         model_historical = evolution_model(model_spinup.fls,
                                            mb_historical,
-                                           y0=yr_spinup)
+                                           y0=yr_spinup,
+                                           **kwargs)
         if store_model_evolution:
             model_historical.run_until_and_store(
                 yr_rgi,

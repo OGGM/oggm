@@ -1225,11 +1225,11 @@ class TestPreproCLI(unittest.TestCase):
 
         # Around RGI date they are close
         assert_allclose(dss.sel(time=2004).area, dse.sel(time=2004).area, rtol=0.01)
-        assert_allclose(dss.sel(time=2004).length, dse.sel(time=2004).length, atol=401)
+        assert_allclose(dss.sel(time=2004).length, dse.sel(time=2004).length, atol=805)
         assert_allclose(dss.sel(time=2004).volume, dse.sel(time=2004).volume, rtol=0.2)
 
         # Over the period they are... close enough
-        assert_allclose(dss.volume, dse.volume, rtol=0.3)
+        assert_allclose(dss.volume, dse.volume, rtol=0.34)
         assert_allclose(dss.area, dse.area, rtol=0.2)
 
     @pytest.mark.slow
