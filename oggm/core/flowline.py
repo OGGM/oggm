@@ -3762,9 +3762,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        evolution_model=FluxBasedModel,
                        spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
-                       precision_min_absolute=1, first_guess_t_bias=-2,
-                       t_bias_max_step_length=2, maxiter=30,
-                       output_filesuffix='_dynamic_spinup',
+                       precision_min_absolute=1, min_ice_thickness=10,
+                       first_guess_t_bias=-2, t_bias_max_step_length=2,
+                       maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=True,
                        **kwargs):
@@ -3798,7 +3798,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         (yr_rgi - spinup_period) the spinup_period is set to
         (yr_rgi - yr_climate_start). Caution if spinup_start_yr is set the
         spinup_period is ignored.
-        Default is 20.
+        Default is 20
     spinup_start_yr : int or None
         The start year of the dynamic spinup. If the provided year is before
         the provided climate data starts the year of the climate data is used.
@@ -3829,6 +3829,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The unit of precision_min_absolute depends on minimise_for (if 'area' in
         km2, if 'volume' in km3)
         Default is 1.
+    min_ice_thickness : float
+        Gives an minimum ice thickness for model grid points which are counted
+        to the total model value. This could be useful to filter out seasonal
+        'glacier growth', as OGGM do not differentiate between snow and ice in
+        the forward model run. Therefore you could see quite fast changes
+        (spikes) in the time-evolution (especially visible in length and area).
+        If you set this value to 0 the filtering can be switched off.
+        Default is 10.
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -4044,7 +4052,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
-        value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
+        # only use grid points with a minimum ice thickness
+        fls = model_dynamic_spinup.fls
+        if cost_var == 'area_km2':
+            value_dynamic_spinup = np.sum(
+                [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-6
+        elif cost_var == 'volume_km3':
+            value_dynamic_spinup = np.sum(
+                [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-9
+        else:
+            raise NotImplementedError(f'{cost_var}')
 
         # calculate the mismatch in percent
         cost = (value_dynamic_spinup - value_ref) / value_ref * 100
