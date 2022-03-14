@@ -3762,8 +3762,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        evolution_model=FluxBasedModel,
                        spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
-                       first_guess_t_bias=-2, t_bias_max_step_length=2,
-                       maxiter=30, output_filesuffix='_dynamic_spinup',
+                       precision_min_absolute=1, first_guess_t_bias=-2,
+                       t_bias_max_step_length=2, maxiter=30,
+                       output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=True,
                        **kwargs):
@@ -3812,12 +3813,22 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
     minimise_for : str
-        The variable we want to match at yr_rgi. Default is 'area'.
-        Options are 'area' or 'volume'.
+        The variable we want to match at yr_rgi. Options are 'area' or 'volume'.
+        Default is 'area'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 10,
-        meaning the difference must be within 10% of the given value
-        (area or volume).
+        Gives the precision we want to match in percent. The algorithm makes
+        sure that the resulting relative mismatch is smaller than
+        precision_percent, but also that the absolute value is smaller than
+        precision_min_absolute.
+        Default is 1, meaning the difference must be within 1% of the given
+        value (area or volume).
+    precision_min_absolute : float
+        Gives an minimum absolute value to match. The algorithm makes sure that
+        the resulting relative mismatch is smaller than precision_percent, but
+        also that the absolute value is smaller than precision_min_absolute.
+        The unit of precision_min_absolute depends on minimise_for (if 'area' in
+        km2, if 'volume' in km3)
+        Default is 1.
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -3828,7 +3839,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         Default is 2
     maxiter : int
         Maximum number of minimisation iterations per spinup period. If reached
-        and 'ignore_errors=False' an error is raised. Default is 10.
+        and 'ignore_errors=False' an error is raised.
+        Default is 10.
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
@@ -3980,6 +3992,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     reference_value = np.sum([getattr(f, cost_var) for f in fls_ref])
     other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
                                     for f in fls_ref])
+
+    # here we adjust the used precision_percent to make sure the resulting
+    # absolute mismatch is smaller than precision_min_absolute
+    precision_percent = min(precision_percent,
+                            precision_min_absolute / reference_value * 100)
 
     # only used to check performance of function
     forward_model_runs = [0]

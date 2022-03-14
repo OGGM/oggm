@@ -3318,6 +3318,9 @@ class TestHEF:
             ref_value += getattr(fl, var_name)
 
         precision_percent = 10
+        # this value is chosen in a way that it effects the result in the 'area'
+        # run but not in the 'volume' run
+        precision_min_absolute = 0.1
         assert hef_gdir.rgi_date == 2003
         # is needed because the test climate dataset has ye = 2003 (in hydro
         # years would be 2004)
@@ -3330,12 +3333,15 @@ class TestHEF:
                 yr_rgi=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
+                precision_min_absolute=precision_min_absolute,
                 output_filesuffix='_dynamic_spinup',
                 store_model_evolution=store_model_evolution)
 
             # check if resulting model match wanted value with prescribed precision
             assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value,
                               rtol=precision_percent/100, atol=0)
+            assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value,
+                              rtol=0, atol=precision_min_absolute)
             assert model_dynamic_spinup.yr == yr_rgi
             assert len(model_dynamic_spinup.fls) == len(fls)
             # but surface_h should not be the same
@@ -3382,6 +3388,7 @@ class TestHEF:
             yr_rgi=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
+            precision_min_absolute=precision_min_absolute,
             output_filesuffix='_dynamic_spinup_ys',)
         # check that is the same if we provide spinup_start_yr instead of spinup_period
         assert np.isclose(model_dynamic_spinup_ys.volume_km3,
