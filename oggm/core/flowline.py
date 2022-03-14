@@ -3762,7 +3762,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        evolution_model=FluxBasedModel,
                        spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
-                       precision_min_absolute=1, min_ice_thickness=10,
+                       precision_absolute=1, min_ice_thickness=10,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
@@ -3819,14 +3819,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         Gives the precision we want to match in percent. The algorithm makes
         sure that the resulting relative mismatch is smaller than
         precision_percent, but also that the absolute value is smaller than
-        precision_min_absolute.
+        precision_absolute.
         Default is 1, meaning the difference must be within 1% of the given
         value (area or volume).
-    precision_min_absolute : float
+    precision_absolute : float
         Gives an minimum absolute value to match. The algorithm makes sure that
         the resulting relative mismatch is smaller than precision_percent, but
-        also that the absolute value is smaller than precision_min_absolute.
-        The unit of precision_min_absolute depends on minimise_for (if 'area' in
+        also that the absolute value is smaller than precision_absolute.
+        The unit of precision_absolute depends on minimise_for (if 'area' in
         km2, if 'volume' in km3)
         Default is 1.
     min_ice_thickness : float
@@ -4002,9 +4002,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                     for f in fls_ref])
 
     # here we adjust the used precision_percent to make sure the resulting
-    # absolute mismatch is smaller than precision_min_absolute
+    # absolute mismatch is smaller than precision_absolute
     precision_percent = min(precision_percent,
-                            precision_min_absolute / reference_value * 100)
+                            precision_absolute / reference_value * 100)
 
     # only used to check performance of function
     forward_model_runs = [0]

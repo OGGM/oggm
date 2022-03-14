@@ -3322,7 +3322,7 @@ class TestHEF:
         precision_percent = 10
         # this value is chosen in a way that it effects the result in the 'area'
         # run but not in the 'volume' run
-        precision_min_absolute = 0.1
+        precision_absolute = 0.1
         min_ice_thickness = 10
         assert hef_gdir.rgi_date == 2003
         # is needed because the test climate dataset has ye = 2003 (in hydro
@@ -3336,7 +3336,7 @@ class TestHEF:
                 yr_rgi=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
-                precision_min_absolute=precision_min_absolute,
+                precision_absolute=precision_absolute,
                 min_ice_thickness=min_ice_thickness,
                 output_filesuffix='_dynamic_spinup',
                 store_model_evolution=store_model_evolution)
@@ -3355,7 +3355,7 @@ class TestHEF:
             assert np.isclose(model_value, ref_value,
                               rtol=precision_percent / 100, atol=0)
             assert np.isclose(model_value, ref_value,
-                              rtol=0, atol=precision_min_absolute)
+                              rtol=0, atol=precision_absolute)
             assert model_dynamic_spinup.yr == yr_rgi
             assert len(model_dynamic_spinup.fls) == len(fls)
             # but surface_h should not be the same
@@ -3402,7 +3402,7 @@ class TestHEF:
             yr_rgi=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
-            precision_min_absolute=precision_min_absolute,
+            precision_absolute=precision_absolute,
             min_ice_thickness=min_ice_thickness,
             output_filesuffix='_dynamic_spinup_ys', )
         # check that is the same if we provide spinup_start_yr instead of spinup_period
