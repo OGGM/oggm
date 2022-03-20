@@ -6,7 +6,7 @@ to be realized by any OGGM pre-processing workflow.
 import os
 import logging
 import warnings
-from distutils.version import LooseVersion
+from packaging.version import Version
 from functools import partial
 
 # External libs
@@ -16,9 +16,7 @@ import pandas as pd
 import xarray as xr
 import shapely.geometry as shpg
 import scipy.signal
-from scipy.ndimage.measurements import label
-from scipy.ndimage import binary_erosion
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage import label, distance_transform_edt, binary_erosion
 from scipy.interpolate import griddata
 from scipy import optimize as optimization
 
@@ -358,7 +356,7 @@ def define_glacier_region(gdir, entity=None, source=None):
     if len(dem_list) == 1:
         dem_dss = [rasterio.open(dem_list[0])]  # if one tile, just open it
         dem_data = rasterio.band(dem_dss[0], 1)
-        if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+        if Version(rasterio.__version__) >= Version('1.0'):
             src_transform = dem_dss[0].transform
         else:
             src_transform = dem_dss[0].affine

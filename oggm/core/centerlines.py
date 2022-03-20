@@ -19,7 +19,7 @@ import logging
 import copy
 from itertools import groupby
 from collections import Counter
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 # External libs
 import numpy as np
@@ -28,9 +28,8 @@ import shapely.ops
 import scipy.signal
 import shapely.geometry as shpg
 from scipy.interpolate import RegularGridInterpolator
-from scipy.ndimage.filters import gaussian_filter1d
-from scipy.ndimage.morphology import distance_transform_edt
-from scipy.ndimage.measurements import label, find_objects
+from scipy.ndimage import (gaussian_filter1d, distance_transform_edt,
+                           label, find_objects)
 
 # Optional libs
 try:
@@ -1605,7 +1604,7 @@ def catchment_intersections(gdir):
                                   to_crs=gdir.grid.proj, inplace=True)
     except TypeError:
         # from_crs not available yet
-        if LooseVersion(gpd.__version__) >= LooseVersion('0.7.0'):
+        if Version(gpd.__version__) >= Version('0.7.0'):
             raise ImportError('You have installed geopandas v0.7 or higher. '
                               'Please also update salem for compatibility.')
         gdfc.crs = gdir.grid

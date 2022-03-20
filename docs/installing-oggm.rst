@@ -113,7 +113,7 @@ window, type::
     conda create --name oggm_env python=3.X
 
 
-where ``3.X`` is the Python version shipped with conda (currently 3.8).
+where ``3.X`` is the Python version shipped with conda (currently 3.9).
 You can of course use any other name for your environment.
 
 Don't forget to activate it before going on::
@@ -124,14 +124,19 @@ Don't forget to activate it before going on::
 .. _environment: https://conda.io/projects/conda/en/latest/user-guide/concepts/environments.html
 
 
-Feeling adventurous? Try mamba (optional)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In a hurry? Try mamba (optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The conda package manager has recently been criticized for being slow (it *is*
-quite slow to be honest). A new, faster tool is now available to replace conda: `mamba <https://mamba.readthedocs.io>`_.
-Mamba is a drop-in replacement for all conda commands.
-If you feel like it, install mamba in your conda environment (``conda install -c conda-forge mamba``)
+The conda package manager has been criticized for being slow (it *is*
+quite slow to be honest). A new, faster tool is now available
+to replace conda: `mamba <https://mamba.readthedocs.io>`_. Mamba is a drop-in
+replacement for all conda commands. If you feel like it, install mamba in your conda
+environment (``conda install -c conda-forge mamba``)
 and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
+
+*Note March 2022: soon, conda will use mamba per default. See
+`this post <https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community>`_
+for more info.*
 
 
 Install dependencies
@@ -303,7 +308,7 @@ environment from the following ``environment.yml`` file used to work::
     channels:
       - conda-forge
     dependencies:
-      - python=3.8
+      - python=3.9
       - jupyter
       - jupyterlab
       - numpy
@@ -324,6 +329,7 @@ environment from the following ``environment.yml`` file used to work::
       - cartopy
       - geopandas
       - rasterio
+      - rioxarray
       - seaborn
       - pytables
       - salem

@@ -1,7 +1,7 @@
 import unittest
 import os
 import shutil
-from distutils.version import LooseVersion
+from packaging.version import Version
 import pytest
 import warnings
 
@@ -301,8 +301,8 @@ class TestGIS(unittest.TestCase):
         with pytest.raises(RuntimeError):
             gis.glacier_masks(gdir)
 
-    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
-                         LooseVersion('1.0')),
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
                         reason='requires rasterio >= 1.0')
     def test_simple_glacier_masks(self):
 
@@ -357,8 +357,8 @@ class TestGIS(unittest.TestCase):
         assert dft.sum()[0] == 1000
         assert utils.rmsd(dft['ref'], dft['oggm']) < 5
 
-    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
-                         LooseVersion('1.0')),
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
                         reason='requires rasterio >= 1.0')
     def test_glacier_masks_other_glacier(self):
 
@@ -390,8 +390,8 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
         np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
 
-    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
-                         LooseVersion('1.0')),
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
                         reason='requires rasterio >= 1.0')
     def test_rasterio_glacier_masks(self):
 

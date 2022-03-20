@@ -1653,10 +1653,9 @@ class TestFakeDownloads(unittest.TestCase):
         file_sha256 = file_sha256.digest()
 
         data = utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
-        s = pd.Series({'size': file_size, 'sha256': file_sha256},
-                      name='test.txt')
-        data = data.append(s)
-        cfg.DATA['dl_verify_data_test.com'] = data
+        s = pd.DataFrame({'size': file_size, 'sha256': file_sha256},
+                         index=['test.txt'])
+        cfg.DATA['dl_verify_data_test.com'] = pd.concat([data, s])
 
         return 'https://test.com/test.txt'
 

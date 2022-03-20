@@ -7,6 +7,7 @@ gpd = pytest.importorskip('geopandas')
 
 import oggm
 import xarray as xr
+import rioxarray as rioxr
 import numpy as np
 import pandas as pd
 from oggm import utils
@@ -66,9 +67,9 @@ class Test_its_live:
         gis.rasterio_to_gdir(gdir, region_files['ALA']['vy'], 'its_live_vy',
                              resampling='bilinear')
 
-        with xr.open_rasterio(gdir.get_filepath('its_live_vx')) as da:
+        with rioxr.open_rasterio(gdir.get_filepath('its_live_vx')) as da:
             _vx = da.where(mask).data.squeeze()
-        with xr.open_rasterio(gdir.get_filepath('its_live_vy')) as da:
+        with rioxr.open_rasterio(gdir.get_filepath('its_live_vy')) as da:
             _vy = da.where(mask).data.squeeze()
 
         _vel = np.sqrt(_vx**2 + _vy**2)
@@ -552,7 +553,7 @@ class Test_bedtopo:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             mine = ds.consensus_ice_thickness
 
-        with xr.open_rasterio(gdir.get_filepath('consensus')) as ds:
+        with rioxr.open_rasterio(gdir.get_filepath('consensus')) as ds:
             ref = ds.isel(band=0)
 
         # Check area
