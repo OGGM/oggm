@@ -1329,7 +1329,7 @@ class FlowlineModel(object):
 
                 if stop_criterion is not None:
                     # Remove probable NaNs
-                    ds = ds.dropna('time')
+                    ds = ds.dropna('time', subset=['ts_section'])
 
                 geom_ds.append(ds)
 
@@ -1343,7 +1343,7 @@ class FlowlineModel(object):
 
         if stop_criterion is not None:
             # Remove probable NaNs
-            diag_ds = diag_ds.dropna('time')
+            diag_ds = diag_ds.dropna('time', subset=['volume_m3'])
 
         # write output?
         if do_fl_diag:
@@ -1356,7 +1356,7 @@ class FlowlineModel(object):
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
                 if stop_criterion is not None:
                     # Remove probable NaNs
-                    fl_diag_dss[i] = ds.dropna('time')
+                    fl_diag_dss[i] = ds.dropna('time', subset=['volume_m3'])
 
             # Write out?
             if fl_diag_path not in [True, None]:
