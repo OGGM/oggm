@@ -1697,9 +1697,13 @@ class TestIO():
             os.remove(fl_diag_path)
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
+
+        # We add this because this discovered a bug
+        from oggm.core.flowline import zero_glacier_stop_criterion
         model.run_until_and_store(500, geom_path=geom_path,
                                   diag_path=diag_path,
                                   fl_diag_path=fl_diag_path,
+                                  stop_criterion=zero_glacier_stop_criterion,
                                   store_monthly_step=True)
 
         with xr.open_dataset(diag_path) as ds_:
