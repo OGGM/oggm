@@ -2367,6 +2367,8 @@ class GlacierDirectory(object):
     ----------
     dir : str
         path to the directory
+    base_dir : str
+        path to the base directory
     rgi_id : str
         The glacier's RGI identifier
     glims_id : str
@@ -2379,9 +2381,19 @@ class GlacierDirectory(object):
         The RGI's BGNDATE year attribute if available. Otherwise, defaults to
         the median year for the RGI region
     rgi_region : str
+        The RGI region ID
+    rgi_subregion : str
+        The RGI subregion ID
+    rgi_version : str
+        The RGI version name
+    rgi_region_name : str
         The RGI region name
+    rgi_subregion_name : str
+        The RGI subregion name
     name : str
-        The RGI glacier name (if Available)
+        The RGI glacier name (if available)
+    hemisphere : str
+        `nh` or `sh`
     glacier_type : str
         The RGI glacier type ('Glacier', 'Ice cap', 'Perennial snowfield',
         'Seasonal snowfield')
@@ -2389,9 +2401,25 @@ class GlacierDirectory(object):
         The RGI terminus type ('Land-terminating', 'Marine-terminating',
         'Lake-terminating', 'Dry calving', 'Regenerated', 'Shelf-terminating')
     is_tidewater : bool
-        Is the glacier a caving glacier?
+        Is the glacier a calving glacier?
+    is_lake_terminating : bool
+        Is the glacier a lake terminating glacier?
+    is_nominal : bool
+        Is the glacier an RGI nominal glacier?
+    is_icecap : bool
+        Is the glacier an ice cap?
+    extent_ll : list
+        Extent of the glacier in lon/lat
+    logfile : str
+        Path to the log file (txt)
     inversion_calving_rate : float
         Calving rate used for the inversion
+    grid
+    dem_info
+    dem_daterange
+    intersects_ids
+    rgi_area_m2
+    rgi_area_km2
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
