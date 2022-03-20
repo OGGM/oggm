@@ -40,7 +40,7 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-class TestFuncs(unittest.TestCase):
+class TestFuncs(object):
 
     def setUp(self):
         pass
@@ -65,7 +65,7 @@ class TestFuncs(unittest.TestCase):
         a = np.array([1., 4, 7, 7, 4, 1])
         b = utils.smooth1d(a, 3, kernel='mean')
         assert_allclose(b, [3, 4, 6, 6, 4, 3])
-        kernel = [0.60653066,  1., 0.60653066]
+        kernel = [0.60653066, 1., 0.60653066]
         b = utils.smooth1d(a, 3, kernel=kernel)
         c = utils.smooth1d(a, 3)
         assert_allclose(b, c)
@@ -74,20 +74,20 @@ class TestFuncs(unittest.TestCase):
 
         name = 'Tustumena Glacier                              \x9c'
         expected = 'Tustumena Glacier'
-        self.assertTrue(utils.filter_rgi_name(name), expected)
+        assert utils.filter_rgi_name(name) == expected
 
         name = 'Hintereisferner                                À'
         expected = 'Hintereisferner'
-        self.assertTrue(utils.filter_rgi_name(name), expected)
+        assert utils.filter_rgi_name(name) == expected
 
         name = 'SPECIAL GLACIER                                3'
         expected = 'Special Glacier'
-        self.assertTrue(utils.filter_rgi_name(name), expected)
+        assert utils.filter_rgi_name(name) == expected
 
     def test_floatyear_to_date(self):
 
         r = utils.floatyear_to_date(0)
-        self.assertEqual(r, (0, 1))
+        assert r == (0, 1)
 
         y, m = utils.floatyear_to_date([0, 1])
         np.testing.assert_array_equal(y, [0, 1])
@@ -103,19 +103,19 @@ class TestFuncs(unittest.TestCase):
 
         yr = 1998 + 2 / 12
         r = utils.floatyear_to_date(yr)
-        self.assertEqual(r, (1998, 3))
+        assert r == (1998, 3)
 
         yr = 1998 + 1 / 12
         r = utils.floatyear_to_date(yr)
-        self.assertEqual(r, (1998, 2))
+        assert r == (1998, 2)
 
     def test_date_to_floatyear(self):
 
         r = utils.date_to_floatyear(0, 1)
-        self.assertEqual(r, 0)
+        assert r == 0
 
         r = utils.date_to_floatyear(1, 1)
-        self.assertEqual(r, 1)
+        assert r == 1
 
         r = utils.date_to_floatyear([0, 1], [1, 1])
         np.testing.assert_array_equal(r, [0, 1])
@@ -158,8 +158,25 @@ class TestFuncs(unittest.TestCase):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             utils.monthly_timeseries(1)
+
+    @pytest.mark.parametrize("d,w", [
+        (np.arange(10), np.arange(10)),
+        (np.arange(10)-5, np.arange(10)-5),
+        (np.random.random(1000), np.random.random(1000)),
+        ([2], [1]),
+        ([0], [1]),
+    ])
+    def test_weighted_avg(self, d, w):
+        r1 = utils.weighted_average_1d(d, weights=w)
+        r2 = np.average(d, weights=w)
+        assert_allclose(r1, r2)
+
+    def test_weighted_avg_fail(self):
+        d, w = ([0], [0])
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_average_1d(d, weights=w)
 
     def test_hydro_convertion(self):
 
@@ -254,7 +271,6 @@ class TestFuncs(unittest.TestCase):
         y, m = utils.hydrodate_to_calendardate(y, m, start_month=1)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
-
 
     def test_rgi_meta(self):
         cfg.initialize()
@@ -377,7 +393,7 @@ class TestInitialize(unittest.TestCase):
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
-        self.assertEqual(cfg.PATHS['working_dir'], expected)
+        assert cfg.PATHS['working_dir'] == expected
 
 
 class TestWorkflowTools(unittest.TestCase):
