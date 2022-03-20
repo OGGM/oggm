@@ -375,6 +375,17 @@ def clip_scalar(value, vmin, vmax):
     return vmin if value < vmin else vmax if value > vmax else value
 
 
+def weighted_average_1d(data, weights):
+    """A faster weighted average without dimension checks.
+
+    We use it because it turned out to be quite a bottleneck in calibration
+    """
+    scl = np.sum(weights)
+    if scl == 0:
+        raise ZeroDivisionError("Weights sum to zero, can't be normalized")
+    return np.multiply(data, weights).sum() / scl
+
+
 if Version(np.__version__) < Version('1.17'):
     clip_array = np.clip
 else:

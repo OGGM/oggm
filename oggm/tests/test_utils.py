@@ -40,7 +40,7 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-class TestFuncs(unittest.TestCase):
+class TestFuncs(object):
 
     def setUp(self):
         pass
@@ -160,6 +160,23 @@ class TestFuncs(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             utils.monthly_timeseries(1)
+
+    @pytest.mark.parametrize("d,w", [
+        (np.arange(10), np.arange(10)),
+        (np.arange(10)-5, np.arange(10)-5),
+        (np.random.random(1000), np.random.random(1000)),
+        ([2], [1]),
+        ([0], [1]),
+    ])
+    def test_weighted_avg(self, d, w):
+        r1 = utils.weighted_average_1d(d, weights=w)
+        r2 = np.average(d, weights=w)
+        assert_allclose(r1, r2)
+
+    def test_weighted_avg_fail(self):
+        d, w = ([0], [0])
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_average_1d(d, weights=w)
 
     def test_hydro_convertion(self):
 
