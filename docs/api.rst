@@ -288,9 +288,9 @@ Users usually don't have to care about *where* the data is located.
 
     fdem = gdir.get_filepath('dem')
     fdem
-    import xarray as xr
+    import rioxarray as rioxr
     @savefig plot_gdir_dem.png width=80%
-    xr.open_rasterio(fdem).plot(cmap='terrain');
+    rioxr.open_rasterio(fdem).plot(cmap='terrain');
 
 This persistence on disk allows for example to continue a workflow that has
 been previously interrupted. Initialising a GlacierDirectory from a non-empty

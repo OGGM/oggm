@@ -21,6 +21,10 @@ try:
 except ImportError:
     pass
 
+# TODO: remove this when geopandas will behave a bit better
+import warnings
+warnings.filterwarnings(action='ignore', category=FutureWarning, module=r'.*geopandas')
+
 # API
 # Some decorators used by many
 from oggm.utils import entity_task, global_task

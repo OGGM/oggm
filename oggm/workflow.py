@@ -433,6 +433,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     This is the very first task to do (always). If the directories are already
     available in the working directory, use them. If not, create new ones.
 
+    **Careful**: when starting from a pre-processed directory with
+    `from_prepro_level` or `from_tar`, the existing directories will be overwritten!
+
     Parameters
     ----------
     rgidf : GeoDataFrame or list of ids, optional for pre-computed runs
@@ -445,8 +448,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         setting `reset=True` will trigger a yes/no question to the user. Set
         `force=True` to avoid this.
     from_prepro_level : int
-        get the gdir data from the official pre-processed pool. See the
-        documentation for more information
+        get the gdir data from the official pre-processed pool. If this
+        argument is set, the existing directories will be overwritten!
     prepro_border : int
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['border']`
@@ -460,7 +463,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
-        delete the original tar file after extraction.
+        delete the original tar file after extraction. If this
+        argument is set, the existing directories will be overwritten!
 
     Returns
     -------

@@ -1,7 +1,7 @@
 """Climate data pre-processing"""
 # Built ins
 import logging
-from distutils.version import LooseVersion
+from packaging.version import Version
 import warnings
 
 # External libs
@@ -209,7 +209,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         fpath_precl = cfg.PATHS['cesm_precl_file']
 
     # read the files
-    if LooseVersion(xr.__version__) < LooseVersion('0.11'):
+    if Version(xr.__version__) < Version('0.11'):
         raise ImportError('This task needs xarray v0.11 or newer to run.')
 
     tempds = xr.open_dataset(fpath_temp)

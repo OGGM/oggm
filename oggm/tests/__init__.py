@@ -1,5 +1,5 @@
 import os
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 import pytest
 import matplotlib.ft2font
@@ -12,7 +12,7 @@ from oggm.utils import SAMPLE_DATA_COMMIT
 
 # Matplotlib version changes plots, too
 HAS_MPL_FOR_TESTS = False
-if LooseVersion(matplotlib.__version__) >= LooseVersion('2'):
+if Version(matplotlib.__version__) >= Version('2'):
     HAS_MPL_FOR_TESTS = True
     BASELINE_DIR = os.path.join(cfg.CACHE_DIR,
                                 'oggm-sample-data-%s' % SAMPLE_DATA_COMMIT,
