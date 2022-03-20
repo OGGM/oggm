@@ -725,13 +725,13 @@ def get_centerline_lonlat(gdir,
                 # First check if this is necessary - this segment should
                 # be within the geometry or it's already good to go
                 if fs.within(exterior):
-                    fs = shpa.scale(fs, xfact=3, yfact=3, origin=fs.boundary[1])
+                    fs = shpa.scale(fs, xfact=3, yfact=3, origin=fs.boundary.geoms[1])
                     line = shpg.LineString([*fs.coords, *line.coords[2:]])
                 # If last also extend at the end
                 if mm == 1:
                     ls = shpg.LineString(line.coords[-2:])
                     if ls.within(exterior):
-                        ls = shpa.scale(ls, xfact=3, yfact=3, origin=ls.boundary[0])
+                        ls = shpa.scale(ls, xfact=3, yfact=3, origin=ls.boundary.geoms[0])
                         line = shpg.LineString([*line.coords[:-2], *ls.coords])
 
                 # Simplify and smooth?

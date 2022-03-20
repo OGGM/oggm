@@ -4721,12 +4721,12 @@ def clean_merged_flowlines(gdir, buffer=None):
             oix = 9999
             if _overlap.length > 0 and fl1 != fl2 and fl2.flows_to != fl1:
                 if isinstance(_overlap, shpg.MultiLineString):
-                    if _overlap[0].coords[0] == fl1.line.coords[0]:
+                    if _overlap.geoms[0].coords[0] == fl1.line.coords[0]:
                         # if the head of overlap is same as the first line,
                         # best guess is, that the heads are close topgether!
-                        _ov1 = _overlap[1].coords[1]
+                        _ov1 = _overlap.geoms[1].coords[1]
                     else:
-                        _ov1 = _overlap[0].coords[1]
+                        _ov1 = _overlap.geoms[0].coords[1]
                 else:
                     _ov1 = _overlap.coords[1]
                 for _i, _p in enumerate(fl1.line.coords):
@@ -4762,7 +4762,7 @@ def clean_merged_flowlines(gdir, buffer=None):
             # if the tributary flowline is longer than the main line,
             # _line will contain multiple LineStrings: only keep the first
             if isinstance(_linediff, shpg.MultiLineString):
-                _linediff = _linediff[0]
+                _linediff = _linediff.geoms[0]
 
             if len(_linediff.coords) < 10:
                 bufferuse -= 1
