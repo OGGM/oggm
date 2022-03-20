@@ -64,6 +64,7 @@ GIS tools:
     - shapely
     - pyproj
     - rasterio
+    - rioxarray
     - geopandas
 
 Testing:
@@ -276,6 +277,11 @@ If everything worked fine, you should see something like::
 
 You can safely ignore deprecation warnings and other messages (if any),
 as long as the tests end without errors.
+
+.. important::
+
+   The tests (without the ``--run-slow`` option) should run in 5 to 10 minutes.
+   If this takes too long, this may be an indiv
 
 This runs a minimal suite of tests. If you want to run the entire test suite
 (including graphics and slow running tests), type::

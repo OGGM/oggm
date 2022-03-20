@@ -3086,7 +3086,7 @@ class TestColumbiaCalving(unittest.TestCase):
         df = inversion.find_inversion_calving(gdir)
 
         assert df['calving_flux'] > 2
-        assert df['calving_rate_myr'] > 500
+        assert df['calving_rate_myr'] > 450
         assert df['calving_mu_star'] == 0
 
         # Test that new MB equal flux

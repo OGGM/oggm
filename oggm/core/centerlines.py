@@ -1325,7 +1325,10 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
     # Make sure we are always returning a MultiLineString for later
     line = line.intersection(poly)
     if line.type == 'LineString':
-        line = shpg.MultiLineString([line])
+        try:
+            line = shpg.MultiLineString([line])
+        except shapely.errors.EmptyPartError:
+            return np.NaN, shpg.MultiLineString()
     elif line.type == 'MultiLineString':
         pass  # nothing to be done
     elif line.type == 'GeometryCollection':
