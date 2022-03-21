@@ -3425,8 +3425,8 @@ class TestHEF:
             'RGI60-04.05259': 'The difference between the rgi_date '
                               'and the start year of the climate data is to '
                               'small to run a dynamic spinup!',
-            'RGI60-04.00381': 'Mismatch is INF, this indicates '
-                              'that the reference value is 0.!',
+            'RGI60-04.00381': 'The given reference value is Zero, no dynamic '
+                              'spinup possible!',
             'RGI60-04.00331': 'Could not find mismatch smaller'
                               f' {precision_percent}%',
             'RGI60-04.07198': 'Not able to minimise! Problem is unknown, '

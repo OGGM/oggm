@@ -4001,6 +4001,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
                                     for f in fls_ref])
 
+    # if reference value is zero no dynamic spinup is possible
+    if reference_value == 0.:
+        if ignore_errors:
+            model_dynamic_spinup_end = save_model_without_dynamic_spinup()
+            return model_dynamic_spinup_end
+        else:
+            raise RuntimeError('The given reference value is Zero, no dynamic '
+                               'spinup possible!')
+
     # here we adjust the used precision_percent to make sure the resulting
     # absolute mismatch is smaller than precision_absolute
     precision_percent = min(precision_percent,
@@ -4151,11 +4160,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                    (iteration < max_iterations)):
                 try:
                     tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
-
-                    # check if mismatch is inf -> reference value is 0
-                    if np.isinf(tmp_mismatch):
-                        raise RuntimeError('Mismatch is INF, this indicates '
-                                           'that the reference value is 0.!')
 
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
