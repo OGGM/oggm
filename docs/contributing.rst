@@ -88,7 +88,30 @@ request. If you have uncommitted changes, you will need to ``stash`` them prior
 to updating. This will effectively store your changes and they can be reapplied
 after updating.
 
+.. note::
+
+    If you obtain the following error when you try to fetch upstream:
+    
+    *fatal: remote error: 
+    The unauthenticated git protocol on port 9418 is no longer supported.
+    Please see https://github.blog/2021-09-01-improving-git-protocol-security-github/ for more information.*
+
+    That's because since March 15, 2022, the Git protocol security on GitHub
+    has been changed and it's now permanent. You need to modify the connection 
+    to remote upstream (see `GitHub security`_ for more information`)::
+    
+    git remote set-url upstream git@github.com:OGGM/oggm.git
+    
+.. _GitHub security: https://github.blog/2021-09-01-improving-git-protocol-security-github/
+    
 .. _contributing.dev_env:
+
+    Installing OGGM in development mode means that subsequent changes to this
+    code repository will be taken into account the next time you will
+    ``import oggm``. You can also update OGGM with a simple `git pull`_ from
+    the root of the cloned repository.
+
+.. _git pull: https://git-scm.com/docs/git-pull
 
 Creating a development environment
 ----------------------------------
