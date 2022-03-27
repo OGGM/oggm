@@ -202,7 +202,7 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
     return out_thick
 
 
-def sia_thickness_via_optim(slope, width, flux, rel_h, a_factor, 
+def sia_thickness_via_optim(slope, width, flux, rel_h=1, a_factor=1, 
 							shape='rectangular', glen_a=None, fs=None, 
 							t_lambda=None):
     """Compute the thickness numerically instead of analytically.
@@ -278,7 +278,7 @@ def sia_thickness_via_optim(slope, width, flux, rel_h, a_factor,
     return out_h
 
 
-def sia_thickness(slope, width, flux, rel_h, a_factor, shape='rectangular',												
+def sia_thickness(slope, width, flux, rel_h=1, a_factor=1, shape='rectangular',												
                   glen_a=None, fs=None, shape_factor=None):
 										
     """Computes the ice thickness from mass-conservation.
@@ -408,7 +408,7 @@ def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
 @entity_task(log, writes=['inversion_output'])
 def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                                 filesuffix='', water_level=None,
-                                t_lambda=None, min_rel_h=None):
+                                t_lambda=None, min_rel_h=1):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -465,8 +465,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     # Clip the slope, in rad
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
     min_slope = np.deg2rad(cfg.PARAMS[min_slope])
-    if min_rel_h is None:
-        min_rel_h = 1
+
     out_volume = 0.
 
     cls = gdir.read_pickle('inversion_input')
