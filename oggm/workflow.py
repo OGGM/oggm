@@ -633,7 +633,8 @@ def climate_tasks(gdirs, base_url=None):
 
 
 @global_task(log)
-def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
+def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
+                    ref_period='None'):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -642,7 +643,21 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    ref_period : years of mass balance that should be taken into account in
+        inversion
     """
+
+    if ref_period is None:
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+        y0, y1 = ref_period.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        mb_years = [y0, y1-1]
+    else:
+        y0, y1 = ref_period.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        mb_years = [y0, y1-1]
 
     if cfg.PARAMS['use_kcalving_for_inversion']:
         # Differentiate between calving and non-calving glaciers
@@ -666,8 +681,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
-            execute_entity_task(tasks.find_inversion_calving, gdirs_c,
-                                glen_a=glen_a, fs=fs)
+            execute_entity_task(find_inversion_calving_from_any_mb, gdirs_c,
+                                glen_a=glen_a, fs=fs, mb_years=mb_years)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
