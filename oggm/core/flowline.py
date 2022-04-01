@@ -2050,11 +2050,7 @@ class FileModel(object):
     """Duck FlowlineModel which actually reads data out of a nc file."""
 
     def __init__(self, path):
-        """ Instantiate.
-
-        Parameters
-        ----------
-        """
+        """ Instantiate."""
 
         self.fls = glacier_from_netcdf(path)
 

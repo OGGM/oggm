@@ -206,7 +206,7 @@ Some other important things to know about the docs:
 How to build the documentation
 ------------------------------
 
-Requirements
+Installation
 ~~~~~~~~~~~~
 
 There are some extra requirements to build the docs: you will need to
@@ -216,13 +216,15 @@ and ``ipython`` installed.
 If you have a conda environment named ``oggm_env``, you can install the extra
 requirements with::
 
-      conda install -n oggm_env sphinx ipython numpydoc
-      conda install -c conda-forge sphinx-togglebutton sphinx-book-theme
+      mamba install -c conda-forge sphinx ipython numpydoc sphinx-book-theme
+      pip install sphinx-togglebutton
 
-If you use pip, activate your python environment and install the requirements
-with::
-
-      pip install sphinx sphinx-togglebutton sphinx-book-theme ipython numpydoc
+If you don't have an oggm installation yet, download (or clone) the latest version
+of the oggm repository.
+From the repository's root folder, activate conda if necessary and then,
+from your `base` environment, run ``mamba env create -f docs/environment.yml``
+(or ``conda env create -f docs/environment.yml``). To activate the environment,
+type: ``conda activate oggm_docs``.
 
 Building the documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
