@@ -35,13 +35,13 @@ class Model2D(object):
         dy : float
             map resolution (m)
         mb_model : oggm.core.massbalance model
-            the mass-balance model to use for the simulation
+            the mass balance model to use for the simulation
         y0 : int
             the starting year
         glen_a : float
             Glen's flow law parameter A
         mb_elev_feedback : str (default: 'annual')
-            when to update the mass-balance model ('annual', 'monthly', or
+            when to update the mass balance model ('annual', 'monthly', or
             'always')
         ice_thick_filter : func
             function to apply to the ice thickness *after* each time step.
@@ -252,13 +252,13 @@ class Upstream2D(Model2D):
         dy : float
             map resolution (m)
         mb_model : oggm.core.massbalance model
-            the mass-balance model to use for the simulation
+            the mass balance model to use for the simulation
         y0 : int
             the starting year
         glen_a : float
             Glen's flow law parameter A
         mb_elev_feedback : str (default: 'annual')
-            when to update the mass-balance model ('annual', 'monthly', or
+            when to update the mass balance model ('annual', 'monthly', or
             'always')
         cfl : float (default:0.124)
             forward time stepping stability criteria. Default is just beyond

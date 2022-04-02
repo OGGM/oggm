@@ -1253,7 +1253,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     Parameters
     ----------
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
-        the mass-balance model to use
+        the mass balance model to use
     mb_years : array
         the array of years from which you want to average the MB for (for
         mb_model only).

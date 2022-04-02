@@ -110,11 +110,11 @@ cluster type you are working with, who is administrating the cluster, etc.
 Installation
 ~~~~~~~~~~~~
 
-The installation procedure explained in :ref:`installing.oggm` should also
+The installation procedure explained in :doc:`installing-oggm` should also
 work in cluster environments. If you don't have admin rights,
 installing with conda in your ``$HOME`` probably is the easiest option.
 Once OGGM is installed, you can use your scripts (like the ones provided in the
-:ref:`tutorials`). But you probably want to check if the tests pass and our
+`tutorials <https://oggm.org/tutorials>`_). But you probably want to check if the tests pass and our
 `Data storage`_ section below first!
 
 
@@ -138,8 +138,8 @@ you. They are highly configurable, and come in many flavors.
     We highly recommend their use.
 
 The OGGM team (mostly `Timo <https://github.com/TimoRoth>`_) provides,
-maintains and updates a `Docker <https://www.docker.com/>`_ container.
-You can see all OGGM containers `here <https://github.com/orgs/OGGM/packages>`_.
+maintains and updates a Docker container that can be used by Singularity as well.
+You can list and download all OGGM containers `here <https://github.com/orgs/OGGM/packages>`_.
 Our most important repositories are:
 
 - `untested_base <https://github.com/OGGM/OGGM-Docker/pkgs/container/untested_base>`_ is a
@@ -174,7 +174,7 @@ This will store the image in your current directory and needs to be done only on
 
 .. important::
 
-    **Please do NOT pull from docker hub or ghcr.io in scheduled scripts**.
+    **Please do NOT pull from ghcr.io in scheduled scripts**.
     This is highly inefficient since it downloads the same file over and over
     again, and ghcr.io might put a cap on downloads if we do that too often.
 
@@ -211,18 +211,18 @@ Some explanations:
   environments, mostly for security and performance reasons. 
   On our cluster, we use the SLURM manager to run a number of glaciers (an RGI region
   for example), and the script above is then run on a node. You can also
-  use and run singularity with `srun -n 1 -c X singularity exec ...`:
+  use and run singularity with ``srun -n 1 -c X singularity exec ...``:
   this might vary on your cluster.
 - we fix the container version we want to use to a certain
   `tag <https://github.com/OGGM/oggm/pkgs/container/oggm/versions>`_. With this, we are
   guaranteed to always use the same software versions across runs.
 - it follows a number of commands to make sure we don't mess around with
-  the system settings. Here we use an `$OGGM_WORKDIR` variable which is 
+  the system settings. Here we use an ``$OGGM_WORKDIR`` variable which is
   probably not available in your case: it points to a directory you can 
   write to, and where OGGM will work (for example, it might also be the 
-  directory you are working on with OGGM (`cfg.PATHS['working_dir']`).
+  directory you are working on with OGGM (``cfg.PATHS['working_dir']``).
   We suggest to replace this variable with what works for you.
-- the `oggm` docker images ship with an OGGM version guaranteed to work on this container.
+- the ``oggm`` docker images ship with an OGGM version guaranteed to work on this container.
   Sometimes, you may want to use another OGGM version, for example with newer developments 
   on it. You might also add your own flavor or parameterization to OGGM into the environment. 
   For this you can use pip and install the version you want. Here we show an example 
@@ -230,13 +230,13 @@ Some explanations:
   git hash (you can use a
   `git tag <https://stackoverflow.com/questions/13685920/install-specific-git-commit-with-pip>`_
   as well). If you do that, you might want to run the tests once first to make sure 
-  that it works as expected. You can do that by replacing `YOUR_RUN_SCRIPT_HERE`
-  with `pytest --pyargs oggm --run-slow`!
+  that it works as expected. You can do that by replacing ``YOUR_RUN_SCRIPT_HERE``
+  with ``pytest --pyargs oggm --run-slow``!
 - finally, the `YOUR_RUN_SCRIPT_HERE` is the actual command you want to run
   from this container! Most of the time, it will be a call to your python
   script.
 
-We recommend to keep these `cluster` scripts alongside your code and data, so that you
+We recommend to keep these scripts alongside your code and data, so that you
 can trace them later on.
 
 Data storage
@@ -244,7 +244,7 @@ Data storage
 
 **‣ Input**
 
-OGGM needs a certain amount of data to run (see :ref:`shop`). Regardless
+OGGM needs a certain amount of data to run (see :doc:`input-data`). Regardless
 if you are using pre-processed directories or raw data, you will need to have
 access to them from your environment. The default in OGGM is to download
 the data and store it in a folder, specified in the ``$HOME/.oggm_config``
@@ -286,7 +286,7 @@ you have to deal with:
   to create compressed, aggregated files of your directories. You can
   later initialize new directories from these tar files with the `from_tar`
   keyword argument in :py:func:`workflow.init_glacier_directories`. See our
-  dedicated `Tutorials <https://oggm.org/tutorials/notebooks/store_and_compress_glacierdirs.html>`_ on the topic.
+  dedicated `tutorials on the topic <https://oggm.org/tutorials/master/notebooks/store_and_compress_glacierdirs.html>`_.
 
 
 Run per RGI region, not globally
@@ -348,7 +348,7 @@ The current OGGM model version is:
     oggm.__version__
 
 We document the changes we make to the model on GitHub, and in the
-:ref:`whats-new`.
+:doc:`whats-new`.
 
 Dependencies
 ~~~~~~~~~~~~
@@ -368,8 +368,7 @@ the interpolation routines of GDAL/rasterio can change the glacier
 topography in a non-traceable way for OGGM. This is an obstacle to
 reproducible science, and we should try to avoid these situations.
 
-Therefore, we have written a
-"`roadmap <https://github.com/OGGM/oggm/blob/master/DEPENDENCIES_ROADMAP.md>`_"
+Therefore, we have written :doc:`oeps/oep--0001-dependencies`
 as a tool to guide our decision regarding software dependencies in OGGM.
 This document also lists some example situations affecting model users and
 developers.
@@ -386,7 +385,7 @@ Dependence on hardware and input data
 
 The OGGM model will always be dependent on the input data (topography, climate,
 outlines...). Be aware that while certain results are robust (like interannual
-variability of surface mass-balance), other results are highly sensitive
+variability of surface mass balance), other results are highly sensitive
 to small changes in the boundary conditions. Some examples include:
 
 - the ice thickness inversion at a specific location is highly sensitive to the
@@ -416,7 +415,7 @@ not perfect, but we constantly seek to improve them:
 
 .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
     :target: https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html
-    :alt: Mass-balance cross validation
+    :alt: Mass balance cross validation
 
 .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
     :target: http://docs.oggm.org/en/latest

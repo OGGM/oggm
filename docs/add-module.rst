@@ -1,5 +1,3 @@
-.. _add-module:
-
 *********************************
 Adding an external module to OGGM
 *********************************
@@ -10,7 +8,7 @@ There are two ways to add a functionality to OGGM:
 
 1. The easiest (and recommended) way for small bug fixes or simple functionalities
    is to add it directly to the main OGGM codebase. In this case, refer to
-   the :ref:`contributing` page for how to do that.
+   the :doc:`contributing` page for how to do that.
 2. If your endeavor is a larger project (i.e. a fundamental change in the model
    physics or a new workflow), you can still use option 1 above. However,
    there might be reasons (explained below) to use a different approach. This

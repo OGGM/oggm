@@ -1,12 +1,10 @@
-.. _installing.oggm:
-
 Installing OGGM
 ===============
 
 .. important::
 
    Did you know that you can try OGGM in your browser before installing it
-   on your computer? Visit :ref:`cloud` for more information.
+   on your computer? Visit :doc:`cloud` for more information.
 
 OGGM itself is a pure Python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
@@ -135,9 +133,9 @@ replacement for all conda commands. If you feel like it, install mamba in your c
 environment (``conda install -c conda-forge mamba``)
 and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
-*Note March 2022: soon, conda will use mamba per default. See
+*Note March 2022*: soon, conda will use mamba per default. See
 `this post <https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community>`_
-for more info.*
+for more info.
 
 
 Install dependencies
@@ -145,7 +143,7 @@ Install dependencies
 
 Install all OGGM dependencies from the ``conda-forge`` and ``oggm`` conda channels::
 
-    conda install -c oggm -c conda-forge oggm-deps
+    mamba install -c oggm -c conda-forge oggm-deps
 
 The ``oggm-deps`` package is a "meta package". It does not contain any code but
 will install all the packages OGGM needs automatically.
@@ -158,15 +156,15 @@ will install all the packages OGGM needs automatically.
     recommend to **always** use the the `conda-forge`_ channel for your
     installation.
 
-You might consider setting `conda-forge`_  as your
-default channel::
+    You might consider setting `conda-forge`_  as your
+    default channel::
 
-    conda config --add channels conda-forge
+        conda config --add channels conda-forge
 
 No scientific Python installation is complete without installing a good
 testing framework, as well as `IPython`_ and `Jupyter`_::
 
-    conda install -c conda-forge pytest ipython jupyter
+    mamba install -c conda-forge pytest ipython jupyter
 
 .. _conda-forge: https://conda-forge.github.io/
 .. _IPython: https://ipython.org/
@@ -192,7 +190,7 @@ First, choose which version of OGGM you would like to install:
 
 If you are using conda, you can install stable OGGM as a normal conda package::
 
-    conda install -c oggm oggm
+    mamba install -c oggm oggm
 
 If you are using pip, you can install OGGM from `PyPI <https://pypi.python.org/pypi/oggm>`_::
 
@@ -288,8 +286,7 @@ This runs a minimal suite of tests. If you want to run the entire test suite
 
     pytest --pyargs oggm --run-slow --mpl
 
-**Congrats**, you are now set-up for the :ref:`getting-started` section!
-
+**Congrats**, you are now set-up for the :doc:`getting-started` section!
 
 
 .. _install-troubleshooting:
@@ -311,10 +308,9 @@ environment might help. At the time of writing (20.01.2021), creating an
 environment from the following ``environment.yml`` file used to work::
 
     name: oggm_env
-    channels:
+     channels:
       - conda-forge
     dependencies:
-      - python=3.9
       - jupyter
       - jupyterlab
       - numpy
@@ -334,16 +330,22 @@ environment from the following ``environment.yml`` file used to work::
       - pyproj
       - cartopy
       - geopandas
-      - rasterio
+      - rasterio<1.2.10
       - rioxarray
       - seaborn
       - pytables
       - salem
       - motionless
-      - pip
+      - sphinx
+      - sphinx-book-theme
+      - ipython
+      - numpydoc
+      - seaborn
+      - sphinx-intl
       - pip:
         - joblib
         - progressbar2
+        - sphinx-togglebutton
         - git+https://github.com/OGGM/pytest-mpl
         - oggm
 
@@ -362,9 +364,9 @@ Install with pyenv (Linux)
 
 .. note::
 
-   We recommend our users to use `conda` instead of `pip`, because
-   of the ease of installation with `conda`. If you are familiar with `pip` and
-   `pyenv`, the instructions below work as well: as of Sept 2020 (and thanks
+   We recommend our users to use ``conda`` instead of ``pip``, because
+   of the ease of installation with ``conda``. If you are familiar with ``pip`` and
+   ``pyenv``, the instructions below work as well: as of Sept 2020 (and thanks
    to pip wheels), a pyenv
    installation is possible without major issue on Debian/Ubuntu/Mint
    systems.
@@ -428,18 +430,27 @@ Install a minimal OGGM environment
 
 If you plan to use only the numerical core of OGGM (that is, for idealized
 simulations or teaching), you can skip many dependencies and only
-install this shorter list:
+install this shorter list::
 
-- numpy
-- scipy
-- pandas
-- matplotlib
-- shapely
-- requests
-- configobj
-- netcdf4
-- xarray
-- pytables
+    name: oggm_minimal
+    channels:
+      - conda-forge
+    dependencies:
+      - numpy
+      - scipy
+      - pandas
+      - matplotlib
+      - shapely
+      - requests
+      - configobj
+      - netcdf4
+      - xarray
+      - pytables
+      - pytest
+      # For oggm-edu
+      - seaborn
+    pip:
+      - oggm
 
 Installing them with pip or conda should be much easier.
 `Install OGGM itself`_ then as above.

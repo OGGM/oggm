@@ -30,7 +30,7 @@ LONG_DESCRIPTION = """
 
 The model accounts for glacier geometry (including contributory branches) and
 includes an explicit ice dynamics module. It can simulate past and
-future mass-balance, volume and geometry of (almost) any glacier in the world
+future mass balance, volume and geometry of (almost) any glacier in the world
 in a fully automated and extensible workflow. We rely exclusively on publicly
 available data for calibration and validation.
 

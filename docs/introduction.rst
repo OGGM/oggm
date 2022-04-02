@@ -18,11 +18,11 @@ its features:
     Data preprocessing
       Acquisition, download and processing of a large number of digital
       elevation models, gridded climate datasets, reference datasets for model
-      calibration and validation )such as geodetic mass-balance and velocity products),
+      calibration and validation )such as geodetic mass balance and velocity products),
       and more...
 
-    Climatic mass-balance
-      Mass-balance models of various degrees of complexity,
+    Climatic mass balance
+      Mass balance models of various degrees of complexity,
       interchangeable, extendable and reprogrammable by anyone.
 
     Glacier geometry evolution models
@@ -79,14 +79,14 @@ Catchment areas and widths
   representation of the glacier is in close accordance with the actual
   altitude-area distribution of the glacier (**Fig. d**).
 
-Climate data and mass-balance
+Climate data and mass balance
   Gridded climate data (monthly temperature and precipitation) are interpolated
   to the glacier location and corrected for altitude at each flowline's grid
   point. A carefully calibrated temperature-index model is used to compute the
-  mass-balance for any month in the past.
+  mass balance for any month in the past.
 
 Ice thickness inversion
-  Using the mass-balance data computed above and relying on mass-conservation
+  Using the mass balance data computed above and relying on mass-conservation
   considerations, an estimate of the ice flux along each glacier grid point cross-section
   is computed by making assumptions about the shape of the cross-section
   (parabolic, rectangular or trapezoid). Using the physics of ice flow and the shallow ice approximation, 
@@ -104,4 +104,4 @@ Glacier evolution
 
    Since v1.4, OGGM now has another way to compute flowlines via
    **binned elevation bands** [Huss_Farinotti_2012]_. See
-   :ref:`flowlines` for more details.
+   :doc:`flowlines` for more details.

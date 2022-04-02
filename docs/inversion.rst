@@ -3,7 +3,7 @@ Bed inversion
 
 To compute the initial ice thickness :math:`h_0`, OGGM follows a methodology
 largely inspired from [Farinotti_et_al_2009]_, but fully automated and relying
-on different methods for the mass-balance and the calibration.
+on different methods for the mass balance and the calibration.
 
 Basics
 ------
@@ -44,19 +44,19 @@ upstream of this point we have:
 
 with :math:`\dot{m}` the mass balance, and
 :math:`\widetilde{m} = \dot{m} - \rho \partial h / \partial t` the
-"apparent mass-balance" after [Farinotti_et_al_2009]_. If the glacier is in
-steady state, the apparent mass-balance is equivalent to the the actual (and
-observable) mass-balance. Unfortunately, that is rarely the case, hence :math:`\partial h / \partial t` is not
+"apparent mass balance" after [Farinotti_et_al_2009]_. If the glacier is in
+steady state, the apparent mass balance is equivalent to the the actual (and
+observable) mass balance. Unfortunately, that is rarely the case, hence :math:`\partial h / \partial t` is not
 known and there is no easy way to compute it. In order to continue, we have
 to make the assumption that our geometry is in equilibrium.
 
 This however has a very useful consequence: indeed, for the calibration
-of our :ref:`mass-balance` model it is required to find a date :math:`t^*`
+of our :doc:`mass-balance` model it is required to find a date :math:`t^*`
 at which the glacier would be in equilibrium with its average climate
 **while conserving its modern geometry**. Thus, we have
 :math:`\widetilde{m} = \dot{m}_{t^*}`, where :math:`\dot{m}_{t^*}` is the
-31-yr average mass-balance centered at :math:`t^*` (which is known since
-the mass-balance model calibration).
+31-yr average mass balance centered at :math:`t^*` (which is known since
+the mass balance model calibration).
 
 The plot below shows the mass flux along the major flowline of Hintereisferner
 glacier at :math:`t^*`. By construction, the flux is maximal at the equilibrium line and

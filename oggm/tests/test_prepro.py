@@ -3625,11 +3625,12 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
-        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_temp_file'] = f
-        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_precip_file'] = f
-        gcm_climate.process_cmip_data(gdir, filesuffix='_CCSM4')
+        fpath_temp = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        fpath_precip = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4')
 
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
@@ -3797,13 +3798,17 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
-        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_temp_file'] = f
-        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_precip_file'] = f
-        gcm_climate.process_cmip_data(gdir, filesuffix='_CCSM4_ns',
+        fpath_temp = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        fpath_precip = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4_ns',
                                       scale_stddev=False)
-        gcm_climate.process_cmip_data(gdir, filesuffix='_CCSM4')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4')
 
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')

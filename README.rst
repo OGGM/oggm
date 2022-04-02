@@ -6,7 +6,7 @@
 **OGGM is a modular open source model for glacier dynamics**
 
 OGGM is able to simulate past and
-future mass-balance, volume and geometry of (almost) any glacier in the world,
+future mass balance, volume and geometry of (almost) any glacier in the world,
 in a fully automated and extensible workflow.
 
 The model accounts for glacier geometry (including contributory branches) and
@@ -32,7 +32,7 @@ Get in touch
 - Follow us on `Twitter`_.
 - Or you can always send us an `e-mail`_ the good old way.
 
-.. _e-mail: https://mailman.zfn.uni-bremen.de/cgi-bin/mailman/listinfo/oggm-users
+.. _e-mail: info@oggm.org
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
@@ -71,7 +71,7 @@ About
 
     .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
         :target: https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html
-        :alt: Mass-balance cross validation
+        :alt: Mass balance cross validation
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://docs.oggm.org/en/latest/

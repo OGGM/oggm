@@ -1,7 +1,5 @@
 .. currentmodule:: oggm
 
-.. _getting-started:
-
 Getting started
 ===============
 
@@ -19,7 +17,7 @@ through several examples to get you started.
 .. important::
 
    Did you know that you can try OGGM in your browser before installing it
-   on your computer? Visit :ref:`cloud` for more information.
+   on your computer? Visit :doc:`cloud` for more information.
 
 .. _system-settings:
 
@@ -42,7 +40,7 @@ At your very first import, this will do two things:
 
 1. It will download a small subset of data used for testing and calibration.
    Those data are located in your home directory, in a hidden folder
-   called `.oggm`.
+   called ``.oggm``.
 2. It will create a configuration file in your home folder, where you can
    indicate where you want to store further input data. This configuration
    file is also located in your home directory under the name ``.oggm_config``.
@@ -69,11 +67,11 @@ At the first import, OGGM will create a cached ``.oggm`` directory in your
 ``$HOME`` folder. This directory contains all data obtained from the
 `oggm sample data`_ repository. It contains several files needed only for
 testing, but also some important files needed for calibration and validation
-(e.g. the `reference mass-balance data`_ from WGMS with
+(e.g. the `reference mass balance data`_ from WGMS with
 `links to the respective RGI polygons`_).
 
 .. _oggm sample data: https://github.com/OGGM/oggm-sample-data
-.. _reference mass-balance data: https://github.com/OGGM/oggm-sample-data/tree/master/wgms
+.. _reference mass balance data: https://github.com/OGGM/oggm-sample-data/tree/master/wgms
 .. _links to the respective RGI polygons: http://fabienmaussion.info/2017/02/19/wgms-rgi-links/
 
 The ``~/.oggm`` directory should be updated automatically when you update OGGM,
@@ -138,7 +136,7 @@ Some explanations:
   ``OGGM_DOWNLOAD_CACHE`` and ``OGGM_DOWNLOAD_CACHE_RO`` override the
   ``dl_cache_dir`` and ``dl_cache_readonly`` settings.
 
-.. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_Recently_Used_.28LRU.29
+.. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used_(LRU)
 
 
 OGGM workflow

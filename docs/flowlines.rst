@@ -1,7 +1,5 @@
 .. currentmodule:: oggm
 
-.. _flowlines:
-
 Glacier flowlines
 =================
 
@@ -213,7 +211,7 @@ elevation-band and geometrical flowlines.
 
 Both flowline types are available for download and for use in the OGGM
 framework. The plot below has been obtained from the
-`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/notebooks/elevation_bands_vs_centerlines.html>`_.
+`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/master/notebooks/elevation_bands_vs_centerlines.html>`_.
 
 
 .. figure:: _static/eb_vs_cl.png
@@ -248,9 +246,9 @@ Geometrical centerlines
   - Grid points along the centerlines preserve their geometrical information,
     i.e. one can compute the exact location of ice thickness change.
   - It is possible to have different model parameters for each flowline (e.g.
-    different mass-balance models), although this is coming with its own
+    different mass balance models), although this is coming with its own
     challenges.
-  - Arguably: better suitability for mass-balance parameterizations taking
+  - Arguably: better suitability for mass balance parameterizations taking
     glacier geometry and exposition into account.
   - Arguably: better representation of the main glacier flow?
 
@@ -265,7 +263,7 @@ Geometrical centerlines
     can "look" very ugly.
   - Computationally expensive (more grid points on average, more prone
     to numerical instabilities).
-  - Complex handling of mass-balance parameters for tributaries at the
+  - Complex handling of mass balance parameters for tributaries at the
     inversion (leading to multiple temperature sensitivity parameters
     for large glaciers).
   - Related: **all "new generation" maas-balance models in OGGM currently
@@ -274,12 +272,12 @@ Geometrical centerlines
 .. admonition:: **Summary**
 
    **When to use:** when geometry matters, and when length is a important variable.
-   For mountain glaciers (e.g. Alps, Himalayas). With the old mass-balance
+   For mountain glaciers (e.g. Alps, Himalayas). With the old mass balance
    model.
 
    **When not to use:** for ice caps, badly outlined glaciers, very large and
    flat glaciers, for global applications where geometrical details matters less.
-   With the more fancy mass-balance models.
+   With the more fancy mass balance models.
 
 Elevation-band flowlines
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -290,7 +288,7 @@ Elevation-band flowlines
     probably its best attribute, and makes it very interesting for large-scale
     applications.
   - Computationally cheap and simple: less error prone.
-  - Simpler mass-balance, because no complexity with the tributaries.
+  - Simpler mass balance, because no complexity with the tributaries.
   - Arguably: better representation of the main glacier flow?
 
 - Cons:
@@ -305,7 +303,7 @@ Elevation-band flowlines
 
    **When to use:** when "true" geometry does not matter. When doing simulations
    at large scales, and when robustness to bad / uncertain boundary conditions
-   is important. With the new generation mass-balance models.
+   is important. With the new generation mass balance models.
 
    **When not to use:** when glacier geometry or (absolute) length matters.
 
@@ -328,10 +326,10 @@ References
    Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
    applications, J. Glaciol., 1–16, doi:10.1017/jog.2019.93, 2019.
 
-
 Implementation details
 ----------------------
 
-Shared setup for these examples:
+.. admonition:: Code used to generate the examples
+   :class: note, dropdown
 
-.. literalinclude:: _code/prepare_centerlines.py
+   .. literalinclude:: _code/prepare_centerlines.py

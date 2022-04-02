@@ -1,7 +1,7 @@
 .. _oep0003:
 
 ===========================================
-OEP-0003: Surface mass-balance enhancements
+OEP-0003: Surface mass balance enhancements
 ===========================================
 
 :Authors: Fabien Maussion

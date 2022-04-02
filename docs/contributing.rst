@@ -1,5 +1,3 @@
-.. _contributing:
-
 ********************
 Contributing to OGGM
 ********************
@@ -33,8 +31,6 @@ version control to allow many people to work together on the project.
 Some great resources for learning Git:
 
 * the `GitHub help pages <http://help.github.com/>`_.
-* the `NumPy's documentation <https://numpy.org/doc/stable/dev/index.html>`_.
-* Matthew Brett's `Pydagogue <http://matthew-brett.github.com/pydagogue/>`_.
 
 Getting started with Git
 ------------------------
@@ -94,7 +90,7 @@ Creating a development environment
 ----------------------------------
 
 An easy way to create an OGGM development environment is explained in
-:ref:`installing.oggm`.
+:doc:`installing-oggm`.
 
 
 Contributing to the code base
@@ -317,7 +313,7 @@ again make sure that you have followed all the guidelines outlined in this docum
 regarding code style, tests, and documentation. You should also
 double check your branch changes against the branch it was based on:
 
-#. Navigate to your repository on GitHub -- https://github.com/your-GitHub-user-name/oggm
+#. Navigate to your repository on GitHub -- ``github.com/your-GitHub-user-name/oggm``
 #. Click on ``Branches``
 #. Click on the ``Compare`` button for your feature branch
 #. Select the ``base`` and ``compare`` branches, if necessary. This will be ``master`` and

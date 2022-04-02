@@ -1,7 +1,3 @@
-.. _mass-redistribution:
-
-.. currentmodule:: oggm
-
 Mass redistribution curve model
 ===============================
 
@@ -12,7 +8,7 @@ mass-redistribution curves as described in
 `Huss & Hock (2015) <https://www.frontiersin.org/articles/10.3389/feart.2015.00054/full>`_ or
 `Rounce et al. (2020) <https://www.frontiersin.org/articles/10.3389/feart.2019.00331/full>`_.
 
-Each year, the total glacier mass-balance is redistributed along the glacier
+Each year, the total glacier mass balance is redistributed along the glacier
 so that the surface elevation change is zero at the glacier top and
 maximal at the glacier terminus.
 

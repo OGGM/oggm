@@ -3,7 +3,7 @@ A modular open source glacier model in Python
 ---------------------------------------------
 
 **OGGM is an open source modelling framework** able to simulate past and
-future mass-balance, volume and geometry of (almost) any glacier in the world,
+future mass balance, volume and geometry of (almost) any glacier in the world,
 in a fully automated and extensible workflow.
 
 The model can account for glacier geometry (including contributory branches) and
@@ -148,7 +148,7 @@ copy, modify or redistribute its code at your wish, under certain conditions:
 
 1. When using this software, please acknowledge the original authors of this
    contribution by using our logo, referring to our website or using an
-   appropriate citation. See :ref:`citing-oggm` for how to do that.
+   appropriate citation. See :doc:`citing-oggm` for how to do that.
 
 2. Redistributions of any substantial portion of the OGGM source code must
    meet the conditions listed in the `OGGM license`_
@@ -196,7 +196,7 @@ About
 
     .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
         :target: https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html
-        :alt: Mass-balance cross validation
+        :alt: Mass balance cross validation
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://docs.oggm.org/en/latest

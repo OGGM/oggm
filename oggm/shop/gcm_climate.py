@@ -293,21 +293,11 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
     fpath_temp : str
-        path to the temp file (default: cfg.PATHS['cmip5_temp_file'])
+        path to the temp file
     fpath_precip : str
-        path to the precip file (default: cfg.PATHS['cmip5_precip_file'])
+        path to the precip file
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
-
-    # Get the path of GCM temperature & precipitation data
-    if fpath_temp is None:
-        if not ('cmip5_temp_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['cmip5_temp_file']")
-        fpath_temp = cfg.PATHS['cmip5_temp_file']
-    if fpath_precip is None:
-        if not ('cmip5_precip_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['cmip5_precip_file']")
-        fpath_precip = cfg.PATHS['cmip5_precip_file']
 
     # Glacier location
     glon = gdir.cenlon

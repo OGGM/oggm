@@ -38,5 +38,3 @@ dependencies:
     - progressbar2
     - sphinx-togglebutton
     - git+https://github.com/OGGM/pytest-mpl
-    # relative to this file. Needs to be editable to be accepted.
-    - -e ..
