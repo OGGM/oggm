@@ -9,6 +9,7 @@ v1.5.3 (02.04.2022)
 New release of the OGGM model, setting the ground for a major update to be
 released soon. Several major improvements available for testing, but
 not yet as default:
+
 - new ``MassRedistributionCurveModel`` which uses the Huss curves to parameterize
   glacier retreat.
 - new ``mu_star_calibration_from_geodetic_mb`` task which now calibrates
