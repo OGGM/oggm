@@ -3,6 +3,18 @@
 Version history
 ===============
 
+v1.X.Y (unreleased)
+-------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+Enhancements
+~~~~~~~~~~~~
+
+Bug fixes
+~~~~~~~~~
+
 v1.5.3 (02.04.2022)
 -------------------
 
