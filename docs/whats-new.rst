@@ -7,8 +7,8 @@ v1.5.3 (02.04.2022)
 -------------------
 
 New release of the OGGM model, setting the ground for a major update to be
-released soon. Several major improvements available for testing, but
-not yet as default:
+released soon. Several major improvements available for testing, and will
+become the default in a future major release:
 
 - new ``MassRedistributionCurveModel`` which uses the Huss curves to parameterize
   glacier retreat.
@@ -16,10 +16,7 @@ not yet as default:
   each glacier individually
 - new ``run_dynamic_spinup`` task which used the ice dynamics model to spinup the
   model (instead of the default equilibrium assumption)
-- plus much more (see below)
-
-We will finalize these new options and change the OGGM defaults to use them
-in a future major release.
+- and much more! See below.
 
 
 Breaking changes
