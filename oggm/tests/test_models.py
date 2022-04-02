@@ -80,13 +80,13 @@ class TestInitPresentDayFlowline:
             np.testing.assert_allclose(ref, fl.dis_on_line,
                                        rtol=0.001,
                                        atol=0.01)
-            assert(len(fl.surface_h) ==
-                   len(fl.bed_h) ==
-                   len(fl.bed_shape) ==
-                   len(fl.dis_on_line) ==
-                   len(fl.widths) ==
-                   len(fl.bin_area_m2)
-                   )
+            assert (len(fl.surface_h) ==
+                    len(fl.bed_h) ==
+                    len(fl.bed_shape) ==
+                    len(fl.dis_on_line) ==
+                    len(fl.widths) ==
+                    len(fl.bin_area_m2)
+                    )
 
             assert np.all(fl.widths >= 0)
             vol += fl.volume_m3
@@ -196,6 +196,7 @@ class TestInitPresentDayFlowline:
         # the one where all elevation band measurements are taken into account
         np.testing.assert_allclose(slope_obs_constant_dh, slope_obs_constant_dh_0_6, rtol=0.2)
 
+
 @pytest.fixture(scope='class')
 def other_glacier_cfg():
     cfg.initialize()
@@ -241,14 +242,14 @@ class TestInitFlowlineOtherGlacier:
         myarea = 0.
         cls = gdir.read_pickle('inversion_flowlines')
         for cl in cls:
-            myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
+            myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx ** 2)
 
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
 
         myarea = 0.
         cls = gdir.read_pickle('inversion_flowlines')
         for cl in cls:
-            myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx**2)
+            myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx ** 2)
 
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
 
@@ -262,11 +263,11 @@ class TestInitFlowlineOtherGlacier:
             np.testing.assert_allclose(ref, fl.dis_on_line,
                                        rtol=0.001,
                                        atol=0.01)
-            assert(len(fl.surface_h) ==
-                   len(fl.bed_h) ==
-                   len(fl.bed_shape) ==
-                   len(fl.dis_on_line) ==
-                   len(fl.widths))
+            assert (len(fl.surface_h) ==
+                    len(fl.bed_h) ==
+                    len(fl.bed_shape) ==
+                    len(fl.dis_on_line) ==
+                    len(fl.widths))
 
             assert np.all(fl.widths >= 0)
             vol += fl.volume_km3
@@ -274,7 +275,7 @@ class TestInitFlowlineOtherGlacier:
 
         rtol = 0.08
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
-        np.testing.assert_allclose(v*1e-9, vol, rtol=rtol)
+        np.testing.assert_allclose(v * 1e-9, vol, rtol=rtol)
 
 
 class TestMassBalanceModels:
@@ -300,7 +301,7 @@ class TestMassBalanceModels:
                                                       year_range=yrp)
 
         mb_mod = massbalance.PastMassBalance(gdir, bias=0)
-        for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+        for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
             ref_mb_on_h = p[:, i] - mu_star * t[:, i]
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
             np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h,
@@ -310,7 +311,7 @@ class TestMassBalanceModels:
             assert_allclose(totest[0], 0, atol=1)
 
         mb_mod = massbalance.PastMassBalance(gdir)
-        for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+        for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
             ref_mb_on_h = p[:, i] - mu_star * t[:, i]
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
             np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h + bias,
@@ -319,10 +320,10 @@ class TestMassBalanceModels:
             totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
             assert_allclose(totest[0], 0, atol=1)
 
-        for i, yr in enumerate(np.arange(yrp[0], yrp[1]+1)):
+        for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
 
             ref_mb_on_h = p[:, i] - mu_star * t[:, i]
-            my_mb_on_h = ref_mb_on_h*0.
+            my_mb_on_h = ref_mb_on_h * 0.
             for m in np.arange(12):
                 yrm = utils.date_to_floatyear(yr, m + 1)
                 tmp = mb_mod.get_monthly_mb(h, yrm) * SEC_IN_MONTH * rho
@@ -762,16 +763,16 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
 
         # Monthly
-        time = pd.date_range('1/1/1973', periods=31*12, freq='MS')
+        time = pd.date_range('1/1/1973', periods=31 * 12, freq='MS')
         yrs = utils.date_to_floatyear(time.year, time.month)
 
         ref_mb = np.zeros(12)
         my_mb = np.zeros(12)
         for yr, m in zip(yrs, time.month):
-            ref_mb[m-1] += np.average(mb_ref.get_monthly_mb(h, yr) *
-                                      SEC_IN_MONTH, weights=w)
-            my_mb[m-1] += np.average(mb_mod.get_monthly_mb(h, yr) *
-                                     SEC_IN_MONTH, weights=w)
+            ref_mb[m - 1] += np.average(mb_ref.get_monthly_mb(h, yr) *
+                                        SEC_IN_MONTH, weights=w)
+            my_mb[m - 1] += np.average(mb_mod.get_monthly_mb(h, yr) *
+                                       SEC_IN_MONTH, weights=w)
         my_mb = my_mb / 31
         ref_mb = ref_mb / 31
         assert utils.rmsd(ref_mb, my_mb) < 0.1
@@ -855,17 +856,17 @@ class TestMassBalanceModels:
 
         # test uniqueness
         # size
-        assert(len(list(mb_mod._state_yr.values())) ==
-               np.unique(list(mb_mod._state_yr.values())).size)
+        assert (len(list(mb_mod._state_yr.values())) ==
+                np.unique(list(mb_mod._state_yr.values())).size)
         # size2
-        assert(len(list(mb_mod2._state_yr.values())) ==
-               np.unique(list(mb_mod2._state_yr.values())).size)
+        assert (len(list(mb_mod2._state_yr.values())) ==
+                np.unique(list(mb_mod2._state_yr.values())).size)
         # state years 1 vs 2
-        assert(np.all(np.unique(list(mb_mod._state_yr.values())) ==
-                      np.unique(list(mb_mod2._state_yr.values()))))
+        assert (np.all(np.unique(list(mb_mod._state_yr.values())) ==
+                       np.unique(list(mb_mod2._state_yr.values()))))
         # state years 1 vs reference model
-        assert(np.all(np.unique(list(mb_mod._state_yr.values())) ==
-                      ref_mod.years))
+        assert (np.all(np.unique(list(mb_mod._state_yr.values())) ==
+                       ref_mod.years))
 
         # test ela vs specific mb
         elats = mb_mod.get_ela(yrs[:200])
@@ -982,7 +983,7 @@ class TestMassBalanceModels:
         h, w = gdir.get_inversion_flowline_hw()
 
         # Climate period, 10 day timestep
-        yrs = np.arange(1850, 2003, 10/365)
+        yrs = np.arange(1850, 2003, 10 / 365)
 
         # models
         start_time = time.time()
@@ -1033,6 +1034,7 @@ class TestMassBalanceModels:
         # before, the 21-year period was matched instead of the 20-year period
         # mb_modelled_wrong = mb.get_specific_mb(h, w, year=np.arange(1999,2020,1))
         # np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
+
 
 class TestModelFlowlines():
 
@@ -1104,12 +1106,12 @@ class TestModelFlowlines():
 
         # More adventurous
         rec.section = section / 2
-        assert_allclose(rec.thick, thick/2)
+        assert_allclose(rec.thick, thick / 2)
         assert_allclose(rec.widths, widths)
         assert_allclose(rec.widths_m, widths_m)
-        assert_allclose(rec.section, section/2)
+        assert_allclose(rec.section, section / 2)
         assert_allclose(rec.area_m2, area_m2.sum())
-        assert_allclose(rec.volume_m3, (vol_m3/2).sum())
+        assert_allclose(rec.volume_m3, (vol_m3 / 2).sum())
 
         # Water level
         rec = RectangularBedFlowline(line=line, dx=dx, map_dx=map_dx,
@@ -1142,7 +1144,7 @@ class TestModelFlowlines():
         widths[:30] = 40
         widths[-30:] = 10
 
-        lambdas = bed_h*0.
+        lambdas = bed_h * 0.
         is_trap = np.ones(len(lambdas), dtype=bool)
 
         # tests
@@ -1202,12 +1204,12 @@ class TestModelFlowlines():
 
             # More adventurous
             rec.section = section / 2
-            assert_allclose(rec.thick, thick/2)
+            assert_allclose(rec.thick, thick / 2)
             assert_allclose(rec.widths, widths)
             assert_allclose(rec.widths_m, widths_m)
-            assert_allclose(rec.section, section/2)
+            assert_allclose(rec.section, section / 2)
             assert_allclose(rec.area_m2, area_m2.sum())
-            assert_allclose(rec.volume_m3, (vol_m3/2).sum())
+            assert_allclose(rec.volume_m3, (vol_m3 / 2).sum())
 
     def test_trapeze_mixed_lambda1(self):
 
@@ -1227,7 +1229,7 @@ class TestModelFlowlines():
         widths_0[:30] = 40
         widths_0[-30:] = 10
 
-        lambdas = bed_h*0. + 1
+        lambdas = bed_h * 0. + 1
 
         # tests
         thick = surface_h - bed_h
@@ -1299,7 +1301,7 @@ class TestModelFlowlines():
         surface_h[:20] += 50
         surface_h[-20:] -= 80
 
-        shapes = bed_h*0. + 0.003
+        shapes = bed_h * 0. + 0.003
         shapes[:30] = 0.002
         shapes[-30:] = 0.004
 
@@ -1355,7 +1357,7 @@ class TestModelFlowlines():
         surface_h[:20] += 50
         surface_h[-20:] -= 80
 
-        shapes = bed_h*0. + 0.003
+        shapes = bed_h * 0. + 0.003
         shapes[:30] = 0.002
         shapes[-30:] = 0.004
 
@@ -1423,7 +1425,7 @@ class TestModelFlowlines():
         widths_0[:30] = 40
         widths_0[-30:] = 10
 
-        lambdas = bed_h*0. + 1
+        lambdas = bed_h * 0. + 1
         lambdas[0:50] = 0
 
         thick = surface_h - bed_h
@@ -1436,7 +1438,7 @@ class TestModelFlowlines():
                                       bed_h=bed_h, widths=widths,
                                       lambdas=lambdas)
 
-        shapes = bed_h*0. + 0.003
+        shapes = bed_h * 0. + 0.003
         shapes[-30:] = 0.004
 
         # tests
@@ -2189,7 +2191,7 @@ class TestIdealisedInversion():
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / \
-            (flo.widths * inversion_gdir.grid.dx) ** 2
+                       (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
                          (flo.widths * inversion_gdir.grid.dx) ** 2)
 
@@ -2270,7 +2272,7 @@ class TestIdealisedInversion():
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / \
-            (flo.widths * inversion_gdir.grid.dx) ** 2
+                       (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
                          (flo.widths * inversion_gdir.grid.dx) ** 2)
 
@@ -2330,7 +2332,7 @@ class TestIdealisedInversion():
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / \
-            (flo.widths * inversion_gdir.grid.dx) ** 2
+                       (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
                          (flo.widths * inversion_gdir.grid.dx) ** 2)
 
@@ -2740,7 +2742,7 @@ class TestIdealisedInversion():
         assert v > model.volume_m3
         ocls = inversion_gdir.read_pickle('inversion_output')
         ithick = ocls[0]['thick']
-        assert np.mean(ithick) > np.mean(model.fls[0].thick)*1.1
+        assert np.mean(ithick) > np.mean(model.fls[0].thick) * 1.1
         if do_plot:  # pragma: no cover
             self.simple_plot(model, inversion_gdir)
 
@@ -2770,12 +2772,12 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
         inv = inversion_gdir.read_pickle('inversion_output')[-1]
-        bed_shape_gl = 4*inv['thick']/(flo.widths*inversion_gdir.grid.dx)**2
+        bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
 
         ithick = inv['thick']
         fls = dummy_parabolic_bed(map_dx=inversion_gdir.grid.dx,
                                   from_other_shape=bed_shape_gl[:-2],
-                                  from_other_bed=(sh-ithick)[:-2])
+                                  from_other_bed=(sh - ithick)[:-2])
         model2 = FluxBasedModel(fls, mb_model=mb, y0=0.)
         model2.run_until_equilibrium()
         assert_allclose(model2.volume_m3, model.volume_m3, rtol=0.01)
@@ -3322,6 +3324,10 @@ class TestHEF:
             ref_value += getattr(fl, var_name)
 
         precision_percent = 10
+        # this value is chosen in a way that it effects the result in the 'area'
+        # run but not in the 'volume' run
+        precision_absolute = 0.1
+        min_ice_thickness = 10
         assert hef_gdir.rgi_date == 2003
         # is needed because the test climate dataset has ye = 2003 (in hydro
         # years would be 2004)
@@ -3334,12 +3340,26 @@ class TestHEF:
                 yr_rgi=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
+                precision_absolute=precision_absolute,
+                min_ice_thickness=min_ice_thickness,
                 output_filesuffix='_dynamic_spinup',
                 store_model_evolution=store_model_evolution)
 
             # check if resulting model match wanted value with prescribed precision
-            assert np.isclose(getattr(model_dynamic_spinup, var_name), ref_value,
-                              rtol=precision_percent/100, atol=0)
+            if var_name == 'area_km2':
+                model_value = np.sum(
+                    [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
+                     for fl in model_dynamic_spinup.fls]) * 1e-6
+            elif var_name == 'volume_km3':
+                model_value = np.sum(
+                    [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
+                     for fl in model_dynamic_spinup.fls]) * 1e-9
+            else:
+                raise NotImplementedError(f'{var_name}')
+            assert np.isclose(model_value, ref_value,
+                              rtol=precision_percent / 100, atol=0)
+            assert np.isclose(model_value, ref_value,
+                              rtol=0, atol=precision_absolute)
             assert model_dynamic_spinup.yr == yr_rgi
             assert len(model_dynamic_spinup.fls) == len(fls)
             # but surface_h should not be the same
@@ -3386,7 +3406,9 @@ class TestHEF:
             yr_rgi=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
-            output_filesuffix='_dynamic_spinup_ys',)
+            precision_absolute=precision_absolute,
+            min_ice_thickness=min_ice_thickness,
+            output_filesuffix='_dynamic_spinup_ys', )
         # check that is the same if we provide spinup_start_yr instead of spinup_period
         assert np.isclose(model_dynamic_spinup_ys.volume_km3,
                           model_dynamic_spinup.volume_km3)
@@ -3407,8 +3429,8 @@ class TestHEF:
             'RGI60-04.05259': 'The difference between the rgi_date '
                               'and the start year of the climate data is to '
                               'small to run a dynamic spinup!',
-            'RGI60-04.00381': 'Mismatch is INF, this indicates '
-                              'that the reference value is 0.!',
+            'RGI60-04.00381': 'The given reference value is Zero, no dynamic '
+                              'spinup possible!',
             'RGI60-04.00331': 'Could not find mismatch smaller'
                               f' {precision_percent}%',
             'RGI60-04.07198': 'Not able to minimise! Problem is unknown, '
@@ -3443,12 +3465,13 @@ class TestHEF:
             # not all combinations raise an error, but still test special cases
             if (((minimise_for == 'area') &
                  (gdir.rgi_id == 'RGI60-04.07198')) |
-                ((minimise_for == 'volume') &
-                 (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
-                                  'RGI60-04.00331']))):
+                    ((minimise_for == 'volume') &
+                     (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
+                                      'RGI60-04.00331']))):
                 run_dynamic_spinup(gdir,
                                    minimise_for=minimise_for,
                                    precision_percent=precision_percent,
+                                   min_ice_thickness=0,
                                    output_filesuffix='_dynamic_spinup',
                                    maxiter=10,
                                    ignore_errors=ignore_errors,
@@ -3460,6 +3483,7 @@ class TestHEF:
                     run_dynamic_spinup(gdir,
                                        minimise_for=minimise_for,
                                        precision_percent=precision_percent,
+                                       min_ice_thickness=0,
                                        output_filesuffix='_dynamic_spinup',
                                        maxiter=10,
                                        ignore_errors=ignore_errors,
@@ -3470,7 +3494,7 @@ class TestHEF:
                                  'model_diagnostics']:
                     assert not os.path.exists(
                         gdir.get_filepath(filename,
-                                          filesuffix='_dynamic_spinup',))
+                                          filesuffix='_dynamic_spinup', ))
 
         # check that ignore_error is working correctly
         ignore_errors = True
@@ -3528,7 +3552,6 @@ class TestHEF:
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
         with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
-
             # Let's do some basic checks
             shist = hist.sel(time=slice('1961', '1990'))
             scesm = cesm.sel(time=slice('1961', '1990'))
@@ -3606,7 +3629,7 @@ class TestHEF:
         ds3 = utils.compile_run_output([gdir], path=False,
                                        input_filesuffix='_afterspinup')
         assert (ds1.volume.isel(rgi_id=0, time=-1).data <
-                0.75*ds3.volume.isel(rgi_id=0, time=-1).data)
+                0.75 * ds3.volume.isel(rgi_id=0, time=-1).data)
         ds3.close()
 
         # Try the compile optimisation
@@ -3653,7 +3676,7 @@ class TestHEF:
         if do_plot:
             plt.figure()
             for ds, lab in zip(out, feedbacks):
-                (ds.volume*1e-9).plot(label=lab)
+                (ds.volume * 1e-9).plot(label=lab)
             plt.xlabel('Vol (km3)')
             plt.legend()
             plt.show()
@@ -3745,6 +3768,7 @@ class TestHEF:
                                            ods[vn].sel(time=1990) -
                                            ods[vn].sel(time=1980),
                                            rtol=rtol)
+
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHydro:
@@ -3874,7 +3898,7 @@ class TestHydro:
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                              store_monthly_hydro=store_monthly_hydro,
-                             nyears=100, y0=2003-5, halfsize=5,
+                             nyears=100, y0=2003 - 5, halfsize=5,
                              output_filesuffix='_const')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -4163,7 +4187,7 @@ class TestHydro:
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
                              store_monthly_hydro=store_monthly_hydro,
-                             seed=0, nyears=100, y0=2003-5, halfsize=5,
+                             seed=0, nyears=100, y0=2003 - 5, halfsize=5,
                              output_filesuffix='_rand')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -4242,12 +4266,12 @@ class TestHydro:
             tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                                  bias=mb_bias,
                                  store_monthly_hydro=False,
-                                 nyears=20, y0=2003-5, halfsize=5,
+                                 nyears=20, y0=2003 - 5, halfsize=5,
                                  output_filesuffix='_annual')
             tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                                  bias=mb_bias,
                                  store_monthly_hydro=True,
-                                 nyears=20, y0=2003-5, halfsize=5,
+                                 nyears=20, y0=2003 - 5, halfsize=5,
                                  output_filesuffix='_monthly')
         elif mb_type == 'hist':
             tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -4390,11 +4414,11 @@ class TestMassRedis:
 
                 f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
                 v.plot(ax=ax1,
-                       color=['C0']*2+['C1']*2+['C3']*2,
+                       color=['C0'] * 2 + ['C1'] * 2 + ['C3'] * 2,
                        style=['-', ':'] * 3)
                 ax1.set_title(f'Volume, advance_method={advance_method}')
                 l.plot(ax=ax2,
-                       color=['C0']*2+['C1']*2+['C3']*2,
+                       color=['C0'] * 2 + ['C1'] * 2 + ['C3'] * 2,
                        style=['-', ':'] * 3)
                 ax2.set_title(f'Length, advance_method={advance_method}')
                 plt.show()
@@ -4402,7 +4426,6 @@ class TestMassRedis:
 
 @pytest.fixture(scope='class')
 def merged_hef_cfg(class_case_dir):
-
     # Init
     cfg.initialize()
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))

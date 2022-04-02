@@ -3758,6 +3758,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        evolution_model=FluxBasedModel,
                        spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
+                       precision_absolute=1, min_ice_thickness=10,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
@@ -3793,7 +3794,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         (yr_rgi - spinup_period) the spinup_period is set to
         (yr_rgi - yr_climate_start). Caution if spinup_start_yr is set the
         spinup_period is ignored.
-        Default is 20.
+        Default is 20
     spinup_start_yr : int or None
         The start year of the dynamic spinup. If the provided year is before
         the provided climate data starts the year of the climate data is used.
@@ -3808,12 +3809,30 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
     minimise_for : str
-        The variable we want to match at yr_rgi. Default is 'area'.
-        Options are 'area' or 'volume'.
+        The variable we want to match at yr_rgi. Options are 'area' or 'volume'.
+        Default is 'area'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 10,
-        meaning the difference must be within 10% of the given value
-        (area or volume).
+        Gives the precision we want to match in percent. The algorithm makes
+        sure that the resulting relative mismatch is smaller than
+        precision_percent, but also that the absolute value is smaller than
+        precision_absolute.
+        Default is 1, meaning the difference must be within 1% of the given
+        value (area or volume).
+    precision_absolute : float
+        Gives an minimum absolute value to match. The algorithm makes sure that
+        the resulting relative mismatch is smaller than precision_percent, but
+        also that the absolute value is smaller than precision_absolute.
+        The unit of precision_absolute depends on minimise_for (if 'area' in
+        km2, if 'volume' in km3)
+        Default is 1.
+    min_ice_thickness : float
+        Gives an minimum ice thickness for model grid points which are counted
+        to the total model value. This could be useful to filter out seasonal
+        'glacier growth', as OGGM do not differentiate between snow and ice in
+        the forward model run. Therefore you could see quite fast changes
+        (spikes) in the time-evolution (especially visible in length and area).
+        If you set this value to 0 the filtering can be switched off.
+        Default is 10.
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -3824,7 +3843,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         Default is 2
     maxiter : int
         Maximum number of minimisation iterations per spinup period. If reached
-        and 'ignore_errors=False' an error is raised. Default is 10.
+        and 'ignore_errors=False' an error is raised.
+        Default is 10.
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
@@ -3977,6 +3997,20 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
                                     for f in fls_ref])
 
+    # if reference value is zero no dynamic spinup is possible
+    if reference_value == 0.:
+        if ignore_errors:
+            model_dynamic_spinup_end = save_model_without_dynamic_spinup()
+            return model_dynamic_spinup_end
+        else:
+            raise RuntimeError('The given reference value is Zero, no dynamic '
+                               'spinup possible!')
+
+    # here we adjust the used precision_percent to make sure the resulting
+    # absolute mismatch is smaller than precision_absolute
+    precision_percent = min(precision_percent,
+                            precision_absolute / reference_value * 100)
+
     # only used to check performance of function
     forward_model_runs = [0]
 
@@ -4023,7 +4057,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
-        value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
+        # only use grid points with a minimum ice thickness
+        fls = model_dynamic_spinup.fls
+        if cost_var == 'area_km2':
+            value_dynamic_spinup = np.sum(
+                [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-6
+        elif cost_var == 'volume_km3':
+            value_dynamic_spinup = np.sum(
+                [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-9
+        else:
+            raise NotImplementedError(f'{cost_var}')
 
         # calculate the mismatch in percent
         cost = (value_dynamic_spinup - value_ref) / value_ref * 100
@@ -4111,11 +4156,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                    (iteration < max_iterations)):
                 try:
                     tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
-
-                    # check if mismatch is inf -> reference value is 0
-                    if np.isinf(tmp_mismatch):
-                        raise RuntimeError('Mismatch is INF, this indicates '
-                                           'that the reference value is 0.!')
 
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
