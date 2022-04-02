@@ -445,12 +445,6 @@ class TestMassBalanceModels:
         mb_mod.prcp_fac = [prcp_fac_old] * 12
         np.testing.assert_allclose(mb_mod.prcp_fac, prcp_fac_old)
 
-        # Deprecated attrs
-        with pytest.raises(AttributeError):
-            mb_mod.prcp_bias = 2
-        with pytest.raises(AttributeError):
-            mb_mod.prcp_bias
-
         # increase prcp by factor of 10 and add a temperature bias of 1
         factor = 10
         mb_mod.prcp_fac = factor
@@ -553,10 +547,10 @@ class TestMassBalanceModels:
             mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
                                                             mb_model_class=cl)
             mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
-                                                  rdn_prcp_bias_seed=2,
+                                                  rdn_prcp_fac_seed=2,
                                                   rdn_temp_bias_seed=3)
             mb_gw = massbalance.UncertainMassBalance(mb_gw, rdn_bias_seed=1,
-                                                     rdn_prcp_bias_seed=2,
+                                                     rdn_prcp_fac_seed=2,
                                                      rdn_temp_bias_seed=3)
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
@@ -884,7 +878,7 @@ class TestMassBalanceModels:
         # only change bias: this works as before
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
                                                   rdn_temp_bias_sigma=0,
-                                                  rdn_prcp_bias_sigma=0,
+                                                  rdn_prcp_fac_sigma=0,
                                                   rdn_bias_sigma=100)
         yrs = np.arange(100)
         h, w = gdir.get_inversion_flowline_hw()
@@ -911,7 +905,7 @@ class TestMassBalanceModels:
 
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
                                                   rdn_temp_bias_sigma=0.1,
-                                                  rdn_prcp_bias_sigma=0,
+                                                  rdn_prcp_fac_sigma=0,
                                                   rdn_bias_sigma=0)
         ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)
@@ -921,7 +915,7 @@ class TestMassBalanceModels:
 
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
                                                   rdn_temp_bias_sigma=0,
-                                                  rdn_prcp_bias_sigma=0.1,
+                                                  rdn_prcp_fac_sigma=0.1,
                                                   rdn_bias_sigma=0)
         ref_mb = ref_mod.get_specific_mb(h, w, year=yrs)
         unc_mb = mb_mod.get_specific_mb(h, w, year=yrs)

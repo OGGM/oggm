@@ -1044,7 +1044,7 @@ class UncertainMassBalance(MassBalanceModel):
 
     def __init__(self, basis_model,
                  rdn_temp_bias_seed=None, rdn_temp_bias_sigma=0.1,
-                 rdn_prcp_bias_seed=None, rdn_prcp_bias_sigma=0.1,
+                 rdn_prcp_fac_seed=None, rdn_prcp_fac_sigma=0.1,
                  rdn_bias_seed=None, rdn_bias_sigma=100):
         """Initialize.
 
@@ -1056,10 +1056,9 @@ class UncertainMassBalance(MassBalanceModel):
             the seed of the random number generator
         rdn_temp_bias_sigma : float
             the standard deviation of the random temperature error
-        rdn_prcp_bias_seed : int
+        rdn_prcp_fac_seed : int
             the seed of the random number generator
-            (to be consistent this should be renamed prcp_fac as well)
-        rdn_prcp_bias_sigma : float
+        rdn_prcp_fac_sigma : float
             the standard deviation of the random precipitation error
             (to be consistent this should be renamed prcp_fac as well)
         rdn_bias_seed : int
@@ -1073,10 +1072,10 @@ class UncertainMassBalance(MassBalanceModel):
         self.hemisphere = basis_model.hemisphere
         self.valid_bounds = self.mbmod.valid_bounds
         self.rng_temp = np.random.RandomState(rdn_temp_bias_seed)
-        self.rng_prcp = np.random.RandomState(rdn_prcp_bias_seed)
+        self.rng_prcp = np.random.RandomState(rdn_prcp_fac_seed)
         self.rng_bias = np.random.RandomState(rdn_bias_seed)
         self._temp_sigma = rdn_temp_bias_sigma
-        self._prcp_sigma = rdn_prcp_bias_sigma
+        self._prcp_sigma = rdn_prcp_fac_sigma
         self._bias_sigma = rdn_bias_sigma
         self._state_temp = dict()
         self._state_prcp = dict()
