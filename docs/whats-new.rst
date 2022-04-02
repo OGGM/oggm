@@ -3,8 +3,23 @@
 Version history
 ===============
 
-v1.5.x (unreleased)
+v1.5.3 (02.04.2022)
 -------------------
+
+New release of the OGGM model, setting the ground for a major update to be
+released soon. Several major improvements available for testing, but
+not yet as default:
+- new ``MassRedistributionCurveModel`` which uses the Huss curves to parameterize
+  glacier retreat.
+- new ``mu_star_calibration_from_geodetic_mb`` task which now calibrates
+  each glacier individually
+- new ``run_dynamic_spinup`` task which used the ice dynamics model to spinup the
+  model (instead of the default equilibrium assumption)
+- plus much more (see below)
+
+We will finalize these new options and change the OGGM defaults to use them
+in a future major release.
+
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -26,8 +41,8 @@ Breaking changes
   2021 release with additional data corrections (:pull:`1364`).
 
 
-Enhancements
-~~~~~~~~~~~~
+Enhancements & bug fixes
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Added the ELA back as a variable. Unlike before it is now a diagnostic
   variable that can be computed independent of a model run with
@@ -96,9 +111,6 @@ Enhancements
   spinup + historical or historical + projection runs in post-processing.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
-
-Bug fixes
-~~~~~~~~~
 
 v1.5.2 (29.08.2021)
 -------------------
