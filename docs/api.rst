@@ -7,7 +7,7 @@ API Reference
 This page lists all available functions and classes in OGGM. It is a hard
 work to keep everything up-to-date, so don't hesitate to let us know
 (see :ref:`contact`) if something's missing, or help us (see
-:ref:`contributing`) to write a better documentation!
+:doc:`contributing`) to write a better documentation!
 
 .. _api-workflow:
 
@@ -141,6 +141,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.apparent_mb_from_linear_mb
     tasks.apparent_mb_from_any_mb
     tasks.fixed_geometry_mass_balance
+    tasks.compute_ela
     tasks.process_cru_data
     tasks.process_dummy_cru_file
     tasks.process_histalp_data
@@ -227,6 +228,10 @@ which are used and re-used across modules and tasks).
     Centerline
     Flowline
     MassBalanceModel
+    MassBalanceModel.get_monthly_mb
+    MassBalanceModel.get_annual_mb
+    MassBalanceModel.get_specific_mb
+    MassBalanceModel.get_ela
     FlowlineModel
     FileModel
 
@@ -302,15 +307,15 @@ folder won't erase its content:
     os.listdir(gdir.dir)  # the directory still contains the data
 
 For more information about how to use GlacierDirectories, visit our
-`tutorial on the topic <https://oggm.org/tutorials/notebooks/store_and_compress_glacierdirs.html>`_.
+`tutorial on the topic <https://oggm.org/tutorials/master/notebooks/store_and_compress_glacierdirs.html>`_.
 
 
 .. include:: _generated/basenames.txt
 
-Mass-balance
+Mass balance
 ============
 
-Mass-balance models found in the ``core.massbalance`` module.
+Mass balance models found in the ``core.massbalance`` module.
 
 .. currentmodule:: oggm.core.massbalance
 
@@ -320,10 +325,10 @@ of the units and conventions used by all models:
 Units
 -----
 
-The computed mass-balance is in units of [m ice s-1] ("meters of ice per
+The computed mass balance is in units of [m ice s-1] ("meters of ice per
 second"), unless otherwise specified (e.g. for the utility function
 ``get_specific_mb``).
-The conversion from the climatic mass-balance ([kg m-2 s-1] ) therefore assumes
+The conversion from the climatic mass balance ([kg m-2 s-1] ) therefore assumes
 an ice density given by ``cfg.PARAMS['ice_density']`` (currently: 900 kg m-3).
 
 Time

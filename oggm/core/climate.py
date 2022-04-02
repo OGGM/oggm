@@ -1,4 +1,4 @@
-"""Climate data and mass-balance computations"""
+"""Climate data and mass balance computations"""
 # Built ins
 import logging
 import os
@@ -481,7 +481,7 @@ def historical_climate_qc(gdir):
 
 
 def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
-    """Mass-balance climate of the glacier at a specific height
+    """Mass balance climate of the glacier at a specific height
 
     Reads the glacier's monthly climate data file and computes the
     temperature "energies" (temp above 0) and solid precipitation at the
@@ -591,7 +591,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
 
 def mb_yearly_climate_on_height(gdir, heights, *,
                                 year_range=None, flatten=False):
-    """Yearly mass-balance climate of the glacier at a specific height
+    """Yearly mass balance climate of the glacier at a specific height
 
     See also: mb_climate_on_height
 
@@ -649,7 +649,7 @@ def mb_yearly_climate_on_height(gdir, heights, *,
 
 
 def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
-    """Yearly mass-balance climate at all glacier heights,
+    """Yearly mass balance climate at all glacier heights,
     multiplied with the flowlines widths. (all in pix coords.)
 
     See also: mb_climate_on_height
@@ -777,7 +777,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
     # which years to look at
     ref_years = mbdf.index.values
 
-    # Average oberved mass-balance
+    # Average oberved mass balance
     ref_mb = np.mean(mbdf)
 
     # Compute one mu candidate per year and the associated statistics
@@ -1081,7 +1081,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
                                    max_mu_star=None):
 
     # Do we have a calving glacier? This is only for the first call!
-    # The calving mass-balance is distributed over the valid tributaries of the
+    # The calving mass balance is distributed over the valid tributaries of the
     # main line, i.e. bad tributaries are not considered for calving
     cmb = calving_mb(gdir) if first_call else 0.
 
@@ -1137,7 +1137,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
                            mu_star=mu)
 
     # Sometimes, low lying tributaries have a non-physically consistent
-    # Mass-balance. These tributaries wouldn't exist with a single
+    # Mass balance. These tributaries wouldn't exist with a single
     # glacier-wide mu*, and therefore need a specific calibration.
     # All other mus may be affected
     if cfg.PARAMS['correct_for_neg_flux'] and (len(fls) > 1):
@@ -1205,9 +1205,9 @@ def _fallback_mu_star_calibration(gdir):
 @entity_task(log, writes=['inversion_flowlines'],
              fallback=_fallback_mu_star_calibration)
 def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
-    """Compute the flowlines' mu* and the associated apparent mass-balance.
+    """Compute the flowlines' mu* and the associated apparent mass balance.
 
-    If low lying tributaries have a non-physically consistent Mass-balance
+    If low lying tributaries have a non-physically consistent Mass balance
     this function will either filter them out or calibrate each flowline with a
     specific mu*. The latter is default and recommended.
 
@@ -1316,7 +1316,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     """Compute the flowlines' mu* from the reference geodetic MB data.
 
     This is similar to mu_star_calibration but using the reference geodetic
-    MB data instead, and this does NOT compute the apparent mass-balance at
+    MB data instead, and this does NOT compute the apparent mass balance at
     the same time - users need to run apparent_mb_from_any_mb separately.
     Currently only works for single flowlines.
 
@@ -1325,7 +1325,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     ref_mb : float
-        the reference mass-balance to match (units: kg m-2 yr-1)
+        the reference mass balance to match (units: kg m-2 yr-1)
     ref_period : str, default: PARAMS['geodetic_mb_period']
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
@@ -1435,7 +1435,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         _lim0 = _mu_star_per_minimization(min_mu_star, fls, ref_mb, temp,
                                           prcp, widths)
         if _lim0 < 0:
-            # The mass-balances are too positive to be matched - we need to
+            # The mass balances are too positive to be matched - we need to
             # cool down the climate data
             step = -step_height_for_corr
             end = -max_height_change_for_corr
@@ -1517,7 +1517,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
 def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
-    """Compute apparent mb from a linear mass-balance assumption (for testing).
+    """Compute apparent mb from a linear mass balance assumption (for testing).
 
     This is for testing currently, but could be used as alternative method
     for the inversion quite easily.
@@ -1575,9 +1575,9 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
 @entity_task(log, writes=['inversion_flowlines'])
 def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
-    """Compute apparent mb from an arbitrary mass-balance profile.
+    """Compute apparent mb from an arbitrary mass balance profile.
 
-    This searches for a mass-balance residual to add to the mass-balance
+    This searches for a mass balance residual to add to the mass balance
     profile so that the average specific MB is zero.
 
     Parameters
@@ -1585,7 +1585,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
-        the mass-balance model to use - if None, will use the default OGGM
+        the mass balance model to use - if None, will use the default OGGM
         one.
     mb_years : array
         the array of years from which you want to average the MB for (for

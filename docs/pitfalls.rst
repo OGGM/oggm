@@ -1,5 +1,3 @@
-.. _pitfalls:
-
 .. currentmodule:: oggm
 
 ************************
@@ -8,7 +6,7 @@ Pitfalls and limitations
 
 As the OGGM project is gaining visibility and momentum, we also see an increase
 of potential misuse or misunderstandings about what OGGM can and cannot do.
-Refer to our :ref:`faq` for a general introduction. Here, we discuss
+Refer to our :doc:`faq` for a general introduction. Here, we discuss
 specific pitfalls in more details.
 
 The default ice dynamics parameter "Glen A" is roughly calibrated
@@ -116,28 +114,6 @@ it in detail, but for a summary:
 however, is that the calculated velocities display "wobbles" or artifacts,
 which are a sign of instability. If this occurs, set the global parameter
 ``cfg.PARAMS['cfl_number']`` to a lower value (0.01 or 0.005 are worth a try).
-
-
-The mass-balance model of OGGM is not calibrated with remote sensing data on individual glaciers
-================================================================================================
-
-Currently, the values for the mass-balance parameters such as the
-temperature sensitivity, the precipitation correction factor, etc. are
-calibrated based on the in-situ measurements provided by the WGMS
-(traditional mass-balance data). For more information about the procedure,
-see [Maussion_etal_2019]_ and :ref:`mass-balance`.
-
-.. admonition:: **New in version 1.4!**
-
-   As of v1.4, OGGM can now also calibrate the mass-balance model at the regional
-   level based on available estimates. See :py:func:`workflow.match_regional_geodetic_mb`
-   for more info.
-
-.. admonition:: **New in version 1.5.2!**
-
-   As of v1.5.2, OGGM can now also calibrate the mass-balance model on a glacier
-   per glacier basis. See :ref:`mass-balance-2012-pergla` for more info.
-
 
 References
 ==========

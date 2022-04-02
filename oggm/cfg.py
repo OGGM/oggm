@@ -282,7 +282,7 @@ BASENAMES['inversion_output'] = ('inversion_output.pkl', _doc)
 _doc = 'List of flowlines ready to be run by the model.'
 BASENAMES['model_flowlines'] = ('model_flowlines.pkl', _doc)
 
-_doc = ('When using a linear mass-balance for the inversion, this dict stores '
+_doc = ('When using a linear mass balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
 
@@ -295,7 +295,7 @@ _doc = ('A netcdf file containing enough information to reconstruct the '
 BASENAMES['model_geometry'] = ('model_geometry.nc', _doc)
 
 _doc = ('A netcdf file containing the model diagnostics (volume, '
-        'mass-balance, length...).')
+        'mass balance, length...).')
 BASENAMES['model_diagnostics'] = ('model_diagnostics.nc', _doc)
 
 _doc = ('A group netcdf file containing the model diagnostics (volume, '

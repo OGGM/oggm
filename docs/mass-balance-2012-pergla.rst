@@ -1,22 +1,20 @@
 .. currentmodule:: oggm
 
-.. _mass-balance-2012-pergla:
-
 Temperature index model calibrated on geodetic MB data
 ======================================================
 
-As of OGGM v1.5.3, we implemented a simple mass-balance model that can be
-calibrated on the geodetic mass-balance data from
+As of OGGM v1.5.3, we implemented a simple mass balance model that can be
+calibrated on the geodetic mass balance data from
 `Hugonnet et al., 2021`_ (see also: :ref:`shop-geod`).
 
 .. _Hugonnet et al., 2021: https://www.nature.com/articles/s41586-021-03436-z
 
 
-This can be seen as a temporary improvement of the :ref:`mass-balance-2012`
+This can be seen as a temporary improvement of the :doc:`mass-balance-2012`
 until the `sandbox models <https://github.com/OGGM/massbalance-sandbox>`_ become
 fully operational.
 
-Like for the previous model, the monthly mass-balance :math:`B_i` at elevation :math:`z` is computed as:
+Like for the previous model, the monthly mass balance :math:`B_i` at elevation :math:`z` is computed as:
 
 .. math::
 
@@ -39,7 +37,7 @@ Calibration
 The glacier per glacier calibration is done for two parameters:
 
 - the parameter :math:`\mu ^{*}` indicates the temperature sensitivity of the
-  glacier, and is calibrated to match the geodetic mass-balance data over the
+  glacier, and is calibrated to match the geodetic mass balance data over the
   reference period.
 - if the resulting :math:`\mu ^{*}` is outside of predefined bounds
   (for example [20, 600] :math:`mm\,w.e.\,K^{-1}\,mth^{-1}`), then the temperature

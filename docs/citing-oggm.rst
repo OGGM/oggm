@@ -1,5 +1,3 @@
-.. _citing-oggm:
-
 Citing OGGM
 ===========
 

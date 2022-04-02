@@ -130,10 +130,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         compute all flowlines based on the OGGM centerline(s) method instead
         of the OGGM default, which is a mix of elev_bands and centerlines.
     match_regional_geodetic_mb : str
-        match the regional mass-balance estimates at the regional level
+        match the regional mass balance estimates at the regional level
         ('hugonnet': Hugonnet et al., 2020 or 'zemp': Zemp et al., 2019).
     match_geodetic_mb_per_glacier : str
-        match the mass-balance estimates at the glacier level
+        match the mass balance estimates at the glacier level
         (currently only 'hugonnet': Hugonnet et al., 2020).
     evolution_model : str
         which geometry evolution model to use: `fl_sia` (default),

@@ -598,7 +598,7 @@ class FlowlineModel(object):
             is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
-            mass-balance should be recomputed from the mass balance model.
+            mass balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
         check_for_boundaries : bool
@@ -1002,7 +1002,7 @@ class FlowlineModel(object):
 
         if not self.mb_model.hemisphere:
             raise InvalidParamsError('run_until_and_store needs a '
-                                     'mass-balance model with an unambiguous '
+                                     'mass balance model with an unambiguous '
                                      'hemisphere.')
 
         # Do we have a spinup?
@@ -1411,7 +1411,7 @@ class FlowlineModel(object):
         """ Runs the model until an equilibrium state is reached.
 
         Be careful: This only works for CONSTANT (not time-dependant)
-        mass-balance models.
+        mass balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
         """
@@ -1467,7 +1467,7 @@ class FluxBasedModel(FlowlineModel):
         flowlines : list
             the glacier flowlines
         mb_model : MassBalanceModel
-            the mass-balance model
+            the mass balance model
         y0 : int
             initial year of the simulation
         glen_a : float
@@ -1498,7 +1498,7 @@ class FluxBasedModel(FlowlineModel):
             is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
-            mass-balance should be recomputed from the mass balance model.
+            mass balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
         check_for_boundaries: bool, default: True
@@ -1781,7 +1781,7 @@ class FluxBasedModel(FlowlineModel):
             if is_trib:
                 flx_stag = flx_stag[:-1]
 
-            # Mass-balance
+            # Mass balance
             widths = fl.widths_m
             mb = mbs[fl_id]
             # Allow parabolic beds to grow
@@ -2217,7 +2217,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         flowlines : list
             the glacier flowlines
         mb_model : MassBalanceModel
-            the mass-balance model
+            the mass balance model
         y0 : int
             initial year of the simulation
         advance_method : int
@@ -2878,7 +2878,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):
-        warnings.warn("The mass-balance used to drive the ice dynamics model "
+        warnings.warn("The mass balance used to drive the ice dynamics model "
                       "is updated yearly. If you want the output to be stored "
                       "monthly and also reflect monthly processes, "
                       "set store_monthly_step=True and "
@@ -2976,7 +2976,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        init_model_yr=None,
                        zero_initial_glacier=False,
                        unique_samples=False, **kwargs):
-    """Runs the random mass-balance model for a given number of years.
+    """Runs the random mass balance model for a given number of years.
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
@@ -3037,7 +3037,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
     unique_samples: bool
-        if true, chosen random mass-balance years will only be available once
+        if true, chosen random mass balance years will only be available once
         per random climate period-length
         if false, every model year will be chosen from the random climate
         period with the same probability
@@ -3085,7 +3085,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          zero_initial_glacier=False,
                          use_avg_climate=False,
                          **kwargs):
-    """Runs the constant mass-balance model for a given number of years.
+    """Runs the constant mass balance model for a given number of years.
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
@@ -3337,7 +3337,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     ----------
     run_task : func
         any of the `run_*`` tasks in the oggm.flowline module.
-        The mass-balance model used needs to have the `add_climate` output
+        The mass balance model used needs to have the `add_climate` output
         kwarg available though.
     store_monthly_hydro : bool
         also compute monthly hydrological diagnostics. The monthly outputs
@@ -3460,7 +3460,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             ref_area[:] = bin_area_2d.max(axis=0)
 
     # Ok now we have arrays, we can work with that
-    # -> second time varying loop is for mass-balance
+    # -> second time varying loop is for mass balance
     months = [1]
     seconds = cfg.SEC_IN_YEAR
     ntime = len(years) + 1
@@ -3527,7 +3527,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             'data': np.zeros(oshape),
         },
         'model_mb': {
-            'description': 'Annual mass-balance from dynamical model',
+            'description': 'Annual mass balance from dynamical model',
             'unit': 'kg yr-1',
             'data': np.zeros(ntime),
         },

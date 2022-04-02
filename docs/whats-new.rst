@@ -1,5 +1,4 @@
 .. currentmodule:: oggm
-.. _whats-new:
 
 Version history
 ===============
@@ -88,7 +87,7 @@ Enhancements
   smoother and more correct centerlines (:pull:`1357`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the 30m version of the
-  `Copernicus DEM <https://spacedata.copernicus.eu/web/cscda/dataset-details?articleId=394198>`_.
+  `Copernicus DEM <https://spacedata.copernicus.eu>`_.
   This DEM can be set with ``source='COPDEM30'`` and can be usefull for smaller sized glaciers.
   An account with Copernicus is required to access the DEM (free for academics).
   (:pull:`1364`). By `Matthias Dusch <https://github.com/matthiasdusch>`_
@@ -141,7 +140,7 @@ Enhancements
   the MB bias for any selection of glaciers (:pull:`1248`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added functionality to control the area over which the hydrological
-  output is computed (:pull:`1264,1276`).
+  output is computed (:pull:`1264`, :pull:`1276`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added a new (wrong) way to compute equilibrium runs based on the average
   climate (:pull:`1275`).
@@ -168,10 +167,10 @@ https://oggm.org/tutorials !
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
-- Mass-balance models now do their computations with float64 arrays instead
+- Mass balance models now do their computations with float64 arrays instead
   of float32 (:pull:`1211`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
-- `prcp_bias` renamed to `prcp_fac` in mass-balance models (:pull:`1211`).
+- `prcp_bias` renamed to `prcp_fac` in mass balance models (:pull:`1211`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - Various name changes (with deprecation cycle, i.e. old code should still
   work): ``gdir.get_filepath('model_run')`` renamed to ``gdir.get_filepath('model_geometry')``;
@@ -181,7 +180,7 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
-- Mass-balance models now properly refer to ``prcp_fac`` (was incorrectly named
+- Mass balance models now properly refer to ``prcp_fac`` (was incorrectly named
   ``prcp_bias``) (:pull:`1211`).
   Additionally, the ``run_*`` tasks in ``oggm.core.flowline`` can now also adjust
   the precipitation factor for sensitivity experiments.
@@ -231,7 +230,7 @@ We recommend all users to update to this version.
     this release). Here are the highlights:
 
        - new option to compute centerlines: "elevation band flowlines"
-       - new option to calibrate OGGM mass-balance regionally to geodetic
+       - new option to calibrate OGGM mass balance regionally to geodetic
          estimates
        - new option to calibrate the creep parameter Glen A to match the ice
          thickness to the Farinotti et al. (2019) consensus
@@ -329,7 +328,7 @@ Enhancements
   :py:func:`tasks.gridded_data_var_to_geotiff`. 
   By `Li Fei <https://github.com/Keeptg>`_
 - Added a `find_inversion_calving_from_any_mb` task which uses the Recinos et
-  al. approach, but on any mass-balance profile (:pull:`1043`).
+  al. approach, but on any mass balance profile (:pull:`1043`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
@@ -357,7 +356,7 @@ Enhancements
   very slow. This change was necessary because of race conditions in GDAL,
   but these conditions are rarely relevant to users. We now make this
   change in multiprocessing optional (:pull:`937`)
-- various improvements and changes in the dynamical model - mass-balance model
+- various improvements and changes in the dynamical model - mass balance model
   API. These were necessary to allow compatibility with the PyGEM model
   (:pull:`938`, :pull:`946`, :pull:`949`, :pull:`953`, :pull:`951`).
   By `Fabien Maussion <https://github.com/fmaussion>`_ and
@@ -480,7 +479,7 @@ Enhancements
 ~~~~~~~~~~~~
 
 - Added new ``gridded_attributes`` and ``gridded_mb_attributes`` tasks to
-  add raster glacier attributes such as slope, aspect, mass-balance...
+  add raster glacier attributes such as slope, aspect, mass balance...
   to the glacier directory (:pull:`725`). This can be useful for statistical
   modelling of glacier thickness.
   By `Matteo Castellani <https://github.com/MatCast>`_.
@@ -553,9 +552,7 @@ Enhancements
 - Added a mechanism to add custom MB data to OGGM (:issue:`724`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The ALOS Global Digital Surface Model "ALOS World 3D - 30m" DEM from JAXA can
-  now be used as alternative DEM within OGGM.
-  `See our tutorial <http://edu.oggm.org/en/latest/oggm_tuto.html>`_ on how to
-  set an alternative DEM (:pull:`734`).
+  now be used as alternative DEM within OGGM (:pull:`734`).
   By `Matthias Dusch <https://github.com/matthiasdusch>`_.
 - Switch to setuptools-scm as a version control system (:issue:`727`).
   By `Timo Rothenpieler <https://github.com/TimoRoth>`_.
@@ -631,7 +628,7 @@ Breaking changes
   the complex (and sort of useless) nearest neighbor algorithm we are now
   referring back to the original method of Marzeion et al. (2012). This comes
   together with other breaking changes, altogether likely to change the
-  results of the mass-balance model for some glaciers. For more details see
+  results of the mass balance model for some glaciers. For more details see
   the PR: :pull:`509`
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The ice dynamics parameters (Glen A, N, ice density) are now "real"
@@ -647,7 +644,7 @@ Breaking changes
   glacier wide. This change was necessary because it now allows low-lying
   tributaries to exist, despite of too high glacier wide mu*. This change
   had some wider reaching consequences in the code base and in the
-  mass-balance models in particular: :pull:`539`. This will also allow to
+  mass balance models in particular: :pull:`539`. This will also allow to
   merge neighboring glaciers in the future.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The "human readable" mu* information is now stored in a JSON dict instead
@@ -685,7 +682,7 @@ Enhancements
   Adhikari) and `'Huss'` (Huss & Farinotti 2012). Thorough tests with
   applied shape factors are still missing.
   By `Philipp Gregor <https://github.com/phigre>`_.
-- Some amelioration to the mass-balance models (:pull:`434`). Added a
+- Some amelioration to the mass balance models (:pull:`434`). Added a
   ``repeat`` kwarg to the ``PastMassBalance`` in order to loop over a
   selected period. Added an ``UncertainMassBalance`` model which wraps
   an existing model and adds random uncertainty to it.
@@ -708,7 +705,7 @@ Enhancements
   like `rgitools <http://rgitools.readthedocs.io/en/latest/>`_. This task
   also computes hypsometry files much like RGI does.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- Reference glaciers now have mass-balance profiles attached to them, if
+- Reference glaciers now have mass balance profiles attached to them, if
   available. You can get the profiles with ``gdir.get_ref_mb_profile()``
   (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
@@ -717,7 +714,7 @@ Enhancements
   with different default parameters
   (see `blog <https://oggm.org/2018/08/10/histalp-parameters/>`_). The PR
   also adds some safety checks at the calibration and computation of the
-  mass-balance to make sure there is no misused parameters (:pull:`493`).
+  mass balance to make sure there is no misused parameters (:pull:`493`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - The ``process_cesm_data`` function has been split into two functions, to make
   it easier to run oggm with the climate of other GCM's: ``process_cesm_data``
@@ -804,7 +801,7 @@ New contributors to the project:
 - **Julia Eis** (PhD student, University of Bremen), developed the glacier
   partitioning algorithm
 - **Schmitty Smith** (PhD student,  Northand College, Wisconsin US), added
-  optional parameters to the mass-balance models
+  optional parameters to the mass balance models
 
 
 .. _whats-new.0.1.1:
@@ -815,7 +812,7 @@ v0.1.1 (16 February 2017)
 Minor release: changes in ITMIX to handle the synthetic glacier cases.
 
 It was tagged only recently for long term documentation purposes and storage
-on `Zenodo <https://zenodo.org/record/292630#.WMAwelcX77g>`_.
+on `Zenodo <https://zenodo.org/record/292630>`_.
 
 .. _whats-new.0.1.0:
 
@@ -840,7 +837,7 @@ for a large part). Several people have contributed to this release:
   `links between databases`_ project (2015)
 - **Ben Marzeion** (project leader, University of Bremen)
 - **Fabien Maussion** (project leader, UIBK)
-- **Felix Oesterle** (Post-Doc, UIBK), develops `OGGR`_ and provided the
+- **Felix Oesterle** (Post-Doc, UIBK) provided the
   AWS deployment script (:pull:`25`)
 - **Timo Rothenpieler** (programmer, University of Bremen), participated to the
   OGGM deployment script (e.g. :pull:`34`, :pull:`48`), and developed OGGM
@@ -848,6 +845,5 @@ for a large part). Several people have contributed to this release:
 - **Christian Wild** (master student, UIBK), participated to the development of
   the centerline determination algorithm (2014)
 
-.. _OGGR: http://oggr.org/
 .. _links between databases: https://github.com/OGGM/databases-links
 .. _installation: https://github.com/OGGM/OGGM-Anaconda

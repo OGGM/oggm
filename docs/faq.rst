@@ -1,14 +1,11 @@
-.. _faq:
-
 .. currentmodule:: oggm
 
 ***********************
 FAQ and Troubleshooting
 ***********************
 
-We list here some of the questions we get most often, either on the
-`OGGM Users <https://mailman.zfn.uni-bremen.de/cgi-bin/mailman/listinfo/oggm-users>`_
-mailing list or on `github <https://github.com/OGGM/oggm>`_.
+We list here some of the questions we get most often, either on our Slack
+workspace or on `github <https://github.com/OGGM/oggm>`_.
 
 General questions
 =================
@@ -28,7 +25,7 @@ it can be seen as a "framework", a
 set of unified tools with eases the process of working with many mountain
 glaciers at once.
 
-There is a standard modelling chain in OGGM (with a mass-balance model
+There is a standard modelling chain in OGGM (with a mass balance model
 and a multiple flowline model) but there is no obligation to use all
 of these tools. For example, we can easily picture a workflow where people will
 use OGGM to create homogenized initial conditions (topography, climate) but
@@ -45,14 +42,14 @@ The short answer is: "yes, but..."
 
 The longer answer is that OGGM has been designed to work with *all* the world's
 glaciers, and calibrated only on a few hundreds of them (and that's only
-the mass-balance model...). We are quite confident that OGGM provides
-reasonable global estimates of glacier mass-balance and glacier change: this
+the mass balance model...). We are quite confident that OGGM provides
+reasonable global estimates of glacier mass balance and glacier change: this
 is a result of the law of large numbers, assuming that the uncertainty for
 each single glacier can be large but random and Gaussian.
 
 If you use OGGM for a single or a handful of glaciers, chances are that the
 outcome is disappointing. For these kind of applications, you'll probably
-need to re-calibrate OGGM using local data, for example of mass-balance
+need to re-calibrate OGGM using local data, for example of mass balance
 or observations of past glacier change.
 
 
@@ -100,7 +97,7 @@ Can I export OGGM centerlines to a shapefile?
 
 Yes! There is a function to do exactly that:
 :py:func:`utils.write_centerlines_to_shape`. We also provide some already
-processed ones in :ref:`assets`.
+processed ones in :doc:`assets`.
 
 
 Can I export OGGM's <special variable> to <another programme>?
@@ -192,4 +189,4 @@ encourage you to contact the `GLIMS core team <https://www.glims.org/maps/contac
 to let them know how your inventory improves the glacier digitalization compared to the
 current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
 have a look to this
-`tutorial <https://oggm.org/tutorials/notebooks/use_your_own_inventory.html>`_!
+`tutorial <https://oggm.org/tutorials/stable/notebooks/use_your_own_inventory.html>`_!

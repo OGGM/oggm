@@ -1740,7 +1740,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                         temperature_bias=None,
                                         precipitation_factor=None):
 
-    """Compiles a table of specific mass-balance timeseries for all glaciers.
+    """Compiles a table of specific mass balance timeseries for all glaciers.
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
     to open it.
@@ -3279,7 +3279,7 @@ class GlacierDirectory(object):
         return h, w * self.grid.dx
 
     def set_ref_mb_data(self, mb_df=None):
-        """Adds reference mass-balance data to this glacier.
+        """Adds reference mass balance data to this glacier.
 
         The format should be a dataframe with the years as index and
         'ANNUAL_BALANCE' as values in mm yr-1.
