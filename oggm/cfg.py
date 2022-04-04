@@ -571,15 +571,15 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS[k] = cp[k]
     k = 'use_instability_smoothing'
     if cp[k] == 'False':
-        PARAMS[k] = cp.as_bool[k]
+        PARAMS[k] = cp.as_bool(k)
     else:
         PARAMS[k] = cp[k]
     k = 'instability_min_length'
-    PARAMS[k] = cp.as_int[k]
+    PARAMS[k] = cp.as_int(k)
     k = 'instability_smoothing_window'
-    PARAMS[k] = cp.as_int[k]
+    PARAMS[k] = cp.as_int(k)
     k = 'instability_smoothing_steps'
-    PARAMS[k] = cp.as_int[k]
+    PARAMS[k] = cp.as_int(k)
     k = 'instability_smoothing_mass_redis_fct'
     PARAMS[k] = cp[k]
 

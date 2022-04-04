@@ -60,6 +60,9 @@ class TestFuncs(object):
         ts = pd.Series([-2., -1., 1., 2., 3][::-1], index=np.arange(5))
         sc = utils.signchange(ts)
         assert_array_equal(sc, [0, 0, 0, 1, 0])
+        ts = pd.Series([0., 0., 0., 0., 0], index=np.arange(5))
+        sc = utils.signchange(ts)
+        assert_array_equal(sc, [0, 0, 0, 0, 0])
 
     def test_smooth(self):
         a = np.array([1., 4, 7, 7, 4, 1])

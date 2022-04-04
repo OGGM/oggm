@@ -2090,6 +2090,21 @@ class FluxBasedModel(FlowlineModel):
         # smooth each individual instability separately
         for num, (start, length) in enumerate(zip(starts, lengths)):
             end = start + length
+            # check that end is not longer than flowline, this could happen if
+            # the instability really goes to the last grid point of the fl
+            if end > fl.nx:
+                # If it is a tributary, we do not want to change the last grid
+                # point as this belongs to the branch this tributary is flowing
+                # to and we also want a smooth transition there
+                trib = self._tributary_indices[fl_id]
+                is_trib = trib[0] is not None
+                if is_trib:
+                    end = fl.nx
+                else:
+                    # if it is no tributary we realy also want to change the
+                    # last grid point
+                    end = fl.nx + 1
+                length = end - start
 
             # define the total length of grid points which are used in the
             # running mean during smoothing (also checks if we are at the
@@ -2100,7 +2115,7 @@ class FluxBasedModel(FlowlineModel):
                 add_start = 0
                 add_end = end + smoothing_window
             elif end + smoothing_window > fl.nx:
-                N = (fl.nx - end) + smoothing_window + 1
+                N = (fl.nx + 1 - end) + smoothing_window + 1
                 add_start = start - smoothing_window
                 add_end = -1
             else:
@@ -2191,10 +2206,10 @@ class FluxBasedModel(FlowlineModel):
                     to meet
                 """
                 fl_change = copy.deepcopy(fl_smoothed)
-                fl_change.thick[start: end - 1] = (
+                fl_change.thick[start: end - 1] = utils.clip_min(
                         fl_smoothed.surface_h[start: end - 1] +
                         surface_h_change * coeffs -
-                        fl.bed_h[start: end - 1])
+                        fl.bed_h[start: end - 1], 0)
                 return (np.sum(fl_change.section[start: end - 1] -
                                fl_smoothed.section[start: end - 1]) -
                         total_delta)
@@ -2214,17 +2229,16 @@ class FluxBasedModel(FlowlineModel):
                 raise NotImplementedError
 
             # find corresponding surface_h changes to conserve the section
-            limits = np.min([100, np.min(fl.thick[start: end - 1])])
             minimise_fct = partial(to_minimise, fl_smoothed=fl,
-                                   total_section_delta=total_section_delta,
+                                   total_delta=total_section_delta,
                                    coeffs=coeffs)
-            surface_h_change = optimize.brentq(minimise_fct, limits,
-                                               -limits, xtol=2e-20)
+            surface_h_change = optimize.brentq(minimise_fct, 1000., -1000.,
+                                               xtol=2e-20)
 
             # now change section with the adapted surface_h change
-            fl.thick[start: end - 1] = (fl.surface_h[start: end - 1] +
-                                        surface_h_change * coeffs -
-                                        fl.bed_h[start: end - 1])
+            fl.thick[start: end - 1] = utils.clip_min(
+                fl.surface_h[start: end - 1] + surface_h_change * coeffs -
+                fl.bed_h[start: end - 1], 0)
 
         # finally check if total volume is conserved after smoothing
         if not np.isclose(ref_total_volume, fl.volume_km3):

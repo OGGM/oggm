@@ -435,6 +435,9 @@ def signchange(ts):
     """
     asign = np.sign(ts)
     sz = asign == 0
+    # check if the given array contains only zeros
+    if sz.all():
+        return np.zeros(len(ts)).astype(int)
     while sz.any():
         asign[sz] = np.roll(asign, 1)[sz]
         sz = asign == 0
