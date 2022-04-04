@@ -2207,9 +2207,8 @@ class FluxBasedModel(FlowlineModel):
                 """
                 fl_change = copy.deepcopy(fl_smoothed)
                 fl_change.thick[start: end - 1] = utils.clip_min(
-                        fl_smoothed.surface_h[start: end - 1] +
-                        surface_h_change * coeffs -
-                        fl.bed_h[start: end - 1], 0)
+                    fl_smoothed.surface_h[start: end - 1] + surface_h_change *
+                    coeffs - fl.bed_h[start: end - 1], 0)
                 return (np.sum(fl_change.section[start: end - 1] -
                                fl_smoothed.section[start: end - 1]) -
                         total_delta)
