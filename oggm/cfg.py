@@ -569,6 +569,19 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS[k] = cp[k]
     k = 'glacier_length_method'
     PARAMS[k] = cp[k]
+    k = 'use_instability_smoothing'
+    if cp[k] == 'False':
+        PARAMS[k] = cp.as_bool[k]
+    else:
+        PARAMS[k] = cp[k]
+    k = 'instability_min_length'
+    PARAMS[k] = cp.as_int[k]
+    k = 'instability_smoothing_window'
+    PARAMS[k] = cp.as_int[k]
+    k = 'instability_smoothing_steps'
+    PARAMS[k] = cp.as_int[k]
+    k = 'instability_smoothing_mass_redis_fct'
+    PARAMS[k] = cp[k]
 
     # Others
     PARAMS['tidewater_type'] = cp.as_int('tidewater_type')
@@ -593,7 +606,12 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'use_inversion_params_for_run', 'ref_mb_valid_window',
            'tidewater_type', 'store_model_geometry',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_fl_diagnostics']
+           'geodetic_mb_period', 'store_fl_diagnostics',
+           'use_instability_smoothing',
+           'instability_min_length',
+           'instability_smoothing_window',
+           'instability_smoothing_steps',
+           'instability_smoothing_mass_redis_fct']
     for k in ltr:
         cp.pop(k, None)
 

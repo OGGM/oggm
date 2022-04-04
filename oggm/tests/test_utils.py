@@ -361,6 +361,47 @@ class TestFuncs(object):
         assert_allclose(df.cenlon, cgidf['Glc_Long'])
         assert_allclose(df.rgi_area_km2, cgidf['Glc_Area'] * 1e-6, rtol=1e-3)
 
+    def test_detect_instabilities(self):
+        # test no instability
+        start, length = utils.detect_instabilities(np.arange(0, 100, 1))
+        assert start is None
+        assert length is None
+
+        # test one instability
+        test_array = np.array([0., 1., 2., 1., 2., 1., 0.])
+        start, length = utils.detect_instabilities(test_array, min_length=4)
+        assert np.all(np.equal(start, np.array([2])))
+        assert np.all(np.equal(length, np.array([4])))
+
+        # test two instabilities wide separated
+        test_array = np.array([0., 1., 2., 1., 2., 3., 4., 5., 4., 5., 4., 3.])
+        start, length = utils.detect_instabilities(test_array, min_length=3,
+                                                   min_distance=2)
+        assert np.all(np.equal(start, np.array([2, 7])))
+        assert np.all(np.equal(length, np.array([3, 4])))
+
+        # test two instabilitiew close
+        start, length = utils.detect_instabilities(test_array, min_length=3,
+                                                   min_distance=3)
+        assert np.all(np.equal(start, np.array([2])))
+        assert np.all(np.equal(length, np.array([9])))
+
+        # test three instabilities, two are close
+        test_array = np.array([0., 1., 2., 1., 2., 3., 4., 5., 4., 5., 4., 3.,
+                               2., 1., 0., 1., 0., 1., 2., 3.])
+        start, length = utils.detect_instabilities(test_array, min_length=3,
+                                                   min_distance=3)
+        assert np.all(np.equal(start, np.array([2, 14])))
+        assert np.all(np.equal(length, np.array([9, 4])))
+
+        # test three instabilities, three are close
+        test_array = np.array([0., 1., 2., 1., 2., 3., 4., 5., 4., 5., 4., 3.,
+                               2., 1., 0., 1., 0., 1., 2., 3.])
+        start, length = utils.detect_instabilities(test_array, min_length=3,
+                                                   min_distance=4)
+        assert np.all(np.equal(start, np.array([2])))
+        assert np.all(np.equal(length, np.array([16])))
+
 
 class TestInitialize(unittest.TestCase):
 

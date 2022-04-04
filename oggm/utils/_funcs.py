@@ -424,7 +424,7 @@ def nicenumber(number, binsize, lower=False):
 
 
 def signchange(ts):
-    """Detect sign changes in a time series.
+    """Detect sign changes in a time series or numpy array.
 
     http://stackoverflow.com/questions/2652368/how-to-detect-a-sign-change-
     for-elements-in-a-numpy-array
@@ -439,8 +439,8 @@ def signchange(ts):
         asign[sz] = np.roll(asign, 1)[sz]
         sz = asign == 0
     out = ((np.roll(asign, 1) - asign) != 0).astype(int)
-    if asign.iloc[0] == asign.iloc[1]:
-        out.iloc[0] = 0
+    if asign[0] == asign[1]:
+        out[0] = 0
     return out
 
 
@@ -895,3 +895,115 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
             cooked_rgidf[val] = gi_gdf[key].values
 
     return cooked_rgidf
+
+
+def detect_instabilities(var, min_length=5, min_distance=3):
+    """ This function searches for instabilities in a given variable. An
+    instability is characterised as a zigzag pattern (signal is going up and
+    down for a defined number of consecutive points with 'length_threshold').
+    Moreover the minimum distance between two instabilities can be defined with
+    'min_distance'.
+
+    Parameters
+    ----------
+    var : ndarray
+        Variable which should be checked for instabilities.
+    min_length : int
+        Defines the minimum number of grid points with a zigzag pattern before
+        it is considered as an instability.
+        Default: 5
+    min_distance : int
+        Defines the minimum number of grid points between two consecutive
+        instabilities. All instabilities with a smaller distance between each
+        other will be merged (could also merge more than two).
+        Default: 3
+
+    Returns
+    -------
+    instability_starts, instability_lengths : tuple of two lists
+        First list contains the indices of instability starts, second list
+        contains the corresponding lengths of the instabilities. If both are
+        None no instability was detected.
+    """
+    # detect instabilities by a consecutive run of changing signs for the
+    # difference of the input variable
+    changing_sign = signchange(np.diff(var))
+
+    # -------------------------
+    # this part is adapted from
+    # https://gist.github.com/alimanfoo/c5977e87111abe8127453b21204c1065
+    n = changing_sign.shape[0]
+
+    # find run starts
+    loc_run_start = np.empty(n, dtype=bool)
+    loc_run_start[0] = True
+    np.not_equal(changing_sign[:-1], changing_sign[1:], out=loc_run_start[1:])
+    run_starts = np.nonzero(loc_run_start)[0]
+
+    # find run values
+    run_values = changing_sign[loc_run_start]
+
+    # find run lengths
+    run_lengths = np.diff(np.append(run_starts, n))
+    # -------------------------
+
+    # sign changes are indicated with with run_values of 1, here also check the
+    # minimum length (-1 because of staggered grid due to diff operation)
+    index = np.logical_and(run_values == 1,
+                           run_lengths >= min_length - 1)
+    instability_starts = run_starts[index]
+
+    # + 1 is needed as due to diff the changing_sign is on an staggered grid
+    # and we want to include also the last grid point of the original variable
+    instability_lengths = run_lengths[index] + 1
+
+    if np.all(np.invert(index)):
+        # Hurray no instabilities found
+        return None, None
+    elif np.sum(index) == 1:
+        # Only one instability found so we can return it
+        return instability_starts, instability_lengths
+    else:
+        # More than one instability was found, therefore we check if two
+        # consecutive instabilities have at least the number of 'min_distance'
+        # grid points in between, if not we combine them to one instability
+        instability_ends = instability_starts + instability_lengths
+
+        # the number of grid points between instabilities
+        diff_instabilities = instability_starts[1:] - instability_ends[:-1]
+
+        # here we use a loop as it could be that we must concatenate more
+        # than two instabilities
+        instability_starts_concat = []
+        instability_lengths_concat = []
+        start_tmp = None
+        length_tmp = None
+        for i, diff in enumerate(diff_instabilities < min_distance):
+            if diff:
+                if start_tmp is None:
+                    start_tmp = instability_starts[i]
+                    length_tmp = (instability_starts[i + 1] -
+                                  instability_starts[i])
+                else:
+                    length_tmp += (instability_starts[i + 1] -
+                                   instability_starts[i])
+            else:
+                if start_tmp is None:
+                    start_tmp = instability_starts[i]
+                    length_tmp = instability_lengths[i]
+                else:
+                    length_tmp += instability_lengths[i]
+                instability_starts_concat.append(start_tmp)
+                instability_lengths_concat.append(length_tmp)
+                start_tmp = None
+                length_tmp = None
+        # and add last instability
+        if diff:
+            length_tmp += instability_lengths[-1]
+            instability_starts_concat.append(start_tmp)
+            instability_lengths_concat.append(length_tmp)
+        else:
+            instability_starts_concat.append(instability_starts[-1])
+            instability_lengths_concat.append(instability_lengths[-1])
+
+        return instability_starts_concat, instability_lengths_concat

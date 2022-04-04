@@ -17,6 +17,8 @@ import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
 from scipy import interpolate
+from scipy import stats
+from scipy import optimize
 
 # Optional libs
 try:
@@ -569,7 +571,8 @@ class FlowlineModel(object):
                  fs=None, inplace=False, smooth_trib_influx=True,
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
-                 water_level=None, required_model_steps='monthly'):
+                 water_level=None, required_model_steps='monthly',
+                 use_instability_smoothing=None):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -614,6 +617,9 @@ class FlowlineModel(object):
             only annual updates are required. You may want to change this
             for optimisation reasons for models that don't require adaptive
             steps (for example the deltaH method).
+        use_instability_smoothing : bool or str
+            if numeric instabilities should be smoothed, and if how often.
+            Options: False, 'each_timestep' or 'yearly'
         """
 
         self.is_tidewater = is_tidewater
@@ -676,6 +682,21 @@ class FlowlineModel(object):
         self._tributary_indices = None
         self.reset_flowlines(flowlines, inplace=inplace,
                              smooth_trib_influx=smooth_trib_influx)
+
+        # Instability smoothing
+        if use_instability_smoothing is None:
+            use_instability_smoothing = cfg.PARAMS['use_instability_smoothing']
+        self.use_instability_smoothing = use_instability_smoothing
+        # save guard for typos in use_instability_smoothing
+        if self.use_instability_smoothing not in [False, 'yearly',
+                                                  'each_timestep']:
+            raise ValueError(f'instability smoothing:'
+                             f'{use_instability_smoothing} not supported!'
+                             "Should be one of [False, 'yearly', "
+                             "'each_timestep'].")
+        # SMOOTHING TEST: this variable is only needed for diagnostics to
+        # detect if instability smoothing was used
+        self.instability_smoothing_was_used = False
 
     @property
     def mb_model(self):
@@ -911,7 +932,11 @@ class FlowlineModel(object):
             t = (y - self.y0) * SEC_IN_YEAR
             # because of CFL, step() doesn't ensure that the end date is met
             # lets run the steps until we reach our desired date
+            if (self.use_instability_smoothing == 'yearly') and (y % 1 == 0):
+                self.smooth_instabilities_in_flowlines()
             while self.t < t:
+                if self.use_instability_smoothing == 'each_timestep':
+                    self.smooth_instabilities_in_flowlines()
                 self.step(t - self.t)
 
             # Check for domain bounds
@@ -1432,6 +1457,15 @@ class FlowlineModel(object):
         if ite > max_ite:
             raise RuntimeError('Did not find equilibrium.')
 
+    def smooth_instabilities_in_flowlines(self):
+        """Method to detect and smooth potential numeric instabilities in the
+        flowlines.
+        """
+        # SMOOTHING TEST: This should also set
+        # self.instability_smoothing_was_used to True if instablitiy is
+        # detected and smoothed
+        raise NotImplementedError
+
 
 def flux_gate_with_build_up(year, flux_value=None, flux_gate_yr=None):
     """Default scalar flux gate with build up period"""
@@ -1459,6 +1493,10 @@ class FluxBasedModel(FlowlineModel):
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_use_limiter=None,
                  calving_limiter_frac=None, water_level=None,
+                 instability_min_length=None, instability_smoothing_window=None,
+                 instability_smoothing_steps=None,
+                 instability_smoothing_mass_redis_fct=None,
+                 instability_smoothing_mass_redis_gaus_lim=None,
                  **kwargs):
         """Instantiate the model.
 
@@ -1540,6 +1578,31 @@ class FluxBasedModel(FlowlineModel):
             The best way to set the water level for real glaciers is to use
             the same as used for the inversion (this is what
             `flowline_model_run` does for you)
+        instability_min_length : int
+            Defines a threshold grid point number for instabilities. An
+            instability is only detected as such if it occurs at least for this
+            number of grid points.
+        instability_smoothing_window : int
+            Defines how many grid points before and after each instability grid
+            point should is used for smoothing (using a running mean).
+            Therefore this defines how many 'good' grid points are included
+            before and after the instability. Moreover this defines the minimum
+            number of 'good' grid points between two consecutive instabilities,
+            otherwise they will be merged and considered as one larger
+            instability.
+        instability_smoothing_steps : int
+            Defines how often the instability should be smoothed using a
+            running mean.
+        instability_smoothing_mass_redis_fct : str
+            If a mass conserving step is included during the smoothing, this
+            decides how the mass difference should be distributed along the
+            instability grid points.
+            Options: 'gaussian', 'sinus', 'equal'
+        instability_smoothing_mass_redis_gaus_lim : float
+            If the mass distribution should be done with a 'gaussian' this
+            defines the limits. The larger this value the smoother the
+            transition at the edges of the instability, but also the larger the
+            change inside the instability.
         """
         super(FluxBasedModel, self).__init__(flowlines, mb_model=mb_model,
                                              y0=y0, glen_a=glen_a, fs=fs,
@@ -1619,6 +1682,29 @@ class FluxBasedModel(FlowlineModel):
                                                           self.y0))
         # Special output
         self._surf_vel_fac = (self.glen_n + 2) / (self.glen_n + 1)
+
+        # Instability smoothing
+        if instability_min_length is None:
+            instability_min_length = cfg.PARAMS['instability_min_length']
+        self.instability_min_length = instability_min_length
+        if instability_smoothing_window is None:
+            instability_smoothing_window =\
+                cfg.PARAMS['instability_smoothing_window']
+        self.instability_smoothing_window = instability_smoothing_window
+        if instability_smoothing_steps is None:
+            instability_smoothing_steps =\
+                cfg.PARAMS['instability_smoothing_steps']
+        self.instability_smoothing_steps = instability_smoothing_steps
+        if instability_smoothing_mass_redis_fct is None:
+            instability_smoothing_mass_redis_fct = \
+                cfg.PARAMS['instability_smoothing_mass_redis_fct']
+        self.instability_smoothing_mass_redis_fct = \
+            instability_smoothing_mass_redis_fct
+        if instability_smoothing_mass_redis_gaus_lim is None:
+            instability_smoothing_mass_redis_gaus_lim = \
+                cfg.PARAMS['instability_smoothing_mass_redis_gaus_lim']
+        self.instability_smoothing_mass_redis_gaus_lim = \
+            instability_smoothing_mass_redis_gaus_lim
 
         # Optim
         self.slope_stag = []
@@ -1923,6 +2009,231 @@ class FluxBasedModel(FlowlineModel):
         df['tributary_flux'] = self.trib_flux[fl_id]
 
         return df
+
+    def smooth_instabilities_in_flowlines(self):
+        """Method to detect and smooth potential numeric instabilities in the
+        flowlines. This method should always be follow by a .step() call as it
+        creates inconsistency between the flowlines and the saved flux
+        variables (slope_stag, thick_stag, section_stag, u_stag, shapefac_stag,
+        flux_stag, trib_flux).
+        """
+        for fl_id, fl in enumerate(self.fls):
+            # detect instabilities in u_stag
+            starts, lengths = utils.detect_instabilities(
+                self.u_stag[fl_id], min_length=self.instability_min_length,
+                min_distance=self.instability_min_length)
+
+            if starts is not None:
+                self.instability_smoothing_was_used = True
+                self.fls[fl_id] = self.smoothe_instabilities_in_one_fl(
+                    fl, fl_id, starts, lengths,
+                    smoothing_window=self.instability_smoothing_window,
+                    smoothing_steps=self.instability_smoothing_steps,
+                    mass_redis_fct=self.instability_smoothing_mass_redis_fct,
+                    limit_gaussian=self.instability_smoothing_mass_redis_gaus_lim)
+
+    def smoothe_instabilities_in_one_fl(self, fl, fl_id, starts, lengths,
+                                        smoothing_window=3, smoothing_steps=2,
+                                        mass_redis_fct='gaussian',
+                                        limit_gaussian=2):
+        """This function smoothes the slope of the flowline for the given
+        instabilities. For this it uses a running mean including some 'good'
+        grid points before and after the instability. After the smoothing it
+        is checked that the mass is conserved and if not the mass difference
+        is redistributed, according to the given function, over the instability
+        grid points.
+
+        Parameters
+        ----------
+        fl : oggm.Flowline
+            The flowline where the instabilities should be smoothed.
+        fl_id : int
+            The flowline id.
+        starts : list
+            A list of the starting indices of the instabilities.
+        lengths : list of int
+            A list of the lengths of each instability.
+        smoothing_window : int
+            Defines how many grid points before and after each instability grid
+            point should is used for smoothing (using a running mean).
+            Therefore this defines how many 'good' grid points are included
+            before and after the instability.
+            Default is 3
+        smoothing_steps : int
+            Defines how often the instability should be smoothed using a
+            running mean.
+            Default is 2
+        mass_redis_fct : str
+            This decides how the mass difference due to the instability
+            smoothing should be distributed along the instability grid points.
+            Options: 'gaussian', 'sinus', 'equal'
+            Default is 'gaussian'
+        limit_gaussian : float
+            If the mass distribution should be done with a 'gaussian' defines
+            the limits. The larger this value the smoother the transition at
+            the edges of the instability, but also the larger the gradient of
+            mass distribution inside the instability.
+            Default is 2.
+
+        Returns
+        -------
+        oggm.Flowline with a smoothed slope
+        """
+        # before starting save the volume we want to meet at the end
+        ref_total_volume = fl.volume_km3.copy()
+
+        # get the slope we want to smooth
+        slope_stag = self.slope_stag[fl_id]
+
+        dx = fl.dx_meter
+
+        # smooth each individual instability separately
+        for num, (start, length) in enumerate(zip(starts, lengths)):
+            end = start + length
+
+            # define the total length of grid points which are used in the
+            # running mean during smoothing (also checks if we are at the
+            # flowline boundaries, there it is assumed that one instability
+            # is not spread along the whole flowline)
+            if start < smoothing_window:
+                N = start + smoothing_window + 1
+                add_start = 0
+                add_end = end + smoothing_window
+            elif end + smoothing_window > fl.nx:
+                N = (fl.nx - end) + smoothing_window + 1
+                add_start = start - smoothing_window
+                add_end = -1
+            else:
+                N = 2 * smoothing_window + 1
+                add_start = start - smoothing_window
+                add_end = end + smoothing_window
+
+            # points of the instability to smooth
+            slope_stag_smoothed = slope_stag[start: end].copy()
+
+            # save total slope_stag distance which should be met at the end
+            # for a smooth transition
+            ref_slope_stag_sum = np.sum(slope_stag_smoothed)
+
+            # the actual smoothing happens here with a running mean
+            for _ in range(smoothing_steps):
+                slope_stag_smoothed = np.append(slope_stag[add_start: start],
+                                                slope_stag_smoothed)
+                slope_stag_smoothed = np.append(slope_stag_smoothed,
+                                                slope_stag[end: add_end])
+                slope_stag_smoothed = np.convolve(slope_stag_smoothed,
+                                                  np.ones(N) / N, mode='valid')
+
+            # correct the sum of gradients to match previous value for a smooth
+            # transition at the last smoothed grid point
+            slope_stag_smoothed_sum = np.sum(slope_stag_smoothed)
+            diff_slope_stag_sum = ref_slope_stag_sum - slope_stag_smoothed_sum
+            add_per_point = diff_slope_stag_sum / length
+            slope_stag_smoothed = slope_stag_smoothed + add_per_point
+
+            # recalculate surface_h from slope_stag_smoothed, therefore we
+            # start from the first unchanged surface_h and recursively add the
+            # slope to it, (we need a for loop
+            surface_h_smoothed = np.array([fl.surface_h[start - 1]])
+
+            # the last grad is a residual and defined by the unchanged
+            # surface_h[end + 1] grid point
+            for slope in slope_stag_smoothed[:-1]:
+                surface_h_smoothed = np.append(surface_h_smoothed,
+                                               surface_h_smoothed[-1] -
+                                               slope * dx)
+
+            # for the volume/mass conserving looking at the section is enough
+            # due to same dx for all grid points
+
+            # get section we want to match
+            total_section_ref = np.sum(fl.section[start: end - 1])
+
+            # now change the surface of the fl to the new smoothed surface_h
+            # and get section afterwards; setting thick instead of surface
+            # directly as it is not possible to use indexing when setting a
+            # new surface h (probably because internally this causes also
+            # the thickness to be changed) (first gird point of
+            # surface_h_smoothed corresponds to unchanged grid point at
+            # start -1 and is therefore not used)
+            fl.thick[start: end - 1] = (surface_h_smoothed[1:] -
+                                        fl.bed_h[start: end - 1])
+            total_section_smoothed = np.sum(fl.section[start: end - 1])
+            # section change due to smoothing
+            total_section_delta = (total_section_ref -
+                                   total_section_smoothed)
+
+            # redistribute total_section_delta across all grid points
+            def to_minimise(surface_h_change, fl_smoothed,
+                            total_delta, coeffs):
+                """Function which should be zero to match total_delta by
+                changing the surface_h at each grid point in accordance to
+                surface_h_change * coeffs. With coeffs one can ensure that
+                surface_h_change is not equal (this could create new
+                instabilities at the transitions from unsmoothed to
+                smoothed sections)
+                Parameters
+                ----------
+                surface_h_change : float
+                    The surface height change which is applied.
+                fl_smoothed : oggm.Flowline
+                    Reference flowline.
+                total_delta : float
+                    Total mismatch we want to meet with the change
+                coeffs : float or list of floats
+                    could define a nonuniform redistribution of mass
+
+                Returns
+                -------
+                float
+                    The difference between the section changed with
+                    surface_h_change * coeffs and the total delta we want
+                    to meet
+                """
+                fl_change = copy.deepcopy(fl_smoothed)
+                fl_change.thick[start: end - 1] = (
+                        fl_smoothed.surface_h[start: end - 1] +
+                        surface_h_change * coeffs -
+                        fl.bed_h[start: end - 1])
+                return (np.sum(fl_change.section[start: end - 1] -
+                               fl_smoothed.section[start: end - 1]) -
+                        total_delta)
+
+            if mass_redis_fct == 'equal':
+                coeffs = np.ones(length - 1)
+            elif mass_redis_fct == 'sinus':
+                coeffs = np.sin([i / length * np.pi
+                                 for i in np.arange(1, length)])
+            elif mass_redis_fct == 'gaussian':
+                coeffs = stats.norm.pdf(np.linspace(-limit_gaussian,
+                                                    limit_gaussian,
+                                                    num=length - 1,
+                                                    endpoint=True),
+                                        0, 1)
+            else:
+                raise NotImplementedError
+
+            # find corresponding surface_h changes to conserve the section
+            limits = np.min([100, np.min(fl.thick[start: end - 1])])
+            minimise_fct = partial(to_minimise, fl_smoothed=fl,
+                                   total_section_delta=total_section_delta,
+                                   coeffs=coeffs)
+            surface_h_change = optimize.brentq(minimise_fct, limits,
+                                               -limits, xtol=2e-20)
+
+            # now change section with the adapted surface_h change
+            fl.thick[start: end - 1] = (fl.surface_h[start: end - 1] +
+                                        surface_h_change * coeffs -
+                                        fl.bed_h[start: end - 1])
+
+        # finally check if total volume is conserved after smoothing
+        if not np.isclose(ref_total_volume, fl.volume_km3):
+            raise RuntimeError("The volume during the smoothing of numeric "
+                               "instabilities was not conserved! You should "
+                               "check this by hand or set "
+                               "cfg.PARAMS['use_instability_smoothing']=False.")
+
+        return fl
 
 
 class MassConservationChecker(FluxBasedModel):
@@ -2963,6 +3274,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                                   fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                                   stop_criterion=stop_criterion)
 
+    # SMOOTHING TEST: Only included for testing if smoothing was used
+    gdir.add_to_diagnostics('instability_smoothing_was_used',
+                            model.instability_smoothing_was_used)
     return model
 
 
@@ -4427,6 +4741,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                       other_reference_value)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
                             float(other_mismatch / other_reference_value * 100))
+    # SMOOTHING TEST: Only included for testing if smoothing was used
+    gdir.add_to_diagnostics('dynamic_spinup_instability_smoothing_was_used',
+                            model_dynamic_spinup_end[-1].instability_smoothing_was_used)
 
     # here only save the final model state if store_model_evolution = False
     if not store_model_evolution:
