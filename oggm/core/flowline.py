@@ -17,6 +17,7 @@ import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
 from scipy import interpolate
+from scipy import optimize
 
 # Optional libs
 try:
@@ -38,6 +39,7 @@ from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
 from oggm.core.inversion import find_sia_flux_from_thickness
+from oggm.core.climate import apparent_mb_from_any_mb
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR
@@ -932,7 +934,8 @@ class FlowlineModel(object):
                             geom_path=False,
                             store_monthly_step=None,
                             stop_criterion=None,
-                            fixed_geometry_spinup_yr=None
+                            fixed_geometry_spinup_yr=None,
+                            dynamic_spinup_min_ice_thick=None,
                             ):
         """Runs the model and returns intermediate steps in xarray datasets.
 
@@ -984,6 +987,13 @@ class FlowlineModel(object):
             starting from the chosen year. The only output affected are the
             glacier wide diagnostic files - all other outputs are set
             to constants during "spinup"
+        dynamic_spinup_min_ice_thick : float or None
+            if set to an float, additional variables are saved which are useful
+            in combination with the dynamic spinup. In particular only grid
+            points with a minimum ice thickness are considered for the total
+            area or the total volume. This is useful to smooth out yearly
+            fluctuations when matching to observations. The names of this new
+            variables include the suffix _min_h (e.g. 'area_m2_min_h')
         Returns
         -------
         geom_ds : xarray.Dataset or None
@@ -1086,6 +1096,13 @@ class FlowlineModel(object):
             diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
             diag_ds['volume_m3'].attrs['unit'] = 'm 3'
+            # created here but only filled with a value if
+            # dynamic_spinup_min_ice_thick is not None
+            diag_ds['volume_m3_min_h'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_m3_min_h'].attrs['description'] = \
+                f'Total glacier volume of gridpoints with a minimum ice' \
+                f'thickness of {dynamic_spinup_min_ice_thick} m'
+            diag_ds['volume_m3_min_h'].attrs['unit'] = 'm 3'
 
         if 'volume_bsl' in ovars:
             diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
@@ -1105,6 +1122,13 @@ class FlowlineModel(object):
             diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
             diag_ds['area_m2'].attrs['unit'] = 'm 2'
+            # created here but only filled with a value if
+            # dynamic_spinup_min_ice_thick is not None
+            diag_ds['area_m2_min_h'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['area_m2_min_h'].attrs['description'] = \
+                f'Total glacier area of gridpoints with a minimum ice' \
+                f'thickness of {dynamic_spinup_min_ice_thick} m'
+            diag_ds['area_m2_min_h'].attrs['unit'] = 'm 2'
 
         if 'length' in ovars:
             diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
@@ -1269,8 +1293,16 @@ class FlowlineModel(object):
             # Diagnostics
             if 'volume' in ovars:
                 diag_ds['volume_m3'].data[i] = self.volume_m3
+                if dynamic_spinup_min_ice_thick is not None:
+                    diag_ds['volume_m3_min_h'].data[i] = np.sum([np.sum(
+                        (fl.section * fl.dx_meter)[fl.thick > dynamic_spinup_min_ice_thick])
+                        for fl in self.fls])
             if 'area' in ovars:
                 diag_ds['area_m2'].data[i] = self.area_m2
+                if dynamic_spinup_min_ice_thick is not None:
+                    diag_ds['area_m2_min_h'].data[i] = np.sum([np.sum(
+                        fl.bin_area_m2[fl.thick > dynamic_spinup_min_ice_thick])
+                        for fl in self.fls])
             if 'length' in ovars:
                 diag_ds['length_m'].data[i] = self.length_m
             if 'calving' in ovars:
@@ -3756,13 +3788,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
-                       spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
+                       spinup_period=20, spinup_start_yr=None,
+                       min_spinup_period=10, spinup_start_yr_max=None,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
                        precision_absolute=1, min_ice_thickness=10,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=True,
+                       return_t_bias_best=False, ye=None,
                        **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
@@ -3799,24 +3833,29 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The start year of the dynamic spinup. If the provided year is before
         the provided climate data starts the year of the climate data is used.
         If set it overrides the spinup_period.
-        Default is None.
+        Default is None
     min_spinup_period : int
         If the dynamic spinup function fails with the initial 'spinup_period'
         a shorter period is tried. Here you can define the minimum period to
         try.
-        Default is 10.
+        Default is 10
+    spinup_start_yr_max : int or None
+        Possibility to provide a maximum year where the dynamic spinup must
+        start from at least. If set, this overrides the min_spinup_period if
+        yr_rgi - spinup_start_yr_max > min_spinup_period.
+        Default is None
     yr_rgi : int
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
     minimise_for : str
         The variable we want to match at yr_rgi. Options are 'area' or 'volume'.
-        Default is 'area'.
+        Default is 'area'
     precision_percent : float
         Gives the precision we want to match in percent. The algorithm makes
         sure that the resulting relative mismatch is smaller than
         precision_percent, but also that the absolute value is smaller than
         precision_absolute.
-        Default is 1, meaning the difference must be within 1% of the given
+        Default is 1., meaning the difference must be within 1% of the given
         value (area or volume).
     precision_absolute : float
         Gives an minimum absolute value to match. The algorithm makes sure that
@@ -3837,22 +3876,22 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
         Default is -2.
-    t_bias_max_step_length: float
+    t_bias_max_step_length : float
         Defines the maximums allowed change of t_bias between two iteratons. Is
         needed to avoid to large changes.
-        Default is 2
+        Default is 2.
     maxiter : int
         Maximum number of minimisation iterations per spinup period. If reached
         and 'ignore_errors=False' an error is raised.
-        Default is 10.
+        Default is 30
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
-        Default is True.
+        Default is True
     store_fl_diagnostics : bool or None
         whether to store the model flowline diagnostics to disk or not.
-        Default is None.
+        Default is None
     store_model_evolution : bool
         if True the complete dynamic spinup run is saved (complete evolution
         of the model during the dynamic spinup), if False only the final model
@@ -3860,12 +3899,25 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         store_model_evolution = True and ignore_errors = True and an Error
         during the dynamic spinup occurs the stored model evolution is only one
         year long)
-        Default is True.
+        Default is True
     ignore_errors : bool
         If True the function saves the model without a dynamic spinup using
         the 'output_filesuffix', if an error during the dynamic spinup occurs.
         This is useful if you want to keep glaciers for the following tasks.
-        Default is True.
+        Default is True
+    return_t_bias_best : bool
+        If True the used temperature bias for the spinup is returned in
+        addition to the final model. If an error occurs and ignore_error=True,
+        the returned value is np.nan.
+        Default is False
+    ye : int
+        end year of the model run, must be larger than yr_rgi. If nothing is
+        given it is set to yr_rgi. It is not recommended to use it if only data
+        until yr_rgi is needed for calibration as this increases the run time
+        of each iteration during the iterative minimisation. Instead use
+        run_from_climate_data afterwards and merge both outputs using
+        merge_consecutive_run_outputs.
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -3879,7 +3931,30 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
 
+    if ye is None:
+        ye = yr_rgi
+
+    if ye < yr_rgi:
+        raise RuntimeError(f'The provided end year (ye = {ye}) must be larger'
+                           f'than the rgi date (yr_rgi = {yr_rgi}!')
+
     yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+
+    # check provided maximum start year here, and change min_spinup_period
+    if spinup_start_yr_max is not None:
+        if spinup_start_yr_max < yr_min:
+            raise RuntimeError(f'The provided maximum start year (= '
+                               f'{spinup_start_yr_max}) must be larger than '
+                               f'the start year of the provided climate data '
+                               f'(= {yr_min})!')
+        if spinup_start_yr is not None:
+            if spinup_start_yr_max <= spinup_start_yr:
+                raise RuntimeError(f'The provided start year (= '
+                                   f'{spinup_start_yr} must be smaller than '
+                                   f'the maximum start year '
+                                   f'{spinup_start_yr_max}!')
+        if (yr_rgi - spinup_start_yr_max) > min_spinup_period:
+            min_spinup_period = (yr_rgi - spinup_start_yr_max)
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
@@ -3953,13 +4028,17 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                                    **kwargs)
 
         with np.warnings.catch_warnings():
+            if ye < yr_use:
+                yr_run = yr_use
+            else:
+                yr_run = ye
             # For operational runs we ignore the warnings
             np.warnings.filterwarnings('ignore', category=RuntimeWarning)
             model_dynamic_spinup_end.run_until_and_store(
-                yr_use,
+                yr_run,
                 geom_path=geom_path,
                 diag_path=diag_path,
-                fl_diag_path=fl_diag_path, )
+                fl_diag_path=fl_diag_path)
 
         return model_dynamic_spinup_end
 
@@ -3971,7 +4050,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                     'climate data (if yr_climate_start > yr_rgi)')
         if ignore_errors:
             model_dynamic_spinup_end = save_model_without_dynamic_spinup()
-            return model_dynamic_spinup_end
+            if return_t_bias_best:
+                return model_dynamic_spinup_end, np.nan
+            else:
+                return model_dynamic_spinup_end
         else:
             raise RuntimeError('The difference between the rgi_date and the '
                                'start year of the climate data is to small to '
@@ -4001,7 +4083,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     if reference_value == 0.:
         if ignore_errors:
             model_dynamic_spinup_end = save_model_without_dynamic_spinup()
-            return model_dynamic_spinup_end
+            if return_t_bias_best:
+                return model_dynamic_spinup_end, np.nan
+            else:
+                return model_dynamic_spinup_end
         else:
             raise RuntimeError('The given reference value is Zero, no dynamic '
                                'spinup possible!')
@@ -4038,50 +4123,60 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                            y0=yr_spinup,
                                            **kwargs)
         if store_model_evolution:
-            model_historical.run_until_and_store(
-                yr_rgi,
+            ds = model_historical.run_until_and_store(
+                ye,
                 geom_path=geom_path,
                 diag_path=diag_path,
-                fl_diag_path=fl_diag_path, )
+                fl_diag_path=fl_diag_path,
+                dynamic_spinup_min_ice_thick=min_ice_thickness)
+            if type(ds) == tuple:
+                ds = ds[0]
+            model_area_km2 = ds.area_m2_min_h.loc[yr_rgi].values * 1e-6
+            model_volume_km3 = ds.volume_m3_min_h.loc[yr_rgi].values * 1e-9
         else:
+            # only run to rgi date and extract values
             model_historical.run_until(yr_rgi)
-
-        return model_historical, ice_free
-
-    def cost_fct(t_bias, model_dynamic_spinup_end):
-
-        # actual model run
-        model_dynamic_spinup, ice_free = run_model_with_spinup_to_rgi_date(t_bias)
-
-        # save the final model for later
-        model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
-
-        value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
-        # only use grid points with a minimum ice thickness
-        fls = model_dynamic_spinup.fls
-        if cost_var == 'area_km2':
-            value_dynamic_spinup = np.sum(
+            fls = model_historical
+            model_area_km2 = np.sum(
                 [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
                  for fl in fls]) * 1e-6
-        elif cost_var == 'volume_km3':
-            value_dynamic_spinup = np.sum(
+            model_volume_km3 = np.sum(
                 [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
                  for fl in fls]) * 1e-9
+            # afterwards finish the complete run
+            model_historical.run_until(ye)
+
+        if cost_var == 'area_km2':
+            return model_area_km2, model_volume_km3, model_historical, ice_free
+        elif cost_var == 'volume_km3':
+            return model_volume_km3, model_area_km2, model_historical, ice_free
         else:
             raise NotImplementedError(f'{cost_var}')
 
+    def cost_fct(t_bias, model_dynamic_spinup_end_loc, other_variable_mismatch_loc):
+        # actual model run
+        model_value, other_value, model_dynamic_spinup, ice_free =\
+            run_model_with_spinup_to_rgi_date(t_bias)
+
+        # save the final model for later
+        model_dynamic_spinup_end_loc.append(copy.deepcopy(model_dynamic_spinup))
+
         # calculate the mismatch in percent
-        cost = (value_dynamic_spinup - value_ref) / value_ref * 100
+        cost = (model_value - reference_value) / reference_value * 100
+        other_variable_mismatch_loc.append(
+            (other_value - other_reference_value) / other_reference_value * 100)
 
         return cost, ice_free
 
     def init_cost_fct():
-        model_dynamic_spinup_end = []
+        model_dynamic_spinup_end_loc = []
+        other_variable_mismatch_loc = []
 
-        def c_fun(t_bias):
-            return cost_fct(t_bias, model_dynamic_spinup_end)
+        def c_fct(t_bias):
+            return cost_fct(t_bias, model_dynamic_spinup_end_loc,
+                            other_variable_mismatch_loc)
 
-        return c_fun, model_dynamic_spinup_end
+        return c_fct, model_dynamic_spinup_end_loc, other_variable_mismatch_loc
 
     def minimise_with_spline_fit(fct_to_minimise):
         # defines limits of t_bias in accordance to maximal allowed change
@@ -4310,7 +4405,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                         t_bias_limits[0] = t_bias_limits[1] - \
                             t_bias_max_step_length
 
-            return tmp_mismatch, float(t_bias)
+            return float(tmp_mismatch), float(t_bias)
 
         # first guess
         new_mismatch, new_t_bias = get_mismatch(first_guess_t_bias)
@@ -4375,7 +4470,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                            f'Iterations!')
 
     # define function for the actual minimisation
-    c_fun, model_dynamic_spinup_end = init_cost_fct()
+    c_fun, model_dynamic_spinup_end, other_variable_mismatch = init_cost_fct()
 
     # define the MassBalanceModels for different spinup periods and try to
     # minimise, if minimisation fails a shorter spinup period is used
@@ -4426,7 +4521,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             f'The error message of the dynamic spinup is: {e}')
                 if ignore_errors:
                     model_dynamic_spinup_end = save_model_without_dynamic_spinup()
-                    return model_dynamic_spinup_end
+                    if return_t_bias_best:
+                        return model_dynamic_spinup_end, np.nan
+                    else:
+                        return model_dynamic_spinup_end
                 else:
                     # delete all files which could be saved during the previous
                     # iterations
@@ -4458,11 +4556,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                             float(reference_value))
     gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
                             float(other_reference_value))
-    other_mismatch = (getattr(model_dynamic_spinup_end[-1],
-                              f'{other_variable}_{other_unit}') -
-                      other_reference_value)
     gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
-                            float(other_mismatch / other_reference_value * 100))
+                            float(other_variable_mismatch[-1]))
 
     # here only save the final model state if store_model_evolution = False
     if not store_model_evolution:
@@ -4475,7 +4570,510 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path, )
 
+    if return_t_bias_best:
+        return model_dynamic_spinup_end[-1], final_t_bias_guess[-1]
+    else:
+        return model_dynamic_spinup_end[-1]
+
+
+@entity_task(log, writes=['inversion_flowlines'])
+def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
+                                           precision_percent_dmdtda=1,
+                                           ignore_hydro_months=False,
+                                           min_mu_star=None, max_mu_star=None,
+                                           potential_limit_diff=[1., 10., 100.],
+                                           ignore_errors=True,
+                                           output_filesuffix='_historical_spinup_mb_calib',
+                                           evolution_model=FluxBasedModel,
+                                           ye=None, init_model_filesuffix=None,
+                                           init_model_fls=None,
+                                           minimise_for='area',
+                                           climate_input_filesuffix='',
+                                           spinup_period=20,
+                                           spinup_start_yr=None,
+                                           min_spinup_period=10, yr_rgi=None,
+                                           precision_percent_dyn_spinup=1,
+                                           precision_absolute_dyn_spinup=1,
+                                           min_ice_thickness=10,
+                                           first_guess_t_bias=-2,
+                                           t_bias_max_step_length=2,
+                                           maxiter=30,
+                                           store_model_geometry=True,
+                                           store_fl_diagnostics=None,
+                                           **kwargs):
+    """Dynamically spinup the glacier to match area OR volume at the RGI date
+    AND match a geodetic MB over a given period (including dynamic feedbacks).
+
+    This task can be seen as an addon to the function run_dynamic_spinup.
+    First it uses the run_dynamic_spinup function to match area or volume at
+    the RGI date. In a next step the geodetic MB during this first run is
+    compared to a given reference geodetic MB. This difference is tried to be
+    brought under a defined threshold (precision_percent_dmdtda) by fine
+    tuning mu* of the used temperature index MB-model. This includes in each
+    iteration a glacier bed inversion with calibration of A to the consensus
+    with a new mu* and afterwards a run_dynamic_spinup run.
+    This task stores always the model evolution as it is internally needed!
+    Also have a look at the doc string of the `run_dynamic_spinup` function!
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    ref_dmdtda : float or None
+        The reference geodetic mass balance to match (units: kg m-2 yr-1). If
+        None the data from Hugonnet 2021 is used.
+        Default is None
+    ref_period : str
+        If ref_dmdtda is None one of '2000-01-01_2010-01-01',
+        '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
+        set, this should still match the same format but can be any date.
+        Default is '' (-> PARAMS['geodetic_mb_period'])
+    precision_percent_dmdtda : float
+        Gives the precision we want to match in percent for the geodetic mass
+        balance.
+        Default is 1, meaning the final difference must be within 1% of the
+        given value.
+    ignore_hydro_months : bool
+        Do not raise an  error if we are working on calendar years.
+        Default is False
+    min_mu_star : float or None
+        Lower absolute limit for mu*.
+        Default is None (-> cfg.PARAMS['min_mu_star'])
+    max_mu_star : float or None
+        Upper absolute limit for mu*
+        Default is None (-> cfg.PARAMS['max_mu_star'])
+    potential_limit_diff : list of floats
+        Defines the limits around the initial mu* which are used during the
+        search (bounds are defined as [mu* - limit_diff, mu* + limit_diff]). We
+        want to change mu* as little as possible, so starting with smaller
+        values is desirable.
+        Default is [1., 10., 100.]
+    ignore_errors : bool
+        If True and the dynamic spinup with mu* star calibration is not working
+        first a dynamic spinup with no mu* calibration is conducted. If this
+        also fails a run with no dynamic spinup is carried out. If False and
+        the dynamic spinup with mu* star calibration is not working an Error is
+        raised.
+        Default is True
+    output_filesuffix : str
+        For the output file.
+        Default is '_historical_spinup_mb_calib'
+    evolution_model : class:oggm.core.FlowlineModel
+        Evolution model to use.
+        Default is FluxBasedModel
+    ye : int or None
+        The end year of the conducted run. If None last year of the provided
+        climate file.
+        Default is None
+    init_model_filesuffix : str or None
+        If you want to start from a previous model run state. This state
+        should be at time yr_rgi_date.
+        Default is None
+    init_model_fls : []
+        List of flowlines to use to initialise the model (the default is the
+        present_time_glacier file from the glacier directory).
+        Ignored if `init_model_filesuffix` is set.
+    minimise_for : str
+        The variable we want to match at yr_rgi. Options are 'area' or 'volume'.
+        Default is 'area'.
+    climate_input_filesuffix : str
+        filesuffix for the input climate file
+        Default is ''
+    spinup_period : int
+        The period how long the spinup should run. Start date of historical run
+        is defined "yr_rgi - spinup_period". Minimum allowed value is defined
+        with 'min_spinup_period'. If the provided climate data starts at year
+        later than (yr_rgi - spinup_period) the spinup_period is set to
+        (yr_rgi - yr_climate_start). Caution if spinup_start_yr is set the
+        spinup_period is ignored.
+        Default is 20
+    spinup_start_yr : int or None
+        The start year of the dynamic spinup. If the provided year is before
+        the provided climate data starts the year of the climate data is used.
+        If set it overrides the spinup_period.
+        Default is None
+    min_spinup_period : int
+        If the dynamic spinup function fails with the initial 'spinup_period'
+        a shorter period is tried. Here you can define the minimum period to
+        try.
+        Default is 10
+    yr_rgi : int or None
+        The rgi date, at which we want to match area or volume.
+        If None, gdir.rgi_date + 1 is used (the default).
+        Default is None
+    precision_percent_dyn_spinup : float
+        Gives the precision we want to match for the selected variable
+        ('minimise_for') at rgi_date in percent. The algorithm makes sure that
+        the resulting relative mismatch is smaller than precision_percent, but
+        also that the absolute value is smaller than precision_absolute.
+        Default is 1, meaning the difference must be within 1% of the given
+        value (area or volume).
+    precision_absolute_dyn_spinup : float
+        Gives an minimum absolute value to match. The algorithm makes sure that
+        the resulting relative mismatch is smaller than
+        precision_percent_dyn_spinup, but also that the absolute value is
+        smaller than precision_absolute_dyn_spinup.
+        The unit of precision_absolute depends on minimise_for (if 'area' in
+        km2, if 'volume' in km3)
+        Default is 1.
+    min_ice_thickness : float
+        Gives an minimum ice thickness for model grid points which are counted
+        to the total model value. This could be useful to filter out seasonal
+        'glacier growth', as OGGM do not differentiate between snow and ice in
+        the forward model run. Therefore you could see quite fast changes
+        (spikes) in the time-evolution (especially visible in length and area).
+        If you set this value to 0 the filtering can be switched off.
+        Default is 10.
+    first_guess_t_bias : float
+        The initial guess for the temperature bias for the spinup
+        MassBalanceModel in °C.
+        Default is -2.
+    t_bias_max_step_length : float
+        Defines the maximums allowed change of t_bias between two iteratons. Is
+        needed to avoid to large changes.
+        Default is 2
+    maxiter : int
+        Maximum number of minimisation iterations per spinup period. If reached
+        and 'ignore_errors=False' an error is raised.
+        Default is 30
+    store_model_geometry : bool
+        whether to store the full model geometry run file to disk or not.
+        Default is True
+    store_fl_diagnostics : bool or None
+        Whether to store the model flowline diagnostics to disk or not.
+        Default is None (-> cfg.PARAMS['store_fl_diagnostics'])
+    kwargs : dict
+        kwargs to pass to the evolution_model instance
+
+    Returns
+    -------
+    :py:class:`oggm.core.flowline.evolution_model`
+        The final dynamically spined-up model. Type depends on the selected
+        evolution_model, by default a FluxBasedModel.
+    """
+    # mu* constraints
+    if min_mu_star is None:
+        min_mu_star = cfg.PARAMS['min_mu_star']
+    if max_mu_star is None:
+        max_mu_star = cfg.PARAMS['max_mu_star']
+
+    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    if sm != 1 and not ignore_hydro_months:
+        raise InvalidParamsError('run_dynamic_spinup_with_mb_calibration makes '
+                                 'more sense when applied on calendar years '
+                                 "(PARAMS['hydro_month_nh']=1 and "
+                                 "`PARAMS['hydro_month_sh']=1). If you want "
+                                 "to ignore this error, set "
+                                 "ignore_hydro_months to True")
+
+    if max_mu_star > 1000:
+        raise InvalidParamsError('You seem to have set a very high '
+                                 'max_mu_star for this run. This is not '
+                                 'how this task is supposed to work, and '
+                                 'we recommend a value lower than 1000 '
+                                 '(or even 600).')
+
+    # geodetic mb stuff
+    if not ref_period:
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+    # Get the reference geodetic mb if not given
+    if ref_dmdtda is None:
+        ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_dmdtda = float(ref_dmdtda.loc[ref_dmdtda['period'] == ref_period]['dmdtda'])
+        # dmdtda: in meters water-equivalent per year -> we convert
+        ref_dmdtda *= 1000  # kg m-2 yr-1
+    # get start and end year of geodetic mb
+    yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
+    yr0_ref_mb = int(yr0_ref_mb.split('-')[0])
+    yr1_ref_mb = int(yr1_ref_mb.split('-')[0])
+    yr_area_mb = gdir.rgi_date + 1  # + 1 converted to hydro years
+
+    if ye is None:
+        # One adds 1 because the run ends at the end of the year
+        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+
+    if ye < yr1_ref_mb:
+        raise RuntimeError('The provided ye is smaller than the end year of '
+                           'the given geodetic_mb_period!')
+
+    if spinup_start_yr is not None:
+        if spinup_start_yr > yr0_ref_mb:
+            raise RuntimeError('The provided spinup_start_year is larger than '
+                               'the start year of the given geodetic_mb_period!')
+
+    # save original mu star for later to be able to recreate original gdir if
+    # an error occurs
+    mu_star_initial = gdir.read_json('local_mustar')['mu_star_glacierwide']
+
+    fls_ref = gdir.read_pickle('model_flowlines')
+
+    # save initial volume (it is assumed that the volume was previously
+    # calibrated to the consensus estimate on a regional bases
+    vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
+
+    # only used to check performance of function
+    dynamic_spinup_runs = [0]
+
+    # TODO: add tests for this case
+    # this function tries to conduct a dynamic spinup without mu star
+    # calibration using the original mu star. If the dynamic spinup fails
+    # a model run to ye with no dynamic spinup is saved.
+    def do_dynamic_spinup_without_mu_star_calibration():
+        gdir.add_to_diagnostics('run_dynamic_spinup_with_mb_calibration_success',
+                                False)
+        # revert mu star
+        df = dict()
+        df['rgi_id'] = gdir.rgi_id
+        df['t_star'] = np.nan
+        df['bias'] = 0
+        df['mu_star_per_flowline'] = [mu_star_initial] * len(fls_ref)
+        df['mu_star_glacierwide'] = mu_star_initial
+        df['mu_star_flowline_avg'] = mu_star_initial
+        df['mu_star_allsame'] = True
+        gdir.write_json(df, 'local_mustar')
+        apparent_mb_from_any_mb(gdir)
+        calibrate_inversion_from_consensus([gdir],
+                                           apply_fs_on_mismatch=True,
+                                           error_on_mismatch=False,
+                                           filter_inversion_output=True,
+                                           volume_m3_reference=vol_m3_ref)
+        init_present_time_glacier(gdir)
+        yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+        try:
+            model_end = run_dynamic_spinup(
+                gdir, init_model_filesuffix=init_model_filesuffix,
+                init_model_fls=init_model_fls,
+                climate_input_filesuffix=climate_input_filesuffix,
+                evolution_model=evolution_model, spinup_period=spinup_period,
+                spinup_start_yr=spinup_start_yr,
+                min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
+                minimise_for=minimise_for,
+                precision_percent=precision_percent_dyn_spinup,
+                precision_absolute=precision_absolute_dyn_spinup,
+                min_ice_thickness=min_ice_thickness,
+                first_guess_t_bias=first_guess_t_bias,
+                t_bias_max_step_length=t_bias_max_step_length, maxiter=maxiter,
+                output_filesuffix=output_filesuffix,
+                store_model_geometry=store_model_geometry,
+                store_fl_diagnostics=store_fl_diagnostics,
+                ignore_errors=False, ye=ye, **kwargs)
+        except RuntimeError:
+            log.warning('No dynamic spinup could be conducted by using the '
+                        f'original mu* ({mu_star_initial}). Therefore the last '
+                        'try is to conduct a run until ye without a dynamic '
+                        'spinup.')
+            model_end = run_from_climate_data(
+                gdir, min_ys=yr_clim_min, ye=ye,
+                output_filesuffix=output_filesuffix,
+                climate_input_filesuffix=climate_input_filesuffix,
+                store_model_geometry=store_model_geometry,
+                store_fl_diagnostics=store_fl_diagnostics,
+                init_model_filesuffix=init_model_filesuffix,
+                init_model_fls=init_model_fls, evolution_model=evolution_model)
+
+            # set all dynamic diagnostics to None if there where some succesful
+            # runs
+            diag = gdir.get_diagnostics()
+            if minimise_for == 'area':
+                unit = 'km2'
+            elif minimise_for == 'volume':
+                unit = 'km3'
+            else:
+                raise NotImplementedError
+            for key in ['temp_bias_dynamic_spinup', 'dynamic_spinup_period',
+                        'dynamic_spinup_forward_model_runs',
+                        f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent',
+                        f'reference_{minimise_for}_dynamic_spinup_{unit}',
+                        'dynamic_spinup_other_variable_reference',
+                        'dynamic_spinup_mismatch_other_variable_percent']:
+                if key in diag:
+                    gdir.add_to_diagnostics(key, None)
+
+            gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
+        return model_end
+
+    def define_new_mu_and_do_inversion_and_dynamic_spinup(mu_star,
+                                                          t_bias_guess):
+        # to check performance of minimisation
+        dynamic_spinup_runs.append(dynamic_spinup_runs[-1] + 1)
+
+        # define new mu for gdir
+        df = dict()
+        df['rgi_id'] = gdir.rgi_id
+        df['t_star'] = np.nan
+        df['bias'] = 0
+        df['mu_star_per_flowline'] = [mu_star] * len(fls_ref)
+        df['mu_star_glacierwide'] = mu_star
+        df['mu_star_flowline_avg'] = mu_star
+        df['mu_star_allsame'] = True
+        gdir.write_json(df, 'local_mustar')
+        apparent_mb_from_any_mb(gdir)
+        # do inversion with A calibration to current volume
+        # TODO: add tests for giving own volume_m3_reference
+        calibrate_inversion_from_consensus([gdir],
+                                           apply_fs_on_mismatch=True,
+                                           error_on_mismatch=False,
+                                           filter_inversion_output=True,
+                                           volume_m3_reference=vol_m3_ref)
+        # And finally initialise the new model flowlines
+        init_present_time_glacier(gdir)
+
+        # Now do a dynamic spinup to match area
+        # TODO: add tests for ye and return_t_bias, and maybe more (look at changes)
+        # do not ignore errors in dynamic spinup, so all 'bad' files are
+        # deleted in run_dynamic_spinup function
+        try:
+            model, last_best_t_bias = run_dynamic_spinup(
+                gdir, init_model_filesuffix=init_model_filesuffix,
+                init_model_fls=init_model_fls,
+                climate_input_filesuffix=climate_input_filesuffix,
+                evolution_model=evolution_model, spinup_period=spinup_period,
+                spinup_start_yr=spinup_start_yr,
+                spinup_start_yr_max=yr0_ref_mb,
+                min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
+                precision_percent=precision_percent_dyn_spinup,
+                precision_absolute=precision_absolute_dyn_spinup,
+                min_ice_thickness=min_ice_thickness,
+                t_bias_max_step_length=t_bias_max_step_length, maxiter=maxiter,
+                minimise_for=minimise_for, first_guess_t_bias=t_bias_guess,
+                output_filesuffix=output_filesuffix,
+                store_model_evolution=True, ignore_errors=False,
+                return_t_bias_best=True, ye=ye,
+                store_model_geometry=store_model_geometry,
+                store_fl_diagnostics=store_fl_diagnostics,
+                **kwargs)
+        except RuntimeError as e:
+            raise RuntimeError(f'Dynamic spinup raised error! (Message: {e})')
+
+        # calculate dmdtda from previous simulation here
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix)
+        dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
+                       ds.volume.loc[yr0_ref_mb].values) /
+                      gdir.rgi_area_m2 /
+                      (yr1_ref_mb - yr0_ref_mb) *
+                      cfg.PARAMS['ice_density'])
+        # TODO: maybe use density conversion of 850
+
+        return model, dmdtda_mdl, last_best_t_bias
+
+    def cost_fct(mu_star, model_dynamic_spinup_end, t_bias_guesses,
+                 mismatch_dmdt_percent):
+
+        # actual model run
+        model_dynamic_spinup, dmdtda_mdl, last_best_t_bias = \
+            define_new_mu_and_do_inversion_and_dynamic_spinup(mu_star,
+                                                              t_bias_guesses[-1])
+
+        # save final model and last_best_t_bias for later
+        model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
+        t_bias_guesses.append(copy.deepcopy(last_best_t_bias))
+
+        # calculate the mismatch of dmdtda in percent
+        cost = (dmdtda_mdl - ref_dmdtda) / ref_dmdtda * 100
+        mismatch_dmdt_percent.append(cost.copy())
+
+        # here we check if we have arrived at the desired precision for dmdtda
+        if np.abs(cost) < precision_percent_dmdtda:
+            cost = 0
+
+        return cost
+
+    def init_cost_fun():
+        model_dynamic_spinup_end = []
+        t_bias_guesses = [first_guess_t_bias]
+        mismatch_dmdt_percent = []
+
+        def c_fun(mu_star):
+            return cost_fct(mu_star, model_dynamic_spinup_end, t_bias_guesses,
+                            mismatch_dmdt_percent)
+
+        return c_fun, model_dynamic_spinup_end, t_bias_guesses, mismatch_dmdt_percent
+
+    # define function for the actual minimisation
+    c_fun, model_dynamic_spinup_end, t_bias_guesses, mismatch_dmdt_percent = init_cost_fun()
+
+    # Try out different limits, we expect the new mu_star to be close to the
+    # original one
+    for limit_diff in potential_limit_diff:
+        try:
+            mu_star_final, res = optimize.brentq(c_fun,
+                                                 max(mu_star_initial - limit_diff,
+                                                     min_mu_star),
+                                                 min(mu_star_initial + limit_diff,
+                                                     max_mu_star),
+                                                 full_output=True)
+            if not res.converged:
+                if ignore_errors:
+                    log.warning('No dynamic spinup with mu* calibration has '
+                                'converged (brentq). Therefore a dynamic '
+                                'spinup without a mu* calibration is tried.')
+                    model_to_return = do_dynamic_spinup_without_mu_star_calibration()
+                    return model_to_return
+            else:
+                break
+        except ValueError as e:
+            if 'f(a) and f(b) must have different signs' in f'{e}':
+                # check if we are at the maximum limits for mu_star
+                if limit_diff == max(potential_limit_diff):
+                    if ignore_errors:
+                        log.warning('No dynamic spinup with mu* calibration '
+                                    'could be conducted as their is no sign '
+                                    'change even with limits of +/- '
+                                    f'{limit_diff} around the original mu* '
+                                    f'({mu_star_initial}), dynamic spinup '
+                                    'with no mu* star calibration is tried, '
+                                    'using original mu*.')
+                        model_to_return = do_dynamic_spinup_without_mu_star_calibration()
+                        return model_to_return
+                    raise RuntimeError('Exceeding mu* bounds in dynamic mu* '
+                                       'calibration. bounds = original mu* '
+                                       f'({mu_star_initial}) +/- max '
+                                       f'difference ({limit_diff}). Maybe can '
+                                       'try with large limits again.')
+                # if we are not at the limits lets try with new limits in the
+                # next loop
+                continue
+            else:
+                raise ValueError(e)
+        except RuntimeError as e:
+            if 'Dynamic spinup raised error!' in f'{e}':
+                if limit_diff == potential_limit_diff[-1]:
+                    # ok unfortunately we tried all limits for mu with no success
+                    if ignore_errors:
+                        log.warning('Error in dynamic spinup with mu* '
+                                    'calibraion occured, next dynamic spinup '
+                                    'without mu* calibration is tried.')
+                        model_to_return = do_dynamic_spinup_without_mu_star_calibration()
+                        return model_to_return
+                    raise RuntimeError(e)
+                # ok we try again with other limits as there are some left
+                continue
+            else:
+                raise RuntimeError(e)
+
+    # check that new mu star is correctly saved in gdir
+    assert mu_star_final == gdir.read_json('local_mustar')['mu_star_glacierwide']
+
+    # hurray, dynamic spinup with mb calibration successful
+    gdir.add_to_diagnostics('run_dynamic_spinup_with_mb_calibration_success',
+                            True)
+    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_spinup_percent',
+                            float(mismatch_dmdt_percent[-1]))
+    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_spinup_reference',
+                            float(ref_dmdtda))
+    gdir.add_to_diagnostics('mu_star_dynamic_spinup', float(mu_star_final))
+    gdir.add_to_diagnostics('mu_star_before_dynamic_spinup_mb_calib',
+                            float(mu_star_initial))
+    gdir.add_to_diagnostics('dynamic_spinup_runs_mb_calib',
+                            int(dynamic_spinup_runs[-1]))
+
     return model_dynamic_spinup_end[-1]
+
+
+# this import here is weird but it is needed to prevent circular dependency
+# error as in 'workflow' 'tasks' is imported which need some function from this
+# file, maybe we find a more elegant solution for this
+from oggm.workflow import calibrate_inversion_from_consensus
 
 
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
