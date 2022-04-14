@@ -4786,7 +4786,6 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
     yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
     yr0_ref_mb = int(yr0_ref_mb.split('-')[0])
     yr1_ref_mb = int(yr1_ref_mb.split('-')[0])
-    yr_area_mb = gdir.rgi_date + 1  # + 1 converted to hydro years
 
     if ye is None:
         # One adds 1 because the run ends at the end of the year

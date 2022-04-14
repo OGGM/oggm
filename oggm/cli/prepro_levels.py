@@ -582,8 +582,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         mini_base_dir = os.path.join(working_dir, 'mini_perglacier',
                                      'RGI{}'.format(rgi_version),
                                      'b_{:03d}'.format(border))
+        # TODO: setup='all' should be deleted, only needed for testing dynamic
+        #  spinup with mu star calibration, maybe try to use 'inversion' or
+        #  manage the used setup depending on the dynamic spinup settings
         mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
-                                                  base_dir=mini_base_dir)
+                                                  base_dir=mini_base_dir,
+                                                  setup='all')
 
         # L4 OK - compress all in output directory
         log.workflow('L4 done. Writing to tar...')
