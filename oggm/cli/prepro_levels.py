@@ -667,9 +667,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
 
     if dynamic_spinup:
-        opath = os.path.join(sum_dir, f'historical_spinup_run_output_{rgi_reg}.nc')
-        utils.compile_run_output(gdirs, path=opath,
-                                 input_filesuffix='_historical_spinup')
+        if 'dmdtda' not in dynamic_spinup:
+            opath = os.path.join(sum_dir, f'historical_spinup_run_output_{rgi_reg}.nc')
+            utils.compile_run_output(gdirs, path=opath,
+                                     input_filesuffix='_historical_spinup')
+        else:
+            opath = os.path.join(sum_dir, f'historical_spinup_mb_calib_run_output_{rgi_reg}.nc')
+            utils.compile_run_output(gdirs, path=opath,
+                                     input_filesuffix='_historical_spinup_mb_calib')
 
     # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
