@@ -4919,7 +4919,9 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
         init_present_time_glacier(gdir)
 
         # Now do a dynamic spinup to match area
-        # TODO: add tests for ye and return_t_bias, and maybe more (look at changes)
+        # TODO: add tests for ye, return_t_bias, if ds is working when more
+        #  things are saved (e.g. fl_diag_path) line 4130, spinup_start_yr_max
+        #  usage
         # do not ignore errors in dynamic spinup, so all 'bad' files are
         # deleted in run_dynamic_spinup function
         try:

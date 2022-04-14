@@ -186,9 +186,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         raise InvalidParamsError('evolution_model should be one of '
                                  "['fl_sia', 'massredis'].")
 
-    if dynamic_spinup and dynamic_spinup not in ['area', 'volume']:
+    if dynamic_spinup and dynamic_spinup not in ['area', 'volume',
+                                                 'area/dmdtda', 'volume/dmdtda']:
         raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
                                  "not supported")
+
+    if 'dmdtda' in dynamic_spinup and start_level > 3:
+        raise InvalidParamsError("Dynamic spinup with mb calibration needs at "
+                                 "least start level 3 to work! Provided start "
+                                 f"level is {start_level}.")
 
     if dynamic_spinup and evolution_model == 'massredis':
         raise InvalidParamsError("Dynamic spinup is not working/tested"
@@ -618,22 +624,32 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if dynamic_spinup:
         if y0 > dynamic_spinup_start_year:
             dynamic_spinup_start_year = y0
-        workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
-                                     evolution_model=evolution_model,
-                                     minimise_for=dynamic_spinup,
-                                     spinup_start_yr=dynamic_spinup_start_year,
-                                     output_filesuffix='_dynamic_spinup',
-                                     )
-        workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
-                                     min_ys=y0, ye=ye,
-                                     evolution_model=evolution_model,
-                                     init_model_filesuffix='_dynamic_spinup',
-                                     output_filesuffix='_hist_spin')
-        workflow.execute_entity_task(tasks.merge_consecutive_run_outputs, gdirs,
-                                     input_filesuffix_1='_dynamic_spinup',
-                                     input_filesuffix_2='_hist_spin',
-                                     output_filesuffix='_historical_spinup',
-                                     delete_input=True)
+        if 'dmdtda' not in dynamic_spinup:
+            workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
+                                         evolution_model=evolution_model,
+                                         minimise_for=dynamic_spinup,
+                                         spinup_start_yr=dynamic_spinup_start_year,
+                                         output_filesuffix='_dynamic_spinup',
+                                         )
+            workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
+                                         min_ys=y0, ye=ye,
+                                         evolution_model=evolution_model,
+                                         init_model_filesuffix='_dynamic_spinup',
+                                         output_filesuffix='_hist_spin')
+            workflow.execute_entity_task(tasks.merge_consecutive_run_outputs,
+                                         gdirs,
+                                         input_filesuffix_1='_dynamic_spinup',
+                                         input_filesuffix_2='_hist_spin',
+                                         output_filesuffix='_historical_spinup',
+                                         delete_input=True)
+        else:
+            minimise_for = dynamic_spinup.split('/')[0]
+            workflow.execute_entity_task(tasks.run_dynamic_spinup_with_mb_calibration,
+                                         gdirs, evolution_model=evolution_model,
+                                         minimise_for=minimise_for,
+                                         dynamic_spinup_start_year=dynamic_spinup_start_year,
+                                         output_filesuffix='_historical_spinup_mb_calib',
+                                         ye=ye, max_mu_star=1000.)
 
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
@@ -791,8 +807,9 @@ def parse_args(args):
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic_spinup', type=str, default='',
-                        help="include a dynamic spinup for matching 'area' OR "
-                             "'volume' at the RGI-date")
+                        help="include a dynamic spinup for matching 'area' or "
+                             "'volume' at the RGI-date or 'area/dhdtda' or "
+                             "'volume/dhdtda'.")
     parser.add_argument('--dynamic_spinup_start_year', type=int, default=1979,
                         help="if --dynamic_spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
