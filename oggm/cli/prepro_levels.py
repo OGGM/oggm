@@ -159,6 +159,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
+    continue_on_error : bool
+        if True the workflow continues if a task raise an error. For operational
+        runs it should be set to True. Default is True
     """
 
     # Input check
@@ -651,7 +654,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(tasks.run_dynamic_spinup_with_mb_calibration,
                                          gdirs, evolution_model=evolution_model,
                                          minimise_for=minimise_for,
-                                         dynamic_spinup_start_year=dynamic_spinup_start_year,
+                                         spinup_start_yr=dynamic_spinup_start_year,
                                          output_filesuffix='_historical_spinup_mb_calib',
                                          ye=ye, max_mu_star=1000.)
 

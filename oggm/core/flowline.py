@@ -4970,8 +4970,8 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
         t_bias_guesses.append(copy.deepcopy(last_best_t_bias))
 
         # calculate the mismatch of dmdtda in percent
-        cost = (dmdtda_mdl - ref_dmdtda) / ref_dmdtda * 100
-        mismatch_dmdt_percent.append(cost.copy())
+        cost = float((dmdtda_mdl - ref_dmdtda) / ref_dmdtda * 100)
+        mismatch_dmdt_percent.append(cost)
 
         # here we check if we have arrived at the desired precision for dmdtda
         if np.abs(cost) < precision_percent_dmdtda:
@@ -5068,12 +5068,15 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
     gdir.add_to_diagnostics('dynamic_spinup_runs_mb_calib',
                             int(dynamic_spinup_runs[-1]))
 
+    log.workflow(f'Dynamic spinup with mb calibration worked for {gdir.rgi_id}!')
+
     return model_dynamic_spinup_end[-1]
 
 
 # this import here is weird but it is needed to prevent circular dependency
 # error as in 'workflow' 'tasks' is imported which need some function from this
-# file, maybe we find a more elegant solution for this
+# file, maybe we find a more elegant solution for this, maybe try to import in
+# function definition
 from oggm.workflow import calibrate_inversion_from_consensus
 
 
