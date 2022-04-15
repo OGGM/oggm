@@ -4577,30 +4577,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
-                                           precision_percent_dmdtda=1,
-                                           ignore_hydro_months=False,
-                                           min_mu_star=None, max_mu_star=None,
-                                           potential_limit_diff=[1., 10., 100.],
-                                           ignore_errors=True,
-                                           output_filesuffix='_historical_spinup_mb_calib',
-                                           evolution_model=FluxBasedModel,
-                                           ye=None, init_model_filesuffix=None,
-                                           init_model_fls=None,
-                                           minimise_for='area',
-                                           climate_input_filesuffix='',
-                                           spinup_period=20,
-                                           spinup_start_yr=None,
-                                           min_spinup_period=10, yr_rgi=None,
-                                           precision_percent_dyn_spinup=1,
-                                           precision_absolute_dyn_spinup=1,
-                                           min_ice_thickness=10,
-                                           first_guess_t_bias=-2,
-                                           t_bias_max_step_length=2,
-                                           maxiter=30,
-                                           store_model_geometry=True,
-                                           store_fl_diagnostics=None,
-                                           **kwargs):
+def run_dynamic_spinup_with_mb_calibration(
+        gdir, ref_dmdtda=None, ref_period='', precision_percent_dmdtda=1,
+        ignore_hydro_months=False, min_mu_star=None, max_mu_star=None,
+        mu_star_max_step_length=5, maxiter_mu_star=10, ignore_errors=True,
+        output_filesuffix='_historical_spinup_mb_calib',
+        evolution_model=FluxBasedModel, ye=None, init_model_filesuffix=None,
+        init_model_fls=None, minimise_for='area', climate_input_filesuffix='',
+        spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
+        yr_rgi=None, precision_percent_dyn_spinup=1,
+        precision_absolute_dyn_spinup=1, min_ice_thickness=10,
+        first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
+        store_model_geometry=True, store_fl_diagnostics=None, **kwargs):
     """Dynamically spinup the glacier to match area OR volume at the RGI date
     AND match a geodetic MB over a given period (including dynamic feedbacks).
 
@@ -4642,12 +4630,16 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
     max_mu_star : float or None
         Upper absolute limit for mu*
         Default is None (-> cfg.PARAMS['max_mu_star'])
-    potential_limit_diff : list of floats
-        Defines the limits around the initial mu* which are used during the
-        search (bounds are defined as [mu* - limit_diff, mu* + limit_diff]). We
-        want to change mu* as little as possible, so starting with smaller
-        values is desirable.
-        Default is [1., 10., 100.]
+    mu_star_max_step_length : float
+        Defines the maximum allowed change of mu_star between two iteratons.
+        Is needed to avoid to large changes.
+        Default is 5
+    maxiter_mu_star : int
+        Maximum number of minimisation iterations of minimising mismatch to
+        dmdtda by changing mu_star. Each of this iterations conduct a complete
+        dynamic spinup run (see run_dynamic_spinup function). If
+        maxiter_mu_star reached and 'ignore_errors=False' an error is raised.
+        Default is 10
     ignore_errors : bool
         If True and the dynamic spinup with mu* star calibration is not working
         first a dynamic spinup with no mu* calibration is conducted. If this
@@ -4732,9 +4724,10 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
         Defines the maximums allowed change of t_bias between two iteratons. Is
         needed to avoid to large changes.
         Default is 2
-    maxiter : int
-        Maximum number of minimisation iterations per spinup period. If reached
-        and 'ignore_errors=False' an error is raised.
+    maxiter_dyn_spinup : int
+        Maximum number of minimisation iterations per dynamic spinup where area
+        or volume is tried to be matched. If reached and 'ignore_errors=False'
+        an error is raised.
         Default is 30
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
@@ -4817,45 +4810,70 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
     # this function tries to conduct a dynamic spinup without mu star
     # calibration using the original mu star. If the dynamic spinup fails
     # a model run to ye with no dynamic spinup is saved.
-    def do_dynamic_spinup_without_mu_star_calibration():
+    def do_dynamic_spinup_without_mu_star_calibration(mu_star=mu_star_initial,
+                                                      do_dynamic_spinup=True,
+                                                      mismatch_final=None):
         gdir.add_to_diagnostics('run_dynamic_spinup_with_mb_calibration_success',
-                                False)
-        # revert mu star
-        df = dict()
-        df['rgi_id'] = gdir.rgi_id
-        df['t_star'] = np.nan
-        df['bias'] = 0
-        df['mu_star_per_flowline'] = [mu_star_initial] * len(fls_ref)
-        df['mu_star_glacierwide'] = mu_star_initial
-        df['mu_star_flowline_avg'] = mu_star_initial
-        df['mu_star_allsame'] = True
-        gdir.write_json(df, 'local_mustar')
-        apparent_mb_from_any_mb(gdir)
-        calibrate_inversion_from_consensus([gdir],
-                                           apply_fs_on_mismatch=True,
-                                           error_on_mismatch=False,
-                                           filter_inversion_output=True,
-                                           volume_m3_reference=vol_m3_ref)
-        init_present_time_glacier(gdir)
+                                0)
+        # revert mu star if neccessary
+        if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
+            df = dict()
+            df['rgi_id'] = gdir.rgi_id
+            df['t_star'] = np.nan
+            df['bias'] = 0
+            df['mu_star_per_flowline'] = [mu_star] * len(fls_ref)
+            df['mu_star_glacierwide'] = mu_star
+            df['mu_star_flowline_avg'] = mu_star
+            df['mu_star_allsame'] = True
+            gdir.write_json(df, 'local_mustar')
+            apparent_mb_from_any_mb(gdir)
+            calibrate_inversion_from_consensus([gdir],
+                                               apply_fs_on_mismatch=True,
+                                               error_on_mismatch=False,
+                                               filter_inversion_output=True,
+                                               volume_m3_reference=vol_m3_ref)
+            init_present_time_glacier(gdir)
         yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
         try:
-            model_end = run_dynamic_spinup(
-                gdir, init_model_filesuffix=init_model_filesuffix,
-                init_model_fls=init_model_fls,
-                climate_input_filesuffix=climate_input_filesuffix,
-                evolution_model=evolution_model, spinup_period=spinup_period,
-                spinup_start_yr=spinup_start_yr,
-                min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
-                minimise_for=minimise_for,
-                precision_percent=precision_percent_dyn_spinup,
-                precision_absolute=precision_absolute_dyn_spinup,
-                min_ice_thickness=min_ice_thickness,
-                first_guess_t_bias=first_guess_t_bias,
-                t_bias_max_step_length=t_bias_max_step_length, maxiter=maxiter,
-                output_filesuffix=output_filesuffix,
-                store_model_geometry=store_model_geometry,
-                store_fl_diagnostics=store_fl_diagnostics,
-                ignore_errors=False, ye=ye, **kwargs)
+            if do_dynamic_spinup:
+                model_end = run_dynamic_spinup(
+                    gdir, init_model_filesuffix=init_model_filesuffix,
+                    init_model_fls=init_model_fls,
+                    climate_input_filesuffix=climate_input_filesuffix,
+                    evolution_model=evolution_model,
+                    spinup_period=spinup_period,
+                    spinup_start_yr=spinup_start_yr,
+                    min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
+                    minimise_for=minimise_for,
+                    precision_percent=precision_percent_dyn_spinup,
+                    precision_absolute=precision_absolute_dyn_spinup,
+                    min_ice_thickness=min_ice_thickness,
+                    first_guess_t_bias=first_guess_t_bias,
+                    t_bias_max_step_length=t_bias_max_step_length,
+                    maxiter=maxiter_dyn_spinup,
+                    output_filesuffix=output_filesuffix,
+                    store_model_geometry=store_model_geometry,
+                    store_fl_diagnostics=store_fl_diagnostics,
+                    ignore_errors=False, ye=ye, **kwargs)
+                if mu_star != mu_star_initial:
+                    # we could not find a satisfying mismatch, but we could
+                    # improve the default guess, therefore half success
+                    gdir.add_to_diagnostics(
+                        'run_dynamic_spinup_with_mb_calibration_success', 0.5)
+                    gdir.add_to_diagnostics(
+                        'dmdtda_mismatch_dynamic_spinup_percent',
+                        float(mismatch_final))
+                    gdir.add_to_diagnostics(
+                        'dmdtda_mismatch_dynamic_spinup_reference',
+                        float(ref_dmdtda))
+                    gdir.add_to_diagnostics('mu_star_dynamic_spinup',
+                                            float(mu_star))
+                    gdir.add_to_diagnostics(
+                        'mu_star_before_dynamic_spinup_mb_calib',
+                        float(mu_star_initial))
+
+            else:
+                raise RuntimeError
         except RuntimeError:
             log.warning('No dynamic spinup could be conducted by using the '
                         f'original mu* ({mu_star_initial}). Therefore the last '
@@ -4935,7 +4953,8 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
                 precision_percent=precision_percent_dyn_spinup,
                 precision_absolute=precision_absolute_dyn_spinup,
                 min_ice_thickness=min_ice_thickness,
-                t_bias_max_step_length=t_bias_max_step_length, maxiter=maxiter,
+                t_bias_max_step_length=t_bias_max_step_length,
+                maxiter=maxiter_dyn_spinup,
                 minimise_for=minimise_for, first_guess_t_bias=t_bias_guess,
                 output_filesuffix=output_filesuffix,
                 store_model_evolution=True, ignore_errors=False,
@@ -4957,13 +4976,12 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
 
         return model, dmdtda_mdl, last_best_t_bias
 
-    def cost_fct(mu_star, model_dynamic_spinup_end, t_bias_guesses,
-                 mismatch_dmdt_percent):
+    def cost_fct(mu_star, model_dynamic_spinup_end, t_bias_guesses):
 
         # actual model run
         model_dynamic_spinup, dmdtda_mdl, last_best_t_bias = \
-            define_new_mu_and_do_inversion_and_dynamic_spinup(mu_star,
-                                                              t_bias_guesses[-1])
+            define_new_mu_and_do_inversion_and_dynamic_spinup(
+                mu_star,t_bias_guesses[-1])
 
         # save final model and last_best_t_bias for later
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
@@ -4971,98 +4989,284 @@ def run_dynamic_spinup_with_mb_calibration(gdir, ref_dmdtda=None, ref_period='',
 
         # calculate the mismatch of dmdtda in percent
         cost = float((dmdtda_mdl - ref_dmdtda) / ref_dmdtda * 100)
-        mismatch_dmdt_percent.append(cost)
-
-        # here we check if we have arrived at the desired precision for dmdtda
-        if np.abs(cost) < precision_percent_dmdtda:
-            cost = 0
 
         return cost
 
     def init_cost_fun():
-        model_dynamic_spinup_end = []
-        t_bias_guesses = [first_guess_t_bias]
-        mismatch_dmdt_percent = []
+        model_dynamic_spinup_end_loc = []
+        t_bias_guesses_loc = [first_guess_t_bias]
 
         def c_fun(mu_star):
-            return cost_fct(mu_star, model_dynamic_spinup_end, t_bias_guesses,
-                            mismatch_dmdt_percent)
+            return cost_fct(mu_star, model_dynamic_spinup_end_loc,
+                            t_bias_guesses_loc)
 
-        return c_fun, model_dynamic_spinup_end, t_bias_guesses, mismatch_dmdt_percent
+        return c_fun, model_dynamic_spinup_end_loc, t_bias_guesses_loc
+
+    # Here start with own spline minimisation algorithm
+    def minimise_with_spline_fit(fct_to_minimise, mu_star_guess, mismatch):
+        # defines limits of mu in accordance to maximal allowed change
+        # between iterations
+        mu_star_limits = [mu_star_initial - mu_star_max_step_length,
+                          mu_star_initial + mu_star_max_step_length]
+
+        # this two variables indicate that the limits were already adapted to
+        # avoid an error
+        was_min_error = False
+        was_max_error = False
+        was_errors = [was_min_error, was_max_error]
+
+        def get_mismatch(mu_star):
+            mu_star = copy.deepcopy(mu_star)
+            # first check if the mu_star is inside limits
+            if mu_star < mu_star_limits[0]:
+                # was the smaller limit already executed, if not first do this
+                if mu_star_limits[0] not in mu_star_guess:
+                    mu_star = copy.deepcopy(mu_star_limits[0])
+                else:
+                    # smaller limit was already used, check if it was
+                    # already newly defined with error
+                    if was_errors[0]:
+                        raise RuntimeError('Not able to minimise without '
+                                           'raising an error at lower limit!')
+                    else:
+                        # ok we set a new lower limit, consider also minimum
+                        # limit
+                        mu_star_limits[0] = max(min_mu_star,
+                                                mu_star_limits[0] -
+                                                mu_star_max_step_length)
+            elif mu_star > mu_star_limits[1]:
+                # was the larger limit already executed, if not first do this
+                if mu_star_limits[1] not in mu_star_guess:
+                    mu_star = copy.deepcopy(mu_star_limits[1])
+                else:
+                    # larger limit was already used, check if it was
+                    # already newly defined with ice free glacier
+                    if was_errors[1]:
+                        raise RuntimeError('Not able to minimise without '
+                                           'raising an error at upper limit!')
+                    else:
+                        # ok we set a new upper limit, consider also maximum
+                        # limit
+                        mu_star_limits[1] = min(max_mu_star,
+                                                mu_star_limits[1] +
+                                                mu_star_max_step_length)
+
+            # now clip mu_star with limits (to be sure)
+            mu_star = np.clip(mu_star, mu_star_limits[0], mu_star_limits[1])
+            if mu_star in mu_star_guess:
+                raise RuntimeError('This mu* was already tried. Probably we are'
+                                   'at one of the max or min limit and still '
+                                   'have no satisfactory mismatch found!')
+
+            # if error during spinup this defines how much mu_star is changed
+            # in the upcoming iteratoins to look for an error free run
+            mu_star_search_change = mu_star_max_step_length / 10
+            # maximum number of changes to look for an error free run
+            max_iterations = int(mu_star_max_step_length /
+                                 mu_star_search_change)
+
+            current_min_error = False
+            current_max_error = False
+            doing_first_guess = (len(mismatch) == 0)
+            iteration = 0
+            current_mu_star = copy.deepcopy(mu_star)
+
+            # in this loop if an error at the limits is raised we go step by
+            # step away from the limits until we are at the initial guess or we
+            # found an error free run
+            while ((current_min_error | current_max_error | iteration == 0) &
+                   (iteration < max_iterations)):
+                try:
+                    tmp_mismatch = fct_to_minimise(mu_star)
+                except RuntimeError as e:
+                    # check if we are at the lower limit
+                    if mu_star == mu_star_limits[0]:
+                        # check if there was already an error at the lower limit
+                        if was_errors[0]:
+                            raise RuntimeError('Second time with error at '
+                                               'lower limit! Dynamic spinup '
+                                               f'error message: {e}')
+                        else:
+                            was_errors[0] = True
+                            current_min_error = True
+
+                    # check if we are at the upperlimit
+                    elif mu_star == mu_star_limits[1]:
+                        # check if there was already an error at the lower limit
+                        if was_errors[1]:
+                            raise RuntimeError('Second time with error at '
+                                               'upper limit! Dynamic spinup '
+                                               f'error message: {e}')
+                        else:
+                            was_errors[1] = True
+                            current_max_error = True
+
+                    if current_min_error:
+                        # currently we searching for a new lower limit with no
+                        # error
+                        mu_star = np.round(mu_star + mu_star_search_change,
+                                           decimals=1)
+                    elif current_max_error:
+                        # currently we searching for a new upper limit with no
+                        # error
+                        mu_star = np.round(mu_star - mu_star_search_change,
+                                           decimals=1)
+
+                    # if we end close to an already executed guess while
+                    # searching for a new limit we quite
+                    if np.isclose(mu_star, mu_star_guess).any():
+                        raise RuntimeError('Not able to further minimise, '
+                                           'return the best we have so far!'
+                                           f'Error message: {e}')
+
+                    if doing_first_guess:
+                        # unfortunately first guess is not working
+                        raise RuntimeError('Dynamic spinup is not working '
+                                           'with first guess! Error '
+                                           f'message: {e}')
+
+                    if mu_star == current_mu_star:
+                        # something unexpected happen so we end here
+                        raise RuntimeError('Unexpected error not at the limits'
+                                           f' of mu. Error Message: {e}')
+
+                iteration += 1
+
+            if iteration >= max_iterations:
+                # ok we were not able to find an mismatch without error
+                if current_min_error:
+                    raise RuntimeError('Not able to find a new lower limit!')
+                elif current_max_error:
+                    raise RuntimeError('Not able to find new upper limit!')
+                else:
+                    raise RuntimeError('Something unexpected happened during '
+                                       'definition of new t_bias limits!')
+            else:
+                # if we found a new limit set it
+                if current_min_error:
+                    mu_star_limits[0] = copy.deepcopy(mu_star)
+                elif current_max_error:
+                    mu_star_limits[1] = copy.deepcopy(mu_star)
+
+            return float(tmp_mismatch), float(mu_star)
+
+        # first guess
+        new_mismatch, new_mu_star = get_mismatch(mu_star_initial)
+        mu_star_guess.append(new_mu_star)
+        mismatch.append(new_mismatch)
+
+        if abs(mismatch[-1]) < precision_percent_dmdtda:
+            return mismatch[-1], new_mu_star
+
+        # second (arbitrary) guess is given depending on the outcome of first
+        # guess, mu_star is changed for percent of mismacth times
+        # mu_star_max_step_length (if mismatch=100% or 150%, next step is
+        # -mu_star_max_step_length; if mismatch=-40%, next step is
+        # 0.4 * mu_star_max_step_length). (-1) as if mismatch is negative we
+        # need a larger mu_star to get closer to 0
+        step = (-1) * mismatch[-1] * mu_star_max_step_length / 100
+        new_mismatch, new_mu_star = get_mismatch(mu_star_guess[0] + step)
+        mu_star_guess.append(new_mu_star)
+        mismatch.append(new_mismatch)
+
+        if abs(mismatch[-1]) < precision_percent_dmdtda:
+            return mismatch[-1], new_mu_star
+
+        # Now start with splin fit for guessing
+        while len(mu_star_guess) < maxiter_mu_star:
+            # get next guess from splin (fit partial linear function to
+            # previously calculated (mismatch, mu_star) pairs and get mu_star
+            # value where mismatch=0 from this fitted curve)
+            sort_index = np.argsort(np.array(mismatch))
+            tck = interpolate.splrep(np.array(mismatch)[sort_index],
+                                     np.array(mu_star_guess)[sort_index],
+                                     k=1)
+            # here we catch interpolation errors (two different mu_star with
+            # same mismatch), could happen if one mu_star was close to a newly
+            # defined limit
+            if np.isnan(tck[1]).any():
+                if was_errors[0]:
+                    raise RuntimeError('Second time with error at lower '
+                                       'limit! (nan in splin fit)')
+                elif was_errors[1]:
+                    raise RuntimeError('Second time with error at upper '
+                                       'limit! (nan in splin fit)')
+                else:
+                    raise RuntimeError('Not able to minimise! Problem is '
+                                       'unknown. (nan in splin fit)')
+            new_mismatch, new_mu_star = get_mismatch(
+                float(interpolate.splev(0, tck)))
+            mu_star_guess.append(new_mu_star)
+            mismatch.append(new_mismatch)
+
+            if abs(mismatch[-1]) < precision_percent_dmdtda:
+                return mismatch[-1], new_mu_star
+
+        # Ok when we end here the spinup could not find satifying match after
+        # maxiter(ations)
+        raise RuntimeError(f'Could not find mismatch smaller '
+                           f'{precision_percent_dmdtda}% (only '
+                           f'{np.min(np.abs(mismatch))}%) in {maxiter_mu_star}'
+                           f'Iterations!')
+
+    # wrapper to get values for intermediate (mismatch, mu_star) guesses if an
+    # error is raised
+    def init_minimiser():
+        mu_star_guess = []
+        mismatch = []
+
+        def minimiser(fct_to_minimise):
+            return minimise_with_spline_fit(fct_to_minimise, mu_star_guess,
+                                            mismatch)
+
+        return minimiser, mu_star_guess, mismatch
 
     # define function for the actual minimisation
-    c_fun, model_dynamic_spinup_end, t_bias_guesses, mismatch_dmdt_percent = init_cost_fun()
+    c_fun, model_dynamic_spinup_end, t_bias_guesses = init_cost_fun()
 
-    # Try out different limits, we expect the new mu_star to be close to the
-    # original one
-    for limit_diff in potential_limit_diff:
-        try:
-            mu_star_final, res = optimize.brentq(c_fun,
-                                                 max(mu_star_initial - limit_diff,
-                                                     min_mu_star),
-                                                 min(mu_star_initial + limit_diff,
-                                                     max_mu_star),
-                                                 full_output=True)
-            if not res.converged:
-                if ignore_errors:
-                    log.warning('No dynamic spinup with mu* calibration has '
-                                'converged (brentq). Therefore a dynamic '
-                                'spinup without a mu* calibration is tried.')
-                    model_to_return = do_dynamic_spinup_without_mu_star_calibration()
-                    return model_to_return
+    # define minimiser
+    minimise_given_fct, mu_star_guesses, mismatch_dmdtda = init_minimiser()
+
+    try:
+        final_mismatch, final_mu_star = minimise_given_fct(c_fun)
+    except RuntimeError as e:
+        # something happened during minimisation, if there where some
+        # successful runs we return the one with the best mismatch, otherwise
+        # we conduct just a run with no dynamic spinup
+        if len(mismatch_dmdtda) == 0:
+            # we conducted no successful run, so run without dynamic spinup
+            if ignore_errors:
+                log.workflow('Dynamic spinup not successful. Error message: '
+                             f'{e}')
+                model_return = do_dynamic_spinup_without_mu_star_calibration(
+                    mu_star=mu_star_initial, do_dynamic_spinup=False)
+                return model_return
             else:
-                break
-        except ValueError as e:
-            if 'f(a) and f(b) must have different signs' in f'{e}':
-                # check if we are at the maximum limits for mu_star
-                if limit_diff == max(potential_limit_diff):
-                    if ignore_errors:
-                        log.warning('No dynamic spinup with mu* calibration '
-                                    'could be conducted as their is no sign '
-                                    'change even with limits of +/- '
-                                    f'{limit_diff} around the original mu* '
-                                    f'({mu_star_initial}), dynamic spinup '
-                                    'with no mu* star calibration is tried, '
-                                    'using original mu*.')
-                        model_to_return = do_dynamic_spinup_without_mu_star_calibration()
-                        return model_to_return
-                    raise RuntimeError('Exceeding mu* bounds in dynamic mu* '
-                                       'calibration. bounds = original mu* '
-                                       f'({mu_star_initial}) +/- max '
-                                       f'difference ({limit_diff}). Maybe can '
-                                       'try with large limits again.')
-                # if we are not at the limits lets try with new limits in the
-                # next loop
-                continue
-            else:
-                raise ValueError(e)
-        except RuntimeError as e:
-            if 'Dynamic spinup raised error!' in f'{e}':
-                if limit_diff == potential_limit_diff[-1]:
-                    # ok unfortunately we tried all limits for mu with no success
-                    if ignore_errors:
-                        log.warning('Error in dynamic spinup with mu* '
-                                    'calibraion occured, next dynamic spinup '
-                                    'without mu* calibration is tried.')
-                        model_to_return = do_dynamic_spinup_without_mu_star_calibration()
-                        return model_to_return
-                    raise RuntimeError(e)
-                # ok we try again with other limits as there are some left
-                continue
-            else:
-                raise RuntimeError(e)
+                raise RuntimeError('Dynamic spinup with mb calibration was '
+                                   f'not successful! Error Message: {e}')
+        else:
+            log.workflow('Dynamic spinup not successful. Error message: '
+                         f'{e}')
+            # there where some successful runs so we return the one with the
+            # smallest mismatch of dmdtda
+            mu_star_best = np.array(mu_star_guesses)[
+                np.argmin(np.array(mismatch_dmdtda))]
+            model_return = do_dynamic_spinup_without_mu_star_calibration(
+                mu_star=mu_star_best, do_dynamic_spinup=True,
+                mismatch_final=np.min(mismatch_dmdtda))
+            return model_return
 
     # check that new mu star is correctly saved in gdir
-    assert mu_star_final == gdir.read_json('local_mustar')['mu_star_glacierwide']
+    assert final_mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']
 
     # hurray, dynamic spinup with mb calibration successful
     gdir.add_to_diagnostics('run_dynamic_spinup_with_mb_calibration_success',
-                            True)
+                            1)
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_spinup_percent',
-                            float(mismatch_dmdt_percent[-1]))
+                            float(final_mismatch))
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_spinup_reference',
                             float(ref_dmdtda))
-    gdir.add_to_diagnostics('mu_star_dynamic_spinup', float(mu_star_final))
+    gdir.add_to_diagnostics('mu_star_dynamic_spinup', float(final_mu_star))
     gdir.add_to_diagnostics('mu_star_before_dynamic_spinup_mb_calib',
                             float(mu_star_initial))
     gdir.add_to_diagnostics('dynamic_spinup_runs_mb_calib',
