@@ -4812,7 +4812,8 @@ def run_dynamic_spinup_with_mb_calibration(
     # a model run to ye with no dynamic spinup is saved.
     def do_dynamic_spinup_without_mu_star_calibration(mu_star=mu_star_initial,
                                                       do_dynamic_spinup=True,
-                                                      mismatch_final=None):
+                                                      mismatch_final=None,
+                                                      dmdtda_initial=None):
         gdir.add_to_diagnostics('run_dynamic_spinup_with_mb_calibration_success',
                                 0)
         # revert mu star if neccessary
@@ -4866,6 +4867,9 @@ def run_dynamic_spinup_with_mb_calibration(
                     gdir.add_to_diagnostics(
                         'dmdtda_mismatch_dynamic_spinup_reference',
                         float(ref_dmdtda))
+                    gdir.add_to_diagnostics(
+                        'dmdtda_mismatch_with_initial_mu_star_percent',
+                        float(dmdtda_initial))
                     gdir.add_to_diagnostics('mu_star_dynamic_spinup',
                                             float(mu_star))
                     gdir.add_to_diagnostics(
@@ -5079,6 +5083,18 @@ def run_dynamic_spinup_with_mb_calibration(
                 try:
                     tmp_mismatch = fct_to_minimise(mu_star)
                 except RuntimeError as e:
+                    # If it is only a dynamic spinup error that the maxiter was
+                    # reached without finding a smaller mismatch we can stop,
+                    # and let the user now he probably could try again with a
+                    # larger maximum iteration number for dynamic spinup
+                    if 'Could not find mismatch smaller' in f'{e}':
+                        raise RuntimeError('Stopped as dynamic spinup could'
+                                           'not find a small enough mismatch! '
+                                           'The best guess so far will be '
+                                           'saved, but you also could try '
+                                           'again with a larger '
+                                           'maxiter_dyn_spinup. (Error '
+                                           f'Message: {e})')
                     # check if we are at the lower limit
                     if mu_star == mu_star_limits[0]:
                         # check if there was already an error at the lower limit
@@ -5249,11 +5265,12 @@ def run_dynamic_spinup_with_mb_calibration(
                          f'{e}')
             # there where some successful runs so we return the one with the
             # smallest mismatch of dmdtda
-            mu_star_best = np.array(mu_star_guesses)[
-                np.argmin(np.array(mismatch_dmdtda))]
+            min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
+            mu_star_best = np.array(mu_star_guesses)[min_mismatch_index]
             model_return = do_dynamic_spinup_without_mu_star_calibration(
                 mu_star=mu_star_best, do_dynamic_spinup=True,
-                mismatch_final=np.min(mismatch_dmdtda))
+                mismatch_final=np.array(mismatch_dmdtda)[min_mismatch_index],
+                dmdtda_initial=mismatch_dmdtda[0])
             return model_return
 
     # check that new mu star is correctly saved in gdir
