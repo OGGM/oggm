@@ -1382,7 +1382,8 @@ def srtm_zone(lon_ex, lat_ex):
         for lat in lat_ex:
             dx = lon - srtm_x0
             dy = lat - srtm_y0
-            assert dy < 0
+            if dy > 0:
+                continue
             zx = np.ceil(dx / srtm_dx)
             zy = np.ceil(dy / srtm_dy)
             zones.append('{:02.0f}_{:02.0f}'.format(zx, zy))
