@@ -334,9 +334,9 @@ def define_glacier_region(gdir, entity=None, source=None):
     # Open DEM
     # We test DEM availability for glacier only (maps can grow big)
     if not is_dem_source_available(source, *gdir.extent_ll):
-        log.warning('Source: {} may not be available for glacier {} with '
-                    'border {}'.format(source, gdir.rgi_id,
-                                       cfg.PARAMS['border']))
+        raise InvalidWorkflowError(f'Source: {source} is not available for '
+                                   f'glacier {gdir.rgi_id} with border '
+                                   f"{cfg.PARAMS['border']}")
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_id=gdir.rgi_id,
                                          dx_meter=dx,
