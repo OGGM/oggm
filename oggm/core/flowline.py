@@ -4235,7 +4235,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
             # if error during spinup (ice_free or out_of_domain) this defines
             # how much t_bias is changed to look for an error free glacier spinup
-            t_bias_search_change = 0.1
+            t_bias_search_change = t_bias_max_step_length / 10
             # maximum number of changes to look for an error free glacier
             max_iterations = int(t_bias_max_step_length / t_bias_search_change)
             is_out_of_domain = True
