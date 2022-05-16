@@ -4022,7 +4022,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
     def save_model_without_dynamic_spinup():
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
-        yr_use = np.clip(yr_rgi, yr_min, None)
+        yr_use = np.clip(spinup_start_yr, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
                                                    y0=yr_use,
@@ -4418,8 +4418,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
         # second (arbitrary) guess is given depending on the outcome of first
         # guess, when mismatch is 100% t_bias is changed for
-        # t_bias_max_step_length
-        step = mismatch[-1] * t_bias_max_step_length / 100
+        # t_bias_max_step_length, but at least the second guess is 0.2 °C away
+        # from the first guess
+        step = np.sign(mismatch[-1]) * max(np.abs(mismatch[-1]) *
+                                           t_bias_max_step_length / 100,
+                                           0.2)
         new_mismatch, new_t_bias = get_mismatch(t_bias_guess[0] + step)
         t_bias_guess.append(new_t_bias)
         mismatch.append(new_mismatch)
