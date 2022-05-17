@@ -4822,7 +4822,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
         raise RuntimeError(f'Dynamic spinup raised error! (Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix)
+    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                  path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -5104,7 +5105,8 @@ def dynamic_mu_star_run(
                            f'(Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix)
+    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                  path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
