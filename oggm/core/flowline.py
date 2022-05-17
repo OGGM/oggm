@@ -3787,8 +3787,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     ods.to_netcdf(fpath, mode='a')
 
 
-# TODO: this is done for debugging reasons!!
-# @entity_task(log)
+@entity_task(log)
 def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
