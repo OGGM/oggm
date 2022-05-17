@@ -1015,6 +1015,10 @@ class FlowlineModel(object):
                                      'mass balance model with an unambiguous '
                                      'hemisphere.')
 
+        # This is only needed for consistancy to be able to merge two runs
+        if dynamic_spinup_min_ice_thick is None:
+            dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+
         # Do we have a spinup?
         do_fixed_spinup = fixed_geometry_spinup_yr is not None
         y0 = fixed_geometry_spinup_yr if do_fixed_spinup else self.yr
@@ -3785,14 +3789,14 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
 
 # TODO: this is done for debugging reasons!!
 # @entity_task(log)
-def run_dynamic_spinup(gdir, init_model_filesuffix=None,
+def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
                        spinup_period=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
-                       precision_absolute=1, min_ice_thickness=10,
+                       precision_absolute=1, min_ice_thickness=None,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
@@ -3814,6 +3818,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     init_model_filesuffix : str or None
         if you want to start from a previous model run state. This state
         should be at time yr_rgi_date.
+    init_model_yr : int or None
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     init_model_fls : []
         list of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory).
@@ -3941,6 +3948,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
     yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
 
+    if min_ice_thickness is None:
+        min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+
     # check provided maximum start year here, and change min_spinup_period
     if spinup_start_yr_max is not None:
         if spinup_start_yr_max < yr_min:
@@ -3961,6 +3971,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         fp = gdir.get_filepath('model_geometry',
                                filesuffix=init_model_filesuffix)
         fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
         init_model_fls = fmod.fls
 
     if init_model_fls is None:
@@ -4022,7 +4035,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
     def save_model_without_dynamic_spinup():
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
-        yr_use = np.clip(spinup_start_yr, yr_min, None)
+        yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
                                                    y0=yr_use,
@@ -5012,6 +5025,162 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback(
     return model_end
 
 
+def dynamic_mu_star_run(
+        gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
+        output_filesuffix='', evolution_model=FluxBasedModel,
+        set_local_variables=False, get_local_variables=False, **kwargs):
+    """
+    This function is one option for a 'run_function' for the
+    'dynamic_mu_star_calibration' function (the corresponding
+    'fallback_function' is 'dynamic_mu_star_run_fallback'). It is meant to
+    define a new mu_star in the given gdir and conduct a
+    'run_from_climate_data' run between ys and ye and return the geodetic mass
+    balance (units: kg m-2 yr-1) of the period yr0_ref_mb and yr1_ref_mb.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    mu_star : float
+        the mu_star used for this run
+    yr0_ref_mb : int
+        the start year of the geodetic mass balance
+    yr1_ref_mb : int
+        the end year of the geodetic mass balance
+    fls_init : []
+        List of flowlines to use to initialise the model
+    ys : int
+        start year of the complete run, must by smaller or equal y0_ref_mb
+    ye : int
+        end year of the complete run, must be smaller or equal y1_ref_mb
+    output_filesuffix : str
+        For the output file.
+        Default is ''
+    evolution_model : class:oggm.core.FlowlineModel
+        Evolution model to use.
+        Default is FluxBasedModel
+    set_local_variables : bool
+        Not needed in this function. Only here to be confirm with the use of
+        this function in 'dynamic_mu_star_calibration'.
+    get_local_variables : bool
+        Not needed in this function. Only here to be confirm with the use of
+        this function in 'dynamic_mu_star_calibration'.
+    kwargs : dict
+        kwargs to pass to the evolution_model instance
+
+    Returns
+    -------
+    :py:class:`oggm.core.flowline.evolution_model`, float
+        The final model after the run and the calculated geodetic mass balance
+    """
+
+    if set_local_variables:
+        # No local variables needed in this function
+        return None
+
+    if get_local_variables:
+        return None
+
+    # Here we start with the actual model run
+    # define new mu for gdir
+    df = dict()
+    df['rgi_id'] = gdir.rgi_id
+    df['t_star'] = np.nan
+    df['bias'] = 0
+    df['mu_star_per_flowline'] = [mu_star] * len(fls_init)
+    df['mu_star_glacierwide'] = mu_star
+    df['mu_star_flowline_avg'] = mu_star
+    df['mu_star_allsame'] = True
+    gdir.write_json(df, 'local_mustar')
+
+    # conduct model run
+    try:
+        model = run_from_climate_data(gdir, ys=ys, ye=ye,
+                                      output_filesuffix=output_filesuffix,
+                                      init_model_fls=fls_init,
+                                      evolution_model=evolution_model,
+                                      **kwargs)
+    except RuntimeError as e:
+        raise RuntimeError(f'run_from_climate_data raised error! '
+                           f'(Message: {e})')
+
+    # calculate dmdtda from previous simulation here
+    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix)
+    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
+                   ds.volume.loc[yr0_ref_mb].values) /
+                  gdir.rgi_area_m2 /
+                  (yr1_ref_mb - yr0_ref_mb) *
+                  cfg.PARAMS['ice_density'])
+    # TODO: maybe use density conversion of 850
+
+    return model, dmdtda_mdl
+
+
+def dynamic_mu_star_run_fallback(
+        gdir, mu_star, fls_init, ys, ye, local_variables, output_filesuffix='',
+        evolution_model=FluxBasedModel, **kwargs):
+    """
+    This is the fallback function corresponding to the function
+    'dynamic_mu_star_run', which are provided to 'dynamic_mu_star_calibration'.
+    It is used if the run_function fails and if 'ignore_error=True' in
+    'dynamic_mu_star_calibration'. It sets mu_star and conduct a
+    run_from_climate_data run from ys to ye.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    mu_star : float
+        the mu_star used for this run
+    fls_init : []
+        List of flowlines to use to initialise the model
+    ys : int
+        start year of the run
+    ye : int
+        end year of the run
+    local_variables : []
+        Not needed in this function. Only here to be confirm with the use of
+        this function in 'dynamic_mu_star_calibration'.
+    output_filesuffix : str
+        For the output file.
+        Default is ''
+    evolution_model : class:oggm.core.FlowlineModel
+        Evolution model to use.
+        Default is FluxBasedModel
+    kwargs : dict
+        kwargs to pass to the evolution_model instance
+
+     Returns
+    -------
+    :py:class:`oggm.core.flowline.evolution_model`
+        The final model after the run.
+    """
+
+    # define new mu for gdir
+    df = dict()
+    df['rgi_id'] = gdir.rgi_id
+    df['t_star'] = np.nan
+    df['bias'] = 0
+    df['mu_star_per_flowline'] = [mu_star] * len(fls_init)
+    df['mu_star_glacierwide'] = mu_star
+    df['mu_star_flowline_avg'] = mu_star
+    df['mu_star_allsame'] = True
+    gdir.write_json(df, 'local_mustar')
+
+    # conduct model run
+    try:
+        model = run_from_climate_data(gdir, ys=ys, ye=ye,
+                                      output_filesuffix=output_filesuffix,
+                                      init_model_fls=fls_init,
+                                      evolution_model=evolution_model,
+                                      **kwargs)
+    except RuntimeError as e:
+        raise RuntimeError(f'In fallback function run_from_climate_data '
+                           f'raised error! (Message: {e})')
+
+    return model
+
+
 @entity_task(log, writes=['inversion_flowlines'])
 def dynamic_mu_star_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None, ref_period='',
@@ -5022,7 +5191,7 @@ def dynamic_mu_star_calibration(
         kwargs_run_function=None,
         fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
         kwargs_fallback_function=None, init_model_filesuffix=None,
-        init_model_fls=None
+        init_model_yr=None, init_model_fls=None
         ):
     """Calibrate mu_star to match a geodetic mass balance incorporating a
     dynamic model run.
@@ -5112,6 +5281,9 @@ def dynamic_mu_star_calibration(
         If you want to start from a previous model run state. This state
         should be at time yr_rgi_date.
         Default is None
+    init_model_yr : int or None
+        the year of the initial run you want to start from. The default
+        is to take the last year of the simulation.
     init_model_fls : []
         List of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory).
@@ -5136,7 +5308,7 @@ def dynamic_mu_star_calibration(
 
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     if sm != 1 and not ignore_hydro_months:
-        raise InvalidParamsError('run_dynamic_spinup_with_mb_calibration makes '
+        raise InvalidParamsError('dynamic_mu_star_calibration makes '
                                  'more sense when applied on calendar years '
                                  "(PARAMS['hydro_month_nh']=1 and "
                                  "`PARAMS['hydro_month_sh']=1). If you want "
@@ -5201,6 +5373,9 @@ def dynamic_mu_star_calibration(
         fp = gdir.get_filepath('model_geometry',
                                filesuffix=init_model_filesuffix)
         fmod = FileModel(fp)
+        if init_model_yr is None:
+            init_model_yr = fmod.last_yr
+        fmod.run_until(init_model_yr)
         init_model_fls = fmod.fls
 
     if init_model_fls is None:
@@ -5223,7 +5398,10 @@ def dynamic_mu_star_calibration(
             # provided run_function, so we us the fallback_function
             gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_success',
                                     0)
-            local_variables = run_function(gdir, get_local_variables=True)
+            local_variables = run_function(gdir, mu_star=None,
+                                           yr0_ref_mb=None, yr1_ref_mb=None,
+                                           fls_init=None, ys=None, ye=None,
+                                           get_local_variables=True)
             model = fallback_function(gdir=gdir, mu_star=mu_star,
                                       fls_init=fls_init, ys=ys, ye=ye,
                                       local_variables=local_variables,
@@ -5556,8 +5734,8 @@ def dynamic_mu_star_calibration(
                 raise RuntimeError('Dynamic mu star calibration was not '
                                    f'successful! Error Message: {e}')
         else:
-            log.workflow('Dynamic spinup not successful. Error message: '
-                         f'{e}')
+            log.workflow('Dynamic mu star calibration not successful. Error '
+                         f'message: {e}')
             # there where some successful runs so we return the one with the
             # smallest mismatch of dmdtda
             min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
@@ -5580,6 +5758,8 @@ def dynamic_mu_star_calibration(
         float(precision_percent_dmdtda))
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_percent',
                             float(final_mismatch))
+    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_mu_star_percent',
+                            float(mismatch_dmdtda[0]))
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_reference',
                             float(ref_dmdtda))
     gdir.add_to_diagnostics('mu_star_dynamic_calibration', float(final_mu_star))

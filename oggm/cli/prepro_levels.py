@@ -20,6 +20,9 @@ import oggm.cfg as cfg
 from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
+from oggm.core.flowline import dynamic_mu_star_run, dynamic_mu_star_run_fallback, \
+    dynamic_mu_star_run_with_dynamic_spinup_and_inversion, \
+    dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback
 
 # Module logger
 from oggm.utils import get_prepro_base_url, file_downloader
@@ -190,7 +193,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                  "['fl_sia', 'massredis'].")
 
     if dynamic_spinup and dynamic_spinup not in ['area', 'volume',
-                                                 'area/dmdtda', 'volume/dmdtda']:
+                                                 'area/dmdtda/atonce',
+                                                 'volume/dmdtda/atonce',
+                                                 'area/before/dmdtda',
+                                                 'volume/before/dmdtda']:
         raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
                                  "not supported")
 
@@ -651,12 +657,49 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          delete_input=True)
         else:
             minimise_for = dynamic_spinup.split('/')[0]
-            workflow.execute_entity_task(tasks.run_dynamic_spinup_with_mb_calibration,
-                                         gdirs, evolution_model=evolution_model,
-                                         minimise_for=minimise_for,
-                                         spinup_start_yr=dynamic_spinup_start_year,
-                                         output_filesuffix='_historical_spinup_mb_calib',
-                                         ye=ye, max_mu_star=1000.)
+            if 'atonce' in dynamic_spinup:
+                workflow.execute_entity_task(
+                    tasks.dynamic_mu_star_calibration, gdirs,
+                    evolution_model=evolution_model, minimise_for=minimise_for,
+                    spinup_start_yr=dynamic_spinup_start_year,
+                    run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+                    kwargs_run_function={'evolution_model': evolution_model,
+                                         'minimise_for': minimise_for},
+                    fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+                    kwargs_fallback_function={'evolution_model': evolution_model,
+                                              'minimise_for': minimise_for},
+                    output_filesuffix='_historical_spinup_mb_calib', ye=ye,
+                    max_mu_star=1000.)
+            elif 'before' in dynamic_spinup:
+                # first do dynamic spinup and set rgi date to 2000
+                workflow.execute_entity_task(tasks.run_dynamic_spinup, gdirs,
+                                             evolution_model=evolution_model,
+                                             minimise_for=minimise_for,
+                                             spinup_start_yr=dynamic_spinup_start_year,
+                                             yr_rgi=2000,
+                                             output_filesuffix='_dynamic_spinup')
+                # afterwards dynamical calibration of mu star run to the end of
+                # given climate data
+                ye = gdirs[0].get_climate_info()['baseline_hydro_yr_1'] + 1
+                workflow.execute_entity_task(tasks.dynamic_mu_star_calibration, gdirs,
+                                             max_mu_star=1000.,
+                                             run_function=dynamic_mu_star_run,
+                                             kwargs_run_function={
+                                                 'evolution_model': evolution_model},
+                                             fallback_function=dynamic_mu_star_run_fallback,
+                                             kwargs_fallback_function={
+                                                 'evolution_model': evolution_model},
+                                             output_filesuffix='_dynamic_mu_calib',
+                                             ys=2000, ye=ye,
+                                             init_model_filesuffix='_dynamic_spinup'
+                                             )
+                # merge both dynamic calibrations together
+                workflow.execute_entity_task(tasks.merge_consecutive_run_outputs,
+                                             gdirs,
+                                             input_filesuffix_1='_dynamic_spinup',
+                                             input_filesuffix_2='_dynamic_mu_calib',
+                                             output_filesuffix='_dynamic_spinup_mu_calib',
+                                             delete_input=True)
 
     workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                  min_ys=y0, ye=ye,
@@ -675,9 +718,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             utils.compile_run_output(gdirs, path=opath,
                                      input_filesuffix='_historical_spinup')
         else:
-            opath = os.path.join(sum_dir, f'historical_spinup_mb_calib_run_output_{rgi_reg}.nc')
-            utils.compile_run_output(gdirs, path=opath,
-                                     input_filesuffix='_historical_spinup_mb_calib')
+            if 'atonce' in dynamic_spinup:
+                opath = os.path.join(sum_dir,
+                                     f'historical_spinup_mb_calib_run_output_{rgi_reg}.nc')
+                utils.compile_run_output(gdirs, path=opath,
+                                         input_filesuffix='_historical_spinup_mb_calib')
+            elif 'before' in dynamic_spinup:
+                opath = os.path.join(sum_dir,
+                                     f'dynamic_spinup_mu_calib_run_output_{rgi_reg}.nc')
+                utils.compile_run_output(gdirs, path=opath,
+                                         input_filesuffix='_dynamic_spinup_mu_calib')
 
     # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
@@ -820,8 +870,9 @@ def parse_args(args):
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic_spinup', type=str, default='',
                         help="include a dynamic spinup for matching 'area' or "
-                             "'volume' at the RGI-date or 'area/dhdtda' or "
-                             "'volume/dhdtda'.")
+                             "'volume' at the RGI-date or 'area/dmdtda/atonce' "
+                             "or 'volume/dmdtda/atonce' or "
+                             "'area/before/dmdtda' or 'volume/before/dmdtda'.")
     parser.add_argument('--dynamic_spinup_start_year', type=int, default=1979,
                         help="if --dynamic_spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
