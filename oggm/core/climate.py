@@ -184,6 +184,14 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         from oggm.shop.histalp import process_histalp_data
         process_histalp_data(gdir, output_filesuffix=output_filesuffix,
                              y0=y0, y1=y1, **kwargs)
+    elif baseline == 'W5E5':
+        from oggm.shop.w5e5 import process_w5e5_data
+        process_w5e5_data(gdir, output_filesuffix=output_filesuffix,
+                          y0=y0, y1=y1, **kwargs)
+    elif baseline == 'GSWP3_W5E5':
+        from oggm.shop.w5e5 import process_gswp3_w5e5_data
+        process_gswp3_w5e5_data(gdir, output_filesuffix=output_filesuffix,
+                          y0=y0, y1=y1, **kwargs)
     elif baseline in ['ERA5', 'ERA5L', 'CERA', 'ERA5dr', 'ERA5L-HMA']:
         from oggm.shop.ecmwf import process_ecmwf_data
         process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
@@ -480,7 +488,8 @@ def historical_climate_qc(gdir):
         gdir.add_to_diagnostics('ref_hgt_qc_diff', int(ref_hgt - prev_ref_hgt))
 
 
-def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
+def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None,
+                         prcp_fac='default'):
     """Mass balance climate of the glacier at a specific height
 
     Reads the glacier's monthly climate data file and computes the
@@ -502,7 +511,10 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     year_range : [int, int], optional
         Provide a [y0, y1] year range to get the data for specific
         (hydrological) years only. Easier to use than the time bounds above.
-
+    prcp_fac : 'default' or float
+        if set to 'default' which is the default option, just uses the value
+        from cfg.PARAMS['prcp_scaling_factor'], otherwise it uses the given
+        prcp_fac
     Returns
     -------
     (time, tempformelt, prcpsol)::
@@ -520,13 +532,17 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
             # hydrological year is the calendar year!!!
             t0 = datetime.datetime(year_range[0], sm, 1)
         t1 = datetime.datetime(year_range[1], em, 1)
-        return mb_climate_on_height(gdir, heights, time_range=[t0, t1])
+        return mb_climate_on_height(gdir, heights, time_range=[t0, t1],
+                                    prcp_fac=prcp_fac)
 
     # Parameters
     temp_all_solid = cfg.PARAMS['temp_all_solid']
     temp_all_liq = cfg.PARAMS['temp_all_liq']
     temp_melt = cfg.PARAMS['temp_melt']
-    prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+    if prcp_fac == 'default':
+        prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+    else:
+        prcp_fac = prcp_fac
     default_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
 
@@ -590,7 +606,8 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
 
 
 def mb_yearly_climate_on_height(gdir, heights, *,
-                                year_range=None, flatten=False):
+                                year_range=None, flatten=False,
+                                prcp_fac='default'):
     """Yearly mass balance climate of the glacier at a specific height
 
     See also: mb_climate_on_height
@@ -607,6 +624,10 @@ def mb_yearly_climate_on_height(gdir, heights, *,
     flatten : bool
         for some applications (glacier average MB) it's ok to flatten the
         data (average over height) prior to annual summing.
+    prcp_fac : 'default' or float
+        if set to 'default' which is the default option, just uses the value
+        from cfg.PARAMS['prcp_scaling_factor'], otherwise it uses the given
+        prcp_fac
 
     Returns
     -------
@@ -619,7 +640,8 @@ def mb_yearly_climate_on_height(gdir, heights, *,
     """
 
     time, temp, prcp = mb_climate_on_height(gdir, heights,
-                                            year_range=year_range)
+                                            year_range=year_range,
+                                            prcp_fac=prcp_fac)
 
     ny, r = divmod(len(time), 12)
     if r != 0:
@@ -648,7 +670,7 @@ def mb_yearly_climate_on_height(gdir, heights, *,
     return years, temp_yr, prcp_yr
 
 
-def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
+def mb_yearly_climate_on_glacier(gdir, *, year_range=None, prcp_fac='default'):
     """Yearly mass balance climate at all glacier heights,
     multiplied with the flowlines widths. (all in pix coords.)
 
@@ -661,6 +683,10 @@ def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
     year_range : [int, int], optional
         Provide a [y0, y1] year range to get the data for specific
         (hydrological) years only.
+    prcp_fac : 'default' or float
+        if set to 'default' which is the default option, just uses the value
+        from cfg.PARAMS['prcp_scaling_factor'], otherwise it uses the given
+        prcp_fac
 
     Returns
     -------
@@ -680,7 +706,8 @@ def mb_yearly_climate_on_glacier(gdir, *, year_range=None):
 
     years, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
                                                     year_range=year_range,
-                                                    flatten=False)
+                                                    flatten=False,
+                                                    prcp_fac=prcp_fac)
 
     temp = np.average(temp, axis=0, weights=widths)
     prcp = np.average(prcp, axis=0, weights=widths)
@@ -1078,7 +1105,7 @@ def _mu_star_per_minimization(x, fls, cmb, temp, prcp, widths):
 
 def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
                                    force_mu=None, min_mu_star=None,
-                                   max_mu_star=None):
+                                   max_mu_star=None, prcp_fac='default'):
 
     # Do we have a calving glacier? This is only for the first call!
     # The calving mass balance is distributed over the valid tributaries of the
@@ -1098,7 +1125,8 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
 
     _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
                                                 year_range=yr_range,
-                                                flatten=False)
+                                                flatten=False,
+                                                prcp_fac=prcp_fac)
 
     if force_mu is None:
         try:
@@ -1131,7 +1159,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
     for fl in fls:
         y, t, p = mb_yearly_climate_on_height(gdir, fl.surface_h,
                                               year_range=yr_range,
-                                              flatten=False)
+                                              flatten=False, prcp_fac=prcp_fac)
         mu = fl.mu_star if fl.mu_star_is_valid else mu_star
         fl.set_apparent_mb(np.mean(p, axis=1) - mu*np.mean(t, axis=1),
                            mu_star=mu)
@@ -1166,7 +1194,8 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
             _recursive_mu_star_calibration(gdir, fls, t_star,
                                            first_call=first_call,
                                            min_mu_star=min_mu_star,
-                                           max_mu_star=max_mu_star)
+                                           max_mu_star=max_mu_star,
+                                           prcp_fac=prcp_fac)
 
     # At this stage we are good
     for fl in fls:
@@ -1312,7 +1341,8 @@ def mu_star_calibration_from_geodetic_mb(gdir,
                                          max_height_change_for_corr=3000,
                                          ignore_hydro_months=False,
                                          min_mu_star=None,
-                                         max_mu_star=None):
+                                         max_mu_star=None,
+                                         prcp_fac='default'):
     """Compute the flowlines' mu* from the reference geodetic MB data.
 
     This is similar to mu_star_calibration but using the reference geodetic
@@ -1336,6 +1366,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         defaults to cfg.PARAMS['min_mu_star']
     max_mu_star: bool, optional
         defaults to cfg.PARAMS['max_mu_star']
+
     """
 
     # mu* constraints
@@ -1383,10 +1414,33 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     for fl in fls:
         heights = np.append(heights, fl.surface_h)
         widths = np.append(widths, fl.widths)
-
+    if prcp_fac == 'from_winter_prcp':
+        if 'W5E5' not in cfg.PARAMS['baseline_climate']:
+            raise InvalidWorkflowError('prcp_fac from_winter_prcp is only compatible with'
+                                       'the W5E5 climate dataset!')
+        assert ref_period == '2000-01-01_2020-01-01', 'need full ref_period for from_winter_prcp'
+        # from MB sandbox calibration to winter MB
+        # using t_melt=-1, cte lapse rate, monthly resolution
+        a_log_multiplied = -1.0614
+        b_intercept = 3.9200
+        def log_func(x, a, b):
+            r = a * np.log(x) + b
+            # don't allow extremely low/high prcp. factors!!!
+            if np.shape(r) == ():
+                if r > 10:
+                    r = 10
+                if r < 0.1:
+                    r = 0.1
+            else:
+                r[r > 10] = 10
+                r[r < 0.1] = 0.1
+            return r
+        w_prcp = utils.climate_statistics(gdir, winter_daily_mean_prcp=True)['winter_daily_mean_prcp_1979_2019']
+        prcp_fac = log_func(w_prcp, a_log_multiplied, b_intercept)
     _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
                                                 year_range=yr_range,
-                                                flatten=False)
+                                                flatten=False,
+                                                prcp_fac=prcp_fac)
 
     # Get the reference data
     if ref_mb is None:
@@ -1429,7 +1483,8 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         # Read timeseries again after reset
         _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
                                                     year_range=yr_range,
-                                                    flatten=False)
+                                                    flatten=False,
+                                                    prcp_fac=prcp_fac)
 
         # Check in which direction we should correct the temp
         _lim0 = _mu_star_per_minimization(min_mu_star, fls, ref_mb, temp,
@@ -1453,7 +1508,8 @@ def mu_star_calibration_from_geodetic_mb(gdir,
             # Read timeseries
             _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
                                                         year_range=yr_range,
-                                                        flatten=False)
+                                                        flatten=False,
+                                                        prcp_fac=prcp_fac)
 
             try:
                 mu_star = optimize.brentq(_mu_star_per_minimization,
@@ -1511,6 +1567,8 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     df['mu_star_glacierwide'] = mu_star
     df['mu_star_flowline_avg'] = mu_star
     df['mu_star_allsame'] = True
+    if prcp_fac != 'default':
+        df['prcp_fac_from_winter_prcp'] = prcp_fac
     # Write
     gdir.write_json(df, 'local_mustar')
 
@@ -1606,7 +1664,11 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     if mb_model is None:
         from oggm.core.massbalance import MultipleFlowlineMassBalance
         mb_model = MultipleFlowlineMassBalance(gdir, use_inversion_flowlines=True)
-
+        try:
+            pf = gdir.read_json('local_mustar')['prcp_fac_from_winter_prcp']
+            mb_model.prcp_fac = pf
+        except KeyError:
+            pass
     if mb_years is None:
         mb_years = cfg.PARAMS['geodetic_mb_period']
         y0, y1 = mb_years.split('_')
@@ -1717,3 +1779,406 @@ def compute_ref_t_stars(gdirs):
                                'ref_tstars_params.json')
     with open(params_file, 'w') as fp:
         json.dump({k: cfg.PARAMS[k] for k in MB_PARAMS}, fp)
+
+
+######### geodetic and winter MB match ...
+
+# def calibrate_to_geodetic_bias_winter_mb(gdir, climate_type='W5E5',
+#                                          temp_bias=0, input_fs=''):
+#
+#     """
+#     todo: make documentation
+#
+#     Parameters
+#     ----------
+#     gdir
+#     climate_type
+#     temp_bias
+#     input_fs : str
+#         climate input filesuffix, default is ''.
+#
+#     Returns
+#     -------
+#
+#     """
+#
+#     pd_geodetic_all = utils.get_geodetic_mb_dataframe()
+#     pd_geodetic = pd_geodetic_all.loc[pd_geodetic_all.period == '2000-01-01_2020-01-01']
+#     mb_geodetic = pd_geodetic.loc[gdir.rgi_id].dmdtda * 1000
+#
+#
+#     mbdf = gdir.get_ref_mb_data(input_filesuffix=input_fs)
+#     ys_glac = mbdf.index.values
+#     mb_glaciological = mbdf['ANNUAL_BALANCE']
+#
+#     oggm_updated = False
+#     if oggm_updated:
+#         _, pathi = utils.get_wgms_files()
+#         pd_mb_overview = pd.read_csv(
+#             pathi[:-len('/mbdata')] + '/mb_overview_seasonal_mb_time_periods_20220301.csv',
+#             index_col='Unnamed: 0')
+#     else:
+#         # path_mbsandbox = MBsandbox.__file__[:-len('/__init__.py')]
+#         # pd_mb_overview = pd.read_csv(path_mbsandbox + '/data/mb_overview_seasonal_mb_time_periods_20220301.csv',
+#         #                            index_col='Unnamed: 0')
+#         # pd_wgms_data_stats = pd.read_csv(path_mbsandbox + '/data/wgms_data_stats_20220301.csv',
+#         #                                 index_col='Unnamed: 0')
+#
+#         # path_mbsandbox = MBsandbox.__file__[:-len('/__init__.py')]
+#         # pd_mb_overview = pd.read_csv(path_mbsandbox + '/data/mb_overview_seasonal_mb_time_periods_20220301.csv',
+#         #                            index_col='Unnamed: 0')
+#         # pd_wgms_data_stats = pd.read_csv(path_mbsandbox + '/data/wgms_data_stats_20220301.csv',
+#         #                                 index_col='Unnamed: 0')
+#         fp = utils.file_downloader('https://cluster.klima.uni-bremen.de/~lschuster/ref_glaciers' +
+#                                    '/data/mb_overview_seasonal_mb_time_periods_20220301.csv')
+#         pd_mb_overview = pd.read_csv(fp, index_col='Unnamed: 0')
+#
+#     pd_mb_overview_sel_gdir = pd_mb_overview.loc[pd_mb_overview.rgi_id == gdir.rgi_id]
+#     pd_mb_overview_sel_gdir.index = pd_mb_overview_sel_gdir.Year
+#     yrs_seasonal_mbs = pd_mb_overview_sel_gdir.Year.values
+#     assert np.all(yrs_seasonal_mbs >= 1980)
+#     assert np.all(yrs_seasonal_mbs < 2020)
+#     winter_mb_observed = gdir.get_ref_mb_data(input_filesuffix=input_fs).loc[yrs_seasonal_mbs][
+#         'WINTER_BALANCE']
+#     #annual_mb_observed = gdir.get_ref_mb_data(input_filesuffix='_daily_W5E5').loc[yrs_seasonal_mbs][
+#     #    'ANNUAL_BALANCE']
+#     hgts, widths = gdir.get_inversion_flowline_hw()
+#
+#     ###
+#     from MBsandbox.helpfunc import minimize_winter_mb_brentq_geod_via_pf
+#     gd_mb = oggm.core.massbalance.PastMassbalanceModel(gdir, mu_star=200,
+#                                  bias=0,
+#                                  prcp_fac=1,
+#                                  input_filesuffix=input_fs,
+#                                  check_calib_params=False
+#                          )
+#     gd_mb.temp_bias = temp_bias
+#     except_necessary = 0
+#     try:
+#         pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 0.1, 10, xtol=0.1,
+#                                        args=(
+#                                        gd_mb, mb_geodetic, winter_mb_observed, hgts, widths, yrs_seasonal_mbs,
+#                                        True)  # period_from_wgms
+#                                        )
+#     except:
+#         except_necessary += 1
+#         try:
+#             pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 0.4, 5, xtol=0.1,
+#                                            args=(gd_mb, mb_geodetic, winter_mb_observed, hgts, widths,
+#                                                  yrs_seasonal_mbs,
+#                                                  True)  # period_from_wgms
+#                                            )
+#         except:
+#             except_necessary += 1
+#
+#             if method == 'nested':
+#                 try:
+#                     # first try to see if the problem is on high or low pfs!
+#                     scipy.optimize.brentq(minimize_bias_geodetic, 10, 1000,
+#                                           xtol=0.01,
+#                                           args=(gd_mb, mb_geodetic, hgts, widths, 0.1),
+#                                           disp=True)
+#
+#                     try:
+#
+#                         pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 0.1, 2, xtol=0.1,
+#                                                        args=(
+#                                                        gd_mb, mb_geodetic, winter_mb_observed, hgts, widths,
+#                                                        yrs_seasonal_mbs,
+#                                                        True))  # period_from_wgms
+#                     except:
+#                         except_necessary += 1
+#                         try:
+#                             pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 0.1, 1, xtol=0.1,
+#                                                            args=(
+#                                                            gd_mb, mb_geodetic, winter_mb_observed, hgts, widths,
+#                                                            yrs_seasonal_mbs,
+#                                                            True)  # period_from_wgms
+#                                                            )
+#                         except:
+#                             except_necessary += 1
+#                             pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 0.3, 0.9,
+#                                                            xtol=0.1,
+#                                                            args=(
+#                                                            gd_mb, mb_geodetic, winter_mb_observed, hgts, widths,
+#                                                            yrs_seasonal_mbs,
+#                                                            True)  # period_from_wgms
+#                                                            )
+#                 except:
+#                     try:
+#                         pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 2, 5, xtol=0.1,
+#                                                        args=(
+#                                                        gd_mb, mb_geodetic, winter_mb_observed, hgts, widths,
+#                                                        yrs_seasonal_mbs,
+#                                                        True)  # period_from_wgms
+#                                                        )
+#                     except:
+#                         pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 1, 3, xtol=0.1,
+#                                                        args=(
+#                                                        gd_mb, mb_geodetic, winter_mb_observed, hgts, widths,
+#                                                        yrs_seasonal_mbs,
+#                                                        True)  # period_from_wgms
+#                                                        )
+#             elif method == 'pre-check':
+#                 melt_f_opt_dict = {}
+#                 for pf in np.concatenate([np.arange(0.1, 3, 0.5), np.arange(3, 10, 2)]):
+#                     try:
+#                         melt_f = scipy.optimize.brentq(minimize_bias_geodetic, 10, 1000,
+#                                                        xtol=0.01,
+#                                                        args=(gd_mb, mb_geodetic,
+#                                                              hgts, widths, pf),
+#                                                        disp=True)
+#                         melt_f_opt_dict[pf] = melt_f
+#                     except:
+#                         pass
+#                 #print(melt_f_opt_dict)
+#                 pf_start = list(melt_f_opt_dict.items())[0][0]
+#                 pf_end = list(melt_f_opt_dict.items())[-1][0]
+#                 try:
+#                     pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, pf_start, pf_end,
+#                                                    xtol=0.1,
+#                                                    args=(gd_mb, mb_geodetic, winter_mb_observed,
+#                                                          hgts, widths, yrs_seasonal_mbs,
+#                                                          True)  # period_from_wgms
+#                                                    )
+#                 except:
+#                     except_necessary += 1
+#                     try:
+#                         pf_start = list(melt_f_opt_dict.items())[1][0]
+#                         pf_end = list(melt_f_opt_dict.items())[-2][0]
+#                         pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, pf_start, pf_end,
+#                                                        xtol=0.1,
+#                                                        args=(gd_mb, mb_geodetic, winter_mb_observed,
+#                                                              hgts, widths, yrs_seasonal_mbs,
+#                                                              True)  # period_from_wgms
+#                                                        )
+#                     except:
+#                         except_necessary += 1
+#                         pf_start = list(melt_f_opt_dict.items())[2][0]
+#                         pf_end = list(melt_f_opt_dict.items())[-3][0]
+#                         pf_opt = scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, pf_start, pf_end,
+#                                                        xtol=0.1,
+#                                                        args=(gd_mb, mb_geodetic, winter_mb_observed,
+#                                                              hgts, widths, yrs_seasonal_mbs,
+#                                                              True)  # period_from_wgms
+#                                                        )
+#
+#     gd_mb.prcp_fac = pf_opt
+#     gd_mb.melt_f = scipy.optimize.brentq(minimize_bias_geodetic, 10, 1000,
+#                                              xtol=0.01,
+#                                              args=(gd_mb, mb_geodetic, hgts, widths, pf_opt),
+#                                              disp=True)
+#
+#     # first precompute it for the entire time period
+#     # more practical also for std and MB profile computation
+#     # (like that also years in between (without observations) are estimated)
+#     # [only important for TIModel_Sfc_Type, if observations have missing years in between]
+#     gd_mb.get_specific_mb(heights=hgts, widths=widths,
+#                               year=np.arange(1979, # yrs_seasonal_mbs[0]
+#                                              2019 + 1, 1))
+#     # in case of HEF this should be the same !!! (as HEF always has WGMS seasonal MB from Oct 1st to April 30th)
+#     outi_right_period = gd_mb.get_specific_winter_mb(heights=hgts, year=yrs_seasonal_mbs, widths=widths,
+#                                                          add_climate=True,
+#                                                          period_from_wgms=True)
+#     np.testing.assert_allclose(outi_right_period[0].mean(),
+#                                winter_mb_observed.mean(), rtol=0.05)
+#     #outi = gd_mb.get_specific_winter_mb(heights=hgts, year=yrs_seasonal_mbs, widths=widths, add_climate=True,
+#     #                                    period_from_wgms=False)
+#     # for k,_ in enumerate(outi):
+#     #    np.testing.assert_allclose(outi[k],
+#     #                               outi_right_period[k])
+#     t, tfm, prcp, prcpsol = outi_right_period[1:]
+#
+#     pd_prcp = pd.DataFrame(prcp).T
+#     pd_prcp.index.name = 'distance_along_flowline'
+#     pd_prcp.columns = yrs_seasonal_mbs
+#     winter_prcp_mean = pd_prcp.mean().mean()
+#
+#     pd_solid_prcp = pd.DataFrame(prcpsol).T
+#     pd_solid_prcp.index.name = 'distance_along_flowline'
+#     pd_solid_prcp.columns = yrs_seasonal_mbs
+#     winter_solid_prcp_mean = np.average(pd_solid_prcp.mean(axis=1), weights=widths)
+#
+#     if mb_type == 'mb_real_daily':
+#         fact = 12 / 365.25
+#     else:
+#         fact = 1
+#
+#     pd_tfm = pd.DataFrame(tfm).T
+#     pd_tfm.index.name = 'distance_along_flowline'
+#     pd_tfm.columns = yrs_seasonal_mbs
+#     # how much minimum melt happened over winter months?
+#     if sfc_type_distinction:
+#         melt_w_month_kg_m2_2d = pd_tfm * fact * gd_mb.melt_f_buckets[0]
+#     else:
+#         melt_w_month_kg_m2_2d = pd_tfm * fact * gd_mb.melt_f
+#
+#     specific_melt_winter = np.average(melt_w_month_kg_m2_2d.mean(axis=1), weights=widths)
+#
+#     # also compute quot_std
+#     mod_std = gd_mb.get_specific_mb(heights=hgts, widths=widths,
+#                                     year=ys_glac).std()
+#     ref_std = mb_glaciological.loc[ys_glac].values.std()
+#     quot_std = mod_std / ref_std
+#
+#     # now also compute mean absolute error of mean MB profile: (if available!)
+#     # observed MB profile
+#     # todo: optimize this that this is not called every time but just once!
+#     outi_prof = get_mean_mb_profile_filtered(gdir, input_fs=input_fs, obs_ratio_needed=0.6)
+#     if outi_prof is None:
+#         # no MB profile exist -> mae has to be np.NaN
+#         mae = np.NaN
+#     else:
+#         obs_mean_mb_profile_filtered, obs_mean_mb_profile_years = outi_prof
+#         # get modelled MB profile
+#         fac = cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+#         mb_annual = []
+#         if sfc_type_distinction:
+#             gd_mb.reset_pd_mb_bucket()
+#         for y in obs_mean_mb_profile_years:
+#             # if isinstance(gd_mb, TIModel):
+#             mb_y = gd_mb.get_annual_mb(hgts, y) * fac
+#             # print(h, mb_y)
+#             # else:
+#             #   mb_y = gd_mb.pd_mb_annual[y]
+#             mb_annual.append(mb_y)
+#         y_modelled = np.array(mb_annual).mean(axis=0)
+#         h_condi = obs_mean_mb_profile_filtered.index
+#         condi1 = ((hgts > min(h_condi)) & (hgts < max(h_condi)))
+#         f = scipy.interpolate.interp1d(h_condi,
+#                                        obs_mean_mb_profile_filtered.values,
+#                                        kind='cubic')
+#         y_interp_obs = f(hgts[condi1])
+#         mae = mean_absolute_error(y_interp_obs, y_modelled[condi1])
+#
+#     return (gd_mb.prcp_fac, gd_mb.melt_f, winter_prcp_mean, winter_solid_prcp_mean,
+#             specific_melt_winter, except_necessary, quot_std, mae)
+#
+# def minimize_bias_geodetic(x, gd_mb=None, mb_geodetic=None,
+#                            h=None, w=None, pf=2.5,
+#                            absolute_bias=False,
+#                            ys=np.arange(2000, 2020, 1),
+#                            oggm_default_mb=True,
+#                            spinup=False):
+#     """ calibrates mu_star or melt factor by getting the bias to zero
+#     comparing modelled mean specific mass balance between 2000 and 2020 to
+#     observed geodetic data (from Hugonnet et al. 2021)
+#
+#     (and actually the minimisation occurs only when doing scipy.optimize.brentq(minimize_bias_geodetic, 10, 100, ...)
+#     but we don't want to change the function at this stage)
+#
+#     Parameters
+#     ----------
+#     x : float
+#         what is optimised (here the melt_f)
+#     gd_mb: class instance
+#         instantiated class of TIModel, this is updated by melt_f
+#     mb_geodetic: float
+#          geodetic mass balance between 2000-2020 of the instantiated glacier
+#     h: ndarray
+#         heights of the instantiated glacier
+#     w: ndarray
+#         widths of the instantiated glacier.
+#         Important to set that otherwise it is assumed that the glacier has the same width everywhere!
+#     pf: float
+#         precipitation scaling factor
+#         default is 2.5
+#     absolute_bias : bool
+#         if absolute_bias == True, the absolute value of the bias is returned.
+#         if optimisation is done with Powell need absolute bias.
+#         If optimisation is done with Brentq, absolute_bias has to be set False
+#         The default is False.
+#     ys: ndarray
+#         years for which specific mass balance is computed
+#         default is 2000--2019 (when using W5E5)
+#     oggm_default_mb : bool
+#         if default oggm mass balance should be used (default is False)
+#     spinup : bool
+#         send to get_specific_mb (for sfc type distinction)
+#
+#     Returns
+#     -------
+#     float
+#         bias: modeled mass balance mean - reference mean (geodetic)
+#         if absolute_bias = True:  np.abs(bias) is returned
+#
+#     """
+#     if oggm_default_mb:
+#         gd_mb.mu_star = x
+#     else:
+#         gd_mb.melt_f = x
+#
+#     gd_mb.prcp_fac = pf
+#     if spinup:
+#         try:
+#             mb_specific = gd_mb.get_specific_mb(heights=h,
+#                                                 widths=w,
+#                                                 year=ys,
+#                                                 spinup=spinup
+#                                                 ).mean()
+#         except:
+#             mb_specific = gd_mb.get_specific_mb(heights=h,
+#                                             widths=w,
+#                                             year=ys
+#                                             ).mean()
+#
+#     if absolute_bias:
+#         bias_calib = np.abs(np.mean(mb_specific -
+#                                     mb_geodetic))
+#     else:
+#         bias_calib = np.mean(mb_specific - mb_geodetic)
+#
+#     return bias_calib
+#
+# def minimize_winter_mb_brentq_geod_via_pf(x, gd_mb=None, mb_geodetic=None,
+#                                           mb_glaciological_winter=None, h=None,
+#                                           w=None, ys_glac=None,
+#                                           period_from_wgms=False, tipe='bias',
+#                                           oggm_default_mb=True):
+#     """ calibrates the optimal precipitation factor (pf) to match best the observed winter mass balance
+#      to the modelled mass balance by getting the bias near to zero (-> could change this to mean absolute error?!)
+#
+#     for each pf an optimal melt_f is found (by using the geodetic data via `minimize_bias_geodetic`),
+#     then the bias (mean absolute error) is computed, which is then brought to zero (minimised)
+#
+#     Attention mb_glaciological_winter should be the MB of the years from ys_glac!!
+#
+#     --> Work In Process:
+#     todo: documentation
+#
+#     (and actually the optimisation occurs only when doing
+#     scipy.optimize.brentq(minimize_winter_mb_brentq_geod_via_pf, 0.1, 10, ...)
+#     but we don't want to change the function at this stage)
+#
+#     """
+#
+#     pf = x
+#     melt_f_opt = scipy.optimize.brentq(minimize_bias_geodetic, 10, 1000,
+#                                        xtol=0.01,
+#                                        args=(gd_mb, mb_geodetic, h, w, pf),
+#                                        disp=True)
+#     if oggm_default_mb:
+#         gd_mb.mu_star = melt_f_opt
+#     else:
+#         gd_mb.melt_f = melt_f_opt
+#     gd_mb.prcp_fac = pf
+#
+#     # now compute mean absolute error over given time period using direct glaciological observations
+#     # mb_sum = []
+#     mb_winter = []
+#     #for y in ys_glac:
+#     # mb_sum.append(gd_mb.get_specific_summer_mb(y))
+#     # first precompute it without missing years
+#     gd_mb.get_specific_mb(heights=h, widths=w,
+#                               year=np.arange(ys_glac[0],
+#                                              ys_glac[-1] + 1, 1))
+#     mb_winter.append(gd_mb.get_specific_winter_mb(h, year=ys_glac, widths=w,
+#                                                   period_from_wgms=period_from_wgms))
+#
+#     bias = np.array(mb_winter).mean() - mb_glaciological_winter.mean()
+#     # mae_win = mean_absolute_error(mb_winter, mb_glaciological_winter)
+#     if tipe == 'bias':
+#         return bias
+#     elif tipe == 'absolute_bias':
+#         return np.absolute(bias)
+#

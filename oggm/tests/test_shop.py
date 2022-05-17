@@ -148,6 +148,110 @@ class Test_rgitopo:
         assert len(out) > 5
         assert np.sum(list(out.values())) > 5
 
+class Test_w5e5:
+
+    def test_get_gswp3_w5e5_file(self):
+        from oggm.shop import w5e5
+        d = 'GSWP3_W5E5'
+        for vars,_ in w5e5.BASENAMES[d].items():
+            assert os.path.isfile(w5e5.get_gswp3_w5e5_file(d, vars))
+        with pytest.raises(ValueError):
+            w5e5.get_gswp3_w5e5_file(d, 'zoup')
+
+        # check if W5E5 and GSWP3_W5E5 are equal over common time period
+        # this is done in the flattening notebook
+
+
+    def test_proces_w5e5_data(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        cfg.PARAMS['hydro_month_nh'] = 1
+        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
+        from oggm.shop import w5e5
+        w5e5.process_w5e5_data(gdir)
+        path_clim = gdir.get_filepath('climate_historical')
+
+        ds_clim = xr.open_dataset(path_clim)
+        assert ds_clim.time[0]['time.year'] == 1979
+        assert ds_clim.time[-1]['time.year'] == 2019
+        assert ds_clim.time[0]['time.month'] == 1
+        assert ds_clim.time[-1]['time.month'] == 12
+        assert (ds_clim.ref_hgt>2000) and (ds_clim.ref_hgt<3000)
+        assert (ds_clim.temp.mean() < 5) and (ds_clim.temp.mean() > -5)
+        assert ds_clim.temp.min() > -30  # °C
+        assert ds_clim.temp.max() < 30
+        # temp_std
+        assert np.all(ds_clim.temp_std > 0)
+        assert np.all(ds_clim.temp_std <= 10)
+
+        # prcp
+        assert ds_clim.prcp.min() > 0 # kg/m2/month
+        annual_prcp_sum = ds_clim.prcp.groupby('time.year').sum().values
+        assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
+        assert np.all(annual_prcp_sum > 500)  # kg /m2/year
+        assert np.all(annual_prcp_sum < 1500)
+        # gradient
+        assert ds_clim.gradient.mean()
+        assert np.all(ds_clim.gradient > -0.01)  # >-10K/km
+        assert np.all(ds_clim.gradient < -0.001)  # <-0.1 K/km
+        # by construction, lapse rates from 2019 should be the avg. of 1979-2018!
+        # (because of lacking ERA5dr data after 2019-05)
+        m_grads = ds_clim.sel(time=slice('1979', '2018')).gradient.groupby('time.month').mean()
+        m_grads_2019 = ds_clim.sel(time=slice('2019', '2019')).gradient
+        np.testing.assert_allclose(m_grads, m_grads_2019)
+
+    def test_proces_gswp3_w5e5_data(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        cfg.PARAMS['hydro_month_nh'] = 1
+        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
+        from oggm.shop import w5e5
+        w5e5.process_gswp3_w5e5_data(gdir)
+        path_clim = gdir.get_filepath('climate_historical')
+
+        ds_clim = xr.open_dataset(path_clim)
+        assert ds_clim.time[0]['time.year'] == 1901
+        assert ds_clim.time[-1]['time.year'] == 2019
+        assert ds_clim.time[0]['time.month'] == 1
+        assert ds_clim.time[-1]['time.month'] == 12
+        assert (ds_clim.ref_hgt > 2000) and (ds_clim.ref_hgt < 3000)
+        assert (ds_clim.temp.mean() < 5) and (ds_clim.temp.mean() > -5)
+        assert ds_clim.temp.min() > -30  # °C
+        assert ds_clim.temp.max() < 30
+        # temp_std
+        assert np.all(ds_clim.temp_std > 0)
+        assert np.all(ds_clim.temp_std <= 10)
+
+        # prcp
+        try:
+            assert ds_clim.prcp.min() > 0  # kg/m2/month
+        except:
+            # ok, we allow a small amount of months with just 0 prcp,
+            # (here it is just one month)
+            assert ds_clim.prcp.quantile(0.001) >= 0
+            assert ds_clim.prcp.min() >= 0
+        annual_prcp_sum = ds_clim.prcp.groupby('time.year').sum().values
+        assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
+        assert np.all(annual_prcp_sum > 400)  # kg /m2/year
+        assert np.all(annual_prcp_sum < 1500)
+        # no gradient for GSWP3-W5E5!
+
+        # test climate statistics with winter_daily_mean_prcp
+        df = utils.compile_climate_statistics([gdir], path=False,
+                                              winter_daily_mean_prcp=True)
+        assert np.all(df['winter_daily_mean_prcp_1979_2019'] > 1.5)
+        assert np.all(df['winter_daily_mean_prcp_1979_2019'] < 1.8)
+
 
 class Test_ecmwf:
 
@@ -328,7 +432,7 @@ class Test_climate_datasets:
 
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
-        exps = ['CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
+        exps = ['W5E5', 'GSWP3_W5E5', 'CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
         ref_hgts = []
         dft = []
         dfp = []
@@ -410,19 +514,23 @@ class Test_climate_datasets:
 
         # maybe there is already somewhere an overview or a better way to get
         # these dates, but I did not find it
-        base_data_time = {'CRU': {'start_year': 1901, 'end_year': 2014},
+        base_data_time = {'W5E5': {'start_year': 1979, 'end_year': 2019},
+                          'GSWP3_W5E5': {'start_year': 1901, 'end_year': 2019},
+                          'CRU': {'start_year': 1901, 'end_year': 2014},
                           'ERA5': {'start_year': 1979, 'end_year': 2018},
                           'ERA5dr': {'start_year': 1979, 'end_year': 2019},
                           'HISTALP': {'start_year': 1850, 'end_year': 2014},
                           'CERA': {'start_year': 1901, 'end_year': 2010},
-                          'ERA5L': {'start_year': 1981, 'end_year': 2018}}
+                          'ERA5L': {'start_year': 1981, 'end_year': 2018}
+                          }
 
         gdir = hef_gdir
         oggm.core.flowline.init_present_time_glacier(gdir)
         mb_mod = oggm.core.massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
 
-        exps = ['ERA5dr', 'CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
+        exps = ['W5E5', 'GSWP3_W5E5', 'ERA5dr',
+                'CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
         for base in exps:
             # this does not need to be the best one,
             # just for comparison between different hydro months
