@@ -391,6 +391,12 @@ For NetCDF and HDF::
 Pyenv and pyenv-virtualenv
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. note::
+
+    If you are not familiar with pyenv, you can
+    `read the docs <https://realpython.com/intro-to-pyenv/>`_
+    (especially the installing pyenv section).
+    
 Install `pyenv <https://github.com/pyenv/pyenv>`_ and create a new virtual environment
 with a recent python version (3.7+) using `pyenv-virtualenv <https://github.com/pyenv/pyenv-virtualenv>`_.
 
@@ -410,7 +416,7 @@ Install some packages one by one::
    $ pip install numpy scipy pandas shapely matplotlib pyproj \
        rasterio Pillow geopandas netcdf4 scikit-image configobj joblib \
        xarray progressbar2 pytest motionless dask bottleneck toolz \
-       tables
+       tables rioxarray
 
 A pinning of the NetCDF4 package to 1.3.1 might be necessary on some systems
 (`related issue <https://github.com/Unidata/netcdf4-python/issues/962>`_).
