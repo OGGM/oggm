@@ -39,9 +39,9 @@ class Test_its_live:
         tasks.glacier_masks(gdir)
 
         # use our files
-        region_files = {'ALA':
-                            {'vx': get_demo_file('crop_ALA_G0120_0000_vx.tif'),
-                             'vy': get_demo_file('crop_ALA_G0120_0000_vy.tif')}
+        region_files = {'ALA': {
+            'vx': get_demo_file('crop_ALA_G0120_0000_vx.tif'),
+            'vy': get_demo_file('crop_ALA_G0120_0000_vy.tif')}
                         }
         monkeypatch.setattr(its_live, 'region_files', region_files)
         monkeypatch.setattr(utils, 'file_downloader', lambda x: x)
@@ -148,19 +148,19 @@ class Test_rgitopo:
         assert len(out) > 5
         assert np.sum(list(out.values())) > 5
 
+
 class Test_w5e5:
 
     def test_get_gswp3_w5e5_file(self):
         from oggm.shop import w5e5
         d = 'GSWP3_W5E5'
-        for vars,_ in w5e5.BASENAMES[d].items():
+        for vars, _ in w5e5.BASENAMES[d].items():
             assert os.path.isfile(w5e5.get_gswp3_w5e5_file(d, vars))
         with pytest.raises(ValueError):
             w5e5.get_gswp3_w5e5_file(d, 'zoup')
 
         # check if W5E5 and GSWP3_W5E5 are equal over common time period
         # this is done in the flattening notebook
-
 
     def test_proces_w5e5_data(self, class_case_dir):
 
@@ -181,7 +181,7 @@ class Test_w5e5:
         assert ds_clim.time[-1]['time.year'] == 2019
         assert ds_clim.time[0]['time.month'] == 1
         assert ds_clim.time[-1]['time.month'] == 12
-        assert (ds_clim.ref_hgt>2000) and (ds_clim.ref_hgt<3000)
+        assert (ds_clim.ref_hgt > 2000) and (ds_clim.ref_hgt < 3000)
         assert (ds_clim.temp.mean() < 5) and (ds_clim.temp.mean() > -5)
         assert ds_clim.temp.min() > -30  # °C
         assert ds_clim.temp.max() < 30
@@ -190,7 +190,7 @@ class Test_w5e5:
         assert np.all(ds_clim.temp_std <= 10)
 
         # prcp
-        assert ds_clim.prcp.min() > 0 # kg/m2/month
+        assert ds_clim.prcp.min() > 0  # kg/m2/month
         annual_prcp_sum = ds_clim.prcp.groupby('time.year').sum().values
         assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
         assert np.all(annual_prcp_sum > 500)  # kg /m2/year
@@ -235,7 +235,7 @@ class Test_w5e5:
         # prcp
         try:
             assert ds_clim.prcp.min() > 0  # kg/m2/month
-        except:
+        except AssertionError:
             # ok, we allow a small amount of months with just 0 prcp,
             # (here it is just one month)
             assert ds_clim.prcp.quantile(0.001) >= 0
@@ -526,7 +526,6 @@ class Test_climate_datasets:
 
         gdir = hef_gdir
         oggm.core.flowline.init_present_time_glacier(gdir)
-        mb_mod = oggm.core.massbalance.PastMassBalance(gdir)
         h, w = gdir.get_inversion_flowline_hw()
 
         exps = ['W5E5', 'GSWP3_W5E5', 'ERA5dr',

@@ -1674,7 +1674,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
                 # precipitation by using the logarithmic regression
                 # found in the MBsandbox
                 d['prcp_fac_from_winter_prcp'] = df['prcp_fac_from_winter_prcp']
-            except:
+            except KeyError:
                 pass
         except BaseException:
             pass

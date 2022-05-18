@@ -22,23 +22,14 @@ from oggm.exceptions import InvalidParamsError
 log = logging.getLogger(__name__)
 
 GSWP3_W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
-#W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~lschuster/'
-
-
-
-BASENAMES = {
-'W5E5_monthly':{
-    'inv': 'w5e5v2.0/flattened/monthly/w5e5v2.0_glacier_invariant_flat.nc',
-    'tmp': 'w5e5v2.0/flattened/monthly/w5e5v2.0_tas_global_monthly_flat_glaciers_1979_2019.nc',
-    'temp_std': 'w5e5v2.0/flattened/monthly/w5e5v2.0_tas_std_global_monthly_flat_glaciers_1979_2019.nc',
-    'prcp': 'w5e5v2.0/flattened/monthly/w5e5v2.0_pr_global_monthly_flat_glaciers_1979_2019.nc',
-    },
-'GSWP3_W5E5':{
-    'inv': 'gswp3-w5e5/flattened/monthly/gswp3-w5e5_glacier_invariant_flat.nc',
-    'tmp': 'gswp3-w5e5/flattened/monthly/gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers.nc',
-    'temp_std': 'gswp3-w5e5/flattened/monthly/gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers.nc',
-    'prcp': 'gswp3-w5e5/flattened/monthly/gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers.nc'
-}}
+# W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~lschuster/'
+path = 'gswp3-w5e5/flattened/monthly/'
+BASENAMES = {'GSWP3_W5E5': {
+    'inv': f'{path}gswp3-w5e5_glacier_invariant_flat.nc',
+    'tmp': f'{path}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers.nc',
+    'temp_std': f'{path}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers.nc',
+    'prcp': f'{path}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers.nc'
+    }}
 
 
 def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
@@ -93,9 +84,9 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None,
     output_filesuffix : str, optional
          None by default
     """
-    dataset = 'GSWP3_W5E5'  #'W5E5_monthly'
-    Tvar = 'tas'
-    Pvar = 'pr'
+    dataset = 'GSWP3_W5E5'  # 'W5E5_monthly'
+    tvar = 'tas'
+    pvar = 'pr'
 
     # get the central longitude/latitudes of the glacier
     lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon
@@ -118,7 +109,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None,
         y1 = yrs[-1] if y1 is None else y1
 
         if y1 > 2019 or y0 < 1901:
-            text = ('The climate files only go from 1901--2019,')
+            text = 'The climate files only go from 1901--2019'
             raise InvalidParamsError(text)
         ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
                                '{}-{:02d}-01'.format(y1, em)))
@@ -131,11 +122,11 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None,
             # normally if I do the flattening, this here should not occur
 
         # because of the flattening, there is no time dependece of lon and lat anymore!
-        ds['longitude'] = ds.longitude  #.isel(time=0)
-        ds['latitude'] = ds.latitude  #.isel(time=0)
+        ds['longitude'] = ds.longitude  # .isel(time=0)
+        ds['latitude'] = ds.latitude  # .isel(time=0)
 
         # temperature should be in degree Celsius for the glacier climate files
-        temp = ds[Tvar].data - 273.15
+        temp = ds[tvar].data - 273.15
         time = ds.time.data
 
         ref_lon = float(ds['longitude'])
@@ -160,7 +151,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None,
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
 
         # convert kg m-2 s-1 monthly mean into monthly sum!!!
-        prcp = ds[Pvar].data*cfg.SEC_IN_DAY*ds['time.daysinmonth']
+        prcp = ds[pvar].data*cfg.SEC_IN_DAY*ds['time.daysinmonth']
 
     # w5e5 invariant file
     with xr.open_dataset(path_inv) as ds:
@@ -274,4 +265,3 @@ def process_w5e5_data(gdir, y0=None, y1=None,
         raise InvalidParamsError(text)
     process_gswp3_w5e5_data(gdir, y0=y0, y1=y1,
                             output_filesuffix=output_filesuffix)
-

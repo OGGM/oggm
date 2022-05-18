@@ -437,8 +437,6 @@ class TestWorkflowTools(unittest.TestCase):
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
 
-
-
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)
         np.testing.assert_allclose(df['tstar_avg_prcp'],
