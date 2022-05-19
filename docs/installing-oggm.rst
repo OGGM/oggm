@@ -308,7 +308,7 @@ environment might help. At the time of writing (20.01.2021), creating an
 environment from the following ``environment.yml`` file used to work::
 
     name: oggm_env
-     channels:
+    channels:
       - conda-forge
     dependencies:
       - jupyter
