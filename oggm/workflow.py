@@ -766,8 +766,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
         odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
         if volume_m3_reference is None:
-            ref_vol_1 = odf1.vol_itmix_m3 * 1e-9
-            ref_vol_2 = odf2.vol_itmix_m3 * 1e-9
+            ref_vol_1 = odf1.vol_itmix_m3
+            ref_vol_2 = odf2.vol_itmix_m3
         else:
             ref_vol_1 = volume_m3_reference * 1e-9
             ref_vol_2 = volume_m3_reference * 1e-9
