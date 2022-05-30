@@ -3266,7 +3266,7 @@ class GlacierDirectory(object):
 
             # hydro_year corresponds to the last month of the data
             if time[0].month == 1:
-                # if first_month =1, last_month = 12, so y0 is hydro_yr_0
+                # if first_month = 1, last_month = 12, so y0 is hydro_yr_0
                 nc.hydro_yr_0 = y0
             else:
                 # if first_month>1, then the last_month is in the next year,

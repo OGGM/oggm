@@ -3557,6 +3557,148 @@ class TestGCMClimate(unittest.TestCase):
         shutil.rmtree(self.testdir)
         os.makedirs(self.testdir)
 
+    def test_process_monthly_isimip_data(self):
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        cfg.PARAMS['hydro_month_nh'] = 1
+        ssp = 'ssp126'
+        ensemble = 'mri-esm2-0_r1i1p1f1'
+
+        tasks.process_w5e5_data(gdir)
+
+        # testing = True to only download the HEF gridpoint and 3 other gridppoints around
+        tasks.process_monthly_isimip_data(gdir, ensemble=ensemble, ssp=ssp,
+                                          output_filesuffix='_no_OGGM_bc',
+                                          correct=False,
+                                          testing=True)
+        tasks.process_monthly_isimip_data(gdir, ensemble=ensemble, ssp=ssp,
+                                          correct=True,
+                                          output_filesuffix='_with_OGGM_bc',
+                                          testing=True)
+        fh = gdir.get_filepath('climate_historical')
+        # with additional bias correction of OGGM
+        fgcm = gdir.get_filepath('gcm_data',
+                                 filesuffix='_with_OGGM_bc')
+
+        # without any bias correction of OGGM (as ISIMIP3b is already
+        # externally bias-corrected to W5E5)
+        fgcm_nc = gdir.get_filepath('gcm_data',
+                                    filesuffix='_no_OGGM_bc')
+
+        with xr.open_dataset(fh) as clim, xr.open_dataset(fgcm) as gcm, \
+                xr.open_dataset(fgcm_nc) as gcm_nc:
+            # Let's do some basic checks
+            sclim = clim.sel(time=slice('1979', '2014'))
+            sgcm = gcm.load().isel(time=((gcm['time.year'] >= 1979) &
+                                         (gcm['time.year'] <= 2014)))
+
+            sgcm_nc = gcm_nc.load().isel(time=((gcm_nc['time.year'] >= 1979) &
+                                               (gcm_nc['time.year'] <= 2014)))
+
+            # first check if the same grid point was chosen and the same ref_hgt:
+            np.testing.assert_allclose(sgcm.ref_hgt, sgcm_nc.ref_hgt)
+            np.testing.assert_allclose(sgcm_nc.ref_hgt, sclim.ref_hgt)
+
+            np.testing.assert_allclose(sgcm.ref_pix_lon, sgcm_nc.ref_pix_lon)
+            np.testing.assert_allclose(sgcm_nc.ref_pix_lon, sclim.ref_pix_lon)
+
+            np.testing.assert_allclose(sgcm.ref_pix_lat, sgcm_nc.ref_pix_lat)
+            np.testing.assert_allclose(sgcm_nc.ref_pix_lat, sclim.ref_pix_lat)
+
+            # Climate during the chosen period should be the same when corrected
+            np.testing.assert_allclose(sclim.temp.mean(),
+                                       sgcm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(sclim.prcp.mean(),
+                                       sgcm.prcp.mean(),
+                                       rtol=1e-3)
+            # even if not corrected the climate should be quite similar because ISIMIP3b was internally
+            # bias corrected to match W5E5
+            np.testing.assert_allclose(sclim.temp.mean(),
+                                       sgcm_nc.temp.mean(),
+                                       rtol=2e-2)
+            np.testing.assert_allclose(sclim.prcp.mean(),
+                                       sgcm_nc.prcp.mean(),
+                                       rtol=2e-2)
+
+            # annual lapse rate cycle is applied anyway
+            _sclim = sclim.groupby('time.month').std(dim='time')
+            _sgcm = sgcm.groupby('time.month').std(dim='time')
+            _sgcm_nc = sgcm_nc.groupby('time.month').std(dim='time')
+            # need higher tolerance here:
+            np.testing.assert_allclose(_sclim.temp, _sgcm.temp, rtol=0.08)  # 1e-3
+            # even higher for non-OGGM bias ccrrection
+            np.testing.assert_allclose(_sclim.temp, _sgcm_nc.temp, rtol=0.3)  # 1e-3
+            # not done for precipitation!
+
+            # And also the annual cycle
+            sclim = sclim.groupby('time.month').mean(dim='time')
+            sgcm = sgcm.groupby('time.month').mean(dim='time')
+            sgcm_nc = sgcm_nc.groupby('time.month').mean(dim='time')
+
+            np.testing.assert_allclose(sclim.temp, sgcm.temp, rtol=1e-3)
+            np.testing.assert_allclose(sclim.prcp, sgcm.prcp, rtol=1e-3)
+
+            # same for non corrected stuff
+            np.testing.assert_allclose(sclim.temp, sgcm_nc.temp, rtol=8e-2)
+            np.testing.assert_allclose(sclim.prcp, sgcm_nc.prcp, rtol=2e-1)
+
+            # How did the annual cycle change with time?
+            sgcm1 = gcm.load().isel(time=((gcm['time.year'] >= 1979) &
+                                          (gcm['time.year'] <= 2019)))
+            sgcm2 = gcm.isel(time=((gcm['time.year'] >= 2060) &
+                                   (gcm['time.year'] <= 2100)))
+            sgcm1_nc = gcm_nc.load().isel(time=((gcm_nc['time.year'] >= 1979) &
+                                                (gcm_nc['time.year'] <= 2019)))
+            sgcm2_nc = gcm_nc.isel(time=((gcm_nc['time.year'] >= 2060) &
+                                         (gcm_nc['time.year'] <= 2100)))
+
+            _sgcm1_std = sgcm1.groupby('time.month').mean(dim='time').std()
+            _sgcm2_std = sgcm2.groupby('time.month').mean(dim='time').std()
+
+            _sgcm1_nc_std = sgcm1_nc.groupby('time.month').mean(dim='time').std()
+            _sgcm2_nc_std = sgcm2_nc.groupby('time.month').mean(dim='time').std()
+            # the mean standard deviation over the year between the months
+            # should be different for the time periods
+            assert not np.allclose(_sgcm1_std.temp, _sgcm2_std.temp, rtol=1e-2)
+            assert not np.allclose(_sgcm1_nc_std.temp, _sgcm2_nc_std.temp, rtol=1e-2)
+            # but should be similar between corrected and not corrected
+            np.testing.assert_allclose(_sgcm1_std.temp, _sgcm1_nc_std.temp, rtol=1e-2)
+            np.testing.assert_allclose(_sgcm2_std.temp, _sgcm2_nc_std.temp, rtol=1e-2)
+
+            sgcm1 = sgcm1.groupby('time.month').mean(dim='time')
+            sgcm2 = sgcm2.groupby('time.month').mean(dim='time')
+            sgcm1_nc = sgcm1_nc.groupby('time.month').mean(dim='time')
+            sgcm2_nc = sgcm2_nc.groupby('time.month').mean(dim='time')
+            # It has warmed at least 1 degree for each scenario???
+            assert sgcm1.temp.mean() < (sgcm2.temp.mean() - 1)
+            assert sgcm1_nc.temp.mean() < (sgcm2_nc.temp.mean() - 1)
+            # No prcp change more than 30%? (silly test)
+            np.testing.assert_allclose(sgcm1.prcp, sgcm2.prcp, rtol=0.3)
+            np.testing.assert_allclose(sgcm1_nc.prcp, sgcm2_nc.prcp, rtol=0.3)
+
+            # mean temperature similar between OGGM and ISIMIP corrected
+            np.testing.assert_allclose(sgcm1.temp.mean(),
+                                       sgcm1_nc.temp.mean(), rtol=0.05)
+            np.testing.assert_allclose(sgcm2.temp.mean(),
+                                       sgcm2_nc.temp.mean(), rtol=0.05)
+
+            # mean prcp similar between OGGM and ISIMIP corrected
+            np.testing.assert_allclose(sgcm1.prcp.mean(),
+                                       sgcm1_nc.prcp.mean(), rtol=0.05)
+            np.testing.assert_allclose(sgcm2.prcp.mean(),
+                                       sgcm2_nc.prcp.mean(), rtol=0.05)
+
+            # Check that temp still correlate a lot between non corrected
+            # and corrected gcm:
+            n = 36 * 12 + 1
+            ss1 = gcm.temp.rolling(time=n, min_periods=1, center=True).std()
+            ss2 = gcm_nc.temp.rolling(time=n, min_periods=1, center=True).std()
+            assert utils.corrcoef(ss1, ss2) > 0.99
+
     def test_process_cesm(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -4204,3 +4346,4 @@ class TestPyGEM_compat(unittest.TestCase):
         np.testing.assert_allclose(fls[0].volume_m3,
                                    np.sum(width*thick*dx_meter),
                                    rtol=0.01)
+

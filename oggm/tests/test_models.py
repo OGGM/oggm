@@ -1031,9 +1031,9 @@ class TestMassBalanceModels:
         # this should only work with W5E5 or GSWP3_W5E5
         with pytest.raises(InvalidWorkflowError):
             climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
-                                                     ref_period='2000-01-01_2020-01-01',
-                                                     ignore_hydro_months=False,
-                                                     prcp_fac='from_winter_prcp')
+                                                         ref_period='2000-01-01_2020-01-01',
+                                                         ignore_hydro_months=False,
+                                                         prcp_fac='from_winter_prcp')
         cfg.PARAMS['baseline_climate'] = 'W5E5'
         tasks.process_climate_data(gdir)
         climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
