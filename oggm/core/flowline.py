@@ -5345,9 +5345,6 @@ def dynamic_mu_star_calibration(
         # error of reference geodetic mass balance from Hugonnet 2021
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
-    # Define the precision we want to reach during the minimisation using the
-    # provided geodetic mass balance error
-    precision_percent_dmdtda = 100 / abs(ref_dmdtda) * err_ref_dmdtda
 
     # get start and end year of geodetic mb
     yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
@@ -5442,6 +5439,22 @@ def dynamic_mu_star_calibration(
                                     int(dynamic_mu_star_calibration_runs[-1]))
 
         return model
+
+    # if reference dmdtda is zero no dynamic mu calibration is possible
+    if ref_dmdtda == 0.:
+        if ignore_errors:
+            log.workflow('Dynamic mu star calibration not possible with a '
+                         'reference value for dmdtda of 0.')
+            model_return = fallback_run(mu_star=mu_star_initial,
+                                        reset=True)
+            return model_return
+        else:
+            raise RuntimeError('The given reference value is Zero, no dynamic '
+                               'spinup possible!')
+
+    # Define the precision we want to reach during the minimisation using the
+    # provided geodetic mass balance error
+    precision_percent_dmdtda = 100 / abs(ref_dmdtda) * err_ref_dmdtda
 
     # here we reset all local variables of the run_function if there are any
     run_function(gdir=gdir, mu_star=None, yr0_ref_mb=None, yr1_ref_mb=None,
