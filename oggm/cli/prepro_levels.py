@@ -660,15 +660,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             if 'atonce' in dynamic_spinup:
                 workflow.execute_entity_task(
                     tasks.dynamic_mu_star_calibration, gdirs,
-                    evolution_model=evolution_model, minimise_for=minimise_for,
-                    spinup_start_yr=dynamic_spinup_start_year,
+                    ys=dynamic_spinup_start_year, ye=ye,
                     run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
                     kwargs_run_function={'evolution_model': evolution_model,
                                          'minimise_for': minimise_for},
                     fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
                     kwargs_fallback_function={'evolution_model': evolution_model,
                                               'minimise_for': minimise_for},
-                    output_filesuffix='_historical_spinup_mb_calib', ye=ye,
+                    output_filesuffix='_historical_spinup_mb_calib',
                     max_mu_star=1000.)
             elif 'before' in dynamic_spinup:
                 # first do dynamic spinup and set rgi date to 2000
