@@ -1490,7 +1490,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         # Final correction of the data
         with utils.ncDataset(fpath, 'a') as nc:
             nc.ref_hgt = sel_steps[0]
-        gdir.add_to_diagnostics('ref_hgt_calib_diff', sel_steps[0] - start)
+        gdir.add_to_diagnostics('ref_hgt_calib_diff', float(sel_steps[0] - start))
 
     if not np.isfinite(mu_star):
         raise MassBalanceCalibrationError('{} '.format(gdir.rgi_id) +
