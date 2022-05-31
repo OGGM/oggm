@@ -5184,10 +5184,11 @@ def dynamic_mu_star_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def dynamic_mu_star_calibration(
-        gdir, ref_dmdtda=None, err_ref_dmdtda=None, ref_period='',
-        ignore_hydro_months=False, min_mu_star=None, max_mu_star=None,
-        mu_star_max_step_length=5, maxiter_mu_star=10, ignore_errors=True,
-        output_filesuffix='_historical_dynamic_mu_star', ys=None, ye=None,
+        gdir, ref_dmdtda=None, err_ref_dmdtda=None, min_precision=None,
+        ref_period='', ignore_hydro_months=False, min_mu_star=None,
+        max_mu_star=None, mu_star_max_step_length=5, maxiter_mu_star=10,
+        ignore_errors=True, output_filesuffix='_historical_dynamic_mu_star',
+        ys=None, ye=None,
         run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
         kwargs_run_function=None,
         fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
@@ -5217,7 +5218,15 @@ def dynamic_mu_star_calibration(
         The reference geodetic mass balance to match (units: kg m-2 yr-1). If
         None the data from Hugonnet 2021 is used.
         Default is None
-    err_ref_dmdtda
+    err_ref_dmdtda : float or None
+        The error of the reference geodetic mass balance to match (unit: kg m-2
+        yr-1). If None the data from Hugonett 2021 is used.
+        Default is None
+    min_precision : float or None
+        Additionaly to the error of the reference geodetic mass balance can
+        prescribe here a minimum percision to meet in percent of the given
+        reference geodetic mass balance.
+        Default is None
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
@@ -5345,6 +5354,7 @@ def dynamic_mu_star_calibration(
         # error of reference geodetic mass balance from Hugonnet 2021
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
     # get start and end year of geodetic mb
     yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
@@ -5455,6 +5465,9 @@ def dynamic_mu_star_calibration(
     # Define the precision we want to reach during the minimisation using the
     # provided geodetic mass balance error
     precision_percent_dmdtda = 100 / abs(ref_dmdtda) * err_ref_dmdtda
+    # if a minimum precision was given, use it here
+    if min_precision is not None:
+        precision_percent_dmdtda = min(min_precision, precision_percent_dmdtda)
 
     # here we reset all local variables of the run_function if there are any
     run_function(gdir=gdir, mu_star=None, yr0_ref_mb=None, yr1_ref_mb=None,
