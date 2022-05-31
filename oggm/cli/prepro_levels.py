@@ -633,6 +633,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         from oggm.core.flowline import FluxBasedModel
         evolution_model = FluxBasedModel
 
+    # conduct historical run before dynamic mu calibration (for comparisons to
+    # old default behavior)
+    workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
+                                 min_ys=y0, ye=ye,
+                                 evolution_model=evolution_model,
+                                 output_filesuffix='_historical')
+
     # OK - run
     if dynamic_spinup:
         if y0 > dynamic_spinup_start_year:
@@ -699,11 +706,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                              input_filesuffix_2='_dynamic_mu_calib',
                                              output_filesuffix='_dynamic_spinup_mu_calib',
                                              delete_input=True)
-
-    workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
-                                 min_ys=y0, ye=ye,
-                                 evolution_model=evolution_model,
-                                 output_filesuffix='_historical')
 
     # Now compile the output
     sum_dir = os.path.join(output_base_dir, 'L5', 'summary')
