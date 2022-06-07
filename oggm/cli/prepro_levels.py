@@ -600,7 +600,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir,
                                                       gdirs,
                                                       base_dir=mini_base_dir,
-                                                      setup='inversion')
+                                                      setup='all')
         else:
             mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir,
                                                       gdirs,
