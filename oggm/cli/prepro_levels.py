@@ -703,7 +703,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     gdirs, max_mu_star=1000.,
                     run_function=dynamic_mu_star_run,
                     kwargs_run_function={'evolution_model': evolution_model},
-                    ignore_errors=False,  # TODO: set to True
+                    ignore_errors=True,
                     fallback_function=dynamic_mu_star_run_fallback,
                     kwargs_fallback_function={'evolution_model': evolution_model},
                     output_filesuffix='_dynamic_mu_calib',

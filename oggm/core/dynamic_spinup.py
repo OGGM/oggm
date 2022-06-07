@@ -1392,7 +1392,7 @@ def dynamic_mu_star_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_mu_star_calibration(
-        gdir, ref_dmdtda=None, err_ref_dmdtda=None, min_precision=None,
+        gdir, ref_dmdtda=None, err_ref_dmdtda=None,
         ref_period='', ignore_hydro_months=False, min_mu_star=None,
         max_mu_star=None, mu_star_max_step_length=5, maxiter_mu_star=10,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
@@ -1428,12 +1428,8 @@ def run_dynamic_mu_star_calibration(
         Default is None
     err_ref_dmdtda : float or None
         The error of the reference geodetic mass balance to match (unit: kg m-2
-        yr-1). If None the data from Hugonett 2021 is used.
-        Default is None
-    min_precision : float or None
-        Additionaly to the error of the reference geodetic mass balance can
-        prescribe here a minimum percision to meet in percent of the given
-        reference geodetic mass balance.
+        yr-1). Must always be a positive number. If None the data from Hugonett
+        2021 is used.
         Default is None
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
@@ -1565,6 +1561,10 @@ def run_dynamic_mu_star_calibration(
                                                  ref_period]['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
+    if err_ref_dmdtda <= 0:
+        raise RuntimeError('The provided error for the geodetic mass-balance '
+                           '(err_ref_dmdtda) must be positive and non zero! But'
+                           f'given was {err_ref_dmdtda}!')
     # get start and end year of geodetic mb
     yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
     yr0_ref_mb = int(yr0_ref_mb.split('-')[0])
@@ -1638,13 +1638,13 @@ def run_dynamic_mu_star_calibration(
                 'dmdtda_mismatch_dynamic_calibration_reference',
                 float(ref_dmdtda))
             gdir.add_to_diagnostics(
-                'dmdtda_mismatch_dynamic_calibration_wanted_precision',
-                float(precision_percent_dmdtda))
+                'dmdtda_dynamic_calibration_given_error',
+                float(err_ref_dmdtda))
             gdir.add_to_diagnostics(
-                'dmdtda_mismatch_dynamic_calibration_percent',
+                'dmdtda_mismatch_dynamic_calibration',
                 float(best_mismatch))
             gdir.add_to_diagnostics(
-                'dmdtda_mismatch_with_initial_mu_star_percent',
+                'dmdtda_mismatch_with_initial_mu_star',
                 float(initial_mismatch))
             gdir.add_to_diagnostics('mu_star_dynamic_calibration',
                                     float(mu_star))
@@ -1654,25 +1654,6 @@ def run_dynamic_mu_star_calibration(
                                     int(dynamic_mu_star_calibration_runs[-1]))
 
         return model
-
-    # if reference dmdtda is zero no dynamic mu calibration is possible
-    if ref_dmdtda == 0.:
-        if ignore_errors:
-            log.workflow('Dynamic mu star calibration not possible with a '
-                         'reference value for dmdtda of 0.')
-            model_return = fallback_run(mu_star=mu_star_initial,
-                                        reset=True)
-            return model_return
-        else:
-            raise RuntimeError('The given reference value is Zero, no dynamic '
-                               'spinup possible!')
-
-    # Define the precision we want to reach during the minimisation using the
-    # provided geodetic mass balance error
-    precision_percent_dmdtda = 100 / abs(ref_dmdtda) * err_ref_dmdtda
-    # if a minimum precision was given, use it here
-    if min_precision is not None:
-        precision_percent_dmdtda = min(min_precision, precision_percent_dmdtda)
 
     # here we define the local variables which are used in the run_function,
     # for some run_functions this is useful to save parameters from a previous
@@ -1707,8 +1688,8 @@ def run_dynamic_mu_star_calibration(
         # save final model for later
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
-        # calculate the mismatch of dmdtda in percent
-        cost = float((dmdtda_mdl - ref_dmdtda) / ref_dmdtda * 100)
+        # calculate the mismatch of dmdtda
+        cost = float(dmdtda_mdl - ref_dmdtda)
 
         return cost
 
@@ -1881,24 +1862,25 @@ def run_dynamic_mu_star_calibration(
         mu_star_guess.append(new_mu_star)
         mismatch.append(new_mismatch)
 
-        if abs(mismatch[-1]) < precision_percent_dmdtda:
+        if abs(mismatch[-1]) < err_ref_dmdtda:
             return mismatch[-1], new_mu_star
 
         # second (arbitrary) guess is given depending on the outcome of first
-        # guess, mu_star is changed for percent of mismacth times
-        # mu_star_max_step_length (if mismatch=100% or 150%, next step is
-        # -mu_star_max_step_length; if mismatch=-40%, next step is
-        # 0.4 * mu_star_max_step_length, but at least a change of 0.5 to
-        # prevent to close guesses). (-1) as if mismatch is negative we need a
-        # larger mu_star to get closer to 0
-        step = (-1) * np.sign(mismatch[-1]) * max(np.abs(mismatch[-1]) *
-                                                  mu_star_max_step_length / 100,
-                                                  0.5)
+        # guess, mu_star is changed for percent of mismatch relative to
+        # err_ref_dmdtda times mu_star_max_step_length (if
+        # mismatch = 2 * err_ref_dmdtda this corresponds to 100%; for 100% or
+        # 150% the next step is (-1) * mu_star_max_step_length; if mismatch
+        # -40%, next step is 0.4 * mu_star_max_step_length; but always at least
+        # a change of 0.5 is imposed to prevent too close guesses). (-1) as if
+        # mismatch is negative we need a larger mu_star to get closer to 0
+        step = (-1) * np.sign(mismatch[-1]) * \
+            max((np.abs(mismatch[-1]) - err_ref_dmdtda) / err_ref_dmdtda *
+                mu_star_max_step_length, 0.5)
         new_mismatch, new_mu_star = get_mismatch(mu_star_guess[0] + step)
         mu_star_guess.append(new_mu_star)
         mismatch.append(new_mismatch)
 
-        if abs(mismatch[-1]) < precision_percent_dmdtda:
+        if abs(mismatch[-1]) < err_ref_dmdtda:
             return mismatch[-1], new_mu_star
 
         # Now start with splin fit for guessing
@@ -1928,15 +1910,15 @@ def run_dynamic_mu_star_calibration(
             mu_star_guess.append(new_mu_star)
             mismatch.append(new_mismatch)
 
-            if abs(mismatch[-1]) < precision_percent_dmdtda:
+            if abs(mismatch[-1]) < err_ref_dmdtda:
                 return mismatch[-1], new_mu_star
 
         # Ok when we end here the spinup could not find satisfying match after
         # maxiter(ations)
         raise RuntimeError(f'Could not find mismatch smaller '
-                           f'{precision_percent_dmdtda}% (only '
-                           f'{np.min(np.abs(mismatch))}%) in {maxiter_mu_star} '
-                           f'Iterations!')
+                           f'{err_ref_dmdtda} kg m-2 yr-1 (only '
+                           f'{np.min(np.abs(mismatch))} kg m-2 yr-1) in '
+                           f'{maxiter_mu_star} Iterations!')
 
     # wrapper to get values for intermediate (mismatch, mu_star) guesses if an
     # error is raised
@@ -1997,15 +1979,14 @@ def run_dynamic_mu_star_calibration(
     # hurray, dynamic mu star calibration successful
     gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_success',
                             1)
-    gdir.add_to_diagnostics(
-        'dmdtda_mismatch_dynamic_calibration_wanted_precision',
-        float(precision_percent_dmdtda))
-    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_percent',
-                            float(final_mismatch))
-    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_mu_star_percent',
-                            float(mismatch_dmdtda[0]))
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_reference',
                             float(ref_dmdtda))
+    gdir.add_to_diagnostics('dmdtda_dynamic_calibration_given_error',
+                            float(err_ref_dmdtda))
+    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration',
+                            float(final_mismatch))
+    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_mu_star',
+                            float(mismatch_dmdtda[0]))
     gdir.add_to_diagnostics('mu_star_dynamic_calibration', float(final_mu_star))
     gdir.add_to_diagnostics('mu_star_before_dynamic_calibration',
                             float(mu_star_initial))

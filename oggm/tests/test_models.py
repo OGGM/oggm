@@ -3732,7 +3732,7 @@ class TestHEF:
                 kwargs_fallback_function={'minimise_for': minimise_for},
                 output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
                 ignore_errors=False,
-                min_precision=0.1,
+                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
                 maxiter_mu_star=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
@@ -3748,7 +3748,7 @@ class TestHEF:
                                       'precision_absolute_dyn_spinup': precision_absolute},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
-            min_precision=0.1,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0.5
@@ -3782,7 +3782,7 @@ class TestHEF:
                                       'maxiter_dyn_spinup': 2},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
-            min_precision=0.1,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0
@@ -3801,38 +3801,6 @@ class TestHEF:
                     fls_init=fls, ys=1980, ye=2020,
                     local_variables=local_variables)
 
-        # test provided minimum precision
-        min_precision = 0.1
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-        run_dynamic_mu_star_calibration(
-            gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute},
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute},
-            output_filesuffix='_dyn_mu_calib_spinup_inversion_min_precision',
-            ys=1979, ye=ye, min_precision=min_precision)
-        ds = utils.compile_run_output(
-            gdir, input_filesuffix='_dyn_mu_calib_spinup_inversion_min_precision',
-            path=False)
-        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
-                       ds.volume.loc[yr0_ref_dmdtda].values) /
-                      gdir.rgi_area_m2 /
-                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
-                      cfg.PARAMS['ice_density'])
-        assert np.isclose(dmdtda_mdl, ref_dmdtda,
-                          rtol=min_precision)
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 1.
-
         # test that error is raised if user provided dmdtda is given without an
         # error and vice versa
         for use_ref_dmdtda, use_err_ref_dmdtda in zip([ref_dmdtda, None],
@@ -3843,6 +3811,17 @@ class TestHEF:
                 run_dynamic_mu_star_calibration(
                     gdir, max_mu_star=1000.,
                     ref_dmdtda=use_ref_dmdtda,
+                    err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test that error is raised if user provided dmdtda error is 0 or
+        # negative
+        for use_err_ref_dmdtda in [0., -0.1]:
+            with pytest.raises(RuntimeError,
+                               match='The provided error for the geodetic '
+                                     'mass-balance.*'):
+                run_dynamic_mu_star_calibration(
+                    gdir, max_mu_star=1000.,
+                    ref_dmdtda=ref_dmdtda,
                     err_ref_dmdtda=use_err_ref_dmdtda)
 
         # change settings back to default
@@ -3953,7 +3932,7 @@ class TestHEF:
                 fallback_function=dynamic_mu_star_run,
                 output_filesuffix='_dyn_mu_calib_error',
                 ignore_errors=False,
-                min_precision=0.1,
+                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
                 maxiter_mu_star=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
@@ -3963,7 +3942,7 @@ class TestHEF:
             fallback_function=dynamic_mu_star_run_fallback,
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
-            min_precision=0.1,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0.5
@@ -3977,36 +3956,10 @@ class TestHEF:
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
             output_filesuffix='_dyn_mu_calib_error',
             ignore_errors=True,
-            min_precision=0.1,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0
-
-        # test provided minimum precision
-        min_precision = 0.1
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-        run_dynamic_mu_star_calibration(
-            gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run,
-            fallback_function=dynamic_mu_star_run_fallback,
-            output_filesuffix='_dyn_mu_calib_min_precision',
-            ys=1979, ye=ye, min_precision=min_precision)
-        ds = utils.compile_run_output(
-            gdir, input_filesuffix='_dyn_mu_calib_min_precision',
-            path=False)
-        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
-                       ds.volume.loc[yr0_ref_dmdtda].values) /
-                      gdir.rgi_area_m2 /
-                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
-                      cfg.PARAMS['ice_density'])
-        assert np.isclose(dmdtda_mdl, ref_dmdtda,
-                          rtol=min_precision)
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 1.
 
         # test that error is raised if user provided dmdtda is given without an
         # error and vice versa
