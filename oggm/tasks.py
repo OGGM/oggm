@@ -33,6 +33,7 @@ from oggm.core.climate import mu_star_calibration_from_geodetic_mb
 from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.climate import apparent_mb_from_any_mb
 from oggm.core.massbalance import fixed_geometry_mass_balance
+from oggm.core.massbalance import compute_ela
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
 from oggm.shop.histalp import process_histalp_data

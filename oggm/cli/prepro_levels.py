@@ -22,6 +22,8 @@ from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
 
 # Module logger
+from oggm.utils import get_prepro_base_url, file_downloader
+
 log = logging.getLogger(__name__)
 
 
@@ -128,10 +130,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         compute all flowlines based on the OGGM centerline(s) method instead
         of the OGGM default, which is a mix of elev_bands and centerlines.
     match_regional_geodetic_mb : str
-        match the regional mass-balance estimates at the regional level
+        match the regional mass balance estimates at the regional level
         ('hugonnet': Hugonnet et al., 2020 or 'zemp': Zemp et al., 2019).
     match_geodetic_mb_per_glacier : str
-        match the mass-balance estimates at the glacier level
+        match the mass balance estimates at the glacier level
         (currently only 'hugonnet': Hugonnet et al., 2020).
     evolution_model : str
         which geometry evolution model to use: `fl_sia` (default),
@@ -164,8 +166,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
 
     if start_level is not None:
-        if start_level not in [0, 1, 2]:
-            raise InvalidParamsError('start_level should be one of [0, 1, 2]')
+        if start_level not in [0, 1, 2, 3, 4]:
+            raise InvalidParamsError('start_level should be one of [0, 1, 2, 3, 4]')
         if start_level > 0 and start_base_url is None:
             raise InvalidParamsError('With start_level, please also indicate '
                                      'start_base_url')
@@ -484,100 +486,113 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             return
 
     # L3 - Tasks
-    sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
-    utils.mkdir(sum_dir)
+    if start_level <= 2:
+        sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
+        utils.mkdir(sum_dir)
 
-    # Climate
-    workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+        # Climate
+        workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-    if cfg.PARAMS['climate_qc_months'] > 0:
-        workflow.execute_entity_task(tasks.historical_climate_qc, gdirs)
+        if cfg.PARAMS['climate_qc_months'] > 0:
+            workflow.execute_entity_task(tasks.historical_climate_qc, gdirs)
 
-    if match_geodetic_mb_per_glacier:
-        utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
-        workflow.execute_entity_task(tasks.mu_star_calibration_from_geodetic_mb, gdirs)
-        workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
-    else:
-        workflow.execute_entity_task(tasks.local_t_star, gdirs)
-        workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
+        if match_geodetic_mb_per_glacier:
+            utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
+            workflow.execute_entity_task(tasks.mu_star_calibration_from_geodetic_mb, gdirs)
+            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+        else:
+            workflow.execute_entity_task(tasks.local_t_star, gdirs)
+            workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
 
-    # Inversion: we match the consensus
-    filter = border >= 20
-    workflow.calibrate_inversion_from_consensus(gdirs,
-                                                apply_fs_on_mismatch=True,
-                                                error_on_mismatch=False,
-                                                filter_inversion_output=filter)
+        # Inversion: we match the consensus
+        filter = border >= 20
+        workflow.calibrate_inversion_from_consensus(gdirs,
+                                                    apply_fs_on_mismatch=True,
+                                                    error_on_mismatch=False,
+                                                    filter_inversion_output=filter)
 
-    # Do we want to match geodetic estimates?
-    # This affects only the bias so we can actually do this *after*
-    # the inversion, but we really want to take calving into account here
-    if match_regional_geodetic_mb:
-        opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
-                                      'before_match_{}.csv'.format(rgi_reg))
+        # Do we want to match geodetic estimates?
+        # This affects only the bias so we can actually do this *after*
+        # the inversion, but we really want to take calving into account here
+        if match_regional_geodetic_mb:
+            opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
+                                          'before_match_{}.csv'.format(rgi_reg))
+            utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
+            workflow.match_regional_geodetic_mb(gdirs, rgi_reg=rgi_reg,
+                                                dataset=match_regional_geodetic_mb)
+
+        # We get ready for modelling
+        if border >= 20:
+            workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+        else:
+            log.workflow('L3: for map border values < 20, wont initialize glaciers '
+                         'for the run.')
+        # Glacier stats
+        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        utils.compile_glacier_statistics(gdirs, path=opath)
+        opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
+        utils.compile_climate_statistics(gdirs, path=opath)
+        opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
         utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
-        workflow.match_regional_geodetic_mb(gdirs, rgi_reg=rgi_reg,
-                                            dataset=match_regional_geodetic_mb)
 
-    # We get ready for modelling
-    if border >= 20:
-        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
-    else:
-        log.workflow('L3: for map border values < 20, wont initialize glaciers '
-                     'for the run.')
-    # Glacier stats
-    opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_glacier_statistics(gdirs, path=opath)
-    opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
-    utils.compile_climate_statistics(gdirs, path=opath)
-    opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
-    utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
+        # L3 OK - compress all in output directory
+        log.workflow('L3 done. Writing to tar...')
+        level_base_dir = os.path.join(output_base_dir, 'L3')
+        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                     base_dir=level_base_dir)
+        utils.base_dir_to_tar(level_base_dir)
+        if max_level == 3:
+            _time_log()
+            return
+        if border < 20:
+            log.workflow('L3: for map border values < 20, wont compute L4 and L5.')
+            _time_log()
+            return
 
-    # L3 OK - compress all in output directory
-    log.workflow('L3 done. Writing to tar...')
-    level_base_dir = os.path.join(output_base_dir, 'L3')
-    workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
-    if max_level == 3:
-        _time_log()
-        return
-    if border < 20:
-        log.workflow('L3: for map border values < 20, wont compute L4 and L5.')
-        _time_log()
-        return
+        # is needed to copy some files for L4 and L5
+        sum_dir_L3 = sum_dir
 
     # L4 - No tasks: add some stats for consistency and make the dirs small
-    sum_dir_L3 = sum_dir
-    sum_dir = os.path.join(output_base_dir, 'L4', 'summary')
-    utils.mkdir(sum_dir)
+    if start_level <= 3:
+        sum_dir = os.path.join(output_base_dir, 'L4', 'summary')
+        utils.mkdir(sum_dir)
 
-    # Copy L3 files for consistency
-    for bn in ['glacier_statistics', 'climate_statistics',
-               'fixed_geometry_mass_balance']:
-        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
-        opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
-        shutil.copyfile(ipath, opath)
+        # Copy L3 files for consistency
+        for bn in ['glacier_statistics', 'climate_statistics',
+                   'fixed_geometry_mass_balance']:
+            if start_level < 3:
+                ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+            else:
+                ipath = file_downloader(os.path.join(
+                    get_prepro_base_url(base_url=start_base_url,
+                                        rgi_version=rgi_version, border=border,
+                                        prepro_level=start_level), 'summary',
+                    bn + '_{}.csv'.format(rgi_reg)))
 
-    # Copy mini data to new dir
-    mini_base_dir = os.path.join(working_dir, 'mini_perglacier',
-                                 'RGI{}'.format(rgi_version),
-                                 'b_{:03d}'.format(border))
-    mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
-                                              base_dir=mini_base_dir)
+            opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+            shutil.copyfile(ipath, opath)
 
-    # L4 OK - compress all in output directory
-    log.workflow('L4 done. Writing to tar...')
-    level_base_dir = os.path.join(output_base_dir, 'L4')
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
-    if max_level == 4:
-        _time_log()
-        return
+        # Copy mini data to new dir
+        mini_base_dir = os.path.join(working_dir, 'mini_perglacier',
+                                     'RGI{}'.format(rgi_version),
+                                     'b_{:03d}'.format(border))
+        mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
+                                                  base_dir=mini_base_dir)
+
+        # L4 OK - compress all in output directory
+        log.workflow('L4 done. Writing to tar...')
+        level_base_dir = os.path.join(output_base_dir, 'L4')
+        workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
+                                     base_dir=level_base_dir)
+        utils.base_dir_to_tar(level_base_dir)
+        if max_level == 4:
+            _time_log()
+            return
+
+        # use mini_gdirs for L5
+        gdirs = mini_gdirs
 
     # L5 - spinup run in mini gdirs
-    gdirs = mini_gdirs
-
     # Get end date. The first gdir might have blown up, try some others
     i = 0
     while True:
@@ -607,7 +622,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      evolution_model=evolution_model,
                                      minimise_for=dynamic_spinup,
                                      spinup_start_yr=dynamic_spinup_start_year,
-                                     spinup_period=None,
                                      output_filesuffix='_dynamic_spinup',
                                      )
         workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
@@ -643,7 +657,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Other stats for consistency
     for bn in ['climate_statistics', 'fixed_geometry_mass_balance']:
-        ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        if start_level < 3:
+            ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+        else:
+            ipath = file_downloader(os.path.join(
+                get_prepro_base_url(base_url=start_base_url,
+                                    rgi_version=rgi_version, border=border,
+                                    prepro_level=start_level), 'summary',
+                bn + '_{}.csv'.format(rgi_reg)))
         opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
         shutil.copyfile(ipath, opath)
 
@@ -651,7 +672,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
     mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
     # This is crucial - extending calving only possible with L3 data!!!
-    sf = os.path.join(sum_dir_L3, 'glacier_statistics_{}.csv'.format(rgi_reg))
+    if start_level < 3:
+        sf = os.path.join(sum_dir_L3, 'glacier_statistics_{}.csv'.format(rgi_reg))
+    else:
+        sf = file_downloader(os.path.join(
+            get_prepro_base_url(base_url=start_base_url,
+                                rgi_version=rgi_version, border=border,
+                                prepro_level=start_level), 'summary',
+            'glacier_statistics_{}.csv'.format(rgi_reg)))
     opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
     utils.extend_past_climate_run(past_run_file=pf,
                                   fixed_geometry_mb_file=mf,

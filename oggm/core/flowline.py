@@ -598,7 +598,7 @@ class FlowlineModel(object):
             is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
-            mass-balance should be recomputed from the mass balance model.
+            mass balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
         check_for_boundaries : bool
@@ -1002,7 +1002,7 @@ class FlowlineModel(object):
 
         if not self.mb_model.hemisphere:
             raise InvalidParamsError('run_until_and_store needs a '
-                                     'mass-balance model with an unambiguous '
+                                     'mass balance model with an unambiguous '
                                      'hemisphere.')
 
         # Do we have a spinup?
@@ -1329,7 +1329,7 @@ class FlowlineModel(object):
 
                 if stop_criterion is not None:
                     # Remove probable NaNs
-                    ds = ds.dropna('time')
+                    ds = ds.dropna('time', subset=['ts_section'])
 
                 geom_ds.append(ds)
 
@@ -1343,7 +1343,7 @@ class FlowlineModel(object):
 
         if stop_criterion is not None:
             # Remove probable NaNs
-            diag_ds = diag_ds.dropna('time')
+            diag_ds = diag_ds.dropna('time', subset=['volume_m3'])
 
         # write output?
         if do_fl_diag:
@@ -1356,7 +1356,7 @@ class FlowlineModel(object):
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
                 if stop_criterion is not None:
                     # Remove probable NaNs
-                    fl_diag_dss[i] = ds.dropna('time')
+                    fl_diag_dss[i] = ds.dropna('time', subset=['volume_m3'])
 
             # Write out?
             if fl_diag_path not in [True, None]:
@@ -1411,7 +1411,7 @@ class FlowlineModel(object):
         """ Runs the model until an equilibrium state is reached.
 
         Be careful: This only works for CONSTANT (not time-dependant)
-        mass-balance models.
+        mass balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
         """
@@ -1467,7 +1467,7 @@ class FluxBasedModel(FlowlineModel):
         flowlines : list
             the glacier flowlines
         mb_model : MassBalanceModel
-            the mass-balance model
+            the mass balance model
         y0 : int
             initial year of the simulation
         glen_a : float
@@ -1498,7 +1498,7 @@ class FluxBasedModel(FlowlineModel):
             is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
-            mass-balance should be recomputed from the mass balance model.
+            mass balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
         check_for_boundaries: bool, default: True
@@ -1781,7 +1781,7 @@ class FluxBasedModel(FlowlineModel):
             if is_trib:
                 flx_stag = flx_stag[:-1]
 
-            # Mass-balance
+            # Mass balance
             widths = fl.widths_m
             mb = mbs[fl_id]
             # Allow parabolic beds to grow
@@ -2050,11 +2050,7 @@ class FileModel(object):
     """Duck FlowlineModel which actually reads data out of a nc file."""
 
     def __init__(self, path):
-        """ Instantiate.
-
-        Parameters
-        ----------
-        """
+        """ Instantiate."""
 
         self.fls = glacier_from_netcdf(path)
 
@@ -2221,7 +2217,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         flowlines : list
             the glacier flowlines
         mb_model : MassBalanceModel
-            the mass-balance model
+            the mass balance model
         y0 : int
             initial year of the simulation
         advance_method : int
@@ -2882,7 +2878,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):
-        warnings.warn("The mass-balance used to drive the ice dynamics model "
+        warnings.warn("The mass balance used to drive the ice dynamics model "
                       "is updated yearly. If you want the output to be stored "
                       "monthly and also reflect monthly processes, "
                       "set store_monthly_step=True and "
@@ -2981,7 +2977,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        init_model_yr=None,
                        zero_initial_glacier=False,
                        unique_samples=False, **kwargs):
-    """Runs the random mass-balance model for a given number of years.
+    """Runs the random mass balance model for a given number of years.
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
@@ -3047,7 +3043,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
     unique_samples: bool
-        if true, chosen random mass-balance years will only be available once
+        if true, chosen random mass balance years will only be available once
         per random climate period-length
         if false, every model year will be chosen from the random climate
         period with the same probability
@@ -3098,7 +3094,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          zero_initial_glacier=False,
                          use_avg_climate=False,
                          **kwargs):
-    """Runs the constant mass-balance model for a given number of years.
+    """Runs the constant mass balance model for a given number of years.
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
@@ -3365,7 +3361,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     ----------
     run_task : func
         any of the `run_*`` tasks in the oggm.flowline module.
-        The mass-balance model used needs to have the `add_climate` output
+        The mass balance model used needs to have the `add_climate` output
         kwarg available though.
     store_monthly_hydro : bool
         also compute monthly hydrological diagnostics. The monthly outputs
@@ -3488,7 +3484,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             ref_area[:] = bin_area_2d.max(axis=0)
 
     # Ok now we have arrays, we can work with that
-    # -> second time varying loop is for mass-balance
+    # -> second time varying loop is for mass balance
     months = [1]
     seconds = cfg.SEC_IN_YEAR
     ntime = len(years) + 1
@@ -3555,7 +3551,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             'data': np.zeros(oshape),
         },
         'model_mb': {
-            'description': 'Annual mass-balance from dynamical model',
+            'description': 'Annual mass balance from dynamical model',
             'unit': 'kg yr-1',
             'data': np.zeros(ntime),
         },
@@ -3787,11 +3783,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        mb_model_historical=None, mb_model_spinup=None,
                        spinup_period=20, spinup_start_yr=None,
                        min_spinup_period=10, yr_rgi=None, minimise_for='area',
-                       precision_percent=1, first_guess_t_bias=-2,
-                       t_bias_max_step_length=2, maxiter=30,
-                       output_filesuffix='_dynamic_spinup',
+                       precision_percent=1, min_ice_thickness=10,
+                       first_guess_t_bias=-2, t_bias_max_step_length=2,
+                       maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=False,
-                       store_model_evolution=True, ignore_errors=True):
+                       store_model_evolution=True, ignore_errors=True,
+                       **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -3831,7 +3828,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         (yr_rgi - spinup_period) the spinup_period is set to
         (yr_rgi - yr_climate_start). Caution if spinup_start_yr is set the
         spinup_period is ignored.
-        Default is 20.
+        Default is 20
     spinup_start_yr : int or None
         The start year of the dynamic spinup. If the provided year is before
         the provided climate data starts the year of the climate data is used.
@@ -3846,12 +3843,30 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
     minimise_for : str
-        The variable we want to match at yr_rgi. Default is 'area'.
-        Options are 'area' or 'volume'.
+        The variable we want to match at yr_rgi. Options are 'area' or 'volume'.
+        Default is 'area'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 10,
-        meaning the difference must be within 10% of the given value
-        (area or volume).
+        Gives the precision we want to match in percent. The algorithm makes
+        sure that the resulting relative mismatch is smaller than
+        precision_percent, but also that the absolute value is smaller than
+        precision_absolute.
+        Default is 1, meaning the difference must be within 1% of the given
+        value (area or volume).
+    precision_absolute : float
+        Gives an minimum absolute value to match. The algorithm makes sure that
+        the resulting relative mismatch is smaller than precision_percent, but
+        also that the absolute value is smaller than precision_absolute.
+        The unit of precision_absolute depends on minimise_for (if 'area' in
+        km2, if 'volume' in km3)
+        Default is 1.
+    min_ice_thickness : float
+        Gives an minimum ice thickness for model grid points which are counted
+        to the total model value. This could be useful to filter out seasonal
+        'glacier growth', as OGGM do not differentiate between snow and ice in
+        the forward model run. Therefore you could see quite fast changes
+        (spikes) in the time-evolution (especially visible in length and area).
+        If you set this value to 0 the filtering can be switched off.
+        Default is 10.
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -3862,15 +3877,16 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         Default is 2
     maxiter : int
         Maximum number of minimisation iterations per spinup period. If reached
-        and 'ignore_errors=False' an error is raised. Default is 10.
+        and 'ignore_errors=False' an error is raised.
+        Default is 10.
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
         Default is True.
-    store_fl_diagnostics : bool
+    store_fl_diagnostics : bool or None
         whether to store the model flowline diagnostics to disk or not.
-        Default is False.
+        Default is None.
     store_model_evolution : bool
         if True the complete dynamic spinup run is saved (complete evolution
         of the model during the dynamic spinup), if False only the final model
@@ -3884,6 +3900,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         the 'output_filesuffix', if an error during the dynamic spinup occurs.
         This is useful if you want to keep glaciers for the following tasks.
         Default is True.
+    kwargs : dict
+        kwargs to pass to the evolution_model instance
 
     Returns
     -------
@@ -3923,6 +3941,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     else:
         geom_path = False
 
+    if store_fl_diagnostics is None:
+        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
+
     if store_fl_diagnostics:
         fl_diag_path = gdir.get_filepath('fl_diagnostics',
                                          filesuffix=output_filesuffix,
@@ -3934,6 +3955,26 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
+    if cfg.PARAMS['use_inversion_params_for_run']:
+        diag = gdir.get_diagnostics()
+        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
+        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
+    else:
+        fs = cfg.PARAMS['fs']
+        glen_a = cfg.PARAMS['glen_a']
+
+    kwargs.setdefault('fs', fs)
+    kwargs.setdefault('glen_a', glen_a)
+
+    mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
+    if mb_elev_feedback != 'annual':
+        raise InvalidParamsError('Only use annual mb_elev_feedback with the '
+                                 'dynamic spinup function!')
+
+    if cfg.PARAMS['use_kcalving_for_run']:
+        raise InvalidParamsError('Dynamic spinup not tested with '
+                                 "cfg.PARAMS['use_kcalving_for_run'] is `True`!")
+
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
@@ -3942,8 +3983,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_model_historical,
-                                                   y0=yr_use)
-
+                                                   y0=yr_use,
+                                                   **kwargs)
         with np.warnings.catch_warnings():
             # For operational runs we ignore the warnings
             np.warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -3989,6 +4030,20 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
                                     for f in fls_ref])
 
+    # if reference value is zero no dynamic spinup is possible
+    if reference_value == 0.:
+        if ignore_errors:
+            model_dynamic_spinup_end = save_model_without_dynamic_spinup()
+            return model_dynamic_spinup_end
+        else:
+            raise RuntimeError('The given reference value is Zero, no dynamic '
+                               'spinup possible!')
+
+    # here we adjust the used precision_percent to make sure the resulting
+    # absolute mismatch is smaller than precision_absolute
+    precision_percent = min(precision_percent,
+                            precision_absolute / reference_value * 100)
+
     # only used to check performance of function
     forward_model_runs = [0]
 
@@ -4001,7 +4056,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # run the spinup
         model_spinup = evolution_model(copy.deepcopy(fls_spinup),
                                        mb_model_spinup,
-                                       y0=0)
+                                       y0=0,
+                                       **kwargs)
         model_spinup.run_until(2 * halfsize_spinup)
 
         # if glacier is completely gone return information in ice-free
@@ -4012,7 +4068,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         # Now conduct the actual model run to the rgi date
         model_historical = evolution_model(model_spinup.fls,
                                            mb_model_historical,
-                                           y0=yr_spinup)
+                                           y0=yr_spinup,
+                                           **kwargs)
         if store_model_evolution:
             model_historical.run_until_and_store(
                 yr_rgi,
@@ -4033,7 +4090,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
-        value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
+        # only use grid points with a minimum ice thickness
+        fls = model_dynamic_spinup.fls
+        if cost_var == 'area_km2':
+            value_dynamic_spinup = np.sum(
+                [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-6
+        elif cost_var == 'volume_km3':
+            value_dynamic_spinup = np.sum(
+                [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-9
+        else:
+            raise NotImplementedError(f'{cost_var}')
 
         # calculate the mismatch in percent
         cost = (value_dynamic_spinup - value_ref) / value_ref * 100
@@ -4121,11 +4189,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                    (iteration < max_iterations)):
                 try:
                     tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
-
-                    # check if mismatch is inf -> reference value is 0
-                    if np.isinf(tmp_mismatch):
-                        raise RuntimeError('Mismatch is INF, this indicates '
-                                           'that the reference value is 0.!')
 
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
@@ -4726,12 +4789,12 @@ def clean_merged_flowlines(gdir, buffer=None):
             oix = 9999
             if _overlap.length > 0 and fl1 != fl2 and fl2.flows_to != fl1:
                 if isinstance(_overlap, shpg.MultiLineString):
-                    if _overlap[0].coords[0] == fl1.line.coords[0]:
+                    if _overlap.geoms[0].coords[0] == fl1.line.coords[0]:
                         # if the head of overlap is same as the first line,
                         # best guess is, that the heads are close topgether!
-                        _ov1 = _overlap[1].coords[1]
+                        _ov1 = _overlap.geoms[1].coords[1]
                     else:
-                        _ov1 = _overlap[0].coords[1]
+                        _ov1 = _overlap.geoms[0].coords[1]
                 else:
                     _ov1 = _overlap.coords[1]
                 for _i, _p in enumerate(fl1.line.coords):
@@ -4767,7 +4830,7 @@ def clean_merged_flowlines(gdir, buffer=None):
             # if the tributary flowline is longer than the main line,
             # _line will contain multiple LineStrings: only keep the first
             if isinstance(_linediff, shpg.MultiLineString):
-                _linediff = _linediff[0]
+                _linediff = _linediff.geoms[0]
 
             if len(_linediff.coords) < 10:
                 bufferuse -= 1

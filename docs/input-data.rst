@@ -1,5 +1,3 @@
-.. _shop:
-
 .. currentmodule:: oggm
 
 OGGM Shop
@@ -57,7 +55,7 @@ Currently, there are six available levels of pre-processing:
   computed and ready to be used.
 - **Level 3**: adding the baseline climate timeseries (CRU or ERA5, see below)
   to the directories. Adding all necessary pre-processing tasks
-  for a dynamical run, including the mass-balance calibration, bed inversion,
+  for a dynamical run, including the mass balance calibration, bed inversion,
   up to the :py:func:`tasks.init_present_time_glacier` task included.
   These directories still contain all data that were necessary for the processing,
   i.e. the largest in size but also the most flexible since
@@ -77,7 +75,7 @@ are some example use cases:
 
 1. *Running OGGM from GCM / RCM data with the default settings*: **start at level 5**
 2. *Using OGGM's flowlines but running your own baseline climate,
-   mass-balance or ice thickness inversion models*: **start at level 2** (and maybe
+   mass balance or ice thickness inversion models*: **start at level 2** (and maybe
    use OGGM's workflow again for glacier dynamic evolution?). This is the workflow used
    by associated model `PyGEM <https://github.com/drounce/PyGEM>`_ for example.
 3. *Run sensitivity experiments for the ice thickness inversion*: start at level
@@ -188,7 +186,7 @@ directories from the default urls. Here is a summary of the default configuratio
 - baseline climate quality checked and corrected if needed with :py:func:`tasks.historical_climate_qc` with ``N=3``.
   If the condition of at least 3 months of melt per year at the terminus and 3 months of accumulation
   at the glacier top is not reached, temperatures are shifted (path index: *qc3*).
-- mass-balance parameters calibrated with the standard OGGM procedure (:ref:`mass-balance-2012`, path index: *no_match*).
+- mass balance parameters calibrated with the standard OGGM procedure (:doc:`mass-balance-2012`, path index: *no_match*).
   No calibration against geodetic MB (see options below for regional calibration).
 - ice volume inversion calibrated to match the ice volume from [Farinotti_etal_2019]_
   **at the RGI region level**, i.e. glacier estimates might differ. If not specified otherwise,
@@ -217,7 +215,7 @@ contains diagnostic files which can be useful as well.
 B. Option: Geometrical centerlines or elevation band flowlines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The type of flowline to use (see :ref:`flowlines`) can be decided at level 2 already.
+The type of flowline to use (see :doc:`flowlines`) can be decided at level 2 already.
 Therefore, the two configurations available at level 2 from these urls:
 
 - `L1-L2_files/centerlines <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L1-L2_files/centerlines/>`_ for centerlines
@@ -245,32 +243,32 @@ Note that the globally calibrated multiplicative precipitation factor (pcp) depe
 (e.g. pcp is 2.5 for CRU and 1.6 for ERA5). If you want to use another baseline climate, you have to calibrate the
 precipitation factor yourself. Please get in touch with us in that case!
 
-D. Option: Mass-balance calibration method
+D. Option: Mass balance calibration method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are different mass-balance calibration options available in the preprocessed directories:
+There are different mass balance calibration options available in the preprocessed directories:
 
 -   **no_match**: This is the default calibration option. For calibration, the direct glaciological WGMS data is used
     and the `Marzeion et al., 2012`_ *tstar* method is applied to interpolate to glaciers without measurements
-    (see also :ref:`mass-balance-2012`). With this method, the geodetic estimates are not matched.
+    (see also :doc:`mass-balance-2012`). With this method, the geodetic estimates are not matched.
 -   **match_geod**: The default calibration with direct glaciological WGMS data is still applied on the glacier per
     glacier level, but on the regional level the epsilon (residual) is corrected to match the geodetic estimates
     from `Hugonnet et al., 2021`_ (using :py:func:`oggm.workflow.match_regional_geodetic_mb`, see also
     :ref:`regional-match-calib`). For example:
 
-    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances
-    - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances
+    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass balances
+    - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass balances
 
 -   **match_geod_pergla**: Only the per-glacier geodetic estimates from `Hugonnet et al., 2021`_
-    (mean mass-balance change between 2000 and 2020) are used for calibration. The mass-balance model parameter
+    (mean mass balance change between 2000 and 2020) are used for calibration. The mass balance model parameter
     :math:`\mu ^{*}` of each glacier is calibrated to match individually the geodetic estimates (using
     :py:func:`oggm.core.climate.mustar_calibration_from_geodetic_mb`). For the preprocessed glacier directories, the
-    allowed :math:`\mu ^{*}` range is set to 20--600 (more in :ref:`mass-balance-2012-pergla`).
+    allowed :math:`\mu ^{*}` range is set to 20--600 (more in :doc:`mass-balance-2012-pergla`).
     This option only works for elevation band flowlines at the moment. match_geod_pergla makes only sense without
     "external" climate quality check and correction (i.e. qc0) as this is already done internally. For example:
 
-    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass-balances on individual glacier level
-    - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass-balances on individual glacier level
+    - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass balances on individual glacier level
+    - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass balances on individual glacier level
 
     .. warning::
         make sure that you use the oggm_v1.6 directory for match_geod_pergla and match_geod_pergla_massredis!
@@ -288,12 +286,12 @@ E. Further set-ups
 Here is a list of other available configurations at the time of writing (explore the server for more!):
 
 - `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/no_match/>`_ for CERA+ERA5 + elevation bands flowlines
-- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for CERA+ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances
-- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + precipitation factor 1.8
-- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + no climate quality check
+- `L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CERA+ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for CERA+ERA5 + elevation bands flowlines + matched on regional geodetic mass balances
+- `L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.8/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass balances + precipitation factor 1.8
+- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass balances + no climate quality check
 - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/no_match/>`_ for CRU + elevation bands flowlines + no climate quality check
-- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla_massredis/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass-balances + mass redistribution instead of SIA (see: :ref:`mass-redistribution`)
-- `L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla_massredis/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass-balances + mass redistribution instead of SIA
+- `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla_massredis/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass balances + mass redistribution instead of SIA (see: :doc:`mass-redistribution`)
+- `L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla_massredis <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla_massredis/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass balances + mass redistribution instead of SIA
 
 Note: the additional set-ups might not always have all map sizes available. Please
 get in touch if you have interest in a specific set-up. Remember that per default, the climate quality check
@@ -400,13 +398,13 @@ file in the OGGM `sample-data`_ folder for an example format.
 GCM data
 ~~~~~~~~
 
-OGGM can also use climate model output to drive the mass-balance model. In
+OGGM can also use climate model output to drive the mass balance model. In
 this case we still rely on gridded observations (e.g. CRU) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
 period. This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
 Visit our online tutorials to see how this can be done
-(`OGGM run with GCM tutorial <https://oggm.org/tutorials/notebooks/run_with_gcm.html>`_).
+(`OGGM run with GCM tutorial <https://oggm.org/tutorials/master/notebooks/run_with_gcm.html>`_).
 
 RGI-TOPO
 --------
@@ -424,17 +422,17 @@ our `tutorials`_ if you are interested!).
 
 .. _tutorials: https://oggm.org/tutorials
 
-Reference mass-balance data
+Reference mass balance data
 ---------------------------
 
 Traditional in-situ MB data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In-situ mass-balance data are used by OGGM to calibrate and validate the
-first generation mass-balance model (:ref:`mass-balance-2012`).
-We rely on mass-balance observations provided by the
+In-situ mass balance data are used by OGGM to calibrate and validate the
+first generation mass balance model (:doc:`mass-balance-2012`).
+We rely on mass balance observations provided by the
 World Glacier Monitoring Service (`WGMS`_).
-The `Fluctuations of Glaciers (FoG)`_ database contains annual mass-balance
+The `Fluctuations of Glaciers (FoG)`_ database contains annual mass balance
 values for several hundreds of glaciers worldwide. We exclude water-terminating
 glaciers and the time series with less than five years of
 data.
@@ -473,7 +471,7 @@ have access to the timeseries through the glacier directory:
 Geodetic MB data
 ~~~~~~~~~~~~~~~~
 
-OGGM ships with a geodetic mass-balance table containing MB information for all
+OGGM ships with a geodetic mass balance table containing MB information for all
 of the world's glaciers as obtained from `Hugonnet et al., 2021`_.
 
 The original, raw data have been modified in three ways (`code <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb?flush_cache=true>`_):
@@ -493,7 +491,7 @@ You can access the table with:
     mbdf = utils.get_geodetic_mb_dataframe()
     mbdf.head()
 
-The data contains the climatic mass-balance (in units meters water-equivalent per year)
+The data contains the climatic mass balance (in units meters water-equivalent per year)
 for three reference periods (2000-2010, 2010-2020, 2000-2020):
 
 .. ipython:: python
@@ -793,7 +791,7 @@ folder for an example.
 
 **‣ GCM data**
 
-OGGM can also use climate model output to drive the mass-balance model. In
+OGGM can also use climate model output to drive the mass balance model. In
 this case we still rely on gridded observations (CRU) for the baseline
 climatology and apply the GCM anomalies computed from a preselected reference
 period. This method is sometimes called the

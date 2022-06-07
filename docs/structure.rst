@@ -94,7 +94,7 @@ downloading and extracting these data locally:
     @savefig plot_example_inversion.png width=100%
     graphics.plot_inversion(gdirs[0])
 
-See also the documentation page for :ref:`shop` for more examples of
+See also the documentation page for :doc:`input-data` for more examples of
 the kind of data that can be added to glacier directories.
 
 .. admonition:: More details: pros and cons of glacier directories
@@ -184,7 +184,7 @@ Modularity in OGGM is achieved in two major ways:
   interfaces to couple modelling elements between each other. A typical example
   are the ``FlowlineModel`` and ``MassBalanceModel`` classes which are use
   to couple the two models without enforcing any particular way to solve the
-  glacier geometry evolution or the climatic mass-balance.
+  glacier geometry evolution or the climatic mass balance.
 - **persistence on disk with Glacier Directories**: as explained in the previous
   chapter, :ref:`tasks can be interchanged <fl_compat>` during a processing
   workflow, allowing modularity as long as all tasks agree on the format
@@ -206,5 +206,5 @@ OGGM is designed for large-scale applications, i.e. we have pre-downloaded and
 pre-processed a large number of datasets that are ready to use from within the
 OGGM framework.
 
-Visit :ref:`shop` to learn all you need to know about the data we have
+Visit :doc:`input-data` to learn all you need to know about the data we have
 prepared for you!

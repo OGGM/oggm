@@ -6,7 +6,7 @@ to be realized by any OGGM pre-processing workflow.
 import os
 import logging
 import warnings
-from distutils.version import LooseVersion
+from packaging.version import Version
 from functools import partial
 
 # External libs
@@ -16,9 +16,7 @@ import pandas as pd
 import xarray as xr
 import shapely.geometry as shpg
 import scipy.signal
-from scipy.ndimage.measurements import label
-from scipy.ndimage import binary_erosion
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage import label, distance_transform_edt, binary_erosion
 from scipy.interpolate import griddata
 from scipy import optimize as optimization
 
@@ -312,18 +310,18 @@ def define_glacier_region(gdir, entity=None, source=None):
           - 'USER' : file set in cfg.PATHS['dem_file']
           - 'SRTM' : http://srtm.csi.cgiar.org/
           - 'GIMP' : https://bpcrc.osu.edu/gdg/data/gimpdem
-          - 'RAMP' : http://nsidc.org/data/docs/daac/nsidc0082_ramp_dem.gd.html
+          - 'RAMP' : https://nsidc.org/data/nsidc-0082/versions/2/documentation
           - 'REMA' : https://www.pgc.umn.edu/data/rema/
           - 'DEM3' : http://viewfinderpanoramas.org/
-          - 'ASTER' : https://lpdaac.usgs.gov/products/astgtmv003/
+          - 'ASTER' : https://asterweb.jpl.nasa.gov/gdem.asp
           - 'TANDEM' : https://geoservice.dlr.de/web/dataguide/tdm90/
           - 'ARCTICDEM' : https://www.pgc.umn.edu/data/arcticdem/
-          - 'AW3D30' : https://www.eorc.jaxa.jp/ALOS/en/aw3d30
+          - 'AW3D30' : https://www.eorc.jaxa.jp
           - 'MAPZEN' : https://registry.opendata.aws/terrain-tiles/
           - 'ALASKA' : https://www.the-cryosphere.net/8/503/2014/
-          - 'COPDEM30' : Copernicus DEM GLO-30 https://bit.ly/2T98qqs
-          - 'COPDEM90' : Copernicus DEM GLO-90 https://bit.ly/2T98qqs
-          - 'NASADEM': https://lpdaac.usgs.gov/products/nasadem_hgtv001/
+          - 'COPDEM30' : Copernicus DEM GLO30 https://spacedata.copernicus.eu/web/cscda/cop-dem-faq
+          - 'COPDEM90' : Copernicus DEM GLO90 https://spacedata.copernicus.eu/web/cscda/cop-dem-faq
+          - 'NASADEM':  https://doi.org/10.5069/G93T9FD9
     """
 
     utm_proj, nx, ny, ulx, uly, dx = glacier_grid_params(gdir)
@@ -336,9 +334,9 @@ def define_glacier_region(gdir, entity=None, source=None):
     # Open DEM
     # We test DEM availability for glacier only (maps can grow big)
     if not is_dem_source_available(source, *gdir.extent_ll):
-        log.warning('Source: {} may not be available for glacier {} with '
-                    'border {}'.format(source, gdir.rgi_id,
-                                       cfg.PARAMS['border']))
+        raise InvalidWorkflowError(f'Source: {source} is not available for '
+                                   f'glacier {gdir.rgi_id} with border '
+                                   f"{cfg.PARAMS['border']}")
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          rgi_id=gdir.rgi_id,
                                          dx_meter=dx,
@@ -358,7 +356,7 @@ def define_glacier_region(gdir, entity=None, source=None):
     if len(dem_list) == 1:
         dem_dss = [rasterio.open(dem_list[0])]  # if one tile, just open it
         dem_data = rasterio.band(dem_dss[0], 1)
-        if LooseVersion(rasterio.__version__) >= LooseVersion('1.0'):
+        if Version(rasterio.__version__) >= Version('1.0'):
             src_transform = dem_dss[0].transform
         else:
             src_transform = dem_dss[0].affine
@@ -1180,7 +1178,7 @@ def _all_inflows(cls, cl):
 
 @entity_task(log)
 def gridded_mb_attributes(gdir):
-    """Adds mass-balance related attributes to the gridded data file.
+    """Adds mass balance related attributes to the gridded data file.
 
     This could be useful for distributed ice thickness models.
     The raster data are added to the gridded_data file.
@@ -1211,7 +1209,7 @@ def gridded_mb_attributes(gdir):
     catchment_mask = catchment_mask_2d[glacier_mask_2d].astype(int)
     topo = topo_2d[glacier_mask_2d]
 
-    # Prepare the distributed mass-balance data
+    # Prepare the distributed mass balance data
     rho = cfg.PARAMS['ice_density']
     dx2 = gdir.grid.dx ** 2
 
@@ -1224,7 +1222,7 @@ def gridded_mb_attributes(gdir):
     mbmod = LinearMassBalance(float(ela_h['x']))
     lin_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
     if not np.isclose(np.sum(lin_mb_on_z), 0, atol=10):
-        raise RuntimeError('Spec mass-balance should be zero but is: {}'
+        raise RuntimeError('Spec mass balance should be zero but is: {}'
                            .format(np.sum(lin_mb_on_z)))
 
     # Normal OGGM (a bit tweaked)
@@ -1242,7 +1240,7 @@ def gridded_mb_attributes(gdir):
                                 y0=df['t_star'])
     oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
     if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=10):
-        raise RuntimeError('Spec mass-balance should be zero but is: {}'
+        raise RuntimeError('Spec mass balance should be zero but is: {}'
                            .format(np.sum(oggm_mb_on_z)))
 
     # Altitude based mass balance
@@ -1343,10 +1341,10 @@ def gridded_mb_attributes(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'kg/year'
         v.long_name = 'MB above point from linear MB model, without catchments'
-        v.description = ('Mass-balance cumulated above the altitude of the'
+        v.description = ('Mass balance cumulated above the altitude of the'
                          'point, hence in unit of flux. Note that it is '
                          'a coarse approximation of the real flux. '
-                         'The mass-balance model is a simple linear function'
+                         'The mass balance model is a simple linear function'
                          'of altitude.')
         v[:] = lin_mb_above_z
 
@@ -1357,10 +1355,10 @@ def gridded_mb_attributes(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'kg/year'
         v.long_name = 'MB above point from linear MB model, with catchments'
-        v.description = ('Mass-balance cumulated above the altitude of the'
+        v.description = ('Mass balance cumulated above the altitude of the'
                          'point in a flowline catchment, hence in unit of '
                          'flux. Note that it is a coarse approximation of the '
-                         'real flux. The mass-balance model is a simple '
+                         'real flux. The mass balance model is a simple '
                          'linear function of altitude.')
         v[:] = lin_mb_above_z_on_catch
 
@@ -1371,10 +1369,10 @@ def gridded_mb_attributes(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'kg/year'
         v.long_name = 'MB above point from OGGM MB model, without catchments'
-        v.description = ('Mass-balance cumulated above the altitude of the'
+        v.description = ('Mass balance cumulated above the altitude of the'
                          'point, hence in unit of flux. Note that it is '
                          'a coarse approximation of the real flux. '
-                         'The mass-balance model is a calibrated temperature '
+                         'The mass balance model is a calibrated temperature '
                          'index model like OGGM.')
         v[:] = oggm_mb_above_z
 
@@ -1385,10 +1383,10 @@ def gridded_mb_attributes(gdir):
             v = nc.createVariable(vn, 'f4', ('y', 'x', ))
         v.units = 'kg/year'
         v.long_name = 'MB above point from OGGM MB model, with catchments'
-        v.description = ('Mass-balance cumulated above the altitude of the'
+        v.description = ('Mass balance cumulated above the altitude of the'
                          'point in a flowline catchment, hence in unit of '
                          'flux. Note that it is a coarse approximation of the '
-                         'real flux. The mass-balance model is a calibrated '
+                         'real flux. The mass balance model is a calibrated '
                          'temperature index model like OGGM.')
         v[:] = oggm_mb_above_z_on_catch
 

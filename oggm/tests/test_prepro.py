@@ -1,7 +1,7 @@
 import unittest
 import os
 import shutil
-from distutils.version import LooseVersion
+from packaging.version import Version
 import pytest
 import warnings
 
@@ -301,8 +301,8 @@ class TestGIS(unittest.TestCase):
         with pytest.raises(RuntimeError):
             gis.glacier_masks(gdir)
 
-    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
-                         LooseVersion('1.0')),
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
                         reason='requires rasterio >= 1.0')
     def test_simple_glacier_masks(self):
 
@@ -357,8 +357,8 @@ class TestGIS(unittest.TestCase):
         assert dft.sum()[0] == 1000
         assert utils.rmsd(dft['ref'], dft['oggm']) < 5
 
-    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
-                         LooseVersion('1.0')),
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
                         reason='requires rasterio >= 1.0')
     def test_glacier_masks_other_glacier(self):
 
@@ -390,8 +390,8 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
         np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
 
-    @pytest.mark.skipif((LooseVersion(rasterio.__version__) <
-                         LooseVersion('1.0')),
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
                         reason='requires rasterio >= 1.0')
     def test_rasterio_glacier_masks(self):
 
@@ -3086,7 +3086,7 @@ class TestColumbiaCalving(unittest.TestCase):
         df = inversion.find_inversion_calving(gdir)
 
         assert df['calving_flux'] > 2
-        assert df['calving_rate_myr'] > 500
+        assert df['calving_rate_myr'] > 450
         assert df['calving_mu_star'] == 0
 
         # Test that new MB equal flux
@@ -3625,11 +3625,12 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
-        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_temp_file'] = f
-        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_precip_file'] = f
-        gcm_climate.process_cmip_data(gdir, filesuffix='_CCSM4')
+        fpath_temp = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        fpath_precip = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4')
 
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
@@ -3797,13 +3798,17 @@ class TestGCMClimate(unittest.TestCase):
         self.assertEqual(ci['baseline_hydro_yr_0'], 1902)
         self.assertEqual(ci['baseline_hydro_yr_1'], 2014)
 
-        f = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_temp_file'] = f
-        f = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
-        cfg.PATHS['cmip5_precip_file'] = f
-        gcm_climate.process_cmip_data(gdir, filesuffix='_CCSM4_ns',
+        fpath_temp = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        fpath_precip = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4_ns',
                                       scale_stddev=False)
-        gcm_climate.process_cmip_data(gdir, filesuffix='_CCSM4')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4')
 
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')

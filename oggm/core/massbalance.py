@@ -1,4 +1,4 @@
-"""Mass-balance models"""
+"""Mass balance models"""
 # Built ins
 import logging
 # External libs
@@ -13,7 +13,8 @@ import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, lazy_property, floatyear_to_date,
                         date_to_floatyear, monthly_timeseries, ncDataset,
-                        tolist, clip_min, clip_max, clip_array)
+                        tolist, clip_min, clip_max, clip_array,
+                        weighted_average_1d)
 from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
 from oggm import entity_task
 
@@ -24,13 +25,18 @@ log = logging.getLogger(__name__)
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Interface and common logic for all mass balance models used in OGGM.
 
-    All mass-balance models should implement this interface.
+    All mass balance models should implement this interface.
 
     Attributes
     ----------
     valid_bounds : [float, float]
         The altitudinal bounds where the MassBalanceModel is valid. This is
         necessary for automated ELA search.
+    hemisphere : str, {'nh', 'sh'}
+        Used for time handling when the hydrological year convention is
+        used (``cfg.PARAMS['hydro_month_nh'] != 1``)
+    rho : float, default: ``cfg.PARAMS['ice_density']``
+        Density of ice
     """
 
     def __init__(self):
@@ -40,7 +46,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         self.rho = cfg.PARAMS['ice_density']
 
     def __repr__(self):
-        """String Representation of the mass-balance model"""
+        """String Representation of the mass balance model"""
         summary = ['<oggm.MassBalanceModel>']
         summary += ['  Class: ' + self.__class__.__name__]
         summary += ['  Attributes:']
@@ -53,22 +59,8 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
 
-    # TODO: remove this in OGGM v1.5
-    @property
-    def prcp_bias(self):
-        raise AttributeError('prcp_bias has been renamed to prcp_fac as it is '
-                             'a multiplicative factor, please use prcp_fac '
-                             'instead.')
-
-    @prcp_bias.setter
-    def prcp_bias(self, new_prcp_fac):
-        raise AttributeError('prcp_bias has been renamed to prcp_fac as it is '
-                             'a multiplicative factor. If you want to '
-                             'change the precipitation scaling factor use '
-                             'prcp_fac instead.')
-
     def get_monthly_mb(self, heights, year=None, fl_id=None, fls=None):
-        """Monthly mass-balance at given altitude(s) for a moment in time.
+        """Monthly mass balance at given altitude(s) for a moment in time.
 
         Units: [m s-1], or meters of ice per second
 
@@ -78,7 +70,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the atitudes at which the mass-balance will be computed
+            the atitudes at which the mass balance will be computed
         year: float, optional
             the time (in the "hydrological floating year" convention)
         fl_id: float, optional
@@ -91,14 +83,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         Returns
         -------
-        the mass-balance (same dim as `heights`) (units: [m s-1])
+        the mass balance (same dim as `heights`) (units: [m s-1])
         """
         raise NotImplementedError()
 
     def get_annual_mb(self, heights, year=None, fl_id=None, fls=None):
         """Like `self.get_monthly_mb()`, but for annual MB.
 
-        For some simpler mass-balance models ``get_monthly_mb()` and
+        For some simpler mass balance models ``get_monthly_mb()` and
         `get_annual_mb()`` can be equivalent.
 
         Units: [m s-1], or meters of ice per second
@@ -109,7 +101,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the altitudes at which the mass-balance will be computed
+            the altitudes at which the mass balance will be computed
         year: float, optional
             the time (in the "floating year" convention)
         fl_id: float, optional
@@ -122,7 +114,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         Returns
         -------
-        the mass-balance (same dim as `heights`) (units: [m s-1])
+        the mass balance (same dim as `heights`) (units: [m s-1])
         """
         raise NotImplementedError()
 
@@ -135,7 +127,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the altitudes at which the mass-balance will be computed.
+            the altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided
         widths: ndarray
             the widths of the flowline (necessary for the weighted average).
@@ -148,7 +140,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         Returns
         -------
-        the specific mass-balance (units: mm w.e. yr-1)
+        the specific mass balance (units: mm w.e. yr-1)
         """
 
         if len(np.atleast_1d(year)) > 1:
@@ -174,10 +166,10 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         else:
             mbs = self.get_annual_mb(heights, year=year)
 
-        return np.average(mbs, weights=widths) * SEC_IN_YEAR * self.rho
+        return weighted_average_1d(mbs, widths) * SEC_IN_YEAR * self.rho
 
     def get_ela(self, year=None, **kwargs):
-        """Compute the equilibrium line altitude for this year
+        """Compute the equilibrium line altitude for a given year.
 
         Parameters
         ----------
@@ -211,13 +203,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
 
 class ScalarMassBalance(MassBalanceModel):
-    """Constant mass-balance, everywhere."""
+    """Constant mass balance, everywhere."""
 
     def __init__(self, mb=0.):
         """ Initialize.
+
         Parameters
         ----------
-        mb: float
+        mb : float
             Fix the mass balance to a certain value (unit: [mm w.e. yr-1])
         """
         super(ScalarMassBalance, self).__init__()
@@ -235,7 +228,17 @@ class ScalarMassBalance(MassBalanceModel):
 
 
 class LinearMassBalance(MassBalanceModel):
-    """Constant mass-balance as a linear function of altitude.
+    """Constant mass balance as a linear function of altitude.
+
+    Attributes
+    ----------
+    ela_h: float
+        the equilibrium line altitude (units: [m])
+    grad: float
+        the mass balance gradient (unit: [mm w.e. yr-1 m-1])
+    max_mb: float
+        Cap the mass balance to a certain value (unit: [mm w.e. yr-1])
+    temp_bias
     """
 
     def __init__(self, ela_h, grad=3., max_mb=None):
@@ -246,16 +249,9 @@ class LinearMassBalance(MassBalanceModel):
         ela_h: float
             Equilibrium line altitude (units: [m])
         grad: float
-            Mass-balance gradient (unit: [mm w.e. yr-1 m-1])
+            Mass balance gradient (unit: [mm w.e. yr-1 m-1])
         max_mb: float
             Cap the mass balance to a certain value (unit: [mm w.e. yr-1])
-
-        Attributes
-        ----------
-        temp_bias : float, default 0
-            A "temperature bias" doesn't makes much sense in the linear MB
-            context, but we implemented a simple empirical rule:
-            + 1K -> ELA + 150 m
         """
         super(LinearMassBalance, self).__init__()
         self.hemisphere = 'nh'
@@ -268,12 +264,16 @@ class LinearMassBalance(MassBalanceModel):
 
     @property
     def temp_bias(self):
-        """Temperature bias to add to the original series."""
+        """Change the ELA following a simple rule: + 1K -> ELA + 150 m
+
+        A "temperature bias" doesn't makes much sense in the linear MB
+        context, but we implemented a simple empirical rule:
+        + 1K -> ELA + 150 m
+        """
         return self._temp_bias
 
     @temp_bias.setter
     def temp_bias(self, value):
-        """Temperature bias to change the ELA."""
         self.ela_h = self.orig_ela_h + value * 150
         self._temp_bias = value
 
@@ -288,7 +288,13 @@ class LinearMassBalance(MassBalanceModel):
 
 
 class PastMassBalance(MassBalanceModel):
-    """Mass balance during the climate data period."""
+    """Mass balance during the climate data period.
+
+    Attributes
+    ----------
+    temp_bias
+    prcp_fac
+    """
 
     def __init__(self, gdir, mu_star=None, bias=None,
                  filename='climate_historical', input_filesuffix='',
@@ -326,15 +332,6 @@ class PastMassBalance(MassBalanceModel):
             the parameters used during calibration and the ones you are
             using at run time. If they don't match, it will raise an error.
             Set to False to suppress this check.
-
-        Attributes
-        ----------
-        temp_bias : float, default 0
-            Add a temperature bias to the time series
-        prcp_fac : float, default cfg.PARAMS['prcp_scaling_factor']
-            Precipitation factor to the time series (called factor to make clear
-             that it is a multiplicative factor in contrast to the additive
-             `temp_bias`)
         """
 
         super(PastMassBalance, self).__init__()
@@ -345,7 +342,7 @@ class PastMassBalance(MassBalanceModel):
             if check_calib_params:
                 if not df['mu_star_allsame']:
                     msg = ('You seem to use the glacier-wide mu* to compute '
-                           'the mass-balance although this glacier has '
+                           'the mass balance although this glacier has '
                            'different mu* for its flowlines. Set '
                            '`check_calib_params=False` to prevent this '
                            'error.')
@@ -376,7 +373,7 @@ class PastMassBalance(MassBalanceModel):
             mb_calib = gdir.get_climate_info()['mb_calib_params']
             for k, v in mb_calib.items():
                 if v != cfg.PARAMS[k]:
-                    msg = ('You seem to use different mass-balance parameters '
+                    msg = ('You seem to use different mass balance parameters '
                            'than used for the calibration: '
                            f"you use cfg.PARAMS['{k}']={cfg.PARAMS[k]} while "
                            f"it was calibrated with cfg.PARAMS['{k}']={v}. "
@@ -444,6 +441,11 @@ class PastMassBalance(MassBalanceModel):
     # after instantiation with properly changing the prcp time series
     @property
     def prcp_fac(self):
+        """Precipitation factor (default: cfg.PARAMS['prcp_scaling_factor'])
+
+        Called factor to make clear that it is a multiplicative factor in
+        contrast to the additive temperature bias
+        """
         return self._prcp_fac
 
     @prcp_fac.setter
@@ -464,9 +466,9 @@ class PastMassBalance(MassBalanceModel):
         # update old prcp_fac in order that it can be updated again ...
         self._prcp_fac = new_prcp_fac
 
-    # same for temp_bias:
     @property
     def temp_bias(self):
+        """Add a temperature bias to the time series"""
         return self._temp_bias
 
     @temp_bias.setter
@@ -593,9 +595,20 @@ class PastMassBalance(MassBalanceModel):
 
 
 class ConstantMassBalance(MassBalanceModel):
-    """Constant mass-balance during a chosen period.
+    """Constant mass balance during a chosen period.
 
-    This is useful for equilibrium experiments.
+    This is useful for equilibrium experiments. Note that is is the "correct"
+    way to represent the average mass balance over a given period.
+    See: https://oggm.org/2021/08/05/mean-forcing/
+
+    Attributes
+    ----------
+    y0 : int
+        the center year of the period
+    halfsize : int
+        the halfsize of the period
+    years : ndarray
+        the years of the period
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
@@ -666,7 +679,6 @@ class ConstantMassBalance(MassBalanceModel):
 
     @temp_bias.setter
     def temp_bias(self, value):
-        """Temperature bias to add to the original series."""
         for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
             if hasattr(self, attr_name):
                 delattr(self, attr_name)
@@ -679,7 +691,6 @@ class ConstantMassBalance(MassBalanceModel):
 
     @prcp_fac.setter
     def prcp_fac(self, value):
-        """Precipitation factor to apply to the original series."""
         for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
             if hasattr(self, attr_name):
                 delattr(self, attr_name)
@@ -692,7 +703,6 @@ class ConstantMassBalance(MassBalanceModel):
 
     @bias.setter
     def bias(self, value):
-        """Residual bias to apply to the original series."""
         self.mbmod.bias = value
 
     @lazy_property
@@ -794,12 +804,10 @@ class ConstantMassBalance(MassBalanceModel):
 
 
 class AvgClimateMassBalance(ConstantMassBalance):
-    """Mass balance with the average climate of a selected period.
+    """Mass balance with the average climate of a selected period (wrong!).
 
     !!!Careful! This is conceptually wrong!!! This is here only to make
-    a point.
-
-    See https://oggm.org/2021/08/05/mean-forcing/
+    a point. See: https://oggm.org/2021/08/05/mean-forcing
     """
 
     def __init__(self, gdir, mu_star=None, bias=None,
@@ -829,15 +837,6 @@ class AvgClimateMassBalance(ConstantMassBalance):
             is to use tstar as center.
         halfsize : int, optional
             the half-size of the time window (window size = 2 * halfsize + 1)
-
-        Attributes
-        ----------
-        temp_bias : float, default 0
-            Add a temperature bias to the time series
-        prcp_fac : float, default cfg.PARAMS['prcp_scaling_factor']
-            Precipitation factor to the time series (called factor to make clear
-             that it is a multiplicative factor in contrast to the additive
-             `temp_bias`)
         """
         super(AvgClimateMassBalance, self).__init__(gdir, mu_star=mu_star,
                                                     bias=bias,
@@ -915,7 +914,7 @@ class RandomMassBalance(MassBalanceModel):
             if True, overwrites ``y0`` and ``halfsize`` to use all available
             years.
         unique_samples: bool
-            if true, chosen random mass-balance years will only be available
+            if true, chosen random mass balance years will only be available
             once per random climate period-length
             if false, every model year will be chosen from the random climate
             period with the same probability
@@ -1045,7 +1044,7 @@ class UncertainMassBalance(MassBalanceModel):
 
     def __init__(self, basis_model,
                  rdn_temp_bias_seed=None, rdn_temp_bias_sigma=0.1,
-                 rdn_prcp_bias_seed=None, rdn_prcp_bias_sigma=0.1,
+                 rdn_prcp_fac_seed=None, rdn_prcp_fac_sigma=0.1,
                  rdn_bias_seed=None, rdn_bias_sigma=100):
         """Initialize.
 
@@ -1057,10 +1056,9 @@ class UncertainMassBalance(MassBalanceModel):
             the seed of the random number generator
         rdn_temp_bias_sigma : float
             the standard deviation of the random temperature error
-        rdn_prcp_bias_seed : int
+        rdn_prcp_fac_seed : int
             the seed of the random number generator
-            (to be consistent this should be renamed prcp_fac as well)
-        rdn_prcp_bias_sigma : float
+        rdn_prcp_fac_sigma : float
             the standard deviation of the random precipitation error
             (to be consistent this should be renamed prcp_fac as well)
         rdn_bias_seed : int
@@ -1074,10 +1072,10 @@ class UncertainMassBalance(MassBalanceModel):
         self.hemisphere = basis_model.hemisphere
         self.valid_bounds = self.mbmod.valid_bounds
         self.rng_temp = np.random.RandomState(rdn_temp_bias_seed)
-        self.rng_prcp = np.random.RandomState(rdn_prcp_bias_seed)
+        self.rng_prcp = np.random.RandomState(rdn_prcp_fac_seed)
         self.rng_bias = np.random.RandomState(rdn_bias_seed)
         self._temp_sigma = rdn_temp_bias_sigma
-        self._prcp_sigma = rdn_prcp_bias_sigma
+        self._prcp_sigma = rdn_prcp_fac_sigma
         self._bias_sigma = rdn_bias_sigma
         self._state_temp = dict()
         self._state_prcp = dict()
@@ -1151,9 +1149,9 @@ class UncertainMassBalance(MassBalanceModel):
 
 
 class MultipleFlowlineMassBalance(MassBalanceModel):
-    """Handle mass-balance at the glacier level instead of flowline level.
+    """Handle mass balance at the glacier level instead of flowline level.
 
-    Convenience class doing not much more than wrapping a list of mass-balance
+    Convenience class doing not much more than wrapping a list of mass balance
     models, one for each flowline.
 
     This is useful for real-case studies, where each flowline might have a
@@ -1164,7 +1162,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
     fls : list
         list of flowline objects
     mb_models : list
-        list of mass-balance objects
+        list of mass balance objects
     """
 
     def __init__(self, gdir, fls=None, mu_star=None,
@@ -1184,7 +1182,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             list of flowline objects to use (defaults to 'model_flowlines',
             and if not available, to 'inversion_flowlines')
         mb_model_class : class, optional
-            the mass-balance model to use (e.g. PastMassBalance,
+            the mass balance model to use (e.g. PastMassBalance,
             ConstantMassBalance...)
         use_inversion_flowlines: bool, optional
             if True 'inversion_flowlines' instead of 'model_flowlines' will be
@@ -1312,7 +1310,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         Parameters
         ----------
         fls: list, optional
-            the list of flowlines to get the mass-balance from. Defaults
+            the list of flowlines to get the mass balance from. Defaults
             to self.fls
         year: float, optional
             the time (in the "floating year" convention)
@@ -1362,7 +1360,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
             mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
 
-        return np.average(mbs, weights=widths)
+        return weighted_average_1d(mbs, widths)
 
     def get_ela(self, year=None, **kwargs):
 
@@ -1380,7 +1378,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                                   fls=self.fls))
             areas = np.append(areas, np.sum(fl.widths))
 
-        return np.average(elas, weights=areas)
+        return weighted_average_1d(elas, areas)
 
 
 @entity_task(log)
@@ -1392,7 +1390,7 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
                                 temperature_bias=None,
                                 precipitation_factor=None):
 
-    """Computes the mass-balance with climate input from e.g. CRU or a GCM.
+    """Computes the mass balance with climate input from e.g. CRU or a GCM.
 
     Parameters
     ----------
@@ -1455,7 +1453,7 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
 
     """Computes the ELA of a glacier for a for given years and climate.
 
-        Parameters
+    Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
@@ -1476,7 +1474,6 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
-    -------
     """
 
     mbmod = PastMassBalance(gdir, filename=climate_filename,

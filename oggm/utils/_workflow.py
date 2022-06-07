@@ -725,13 +725,13 @@ def get_centerline_lonlat(gdir,
                 # First check if this is necessary - this segment should
                 # be within the geometry or it's already good to go
                 if fs.within(exterior):
-                    fs = shpa.scale(fs, xfact=3, yfact=3, origin=fs.boundary[1])
+                    fs = shpa.scale(fs, xfact=3, yfact=3, origin=fs.boundary.geoms[1])
                     line = shpg.LineString([*fs.coords, *line.coords[2:]])
                 # If last also extend at the end
                 if mm == 1:
                     ls = shpg.LineString(line.coords[-2:])
                     if ls.within(exterior):
-                        ls = shpa.scale(ls, xfact=3, yfact=3, origin=ls.boundary[0])
+                        ls = shpa.scale(ls, xfact=3, yfact=3, origin=ls.boundary.geoms[0])
                         line = shpg.LineString([*line.coords[:-2], *ls.coords])
 
                 # Simplify and smooth?
@@ -1740,7 +1740,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                         temperature_bias=None,
                                         precipitation_factor=None):
 
-    """Compiles a table of specific mass-balance timeseries for all glaciers.
+    """Compiles a table of specific mass balance timeseries for all glaciers.
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
     to open it.
@@ -2367,6 +2367,8 @@ class GlacierDirectory(object):
     ----------
     dir : str
         path to the directory
+    base_dir : str
+        path to the base directory
     rgi_id : str
         The glacier's RGI identifier
     glims_id : str
@@ -2379,9 +2381,19 @@ class GlacierDirectory(object):
         The RGI's BGNDATE year attribute if available. Otherwise, defaults to
         the median year for the RGI region
     rgi_region : str
+        The RGI region ID
+    rgi_subregion : str
+        The RGI subregion ID
+    rgi_version : str
+        The RGI version name
+    rgi_region_name : str
         The RGI region name
+    rgi_subregion_name : str
+        The RGI subregion name
     name : str
-        The RGI glacier name (if Available)
+        The RGI glacier name (if available)
+    hemisphere : str
+        `nh` or `sh`
     glacier_type : str
         The RGI glacier type ('Glacier', 'Ice cap', 'Perennial snowfield',
         'Seasonal snowfield')
@@ -2389,9 +2401,25 @@ class GlacierDirectory(object):
         The RGI terminus type ('Land-terminating', 'Marine-terminating',
         'Lake-terminating', 'Dry calving', 'Regenerated', 'Shelf-terminating')
     is_tidewater : bool
-        Is the glacier a caving glacier?
+        Is the glacier a calving glacier?
+    is_lake_terminating : bool
+        Is the glacier a lake terminating glacier?
+    is_nominal : bool
+        Is the glacier an RGI nominal glacier?
+    is_icecap : bool
+        Is the glacier an ice cap?
+    extent_ll : list
+        Extent of the glacier in lon/lat
+    logfile : str
+        Path to the log file (txt)
     inversion_calving_rate : float
         Calving rate used for the inversion
+    grid
+    dem_info
+    dem_daterange
+    intersects_ids
+    rgi_area_m2
+    rgi_area_km2
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
@@ -3251,7 +3279,7 @@ class GlacierDirectory(object):
         return h, w * self.grid.dx
 
     def set_ref_mb_data(self, mb_df=None):
-        """Adds reference mass-balance data to this glacier.
+        """Adds reference mass balance data to this glacier.
 
         The format should be a dataframe with the years as index and
         'ANNUAL_BALANCE' as values in mm yr-1.

@@ -8,12 +8,12 @@ import math
 import logging
 import warnings
 import shutil
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 # External libs
 import pandas as pd
 import numpy as np
-from scipy.ndimage import filters
+from scipy.ndimage import convolve1d
 try:
     from scipy.signal.windows import gaussian
 except AttributeError:
@@ -268,7 +268,7 @@ def smooth1d(array, window_size=None, kernel='gaussian'):
         else:
             raise NotImplementedError('Kernel: ' + kernel)
     kernel = kernel / np.asarray(kernel).sum()
-    return filters.convolve1d(array, kernel, mode='mirror')
+    return convolve1d(array, kernel, mode='mirror')
 
 
 def line_interpol(line, dx):
@@ -375,7 +375,18 @@ def clip_scalar(value, vmin, vmax):
     return vmin if value < vmin else vmax if value > vmax else value
 
 
-if LooseVersion(np.__version__) < LooseVersion('1.17'):
+def weighted_average_1d(data, weights):
+    """A faster weighted average without dimension checks.
+
+    We use it because it turned out to be quite a bottleneck in calibration
+    """
+    scl = np.sum(weights)
+    if scl == 0:
+        raise ZeroDivisionError("Weights sum to zero, can't be normalized")
+    return np.multiply(data, weights).sum() / scl
+
+
+if Version(np.__version__) < Version('1.17'):
     clip_array = np.clip
 else:
     # TODO: reassess this when https://github.com/numpy/numpy/issues/14281
@@ -509,7 +520,7 @@ def polygon_intersections(gdf):
                                        '{}.'.format(line.type))
                 line = gpd.GeoDataFrame([[i, j, line]],
                                         columns=out_cols)
-                out = out.append(line)
+                out = pd.concat([out, line])
 
     return out
 

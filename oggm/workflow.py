@@ -317,8 +317,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
         for `from_prepro_level` only: if you want to override the default
-        URL from which to download the gdirs. Default currently is
-        https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.1/
+        URL from which to download the gdirs. Default can be assessed with
+        ``from oggm.utils import GDIR_L3L5_URL``
     from_tar : bool, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -433,6 +433,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     This is the very first task to do (always). If the directories are already
     available in the working directory, use them. If not, create new ones.
 
+    **Careful**: when starting from a pre-processed directory with
+    `from_prepro_level` or `from_tar`, the existing directories will be overwritten!
+
     Parameters
     ----------
     rgidf : GeoDataFrame or list of ids, optional for pre-computed runs
@@ -445,8 +448,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         setting `reset=True` will trigger a yes/no question to the user. Set
         `force=True` to avoid this.
     from_prepro_level : int
-        get the gdir data from the official pre-processed pool. See the
-        documentation for more information
+        get the gdir data from the official pre-processed pool. If this
+        argument is set, the existing directories will be overwritten!
     prepro_border : int
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['border']`
@@ -455,12 +458,13 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
         for `from_prepro_level` only: if you want to override the default
-        URL from which to download the gdirs. Default currently is
-        https://cluster.klima.uni-bremen.de/~fmaussion/gdirs/oggm_v1.1/
+        URL from which to download the gdirs. Default can be accessed from
+        ``from oggm.utils import GDIR_L3L5_URL``
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
-        delete the original tar file after extraction.
+        delete the original tar file after extraction. If this
+        argument is set, the existing directories will be overwritten!
 
     Returns
     -------
@@ -623,7 +627,7 @@ def climate_tasks(gdirs, base_url=None):
     elif base_url:
         download_ref_tstars(base_url=base_url)
 
-    # Mustar and the apparent mass-balance
+    # Mustar and the apparent mass balance
     execute_entity_task(tasks.local_t_star, gdirs)
     execute_entity_task(tasks.mu_star_calibration, gdirs)
 
@@ -786,7 +790,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 @global_task(log)
 def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
                                period='2000-01-01_2020-01-01'):
-    """Regional shift of the mass-balance residual to match observations.
+    """Regional shift of the mass balance residual to match observations.
 
     This is useful for operational runs, but also quite hacky.
     Let's hope we won't need this for too long.
@@ -807,7 +811,7 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
        For 'zemp', the period is always 2006-2016.
     """
 
-    # Get the mass-balance OGGM would give out of the box
+    # Get the mass balance OGGM would give out of the box
     df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
     df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
 
@@ -879,13 +883,13 @@ def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
 @global_task(log)
 def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
                                     file_path=None, fail_safe=False):
-    """Shift the mass-balance residual to match geodetic mb observations.
+    """Shift the mass balance residual to match geodetic mb observations.
 
     It is similar to match_regional_geodetic_mb but uses the raw, glacier
     per glacier tabular data.
 
-    This method finds the "best mass-balance residual" to match all glaciers in
-    gdirs with available OGGM mass balance and available geodetic mass-balance
+    This method finds the "best mass balance residual" to match all glaciers in
+    gdirs with available OGGM mass balance and available geodetic mass balance
     measurements from Hugonnet 2021 or any other file with the same format.
 
     The default is to use hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf
@@ -914,7 +918,7 @@ def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
         in which case you can set fail_safe to True
     """
 
-    # Get the mass-balance OGGM would give out of the box
+    # Get the mass balance OGGM would give out of the box
     df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
     df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
 

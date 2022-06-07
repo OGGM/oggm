@@ -1,7 +1,7 @@
 """Climate data pre-processing"""
 # Built ins
 import logging
-from distutils.version import LooseVersion
+from packaging.version import Version
 import warnings
 
 # External libs
@@ -209,7 +209,7 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
         fpath_precl = cfg.PATHS['cesm_precl_file']
 
     # read the files
-    if LooseVersion(xr.__version__) < LooseVersion('0.11'):
+    if Version(xr.__version__) < Version('0.11'):
         raise ImportError('This task needs xarray v0.11 or newer to run.')
 
     tempds = xr.open_dataset(fpath_temp)
@@ -293,21 +293,11 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
     filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
     fpath_temp : str
-        path to the temp file (default: cfg.PATHS['cmip5_temp_file'])
+        path to the temp file
     fpath_precip : str
-        path to the precip file (default: cfg.PATHS['cmip5_precip_file'])
+        path to the precip file
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
-
-    # Get the path of GCM temperature & precipitation data
-    if fpath_temp is None:
-        if not ('cmip5_temp_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['cmip5_temp_file']")
-        fpath_temp = cfg.PATHS['cmip5_temp_file']
-    if fpath_precip is None:
-        if not ('cmip5_precip_file' in cfg.PATHS):
-            raise ValueError("Need to set cfg.PATHS['cmip5_precip_file']")
-        fpath_precip = cfg.PATHS['cmip5_precip_file']
 
     # Glacier location
     glon = gdir.cenlon

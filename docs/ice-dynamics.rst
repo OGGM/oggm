@@ -1,5 +1,3 @@
-.. _ice-dynamics:
-
 Ice dynamics flowline model (default)
 =====================================
 
@@ -34,7 +32,7 @@ Volume conservation for this discrete element implies:
 
     \frac{\partial S}{\partial t} = w \, \dot{m} - \nabla \cdot q
 
-where :math:`\dot{m}` is the mass-balance, :math:`q = u S` the flux of ice, and
+where :math:`\dot{m}` is the mass balance, :math:`q = u S` the flux of ice, and
 :math:`u` the depth-integrated ice velocity ([Cuffey_Paterson_2010]_, p 310).
 This velocity can be computed from Glen's flow law as a function of the
 basal shear stress :math:`\tau`:
@@ -78,7 +76,7 @@ is not considered), but the shape will still have a considerable influence
 on glacier dynamics:
 
 - the width change as a result of mass transport will be different for
-  each shape, thus influencing the mass-balance term :math:`w \, \dot{m}`.
+  each shape, thus influencing the mass balance term :math:`w \, \dot{m}`.
 - with all other things held constant, a change in the cross-section area
   :math:`\partial S / \partial t` due to mass convergence/divergence
   will result in a different :math:`\partial h / \partial t` and thus in
@@ -208,7 +206,7 @@ Glacier tributaries
 
 Glaciers in OGGM have a main centerline and, sometimes, one or more
 tributaries (which can themselves also have tributaries, see
-:ref:`flowlines`). The number of these tributaries depends on many
+:doc:`flowlines`). The number of these tributaries depends on many
 factors, but most of the time the algorithm works well.
 
 The main flowline and its tributaries are all modelled individually.
