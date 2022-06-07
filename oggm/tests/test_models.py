@@ -4356,7 +4356,7 @@ class TestMassRedis:
         tasks.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
                                                    ref_period='1953-01-01_2004-01-01',
                                                    ignore_hydro_months=True)
-        tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+        tasks.apparent_mb_from_any_mb(gdir, mb_years=np.arange(1953, 2003, 1))
         workflow.calibrate_inversion_from_consensus([gdir])
         tasks.init_present_time_glacier(gdir)
 
