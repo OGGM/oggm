@@ -38,7 +38,9 @@ jobs:
         if: ${{ contains(matrix.container, 'slim') }}
         run: apt-get -y update && apt-get -y install git curl
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+      - name: Fix Git-Permissions
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
         run: ./ci/run_tests.sh ${{ matrix.test-env }}
       - name: Upload Coverage

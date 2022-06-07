@@ -1,0 +1,16 @@
+version: '3.0'
+services:
+    oggm:
+        image: ghcr.io/oggm/base:latest
+        volumes:
+            - ~/OGGMDocker/:/home/oggm/
+        environment:
+            HOME: /home/oggm
+        entrypoint:
+            - /bin/bash
+            - -c
+            - |
+                set -xeo pipefail
+                git config --global --add safe.directory /opt/project
+                python3 -m pip install --no-deps --no-build-isolation --ignore-installed --editable /opt/project
+                exec "$$0" "$$@"
