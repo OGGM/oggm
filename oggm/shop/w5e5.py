@@ -23,19 +23,23 @@ log = logging.getLogger(__name__)
 
 GSWP3_W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
 
-path = 'gswp3-w5e5/flattened/monthly/'
-BASENAMES = {'GSWP3_W5E5': {
-    'inv': f'{path}gswp3-w5e5_glacier_invariant_flat.nc',
-    'tmp': f'{path}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers.nc',
-    'temp_std': f'{path}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers.nc',
-    'prcp': f'{path}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers.nc'
-                            }}
+_base = 'gswp3-w5e5/flattened/monthly/'
+
+BASENAMES = {
+    'GSWP3_W5E5': {
+        'inv': f'{_base}gswp3-w5e5_glacier_invariant_flat.nc',
+        'tmp': f'{_base}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers.nc',
+        'temp_std': f'{_base}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers.nc',
+        'prcp': f'{_base}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers.nc'
+}}
 
 
 def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
-    """returns a path to the desired GSWP3-W5E5 baseline climate file. It is the observed
-    climate dataset used for ISIMIP3a. For OGGM, it was preprocessed by
-    selecting only those gridpoints with glaciers nearby.
+    """Returns the path to the desired GSWP3-W5E5 baseline climate file.
+
+    It is the observed climate dataset used for ISIMIP3a.
+    For OGGM, it was preprocessed by selecting only those gridpoints
+    with glaciers nearby.
 
     If the file is not present, downloads it.
 
@@ -59,18 +63,17 @@ def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_gswp3_w5e5_data(gdir, y0=None, y1=None,
-                            output_filesuffix=None,
-                            ):
-    """
-    Processes and writes the GSWP3-W5E5 / W5E5 baseline climate data for a glacier
-    (on monthly basis).
-    data source: https://www.isimip.org/gettingstarted/input-data-bias-adjustment/details/80/
+def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
+    """Processes and writes the GSWP3-W5E5+W5E5 baseline climate data for a glacier.
+
+    The data is the same as W5E5 after 79, and is GSWP3 before that.
+
+    Data source: https://www.isimip.org/gettingstarted/input-data-bias-adjustment/details/80/
     If y0>=1979, the temperature lapse rate gradient from ERA5dr is added.
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
 
-    TODO: see _verified_download_helper no known hash for ...
+    Parameters
     ----------
     y0 : int
         the starting year of the timeseries to write. The default is to take
@@ -229,11 +232,12 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None,
                                     source=dataset)
 
 
-def process_w5e5_data(gdir, y0=None, y1=None,
-                      output_filesuffix=None):
-    """
-    Processes and writes the W5E5 baseline climate data part from GSWP3-W5E5 for a glacier
-    (on monthly basis).
+def process_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
+    """Processes and writes the W5E5 baseline climate data for a glacier.
+
+    Internally, this is actually calling process_gswp3_w5e5_data but only for
+    the W5E5 part.
+
     data source: https://data.isimip.org/10.48364/ISIMIP.342217
     The temperature lapse rate gradient from ERA5dr is added.
     Same as process_gswp3_w5e5_data, except that y0 is set to 1979
@@ -241,7 +245,7 @@ def process_w5e5_data(gdir, y0=None, y1=None,
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
 
-    TODO: see _verified_download_helper no known hash for ...
+    Parameters
     ----------
     y0 : int
         the starting year of the timeseries to write. The default is to take
