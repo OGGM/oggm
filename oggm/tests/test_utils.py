@@ -1147,8 +1147,8 @@ class TestPreproCLI(unittest.TestCase):
         # for-loop because parametrization is not working with unittest.TestCase
         # see https://docs.pytest.org/en/stable/how-to/unittest.html
         dynamic_spinup = 'area'
-        #for dynamic_spinup in ['area', 'area/before/dmdtda',
-        #                       'area/dmdtda/atonce']:
+        # for dynamic_spinup in ['area', 'area/before/dmdtda',
+        #                        'area/dmdtda/atonce']:
         # Read in the RGI file
         inter, rgidf = self._read_shp()
 
