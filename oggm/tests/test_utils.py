@@ -1141,22 +1141,31 @@ class TestPreproCLI(unittest.TestCase):
     def test_elev_bands_and_spinup_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
-
+        # TODO: for this test to work for the dynamic mu star claibration
+        #  the climate data must go up to 2020 (currently only going until
+        #  2015)
+        # for-loop because parametrization is not working with unittest.TestCase
+        # see https://docs.pytest.org/en/stable/how-to/unittest.html
+        dynamic_spinup = 'area'
+        #for dynamic_spinup in ['area', 'area/before/dmdtda',
+        #                       'area/dmdtda/atonce']:
         # Read in the RGI file
         inter, rgidf = self._read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
+        utils.mkdir(wdir, reset=True)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
         border = 80
         bstr = 'b_080'
+
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          dynamic_spinup='area', test_rgidf=rgidf,
+                          dynamic_spinup=dynamic_spinup, test_rgidf=rgidf,
                           test_intersects_file=inter,
-                          test_topofile=topof, elev_bands=True)
+                          test_topofile=topof, elev_bands=True,
+                          override_params={'hydro_month_nh': 1})
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
@@ -1207,6 +1216,8 @@ class TestPreproCLI(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
+        # for atonce inversion files are also copied TODO
+        # if dynamic_spinup != 'area/dmdtda/atonce':
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
@@ -1220,6 +1231,8 @@ class TestPreproCLI(unittest.TestCase):
                                             filesuffix='_historical'))
         assert model.y0 == 2004
         assert model.last_yr == 2015
+        # for atonce inversion files are also copied TODO
+        # if dynamic_spinup != 'area/dmdtda/atonce':
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)

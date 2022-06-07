@@ -142,9 +142,12 @@ def secure_url_retrieve(url, *args, **kwargs):
 
     # We added a few extra glaciers recently - this really needs to be
     # handled better
-    base_extra = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                  'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
-                  'RGI62/b_160/L4/')
+    base_extra_L4 = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                     'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
+                     'RGI62/b_160/L4/')
+    base_extra_L3 = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                     'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
+                     'RGI62/b_160/L3/')
 
     assert ('github' in url or
             'cluster.klima.uni-bremen.de/~oggm/ref_mb_params' in url or
@@ -153,7 +156,8 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
-            base_extra in url
+            base_extra_L4 in url or
+            base_extra_L3 in url
             )
     return oggm_urlretrieve(url, *args, **kwargs)
 
