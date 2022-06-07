@@ -1610,7 +1610,11 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         y0, y1 = mb_years.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
-        mb_years = [y0, y1-1]
+        mb_years = np.arange(y0, y1, 1)
+    
+    if len(mb_years)<10:
+        raise ValueError('count/length of `mb_years` '
+                         'should not be smaller than 10')
 
     # Unchanged SMB
     o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
