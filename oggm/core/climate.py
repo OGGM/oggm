@@ -1612,7 +1612,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         y1 = int(y1.split('-')[0])
         mb_years = np.arange(y0, y1, 1)
 
-    if len(mb_years)<10:
+    if len(mb_years) < 10:
         raise ValueError('count/length of `mb_years` '
                          'should not be smaller than 10')
 
