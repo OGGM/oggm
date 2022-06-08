@@ -30,6 +30,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
+                       mb_model_historical=None, mb_model_spinup=None,
                        spinup_period=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
                        yr_rgi=None, minimise_for='area', precision_percent=1,
@@ -66,6 +67,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
+    mb_model_historical : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance for the historical run. Default
+        is to use a PastMassBalance model  together with the provided
+        parameter climate_input_filesuffix.
+    mb_model_spinup : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance for the spinup before the
+        historical run. Default is to use a ConstantMassBalance model together
+        with the provided parameter climate_input_filesuffix and during the
+        period of spinup_start_yr until rgi_year (e.g. 1979 - 2000).
     spinup_period : int
         The period how long the spinup should run. Start date of historical run
         is defined "yr_rgi - spinup_period". Minimum allowed value is 10. If
@@ -219,11 +229,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         fls_spinup = copy.deepcopy(init_model_fls)
 
     # MassBalance for actual run from yr_spinup to yr_rgi
-    mb_historical = MultipleFlowlineMassBalance(gdir,
-                                                fls=fls_spinup,
-                                                mb_model_class=PastMassBalance,
-                                                filename='climate_historical',
-                                                input_filesuffix=climate_input_filesuffix)
+    if mb_model_historical is None:
+        mb_model_historical = MultipleFlowlineMassBalance(
+            gdir, fls=fls_spinup, mb_model_class=PastMassBalance,
+            filename='climate_historical',
+            input_filesuffix=climate_input_filesuffix)
 
     # here we define the file-paths for the output
     if store_model_geometry:
@@ -274,7 +284,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
-                                                   mb_historical,
+                                                   mb_model_historical,
                                                    y0=yr_use,
                                                    **kwargs)
 
@@ -355,10 +365,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         forward_model_runs.append(forward_model_runs[-1] + 1)
 
         # with t_bias the glacier state after spinup is changed between iterations
-        mb_spinup.temp_bias = t_bias
+        mb_model_spinup.temp_bias = t_bias
         # run the spinup
         model_spinup = evolution_model(copy.deepcopy(fls_spinup),
-                                       mb_spinup,
+                                       mb_model_spinup,
                                        y0=0,
                                        **kwargs)
         model_spinup.run_until(2 * halfsize_spinup)
@@ -370,7 +380,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
         # Now conduct the actual model run to the rgi date
         model_historical = evolution_model(model_spinup.fls,
-                                           mb_historical,
+                                           mb_model_historical,
                                            y0=yr_spinup,
                                            **kwargs)
         if store_model_evolution:
@@ -743,21 +753,26 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                  int((spinup_period_initial + min_spinup_period) / 2),
                                  min_spinup_period]
 
+    # check if the user provided an mb_model_spinup, otherwise we must define a
+    # new one each iteration
+    provided_mb_model_spinup = False
+    if mb_model_spinup is not None:
+        provided_mb_model_spinup = True
+
     for spinup_period in spinup_periods_to_try:
         yr_spinup = yr_rgi - spinup_period
 
-        # define spinup MassBalance
-        # spinup is running for 'yr_rgi - yr_spinup' years, using a
-        # ConstantMassBalance
-        y0_spinup = (yr_spinup + yr_rgi) / 2
-        halfsize_spinup = yr_rgi - y0_spinup
-        mb_spinup = MultipleFlowlineMassBalance(gdir,
-                                                fls=fls_spinup,
-                                                mb_model_class=ConstantMassBalance,
-                                                filename='climate_historical',
-                                                input_filesuffix=climate_input_filesuffix,
-                                                y0=y0_spinup,
-                                                halfsize=halfsize_spinup)
+        if not provided_mb_model_spinup:
+            # define spinup MassBalance
+            # spinup is running for 'yr_rgi - yr_spinup' years, using a
+            # ConstantMassBalance
+            y0_spinup = (yr_spinup + yr_rgi) / 2
+            halfsize_spinup = yr_rgi - y0_spinup
+            mb_model_spinup = MultipleFlowlineMassBalance(
+                gdir, fls=fls_spinup, mb_model_class=ConstantMassBalance,
+                filename='climate_historical',
+                input_filesuffix=climate_input_filesuffix, y0=y0_spinup,
+                halfsize=halfsize_spinup)
 
         # try to conduct minimisation, if an error occurred try shorter spinup
         # period
