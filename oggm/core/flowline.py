@@ -4428,10 +4428,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                  int((spinup_period_initial + min_spinup_period) / 2),
                                  min_spinup_period]
 
+    # check if the user provided an mb_model_spinup, otherwise we must define a
+    # new one each iteration
+    provided_mb_model_spinup = False
+    if mb_model_spinup is not None:
+        provided_mb_model_spinup = True
     for spinup_period in spinup_periods_to_try:
         yr_spinup = yr_rgi - spinup_period
 
-        if mb_model_spinup is None:
+        if not provided_mb_model_spinup:
             # define spinup MassBalance
             # spinup is running for 'yr_rgi - yr_spinup' years, using a
             # ConstantMassBalance
