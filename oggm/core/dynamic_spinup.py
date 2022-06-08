@@ -830,7 +830,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         return model_dynamic_spinup_end[-1]
 
 
-def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
+def dynamic_mu_star_run_with_dynamic_spinup(
         gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=FluxBasedModel,
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
@@ -838,12 +838,13 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
         precision_absolute_dyn_spinup=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        local_variables=None, set_local_variables=False, **kwargs):
+        local_variables=None, set_local_variables=False, do_inversion=False,
+        **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
     'fallback_function' is
-    'dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback'). This
+    'dynamic_mu_star_run_with_dynamic_spinup_fallback'). This
     function defines a new mu_star in the glacier directory and conducts an
     inversion calibrating A to match '_vol_m3_ref' with this new mu_star
     ('calibrate_inversion_from_consensus'). Afterwards a dynamic spinup is
@@ -951,6 +952,10 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
         glacier volume with the key 'vol_m3_ref' which is later used in the
         calibration during inversion.
         Default is False
+    do_inversion : bool
+        If True a complete inversion is conducted using the provided mu_star
+        before the actual calibration run.
+        Default is False
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -988,15 +993,16 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
     df['mu_star_flowline_avg'] = mu_star
     df['mu_star_allsame'] = True
     gdir.write_json(df, 'local_mustar')
-    apparent_mb_from_any_mb(gdir)
-    # do inversion with A calibration to current volume
-    calibrate_inversion_from_consensus([gdir],
-                                       apply_fs_on_mismatch=True,
-                                       error_on_mismatch=False,
-                                       filter_inversion_output=True,
-                                       volume_m3_reference=local_variables['vol_m3_ref'])
-    # And finally initialise the new model flowlines
-    init_present_time_glacier(gdir)
+
+    if do_inversion:
+        apparent_mb_from_any_mb(gdir)
+        # do inversion with A calibration to current volume
+        calibrate_inversion_from_consensus(
+            [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+            filter_inversion_output=True,
+            volume_m3_reference=local_variables['vol_m3_ref'])
+        # And finally initialise the new model flowlines
+        init_present_time_glacier(gdir)
 
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad' files are
@@ -1039,22 +1045,22 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
                   cfg.PARAMS['ice_density'])
-    # TODO: maybe use density conversion of 850 as in Hugonnet 2021
 
     return model, dmdtda_mdl
 
 
-def dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback(
+def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         gdir, mu_star, fls_init, ys, ye, local_variables, output_filesuffix='',
         evolution_model=FluxBasedModel, minimise_for='area',
         climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
         yr_rgi=None, precision_percent_dyn_spinup=1,
         precision_absolute_dyn_spinup=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
-        store_model_geometry=True, store_fl_diagnostics=None, **kwargs):
+        store_model_geometry=True, store_fl_diagnostics=None,
+        do_inversion=False, **kwargs):
     """
     This is the fallback function corresponding to the function
-    'dynamic_mu_star_run_with_dynamic_spinup_and_inversion', which are provided
+    'dynamic_mu_star_run_with_dynamic_spinup', which are provided
     to 'run_dynamic_mu_star_calibration'. It is used if the run_function fails and
     if 'ignore_error == True' in 'run_dynamic_mu_star_calibration'. First it resets
     mu_star of gdir. Afterwards it tries to conduct a dynamic spinup. If this
@@ -1146,6 +1152,10 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback(
     store_fl_diagnostics : bool or None
         Whether to store the model flowline diagnostics to disk or not.
         Default is None (-> cfg.PARAMS['store_fl_diagnostics'])
+    do_inversion : bool
+        If True a complete inversion is conducted using the provided mu_star
+        before the actual fallback run.
+        Default is False
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1172,13 +1182,13 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback(
         df['mu_star_flowline_avg'] = mu_star
         df['mu_star_allsame'] = True
         gdir.write_json(df, 'local_mustar')
-        apparent_mb_from_any_mb(gdir)
-        calibrate_inversion_from_consensus([gdir],
-                                           apply_fs_on_mismatch=True,
-                                           error_on_mismatch=False,
-                                           filter_inversion_output=True,
-                                           volume_m3_reference=local_variables['vol_m3_ref'])
-        init_present_time_glacier(gdir)
+        if do_inversion:
+            apparent_mb_from_any_mb(gdir)
+            calibrate_inversion_from_consensus(
+                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                filter_inversion_output=True,
+                volume_m3_reference=local_variables['vol_m3_ref'])
+            init_present_time_glacier(gdir)
     yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
     try:
         model_end = run_dynamic_spinup(
@@ -1320,7 +1330,6 @@ def dynamic_mu_star_run(
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
                   cfg.PARAMS['ice_density'])
-    # TODO: maybe use density conversion of 850 as in Hugonnet 2021
 
     return model, dmdtda_mdl
 
@@ -1397,12 +1406,11 @@ def run_dynamic_mu_star_calibration(
         max_mu_star=None, mu_star_max_step_length=5, maxiter_mu_star=10,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
         ys=None, ye=None,
-        run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+        run_function=dynamic_mu_star_run_with_dynamic_spinup,
         kwargs_run_function=None,
-        fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+        fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
         kwargs_fallback_function=None, init_model_filesuffix=None,
-        init_model_yr=None, init_model_fls=None
-):
+        init_model_yr=None, init_model_fls=None):
     """Calibrate mu_star to match a geodetic mass balance incorporating a
     dynamic model run.
 

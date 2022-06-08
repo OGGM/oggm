@@ -41,8 +41,8 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 run_with_hydro)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_mu_star_calibration,
-    dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
-    dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+    dynamic_mu_star_run_with_dynamic_spinup,
+    dynamic_mu_star_run_with_dynamic_spinup_fallback,
     dynamic_mu_star_run,
     dynamic_mu_star_run_fallback)
 
@@ -3590,9 +3590,12 @@ class TestHEF:
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
+    @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
-    def test_run_dynamic_mu_star_calibration_with_dynamic_spinup(self, minimise_for):
+    def test_run_dynamic_mu_star_calibration_with_dynamic_spinup(self,
+                                                                 minimise_for,
+                                                                 do_inversion):
 
         # reset kcalving for this test and set it back to the previous value
         # after the test
@@ -3646,14 +3649,16 @@ class TestHEF:
         yr_rgi = gdir.rgi_date
         run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute},
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
                                       'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute},
+                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion',
             ys=1979, ye=ye)
 
@@ -3693,14 +3698,16 @@ class TestHEF:
             gdir, max_mu_star=1000.,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute},
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
                                       'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute},
+                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_user_dmdtda',
             ys=1979, ye=ye)
         ds = utils.compile_run_output(
@@ -3726,10 +3733,12 @@ class TestHEF:
                            match='Dynamic mu star calibration not successful.*'):
             run_dynamic_mu_star_calibration(
                 gdir, max_mu_star=1000.,
-                run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
-                kwargs_run_function={'minimise_for': minimise_for},
-                fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
-                kwargs_fallback_function={'minimise_for': minimise_for},
+                run_function=dynamic_mu_star_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'do_inversion': do_inversion},
                 output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
                 ignore_errors=False,
                 ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
@@ -3738,14 +3747,16 @@ class TestHEF:
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute},
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
                                       'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute},
+                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
@@ -3770,16 +3781,18 @@ class TestHEF:
         # if no successful run can be conducted
         model_fallback = run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent_dyn_spinup': 0.1,
                                  'precision_absolute_dyn_spinup': 0.0001,
-                                 'maxiter_dyn_spinup': 2},
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+                                 'maxiter_dyn_spinup': 2,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
                                       'precision_percent_dyn_spinup': 0.1,
                                       'precision_absolute_dyn_spinup': 0.0001,
-                                      'maxiter_dyn_spinup': 2},
+                                      'maxiter_dyn_spinup': 2,
+                                      'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
@@ -3788,17 +3801,17 @@ class TestHEF:
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0
 
         # test that error is raised if no dict is provided for local_variables
-        # in dynamic_mu_star_run_with_dynamic_spinup_and_inversion
+        # in dynamic_mu_star_run_with_dynamic_spinup
         for local_variables in [None, []]:
             with pytest.raises(ValueError,
                                match='You must provide a dict for '
                                      'local_variables.*'):
-                dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
+                dynamic_mu_star_run_with_dynamic_spinup(
                     gdir,
                     mu_star=gdir.read_json('local_mustar')['mu_star_glacierwide'],
                     yr0_ref_mb=yr0_ref_dmdtda,
                     yr1_ref_mb=yr1_ref_dmdtda,
-                    fls_init=fls, ys=1980, ye=2020,
+                    fls_init=fls, ys=1980, ye=2020, do_inversion=do_inversion,
                     local_variables=local_variables)
 
         # test that error is raised if user provided dmdtda is given without an
@@ -3951,9 +3964,9 @@ class TestHEF:
         # if no successful run can be conducted
         model_fallback = run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'cfl_number': 1e-8},  # force an error
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             output_filesuffix='_dyn_mu_calib_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
@@ -4622,8 +4635,10 @@ class TestHydro:
         # set back to previous value
         cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
+    @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.slow
-    def test_hydro_dynamic_mu_star_with_inverison(self, inversion_params):
+    def test_hydro_dynamic_mu_star_with_dynamic_spinup(self, inversion_params,
+                                                       do_inversion):
 
         # reset kcalving for this test and set it back to the previous value
         # after the test
@@ -4649,8 +4664,10 @@ class TestHydro:
             gdir, run_task=tasks.run_dynamic_mu_star_calibration,
             store_monthly_hydro=True, ref_area_from_y0=True,
             output_filesuffix='_dyn_mu_calib', max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback)
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'do_inversion': do_inversion},)
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_dyn_mu_calib')) as ds:
@@ -4701,7 +4718,7 @@ class TestHydro:
         cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
     @pytest.mark.slow
-    def test_hydro_dynamic_mu_star_without_inverison(self, inversion_params):
+    def test_hydro_dynamic_mu_star_without_dynamic_spinup(self, inversion_params):
 
         # reset kcalving for this test and set it back to the previous value
         # after the test

@@ -23,8 +23,8 @@ from oggm.exceptions import InvalidParamsError, InvalidDEMError
 from oggm.core.dynamic_spinup import (
     dynamic_mu_star_run,
     dynamic_mu_star_run_fallback,
-    dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
-    dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback)
+    dynamic_mu_star_run_with_dynamic_spinup,
+    dynamic_mu_star_run_with_dynamic_spinup_fallback)
 
 # Module logger
 from oggm.utils import get_prepro_base_url, file_downloader
@@ -197,11 +197,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if dynamic_spinup:
         if dynamic_spinup not in ['area', 'volume', 'area/dmdtda/atonce',
                                   'volume/dmdtda/atonce', 'area/before/dmdtda',
-                                  'volume/before/dmdtda']:
+                                  'volume/before/dmdtda',
+                                  'area/dmdtda/atonce/inversion',
+                                  'volume/dmdtda/atonce/inversion']:
             raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
                                      "not supported")
 
-        if 'atonce' in dynamic_spinup and start_level > 3:
+        if 'inversion' in dynamic_spinup and start_level > 3:
             raise InvalidParamsError("Dynamic spinup with dynamic mu star "
                                      "calibration only works starting from "
                                      "maximum start level 3! Provided start "
@@ -593,7 +595,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         mini_base_dir = os.path.join(working_dir, 'mini_perglacier',
                                      'RGI{}'.format(rgi_version),
                                      'b_{:03d}'.format(border))
-        if dynamic_spinup and 'atonce' in dynamic_spinup:
+        if dynamic_spinup and 'inversion' in dynamic_spinup:
             # TODO: maybe rearrange the level structure in this case,
             #  e.g. do dynamic spinup calibration with inversion and afterwards
             #  save data in mini_gdirs
@@ -672,19 +674,35 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          delete_input=True)
         else:
             minimise_for = dynamic_spinup.split('/')[0]
-            if 'atonce' in dynamic_spinup:
+            if 'inversion' in dynamic_spinup:
                 workflow.execute_entity_task(
                     tasks.run_dynamic_mu_star_calibration, gdirs,
                     ys=dynamic_spinup_start_year, ye=ye,
-                    run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
+                    run_function=dynamic_mu_star_run_with_dynamic_spinup,
                     kwargs_run_function={'evolution_model': evolution_model,
-                                         'minimise_for': minimise_for},
+                                         'minimise_for': minimise_for,
+                                         'do_inversion': True},
                     ignore_errors=True,
-                    fallback_function=
-                    dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
+                    fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
                     kwargs_fallback_function={'evolution_model': evolution_model,
-                                              'minimise_for': minimise_for},
-                    output_filesuffix='_historical_spinup_mb_calib',
+                                              'minimise_for': minimise_for,
+                                              'do_inversion': True},
+                    output_filesuffix='_dynamic_spinup_mu_calib',
+                    max_mu_star=1000.)
+            elif 'atonce' in dynamic_spinup:
+                workflow.execute_entity_task(
+                    tasks.run_dynamic_mu_star_calibration, gdirs,
+                    ys=dynamic_spinup_start_year, ye=ye,
+                    run_function=dynamic_mu_star_run_with_dynamic_spinup,
+                    kwargs_run_function={'evolution_model': evolution_model,
+                                         'minimise_for': minimise_for,
+                                         'do_inversion': False},
+                    ignore_errors=True,
+                    fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+                    kwargs_fallback_function={'evolution_model': evolution_model,
+                                              'minimise_for': minimise_for,
+                                              'do_inversion': False},
+                    output_filesuffix='_dynamic_spinup_mu_calib',
                     max_mu_star=1000.)
             elif 'before' in dynamic_spinup:
                 # first do dynamic spinup and set rgi date to 2000
@@ -729,16 +747,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             utils.compile_run_output(gdirs, path=opath,
                                      input_filesuffix='_historical_spinup')
         else:
-            if 'atonce' in dynamic_spinup:
-                opath = os.path.join(sum_dir,
-                                     f'historical_spinup_mb_calib_run_output_{rgi_reg}.nc')
-                utils.compile_run_output(gdirs, path=opath,
-                                         input_filesuffix='_historical_spinup_mb_calib')
-            elif 'before' in dynamic_spinup:
-                opath = os.path.join(sum_dir,
-                                     f'dynamic_spinup_mu_calib_run_output_{rgi_reg}.nc')
-                utils.compile_run_output(gdirs, path=opath,
-                                         input_filesuffix='_dynamic_spinup_mu_calib')
+            opath = os.path.join(sum_dir,
+                                 f'historical_spinup_mu_calib_run_output_{rgi_reg}.nc')
+            # try statement makes sure if dynamic spinup and dynamic mu
+            # calibration has not worked for one single glacier we still get
+            # the glacier statistics for analysis at the end
+            try:
+                utils.compile_run_output(
+                    gdirs, path=opath,
+                    input_filesuffix='_dynamic_spinup_mu_calib')
+            except RuntimeError as e:
+                if f'{e}' == 'Found no valid glaciers!':
+                    log.workflow('Not a single successful dynamic spinup with '
+                                 'dynamic mu star calibration run for region '
+                                 f'{rgi_reg}.')
+                else:
+                    raise RuntimeError(e)
 
     # Glacier statistics we recompute here for error analysis
     opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
@@ -883,6 +907,8 @@ def parse_args(args):
                         help="include a dynamic spinup for matching 'area' or "
                              "'volume' at the RGI-date or 'area/dmdtda/atonce' "
                              "or 'volume/dmdtda/atonce' or "
+                             "'area/dmdtda/atonce/inversion' or "
+                             "'volume/dmdtda/atonce/inversion' or "
                              "'area/before/dmdtda' or 'volume/before/dmdtda'.")
     parser.add_argument('--dynamic_spinup_start_year', type=int, default=1979,
                         help="if --dynamic_spinup is set, define the starting"
