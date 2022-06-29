@@ -1587,12 +1587,14 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
         the mass balance model to use - if None, will use the default OGGM
         one.
-    mb_years : array
+    mb_years : array, or tuple of length 2 (range)
         the array of years from which you want to average the MB for (for
-        mb_model only). Default is to pick from the reference geodetic MB
-        period, i.e. PARAMS['geodetic_mb_period']. It does not matter much,
-        but it should be a period long enough to have a representative
-        MB gradient.
+        mb_model only). If an array of length 2 is given, all years
+        between this range (excluding the last one) are used.
+        Default is to pick all years from the reference
+        geodetic MB period, i.e. PARAMS['geodetic_mb_period'].
+        It does not matter much for the final result, but it should be a
+        period long enough to have a representative MB gradient.
     """
 
     # Do we have a calving glacier?
@@ -1612,9 +1614,9 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         y1 = int(y1.split('-')[0])
         mb_years = np.arange(y0, y1, 1)
 
-    if len(mb_years) < 10:
-        raise ValueError('count/length of `mb_years` '
-                         'should not be smaller than 10')
+    if len(mb_years) == 2:
+        # Range
+        mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
     o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))

@@ -1950,7 +1950,7 @@ class TestClimate(unittest.TestCase):
         assert 5 < mb_new.mu_star < 500
 
         # Check that inversion works
-        climate.apparent_mb_from_any_mb(gdir, mb_years=np.arange(1953, 2003, 1))
+        climate.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
 
     @pytest.mark.slow
     def test_geodetic_mb_calibration_multiple_fl(self):
