@@ -1999,7 +1999,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(mb_new.bias, 0)
 
         # Check that inversion works
-        climate.apparent_mb_from_any_mb(gdir, mb_years=np.arange(1953, 2003, 1))
+        climate.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
 
         # Artificially make some arms even lower to have multiple branches
         fls = gdir.read_pickle('inversion_flowlines')
@@ -2024,7 +2024,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(mb_new.bias, 0)
 
         # Check that inversion works but it logs a warning
-        climate.apparent_mb_from_any_mb(gdir, mb_years=np.arange(1953, 2003, 1))
+        climate.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
 
     @pytest.mark.slow
     def test_local_t_star_fallback(self):
