@@ -15,6 +15,10 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- corrected a but in ``apparent_mb_from_any_mb``, where only two years of MB
+  would be used instead of a range of years (:pull:`1426`).
+  By `Bowen <https://github.com/bowenbelongstonature>`_
+
 v1.5.3 (02.04.2022)
 -------------------
 
