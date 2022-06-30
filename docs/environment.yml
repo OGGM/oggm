@@ -2,8 +2,6 @@ name: oggm_docs
 channels:
   - conda-forge
 dependencies:
-  - jupyter
-  - jupyterlab
   - numpy
   - scipy
   - pandas
@@ -28,7 +26,8 @@ dependencies:
   - salem
   - motionless
   - sphinx
-  - sphinx-book-theme
+  - pydata-sphinx-theme
+  - sphinx-book-theme>=0.3.2
   - ipython
   - numpydoc
   - seaborn
