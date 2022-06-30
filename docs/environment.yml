@@ -26,7 +26,7 @@ dependencies:
   - salem
   - motionless
   - sphinx
-  - pydata-sphinx-theme>=0.9.0
+  - pydata-sphinx-theme
   - sphinx-book-theme>=0.3.2
   - ipython
   - numpydoc
