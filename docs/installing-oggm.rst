@@ -393,8 +393,8 @@ Pyenv and pyenv-virtualenv
 
 .. note::
 
-    If you are not familiar with pyenv, you can
-    `read the docs <https://realpython.com/intro-to-pyenv/>`_
+    If you are not familiar with pyenv, you can visit
+    `their documentation <https://realpython.com/intro-to-pyenv/>`_
     (especially the installing pyenv section).
     
 Install `pyenv <https://github.com/pyenv/pyenv>`_ and create a new virtual environment
