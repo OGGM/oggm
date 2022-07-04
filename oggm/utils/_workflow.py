@@ -1673,7 +1673,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
                 # is only saved if we use prcp-fac that depend on winter
                 # precipitation by using the logarithmic regression
                 # found in the MBsandbox
-                d['prcp_fac_from_winter_prcp'] = df['prcp_fac_from_winter_prcp']
+                d['winter_prcp_factor'] = df['winter_prcp_factor']
             except KeyError:
                 pass
         except BaseException:
@@ -1894,9 +1894,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
 
 
 @entity_task(log)
-def climate_statistics(gdir, add_climate_period=1995,
-                       winter_daily_mean_prcp=False,
-                       input_filesuffix=''):
+def climate_statistics(gdir, add_climate_period=1995, input_filesuffix=''):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1908,13 +1906,7 @@ def climate_statistics(gdir, add_climate_period=1995,
     add_climate_period : int or list of ints
         compile climate statistics for the 30 yrs period around the selected
         date.
-    winter_daily_mean_prcp : boolean
-        default is False. If True, the winter daily mean prcp (kg m-2 day-1)
-        over the time period 1979-2019 (41 years) is estimated. It is saved
-        under `winter_daily_mean_prcp_1979_2019`.
-        It can be used to predict the precipitation factor.
     """
-
     from oggm.core.massbalance import (ConstantMassBalance,
                                        MultipleFlowlineMassBalance)
 
@@ -1957,13 +1949,6 @@ def climate_statistics(gdir, add_climate_period=1995,
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
                                                 bias=0,
                                                 use_inversion_flowlines=True)
-
-            # should use the right prcp. factor when computing statistics !!!
-            try:
-                pf = gdir.read_json('local_mustar')['prcp_fac_from_winter_prcp']
-                mbmod.prcp_fac = pf
-            except KeyError:
-                pass
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
             pacc = np.where(mbh >= 0)
@@ -1991,29 +1976,6 @@ def climate_statistics(gdir, add_climate_period=1995,
             d['tstar_avg_prcp'] = p[0]
         except BaseException:
             pass
-        if winter_daily_mean_prcp:
-            # get non-corrected winter daily mean prcp (kg m-2 day-1)
-            # it is easier to get this directly from the raw climate files
-            fp = gdir.get_filepath('climate_historical',
-                                   filesuffix=input_filesuffix)
-            with xr.open_dataset(fp).prcp as ds_pr:
-                # just select winter months
-                if gdir.hemisphere == 'nh':
-                    m_winter = [10, 11, 12, 1, 2, 3, 4]
-                else:
-                    m_winter = [4, 5, 6, 7, 8, 9, 10]
-                ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
-                # select the correct 41 year time period
-                ds_pr_winter = ds_pr_winter.sel(time=slice('1979-01-01', '2019-12-01'))
-                # check if we have the full time period
-                # 41 years * 7 months
-                text = 'the climate period has to go from 1979-01 to 2019-12,' \
-                       'use W5E5 or GSWP3_W5E5 as baseline climate and' \
-                       'repeat the climate processing'
-                assert len(ds_pr_winter.time) == 41 * 7, text
-                ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
-                # maybe rather call it: winter_daily_mean_prcp_1979_2019_uncorrected ???
-                d['winter_daily_mean_prcp_1979_2019'] = ds_d_pr_winter_mean.values
         # Climate and MB at specified dates
         add_climate_period = tolist(add_climate_period)
         for y0 in add_climate_period:
@@ -2024,13 +1986,6 @@ def climate_statistics(gdir, add_climate_period=1995,
                                                     y0=y0,
                                                     use_inversion_flowlines=True,
                                                     input_filesuffix=input_filesuffix)
-                # should use the right prcp. factor when computing statistics !!!
-                try:
-                    pf = gdir.read_json('local_mustar')['prcp_fac_from_winter_prcp']
-                    mbmod.prcp_fac = pf
-                except KeyError:
-                    pass
-
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
                 mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
                 pacc = np.where(mbh >= 0)
@@ -2084,11 +2039,6 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
     add_climate_period : int or list of ints
         compile climate statistics for the 30 yrs period around the selected
         date.
-    winter_daily_mean_prcp : boolean
-        default is False. If True, the winter daily mean prcp (kg m-2 day-1)
-        over the time period 1979-2019 (41 years) is estimated. It is saved
-        under `winter_daily_mean_prcp_1979_2019`. It can be used to
-        predict the precipitation factor.
     input_filesuffix : str
         filesuffix of the used climate_historical file, default is no filesuffix
     """
@@ -2096,7 +2046,6 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
 
     out_df = execute_entity_task(climate_statistics, gdirs,
                                  add_climate_period=add_climate_period,
-                                 winter_daily_mean_prcp=winter_daily_mean_prcp,
                                  input_filesuffix=input_filesuffix)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')

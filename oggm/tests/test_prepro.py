@@ -3572,10 +3572,10 @@ class TestGCMClimate(unittest.TestCase):
         # testing = True to only download the HEF gridpoint and 3 other gridppoints around
         tasks.process_monthly_isimip_data(gdir, ensemble=ensemble, ssp=ssp,
                                           output_filesuffix='_no_OGGM_bc',
-                                          correct=False,
+                                          apply_bias_correction=False,
                                           testing=True)
         tasks.process_monthly_isimip_data(gdir, ensemble=ensemble, ssp=ssp,
-                                          correct=True,
+                                          apply_bias_correction=True,
                                           output_filesuffix='_with_OGGM_bc',
                                           testing=True)
         fh = gdir.get_filepath('climate_historical')
@@ -4346,4 +4346,3 @@ class TestPyGEM_compat(unittest.TestCase):
         np.testing.assert_allclose(fls[0].volume_m3,
                                    np.sum(width*thick*dx_meter),
                                    rtol=0.01)
-

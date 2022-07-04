@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                      year_range=('1961', '1990'), scale_stddev=True,
                      time_unit=None, calendar=None, source='',
-                     correct=True):
+                     apply_bias_correction=True):
     """ Applies the anomaly method to GCM climate data
 
     This function can be applied to any GCM data, if it is provided in a
@@ -67,11 +67,11 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         If you use an exotic calendar (e.g. 'noleap')
     source : str
         For metadata: the source of the climate data
-    correct : boolean
+    apply_bias_correction : boolean
         if a bias-correction should be applied. Default is True, only set it to False
         if the GCM has already been externally bias-corrected to the applied
         observational calibration dataset (true for ISIMIP 3b that is bias-corrected
-        to W5E5)
+        to W5E5). !!! We assume that temp is in Kelvin and convert to CELSIUS !!!
     """
 
     # Standard sanity checks
@@ -99,7 +99,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     with xr.open_dataset(fpath) as ds_ref:
 
         ds_ref = ds_ref.sel(time=slice(*year_range))
-        if correct:
+        if apply_bias_correction:
             # compute monthly anomalies
             # of temp
             if scale_stddev:
@@ -185,7 +185,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
                                 ensemble='mri-esm2-0_r1i1p1f1',
                                 ssp='ssp126',
                                 year_range=('1979', '2014'),
-                                correct=False,
+                                apply_bias_correction=False,
                                 testing=False,
                                 **kwargs):
     """Read, process and store the isimip3b gcm data for this glacier.
@@ -301,8 +301,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         precip = precip * dimo * (60 * 60 * 24)
 
     process_gcm_data(gdir, filesuffix=output_filesuffix, prcp=precip, temp=temp,
-                     year_range=year_range, correct=correct,
-                     source=output_filesuffix,
+                     year_range=year_range, source=output_filesuffix,
+                     apply_bias_correction=apply_bias_correction,
                      **kwargs)
 
 @entity_task(log, writes=['gcm_data'])
