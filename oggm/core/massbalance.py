@@ -362,7 +362,12 @@ class PastMassBalance(MassBalanceModel):
         self.t_solid = cfg.PARAMS['temp_all_solid']
         self.t_liq = cfg.PARAMS['temp_all_liq']
         self.t_melt = cfg.PARAMS['temp_melt']
-        prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+
+        if cfg.PARAMS['use_winter_prcp_factor']:
+            prcp_fac = gdir.read_json('local_mustar')['prcp_fac_from_winter_prcp']
+        else:
+            prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+
         # check if valid prcp_fac is used
         if prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac has to be above zero!')

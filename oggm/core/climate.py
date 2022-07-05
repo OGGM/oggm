@@ -540,11 +540,11 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
             df = gdir.read_json('local_mustar')
         except:
             df = {}
-        prcp_fac = df.get('winter_prcp_factor')
+        prcp_fac = df.get('prcp_fac_from_winter_prcp')
         if prcp_fac is None:
             # Then decide and store
             prcp_fac = decide_winter_precip_factor(gdir)
-            df['winter_prcp_factor'] = prcp_fac
+            df['prcp_fac_from_winter_prcp'] = prcp_fac
             gdir.write_json(df, 'local_mustar')
     else:
         prcp_fac = cfg.PARAMS['prcp_scaling_factor']

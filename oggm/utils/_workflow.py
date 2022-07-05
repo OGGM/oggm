@@ -1673,7 +1673,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
                 # is only saved if we use prcp-fac that depend on winter
                 # precipitation by using the logarithmic regression
                 # found in the MBsandbox
-                d['winter_prcp_factor'] = df['winter_prcp_factor']
+                d['prcp_fac_from_winter_prcp'] = df['prcp_fac_from_winter_prcp']
             except KeyError:
                 pass
         except BaseException:
