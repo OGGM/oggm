@@ -247,8 +247,7 @@ class Test_w5e5:
         # no gradient for GSWP3-W5E5!
 
         # test climate statistics with winter_daily_mean_prcp
-        df = utils.compile_climate_statistics([gdir], path=False,
-                                              winter_daily_mean_prcp=True)
+        df = utils.compile_climate_statistics([gdir], path=False)
         assert np.all(df['winter_daily_mean_prcp_1979_2019'] > 1.5)
         assert np.all(df['winter_daily_mean_prcp_1979_2019'] < 1.8)
 

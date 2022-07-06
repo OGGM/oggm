@@ -31,7 +31,8 @@ BASENAMES = {
         'tmp': f'{_base}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers.nc',
         'temp_std': f'{_base}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers.nc',
         'prcp': f'{_base}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers.nc'
-}}
+    }
+}
 
 
 def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):

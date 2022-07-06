@@ -538,7 +538,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
         # Have we decided on a factor yet?
         try:
             df = gdir.read_json('local_mustar')
-        except:
+        except FileNotFoundError:
             df = {}
         prcp_fac = df.get('prcp_fac_from_winter_prcp')
         if prcp_fac is None:
@@ -1330,6 +1330,7 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
 
 
 def decide_winter_precip_factor(gdir):
+    """Utility function to decide on a precip factor based on winter precip."""
 
     # We have to decide on a precip factor
     if 'W5E5' not in cfg.PARAMS['baseline_climate']:

@@ -3615,8 +3615,8 @@ class TestGCMClimate(unittest.TestCase):
             np.testing.assert_allclose(sclim.prcp.mean(),
                                        sgcm.prcp.mean(),
                                        rtol=1e-3)
-            # even if not corrected the climate should be quite similar because ISIMIP3b was internally
-            # bias corrected to match W5E5
+            # even if not corrected the climate should be quite similar because
+            # ISIMIP3b was internally bias corrected to match W5E5
             np.testing.assert_allclose(sclim.temp.mean(),
                                        sgcm_nc.temp.mean(),
                                        rtol=2e-2)

@@ -180,6 +180,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                         source=source,
                                         filesuffix=filesuffix)
 
+
 @entity_task(log, writes=['gcm_data'])
 def process_monthly_isimip_data(gdir, output_filesuffix='',
                                 ensemble='mri-esm2-0_r1i1p1f1',
@@ -258,8 +259,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         # Should we consider GCM interpolation?
         # try:
         # computing all the distances and choose the nearest gridpoint
-        c = (tempds_gcm.longitude - glon) ** 2 + (
-                    tempds_gcm.latitude - glat) ** 2
+        c = ((tempds_gcm.longitude - glon) ** 2 +
+             (tempds_gcm.latitude - glat) ** 2)
         # first select gridpoint, then merge, should be faster!!!
         temp_a_gcm = tempds_gcm.isel(points=c.argmin())
         temp_a_hist = tempds_hist.isel(points=c.argmin())
@@ -277,8 +278,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     with xr.open_dataset(fpath_precip_h, use_cftime=True) as precipds_hist, \
             xr.open_dataset(fpath_precip, use_cftime=True) as precipds_gcm:
 
-        c = (precipds_gcm.longitude - glon) ** 2 + (
-                    precipds_gcm.latitude - glat) ** 2
+        c = ((precipds_gcm.longitude - glon) ** 2 +
+             (precipds_gcm.latitude - glat) ** 2)
         precip_a_gcm = precipds_gcm.isel(points=c.argmin())
         precip_a_hist = precipds_hist.isel(points=c.argmin())
         precip_a = xr.merge([precip_a_gcm, precip_a_hist],

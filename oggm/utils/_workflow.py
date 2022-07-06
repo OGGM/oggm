@@ -2020,7 +2020,6 @@ def climate_statistics(gdir, add_climate_period=1995, input_filesuffix=''):
 @global_task(log)
 def compile_climate_statistics(gdirs, filesuffix='', path=True,
                                add_climate_period=1995,
-                               winter_daily_mean_prcp=False,
                                input_filesuffix=''):
     """Gather as much statistics as possible about a list of glaciers.
 
