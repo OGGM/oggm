@@ -2031,18 +2031,19 @@ def climate_statistics(gdir, add_climate_period=1995, input_filesuffix=''):
                     else:
                         m_winter = [4, 5, 6, 7, 8, 9, 10]
                     ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
-                    # select the correct 41 year time period
-                    ds_pr_winter = ds_pr_winter.sel(time=slice(f'{fs[:4]}-01-01', f'{fs[-4:]}-12-01'))
+                    # select the correct year time period
+                    ds_pr_winter = ds_pr_winter.sel(time=slice(f'{fs[:4]}-01-01',
+                                                               f'{fs[-4:]}-12-01'))
                     # check if we have the full time period
-                    # 41 years * 7 months
-                    text = 'the climate period has to go from 1979-01 to 2019-12,' \
-                           'use W5E5 or GSWP3_W5E5 as baseline climate and' \
-                           'repeat the climate processing'
                     if fs == '1979-2019':
+                        # 41 years * 7 months
+                        text = 'the climate period has to go from 1979-01 to 2019-12,' \
+                               'use W5E5 or GSWP3_W5E5 as baseline climate and' \
+                               'repeat the climate processing'
                         assert len(ds_pr_winter.time) == 41 * 7, text
                     else:
                         n_years = int(fs[-4:]) - int(fs[:4]) + 1
-                        assert len(ds_pr_winter.time) == n_years *7, 'chosen time-span invalid'
+                        assert len(ds_pr_winter.time) == n_years * 7, 'chosen time-span invalid'
                     ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
                     d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
             except BaseException:
