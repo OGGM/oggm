@@ -249,14 +249,16 @@ class Test_w5e5:
         # test climate statistics with winter_daily_mean_prcp
         # they should be computed even if cfg.PARAMS['use_winter_prcp_factor'] is False!
         df = utils.compile_climate_statistics([gdir], path=False,
-                                              add_climate_period=[1995, 2010])
-        fs_l = ['1979-2019', '1980-2010']
-        for fs in fs_l[:-1]:
-            assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] > 1.5)
-            assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] < 1.8)
+                                              add_climate_period=[1999, 2010],
+                                              add_raw_climate_statistics=True,
+                                              halfsize=20)
+        fs= '1979-2019'
+        assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] > 1.5)
+        assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] < 1.8)
+
         # we don't have climate data for that time period
         with pytest.raises(KeyError):
-            df[f'1995-2025_uncorrected_winter_daily_mean_prcp']
+            df[f'1990-2030_uncorrected_winter_daily_mean_prcp']
 
 
 class Test_ecmwf:

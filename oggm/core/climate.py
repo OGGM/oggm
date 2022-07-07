@@ -535,16 +535,21 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     temp_all_liq = cfg.PARAMS['temp_all_liq']
     temp_melt = cfg.PARAMS['temp_melt']
     if cfg.PARAMS['use_winter_prcp_factor']:
+        # Some sanity check
+        if cfg.PARAMS['prcp_scaling_factor'] is not None:
+            raise InvalidWorkflowError("Set PARAMS['prcp_scaling_factor'] to "
+                                       "None if using a winter_prcp_factor")
+
         # Have we decided on a factor yet?
         try:
             df = gdir.read_json('local_mustar')
         except FileNotFoundError:
             df = {}
-        prcp_fac = df.get('prcp_fac_from_winter_prcp')
+        prcp_fac = df.get('glacier_prcp_scaling_factor')
         if prcp_fac is None:
             # Then decide and store
             prcp_fac = decide_winter_precip_factor(gdir)
-            df['prcp_fac_from_winter_prcp'] = prcp_fac
+            df['glacier_prcp_scaling_factor'] = prcp_fac
             gdir.write_json(df, 'local_mustar')
     else:
         prcp_fac = cfg.PARAMS['prcp_scaling_factor']

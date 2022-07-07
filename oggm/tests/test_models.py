@@ -1036,18 +1036,27 @@ class TestMassBalanceModels:
                                                          ignore_hydro_months=False)
         cfg.PARAMS['baseline_climate'] = 'W5E5'
         tasks.process_climate_data(gdir)
+
+        with pytest.raises(InvalidWorkflowError):
+            climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
+                                                         ref_period='2000-01-01_2020-01-01',
+                                                         ignore_hydro_months=False)
+
+        prev_fac = cfg.PARAMS['prcp_scaling_factor']
+        cfg.PARAMS['prcp_scaling_factor'] = None
         climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
                                                      ref_period='2000-01-01_2020-01-01',
                                                      ignore_hydro_months=False)
         h, w = gdir.get_inversion_flowline_hw()
         mb = massbalance.PastMassBalance(gdir)
-        pf = gdir.read_json('local_mustar')['prcp_fac_from_winter_prcp']
+        pf = gdir.read_json('local_mustar')['glacier_prcp_scaling_factor']
         assert mb.prcp_fac == pf
         mb_modelled = mb.get_specific_mb(h, w, year=np.arange(2000, 2020, 1))
 
         np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
         np.testing.assert_allclose(pf, 3.35713, rtol=1e-4)
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = prev_fac
 
 
 class TestModelFlowlines():

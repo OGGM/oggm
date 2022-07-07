@@ -363,8 +363,8 @@ class PastMassBalance(MassBalanceModel):
         self.t_liq = cfg.PARAMS['temp_all_liq']
         self.t_melt = cfg.PARAMS['temp_melt']
 
-        if cfg.PARAMS['use_winter_prcp_factor']:
-            prcp_fac = gdir.read_json('local_mustar')['prcp_fac_from_winter_prcp']
+        if cfg.PARAMS['prcp_scaling_factor'] is None:
+            prcp_fac = gdir.read_json('local_mustar')['glacier_prcp_scaling_factor']
         else:
             prcp_fac = cfg.PARAMS['prcp_scaling_factor']
 
