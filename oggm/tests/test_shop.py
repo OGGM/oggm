@@ -162,7 +162,7 @@ class Test_w5e5:
         # check if W5E5 and GSWP3_W5E5 are equal over common time period
         # this is done in the flattening notebook
 
-    def test_proces_w5e5_data(self, class_case_dir):
+    def test_process_w5e5_data(self, class_case_dir):
 
         # Init
         cfg.initialize()
@@ -205,7 +205,7 @@ class Test_w5e5:
         m_grads_2019 = ds_clim.sel(time=slice('2019', '2019')).gradient
         np.testing.assert_allclose(m_grads, m_grads_2019)
 
-    def test_proces_gswp3_w5e5_data(self, class_case_dir):
+    def test_process_gswp3_w5e5_data(self, class_case_dir):
 
         # Init
         cfg.initialize()
@@ -247,9 +247,16 @@ class Test_w5e5:
         # no gradient for GSWP3-W5E5!
 
         # test climate statistics with winter_daily_mean_prcp
-        df = utils.compile_climate_statistics([gdir], path=False)
-        assert np.all(df['winter_daily_mean_prcp_1979_2019'] > 1.5)
-        assert np.all(df['winter_daily_mean_prcp_1979_2019'] < 1.8)
+        # they should be computed even if cfg.PARAMS['use_winter_prcp_factor'] is False!
+        df = utils.compile_climate_statistics([gdir], path=False,
+                                              add_climate_period=[1995, 2010])
+        fs_l = ['1979-2019', '1980-2010']
+        for fs in fs_l[:-1]:
+            assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] > 1.5)
+            assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] < 1.8)
+        # we don't have climate data for that time period
+        with pytest.raises(KeyError):
+            df[f'1995-2025_uncorrected_winter_daily_mean_prcp']
 
 
 class Test_ecmwf:

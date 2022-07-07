@@ -2013,6 +2013,41 @@ def climate_statistics(gdir, add_climate_period=1995, input_filesuffix=''):
                 d[fs + '_avg_prcp'] = p[0]
             except BaseException:
                 pass
+        # get non-corrected winter daily mean prcp (kg m-2 day-1)
+        # if possible: for '1979-2019' and the chosen time period
+        fs_l = ['1979-2019']
+        for y0 in add_climate_period:
+            fs_l.append('{}-{}'.format(y0 - 15, y0 + 15))
+        for fs in fs_l:
+            try:
+                # get non-corrected winter daily mean prcp (kg m-2 day-1)
+                # it is easier to get this directly from the raw climate files
+                fp = gdir.get_filepath('climate_historical',
+                                       filesuffix=input_filesuffix)
+                with xr.open_dataset(fp).prcp as ds_pr:
+                    # just select winter months
+                    if gdir.hemisphere == 'nh':
+                        m_winter = [10, 11, 12, 1, 2, 3, 4]
+                    else:
+                        m_winter = [4, 5, 6, 7, 8, 9, 10]
+                    ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
+                    # select the correct 41 year time period
+                    ds_pr_winter = ds_pr_winter.sel(time=slice(f'{fs[:4]}-01-01', f'{fs[-4:]}-12-01'))
+                    # check if we have the full time period
+                    # 41 years * 7 months
+                    text = 'the climate period has to go from 1979-01 to 2019-12,' \
+                           'use W5E5 or GSWP3_W5E5 as baseline climate and' \
+                           'repeat the climate processing'
+                    if fs == '1979-2019':
+                        assert len(ds_pr_winter.time) == 41 * 7, text
+                    else:
+                        n_years = int(fs[-4:]) - int(fs[:4]) + 1
+                        assert len(ds_pr_winter.time) == n_years *7, 'chosen time-span invalid'
+                    ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
+                    d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
+            except BaseException:
+                pass
+
 
     return d
 
