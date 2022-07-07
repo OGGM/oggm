@@ -1356,7 +1356,6 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         min_mu_star = cfg.PARAMS['min_mu_star']
     if max_mu_star is None:
         max_mu_star = cfg.PARAMS['max_mu_star']
-    _brentq_xtol = cfg.PARAMS['_brentq_xtol']
     
     MB_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
                  'temp_melt', 'prcp_scaling_factor', 'climate_qc_months',
@@ -1446,7 +1445,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
                                      corr_factor) + (float(fa_will[idx, 9]) * 
                                      corr_factor) / 2)
             unc_will = (float(fa_will[idx, 5])**2 + 
-                        float(fa_will[idx, 7])**2)**0.5 / 2 
+                        float(fa_will[idx, 7])**2)**0.5 / 2
  
         # Shift the frontal ablation estimate, if the mu calculating function
         # is not able to find a value. (Probably because frontal ablation

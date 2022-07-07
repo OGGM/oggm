@@ -42,6 +42,7 @@ from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.cfg import G
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -203,8 +204,8 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
 
 
 def sia_thickness_via_optim(slope, width, flux, rel_h=1, a_factor=1, 
-							shape='rectangular', glen_a=None, fs=None, 
-							t_lambda=None):
+                            shape='rectangular', glen_a=None, fs=None, 
+                            t_lambda=None):
     """Compute the thickness numerically instead of analytically.
 
     It's the only way that works for trapezoid shapes.
@@ -278,9 +279,9 @@ def sia_thickness_via_optim(slope, width, flux, rel_h=1, a_factor=1,
     return out_h
 
 
-def sia_thickness(slope, width, flux, rel_h=1, a_factor=1, shape='rectangular',												
+def sia_thickness(slope, width, flux, rel_h=1, a_factor=1, shape='rectangular',                                             
                   glen_a=None, fs=None, shape_factor=None):
-										
+                                        
     """Computes the ice thickness from mass-conservation.
 
     This is a utility function tested against the true OGGM inversion
@@ -329,7 +330,7 @@ def sia_thickness(slope, width, flux, rel_h=1, a_factor=1, shape='rectangular',
             flux_a0 = 0
 
     # Polynomial factors (a5 = 1)
-    a0 = - flux_a0 / ((rho * cfg.G * slope) ** 3 * fd)
+    a0 = - flux_a0 / ((rho * cfg.G * slope * a_factor) ** 3 * fd)
     a3 = (fs / fd) * rel_h
 
     # Inversion with shape factors?
@@ -452,7 +453,10 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
     a3 = fs / fd
     rho = cfg.PARAMS['ice_density']
-	rho_o = cfg.PARAMS['ocean_density']
+    rho_o = cfg.PARAMS['ocean_density']
+
+    if water_level is None:
+        water_level = 0
 
     # Inversion with shape factors?
     sf_func = None
@@ -492,28 +496,32 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
             wrong_rel_h = ((rel_h < 1) | ~np.isfinite(rel_h))
             rel_h[wrong_rel_h & (water_depth > 0)] = min_rel_h
             rel_h[wrong_rel_h & (water_depth == 0)] = 1
-            rel_h[-1] =  min_rel_h
+            rel_h[-1] = min_rel_h
             a3s = fs/fd*rel_h
-            a_pull = a0s*0
-            length = len(cl['width']) * cl['dx']
-            stretch_dist = utils.clip_max(8e3,length)
-            n_stretch = np.rint(stretch_dist/cl['dx']).astype(int)
-            f_b = cl['hgt'][-1] - water_level
-            pull_stress = utils.clip_min(0,0.5 * G * (rho * out_thick[-1]**2 - 
-                                         rho_o * water_depth[-1]**2))
-            
-            # Define stretch factor and add to driving stress
-            stretch_factor = np.zeros(n_stretch)
-            for j in range(n_stretch):
-                stretch_factor[j] = 2*(j+1)/(n_stretch+1)
-            if cl['dx'] > stretch_dist:
-                stretch_factor = stretch_dist / cl['dx']
-                n_stretch = 1
+            if np.any(bed_h < 0):
+                a_pull = a0s*0
+                length = len(cl['width']) * cl['dx']
+                stretch_dist = utils.clip_max(8e3,length)
+                n_stretch = np.rint(stretch_dist/cl['dx']).astype(int)
+                f_b = cl['hgt'][-1] - water_level
+                pull_stress = utils.clip_min(0, 0.5 * cfg.G * (rho * 
+                                             out_thick[-1]**2 - rho_o * 
+                                             water_depth[-1]**2))
                 
-            a_pull[-(n_stretch-1):] = (stretch_factor[:-1] * (pull_stress / 
-                                                       stretch_dist))
-            a_factor = (a_pull / (rho*cfg.G*slope*out_thick)) + 1
-            a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
+                # Define stretch factor and add to driving stress
+                stretch_factor = np.zeros(n_stretch)
+                for j in range(n_stretch):
+                    stretch_factor[j] = 2*(j+1)/(n_stretch+1)
+                if cl['dx'] > stretch_dist:
+                    stretch_factor = stretch_dist / cl['dx']
+                    n_stretch = 1
+                    
+                a_pull[-(n_stretch-1):] = (stretch_factor[:-1] * (pull_stress / 
+                                                           stretch_dist))
+                a_factor = (a_pull / (rho*cfg.G*slope*out_thick)) + 1
+                a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
+            else:
+                a_factor = rel_h*0+1
             a0s = - cl['flux_a0'] / ((rho*cfg.G*slope*a_factor)**3*fd)
             out_thick = _compute_thick(a0s, a3s, cl['flux_a0'], sf, 
                                           _inv_function)
@@ -1330,6 +1338,17 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     calving_k = diag.get('optimized_k', cfg.PARAMS['inversion_calving_k'])
     rho = cfg.PARAMS['ice_density']
     rho_o = cfg.PARAMS['ocean_density'] # Ocean density, must be >= ice density
+ 
+    # Find volume without water
+    gdir.inversion_calving_rate = 0
+    with utils.DisableLogger():
+        climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+                                        mb_years=mb_years)
+        prepare_for_inversion(gdir)
+        v_ref = mass_conservation_inversion(gdir,glen_a=glen_a,fs=fs)
+        #tasks.filter_inversion_output(gdir)
+    # Store for statistics        
+    gdir.add_to_diagnostics('volume_before_water', v_ref)
     
     # Get the relevant variables
     cls = gdir.read_pickle('inversion_input')[-1]
@@ -1342,19 +1361,9 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     min_slope = np.deg2rad(cfg.PARAMS[min_slope])
     slope = utils.clip_array(slope, min_slope, np.pi / 2.)
 
-    # Find volume without water
-    gdir.inversion_calving_rate = 0
-    with utils.DisableLogger():
-        climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
-                                        mb_years=mb_years)
-        prepare_for_inversion(gdir)
-        v_ref = mass_conservation_inversion(gdir,glen_a=glen_a,fs=fs)
-        #tasks.filter_inversion_output(gdir)
-    # Store for statistics        
-    gdir.add_to_diagnostics('volume_before_water', v_ref)
-
     cl = gdir.read_pickle('inversion_output')[-1]
-    log.workflow('hgt, thick before before: {}, {}'.format(cls['hgt'][-1], cl['thick'][-1]))  
+    #log.workflow('freeboard, thickness before water and frontal ablation: {},'
+    #             ' {}'.format(cls['hgt'][-1], cl['thick'][-1]))  
     thick0 = cl['thick'][-1]
     th = cls['hgt'][-1]
     if water_level is None:
@@ -1525,10 +1534,11 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
 
     cl = gdir.read_pickle('inversion_output')[-1]
-    log.workflow('hgt, thick before: {}, {}'.format(cls['hgt'][-1], cl['thick'][-1]))
+    #log.workflow('freeboard, thickness before frontal ablation: {},'
+    #             ' {}'.format(cls['hgt'][-1]-water_level, cl['thick'][-1]))
     out = calving_flux_from_depth(gdir, water_level=water_level, k=calving_k,
                                   water_depth=water_depth)
-                                  
+                                 
     # Find volume with water and frontal ablation                                 
     f_calving = out['flux']
     gdir.inversion_calving_rate = f_calving
@@ -1544,11 +1554,11 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     fl = gdir.read_pickle('inversion_flowlines')[-1]
     cl = gdir.read_pickle('inversion_output')[-1]
-    log.workflow('thick after: {}, {}'.format(cl['thick'][-1], out['thick']))
+    #log.workflow('thickness after: {}, {}'.format(cl['thick'][-1], out['thick']))
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
                  cfg.PARAMS['ice_density'])
     
-    log.workflow('({}) found frontal thickness, water depth, free-board, water '
+    log.workflow('({}) found frontal thickness, water depth, freeboard, water '
                  'level of {}, {}, {}, {}'.format(gdir.rgi_id, out['thick'], 
                  out['water_depth'],out['free_board'], out['water_level']))
     log.workflow('({}) calving (law) flux of {} ({})'.format(gdir.rgi_id, 

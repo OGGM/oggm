@@ -634,7 +634,7 @@ def climate_tasks(gdirs, base_url=None):
 
 @global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
-                    ref_period='None'):
+                    ref_period=None):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -681,8 +681,9 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
-            execute_entity_task(find_inversion_calving_from_any_mb, gdirs_c,
-                                glen_a=glen_a, fs=fs, mb_years=mb_years)
+            execute_entity_task(tasks.find_inversion_calving_from_any_mb, 
+                                gdirs_c, glen_a=glen_a, fs=fs, 
+                                mb_years=mb_years)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
