@@ -12,6 +12,12 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- added support for new reference data (W5E5), a bias corrected dataset based
+  on ERA5. This will become the new default in OGGM (:pull:`1435`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
+- added support for a precipitation factor varying per glacier (:pull:`1435`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
+
 Bug fixes
 ~~~~~~~~~
 
