@@ -598,7 +598,7 @@ class FlowlineModel(object):
             is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
-            mass-balance should be recomputed from the mass balance model.
+            mass balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
         check_for_boundaries : bool
@@ -1002,7 +1002,7 @@ class FlowlineModel(object):
 
         if not self.mb_model.hemisphere:
             raise InvalidParamsError('run_until_and_store needs a '
-                                     'mass-balance model with an unambiguous '
+                                     'mass balance model with an unambiguous '
                                      'hemisphere.')
 
         # Do we have a spinup?
@@ -1411,7 +1411,7 @@ class FlowlineModel(object):
         """ Runs the model until an equilibrium state is reached.
 
         Be careful: This only works for CONSTANT (not time-dependant)
-        mass-balance models.
+        mass balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
         """
@@ -1467,7 +1467,7 @@ class FluxBasedModel(FlowlineModel):
         flowlines : list
             the glacier flowlines
         mb_model : MassBalanceModel
-            the mass-balance model
+            the mass balance model
         y0 : int
             initial year of the simulation
         glen_a : float
@@ -1498,7 +1498,7 @@ class FluxBasedModel(FlowlineModel):
             is this a lake terminating glacier?
         mb_elev_feedback : str, default: 'annual'
             'never', 'always', 'annual', or 'monthly': how often the
-            mass-balance should be recomputed from the mass balance model.
+            mass balance should be recomputed from the mass balance model.
             'Never' is equivalent to 'annual' but without elevation feedback
             at all (the heights are taken from the first call).
         check_for_boundaries: bool, default: True
@@ -1931,7 +1931,7 @@ class FluxBasedModel(FlowlineModel):
             if is_trib:
                 flx_stag = flx_stag[:-1]
 
-            # Mass-balance
+            # Mass balance
             widths = fl.widths_m
             mb = mbs[fl_id]
             # Allow parabolic beds to grow
@@ -2318,11 +2318,7 @@ class FileModel(object):
     """Duck FlowlineModel which actually reads data out of a nc file."""
 
     def __init__(self, path):
-        """ Instantiate.
-
-        Parameters
-        ----------
-        """
+        """ Instantiate."""
 
         self.fls = glacier_from_netcdf(path)
 
@@ -2489,7 +2485,7 @@ class MassRedistributionCurveModel(FlowlineModel):
         flowlines : list
             the glacier flowlines
         mb_model : MassBalanceModel
-            the mass-balance model
+            the mass balance model
         y0 : int
             initial year of the simulation
         advance_method : int
@@ -3150,7 +3146,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):
-        warnings.warn("The mass-balance used to drive the ice dynamics model "
+        warnings.warn("The mass balance used to drive the ice dynamics model "
                       "is updated yearly. If you want the output to be stored "
                       "monthly and also reflect monthly processes, "
                       "set store_monthly_step=True and "
@@ -3246,13 +3242,14 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
                        climate_filename='climate_historical',
+                       mb_model=None,
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        init_model_filesuffix=None,
                        init_model_yr=None,
                        zero_initial_glacier=False,
                        unique_samples=False, **kwargs):
-    """Runs the random mass-balance model for a given number of years.
+    """Runs the random mass balance model for a given number of years.
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
@@ -3296,6 +3293,11 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb_model : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance. Default is to use a
+        RandomMassBalance together with the provided parameters y0, halfsize,
+        bias, seed, climate_filename, climate_input_filesuffix and
+        unique_samples
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3313,7 +3315,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
     unique_samples: bool
-        if true, chosen random mass-balance years will only be available once
+        if true, chosen random mass balance years will only be available once
         per random climate period-length
         if false, every model year will be chosen from the random climate
         period with the same probability
@@ -3321,20 +3323,22 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
-                                     y0=y0, halfsize=halfsize,
-                                     bias=bias, seed=seed,
-                                     filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix,
-                                     unique_samples=unique_samples)
+    if mb_model is None:
+        mb_model = MultipleFlowlineMassBalance(gdir,
+                                               mb_model_class=RandomMassBalance,
+                                               y0=y0, halfsize=halfsize,
+                                               bias=bias, seed=seed,
+                                               filename=climate_filename,
+                                               input_filesuffix=climate_input_filesuffix,
+                                               unique_samples=unique_samples)
 
     if temperature_bias is not None:
-        mb.temp_bias = temperature_bias
+        mb_model.temp_bias = temperature_bias
     if precipitation_factor is not None:
-        mb.prcp_fac = precipitation_factor
+        mb_model.prcp_fac = precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb, ys=0, ye=nyears,
+                              mb_model=mb_model, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
@@ -3356,12 +3360,13 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
+                         mb_model=None,
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
                          use_avg_climate=False,
                          **kwargs):
-    """Runs the constant mass-balance model for a given number of years.
+    """Runs the constant mass balance model for a given number of years.
 
     This will initialize a
     :py:class:`oggm.core.massbalance.MultipleFlowlineMassBalance`,
@@ -3408,6 +3413,10 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb_model : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance. Default is to use a
+        ConstantMassBalance together with the provided parameters y0, halfsize,
+        bias, climate_filename and climate_input_filesuffix.
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3426,22 +3435,25 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """
 
     if use_avg_climate:
-        mb_model = AvgClimateMassBalance
+        mb_model_class = AvgClimateMassBalance
     else:
-        mb_model = ConstantMassBalance
+        mb_model_class = ConstantMassBalance
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model,
-                                     y0=y0, halfsize=halfsize,
-                                     bias=bias, filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix)
+    if mb_model is None:
+        mb_model = MultipleFlowlineMassBalance(gdir,
+                                               mb_model_class=mb_model_class,
+                                               y0=y0, halfsize=halfsize,
+                                               bias=bias,
+                                               filename=climate_filename,
+                                               input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
-        mb.temp_bias = temperature_bias
+        mb_model.temp_bias = temperature_bias
     if precipitation_factor is not None:
-        mb.prcp_fac = precipitation_factor
+        mb_model.prcp_fac = precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb, ys=0, ye=nyears,
+                              mb_model=mb_model, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
@@ -3459,6 +3471,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_model_geometry=None,
                           store_fl_diagnostics=None,
                           climate_filename='climate_historical',
+                          mb_model=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
@@ -3499,6 +3512,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb_model : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance. Default is to use a
+        PastMassBalance together with the provided parameters climate_filename,
+        bias and climate_input_filesuffix.
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3573,21 +3590,24 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     if max_ys is not None:
         ys = ys if ys < max_ys else max_ys
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                     filename=climate_filename, bias=bias,
-                                     input_filesuffix=climate_input_filesuffix)
+    if mb_model is None:
+        mb_model = MultipleFlowlineMassBalance(gdir,
+                                               mb_model_class=PastMassBalance,
+                                               filename=climate_filename,
+                                               bias=bias,
+                                               input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
-        mb.temp_bias = temperature_bias
+        mb_model.temp_bias = temperature_bias
     if precipitation_factor is not None:
-        mb.prcp_fac = precipitation_factor
+        mb_model.prcp_fac = precipitation_factor
 
     if ye is None:
         # Decide from climate (we can run the last year with data as well)
-        ye = mb.flowline_mb_models[0].ye + 1
+        ye = mb_model.flowline_mb_models[0].ye + 1
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb, ys=ys, ye=ye,
+                              mb_model=mb_model, ys=ys, ye=ye,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
@@ -3613,7 +3633,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     ----------
     run_task : func
         any of the `run_*`` tasks in the oggm.flowline module.
-        The mass-balance model used needs to have the `add_climate` output
+        The mass balance model used needs to have the `add_climate` output
         kwarg available though.
     store_monthly_hydro : bool
         also compute monthly hydrological diagnostics. The monthly outputs
@@ -3736,7 +3756,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             ref_area[:] = bin_area_2d.max(axis=0)
 
     # Ok now we have arrays, we can work with that
-    # -> second time varying loop is for mass-balance
+    # -> second time varying loop is for mass balance
     months = [1]
     seconds = cfg.SEC_IN_YEAR
     ntime = len(years) + 1
@@ -3803,7 +3823,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             'data': np.zeros(oshape),
         },
         'model_mb': {
-            'description': 'Annual mass-balance from dynamical model',
+            'description': 'Annual mass balance from dynamical model',
             'unit': 'kg yr-1',
             'data': np.zeros(ntime),
         },
@@ -4032,11 +4052,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=FluxBasedModel,
-                       spinup_period=20, spinup_start_yr=None, min_spinup_period=10,
-                       yr_rgi=None, minimise_for='area', precision_percent=1,
+                       mb_model_historical=None, mb_model_spinup=None,
+                       spinup_period=20, spinup_start_yr=None,
+                       min_spinup_period=10, yr_rgi=None, minimise_for='area',
+                       precision_percent=1, precision_absolute=1,
+                       min_ice_thickness=10,
                        first_guess_t_bias=-2, t_bias_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
-                       store_model_geometry=True, store_fl_diagnostics=None,
+                       store_model_geometry=True, store_fl_diagnostics=False,
                        store_model_evolution=True, ignore_errors=True,
                        **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
@@ -4062,6 +4085,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: FluxBasedModel
+    mb_model_historical : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance for the historical run. Default
+        is to use a PastMassBalance model  together with the provided
+        parameter climate_input_filesuffix.
+    mb_model_spinup : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance for the spinup before the
+        historical run. Default is to use a ConstantMassBalance model together
+        with the provided parameter climate_input_filesuffix and during the
+        period of spinup_start_yr until rgi_year (e.g. 1979 - 2000).
     spinup_period : int
         The period how long the spinup should run. Start date of historical run
         is defined "yr_rgi - spinup_period". Minimum allowed value is 10. If
@@ -4069,7 +4101,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         (yr_rgi - spinup_period) the spinup_period is set to
         (yr_rgi - yr_climate_start). Caution if spinup_start_yr is set the
         spinup_period is ignored.
-        Default is 20.
+        Default is 20
     spinup_start_yr : int or None
         The start year of the dynamic spinup. If the provided year is before
         the provided climate data starts the year of the climate data is used.
@@ -4084,12 +4116,30 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         The rgi date, at which we want to match area or volume.
         If None, gdir.rgi_date + 1 is used (the default).
     minimise_for : str
-        The variable we want to match at yr_rgi. Default is 'area'.
-        Options are 'area' or 'volume'.
+        The variable we want to match at yr_rgi. Options are 'area' or 'volume'.
+        Default is 'area'.
     precision_percent : float
-        Gives the precision we want to match in percent. Default is 10,
-        meaning the difference must be within 10% of the given value
-        (area or volume).
+        Gives the precision we want to match in percent. The algorithm makes
+        sure that the resulting relative mismatch is smaller than
+        precision_percent, but also that the absolute value is smaller than
+        precision_absolute.
+        Default is 1, meaning the difference must be within 1% of the given
+        value (area or volume).
+    precision_absolute : float
+        Gives an minimum absolute value to match. The algorithm makes sure that
+        the resulting relative mismatch is smaller than precision_percent, but
+        also that the absolute value is smaller than precision_absolute.
+        The unit of precision_absolute depends on minimise_for (if 'area' in
+        km2, if 'volume' in km3)
+        Default is 1.
+    min_ice_thickness : float
+        Gives an minimum ice thickness for model grid points which are counted
+        to the total model value. This could be useful to filter out seasonal
+        'glacier growth', as OGGM do not differentiate between snow and ice in
+        the forward model run. Therefore you could see quite fast changes
+        (spikes) in the time-evolution (especially visible in length and area).
+        If you set this value to 0 the filtering can be switched off.
+        Default is 10.
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -4100,7 +4150,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         Default is 2
     maxiter : int
         Maximum number of minimisation iterations per spinup period. If reached
-        and 'ignore_errors=False' an error is raised. Default is 10.
+        and 'ignore_errors=False' an error is raised.
+        Default is 10.
     output_filesuffix : str
         for the output file
     store_model_geometry : bool
@@ -4149,11 +4200,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         fls_spinup = copy.deepcopy(init_model_fls)
 
     # MassBalance for actual run from yr_spinup to yr_rgi
-    mb_historical = MultipleFlowlineMassBalance(gdir,
-                                                fls=fls_spinup,
-                                                mb_model_class=PastMassBalance,
-                                                filename='climate_historical',
-                                                input_filesuffix=climate_input_filesuffix)
+    if mb_model_historical is None:
+        mb_model_historical = MultipleFlowlineMassBalance(
+            gdir, fls=fls_spinup, mb_model_class=PastMassBalance,
+            filename='climate_historical',
+            input_filesuffix=climate_input_filesuffix)
 
     # here we define the file-paths for the output
     if store_model_geometry:
@@ -4204,10 +4255,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
         yr_use = np.clip(yr_rgi, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
-                                                   mb_historical,
+                                                   mb_model_historical,
                                                    y0=yr_use,
                                                    **kwargs)
-
         with np.warnings.catch_warnings():
             # For operational runs we ignore the warnings
             np.warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -4253,6 +4303,20 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     other_reference_value = np.sum([getattr(f, f'{other_variable}_{other_unit}')
                                     for f in fls_ref])
 
+    # if reference value is zero no dynamic spinup is possible
+    if reference_value == 0.:
+        if ignore_errors:
+            model_dynamic_spinup_end = save_model_without_dynamic_spinup()
+            return model_dynamic_spinup_end
+        else:
+            raise RuntimeError('The given reference value is Zero, no dynamic '
+                               'spinup possible!')
+
+    # here we adjust the used precision_percent to make sure the resulting
+    # absolute mismatch is smaller than precision_absolute
+    precision_percent = min(precision_percent,
+                            precision_absolute / reference_value * 100)
+
     # only used to check performance of function
     forward_model_runs = [0]
 
@@ -4261,10 +4325,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         forward_model_runs.append(forward_model_runs[-1] + 1)
 
         # with t_bias the glacier state after spinup is changed between iterations
-        mb_spinup.temp_bias = t_bias
+        mb_model_spinup.temp_bias = t_bias
         # run the spinup
         model_spinup = evolution_model(copy.deepcopy(fls_spinup),
-                                       mb_spinup,
+                                       mb_model_spinup,
                                        y0=0,
                                        **kwargs)
         model_spinup.run_until(2 * halfsize_spinup)
@@ -4276,7 +4340,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
         # Now conduct the actual model run to the rgi date
         model_historical = evolution_model(model_spinup.fls,
-                                           mb_historical,
+                                           mb_model_historical,
                                            y0=yr_spinup,
                                            **kwargs)
         if store_model_evolution:
@@ -4299,7 +4363,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         value_ref = np.sum([getattr(f, cost_var) for f in fls_ref])
-        value_dynamic_spinup = getattr(model_dynamic_spinup, cost_var)
+        # only use grid points with a minimum ice thickness
+        fls = model_dynamic_spinup.fls
+        if cost_var == 'area_km2':
+            value_dynamic_spinup = np.sum(
+                [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-6
+        elif cost_var == 'volume_km3':
+            value_dynamic_spinup = np.sum(
+                [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
+                 for fl in fls]) * 1e-9
+        else:
+            raise NotImplementedError(f'{cost_var}')
 
         # calculate the mismatch in percent
         cost = (value_dynamic_spinup - value_ref) / value_ref * 100
@@ -4387,11 +4462,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                    (iteration < max_iterations)):
                 try:
                     tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
-
-                    # check if mismatch is inf -> reference value is 0
-                    if np.isinf(tmp_mismatch):
-                        raise RuntimeError('Mismatch is INF, this indicates '
-                                           'that the reference value is 0.!')
 
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
@@ -4630,21 +4700,25 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                                  int((spinup_period_initial + min_spinup_period) / 2),
                                  min_spinup_period]
 
+    # check if the user provided an mb_model_spinup, otherwise we must define a
+    # new one each iteration
+    provided_mb_model_spinup = False
+    if mb_model_spinup is not None:
+        provided_mb_model_spinup = True
     for spinup_period in spinup_periods_to_try:
         yr_spinup = yr_rgi - spinup_period
 
-        # define spinup MassBalance
-        # spinup is running for 'yr_rgi - yr_spinup' years, using a
-        # ConstantMassBalance
-        y0_spinup = (yr_spinup + yr_rgi) / 2
-        halfsize_spinup = yr_rgi - y0_spinup
-        mb_spinup = MultipleFlowlineMassBalance(gdir,
-                                                fls=fls_spinup,
-                                                mb_model_class=ConstantMassBalance,
-                                                filename='climate_historical',
-                                                input_filesuffix=climate_input_filesuffix,
-                                                y0=y0_spinup,
-                                                halfsize=halfsize_spinup)
+        if not provided_mb_model_spinup:
+            # define spinup MassBalance
+            # spinup is running for 'yr_rgi - yr_spinup' years, using a
+            # ConstantMassBalance
+            y0_spinup = (yr_spinup + yr_rgi) / 2
+            halfsize_spinup = yr_rgi - y0_spinup
+            mb_model_spinup = MultipleFlowlineMassBalance(
+                gdir, fls=fls_spinup, mb_model_class=ConstantMassBalance,
+                filename='climate_historical',
+                input_filesuffix=climate_input_filesuffix, y0=y0_spinup,
+                halfsize=halfsize_spinup)
 
         # try to conduct minimisation, if an error occurred try shorter spinup
         # period

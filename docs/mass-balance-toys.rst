@@ -1,8 +1,20 @@
 .. currentmodule:: oggm
 
-.. _mass-balance-toys:
-
 "Toy models" for experimentation
 ================================
 
-(in construction)
+OGGM comes with a suite of simplified models allowing to run idealized or
+simplified experiments very useful for testing or teaching. Like all
+other mass balance models in OGGM, they folow the
+:py:class:`~oggm.MassBalanceModel` interface.
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    core.massbalance.ScalarMassBalance
+    core.massbalance.LinearMassBalance
+    core.massbalance.ConstantMassBalance
+    core.massbalance.AvgClimateMassBalance
+    core.massbalance.RandomMassBalance
+    core.massbalance.UncertainMassBalance

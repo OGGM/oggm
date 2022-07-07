@@ -1,0 +1,41 @@
+name: oggm_docs
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - scipy
+  - pandas
+  - shapely
+  - matplotlib
+  - Pillow
+  - netcdf4
+  - scikit-image
+  - scikit-learn
+  - configobj
+  - xarray
+  - pytest
+  - dask
+  - bottleneck
+  - pyproj
+  - cartopy
+  - geopandas
+  - rasterio<1.2.10
+  - rioxarray
+  - seaborn
+  - pytables
+  - salem
+  - motionless
+  - sphinx
+  - pydata-sphinx-theme
+  - sphinx-book-theme>=0.3.2
+  - ipython
+  - numpydoc
+  - seaborn
+  - sphinx-intl
+  - pip:
+    - joblib
+    - progressbar2
+    - sphinx-togglebutton
+    - git+https://github.com/OGGM/pytest-mpl
+    # relative to this file. Needs to be editable to be accepted.
+    - -e ..

@@ -1,5 +1,3 @@
-.. _oeps:
-
 OGGM Enhancement Proposals (OEPs)
 =================================
 

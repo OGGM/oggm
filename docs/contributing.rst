@@ -1,5 +1,3 @@
-.. _contributing:
-
 ********************
 Contributing to OGGM
 ********************
@@ -33,8 +31,6 @@ version control to allow many people to work together on the project.
 Some great resources for learning Git:
 
 * the `GitHub help pages <http://help.github.com/>`_.
-* the `NumPy's documentation <https://numpy.org/doc/stable/dev/index.html>`_.
-* Matthew Brett's `Pydagogue <http://matthew-brett.github.com/pydagogue/>`_.
 
 Getting started with Git
 ------------------------
@@ -94,7 +90,7 @@ Creating a development environment
 ----------------------------------
 
 An easy way to create an OGGM development environment is explained in
-:ref:`installing.oggm`.
+:doc:`installing-oggm`.
 
 
 Contributing to the code base
@@ -206,7 +202,7 @@ Some other important things to know about the docs:
 How to build the documentation
 ------------------------------
 
-Requirements
+Installation
 ~~~~~~~~~~~~
 
 There are some extra requirements to build the docs: you will need to
@@ -216,13 +212,15 @@ and ``ipython`` installed.
 If you have a conda environment named ``oggm_env``, you can install the extra
 requirements with::
 
-      conda install -n oggm_env sphinx ipython numpydoc
-      conda install -c conda-forge sphinx-togglebutton sphinx-book-theme
+      mamba install -c conda-forge sphinx ipython numpydoc sphinx-book-theme
+      pip install sphinx-togglebutton
 
-If you use pip, activate your python environment and install the requirements
-with::
-
-      pip install sphinx sphinx-togglebutton sphinx-book-theme ipython numpydoc
+If you don't have an oggm installation yet, download (or clone) the latest version
+of the oggm repository.
+From the repository's root folder, activate conda if necessary and then,
+from your `base` environment, run ``mamba env create -f docs/environment.yml``
+(or ``conda env create -f docs/environment.yml``). To activate the environment,
+type: ``conda activate oggm_docs``.
 
 Building the documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -315,7 +313,7 @@ again make sure that you have followed all the guidelines outlined in this docum
 regarding code style, tests, and documentation. You should also
 double check your branch changes against the branch it was based on:
 
-#. Navigate to your repository on GitHub -- https://github.com/your-GitHub-user-name/oggm
+#. Navigate to your repository on GitHub -- ``github.com/your-GitHub-user-name/oggm``
 #. Click on ``Branches``
 #. Click on the ``Compare`` button for your feature branch
 #. Select the ``base`` and ``compare`` branches, if necessary. This will be ``master`` and

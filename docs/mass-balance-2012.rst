@@ -1,15 +1,13 @@
 .. currentmodule:: oggm
 
-.. _mass-balance-2012:
-
 Temperature index model calibrated on traditional MB data
 =========================================================
 
-The first mass-balance (MB) model ever implemented in OGGM is an
+The first mass balance (MB) model ever implemented in OGGM is an
 extended version of the temperature-index model presented by
 `Marzeion et al., (2012)`_.
 
-While the equation governing the mass-balance is that of a traditional
+While the equation governing the mass balance is that of a traditional
 temperature-index model, our special approach to calibration requires
 that we spend some time describing it.
 
@@ -24,7 +22,7 @@ that we spend some time describing it.
         code = compile(f.read(), fpath, 'exec')
         exec(code)
 
-The monthly mass-balance :math:`B_i` at elevation :math:`z` is computed as:
+The monthly mass balance :math:`B_i` at elevation :math:`z` is computed as:
 
 .. math::
 
@@ -63,14 +61,14 @@ implemented in OGGM makes full use of these apparent handicaps by turning
 them into assets.
 
 The calibration procedure starts with glaciers for which we have direct
-observations of the annual specific mass-balance SMB. We use the `WGMS FoG`_
+observations of the annual specific mass balance SMB. We use the `WGMS FoG`_
 (shipped with OGGM) for this purpose.
 
 .. _WGMS FoG: http://wgms.ch/data_databaseversions/
 
 For each of these glaciers, time-dependent "candidate" temperature sensitivities
 :math:`\mu (t)` are estimated by requiring that the average specific
-mass-balance :math:`\overline{B_{31}}` is equal to zero. :math:`\overline{B_{31}}` is computed
+mass balance :math:`\overline{B_{31}}` is equal to zero. :math:`\overline{B_{31}}` is computed
 for a 31-year period centered around the year :math:`t` **and for a constant
 glacier geometry fixed at the RGI date** (e.g. 2003 for most glaciers in the
 European Alps).
@@ -91,10 +89,10 @@ hypothetical sensitivities necessary to maintain the glacier in equilibrium in
 an average climate at the year :math:`t`. We call them "candidates", since one
 (or more) of them is likely to be close to the "real" sensitivity of the glacier.
 
-This is when the mass-balance observations come into play: each of these
-candidates is used to compute the mass-balance during the period
+This is when the mass balance observations come into play: each of these
+candidates is used to compute the mass balance during the period
 were we have observations. We then compare the model output
-with the expected mass-balance and compute the model bias:
+with the expected mass balance and compute the model bias:
 
 .. ipython:: python
    :okwarning:
@@ -126,8 +124,8 @@ study realized by `Marzeion et al., (2012)`_ and confirmed by OGGM:
 
    Benefit of spatially interpolating :math:`t^{*}` instead of :math:`\mu ^{*}` as shown
    by leave-one-glacier-out cross-validation (N = 255). **Left**: error
-   distribution of the computed mass-balance if determined by the
-   interpolated :math:`t^{*}`. **Right**: error distribution of the mass-balance
+   distribution of the computed mass balance if determined by the
+   interpolated :math:`t^{*}`. **Right**: error distribution of the mass balance
    if determined by interpolation of :math:`\mu ^{*}`.
 
 This substantial improvement in model performance is due to several factors:
@@ -149,7 +147,7 @@ This substantial improvement in model performance is due to several factors:
   example, the effect of avalanches or a negative bias in precipitation input
   will have the same impact on calibration: :math:`\mu^*` should be reduced to
   take these effects into account, even though they are not resolved by
-  the mass-balance model.
+  the mass balance model.
 
 The most important drawback of this calibration method is that it assumes that
 two neighboring glaciers should have a similar :math:`t^*`. This is not
@@ -174,8 +172,8 @@ Regional calibration
 
 .. admonition:: **New in version 1.4!**
 
-   As of version 1.4, we now also offer to calibrate the mass-balance at the
-   regional level (RGI regions) based on geodetic mass-balance products
+   As of version 1.4, we now also offer to calibrate the mass balance at the
+   regional level (RGI regions) based on geodetic mass balance products
    ([Zemp_et_al_2019]_ or [Hugonnet_et_al_2021]_, see :py:func:`oggm.workflow.match_regional_geodetic_mb`).
    This is done by correcting (shifting) the residual for each glacier (:math:`\epsilon` in the equation
    above) by a constant value so that the regional estimates match the
@@ -212,12 +210,12 @@ Implementation details
 ----------------------
 
 If you had the courage to read until here, it means that you have concrete
-questions about the implementation of the mass-balance model in OGGM.
+questions about the implementation of the mass balance model in OGGM.
 Here are some more details:
 
-- the mass-balance in OGGM is computed from the altitudes and widths
-  of the flowlines grid points (see :ref:`flowlines`). The easiest way to let
-  OGGM compute the mass-balance for you is to use the
+- the mass balance in OGGM is computed from the altitudes and widths
+  of the flowlines grid points (see :doc:`flowlines`). The easiest way to let
+  OGGM compute the mass balance for you is to use the
   :py:class:`core.massbalance.PastMassBalance`.
 - the interpolation of :math:`t^*` is done with an inverse distance weighting
   algorithm (see :py:func:`tasks.local_t_star`)
@@ -229,6 +227,8 @@ Here are some more details:
   be compensated by :math:`\mu^*`. We are currently quantifying these effects
   more precisely.
 
-Code used to generate these examples:
 
-.. literalinclude:: _code/prepare_climate.py
+.. admonition:: Code used to generate the examples
+   :class: note, dropdown
+
+   .. literalinclude:: _code/prepare_climate.py
