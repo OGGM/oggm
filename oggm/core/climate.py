@@ -1321,7 +1321,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     MB data instead, and this does NOT compute the apparent mass balance at
     the same time - users need to run apparent_mb_from_any_mb separately.
     Currently only works for single flowlines.
-	
+
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
@@ -1356,7 +1356,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         min_mu_star = cfg.PARAMS['min_mu_star']
     if max_mu_star is None:
         max_mu_star = cfg.PARAMS['max_mu_star']
-    
+
     MB_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
                  'temp_melt', 'prcp_scaling_factor', 'climate_qc_months',
                  'hydro_month_nh', 'hydro_month_sh']
@@ -1419,10 +1419,10 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     #                               'yet, but it should actually work. Well keep '
     #                               'you posted!')
 
-	# Here we add the frontal ablation and mass changes below water level to
+    # Here we add the frontal ablation and mass changes below water level to
     # the mix, but it's dirty...
-    if gdir.is_tidewater: 
-        fa_will = np.genfromtxt(fa_data_path, delimiter=',', 
+    if gdir.is_tidewater:
+        fa_will = np.genfromtxt(fa_data_path, delimiter=',',
                                 usecols=np.arange(0, 10), dtype='unicode')
         rgi_list = fa_will[1:,0]
         rgi_id = gdir.rgi_id
@@ -1431,48 +1431,48 @@ def mu_star_calibration_from_geodetic_mb(gdir,
             calving_will = float(fa_will[idx, 4])
             terminus_change_will = (float(fa_will[idx, 8]) * corr_factor)
             unc_will = float(fa_will[idx, 5])
-            
+
         elif ref_period[:4] == '2010' and ref_period[11:15] == '2020':
             calving_will = float(fa_will[idx, 6])
             terminus_change_will = (float(fa_will[idx, 9]) * corr_factor)
             unc_will = float(fa_will[idx, 7])
-            
+
         if (ref_period[:4] == '2000' and ref_period[11:15] == '2020') or \
             calving_will == 0:
             calving_will = (float(fa_will[idx, 6])+
                             float(fa_will[idx, 4])) / 2
-            terminus_change_will = ((float(fa_will[idx, 8]) * 
-                                     corr_factor) + (float(fa_will[idx, 9]) * 
+            terminus_change_will = ((float(fa_will[idx, 8]) *
+                                     corr_factor) + (float(fa_will[idx, 9]) *
                                      corr_factor) / 2)
-            unc_will = (float(fa_will[idx, 5])**2 + 
+            unc_will = (float(fa_will[idx, 5])**2 +
                         float(fa_will[idx, 7])**2)**0.5 / 2
- 
+
         # Shift the frontal ablation estimate, if the mu calculating function
         # is not able to find a value. (Probably because frontal ablation
         # estimate and geodetic mass change don't fit together.)
         if unc == 'low':
             calving_will_unc = calving_will - unc_will
             calving_will_unc = utils.clip_min(calving_will_unc, 0.1*calving_will)
-            terminus_change_will = (terminus_change_will * 
+            terminus_change_will = (terminus_change_will *
                                     (calving_will_unc / calving_will))
             calving_will = calving_will_unc
         if unc == 'half':
             calving_will = 0.5*calving_will
-            terminus_change_will = 0.5*terminus_change_will 
+            terminus_change_will = 0.5*terminus_change_will
         if unc == 'vlow':
             calving_will = 0.1*calving_will
-            terminus_change_will = 0.1*terminus_change_will        
+            terminus_change_will = 0.1*terminus_change_will
         if unc == 'ulow':
             calving_will = 0.01*calving_will
             terminus_change_will = 0.01*terminus_change_will
         if unc == 'high':
             calving_will_unc = calving_will + unc_will
-            terminus_change_will = (terminus_change_will * 
+            terminus_change_will = (terminus_change_will *
                                     (calving_will_unc / calving_will))
             calving_will = calving_will_unc
 
         cmb = (calving_will * 1e12 / gdir.rgi_area_m2)
-        log.workflow('({}) Frontal ablation added: {}'.format(gdir.rgi_id,cmb)) 
+        log.workflow('({}) Frontal ablation added: {}'.format(gdir.rgi_id,cmb))
         # _mu_star_per_minimization solves for 0, we add calving to the match
         ref_mb += cmb
         tmb = (terminus_change_will * 1e12 / gdir.rgi_area_m2)

@@ -681,8 +681,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
         if gdirs_c:
-            execute_entity_task(tasks.find_inversion_calving_from_any_mb, 
-                                gdirs_c, glen_a=glen_a, fs=fs, 
+            execute_entity_task(tasks.find_inversion_calving_from_any_mb,
+                                gdirs_c, glen_a=glen_a, fs=fs,
                                 mb_years=mb_years)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)

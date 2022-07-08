@@ -1567,8 +1567,8 @@ class FluxBasedModel(FlowlineModel):
         if do_kcalving is None:
             do_kcalving = cfg.PARAMS['use_kcalving_for_run']
         self.do_calving = do_kcalving and self.is_tidewater
-        # if calving_k is None:
-        #    calving_k = cfg.PARAMS['calving_k']
+        if calving_k is None:
+           calving_k = cfg.PARAMS['calving_k']
         if do_kcalving:
             self.calving_k = calving_k / cfg.SEC_IN_YEAR
         if calving_use_limiter is None:
@@ -1580,7 +1580,7 @@ class FluxBasedModel(FlowlineModel):
             raise NotImplementedError('calving limiter other than 0 not '
                                       'implemented yet')
         self.calving_limiter_frac = calving_limiter_frac
-        rho_o = cfg.PARAMS['ocean_density'] # Ocean density, must be >= ice density
+        self.rho_o = cfg.PARAMS['ocean_density'] # Ocean density, must be >= ice density
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
         self.flux_gate_m3_since_y0 = 0.
@@ -2182,7 +2182,7 @@ class FluxBasedModel(FlowlineModel):
         var2 = self.u_slide[fl_id]
         _u_slide = (var2[1:nx+1] + var2[:nx])/2
         df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2 + _u_slide
-        df['surface_ice_velocity'] = ((df['ice_velocity'] * self._surf_vel_fac) + 
+        df['surface_ice_velocity'] = ((df['ice_velocity'] * self._surf_vel_fac) +
                                       _u_slide)
         var = self.shapefac_stag[fl_id]
         df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
