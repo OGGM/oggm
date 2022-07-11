@@ -237,7 +237,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     # MassBalance for actual run from yr_spinup to yr_rgi
     if mb_model_historical is None:
         mb_model_historical = MultipleFlowlineMassBalance(
-            gdir, fls=fls_spinup, mb_model_class=PastMassBalance,
+            gdir, mb_model_class=PastMassBalance,
             filename='climate_historical',
             input_filesuffix=climate_input_filesuffix)
 
@@ -775,7 +775,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
             y0_spinup = (yr_spinup + yr_rgi) / 2
             halfsize_spinup = yr_rgi - y0_spinup
             mb_model_spinup = MultipleFlowlineMassBalance(
-                gdir, fls=fls_spinup, mb_model_class=ConstantMassBalance,
+                gdir, mb_model_class=ConstantMassBalance,
                 filename='climate_historical',
                 input_filesuffix=climate_input_filesuffix, y0=y0_spinup,
                 halfsize=halfsize_spinup)

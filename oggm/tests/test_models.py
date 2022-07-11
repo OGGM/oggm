@@ -3514,6 +3514,7 @@ class TestHEF:
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 output_filesuffix='_dynamic_spinup',
+                min_ice_thickness=0,
                 maxiter=10,
                 min_spinup_period=min_spinup_period,
                 ignore_errors=ignore_errors)
@@ -3530,6 +3531,25 @@ class TestHEF:
             assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
             assert len(model_dynamic_spinup_error.fls) == len(fmod.fls)
 
+            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                precision_percent=precision_percent,
+                output_filesuffix='_dynamic_spinup',
+                min_ice_thickness=0,
+                maxiter=10,
+                min_spinup_period=min_spinup_period,
+                ignore_errors=ignore_errors,
+                return_t_bias_best=True)
+            if (((minimise_for == 'area') &
+                 (gdir.rgi_id == 'RGI60-04.07198')) |
+                    ((minimise_for == 'volume') &
+                     (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
+                                      'RGI60-04.00331']))):
+                assert not np.isnan(t_bias_best)
+            else:
+                assert np.isnan(t_bias_best)
+
         # test for parameters ye and return_t_bias
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
@@ -3538,6 +3558,8 @@ class TestHEF:
                             'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
                             'match_geod_pergla/')[0]
 
+        yr_rgi = gdir.rgi_date + 1  # convert to hydro year
+        yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
         ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
         model_dynamic_spinup_ye, t_bias = run_dynamic_spinup(
             gdir,
@@ -3588,7 +3610,67 @@ class TestHEF:
                                       path=False)
         assert ds.time.min().values == 1990
 
+        # test that provided start_yr_max is inside climate data
+        with pytest.raises(RuntimeError,
+                           match='The provided maximum start year *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                spinup_start_yr_max=yr_min - 1)
+
+        # test that provided start year is smaller than start_yr_max
+        with pytest.raises(RuntimeError,
+                           match='The provided start year *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                spinup_start_yr_max=yr_rgi - 10,
+                spinup_start_yr=yr_rgi - 5)
+
+        # test that provided ye is larger than yr_rgi
+        with pytest.raises(RuntimeError,
+                           match='The provided end year *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                yr_rgi=yr_rgi,
+                ye=yr_rgi - 1)
+
+        # test if provided model geometry works and some other principle
+        # parameter tests (use_inversion_params_for_run and
+        # store_model_geometry)
+        cfg.PARAMS['use_inversion_params_for_run'] = False
+        cfg.PARAMS['store_model_geometry'] = True
+        workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
+                                     ys=yr_rgi, ye=yr_rgi + 1,
+                                     output_filesuffix='_one_yr')
+        run_dynamic_spinup(
+            gdir,
+            minimise_for=minimise_for,
+            init_model_filesuffix='_one_yr',
+            init_model_yr=yr_rgi,
+            store_model_geometry=False)
+
+        # test that error is raised if mb_elev_feedback not annual
+        with pytest.raises(InvalidParamsError,
+                           match='Only use annual mb_elev_feedback with the '
+                                 'dynamic spinup function!'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                mb_elev_feedback='monthly')
+
+        # test that error is raised if used together with calving
+        cfg.PARAMS['use_kcalving_for_run'] = True
+        with pytest.raises(InvalidParamsError,
+                           match='Dynamic spinup not tested with *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for)
+        cfg.PARAMS['use_kcalving_for_run'] = False
+
         # change settings back to default
+        cfg.PARAMS['use_inversion_params_for_run'] = True
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
@@ -3889,6 +3971,44 @@ class TestHEF:
                     ref_dmdtda=ref_dmdtda,
                     err_ref_dmdtda=use_err_ref_dmdtda)
 
+        # test if fallback function is resetting mu star correctly
+        original_mu_star = gdir.read_json('local_mustar')['mu_star_glacierwide']
+        new_mu_star = original_mu_star - 10
+        df = dict()
+        df['rgi_id'] = gdir.rgi_id
+        df['t_star'] = np.nan
+        df['bias'] = 0
+        df['mu_star_per_flowline'] = [new_mu_star] * len(gdir.read_pickle('model_flowlines'))
+        df['mu_star_glacierwide'] = new_mu_star
+        df['mu_star_flowline_avg'] = new_mu_star
+        df['mu_star_allsame'] = True
+        gdir.write_json(df, 'local_mustar')
+        assert original_mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']
+        dynamic_mu_star_run_with_dynamic_spinup_fallback(
+            gdir,
+            mu_star=original_mu_star,
+            fls_init=gdir.read_pickle('model_flowlines'),
+            ys=gdir.get_climate_info()['baseline_hydro_yr_0'],
+            ye=gdir.get_climate_info()['baseline_hydro_yr_1'] + 1,
+            local_variables={'vol_m3_ref':
+                                 gdir.read_pickle('model_flowlines')[0].volume_m3},
+            minimise_for=minimise_for
+        )
+        assert original_mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']
+
+        # test if fallback raise error if no local variable provided
+        with pytest.raises(RuntimeError,
+                           match='Need the volume to do *'):
+            dynamic_mu_star_run_with_dynamic_spinup_fallback(
+                gdir,
+                mu_star=original_mu_star,
+                fls_init=gdir.read_pickle('model_flowlines'),
+                ys=gdir.get_climate_info()['baseline_hydro_yr_0'],
+                ye=gdir.get_climate_info()['baseline_hydro_yr_1'] + 1,
+                local_variables=None,
+                minimise_for=minimise_for
+            )
+
         # change settings back to default
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
@@ -4016,9 +4136,9 @@ class TestHEF:
         # if no successful run can be conducted
         model_fallback = run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
-            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            run_function=dynamic_mu_star_run,
             kwargs_run_function={'cfl_number': 1e-8},  # force an error
-            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            fallback_function=dynamic_mu_star_run_fallback,
             output_filesuffix='_dyn_mu_calib_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
@@ -4039,6 +4159,36 @@ class TestHEF:
                     fallback_function=dynamic_mu_star_run_fallback,
                     ref_dmdtda=use_ref_dmdtda,
                     err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test error is raised if given years outside of geodetic period
+        with pytest.raises(RuntimeError,
+                           match='The provided ye is smaller than the end year'
+                                 ' of the given *'):
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                run_function=dynamic_mu_star_run,
+                fallback_function=dynamic_mu_star_run_fallback,
+                ye=yr1_ref_dmdtda - 1)
+
+        with pytest.raises(RuntimeError,
+                           match='The provided ys is larger than the start year'
+                                 ' of the given *'):
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                run_function=dynamic_mu_star_run,
+                fallback_function=dynamic_mu_star_run_fallback,
+                ys=yr0_ref_dmdtda + 1)
+
+        # test initialisation from an previous glacier geometry
+        cfg.PARAMS['store_model_geometry'] = True
+        workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
+                                     ys=yr_rgi, ye=yr_rgi + 1,
+                                     output_filesuffix='_one_yr')
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            init_model_filesuffix='_one_yr',
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback)
 
         # change settings back to default
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
