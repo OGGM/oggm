@@ -3007,6 +3007,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
                        climate_filename='climate_historical',
+                       mb_model=None,
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        init_model_filesuffix=None,
@@ -3057,6 +3058,11 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb_model : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance. Default is to use a
+        RandomMassBalance together with the provided parameters y0, halfsize,
+        bias, seed, climate_filename, climate_input_filesuffix and
+        unique_samples
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3082,20 +3088,22 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=RandomMassBalance,
-                                     y0=y0, halfsize=halfsize,
-                                     bias=bias, seed=seed,
-                                     filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix,
-                                     unique_samples=unique_samples)
+    if mb_model is None:
+        mb_model = MultipleFlowlineMassBalance(gdir,
+                                               mb_model_class=RandomMassBalance,
+                                               y0=y0, halfsize=halfsize,
+                                               bias=bias, seed=seed,
+                                               filename=climate_filename,
+                                               input_filesuffix=climate_input_filesuffix,
+                                               unique_samples=unique_samples)
 
     if temperature_bias is not None:
-        mb.temp_bias = temperature_bias
+        mb_model.temp_bias = temperature_bias
     if precipitation_factor is not None:
-        mb.prcp_fac = precipitation_factor
+        mb_model.prcp_fac = precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb, ys=0, ye=nyears,
+                              mb_model=mb_model, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
@@ -3117,6 +3125,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
+                         mb_model=None,
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
@@ -3169,6 +3178,10 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb_model : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance. Default is to use a
+        ConstantMassBalance together with the provided parameters y0, halfsize,
+        bias, climate_filename and climate_input_filesuffix.
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3187,22 +3200,25 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """
 
     if use_avg_climate:
-        mb_model = AvgClimateMassBalance
+        mb_model_class = AvgClimateMassBalance
     else:
-        mb_model = ConstantMassBalance
+        mb_model_class = ConstantMassBalance
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model,
-                                     y0=y0, halfsize=halfsize,
-                                     bias=bias, filename=climate_filename,
-                                     input_filesuffix=climate_input_filesuffix)
+    if mb_model is None:
+        mb_model = MultipleFlowlineMassBalance(gdir,
+                                               mb_model_class=mb_model_class,
+                                               y0=y0, halfsize=halfsize,
+                                               bias=bias,
+                                               filename=climate_filename,
+                                               input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
-        mb.temp_bias = temperature_bias
+        mb_model.temp_bias = temperature_bias
     if precipitation_factor is not None:
-        mb.prcp_fac = precipitation_factor
+        mb_model.prcp_fac = precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb, ys=0, ye=nyears,
+                              mb_model=mb_model, ys=0, ye=nyears,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
@@ -3220,6 +3236,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_model_geometry=None,
                           store_fl_diagnostics=None,
                           climate_filename='climate_historical',
+                          mb_model=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
@@ -3260,6 +3277,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
+    mb_model : :py:class:`core.MassBalanceModel`
+        User-povided MassBalanceModel instance. Default is to use a
+        PastMassBalance together with the provided parameters climate_filename,
+        bias and climate_input_filesuffix.
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3334,21 +3355,24 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     if max_ys is not None:
         ys = ys if ys < max_ys else max_ys
 
-    mb = MultipleFlowlineMassBalance(gdir, mb_model_class=PastMassBalance,
-                                     filename=climate_filename, bias=bias,
-                                     input_filesuffix=climate_input_filesuffix)
+    if mb_model is None:
+        mb_model = MultipleFlowlineMassBalance(gdir,
+                                               mb_model_class=PastMassBalance,
+                                               filename=climate_filename,
+                                               bias=bias,
+                                               input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
-        mb.temp_bias = temperature_bias
+        mb_model.temp_bias = temperature_bias
     if precipitation_factor is not None:
-        mb.prcp_fac = precipitation_factor
+        mb_model.prcp_fac = precipitation_factor
 
     if ye is None:
         # Decide from climate (we can run the last year with data as well)
-        ye = mb.flowline_mb_models[0].ye + 1
+        ye = mb_model.flowline_mb_models[0].ye + 1
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb, ys=ys, ye=ye,
+                              mb_model=mb_model, ys=ys, ye=ye,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
