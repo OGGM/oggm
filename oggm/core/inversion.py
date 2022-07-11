@@ -184,7 +184,7 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
     """
 
     a0s = a0s / (shape_factor ** 3)
-    a3s = a3 / (shape_factor ** 3)
+    a3s = a3 / (shape_factor ** 3) # Not sure whether this is correct...
     if np.any(~np.isfinite(a0s)):
         raise RuntimeError('non-finite coefficients in the polynomial.')
 
@@ -492,13 +492,12 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
             h_diff = out_thick
             bed_h = cl['hgt']-out_thick
             water_depth = utils.clip_min(0,-bed_h+water_level)
-            rel_h = out_thick / (out_thick-(rho_o/rho)*water_depth)
-            wrong_rel_h = ((rel_h < 1) | ~np.isfinite(rel_h))
-            rel_h[wrong_rel_h & (water_depth > 0)] = min_rel_h
-            rel_h[wrong_rel_h & (water_depth == 0)] = 1
-            rel_h[-1] = min_rel_h
-            a3s = fs/fd*rel_h
-            if np.any(bed_h < 0):
+            if gdir.is_tidewater:
+                rel_h = out_thick / (out_thick-(rho_o/rho)*water_depth)
+                wrong_rel_h = ((rel_h < 1) | ~np.isfinite(rel_h))
+                rel_h[wrong_rel_h & (water_depth > 0)] = min_rel_h
+                rel_h[wrong_rel_h & (water_depth == 0)] = 1
+                rel_h[-1] = min_rel_h
                 a_pull = a0s*0
                 length = len(cl['width']) * cl['dx']
                 stretch_dist = utils.clip_max(8e3,length)
@@ -521,7 +520,9 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                 a_factor = (a_pull / (rho*cfg.G*slope*out_thick)) + 1
                 a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
             else:
-                a_factor = rel_h*0+1
+                rel_h = bed_h*0+1
+                a_factor = bed_h*0+1
+            a3s = fs/fd*rel_h
             a0s = - cl['flux_a0'] / ((rho*cfg.G*slope*a_factor)**3*fd)
             out_thick = _compute_thick(a0s, a3s, cl['flux_a0'], sf,
                                           _inv_function)
