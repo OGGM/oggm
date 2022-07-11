@@ -123,6 +123,10 @@ class TestInitPresentDayFlowline:
             plt.plot(fls[-1].surface_h - fls[-1].bed_h)
             plt.show()
 
+        # test if providing a filesuffix is working
+        init_present_time_glacier(gdir, filesuffix='_test')
+        assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
+
     def test_present_time_glacier_massbalance(self, hef_gdir):
 
         gdir = hef_gdir
@@ -3642,6 +3646,14 @@ class TestHEF:
                                                  ref_period]['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
+        if do_inversion:
+            # before the run, check that the dyn model flowlines does not exist
+            # only important if inversion is included, so original
+            # model_flowlines are unchagned (to be able to conduct more dynamic
+            # calibration runs in the same gdir)
+            assert not os.path.isfile(
+                os.path.join(gdir.dir, 'model_flowlines_dyn_mu_calib.pkl'))
+
         # conduct a run including a dynamic spinup and inversion
         precision_percent = 10
         precision_absolute = 0.1
@@ -3684,6 +3696,42 @@ class TestHEF:
         assert np.isclose(dmdtda_mdl, ref_dmdtda,
                           rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 1.
+
+        if do_inversion:
+            # after the run, check that the dyn model flowlines exists and that
+            # the original model flowlines are unchanged
+            assert os.path.isfile(
+                os.path.join(gdir.dir, 'model_flowlines_dyn_mu_calib.pkl'))
+            assert np.all([np.all(getattr(fl_prev, 'surface_h') ==
+                                  getattr(fl_now, 'surface_h')) and
+                           np.all(getattr(fl_prev, 'bed_h') ==
+                                  getattr(fl_now, 'bed_h'))
+                           for fl_prev, fl_now in
+                           zip(fls, gdir.read_pickle('model_flowlines'))])
+
+        # test that error is raised if user provides flowlines but want to
+        # include inversion during dynamic mu calibration
+        if do_inversion:
+            # artificial change of flowlines to force error
+            fls[0].thick = np.zeros(fls[0].nx)
+            with pytest.raises(InvalidWorkflowError,
+                               match='If you want to perform a dynamic '
+                                     'mu_star calibration including an '
+                                     'inversion*'):
+                run_dynamic_mu_star_calibration(
+                    gdir, max_mu_star=1000.,
+                    run_function=dynamic_mu_star_run_with_dynamic_spinup,
+                    kwargs_run_function={'minimise_for': minimise_for,
+                                         'precision_percent_dyn_spinup': precision_percent,
+                                         'precision_absolute_dyn_spinup': precision_absolute,
+                                         'do_inversion': do_inversion},
+                    fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+                    kwargs_fallback_function={'minimise_for': minimise_for,
+                                              'precision_percent_dyn_spinup': precision_percent,
+                                              'precision_absolute_dyn_spinup': precision_absolute,
+                                              'do_inversion': do_inversion},
+                    output_filesuffix='_dyn_mu_calib_spinup_inversion',
+                    ys=1979, ye=ye, init_model_fls=fls)
 
         # tests for user provided dmdtda (always reset gdir before each test)
         gdir = workflow.init_glacier_directories(
@@ -3799,6 +3847,10 @@ class TestHEF:
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0
+        if do_inversion:
+            # check that the dyn model flowlines are deleted if no success
+            assert not os.path.isfile(
+                os.path.join(gdir.dir, 'model_flowlines_dyn_mu_calib.pkl'))
 
         # test that error is raised if no dict is provided for local_variables
         # in dynamic_mu_star_run_with_dynamic_spinup

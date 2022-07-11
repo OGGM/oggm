@@ -2606,7 +2606,7 @@ def calving_glacier_downstream_line(line, n_points):
     return shpg.LineString(np.array([x, y]).T)
 
 
-def old_init_present_time_glacier(gdir):
+def old_init_present_time_glacier(gdir, filesuffix=''):
     """Init_present_time_glacier when trapezoid inversion was not possible."""
 
     # Some vars
@@ -2719,11 +2719,11 @@ def old_init_present_time_glacier(gdir):
         fl.order = line_order(fl)
 
     # Write the data
-    gdir.write_pickle(new_fls, 'model_flowlines')
+    gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
 @entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir):
+def init_present_time_glacier(gdir, filesuffix=''):
     """Merges data from preprocessing tasks. First task after inversion!
 
     This updates the `mode_flowlines` file and creates a stand-alone numerical
@@ -2733,12 +2733,16 @@ def init_present_time_glacier(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    filesuffix : str
+            append a suffix to the model_flowlines filename (e.g. useful for
+            dynamic mu_star calibration including an inversion, so the original
+            model_flowlines are not changed).
     """
 
     # Some vars
     invs = gdir.read_pickle('inversion_output')
     if invs[0].get('is_trapezoid', None) is None:
-        return old_init_present_time_glacier(gdir)
+        return old_init_present_time_glacier(gdir, filesuffix=filesuffix)
 
     map_dx = gdir.grid.dx
     def_lambda = cfg.PARAMS['trapezoid_lambdas']
@@ -2823,7 +2827,7 @@ def init_present_time_glacier(gdir):
         fl.order = line_order(fl)
 
     # Write the data
-    gdir.write_pickle(new_fls, 'model_flowlines')
+    gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
 def robust_model_run(*args, **kwargs):

@@ -12,7 +12,7 @@ from scipy import interpolate
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    PastMassBalance)
@@ -40,6 +40,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_bias_best=False, ye=None,
+                       model_flowline_filesuffix='',
                        **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
@@ -173,6 +174,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         run_from_climate_data afterwards and merge both outputs using
         merge_consecutive_run_outputs.
         Default is None
+    model_flowline_filesuffix : str
+        suffix to the model_flowlines filename to use (if no other flowlines
+        are provided with init_model_filesuffix or init_model_fls).
+        Default is ''
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -224,7 +229,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         init_model_fls = fmod.fls
 
     if init_model_fls is None:
-        fls_spinup = gdir.read_pickle('model_flowlines')
+        fls_spinup = gdir.read_pickle('model_flowlines',
+                                      filesuffix=model_flowline_filesuffix)
     else:
         fls_spinup = copy.deepcopy(init_model_fls)
 
@@ -1009,7 +1015,24 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     df['mu_star_allsame'] = True
     gdir.write_json(df, 'local_mustar')
 
+    # this variable is used if an inverison is conducted to keep the original
+    # model_flowline unchanged (-> to be able to conduct different dynamic
+    # calibration runs in the same gdir)
+    model_flowline_filesuffix = ''
+
     if do_inversion:
+        if not np.all([np.all(getattr(fl_prov, 'surface_h') ==
+                              getattr(fl_orig, 'surface_h')) and
+                       np.all(getattr(fl_prov, 'bed_h') ==
+                              getattr(fl_orig, 'bed_h'))
+                       for fl_prov, fl_orig in
+                       zip(fls_init, gdir.read_pickle('model_flowlines'))]):
+            raise InvalidWorkflowError('If you want to perform a dynamic '
+                                       'mu_star calibration including an '
+                                       'inversion, it is not possible to '
+                                       'provide your own flowlines! (fls_init '
+                                       'should be None or '
+                                       'the original model_flowlines)')
         apparent_mb_from_any_mb(gdir)
         # do inversion with A calibration to current volume
         calibrate_inversion_from_consensus(
@@ -1017,7 +1040,8 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             filter_inversion_output=True,
             volume_m3_reference=local_variables['vol_m3_ref'])
         # And finally initialise the new model flowlines
-        init_present_time_glacier(gdir)
+        model_flowline_filesuffix = '_dyn_mu_calib'
+        init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix)
 
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad' files are
@@ -1043,6 +1067,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             return_t_bias_best=True, ye=ye,
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
+            model_flowline_filesuffix=model_flowline_filesuffix,
             **kwargs)
         # save the temperature bias which was successful in the last iteration
         # as we expect we are not so far away in the next iteration (only
@@ -1203,7 +1228,11 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
                 [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
                 filter_inversion_output=True,
                 volume_m3_reference=local_variables['vol_m3_ref'])
-            init_present_time_glacier(gdir)
+    if os.path.isfile(os.path.join(gdir.dir,
+                                   'model_flowlines_dyn_mu_calib.pkl')):
+        os.remove(os.path.join(gdir.dir,
+                               'model_flowlines_dyn_mu_calib.pkl'))
+
     yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
     try:
         model_end = run_dynamic_spinup(
