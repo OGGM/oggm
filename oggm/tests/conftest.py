@@ -11,7 +11,7 @@ import pytest
 import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 
-from oggm.shop import cru, histalp, ecmwf
+from oggm.shop import cru, histalp, ecmwf, w5e5
 from oggm import cfg, tasks
 from oggm.core import flowline
 from oggm.tests.funcs import init_hef, get_test_dir
@@ -103,6 +103,7 @@ def pytest_collection_modifyitems(config, items):
 def patch_data_urls(monkeypatch):
     """This makes sure we never download the big files with our tests"""
     url = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
+    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url)
     monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
     monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
     monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')

@@ -545,7 +545,12 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
+    PARAMS['use_winter_prcp_factor'] = cp.as_bool('use_winter_prcp_factor')
 
+    k = 'winter_prcp_factor_ab'
+    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
+    k = 'winter_prcp_factor_range'
+    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'tstar_search_window'
@@ -573,7 +578,13 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     # Others
     PARAMS['tidewater_type'] = cp.as_int('tidewater_type')
 
-    # Delete non-floats
+    # Precip factor can be none
+    try:
+        PARAMS['prcp_scaling_factor'] = cp.as_float('prcp_scaling_factor')
+    except ValueError:
+        PARAMS['prcp_scaling_factor'] = None
+
+     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
            'mp_processes', 'use_multiprocessing', 'climate_qc_months',
@@ -591,9 +602,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run', 'ref_mb_valid_window',
-           'tidewater_type', 'store_model_geometry',
+           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_factor',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_fl_diagnostics']
+           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_factor_ab',
+           'winter_prcp_factor_range', 'prcp_scaling_factor']
     for k in ltr:
         cp.pop(k, None)
 

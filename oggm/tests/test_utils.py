@@ -437,8 +437,6 @@ class TestWorkflowTools(unittest.TestCase):
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
 
-
-
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)
         np.testing.assert_allclose(df['tstar_avg_prcp'],
@@ -733,9 +731,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
                                                                          1960,
-                                                                         2000])
+                                                                         2000],
+                                              add_raw_climate_statistics=True)
         assert 'tstar_avg_temp_mean_elev' in df
         assert '1905-1935_avg_temp_mean_elev' in df
+        assert '1905-1935_uncorrected_winter_daily_mean_prcp' in df
 
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 

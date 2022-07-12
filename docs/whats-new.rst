@@ -12,8 +12,18 @@ Breaking changes
 Enhancements
 ~~~~~~~~~~~~
 
+- added support for new reference data (W5E5), a bias corrected dataset based
+  on ERA5. This will become the new default in OGGM (:pull:`1435`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
+- added support for a precipitation factor varying per glacier (:pull:`1435`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
+
 Bug fixes
 ~~~~~~~~~
+
+- corrected a but in ``apparent_mb_from_any_mb``, where only two years of MB
+  would be used instead of a range of years (:pull:`1426`).
+  By `Bowen <https://github.com/bowenbelongstonature>`_
 
 v1.5.3 (02.04.2022)
 -------------------

@@ -37,7 +37,7 @@ _brentq_xtol = 2e-12
 # Climate relevant params
 MB_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
              'temp_melt', 'prcp_scaling_factor', 'climate_qc_months',
-             'hydro_month_nh', 'hydro_month_sh']
+             'hydro_month_nh', 'hydro_month_sh', 'use_winter_prcp_factor']
 
 
 @entity_task(log, writes=['climate_historical'])
@@ -184,6 +184,14 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         from oggm.shop.histalp import process_histalp_data
         process_histalp_data(gdir, output_filesuffix=output_filesuffix,
                              y0=y0, y1=y1, **kwargs)
+    elif baseline == 'W5E5':
+        from oggm.shop.w5e5 import process_w5e5_data
+        process_w5e5_data(gdir, output_filesuffix=output_filesuffix,
+                          y0=y0, y1=y1, **kwargs)
+    elif baseline == 'GSWP3_W5E5':
+        from oggm.shop.w5e5 import process_gswp3_w5e5_data
+        process_gswp3_w5e5_data(gdir, output_filesuffix=output_filesuffix,
+                                y0=y0, y1=y1, **kwargs)
     elif baseline in ['ERA5', 'ERA5L', 'CERA', 'ERA5dr', 'ERA5L-HMA']:
         from oggm.shop.ecmwf import process_ecmwf_data
         process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
@@ -526,7 +534,25 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     temp_all_solid = cfg.PARAMS['temp_all_solid']
     temp_all_liq = cfg.PARAMS['temp_all_liq']
     temp_melt = cfg.PARAMS['temp_melt']
-    prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+    if cfg.PARAMS['use_winter_prcp_factor']:
+        # Some sanity check
+        if cfg.PARAMS['prcp_scaling_factor'] is not None:
+            raise InvalidWorkflowError("Set PARAMS['prcp_scaling_factor'] to "
+                                       "None if using a winter_prcp_factor")
+
+        # Have we decided on a factor yet?
+        try:
+            df = gdir.read_json('local_mustar')
+        except FileNotFoundError:
+            df = {}
+        prcp_fac = df.get('glacier_prcp_scaling_factor')
+        if prcp_fac is None:
+            # Then decide and store
+            prcp_fac = decide_winter_precip_factor(gdir)
+            df['glacier_prcp_scaling_factor'] = prcp_fac
+            gdir.write_json(df, 'local_mustar')
+    else:
+        prcp_fac = cfg.PARAMS['prcp_scaling_factor']
     default_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
 
@@ -589,8 +615,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
     return time, temp2dformelt, prcpsol
 
 
-def mb_yearly_climate_on_height(gdir, heights, *,
-                                year_range=None, flatten=False):
+def mb_yearly_climate_on_height(gdir, heights, *, year_range=None, flatten=False):
     """Yearly mass balance climate of the glacier at a specific height
 
     See also: mb_climate_on_height
@@ -899,7 +924,10 @@ def _fallback_local_t_star(gdir):
 
     """
     # Scalars in a small dict for later
-    df = dict()
+    try:
+        df = gdir.read_json('local_mustar')
+    except FileNotFoundError:
+        df = {}
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = np.nan
@@ -1034,7 +1062,10 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
                                           '{:.2f}'.format(gdir.rgi_id, mustar))
 
     # Scalars in a small dict for later
-    df = dict()
+    try:
+        df = gdir.read_json('local_mustar')
+    except FileNotFoundError:
+        df = {}
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = int(tstar)
     df['bias'] = bias
@@ -1303,6 +1334,46 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
     gdir.write_json(df, 'local_mustar')
 
 
+def decide_winter_precip_factor(gdir):
+    """Utility function to decide on a precip factor based on winter precip."""
+
+    # We have to decide on a precip factor
+    if 'W5E5' not in cfg.PARAMS['baseline_climate']:
+        raise InvalidWorkflowError('prcp_fac from_winter_prcp is only '
+                                   'compatible with the W5E5 climate '
+                                   'dataset!')
+
+    # get non-corrected winter daily mean prcp (kg m-2 day-1)
+    # it is easier to get this directly from the raw climate files
+    fp = gdir.get_filepath('climate_historical')
+    with xr.open_dataset(fp).prcp as ds_pr:
+        # just select winter months
+        if gdir.hemisphere == 'nh':
+            m_winter = [10, 11, 12, 1, 2, 3, 4]
+        else:
+            m_winter = [4, 5, 6, 7, 8, 9, 10]
+
+        ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
+
+        # select the correct 41 year time period
+        ds_pr_winter = ds_pr_winter.sel(time=slice('1979-01-01', '2019-12-01'))
+
+        # check if we have the full time period: 41 years * 7 months
+        text = ('the climate period has to go from 1979-01 to 2019-12,',
+                'use W5E5 or GSWP3_W5E5 as baseline climate and',
+                'repeat the climate processing')
+        assert len(ds_pr_winter.time) == 41 * 7, text
+        w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
+
+    # from MB sandbox calibration to winter MB
+    # using t_melt=-1, cte lapse rate, monthly resolution
+    a, b = cfg.PARAMS['winter_prcp_factor_ab']
+    prcp_fac = a * np.log(w_prcp) + b
+    # don't allow extremely low/high prcp. factors!!!
+    r0, r1 = cfg.PARAMS['winter_prcp_factor_range']
+    return utils.clip_scalar(prcp_fac, r0, r1)
+
+
 @entity_task(log, writes=['inversion_flowlines'],
              fallback=_fallback_mu_star_calibration)
 def mu_star_calibration_from_geodetic_mb(gdir,
@@ -1503,7 +1574,10 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     gdir.write_json(out, 'climate_info')
 
     # Store diagnostics
-    df = dict()
+    try:
+        df = gdir.read_json('local_mustar')
+    except FileNotFoundError:
+        df = {}
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = 0
@@ -1587,12 +1661,14 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
         the mass balance model to use - if None, will use the default OGGM
         one.
-    mb_years : array
+    mb_years : array, or tuple of length 2 (range)
         the array of years from which you want to average the MB for (for
-        mb_model only). Default is to pick from the reference geodetic MB
-        period, i.e. PARAMS['geodetic_mb_period']. It does not matter much,
-        but it should be a period long enough to have a representative
-        MB gradient.
+        mb_model only). If an array of length 2 is given, all years
+        between this range (excluding the last one) are used.
+        Default is to pick all years from the reference
+        geodetic MB period, i.e. PARAMS['geodetic_mb_period'].
+        It does not matter much for the final result, but it should be a
+        period long enough to have a representative MB gradient.
     """
 
     # Do we have a calving glacier?
@@ -1610,7 +1686,11 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
         y0, y1 = mb_years.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
-        mb_years = [y0, y1-1]
+        mb_years = np.arange(y0, y1, 1)
+
+    if len(mb_years) == 2:
+        # Range
+        mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
     o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
