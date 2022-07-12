@@ -3991,7 +3991,7 @@ class TestHEF:
             ys=gdir.get_climate_info()['baseline_hydro_yr_0'],
             ye=gdir.get_climate_info()['baseline_hydro_yr_1'] + 1,
             local_variables={'vol_m3_ref':
-                                 gdir.read_pickle('model_flowlines')[0].volume_m3},
+                             gdir.read_pickle('model_flowlines')[0].volume_m3},
             minimise_for=minimise_for
         )
         assert original_mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']
