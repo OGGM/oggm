@@ -859,7 +859,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         precision_absolute_dyn_spinup=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        local_variables=None, set_local_variables=False, do_inversion=False,
+        local_variables=None, set_local_variables=False, do_inversion=True,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1097,7 +1097,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         precision_absolute_dyn_spinup=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        do_inversion=False, **kwargs):
+        do_inversion=True, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run_with_dynamic_spinup', which are provided
@@ -1255,6 +1255,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             store_fl_diagnostics=store_fl_diagnostics,
             ignore_errors=False, ye=ye, **kwargs)
 
+        gdir.add_to_diagnostics('used_spinup_option', 'dynamic spinup only')
+
     except RuntimeError:
         log.warning('No dynamic spinup could be conducted by using the '
                     f'original mu* ({mu_star}). Therefore the last '
@@ -1266,7 +1268,10 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             climate_input_filesuffix=climate_input_filesuffix,
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
-            init_model_fls=fls_init, evolution_model=evolution_model)
+            init_model_fls=fls_init, evolution_model=evolution_model,
+            fixed_geometry_spinup_yr=ys)
+
+        gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
 
         # set all dynamic diagnostics to None if there where some succesful
         # runs
@@ -1436,6 +1441,7 @@ def dynamic_mu_star_run_fallback(
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
                                       **kwargs)
+        gdir.add_to_diagnostics('used_spinup_option', 'no spinup')
     except RuntimeError as e:
         raise RuntimeError(f'In fallback function run_from_climate_data '
                            f'raised error! (Message: {e})')
@@ -1447,14 +1453,15 @@ def dynamic_mu_star_run_fallback(
 def run_dynamic_mu_star_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None,
         ref_period='', ignore_hydro_months=False, min_mu_star=None,
-        max_mu_star=None, mu_star_max_step_length=5, maxiter_mu_star=10,
+        max_mu_star=None, mu_star_max_step_length=5, maxiter_mu_star=20,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
         ys=None, ye=None,
         run_function=dynamic_mu_star_run_with_dynamic_spinup,
         kwargs_run_function=None,
         fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
         kwargs_fallback_function=None, init_model_filesuffix=None,
-        init_model_yr=None, init_model_fls=None):
+        init_model_yr=None, init_model_fls=None,
+        first_guess_diagnostic_msg='dynamic spinup only'):
     """Calibrate mu_star to match a geodetic mass balance incorporating a
     dynamic model run.
 
@@ -1504,15 +1511,16 @@ def run_dynamic_mu_star_calibration(
     maxiter_mu_star : int
         Maximum number of minimisation iterations of minimising mismatch to
         dmdtda by changing mu_star. Each of this iterations conduct a complete
-        dynamic spinup run (see run_dynamic_spinup function). If
-        maxiter_mu_star reached and 'ignore_errors=False' an error is raised.
-        Default is 10
+        run defined in the 'run_function'. If maxiter_mu_star reached and
+        'ignore_errors=False' an error is raised.
+        Default is 20
     ignore_errors : bool
-        If True and the dynamic spinup with mu* star calibration is not working
-        first a dynamic spinup with no mu* calibration is conducted. If this
-        also fails a run with no dynamic spinup is carried out. If False and
-        the dynamic spinup with mu* star calibration is not working an Error is
-        raised.
+        If True and the 'run_function' with mu* star calibration is not working
+        to match dmdtda inside the provided uncertainty first, if their where
+        some successful runs with the 'run_function' they are saved as part
+        success, and if not a single run was successful the 'fallback_function'
+        is called. If False and the 'run_function' with mu* star calibration is
+        not working an Error is raised.
         Default is True
     output_filesuffix : str
         For the output file.
@@ -1554,6 +1562,10 @@ def run_dynamic_mu_star_calibration(
         List of flowlines to use to initialise the model (the default is the
         present_time_glacier file from the glacier directory).
         Ignored if `init_model_filesuffix` is set.
+    first_guess_diagnostic_msg : str
+        This message will be added to the glacier diagnostics if only the
+        default mu* resulted in a successful 'run_function' run.
+        Default is 'dynamic spinup only'
 
     Returns
     -------
@@ -1660,12 +1672,15 @@ def run_dynamic_mu_star_calibration(
     dynamic_mu_star_calibration_runs = [0]
 
     # this function is called if the actual dynamic mu star calibration fails
-    def fallback_run(mu_star, reset, best_mismatch=None, initial_mismatch=None):
+    def fallback_run(mu_star, reset, best_mismatch=None, initial_mismatch=None,
+                     only_first_guess=None):
         if reset:
             # unfortunately we could not conduct an error free run using the
             # provided run_function, so we us the fallback_function
-            gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_success',
-                                    0)
+
+            # this diagnostics should be overwritten inside the fallback_function
+            gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
+
             model = fallback_function(gdir=gdir, mu_star=mu_star,
                                       fls_init=fls_init, ys=ys, ye=ye,
                                       local_variables=local_variables_run_function,
@@ -1675,7 +1690,14 @@ def run_dynamic_mu_star_calibration(
             # we were not able to reach the desired precision during the
             # minimisation, but at least we conducted a few error free runs
             # using the run_function, and therefore we save the best guess we
-            # found so far and indicate it as a part success (0.5)
+            # found so far
+            if only_first_guess:
+                gdir.add_to_diagnostics('used_spinup_option',
+                                        first_guess_diagnostic_msg)
+            else:
+                gdir.add_to_diagnostics('used_spinup_option',
+                                        'dynamic mu_star calibration (part '
+                                        'success)')
             model, dmdtda_mdl = run_function(gdir=gdir, mu_star=mu_star,
                                              yr0_ref_mb=yr0_ref_mb,
                                              yr1_ref_mb=yr1_ref_mb,
@@ -1684,8 +1706,6 @@ def run_dynamic_mu_star_calibration(
                                              local_variables=local_variables_run_function,
                                              **kwargs_run_function)
 
-            gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_success',
-                                    0.5)
             gdir.add_to_diagnostics(
                 'dmdtda_mismatch_dynamic_calibration_reference',
                 float(ref_dmdtda))
@@ -2011,6 +2031,13 @@ def run_dynamic_mu_star_calibration(
             if ignore_errors:
                 log.workflow('Dynamic mu star calibration not successful. Error '
                              f'message: {e}')
+
+                only_first_guess = False
+                # if we only conducted one successful run: only the first guess
+                # worked without an error
+                if len(mismatch_dmdtda) == 1:
+                    only_first_guess = True
+
                 # there where some successful runs so we return the one with the
                 # smallest mismatch of dmdtda
                 min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
@@ -2018,7 +2045,8 @@ def run_dynamic_mu_star_calibration(
                 model_return = fallback_run(
                     mu_star=mu_star_best, reset=False,
                     best_mismatch=np.array(mismatch_dmdtda)[min_mismatch_index],
-                    initial_mismatch=mismatch_dmdtda[0])
+                    initial_mismatch=mismatch_dmdtda[0],
+                    only_first_guess=only_first_guess)
 
                 return model_return
             else:
@@ -2029,8 +2057,8 @@ def run_dynamic_mu_star_calibration(
     assert final_mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']
 
     # hurray, dynamic mu star calibration successful
-    gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_success',
-                            1)
+    gdir.add_to_diagnostics('used_spinup_option',
+                            'dynamic mu_star calibration (full success)')
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_reference',
                             float(ref_dmdtda))
     gdir.add_to_diagnostics('dmdtda_dynamic_calibration_given_error',

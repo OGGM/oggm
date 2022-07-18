@@ -3721,7 +3721,9 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         set up you want the copied directory to be useful for. Currently
         supported are 'all' (copy the entire directory), 'inversion'
         (copy the necessary files for the inversion AND the run)
-        and 'run' (copy the necessary files for a dynamical run).
+        , 'run' (copy the necessary files for a dynamical run) or 'run/spinup'
+        (copy the necessary files and all already conducted model runs, e.g.
+        from a dynamic spinup).
 
     Returns
     -------
@@ -3742,6 +3744,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
                  'local_mustar', 'climate_historical', 'gridded_data',
                  'gcm_data', 'climate_info', 'log']
+        paths = ('*' + p + '*' for p in paths)
+        shutil.copytree(gdir.dir, new_dir,
+                        ignore=include_patterns(*paths))
+    elif setup == 'run/spinup':
+        paths = ['model_flowlines', 'inversion_params', 'outlines',
+                 'local_mustar', 'climate_historical', 'glacier_grid',
+                 'gcm_data', 'climate_info', 'diagnostics', 'log', 'model_run',
+                 'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))

@@ -3806,7 +3806,8 @@ class TestHEF:
                       cfg.PARAMS['ice_density'])
         assert np.isclose(dmdtda_mdl, ref_dmdtda,
                           rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 1.
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (full success)'
 
         if do_inversion:
             # after the run, check that the dyn model flowlines exists and that
@@ -3921,7 +3922,8 @@ class TestHEF:
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0.5
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (part success)'
         ds = utils.compile_run_output(
             gdir, input_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             path=False)
@@ -3957,7 +3959,8 @@ class TestHEF:
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'fixed geometry spinup'
         if do_inversion:
             # check that the dyn model flowlines are deleted if no success
             assert not os.path.isfile(
@@ -4100,7 +4103,8 @@ class TestHEF:
                       cfg.PARAMS['ice_density'])
         assert np.isclose(dmdtda_mdl, ref_dmdtda,
                           rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 1.
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (full success)'
 
         # tests for user provided dmdtda (always reset gdir before each test)
         gdir = workflow.init_glacier_directories(
@@ -4159,7 +4163,8 @@ class TestHEF:
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0.5
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (part success)'
 
         # test that fallback function works as expected if ignore_error=True and
         # if no successful run can be conducted
@@ -4173,7 +4178,7 @@ class TestHEF:
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
             maxiter_mu_star=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
-        assert gdir.get_diagnostics()['run_dynamic_mu_star_calibration_success'] == 0
+        assert gdir.get_diagnostics()['used_spinup_option'] == 'no spinup'
 
         # test that error is raised if user provided dmdtda is given without an
         # error and vice versa
