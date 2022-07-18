@@ -659,14 +659,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                     prepro_level=start_level), 'summary',
                 'glacier_statistics_{}.csv'.format(rgi_reg)))
         opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
+        utils.extend_past_climate_run(past_run_file=pf,
+                                      fixed_geometry_mb_file=mf,
+                                      glacier_statistics_file=sf,
+                                      path=opath)
 
-        # this task only works when all glaciers of a region are used
-        # -> ignore for testing
-        if not is_test:
-            utils.extend_past_climate_run(past_run_file=pf,
-                                          fixed_geometry_mb_file=mf,
-                                          glacier_statistics_file=sf,
-                                          path=opath)
         # L4 OK - compress all in output directory
         log.workflow('L4 done. Writing to tar...')
         level_base_dir = os.path.join(output_base_dir, 'L4')
@@ -685,17 +682,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     utils.mkdir(sum_dir)
 
     # Copy L4 files for consistency
-    for bn in ['glacier_statistics', 'climate_statistics',
-               'fixed_geometry_mass_balance']:
+    files_to_copy = ['glacier_statistics', 'climate_statistics',
+                     'fixed_geometry_mass_balance', 'historical_run_output',
+                     'historical_run_output_extended']
+    files_suffixes = ['csv', 'csv', 'csv', 'nc', 'nc']
+    if dynamic_spinup:
+        files_to_copy.append('spinup_historical_run_output')
+        files_suffixes.append('nc')
+    for bn, suffix in zip(files_to_copy, files_suffixes):
         if start_level <= 3:
-            ipath = os.path.join(sum_dir_L4, bn + '_{}.csv'.format(rgi_reg))
+            ipath = os.path.join(sum_dir_L4, bn + f'_{rgi_reg}.{suffix}')
         else:
             ipath = file_downloader(os.path.join(
                 get_prepro_base_url(base_url=start_base_url,
                                     rgi_version=rgi_version, border=border,
                                     prepro_level=start_level), 'summary',
-                bn + '_{}.csv'.format(rgi_reg)))
-        opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+                bn + f'_{rgi_reg}.{suffix}'))
+        opath = os.path.join(sum_dir, bn + f'_{rgi_reg}.{suffix}')
         shutil.copyfile(ipath, opath)
 
     # Copy mini data to new dir
