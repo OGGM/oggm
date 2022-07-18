@@ -268,7 +268,7 @@ There are different mass balance calibration options available in the preprocess
     "external" climate quality check and correction (i.e. qc0) as this is already done internally. For example:
 
     - `L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/CRU/elev_bands/qc0/pcp2.5/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass balances on individual glacier level
-    - `L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla/>`_ for CRU + elevation bands flowlines + matched geodetic mass balances on individual glacier level
+    - `L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/ERA5/elev_bands/qc0/pcp1.6/match_geod_pergla/>`_ for ERA5 + elevation bands flowlines + matched geodetic mass balances on individual glacier level
 
     .. warning::
         make sure that you use the oggm_v1.6 directory for match_geod_pergla and match_geod_pergla_massredis!
