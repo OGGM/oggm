@@ -856,7 +856,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         output_filesuffix='', evolution_model=FluxBasedModel,
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
         min_spinup_period=10, yr_rgi=None, precision_percent_dyn_spinup=1,
-        precision_absolute_dyn_spinup=1, min_ice_thickness=10,
+        precision_absolute_dyn_spinup=1, min_ice_thickness=None,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
@@ -1005,6 +1005,17 @@ def dynamic_mu_star_run_with_dynamic_spinup(
 
         # we are done with preparing the local_variables for the upcoming iterations
         return None
+
+    if yr_rgi is None:
+        yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
+    if min_spinup_period > yr_rgi - ys:
+        log.workflow('The RGI year is closer to ys as the minimum spinup '
+                     'period -> therefore the minimum spinup period is '
+                     'adapted and it is the only period which is tried by the '
+                     'dynamic spinup function!')
+        min_spinup_period = yr_rgi - ys
+        spinup_period = yr_rgi - ys
+        min_ice_thickness = 0
 
     # Here we start with the actual model run
     # define new mu for gdir
@@ -1243,6 +1254,17 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         os.remove(os.path.join(gdir.dir,
                                'model_flowlines_dyn_mu_calib.pkl'))
 
+    if yr_rgi is None:
+        yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
+    if min_spinup_period > yr_rgi - ys:
+        log.workflow('The RGI year is closer to ys as the minimum spinup '
+                     'period -> therefore the minimum spinup period is '
+                     'adapted and it is the only period which is tried by the '
+                     'dynamic spinup function!')
+        min_spinup_period = yr_rgi - ys
+        spinup_period = yr_rgi - ys
+        min_ice_thickness = 0
+
     yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
     try:
         model_end = run_dynamic_spinup(
@@ -1309,7 +1331,7 @@ def dynamic_mu_star_run(
         gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=FluxBasedModel,
         local_variables=None, set_local_variables=False, t_star_initial=None,
-        **kwargs):
+        yr_rgi=None, **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -1349,6 +1371,9 @@ def dynamic_mu_star_run(
     t_star_initial : int or None
         The initial t_star before the dynamic calibration started.
         Default is None
+    yr_rgi : int or None
+        The rgi year of the gdir.
+        Dafault is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1401,7 +1426,8 @@ def dynamic_mu_star_run(
 
 def dynamic_mu_star_run_fallback(
         gdir, mu_star, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=FluxBasedModel, t_star_initial=None, **kwargs):
+        evolution_model=FluxBasedModel, t_star_initial=None, yr_rgi=None,
+        **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run', which are provided to
@@ -1433,6 +1459,9 @@ def dynamic_mu_star_run_fallback(
     t_star_initial : int or None
         The initial t_star before the dynamic calibration started.
         Default is None
+    yr_rgi : int or None
+        The rgi year of the gdir.
+        Dafault is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1669,6 +1698,18 @@ def run_dynamic_mu_star_calibration(
     if ys > yr0_ref_mb:
         raise RuntimeError('The provided ys is larger than the start year of '
                            'the given geodetic_mb_period!')
+
+    yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
+    if yr_rgi < ys:
+        if ignore_errors:
+            log.workflow('The rgi year is smaller than the provided start year '
+                         'ys -> setting the rgi year to ys to continue!')
+            yr_rgi = ys
+        else:
+            raise RuntimeError('The rgi year is smaller than the provided '
+                               'start year ys!')
+    kwargs_run_function['yr_rgi'] = yr_rgi
+    kwargs_fallback_function['yr_rgi'] = yr_rgi
 
     # get initial flowlines from which we want to start from
     if init_model_filesuffix is not None:
