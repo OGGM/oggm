@@ -49,7 +49,7 @@ want to clone your fork to your machine::
 
     git clone git@github.com:your-GitHub-username/oggm.git oggm-yourname
     cd oggm-yourname
-    git remote add upstream git://github.com/OGGM/oggm.git
+    git remote add upstream https://github.com/OGGM/oggm.git
 
 This creates the directory `oggm-yourname` and connects your repository to
 the upstream (main project) oggm repository (with the `your-GitHub-username`
