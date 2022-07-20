@@ -2217,8 +2217,9 @@ def extend_past_climate_run(past_run_file=None,
             ods[vn] = ods[vn].astype(int)
 
         # New vars
-        for vn in ['volume', 'volume_bsl', 'volume_bwl',
-                   'area', 'length', 'calving', 'calving_rate']:
+        for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
+                   'area', 'area_m2_min_h', 'length', 'calving',
+                   'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
@@ -3720,7 +3721,9 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         set up you want the copied directory to be useful for. Currently
         supported are 'all' (copy the entire directory), 'inversion'
         (copy the necessary files for the inversion AND the run)
-        and 'run' (copy the necessary files for a dynamical run).
+        , 'run' (copy the necessary files for a dynamical run) or 'run/spinup'
+        (copy the necessary files and all already conducted model runs, e.g.
+        from a dynamic spinup).
 
     Returns
     -------
@@ -3741,6 +3744,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
                  'local_mustar', 'climate_historical', 'gridded_data',
                  'gcm_data', 'climate_info', 'log']
+        paths = ('*' + p + '*' for p in paths)
+        shutil.copytree(gdir.dir, new_dir,
+                        ignore=include_patterns(*paths))
+    elif setup == 'run/spinup':
+        paths = ['model_flowlines', 'inversion_params', 'outlines',
+                 'local_mustar', 'climate_historical', 'glacier_grid',
+                 'gcm_data', 'climate_info', 'diagnostics', 'log', 'model_run',
+                 'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))

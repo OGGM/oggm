@@ -38,7 +38,13 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_dynamic_spinup, run_with_hydro)
+                                run_with_hydro)
+from oggm.core.dynamic_spinup import (
+    run_dynamic_spinup, run_dynamic_mu_star_calibration,
+    dynamic_mu_star_run_with_dynamic_spinup,
+    dynamic_mu_star_run_with_dynamic_spinup_fallback,
+    dynamic_mu_star_run,
+    dynamic_mu_star_run_fallback)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -116,6 +122,10 @@ class TestInitPresentDayFlowline:
             plt.figure()
             plt.plot(fls[-1].surface_h - fls[-1].bed_h)
             plt.show()
+
+        # test if providing a filesuffix is working
+        init_present_time_glacier(gdir, filesuffix='_test')
+        assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
     def test_present_time_glacier_massbalance(self, hef_gdir):
 
@@ -3326,7 +3336,7 @@ class TestHEF:
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
-    def test_dynamic_spinup(self, hef_gdir, minimise_for):
+    def test_run_dynamic_spinup(self, hef_gdir, minimise_for):
 
         # reset kcalving for this test and set it back to the previous value
         # after the test
@@ -3398,7 +3408,7 @@ class TestHEF:
             gdir_diagnostics = hef_gdir.get_diagnostics()
             assert 'temp_bias_dynamic_spinup' in gdir_diagnostics.keys()
             assert 'dynamic_spinup_period' in gdir_diagnostics.keys()
-            assert 'dynamic_spinup_forward_model_runs' in gdir_diagnostics.keys()
+            assert 'dynamic_spinup_forward_model_iterations' in gdir_diagnostics.keys()
             mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent'
             assert mismatch_key in gdir_diagnostics.keys()
             assert 'dynamic_spinup_other_variable_reference' in \
@@ -3528,11 +3538,12 @@ class TestHEF:
             else:
                 min_spinup_period = 10
 
-            model_dynamic_spinup = run_dynamic_spinup(
+            model_dynamic_spinup_error = run_dynamic_spinup(
                 gdir,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 output_filesuffix='_dynamic_spinup',
+                min_ice_thickness=0,
                 maxiter=10,
                 min_spinup_period=min_spinup_period,
                 ignore_errors=ignore_errors)
@@ -3542,12 +3553,676 @@ class TestHEF:
                                    filesuffix='_dynamic_spinup')
             fmod = FileModel(fp)
             fmod.run_until(fmod.last_yr)
-            assert np.isclose(getattr(model_dynamic_spinup, var_name),
+            assert np.isclose(getattr(model_dynamic_spinup_error, var_name),
                               getattr(fmod, var_name))
             yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
             yr_rgi = gdir.rgi_date + 1  # convert to hydro year
             assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
-            assert len(model_dynamic_spinup.fls) == len(fmod.fls)
+            assert len(model_dynamic_spinup_error.fls) == len(fmod.fls)
+
+            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                precision_percent=precision_percent,
+                output_filesuffix='_dynamic_spinup',
+                min_ice_thickness=0,
+                maxiter=10,
+                min_spinup_period=min_spinup_period,
+                ignore_errors=ignore_errors,
+                return_t_bias_best=True)
+            if (((minimise_for == 'area') &
+                 (gdir.rgi_id == 'RGI60-04.07198')) |
+                    ((minimise_for == 'volume') &
+                     (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
+                                      'RGI60-04.00331']))):
+                assert not np.isnan(t_bias_best)
+            else:
+                assert np.isnan(t_bias_best)
+
+        # test for parameters ye and return_t_bias
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=4, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+
+        yr_rgi = gdir.rgi_date + 1  # convert to hydro year
+        yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+        model_dynamic_spinup_ye, t_bias = run_dynamic_spinup(
+            gdir,
+            spinup_period=40,
+            spinup_start_yr=spinup_start_yr,
+            yr_rgi=yr_rgi,
+            ye=ye,
+            return_t_bias_best=True,
+            minimise_for=minimise_for,
+            precision_percent=precision_percent,
+            precision_absolute=precision_absolute,
+            min_ice_thickness=min_ice_thickness,
+            output_filesuffix='_dynamic_spinup_historical', )
+
+        assert isinstance(t_bias, float)
+        assert model_dynamic_spinup_ye.yr == ye
+        # check that spinup is the same as without ye (with the given precision)
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dynamic_spinup_historical', path=False)
+        if minimise_for == 'volume':
+            assert np.isclose(ds.loc[{'time': yr_rgi}].volume.values,
+                              model_dynamic_spinup.volume_m3,
+                              rtol=precision_percent,
+                              atol=precision_absolute)
+        elif minimise_for == 'area':
+            assert np.isclose(ds.loc[{'time': yr_rgi}].area.values,
+                              model_dynamic_spinup.area_m2,
+                              rtol=precision_percent,
+                              atol=precision_absolute)
+        else:
+            raise ValueError(f'Unknown parameter for minimise for '
+                             f'"{minimise_for}"!')
+
+        # test parameter and spinup_start_yr_max, should override spinup_period
+        # to start at spinup_start_yr_max
+        model_dynamic_spinup_max_start_yr = run_dynamic_spinup(
+            gdir,
+            spinup_period=5,
+            spinup_start_yr=None,
+            spinup_start_yr_max=1990,
+            yr_rgi=yr_rgi,
+            minimise_for=minimise_for,
+            precision_percent=precision_percent,
+            precision_absolute=precision_absolute,
+            min_ice_thickness=min_ice_thickness,
+            output_filesuffix='_dynamic_spinup_max_start', )
+        ds = utils.compile_run_output(gdir, input_filesuffix='_dynamic_spinup_max_start',
+                                      path=False)
+        assert ds.time.min().values == 1990
+
+        # test that provided start_yr_max is inside climate data
+        with pytest.raises(RuntimeError,
+                           match='The provided maximum start year *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                spinup_start_yr_max=yr_min - 1)
+
+        # test that provided start year is smaller than start_yr_max
+        with pytest.raises(RuntimeError,
+                           match='The provided start year *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                spinup_start_yr_max=yr_rgi - 10,
+                spinup_start_yr=yr_rgi - 5)
+
+        # test that provided ye is larger than yr_rgi
+        with pytest.raises(RuntimeError,
+                           match='The provided end year *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                yr_rgi=yr_rgi,
+                ye=yr_rgi - 1)
+
+        # test if provided model geometry works and some other principle
+        # parameter tests (use_inversion_params_for_run and
+        # store_model_geometry)
+        cfg.PARAMS['use_inversion_params_for_run'] = False
+        cfg.PARAMS['store_model_geometry'] = True
+        workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
+                                     ys=yr_rgi, ye=yr_rgi + 1,
+                                     output_filesuffix='_one_yr')
+        run_dynamic_spinup(
+            gdir,
+            minimise_for=minimise_for,
+            init_model_filesuffix='_one_yr',
+            init_model_yr=yr_rgi,
+            store_model_geometry=False)
+
+        # test that error is raised if mb_elev_feedback not annual
+        with pytest.raises(InvalidParamsError,
+                           match='Only use annual mb_elev_feedback with the '
+                                 'dynamic spinup function!'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                mb_elev_feedback='monthly')
+
+        # test that error is raised if used together with calving
+        cfg.PARAMS['use_kcalving_for_run'] = True
+        with pytest.raises(InvalidParamsError,
+                           match='Dynamic spinup not tested with *'):
+            run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for)
+        cfg.PARAMS['use_kcalving_for_run'] = False
+
+        # change settings back to default
+        cfg.PARAMS['use_inversion_params_for_run'] = True
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
+
+    @pytest.mark.parametrize('do_inversion', [True, False])
+    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.slow
+    def test_run_dynamic_mu_star_calibration_with_dynamic_spinup(self,
+                                                                 minimise_for,
+                                                                 do_inversion):
+
+        # reset kcalving for this test and set it back to the previous value
+        # after the test
+        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        cfg.PARAMS['use_kcalving_for_run'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        # use a prepro dir as the hef_gdir climate data only goes to 2003 and
+        # for the geodetic data we need climate data up to 2020
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+
+        # value we want to match after dynamic mu star calibration with dynamic
+        # spinup
+        fls = gdir.read_pickle('model_flowlines')
+        ref_value_dynamic_spinup = 0
+        if minimise_for == 'area':
+            unit = 'km2'
+        elif minimise_for == 'volume':
+            unit = 'km3'
+        else:
+            raise ValueError('Unknown variable to minimise for!')
+        var_name = f'{minimise_for}_{unit}'
+        for fl in fls:
+            ref_value_dynamic_spinup += getattr(fl, var_name)
+
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
+        yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
+
+        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_dmdtda = float(
+            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
+                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+
+        if do_inversion:
+            # before the run, check that the dyn model flowlines does not exist
+            # only important if inversion is included, so original
+            # model_flowlines are unchagned (to be able to conduct more dynamic
+            # calibration runs in the same gdir)
+            assert not os.path.isfile(
+                os.path.join(gdir.dir, 'model_flowlines_dyn_mu_calib.pkl'))
+
+        # conduct a run including a dynamic spinup and inversion
+        precision_percent = 10
+        precision_absolute = 0.1
+        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+        yr_rgi = gdir.rgi_date
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent_dyn_spinup': precision_percent,
+                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent_dyn_spinup': precision_percent,
+                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_inversion',
+            ys=1979, ye=ye)
+
+        # check that we are matching all desired ref values
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_mu_calib_spinup_inversion',
+            path=False)
+        if minimise_for == 'volume':
+            assert np.isclose(ds.loc[{'time': yr_rgi}].volume.values * 1e-9,
+                              ref_value_dynamic_spinup,
+                              rtol=precision_percent / 100,
+                              atol=precision_absolute)
+        elif minimise_for == 'area':
+            assert np.isclose(ds.loc[{'time': yr_rgi}].area.values * 1e-6,
+                              ref_value_dynamic_spinup,
+                              rtol=precision_percent / 100,
+                              atol=precision_absolute)
+        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                       ds.volume.loc[yr0_ref_dmdtda].values) /
+                      gdir.rgi_area_m2 /
+                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                      cfg.PARAMS['ice_density'])
+        assert np.isclose(dmdtda_mdl, ref_dmdtda,
+                          rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (full success)'
+
+        if do_inversion:
+            # after the run, check that the dyn model flowlines exists and that
+            # the original model flowlines are unchanged
+            assert os.path.isfile(
+                os.path.join(gdir.dir, 'model_flowlines_dyn_mu_calib.pkl'))
+            assert np.all([np.all(getattr(fl_prev, 'surface_h') ==
+                                  getattr(fl_now, 'surface_h')) and
+                           np.all(getattr(fl_prev, 'bed_h') ==
+                                  getattr(fl_now, 'bed_h'))
+                           for fl_prev, fl_now in
+                           zip(fls, gdir.read_pickle('model_flowlines'))])
+
+        # test that error is raised if user provides flowlines but want to
+        # include inversion during dynamic mu calibration
+        if do_inversion:
+            # artificial change of flowlines to force error
+            fls[0].thick = np.zeros(fls[0].nx)
+            with pytest.raises(InvalidWorkflowError,
+                               match='If you want to perform a dynamic '
+                                     'mu_star calibration including an '
+                                     'inversion*'):
+                run_dynamic_mu_star_calibration(
+                    gdir, max_mu_star=1000.,
+                    run_function=dynamic_mu_star_run_with_dynamic_spinup,
+                    kwargs_run_function={'minimise_for': minimise_for,
+                                         'precision_percent_dyn_spinup': precision_percent,
+                                         'precision_absolute_dyn_spinup': precision_absolute,
+                                         'do_inversion': do_inversion},
+                    fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+                    kwargs_fallback_function={'minimise_for': minimise_for,
+                                              'precision_percent_dyn_spinup': precision_percent,
+                                              'precision_absolute_dyn_spinup': precision_absolute,
+                                              'do_inversion': do_inversion},
+                    output_filesuffix='_dyn_mu_calib_spinup_inversion',
+                    ys=1979, ye=ye, init_model_fls=fls)
+
+        # tests for user provided dmdtda (always reset gdir before each test)
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        delta_ref_dmdtda = 100
+        delta_err_ref_dmdtda = -50
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent_dyn_spinup': precision_percent,
+                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent_dyn_spinup': precision_percent,
+                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_inversion_user_dmdtda',
+            ys=1979, ye=ye)
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_mu_calib_spinup_inversion_user_dmdtda',
+            path=False)
+        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                       ds.volume.loc[yr0_ref_dmdtda].values) /
+                      gdir.rgi_area_m2 /
+                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                      cfg.PARAMS['ice_density'])
+        assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
+                          rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
+                                      (ref_dmdtda + delta_ref_dmdtda)))
+
+        # test that error is raised if ignore_error=False
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        with pytest.raises(RuntimeError,
+                           match='Dynamic mu star calibration not successful.*'):
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                run_function=dynamic_mu_star_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
+                ignore_errors=False,
+                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+                maxiter_mu_star=2)
+        # test that fallback function works as expected if ignore_error=True and
+        # if the first guess can improve (but not enough)
+        model_fallback = run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent_dyn_spinup': precision_percent,
+                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent_dyn_spinup': precision_percent,
+                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
+            ignore_errors=True,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            maxiter_mu_star=2)
+        assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (part success)'
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_mu_calib_spinup_inversion_error',
+            path=False)
+        if minimise_for == 'volume':
+            assert np.isclose(ds.loc[{'time': yr_rgi}].volume.values * 1e-9,
+                              ref_value_dynamic_spinup,
+                              rtol=precision_percent / 100,
+                              atol=precision_absolute)
+        elif minimise_for == 'area':
+            assert np.isclose(ds.loc[{'time': yr_rgi}].area.values * 1e-6,
+                              ref_value_dynamic_spinup,
+                              rtol=precision_percent / 100,
+                              atol=precision_absolute)
+
+        # test that fallback function works as expected if ignore_error=True and
+        # if no successful run can be conducted
+        model_fallback = run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent_dyn_spinup': 0.1,
+                                 'precision_absolute_dyn_spinup': 0.0001,
+                                 'maxiter_dyn_spinup': 2,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent_dyn_spinup': 0.1,
+                                      'precision_absolute_dyn_spinup': 0.0001,
+                                      'maxiter_dyn_spinup': 2,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
+            ignore_errors=True,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            maxiter_mu_star=2)
+        assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'fixed geometry spinup'
+        if do_inversion:
+            # check that the dyn model flowlines are deleted if no success
+            assert not os.path.isfile(
+                os.path.join(gdir.dir, 'model_flowlines_dyn_mu_calib.pkl'))
+
+        # test that error is raised if no dict is provided for local_variables
+        # in dynamic_mu_star_run_with_dynamic_spinup
+        for local_variables in [None, []]:
+            with pytest.raises(ValueError,
+                               match='You must provide a dict for '
+                                     'local_variables.*'):
+                dynamic_mu_star_run_with_dynamic_spinup(
+                    gdir,
+                    mu_star=gdir.read_json('local_mustar')['mu_star_glacierwide'],
+                    yr0_ref_mb=yr0_ref_dmdtda,
+                    yr1_ref_mb=yr1_ref_dmdtda,
+                    fls_init=fls, ys=1980, ye=2020, do_inversion=do_inversion,
+                    local_variables=local_variables)
+
+        # test that error is raised if user provided dmdtda is given without an
+        # error and vice versa
+        for use_ref_dmdtda, use_err_ref_dmdtda in zip([ref_dmdtda, None],
+                                                      [None, err_ref_dmdtda]):
+            with pytest.raises(RuntimeError,
+                               match='If you provide a reference geodetic '
+                                     'mass balance .*'):
+                run_dynamic_mu_star_calibration(
+                    gdir, max_mu_star=1000.,
+                    ref_dmdtda=use_ref_dmdtda,
+                    err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test that error is raised if user provided dmdtda error is 0 or
+        # negative
+        for use_err_ref_dmdtda in [0., -0.1]:
+            with pytest.raises(RuntimeError,
+                               match='The provided error for the geodetic '
+                                     'mass-balance.*'):
+                run_dynamic_mu_star_calibration(
+                    gdir, max_mu_star=1000.,
+                    ref_dmdtda=ref_dmdtda,
+                    err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test if fallback function is resetting mu star correctly
+        original_mu_star = gdir.read_json('local_mustar')['mu_star_glacierwide']
+        new_mu_star = original_mu_star - 10
+        df = dict()
+        df['rgi_id'] = gdir.rgi_id
+        df['t_star'] = np.nan
+        df['bias'] = 0
+        df['mu_star_per_flowline'] = [new_mu_star] * len(gdir.read_pickle('model_flowlines'))
+        df['mu_star_glacierwide'] = new_mu_star
+        df['mu_star_flowline_avg'] = new_mu_star
+        df['mu_star_allsame'] = True
+        gdir.write_json(df, 'local_mustar')
+        assert original_mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']
+        dynamic_mu_star_run_with_dynamic_spinup_fallback(
+            gdir,
+            mu_star=original_mu_star,
+            fls_init=gdir.read_pickle('model_flowlines'),
+            ys=gdir.get_climate_info()['baseline_hydro_yr_0'],
+            ye=gdir.get_climate_info()['baseline_hydro_yr_1'] + 1,
+            local_variables={'vol_m3_ref':
+                             gdir.read_pickle('model_flowlines')[0].volume_m3},
+            minimise_for=minimise_for
+        )
+        assert original_mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']
+
+        # test if fallback raise error if no local variable provided
+        with pytest.raises(RuntimeError,
+                           match='Need the volume to do *'):
+            dynamic_mu_star_run_with_dynamic_spinup_fallback(
+                gdir,
+                mu_star=original_mu_star,
+                fls_init=gdir.read_pickle('model_flowlines'),
+                ys=gdir.get_climate_info()['baseline_hydro_yr_0'],
+                ye=gdir.get_climate_info()['baseline_hydro_yr_1'] + 1,
+                local_variables=None,
+                minimise_for=minimise_for
+            )
+
+        # change settings back to default
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
+
+    @pytest.mark.slow
+    def test_run_dynamic_mu_star_calibration_without_dynamic_spinup(self):
+
+        # reset kcalving for this test and set it back to the previous value
+        # after the test
+        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        cfg.PARAMS['use_kcalving_for_run'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        # use a prepro dir as the hef_gdir climate data only goes to 2003 and
+        # for the geodetic data we need climate data up to 2020
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+
+        # value we want to match after dynamic mu star calibration
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
+        yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
+
+        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_dmdtda = float(
+            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
+                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+
+        # conduct the run
+        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+        yr_rgi = gdir.rgi_date
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback,
+            output_filesuffix='_dyn_mu_calib',
+            ys=1979, ye=ye)
+
+        # check that we are matching all desired ref values
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_mu_calib',
+            path=False)
+        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                       ds.volume.loc[yr0_ref_dmdtda].values) /
+                      gdir.rgi_area_m2 /
+                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                      cfg.PARAMS['ice_density'])
+        assert np.isclose(dmdtda_mdl, ref_dmdtda,
+                          rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (full success)'
+
+        # tests for user provided dmdtda (always reset gdir before each test)
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        delta_ref_dmdtda = 100
+        delta_err_ref_dmdtda = -50
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback,
+            output_filesuffix='_dyn_mu_calib_user_dmdtda',
+            ys=1979, ye=ye)
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_mu_calib_user_dmdtda',
+            path=False)
+        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                       ds.volume.loc[yr0_ref_dmdtda].values) /
+                      gdir.rgi_area_m2 /
+                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                      cfg.PARAMS['ice_density'])
+        assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
+                          rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
+                                      (ref_dmdtda + delta_ref_dmdtda)))
+
+        # test that error is raised if ignore_error=False
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        with pytest.raises(RuntimeError,
+                           match='Dynamic mu star calibration not successful.*'):
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                run_function=dynamic_mu_star_run,
+                fallback_function=dynamic_mu_star_run,
+                output_filesuffix='_dyn_mu_calib_error',
+                ignore_errors=False,
+                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+                maxiter_mu_star=2)
+        # test that fallback function works as expected if ignore_error=True and
+        # if the first guess can improve (but not enough)
+        model_fallback = run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback,
+            output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
+            ignore_errors=True,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            maxiter_mu_star=2)
+        assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (part success)'
+
+        # test that fallback function works as expected if ignore_error=True and
+        # if no successful run can be conducted
+        model_fallback = run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            run_function=dynamic_mu_star_run,
+            kwargs_run_function={'cfl_number': 1e-8},  # force an error
+            fallback_function=dynamic_mu_star_run_fallback,
+            output_filesuffix='_dyn_mu_calib_error',
+            ignore_errors=True,
+            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            maxiter_mu_star=2)
+        assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
+        assert gdir.get_diagnostics()['used_spinup_option'] == 'no spinup'
+
+        # test that error is raised if user provided dmdtda is given without an
+        # error and vice versa
+        for use_ref_dmdtda, use_err_ref_dmdtda in zip([ref_dmdtda, None],
+                                                      [None, err_ref_dmdtda]):
+            with pytest.raises(RuntimeError,
+                               match='If you provide a reference geodetic '
+                                     'mass balance .*'):
+                run_dynamic_mu_star_calibration(
+                    gdir, max_mu_star=1000.,
+                    run_function=dynamic_mu_star_run,
+                    fallback_function=dynamic_mu_star_run_fallback,
+                    ref_dmdtda=use_ref_dmdtda,
+                    err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test error is raised if given years outside of geodetic period
+        with pytest.raises(RuntimeError,
+                           match='The provided ye is smaller than the end year'
+                                 ' of the given *'):
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                run_function=dynamic_mu_star_run,
+                fallback_function=dynamic_mu_star_run_fallback,
+                ye=yr1_ref_dmdtda - 1)
+
+        with pytest.raises(RuntimeError,
+                           match='The provided ys is larger than the start year'
+                                 ' of the given *'):
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                run_function=dynamic_mu_star_run,
+                fallback_function=dynamic_mu_star_run_fallback,
+                ys=yr0_ref_dmdtda + 1)
+
+        # test initialisation from an previous glacier geometry
+        cfg.PARAMS['store_model_geometry'] = True
+        workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
+                                     ys=yr_rgi, ye=yr_rgi + 1,
+                                     output_filesuffix='_one_yr')
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            init_model_filesuffix='_one_yr',
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback)
 
         # change settings back to default
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
@@ -4194,6 +4869,166 @@ class TestHydro:
         assert_allclose(frac, 0, atol=0.05)
 
         # set back to previous value
+        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
+
+    @pytest.mark.parametrize('do_inversion', [True, False])
+    @pytest.mark.slow
+    def test_hydro_dynamic_mu_star_with_dynamic_spinup(self, inversion_params,
+                                                       do_inversion):
+
+        # reset kcalving for this test and set it back to the previous value
+        # after the test
+        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        cfg.PARAMS['use_kcalving_for_run'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+
+        # Add debug vars
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
+
+        tasks.run_with_hydro(
+            gdir, run_task=tasks.run_dynamic_mu_star_calibration,
+            store_monthly_hydro=True, ref_area_from_y0=True,
+            output_filesuffix='_dyn_mu_calib', max_mu_star=1000.,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'do_inversion': do_inversion},)
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_dyn_mu_calib')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        # Domain area is constant and equal to the first year
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+
+        # Sanity checks
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        reconstructed_vol = (odf['model_mb'].cumsum() / cfg.PARAMS['ice_density'] +
+                             odf['volume_m3'].iloc[0])
+        assert_allclose(odf['volume_m3'].iloc[1:], reconstructed_vol.iloc[:-1])
+
+        # Ensure mass-conservation even at junction?
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # Residual MB should not be crazy large
+        frac = odf['residual_mb'] / odf['melt_on_glacier']
+        assert_allclose(frac, 0, atol=0.05)
+
+        # set back to previous values
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
+
+    @pytest.mark.slow
+    def test_hydro_dynamic_mu_star_without_dynamic_spinup(self, inversion_params):
+
+        # reset kcalving for this test and set it back to the previous value
+        # after the test
+        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        cfg.PARAMS['use_kcalving_for_run'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+
+        # Add debug vars
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        # Needed for this to run
+        cfg.PARAMS['store_model_geometry'] = True
+
+        tasks.run_with_hydro(
+            gdir, run_task=tasks.run_dynamic_mu_star_calibration,
+            store_monthly_hydro=True, ref_area_from_y0=True,
+            output_filesuffix='_dyn_mu_calib', max_mu_star=1000.,
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback)
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_dyn_mu_calib')) as ds:
+            sel_vars = [v for v in ds.variables if 'month_2d' not in ds[v].dims]
+            odf = ds[sel_vars].to_dataframe().iloc[:-1]
+
+        # Domain area is constant and equal to the first year
+        odf['dom_area'] = odf['on_area'] + odf['off_area']
+
+        # Sanity checks
+        odf['tot_prcp'] = (odf['liq_prcp_off_glacier'] +
+                           odf['liq_prcp_on_glacier'] +
+                           odf['snowfall_off_glacier'] +
+                           odf['snowfall_on_glacier'])
+
+        # Glacier area is the same (remove on_area?)
+        assert_allclose(odf['on_area'], odf['area_m2'])
+
+        # Our MB is the same as the glacier dyn one
+        reconstructed_vol = (odf['model_mb'].cumsum() / cfg.PARAMS['ice_density'] +
+                             odf['volume_m3'].iloc[0])
+        assert_allclose(odf['volume_m3'].iloc[1:], reconstructed_vol.iloc[:-1])
+
+        # Ensure mass-conservation even at junction?
+        odf['runoff'] = (odf['melt_on_glacier'] +
+                         odf['melt_off_glacier'] +
+                         odf['liq_prcp_on_glacier'] +
+                         odf['liq_prcp_off_glacier'])
+
+        mass_in_glacier_end = odf['volume_m3'].iloc[-1] * cfg.PARAMS['ice_density']
+        mass_in_glacier_start = odf['volume_m3'].iloc[0] * cfg.PARAMS['ice_density']
+
+        mass_in_snow = odf['snow_bucket'].iloc[-1]
+        mass_in = odf['tot_prcp'].iloc[:-1].sum()
+        mass_out = odf['runoff'].iloc[:-1].sum()
+        assert_allclose(mass_in_glacier_end,
+                        mass_in_glacier_start + mass_in - mass_out - mass_in_snow,
+                        atol=1e-2)  # 0.01 kg is OK as numerical error
+
+        # Residual MB should not be crazy large
+        frac = odf['residual_mb'] / odf['melt_on_glacier']
+        assert_allclose(frac, 0, atol=0.05)
+
+        # set back to previous values
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
     @pytest.mark.slow

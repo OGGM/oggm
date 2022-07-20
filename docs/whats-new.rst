@@ -17,6 +17,29 @@ Enhancements
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - added support for a precipitation factor varying per glacier (:pull:`1435`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
+- Added a new entity task ``run_dynamic_mu_star_calibration``. This task
+  dynamically calibrates the temperature sensitivity mu star to a geodetic
+  mass-balance observation. There are different options available how this is
+  done, the default incorporates an inversion and a dynamic spinup in each
+  iteration (:pull:`1425`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added two new output variables in ``FlowlineModel.run_until_and_store()``
+  (``area_m2_min_h`` and ``volume_m3_min_h``) which are needed for a dynamic
+  mu star calibration which should include the minimum ice thickness argument
+  of an dynamic spinup (needed as a filter for interannual changes of especially
+  the area). Also included ``cfg.PARAMS['dynamic_spinup_min_ice_thick']`` to be
+  able to globally define the used minimum ice thickness for the dynamic spinup
+  (:pull:`1425`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Rearanged the entity tasks ``run_dynamic_mu_star_calibration`` and
+  ``run_dynamic_spinup`` with all help functions in new modul
+  ``oggm.core.dynamic_spinup`` (:pull:`1425`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Rearanged the prepro levels. Level 4 now adds a historical run (previously
+  done in level 5) and a spinup historical run (using dynamic mu star calibration).
+  Level 5 now replaces level 4 and creates the minigdirs (where only the files
+  for a model run are kept and no inversion is possible anymore) (:pull:`1425`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
