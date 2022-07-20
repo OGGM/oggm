@@ -45,37 +45,43 @@ def add_millan_thickness(gdir):
     gdf = _get_lookup_thickness()
     cp = shpg.Point(gdir.cenlon, gdir.cenlat)
     sel = gdf.loc[gdf.contains(cp)]
-    if len(sel) > 1:
-        raise NotImplementedError('Multifile Millan not implemented yet')
     if len(sel) == 0:
         raise InvalidWorkflowError(f'There seems to be no Millan file for this '
                                    f'glacier: {gdir.rgi_id}')
 
-    # Fetch it
-    url = default_base_url + sel['thickness'].iloc[0]
-    input_file = utils.file_downloader(url)
+    # We may have more than one file
+    total_thick = 0
+    for i, s in sel.iterrows():
+        # Fetch it
+        url = default_base_url + s['thickness']
+        input_file = utils.file_downloader(url)
 
-    # Subset to avoid mega files
-    dsb = salem.GeoTiff(input_file)
-    x0, x1, y0, y1 = gdir.grid.extent
-    dsb.set_subset(corners=((x0, y0), (x1, y1)), crs=gdir.grid.proj, margin=5)
+        # Subset to avoid mega files
+        dsb = salem.GeoTiff(input_file)
+        x0, x1, y0, y1 = gdir.grid.extent
+        dsb.set_subset(corners=((x0, y0), (x1, y1)), crs=gdir.grid.proj, margin=5)
 
-    # Read the data and prevent bad surprises
-    thick = dsb.get_vardata().astype(np.float64)
-    # Nans with 0
-    thick[~ np.isfinite(thick)] = 0
-    nmax = np.nanmax(thick)
-    if nmax == np.inf:
-        # Replace inf with 0
-        thick[thick == nmax] = 0
-    # Replace negative values with 0
-    thick[thick < 0] = 0
+        # Read the data and prevent bad surprises
+        thick = dsb.get_vardata().astype(np.float64)
+        # Nans with 0
+        thick[~ np.isfinite(thick)] = 0
+        nmax = np.nanmax(thick)
+        if nmax == np.inf:
+            # Replace inf with 0
+            thick[thick == nmax] = 0
+        # Replace negative values with 0
+        thick[thick < 0] = 0
 
-    # Reproject now
-    thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear').filled(np.nan)
+        if np.nansum(thick) == 0:
+            # No need to continue
+            continue
+
+        # Reproject now
+        r_thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear')
+        total_thick += r_thick.filled(0)
 
     # We mask zero ice as nodata
-    thick = np.where(thick == 0, np.NaN, thick)
+    total_thick = np.where(total_thick == 0, np.NaN, total_thick)
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
@@ -88,4 +94,4 @@ def add_millan_thickness(gdir):
         v.units = 'm'
         ln = 'Ice thickness from Millan et al. 2022'
         v.long_name = ln
-        v[:] = thick
+        v[:] = total_thick
