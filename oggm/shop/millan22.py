@@ -30,6 +30,7 @@ def _get_lookup_thickness():
         _lookup_thickness = gpd.read_file('zip://' + utils.file_downloader(fname))
     return _lookup_thickness
 
+
 @utils.entity_task(log, writes=['gridded_data'])
 def add_millan_thickness(gdir):
     """Add the Millan 22 thickness data to this glacier directory.
@@ -40,10 +41,8 @@ def add_millan_thickness(gdir):
         the glacier directory to process
     """
 
-    base_url = default_base_url
-
+    # Find out which file(s) we need
     gdf = _get_lookup_thickness()
-
     cp = shpg.Point(gdir.cenlon, gdir.cenlat)
     sel = gdf.loc[gdf.contains(cp)]
     if len(sel) > 1:
@@ -52,14 +51,27 @@ def add_millan_thickness(gdir):
         raise InvalidWorkflowError(f'There seems to be no Millan file for this '
                                    f'glacier: {gdir.rgi_id}')
 
-    url = base_url + sel['path'].iloc[0]
+    # Fetch it
+    url = default_base_url + sel['thickness'].iloc[0]
     input_file = utils.file_downloader(url)
 
+    # Subset to avoid mega files
     dsb = salem.GeoTiff(input_file)
     x0, x1, y0, y1 = gdir.grid.extent
     dsb.set_subset(corners=((x0, y0), (x1, y1)), crs=gdir.grid.proj, margin=5)
 
+    # Read the data and prevent bad surprises
     thick = dsb.get_vardata().astype(np.float64)
+    # Nans with 0
+    thick[~ np.isfinite(thick)] = 0
+    nmax = np.nanmax(thick)
+    if nmax == np.inf:
+        # Replace inf with 0
+        thick[thick == nmax] = 0
+    # Replace negative values with 0
+    thick[thick < 0] = 0
+
+    # Reproject now
     thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear').filled(np.nan)
 
     # We mask zero ice as nodata
@@ -76,5 +88,4 @@ def add_millan_thickness(gdir):
         v.units = 'm'
         ln = 'Ice thickness from Millan et al. 2022'
         v.long_name = ln
-        v.base_url = base_url
         v[:] = thick
