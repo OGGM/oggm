@@ -851,6 +851,34 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         return model_dynamic_spinup_end[-1]
 
 
+def define_new_mu_star_in_gdir(gdir, new_mu_star, bias=0):
+    """
+    Helper function to define a new mu star in an gdir. Is used inside the run
+    functions of the dynamic mu star calibration.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to change the mu star
+    new_mu_star : float
+        the new mu_star to save in the gdir
+    bias : float
+        an additional bias to add to the mass balance at the end (was
+        originally used for the static mu star calibration)
+
+    Returns
+    -------
+
+    """
+    df = gdir.read_json('local_mustar')
+    df['bias'] = bias
+    df['mu_star_per_flowline'] = [new_mu_star] * len(df['mu_star_per_flowline'])
+    df['mu_star_glacierwide'] = new_mu_star
+    df['mu_star_flowline_avg'] = new_mu_star
+    df['mu_star_allsame'] = True
+    gdir.write_json(df, 'local_mustar')
+
+
 def dynamic_mu_star_run_with_dynamic_spinup(
         gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=FluxBasedModel,
@@ -860,7 +888,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
-        t_star_initial=None, **kwargs):
+        **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -977,9 +1005,6 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         If True a complete inversion is conducted using the provided mu_star
         before the actual calibration run.
         Default is False
-    t_star_initial : int or None
-        The initial t_star before the dynamic calibration started.
-        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1018,18 +1043,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         min_ice_thickness = 0
 
     # Here we start with the actual model run
-    # define new mu for gdir
-    df = dict()
-    df['rgi_id'] = gdir.rgi_id
-    if t_star_initial is None:
-        t_star_initial = np.nan
-    df['t_star'] = t_star_initial
-    df['bias'] = 0
-    df['mu_star_per_flowline'] = [mu_star] * len(fls_init)
-    df['mu_star_glacierwide'] = mu_star
-    df['mu_star_flowline_avg'] = mu_star
-    df['mu_star_allsame'] = True
-    gdir.write_json(df, 'local_mustar')
+    define_new_mu_star_in_gdir(gdir, mu_star)
 
     # this variable is used if an inverison is conducted to keep the original
     # model_flowline unchanged (-> to be able to conduct different dynamic
@@ -1113,7 +1127,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         precision_absolute_dyn_spinup=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        do_inversion=True, t_star_initial=None, **kwargs):
+        do_inversion=True, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run_with_dynamic_spinup', which are provided
@@ -1212,9 +1226,6 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         If True a complete inversion is conducted using the provided mu_star
         before the actual fallback run.
         Default is False
-    t_star_initial : int or None
-        The initial t_star before the dynamic calibration started.
-        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1232,17 +1243,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
 
     # revert gdir to original state if neccessary
     if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
-        df = dict()
-        df['rgi_id'] = gdir.rgi_id
-        if t_star_initial is None:
-            t_star_initial = np.nan
-        df['t_star'] = t_star_initial
-        df['bias'] = 0
-        df['mu_star_per_flowline'] = [mu_star] * len(fls_init)
-        df['mu_star_glacierwide'] = mu_star
-        df['mu_star_flowline_avg'] = mu_star
-        df['mu_star_allsame'] = True
-        gdir.write_json(df, 'local_mustar')
+        define_new_mu_star_in_gdir(gdir, mu_star)
         if do_inversion:
             apparent_mb_from_any_mb(gdir)
             calibrate_inversion_from_consensus(
@@ -1330,8 +1331,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
 def dynamic_mu_star_run(
         gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=FluxBasedModel,
-        local_variables=None, set_local_variables=False, t_star_initial=None,
-        yr_rgi=None, **kwargs):
+        local_variables=None, set_local_variables=False, yr_rgi=None,
+        **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -1368,9 +1369,6 @@ def dynamic_mu_star_run(
     set_local_variables : bool
         Not needed in this function. Only here to be confirm with the use of
         this function in 'run_dynamic_mu_star_calibration'.
-    t_star_initial : int or None
-        The initial t_star before the dynamic calibration started.
-        Default is None
     yr_rgi : int or None
         The rgi year of the gdir.
         Dafault is None
@@ -1388,18 +1386,7 @@ def dynamic_mu_star_run(
         return None
 
     # Here we start with the actual model run
-    # define new mu for gdir
-    df = dict()
-    df['rgi_id'] = gdir.rgi_id
-    if t_star_initial is None:
-        t_star_initial = np.nan
-    df['t_star'] = t_star_initial
-    df['bias'] = 0
-    df['mu_star_per_flowline'] = [mu_star] * len(fls_init)
-    df['mu_star_glacierwide'] = mu_star
-    df['mu_star_flowline_avg'] = mu_star
-    df['mu_star_allsame'] = True
-    gdir.write_json(df, 'local_mustar')
+    define_new_mu_star_in_gdir(gdir, mu_star)
 
     # conduct model run
     try:
@@ -1426,8 +1413,7 @@ def dynamic_mu_star_run(
 
 def dynamic_mu_star_run_fallback(
         gdir, mu_star, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=FluxBasedModel, t_star_initial=None, yr_rgi=None,
-        **kwargs):
+        evolution_model=FluxBasedModel, yr_rgi=None, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run', which are provided to
@@ -1456,9 +1442,6 @@ def dynamic_mu_star_run_fallback(
     evolution_model : class:oggm.core.FlowlineModel
         Evolution model to use.
         Default is FluxBasedModel
-    t_star_initial : int or None
-        The initial t_star before the dynamic calibration started.
-        Default is None
     yr_rgi : int or None
         The rgi year of the gdir.
         Dafault is None
@@ -1471,18 +1454,7 @@ def dynamic_mu_star_run_fallback(
         The final model after the run.
     """
 
-    # define new mu for gdir
-    df = dict()
-    df['rgi_id'] = gdir.rgi_id
-    if t_star_initial is None:
-        t_star_initial = np.nan
-    df['t_star'] = t_star_initial
-    df['bias'] = 0
-    df['mu_star_per_flowline'] = [mu_star] * len(fls_init)
-    df['mu_star_glacierwide'] = mu_star
-    df['mu_star_flowline_avg'] = mu_star
-    df['mu_star_allsame'] = True
-    gdir.write_json(df, 'local_mustar')
+    define_new_mu_star_in_gdir(gdir, mu_star)
 
     # conduct model run
     try:
@@ -1726,10 +1698,9 @@ def run_dynamic_mu_star_calibration(
     else:
         fls_init = copy.deepcopy(init_model_fls)
 
-    # save original mu star and t_star for later to be able to recreate
-    # original gdir (using the fallback function) if an error occurs
+    # save original mu star for later to be able to recreate original gdir
+    # (using the fallback function) if an error occurs
     mu_star_initial = gdir.read_json('local_mustar')['mu_star_glacierwide']
-    t_star_initial = gdir.read_json('local_mustar')['t_star']
 
     # only used to check performance of minimisation
     dynamic_mu_star_calibration_runs = [0]
@@ -1748,7 +1719,6 @@ def run_dynamic_mu_star_calibration(
                                       fls_init=fls_init, ys=ys, ye=ye,
                                       local_variables=local_variables_run_function,
                                       output_filesuffix=output_filesuffix,
-                                      t_star_initial=t_star_initial,
                                       **kwargs_fallback_function)
         else:
             # we were not able to reach the desired precision during the
@@ -1768,7 +1738,6 @@ def run_dynamic_mu_star_calibration(
                                              fls_init=fls_init, ys=ys, ye=ye,
                                              output_filesuffix=output_filesuffix,
                                              local_variables=local_variables_run_function,
-                                             t_star_initial=t_star_initial,
                                              **kwargs_run_function)
 
             gdir.add_to_diagnostics(
@@ -1799,8 +1768,7 @@ def run_dynamic_mu_star_calibration(
     run_function(gdir=gdir, mu_star=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
                  local_variables=local_variables_run_function,
-                 set_local_variables=True, t_star_initial=t_star_initial,
-                 **kwargs_run_function)
+                 set_local_variables=True, **kwargs_run_function)
 
     # this is the actual model run which is executed each iteration in order to
     # minimise the mismatch of dmdtda of model and observation
@@ -1815,7 +1783,6 @@ def run_dynamic_mu_star_calibration(
                                          fls_init=fls_init, ys=ys, ye=ye,
                                          output_filesuffix=output_filesuffix,
                                          local_variables=local_variables_run_function,
-                                         t_star_initial=t_star_initial,
                                          **kwargs_run_function)
         return model, dmdtda_mdl
 
