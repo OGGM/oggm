@@ -111,22 +111,18 @@ def millan_statistics(gdir):
     d['rgi_region'] = gdir.rgi_region
     d['rgi_subregion'] = gdir.rgi_subregion
     d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['millan_vol_km3'] = 0
+    d['millan_area_km2'] = 0
+    d['millan_perc_cov'] = 0
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            if 'millan_ice_thickness' not in ds:
-                d['millan_vol_km3'] = 0
-                d['millan_area_km2'] = 0
-                d['millan_perc_cov'] = 0
-            else:
-                thick = ds['millan_ice_thickness'].where(ds.glacier_mask, np.NaN).load()
-                d['millan_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
-                d['millan_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
-                d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
-    except FileNotFoundError:
-        d['millan_vol_km3'] = 0
-        d['millan_area_km2'] = 0
-        d['millan_perc_cov'] = 0
+            thick = ds['millan_ice_thickness'].where(ds['glacier_mask'], np.NaN).load()
+            d['millan_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
+            d['millan_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
+            d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
+    except (FileNotFoundError, AttributeError, KeyError):
+        pass
 
     return d
 
