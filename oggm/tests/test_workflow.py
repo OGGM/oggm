@@ -216,6 +216,18 @@ class TestFullRun(unittest.TestCase):
                                    rtol=0.01)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.36)
 
+        # test user provided volume is working
+        delta_volume_m3 = 100000000
+        user_provided_volume_m3 = df.vol_itmix_m3.sum() - delta_volume_m3
+        df = workflow.calibrate_inversion_from_consensus(
+            gdirs, ignore_missing=True,
+            volume_m3_reference=user_provided_volume_m3)
+
+        df = df.dropna()
+        np.testing.assert_allclose(user_provided_volume_m3,
+                                   df.vol_oggm_m3.sum(),
+                                   rtol=0.01)
+
     @pytest.mark.slow
     def test_shapefile_output(self):
 

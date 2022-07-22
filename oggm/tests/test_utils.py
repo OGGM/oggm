@@ -437,8 +437,6 @@ class TestWorkflowTools(unittest.TestCase):
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
 
-
-
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)
         np.testing.assert_allclose(df['tstar_avg_prcp'],
@@ -733,9 +731,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
                                                                          1960,
-                                                                         2000])
+                                                                         2000],
+                                              add_raw_climate_statistics=True)
         assert 'tstar_avg_temp_mean_elev' in df
         assert '1905-1935_avg_temp_mean_elev' in df
+        assert '1905-1935_uncorrected_winter_daily_mean_prcp' in df
 
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
@@ -1102,8 +1102,6 @@ class TestPreproCLI(unittest.TestCase):
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             # cannot be the same after tuning
             assert ds.glen_a != cfg.PARAMS['glen_a']
-        with pytest.raises(FileNotFoundError):
-            tasks.init_present_time_glacier(gdir)
 
         # L5
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
@@ -1146,17 +1144,23 @@ class TestPreproCLI(unittest.TestCase):
         inter, rgidf = self._read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
+        utils.mkdir(wdir, reset=True)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
         border = 80
         bstr = 'b_080'
+
+        # change the reference geodetic mb period, because the climate data of
+        # the test glaciers only go up to 2015
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          dynamic_spinup='area', test_rgidf=rgidf,
+                          dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
                           test_intersects_file=inter,
-                          test_topofile=topof, elev_bands=True)
+                          test_topofile=topof, elev_bands=True,
+                          override_params={'hydro_month_nh': 1,
+                                           'geodetic_mb_period':
+                                           '2000-01-01_2010-01-01'})
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
@@ -1189,7 +1193,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm import tasks
         from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
-        rid = df.rgi_id.iloc[0]
+        rid = df.rgi_id.iloc[1]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L3
@@ -1207,19 +1211,20 @@ class TestPreproCLI(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, nyears=10)
         assert isinstance(model, FlowlineModel)
-        with pytest.raises(FileNotFoundError):
-            # We can't create this because the glacier dir is mini
-            tasks.init_present_time_glacier(gdir)
+        model = FileModel(gdir.get_filepath('model_geometry',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2015
+        model = FileModel(gdir.get_filepath('model_geometry',
+                                            filesuffix='_spinup_historical'))
+        assert model.y0 == 1979
+        assert model.last_yr == 2015
 
         # L5
         tarf = os.path.join(odir, 'RGI61', bstr, 'L5',
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = FileModel(gdir.get_filepath('model_geometry',
-                                            filesuffix='_historical'))
-        assert model.y0 == 2004
-        assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
@@ -1228,7 +1233,7 @@ class TestPreproCLI(unittest.TestCase):
         ef = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
                           'historical_run_output_extended_11.nc')
         sf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
-                          'historical_spinup_run_output_11.nc')
+                          'spinup_historical_run_output_11.nc')
 
         with xr.open_dataset(ef) as dse:
             dse = dse.load()
@@ -1240,13 +1245,14 @@ class TestPreproCLI(unittest.TestCase):
         dse = dse.sel(time=slice(dss.time[0], dss.time[-1]))
 
         # Around RGI date they are close
-        assert_allclose(dss.sel(time=2004).area, dse.sel(time=2004).area, rtol=0.01)
-        assert_allclose(dss.sel(time=2004).length, dse.sel(time=2004).length, atol=805)
-        assert_allclose(dss.sel(time=2004).volume, dse.sel(time=2004).volume, rtol=0.2)
+        # have to exclude rgi_id 'RGI60-11.00719_d02', because no dmdtda data
+        assert_allclose(dss.sel(time=2004).area[1:], dse.sel(time=2004).area[1:], rtol=0.01)
+        assert_allclose(dss.sel(time=2004).length[1:], dse.sel(time=2004).length[1:], atol=805)
+        assert_allclose(dss.sel(time=2004).volume[1:], dse.sel(time=2004).volume[1:], rtol=0.21)
 
         # Over the period they are... close enough
-        assert_allclose(dss.volume, dse.volume, rtol=0.34)
-        assert_allclose(dss.area, dse.area, rtol=0.2)
+        assert_allclose(dss.volume[:, 1:], dse.volume[:, 1:], rtol=0.34)
+        assert_allclose(dss.area[:, 1:], dse.area[:, 1:], rtol=0.2)
 
     @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):
@@ -1327,9 +1333,6 @@ class TestPreproCLI(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, y0=1990, nyears=10)
         assert isinstance(model, FlowlineModel)
-        with pytest.raises(FileNotFoundError):
-            # We can't create this because the glacier dir is mini
-            tasks.init_present_time_glacier(gdir)
 
         # L5
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',

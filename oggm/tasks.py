@@ -34,12 +34,14 @@ from oggm.core.climate import apparent_mb_from_linear_mb
 from oggm.core.climate import apparent_mb_from_any_mb
 from oggm.core.massbalance import fixed_geometry_mass_balance
 from oggm.core.massbalance import compute_ela
+from oggm.shop.w5e5 import process_w5e5_data
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
 from oggm.shop.histalp import process_histalp_data
 from oggm.shop.ecmwf import process_ecmwf_data
 from oggm.shop.gcm_climate import process_gcm_data
 from oggm.shop.gcm_climate import process_cesm_data
+from oggm.shop.gcm_climate import process_monthly_isimip_data
 from oggm.shop.gcm_climate import process_cmip5_data
 from oggm.shop.gcm_climate import process_cmip_data
 from oggm.core.inversion import prepare_for_inversion
@@ -57,7 +59,8 @@ from oggm.core.flowline import run_random_climate
 from oggm.core.flowline import run_from_climate_data
 from oggm.core.flowline import run_constant_climate
 from oggm.core.flowline import run_with_hydro
-from oggm.core.flowline import run_dynamic_spinup
+from oggm.core.dynamic_spinup import run_dynamic_spinup
+from oggm.core.dynamic_spinup import run_dynamic_mu_star_calibration
 from oggm.utils import copy_to_basedir
 from oggm.utils import gdir_to_tar
 from oggm.utils import merge_consecutive_run_outputs

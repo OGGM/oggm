@@ -11,7 +11,7 @@ import pytest
 import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 
-from oggm.shop import cru, histalp, ecmwf
+from oggm.shop import cru, histalp, ecmwf, w5e5
 from oggm import cfg, tasks
 from oggm.core import flowline
 from oggm.tests.funcs import init_hef, get_test_dir
@@ -103,6 +103,7 @@ def pytest_collection_modifyitems(config, items):
 def patch_data_urls(monkeypatch):
     """This makes sure we never download the big files with our tests"""
     url = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
+    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url)
     monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
     monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
     monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
@@ -142,9 +143,12 @@ def secure_url_retrieve(url, *args, **kwargs):
 
     # We added a few extra glaciers recently - this really needs to be
     # handled better
-    base_extra = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                  'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
-                  'RGI62/b_160/L4/')
+    base_extra_L4 = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                     'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
+                     'RGI62/b_160/L4/')
+    base_extra_L3 = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
+                     'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
+                     'RGI62/b_160/L3/')
 
     assert ('github' in url or
             'cluster.klima.uni-bremen.de/~oggm/ref_mb_params' in url or
@@ -153,7 +157,8 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
-            base_extra in url
+            base_extra_L4 in url or
+            base_extra_L3 in url
             )
     return oggm_urlretrieve(url, *args, **kwargs)
 

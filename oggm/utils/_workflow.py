@@ -1669,6 +1669,11 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
             d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
             d['mu_star_allsame'] = df['mu_star_allsame']
             d['mb_bias'] = df['bias']
+            try:
+                # is only saved if we use prcp-fac that depend on glacier
+                d['glacier_prcp_scaling_factor'] = df['glacier_prcp_scaling_factor']
+            except KeyError:
+                pass
         except BaseException:
             pass
 
@@ -1887,20 +1892,28 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
 
 
 @entity_task(log)
-def climate_statistics(gdir, add_climate_period=1995):
+def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
+                       input_filesuffix=''):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
     necessary for a statistic is not available (e.g.: flowlines length) it
     will simply be ignored.
 
+    Important note: the climate is extracted from the mass-balance model and
+    is therefore "corrected" according to the mass-balance calibration scheme
+    (e.g. the precipitation factor and the temp bias correction). For more
+    flexible information about the raw climate data, use `compile_climate_input`
+    or `raw_climate_statistics`.
+
     Parameters
     ----------
     add_climate_period : int or list of ints
-        compile climate statistics for the 30 yrs period around the selected
-        date.
+        compile climate statistics for the halfsize*2 + 1 yrs period
+        around the selected date.
+    halfsize : int
+        the half size of the window
     """
-
     from oggm.core.massbalance import (ConstantMassBalance,
                                        MultipleFlowlineMassBalance)
 
@@ -1975,12 +1988,12 @@ def climate_statistics(gdir, add_climate_period=1995):
         add_climate_period = tolist(add_climate_period)
         for y0 in add_climate_period:
             try:
-                fs = '{}-{}'.format(y0 - 15, y0 + 15)
-
+                fs = '{}-{}'.format(y0 - halfsize, y0 + halfsize)
                 mbcl = ConstantMassBalance
                 mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
                                                     y0=y0,
-                                                    use_inversion_flowlines=True)
+                                                    use_inversion_flowlines=True,
+                                                    input_filesuffix=input_filesuffix)
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
                 mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
                 pacc = np.where(mbh >= 0)
@@ -2012,9 +2025,75 @@ def climate_statistics(gdir, add_climate_period=1995):
     return d
 
 
+@entity_task(log)
+def raw_climate_statistics(gdir, add_climate_period=1995, halfsize=15,
+                           input_filesuffix=''):
+    """Gather as much statistics as possible about this glacier.
+
+    This is like "climate_statistics" but without relying on the
+    mass-balance model, i.e. closer to the actual data (uncorrected)
+
+    Parameters
+    ----------
+    add_climate_period : int or list of ints
+        compile climate statistics for the 30 yrs period around the selected
+        date.
+    """
+    d = OrderedDict()
+    # Easy stats - this should always be possible
+    d['rgi_id'] = gdir.rgi_id
+    d['rgi_region'] = gdir.rgi_region
+    d['rgi_subregion'] = gdir.rgi_subregion
+    d['name'] = gdir.name
+    d['cenlon'] = gdir.cenlon
+    d['cenlat'] = gdir.cenlat
+    d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['glacier_type'] = gdir.glacier_type
+    d['terminus_type'] = gdir.terminus_type
+    d['status'] = gdir.status
+
+    # The rest is less certain
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+        # Climate and MB at specified dates
+        add_climate_period = tolist(add_climate_period)
+
+        # get non-corrected winter daily mean prcp (kg m-2 day-1) for
+        # the chosen time period
+        for y0 in add_climate_period:
+            fs = '{}-{}'.format(y0 - halfsize, y0 + halfsize)
+            try:
+                # get non-corrected winter daily mean prcp (kg m-2 day-1)
+                # it is easier to get this directly from the raw climate files
+                fp = gdir.get_filepath('climate_historical',
+                                       filesuffix=input_filesuffix)
+                with xr.open_dataset(fp).prcp as ds_pr:
+                    # just select winter months
+                    if gdir.hemisphere == 'nh':
+                        m_winter = [10, 11, 12, 1, 2, 3, 4]
+                    else:
+                        m_winter = [4, 5, 6, 7, 8, 9, 10]
+                    ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
+                    # select the correct year time period
+                    ds_pr_winter = ds_pr_winter.sel(time=slice(f'{fs[:4]}-01-01',
+                                                               f'{fs[-4:]}-12-01'))
+                    # check if we have the full time period
+                    n_years = int(fs[-4:]) - int(fs[:4]) + 1
+                    assert len(ds_pr_winter.time) == n_years * 7, 'chosen time-span invalid'
+                    ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
+                    d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
+            except BaseException:
+                pass
+    return d
+
+
 @global_task(log)
 def compile_climate_statistics(gdirs, filesuffix='', path=True,
-                               add_climate_period=1995):
+                               add_climate_period=1995,
+                               halfsize=15,
+                               add_raw_climate_statistics=False,
+                               input_filesuffix=''):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -2032,13 +2111,24 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
     add_climate_period : int or list of ints
         compile climate statistics for the 30 yrs period around the selected
         date.
+    input_filesuffix : str
+        filesuffix of the used climate_historical file, default is no filesuffix
     """
     from oggm.workflow import execute_entity_task
 
     out_df = execute_entity_task(climate_statistics, gdirs,
-                                 add_climate_period=add_climate_period)
-
+                                 add_climate_period=add_climate_period,
+                                 halfsize=halfsize,
+                                 input_filesuffix=input_filesuffix)
     out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    if add_raw_climate_statistics:
+        out_df = execute_entity_task(raw_climate_statistics, gdirs,
+                                     add_climate_period=add_climate_period,
+                                     halfsize=halfsize,
+                                     input_filesuffix=input_filesuffix)
+        out = out.merge(pd.DataFrame(out_df).set_index('rgi_id'))
+
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
@@ -2127,8 +2217,9 @@ def extend_past_climate_run(past_run_file=None,
             ods[vn] = ods[vn].astype(int)
 
         # New vars
-        for vn in ['volume', 'volume_bsl', 'volume_bwl',
-                   'area', 'length', 'calving', 'calving_rate']:
+        for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
+                   'area', 'area_m2_min_h', 'length', 'calving',
+                   'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
@@ -3205,7 +3296,7 @@ class GlacierDirectory(object):
 
             # hydro_year corresponds to the last month of the data
             if time[0].month == 1:
-                # if first_month =1, last_month = 12, so y0 is hydro_yr_0
+                # if first_month = 1, last_month = 12, so y0 is hydro_yr_0
                 nc.hydro_yr_0 = y0
             else:
                 # if first_month>1, then the last_month is in the next year,
@@ -3630,7 +3721,9 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         set up you want the copied directory to be useful for. Currently
         supported are 'all' (copy the entire directory), 'inversion'
         (copy the necessary files for the inversion AND the run)
-        and 'run' (copy the necessary files for a dynamical run).
+        , 'run' (copy the necessary files for a dynamical run) or 'run/spinup'
+        (copy the necessary files and all already conducted model runs, e.g.
+        from a dynamic spinup).
 
     Returns
     -------
@@ -3651,6 +3744,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
                  'local_mustar', 'climate_historical', 'gridded_data',
                  'gcm_data', 'climate_info', 'log']
+        paths = ('*' + p + '*' for p in paths)
+        shutil.copytree(gdir.dir, new_dir,
+                        ignore=include_patterns(*paths))
+    elif setup == 'run/spinup':
+        paths = ['model_flowlines', 'inversion_params', 'outlines',
+                 'local_mustar', 'climate_historical', 'glacier_grid',
+                 'gcm_data', 'climate_info', 'diagnostics', 'log', 'model_run',
+                 'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
