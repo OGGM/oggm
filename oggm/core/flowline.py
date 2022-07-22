@@ -1758,13 +1758,13 @@ class FluxBasedModel(FlowlineModel):
             depth_stag[1:-1] = (depth[0:-1] + depth[1:]) / 2.
             depth_stag[[0, -1]] = depth[[0, -1]]
 
-            h=[]
-            d=[]
-            no_ice=[]
-            last_ice=[]
-            last_above_wl=[]
-            has_ice=[]
-            ice_above_wl=[]
+            h = []
+            d = []
+            no_ice = []
+            last_ice = []
+            last_above_wl = []
+            has_ice=  []
+            ice_above_wl = []
 
             A = self.glen_a
             N = self.glen_n
@@ -1987,18 +1987,22 @@ class FluxBasedModel(FlowlineModel):
             self.calving_rate_myr = 0.
             # Prevent remnants of detached ice below water level
             section = fl.section
+            depth = utils.clip_min(0,self.water_level - fl.bed_h)            
             if self.do_calving:
                 ice_above_wl = np.any((fl.surface_h > self.water_level) &
                                       (fl.bed_h < self.water_level) &
-                                      (fl.thick >= (self.rho_o/self.rho)*depth))
+                                      (fl.thick >= (self.rho_o/self.rho) *
+                                       depth))
             if ice_above_wl and self.do_calving:
                 last_last_wl = []
                 above_wl = np.nonzero((fl.surface_h > self.water_level) &
                                       (fl.bed_h < self.water_level) &
-                                      (fl.thick > (self.rho_o/self.rho)*depth))[0]
+                                      (fl.thick > (self.rho_o/self.rho) * 
+                                       depth))[0]
                 for i in above_wl:
                     if i+1 < len(fl.bed_h) and fl.thick[i+1] <= \
-                                               (self.rho_o/self.rho)*depth[i+1]:
+                                               (self.rho_o/self.rho) * \
+                                               depth[i+1]:
                         last_last_wl = np.append(last_last_wl, i)
                 if len(last_last_wl) > 0:
                     last_above_wl = int(last_last_wl[0])

@@ -634,7 +634,7 @@ def climate_tasks(gdirs, base_url=None):
 
 @global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
-                    ref_period=None):
+                    use_geodetic=False, ref_period=None):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -647,13 +647,13 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
         inversion
     """
 
-    if ref_period is None:
+    if ref_period is None and use_geodetic:
         ref_period = cfg.PARAMS['geodetic_mb_period']
         y0, y1 = ref_period.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
         mb_years = [y0, y1-1]
-    else:
+    elif use_geodetic:
         y0, y1 = ref_period.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
@@ -680,10 +680,13 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
             if filter_inversion_output:
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
 
-        if gdirs_c:
+        if gdirs_c and use_geodetic:
             execute_entity_task(tasks.find_inversion_calving_from_any_mb,
                                 gdirs_c, glen_a=glen_a, fs=fs,
                                 mb_years=mb_years)
+        elif gdirs_c:
+            execute_entity_task(tasks.find_inversion_calving, gdirs_c,
+                                glen_a=glen_a, fs=fs)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,

@@ -3078,6 +3078,7 @@ class TestColumbiaCalving(unittest.TestCase):
     def test_find_calving_full_fl(self):
 
         gdir = init_columbia('test_find_calving_full_fl')
+        cfg.PARAMS['inversion_calving_k'] = 4.2
 
         # For these tests we allow mu to 0
         cfg.PARAMS['calving_min_mu_star_frac'] = 0
@@ -3119,7 +3120,7 @@ class TestColumbiaCalving(unittest.TestCase):
                                    atol=0.001)
 
         # Test with smaller k (it doesn't overshoot)
-        cfg.PARAMS['inversion_calving_k'] = 0.2
+        cfg.PARAMS['inversion_calving_k'] = 1.6
         df = inversion.find_inversion_calving(gdir)
 
         assert df['calving_flux'] > 0.2
@@ -3130,7 +3131,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Test with fixed water depth and high k
         water_depth = 275.282
-        cfg.PARAMS['inversion_calving_k'] = 2.4
+        cfg.PARAMS['inversion_calving_k'] = 3.6
 
         # Test with fixed water depth (it still overshoot)
         df = inversion.find_inversion_calving(gdir,
@@ -3142,7 +3143,7 @@ class TestColumbiaCalving(unittest.TestCase):
         assert df['calving_front_width'] > 100  # just to check its here
 
         # Test with smaller k (it doesn't overshoot)
-        cfg.PARAMS['inversion_calving_k'] = 0.2
+        cfg.PARAMS['inversion_calving_k'] = 2.4
         df = inversion.find_inversion_calving(gdir,
                                               fixed_water_depth=water_depth)
 
@@ -3165,7 +3166,7 @@ class TestColumbiaCalving(unittest.TestCase):
     def test_find_calving_eb(self):
 
         gdir = init_columbia_eb('test_find_calving_eb')
-
+        cfg.PARAMS['inversion_calving_k'] = 4.2
         # Test default k (it overshoots)
         df = inversion.find_inversion_calving(gdir)
 
@@ -3189,10 +3190,10 @@ class TestColumbiaCalving(unittest.TestCase):
         # Test glacier stats
         odf = utils.compile_glacier_statistics([gdir]).iloc[0]
         np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
-        assert odf.calving_front_water_depth > 500
+        assert odf.calving_front_water_depth > 300
 
         # Test with smaller k (no overshoot)
-        cfg.PARAMS['inversion_calving_k'] = 0.5
+        cfg.PARAMS['inversion_calving_k'] = 2.4
         df = inversion.find_inversion_calving(gdir)
 
         assert df['calving_flux'] > 0.5
@@ -3338,8 +3339,8 @@ class TestColumbiaCalving(unittest.TestCase):
                                                           mb_years=[2000])
 
         diag = gdir.get_diagnostics()
-        assert diag['calving_flux'] > 0.9
-        assert df['calving_rate_myr'] > 500
+        assert diag['calving_flux'] > 0
+        assert df['calving_rate_myr'] > 0
 
         # Test that new MB equal flux
         rho = cfg.PARAMS['ice_density']
@@ -3353,7 +3354,7 @@ class TestColumbiaCalving(unittest.TestCase):
         # Test glacier stats
         odf = utils.compile_glacier_statistics([gdir]).iloc[0]
         np.testing.assert_allclose(odf.calving_flux, df['calving_flux'])
-        assert odf.calving_front_water_depth > 500
+        assert odf.calving_front_water_depth > 50
 
         # Test with larger k
         cfg.PARAMS['inversion_calving_k'] = 1

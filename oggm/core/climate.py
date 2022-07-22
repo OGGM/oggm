@@ -1420,7 +1420,6 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
     diag = gdir.get_diagnostics()
     unc = diag.get('unc_fa', unc)
-    log.workflow('({}) Unc. applied: {}'.format(gdir.rgi_id,unc))
 
     # mu* constraints
     if min_mu_star is None:
@@ -1492,7 +1491,9 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
     # Here we add the frontal ablation and mass changes below water level to
     # the mix, but it's dirty...
-    if gdir.is_tidewater:
+    do_calving = cfg.PARAMS['use_kcalving_for_run'] and \
+                 cfg.PARAMS['use_kcalving_for_inversion'] and gdir.is_tidewater
+    if do_calving:
         fa_will = np.genfromtxt(fa_data_path, delimiter=',',
                                 usecols=np.arange(0, 10), dtype='unicode')
         rgi_list = fa_will[1:,0]
@@ -1521,6 +1522,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         # Shift the frontal ablation estimate, if the mu calculating function
         # is not able to find a value. (Probably because frontal ablation
         # estimate and geodetic mass change don't fit together.)
+        log.workflow('({}) Unc. applied: {}'.format(gdir.rgi_id,unc))
         if unc == 'low':
             calving_will_unc = calving_will - unc_will
             calving_will_unc = utils.clip_min(calving_will_unc, 0.1*calving_will)
