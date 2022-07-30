@@ -3131,7 +3131,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
         # Test with fixed water depth and high k
         water_depth = 275.282
-        cfg.PARAMS['inversion_calving_k'] = 3.6
+        cfg.PARAMS['inversion_calving_k'] = 8.4
 
         # Test with fixed water depth (it still overshoot)
         df = inversion.find_inversion_calving(gdir,
@@ -3208,6 +3208,7 @@ class TestColumbiaCalving(unittest.TestCase):
     def test_find_calving_workflow(self):
 
         gdir = init_columbia_eb('test_find_calving_workflow')
+        cfg.PARAMS['inversion_calving_k'] = 1.5
 
         # Check that all this also works with
         cfg.PARAMS['continue_on_error'] = True
@@ -3298,7 +3299,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
             new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.sel(time=2019), ref.sel(time=2019),
-                                       rtol=0.01)
+                                       rtol=0.03)
 
             del ods['volume_fixed_geom']
             assert sorted(list(ds.data_vars)) == sorted(list(ods.data_vars))

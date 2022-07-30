@@ -202,6 +202,22 @@ class Flowline(Centerline):
         fac = vol_bwl / vol_tot if vol_tot > 0 else 0
         return utils.clip_min(vol_bwl -
                               getattr(self, 'calving_bucket_m3', 0) * fac, 0)
+                              
+    def _vol_above_level(self, water_level=0):
+
+        thick = np.copy(self.thick)
+        n_thick = np.copy(thick)
+        bwl = (self.bed_h < water_level) & (thick > 0)
+        n_thick[~bwl] = 0
+        self.thick = n_thick
+        vol_tot = np.sum(self.section * self.dx_meter)
+        n_thick[bwl] = utils.clip_min(0, self.surface_h[bwl] - water_level)
+        self.thick = n_thick
+        vol_awl = np.sum(self.section * self.dx_meter)
+        self.thick = thick
+        fac = vol_awl / vol_tot if vol_tot > 0 else 0
+        return utils.clip_min(vol_awl -
+                              getattr(self, 'calving_bucket_m3', 0) * fac, 0)
 
     @property
     def volume_bsl_m3(self):
@@ -217,7 +233,23 @@ class Flowline(Centerline):
 
     @property
     def volume_bwl_km3(self):
-        return self.volume_bwl_m3 * 1e-9
+        return self.volume_bwl_m3 * 1e-9    
+        
+    @property
+    def volume_asl_m3(self):
+        return self._vol_above_level(water_level=0)
+
+    @property
+    def volume_asl_km3(self):
+        return self.volume_asl_m3 * 1e-9
+
+    @property
+    def volume_awl_m3(self):
+        return self._vol_above_level(water_level=self.water_level)
+
+    @property
+    def volume_awl_km3(self):
+        return self.volume_awl_m3 * 1e-9
 
     @property
     def area_m2(self):
@@ -661,6 +693,8 @@ class FlowlineModel(object):
         # Calving shenanigans
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
+        self.smb_asl_m3 = 0.
+        self.discharge_m3 = 0.
 
         # Time
         if required_model_steps not in ['annual', 'monthly']:
@@ -776,7 +810,23 @@ class FlowlineModel(object):
 
     @property
     def volume_bwl_km3(self):
-        return self.volume_bwl_m3 * 1e-9
+        return self.volume_bwl_m3 * 1e-9    
+        
+    @property
+    def volume_asl_m3(self):
+        return np.sum([f.volume_asl_m3 for f in self.fls])
+
+    @property
+    def volume_asl_km3(self):
+        return self.volume_asl_m3 * 1e-9
+
+    @property
+    def volume_awl_m3(self):
+        return np.sum([f.volume_awl_m3 for f in self.fls])
+
+    @property
+    def volume_awl_km3(self):
+        return self.volume_awl_m3 * 1e-9
 
     @property
     def area_km2(self):
@@ -1117,7 +1167,25 @@ class FlowlineModel(object):
             diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
                                                              'below '
                                                              'water-level')
-            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
+            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'        
+            
+        if 'volume_asl' in ovars:
+            diag_ds['volume_asl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_asl_m3'].attrs['description'] = ('Glacier volume '
+                                                             'above '
+                                                             'sea-level with '
+                                                             'bed below sea-'
+                                                             'level')
+            diag_ds['volume_asl_m3'].attrs['unit'] = 'm 3'
+
+        if 'volume_awl' in ovars:
+            diag_ds['volume_awl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_awl_m3'].attrs['description'] = ('Glacier volume '
+                                                             'below '
+                                                             'water-level with '
+                                                             'bed below sea-'
+                                                             'level')
+            diag_ds['volume_awl_m3'].attrs['unit'] = 'm 3'
 
         if 'area' in ovars:
             diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
@@ -1146,6 +1214,18 @@ class FlowlineModel(object):
             diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
             diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
+
+        if 'smb_asl' in ovars:
+            diag_ds['smb_asl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['smb_asl_m3'].attrs['description'] = ('Surface mass balance '
+                                                          'above water level')
+            diag_ds['smb_asl_m3'].attrs['unit'] = 'm 3'
+
+        if 'discharge' in ovars:
+            diag_ds['discharge_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['discharge_m3'].attrs['description'] = ('Ice flux through '
+                                                            'terminal boundary')
+            diag_ds['discharge_m3'].attrs['unit'] = 'm 3'
 
         for gi in range(10):
             vn = f'terminus_thick_{gi}'
@@ -1205,7 +1285,25 @@ class FlowlineModel(object):
                 if 'volume_bwl' in ovars_fl:
                     ds['volume_bwl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
                     ds['volume_bwl_m3'].attrs['description'] = 'Section volume below water level'
-                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
+                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'                
+                if 'volume_asl' in ovars_fl:
+                    ds['volume_asl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
+                    ds['volume_asl_m3'].attrs['description'] = ('Section volume '
+                                                                'above sea '
+                                                                'level with bed '
+                                                                'below sea level')
+                    ds['volume_asl_m3'].attrs['unit'] = 'm 3'
+                if 'volume_bwl' in ovars_fl:
+                    ds['volume_bwl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
+                    ds['volume_bwl_m3'].attrs['description'] = 'Section volume below water level'
+                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'                
+                if 'volume_awl' in ovars_fl:
+                    ds['volume_awl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
+                    ds['volume_awl_m3'].attrs['description'] = ('Section volume '
+                                                                'above water '
+                                                                'level with bed '
+                                                                'below sea level')
+                    ds['volume_awl_m3'].attrs['unit'] = 'm 3'
                 if 'area' in ovars_fl:
                     ds['area_m2'] = (('time', 'dis_along_flowline'), width)
                     ds['area_m2'].attrs['description'] = 'Section area'
@@ -1281,11 +1379,18 @@ class FlowlineModel(object):
                         if 'volume_bsl' in ovars_fl:
                             ds['volume_bsl_m3'].data[j, :] = fl.volume_bsl_m3
                         if 'volume_bwl' in ovars_fl:
-                            ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3
+                            ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3                        
+                        if 'volume_asl' in ovars_fl:
+                            ds['volume_asl_m3'].data[j, :] = fl.volume_asl_m3
+                        if 'volume_awl' in ovars_fl:
+                            ds['volume_awl_m3'].data[j, :] = fl.volume_awl_m3
                         if 'ice_velocity' in ovars_fl and (yr > self.y0):
                             # Velocity can only be computed with dynamics
-                            var = self.u_stag[fl_id]
-                            val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2 * self._surf_vel_fac
+                            var = self.u_drag[fl_id]
+                            var2 = self.u_slide[fl_id]
+                            val = ((var[1:fl.nx + 1] + var[:fl.nx]) / 2 * 
+                                    self._surf_vel_fac + 
+                                    (var2[1:fl.nx + 1] + var2[:fl.nx]) / 2)
                             ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
                 # j is the yearly index in case we have monthly output
                 # we have to count it ourselves
@@ -1310,10 +1415,18 @@ class FlowlineModel(object):
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
             if 'calving_rate' in ovars:
                 diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
+            if 'smb_asl' in ovars:
+                diag_ds['smb_asl_m3'].data[i] = self.smb_asl_m3
+            if 'discharge' in ovars:
+                diag_ds['discharge_m3'].data[i] = self.discharge_m3
             if 'volume_bsl' in ovars:
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
-                diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+                diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3            
+            if 'volume_asl' in ovars:
+                diag_ds['volume_asl_m3'].data[i] = self.volume_asl_m3
+            if 'volume_awl' in ovars:
+                diag_ds['volume_awl_m3'].data[i] = self.volume_awl_m3
             # Terminus thick is a bit more logic
             ti = None
             for gi in range(10):
@@ -1763,7 +1876,7 @@ class FluxBasedModel(FlowlineModel):
             no_ice = []
             last_ice = []
             last_above_wl = []
-            has_ice=  []
+            has_ice = []
             ice_above_wl = []
 
             A = self.glen_a
@@ -1875,14 +1988,16 @@ class FluxBasedModel(FlowlineModel):
                 u_drag[:] = thick_stag * stress**N * self._fd * sf_stag**N
 
                 # Arbitrarily manipulating u_slide for grid cells
-                # approaching buoancy in order to prevent it from going
+                # approaching buoyancy to prevent it from going
                 # towards infinity...
-                u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N
+                u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N # Not sure if sf correct here
                 u_slide = np.where(z_a_b < 0.1, 4*u_drag, u_slide)
                 # Inhibit flow out of grid cell adjacent to last above
                 # sea-level in order to prevent shelf dynamics. (Not sure if
                 # this is necessary though...)
+                #u_slide[last_above_wl+2:] = 0
                 #u_slide[last_above_wl+2:] = u_slide[last_above_wl+1]
+                #u_stag[last_above_wl+2:] = 0
                 #u_drag[last_above_wl+2:] = u_drag[last_above_wl+1]
 
                 u_stag[:] = u_drag + u_slide
@@ -1892,6 +2007,8 @@ class FluxBasedModel(FlowlineModel):
                 section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
                 section_stag[[0, -1]] = section[[0, -1]]
                 section_stag[last_above_wl+1] = section[last_above_wl]
+                self.discharge_m3 = section_stag[last_above_wl+1] * \
+                                    u_stag[last_above_wl+1]  * dt
 
             # Usual ice dynamics without water at the front
             else:
@@ -1974,13 +2091,13 @@ class FluxBasedModel(FlowlineModel):
                 bed_below_sl = (fl.bed_h < self.water_level) & (fl.thick > 0)
                 mb[bed_below_sl] = utils.clip_min(mb[bed_below_sl],
                                                   -(fl.surface_h[bed_below_sl]
-                                                   - self.water_level) *
-                                                   widths[bed_below_sl])
+                                                    - self.water_level) *
+                                                    widths[bed_below_sl] * dt)
                 mb[fl.surface_h < self.water_level] = 0
+                self.smb_asl_m3 += np.sum(mb[bed_below_sl]) * dx
             # Update section with ice flow and mass balance
             new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt/dx +
                            trib_flux*dt/dx + mb)
-
             # Keep positive values only and store
             fl.section = utils.clip_min(new_section, 0)
 
@@ -2013,9 +2130,6 @@ class FluxBasedModel(FlowlineModel):
                     for i in range(last_above_wl+2, last_ice+1):
                         if section[i] > 0 and fl.bed_h[i] < self.water_level:
                             add_calving = section[i] * dx
-                            #fl.calving_bucket_m3 -= add_calving
-                            #fl.calving_bucket_m3 = utils.clip_min(0,
-                            #                       fl.calving_bucket_m3)
                             self.calving_m3_since_y0 += add_calving
                             self.calving_rate_myr += dx / dt * cfg.SEC_IN_YEAR
                             section[i] = 0
@@ -2053,8 +2167,7 @@ class FluxBasedModel(FlowlineModel):
             ice_above_wl = np.any((fl.surface_h > self.water_level) &
                                   (fl.bed_h < self.water_level) &
                                   (fl.thick >= (self.rho_o/self.rho)*depth))
-            to_remove=0
-            add_calving=0
+
             first_below_sl = np.nonzero((fl.bed_h < self.water_level) &
                                         (fl.thick > 0))[0][0]
 
@@ -2072,7 +2185,6 @@ class FluxBasedModel(FlowlineModel):
 
                 # OK, we're really calving
                 section = fl.section
-
                 # Calving law
                 h = fl.thick[last_above_wl]
                 d = h - (fl.surface_h[last_above_wl] - self.water_level)
@@ -2088,6 +2200,8 @@ class FluxBasedModel(FlowlineModel):
                 below_sl = ((fl.bed_h < self.water_level) &
                             (fl.thick < (self.rho_o/self.rho)*depth) &
                             (fl.thick > 0))
+                to_remove = 0
+                add_calving = 0
                 to_remove = np.sum(section[below_sl]) * fl.dx_meter
                 bed_below_sl = (fl.bed_h < self.water_level) & (fl.thick > 0)
 
@@ -2115,7 +2229,8 @@ class FluxBasedModel(FlowlineModel):
                     # OK check if we need to continue (unlikely)
                     last_above_wl -= 1
                     vol_last = section[last_above_wl] * fl.dx_meter
-
+                
+                # We update the glacier with our changes
                 fl.section = section
 
                 # Deal with surface height at front becoming too high because of
@@ -2133,12 +2248,9 @@ class FluxBasedModel(FlowlineModel):
 
                     if ((last_above_wl+2 < len(fl.bed_h)) and
                         ((add_calving / (fl.widths_m[last_above_wl+2] * dx)) > \
-                        (self.rho_o/self.rho)*depth[last_above_wl+2])):
+                        (self.rho_o/self.rho) * depth[last_above_wl+2])):
                         section[last_above_wl+2] += add_calving / dx
                     else:
-                        #fl.calving_bucket_m3 -= add_calving
-                        #fl.calving_bucket_m3 = utils.clip_min(0,
-                        #                                  fl.calving_bucket_m3)
                         self.calving_m3_since_y0 += add_calving
                         self.calving_rate_myr += ((add_calving /
                                                    section[last_above_wl+1]) /
@@ -2150,25 +2262,25 @@ class FluxBasedModel(FlowlineModel):
                     fl.section = section
                     section = fl.section
                     last_above_wl += 1
-
-                # We update the glacier with our changes
-                fl.section = section
+                    fl.section = section
 
             # Here we remove detached ice that might be left
-            elif fl.thick[first_below_sl-1] == 0:
-                section = fl.section
+            # section = fl.section
+            elif fl.thick[first_below_sl-1] == 0:                                    
                 leftover = ((fl.bed_h < self.water_level) &
                             (fl.thick <= (self.rho_o/self.rho)*depth) &
                             (fl.thick > 0))
                 add_calving = np.sum(section[leftover] * dx)
-                #fl.calving_bucket_m3 -= add_calving
-                #fl.calving_bucket_m3 = utils.clip_min(0, fl.calving_bucket_m3)
                 self.calving_m3_since_y0 += add_calving
                 self.calving_rate_myr += (np.size(section[leftover]) * dx / dt
                                           * cfg.SEC_IN_YEAR)
                 section[leftover] = 0
                 fl.section = section
 
+            elif np.sum(section[first_below_sl:]) > 0:
+                section[first_below_sl] = np.sum(section[first_below_sl:])
+                section[first_below_sl+1:] = 0
+                fl.section = section
         # Next step
         self.t += dt
         return dt
