@@ -694,7 +694,7 @@ class FlowlineModel(object):
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
         self.smb_asl_m3 = 0.
-        self.discharge_m3 = 0.
+        self.discharge_m3_since_y0 = 0.
 
         # Time
         if required_model_steps not in ['annual', 'monthly']:
@@ -1418,7 +1418,7 @@ class FlowlineModel(object):
             if 'smb_asl' in ovars:
                 diag_ds['smb_asl_m3'].data[i] = self.smb_asl_m3
             if 'discharge' in ovars:
-                diag_ds['discharge_m3'].data[i] = self.discharge_m3
+                diag_ds['discharge_m3'].data[i] = self.discharge_m3_since_y0
             if 'volume_bsl' in ovars:
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
@@ -2007,8 +2007,8 @@ class FluxBasedModel(FlowlineModel):
                 section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
                 section_stag[[0, -1]] = section[[0, -1]]
                 section_stag[last_above_wl+1] = section[last_above_wl]
-                self.discharge_m3 = section_stag[last_above_wl+1] * \
-                                    u_stag[last_above_wl+1]  * dt
+                self.discharge_m3_since_y0 += section_stag[last_above_wl+1] * \
+                                              u_stag[last_above_wl+1]  * dt
 
             # Usual ice dynamics without water at the front
             else:
