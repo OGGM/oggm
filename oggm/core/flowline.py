@@ -1991,17 +1991,17 @@ class FluxBasedModel(FlowlineModel):
                 # Arbitrarily manipulating u_slide for grid cells
                 # approaching buoyancy to prevent it from going
                 # towards infinity...
-                u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N # Not sure if sf correct here
+                u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N # Not sure if sf is correct here
                 u_slide = np.where(z_a_b < 0.1, 4*u_drag, u_slide)
-                # Inhibit flow out of grid cell adjacent to last above
-                # sea-level in order to prevent shelf dynamics. (Not sure if
-                # this is necessary though...)
-                u_slide[last_above_wl+2:] = 0
-                #u_slide[last_above_wl+2:] = u_slide[last_above_wl+1]
-                u_stag[last_above_wl+2:] = 0
-                #u_drag[last_above_wl+2:] = u_drag[last_above_wl+1]
+
+                # Force velocity beyond grounding line to be the same as the one
+                # across the grounding line. Entering uncharted (floating) 
+                # territory here...
+                u_slide[last_above_wl+2:] = u_slide[last_above_wl+1]
+                u_drag[last_above_wl+2:] = u_drag[last_above_wl+1]
 
                 u_stag[:] = u_drag + u_slide
+
                 # Staggered section
                 # For the flux out of the last grid cell, the staggered section
                 # is set to the cross section of the calving front.
