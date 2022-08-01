@@ -211,12 +211,13 @@ class Flowline(Centerline):
         n_thick[~bwl] = 0
         self.thick = n_thick
         vol_tot = np.sum(self.section * self.dx_meter)
-        n_thick[bwl] = utils.clip_min(0, self.surface_h[bwl] - water_level)
+        n_thick[bwl] = utils.clip_max(self.surface_h[bwl],
+                                      water_level) - self.bed_h[bwl]
         self.thick = n_thick
-        vol_awl = np.sum(self.section * self.dx_meter)
+        vol_bwl = np.sum(self.section * self.dx_meter)
         self.thick = thick
-        fac = vol_awl / vol_tot if vol_tot > 0 else 0
-        return utils.clip_min(vol_awl -
+        fac = 1 - (vol_bwl / vol_tot) if vol_tot > 0 else 0
+        return utils.clip_min(fac * vol_tot -
                               getattr(self, 'calving_bucket_m3', 0) * fac, 0)
 
     @property
@@ -1995,9 +1996,9 @@ class FluxBasedModel(FlowlineModel):
                 # Inhibit flow out of grid cell adjacent to last above
                 # sea-level in order to prevent shelf dynamics. (Not sure if
                 # this is necessary though...)
-                #u_slide[last_above_wl+2:] = 0
+                u_slide[last_above_wl+2:] = 0
                 #u_slide[last_above_wl+2:] = u_slide[last_above_wl+1]
-                #u_stag[last_above_wl+2:] = 0
+                u_stag[last_above_wl+2:] = 0
                 #u_drag[last_above_wl+2:] = u_drag[last_above_wl+1]
 
                 u_stag[:] = u_drag + u_slide
@@ -2134,7 +2135,7 @@ class FluxBasedModel(FlowlineModel):
                             self.calving_rate_myr += dx / dt * cfg.SEC_IN_YEAR
                             section[i] = 0
                     fl.section = section
-
+            section = fl.section
             # If we use a flux-gate, store the total volume that came in
             self.flux_gate_m3_since_y0 += flx_stag[0] * dt
 
@@ -2184,7 +2185,6 @@ class FluxBasedModel(FlowlineModel):
                     continue
 
                 # OK, we're really calving
-                section = fl.section
                 # Calving law
                 h = fl.thick[last_above_wl]
                 d = h - (fl.surface_h[last_above_wl] - self.water_level)
@@ -2200,8 +2200,7 @@ class FluxBasedModel(FlowlineModel):
                 below_sl = ((fl.bed_h < self.water_level) &
                             (fl.thick < (self.rho_o/self.rho)*depth) &
                             (fl.thick > 0))
-                to_remove = 0
-                add_calving = 0
+
                 to_remove = np.sum(section[below_sl]) * fl.dx_meter
                 bed_below_sl = (fl.bed_h < self.water_level) & (fl.thick > 0)
 
@@ -2209,19 +2208,16 @@ class FluxBasedModel(FlowlineModel):
                     # This is easy, we remove everything
                     section[below_sl] = 0
                     fl.calving_bucket_m3 -= to_remove
-                elif to_remove > 0 and fl.calving_bucket_m3 > 0:
+                elif to_remove > 0:
                     # We can only remove part of if
                     section[below_sl] = 0
                     section[last_above_wl+1] = ((to_remove - fl.calving_bucket_m3)
                                                 / fl.dx_meter)
                     fl.calving_bucket_m3 = 0
-                elif to_remove > 0:
-                    section[below_sl] = 0
-                    section[last_above_wl+1] = to_remove / fl.dx_meter
                 # The rest of the bucket might calve an entire grid point
                 # (or more)
                 vol_last = section[last_above_wl] * fl.dx_meter
-                while fl.calving_bucket_m3 > vol_last and \
+                while fl.calving_bucket_m3 >= vol_last and \
                 last_above_wl >= bed_below_sl[0]:
                     fl.calving_bucket_m3 -= vol_last
                     section[last_above_wl] = 0
@@ -2258,11 +2254,9 @@ class FluxBasedModel(FlowlineModel):
                     section[last_above_wl+1] -= add_calving / dx
                     section[last_above_wl+1] = utils.clip_min(0,
                                                        section[last_above_wl+1])
-                    add_calving = 0
                     fl.section = section
                     section = fl.section
                     last_above_wl += 1
-                    fl.section = section
 
             # Here we remove detached ice that might be left
             # section = fl.section
