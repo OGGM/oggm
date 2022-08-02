@@ -2275,6 +2275,29 @@ class FluxBasedModel(FlowlineModel):
                 section[first_below_sl] = np.sum(section[first_below_sl:])
                 section[first_below_sl+1:] = 0
                 fl.section = section
+                section = fl.section
+                while (first_below_sl < len(fl.bed_h)) and \
+                      (fl.surface_h[first_below_sl] >
+                       fl.surface_h[first_below_sl-1]):
+                    add_calving = ((fl.surface_h[first_below_sl] -
+                                    fl.surface_h[first_below_sl-1]) *
+                                    fl.widths_m[first_below_sl] * dx)
+
+                    if ((first_below_sl+1 < len(fl.bed_h)) and
+                        ((add_calving / (fl.widths_m[first_below_sl+1] * dx)) > \
+                        (self.rho_o / self.rho) * depth[first_below_sl+1])):
+                        section[first_below_sl+1] += add_calving / dx
+                    else:
+                        self.calving_m3_since_y0 += add_calving
+                        self.calving_rate_myr += ((add_calving /
+                                                   section[first_below_sl]) /
+                                                   dt * cfg.SEC_IN_YEAR)
+                    section[first_below_sl] -= add_calving / dx
+                    section[first_below_sl] = utils.clip_min(0,
+                                                       section[first_below_sl])
+                    fl.section = section
+                    section = fl.section
+                    first_below_sl += 1
         # Next step
         self.t += dt
         return dt
