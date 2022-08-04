@@ -1079,6 +1079,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     try:
         model, last_best_t_bias = run_dynamic_spinup(
             gdir,
+            continue_on_error=False,  # force to raise an error in @entity_task
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model, spinup_period=spinup_period,
@@ -1270,6 +1271,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     try:
         model_end = run_dynamic_spinup(
             gdir,
+            continue_on_error=False,  # force to raise an error in @entity_task
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1390,7 +1392,10 @@ def dynamic_mu_star_run(
 
     # conduct model run
     try:
-        model = run_from_climate_data(gdir, ys=ys, ye=ye,
+        model = run_from_climate_data(gdir,
+                                      # force to raise an error in @entity_task
+                                      continue_on_error=False,
+                                      ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
@@ -1458,7 +1463,10 @@ def dynamic_mu_star_run_fallback(
 
     # conduct model run
     try:
-        model = run_from_climate_data(gdir, ys=ys, ye=ye,
+        model = run_from_climate_data(gdir,
+                                      # force to raise an error in @entity_task
+                                      continue_on_error=False,
+                                      ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
