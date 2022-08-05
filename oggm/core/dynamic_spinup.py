@@ -1891,6 +1891,7 @@ def run_dynamic_mu_star_calibration(
             # in this loop if an error at the limits is raised we go step by
             # step away from the limits until we are at the initial guess or we
             # found an error free run
+            tmp_mismatch = None
             while ((current_min_error | current_max_error | iteration == 0) &
                    (iteration < max_iterations)):
                 try:
@@ -1968,6 +1969,10 @@ def run_dynamic_mu_star_calibration(
                     mu_star_limits[0] = copy.deepcopy(mu_star)
                 elif current_max_error:
                     mu_star_limits[1] = copy.deepcopy(mu_star)
+
+            if tmp_mismatch is None:
+                raise RuntimeError('Not able to find a new mismatch for '
+                                   'dmdtda!')
 
             return float(tmp_mismatch), float(mu_star)
 
@@ -2074,16 +2079,16 @@ def run_dynamic_mu_star_calibration(
                 log.workflow('Dynamic mu star calibration not successful. Error '
                              f'message: {e}')
 
-                only_first_guess = False
-                # if we only conducted one successful run: only the first guess
-                # worked without an error
-                if len(mismatch_dmdtda) == 1:
-                    only_first_guess = True
-
                 # there where some successful runs so we return the one with the
                 # smallest mismatch of dmdtda
                 min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
                 mu_star_best = np.array(mu_star_guesses)[min_mismatch_index]
+
+                # check if the first guess was the best guess
+                only_first_guess = False
+                if min_mismatch_index == 1:
+                    only_first_guess = True
+
                 model_return = fallback_run(
                     mu_star=mu_star_best, reset=False,
                     best_mismatch=np.array(mismatch_dmdtda)[min_mismatch_index],
