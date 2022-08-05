@@ -40,7 +40,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_bias_best=False, ye=None,
-                       model_flowline_filesuffix='',
+                       model_flowline_filesuffix='', make_compatible=False,
                        **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
@@ -178,6 +178,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         suffix to the model_flowlines filename to use (if no other flowlines
         are provided with init_model_filesuffix or init_model_fls).
         Default is ''
+    make_compatible : bool
+        if set to true this will add all variables to the resulting dataset
+        so it could be combined with any other one. This is necessary if
+        different spinup methods are used. For example if using the dynamic
+        spinup and setting fixed geoemtry spinup as fallback, the variable
+        'is_fixed_geometry_spinup' must be added to the dynamic spinup so
+        it is possible to compile both glaciers together.
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -305,7 +312,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 yr_run,
                 geom_path=geom_path,
                 diag_path=diag_path,
-                fl_diag_path=fl_diag_path)
+                fl_diag_path=fl_diag_path,
+                make_compatible=make_compatible)
 
         return model_dynamic_spinup_end
 
@@ -395,7 +403,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 geom_path=geom_path,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
-                dynamic_spinup_min_ice_thick=min_ice_thickness)
+                dynamic_spinup_min_ice_thick=min_ice_thickness,
+                make_compatible=make_compatible)
             if type(ds) == tuple:
                 ds = ds[0]
             model_area_km2 = ds.area_m2_min_h.loc[yr_rgi].values * 1e-6
@@ -1099,6 +1108,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             model_flowline_filesuffix=model_flowline_filesuffix,
+            make_compatible=True,
             **kwargs)
         # save the temperature bias which was successful in the last iteration
         # as we expect we are not so far away in the next iteration (only
@@ -1277,7 +1287,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             evolution_model=evolution_model,
             spinup_period=spinup_period,
             spinup_start_yr=ys,
-            min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
+            min_spinup_period=min_spinup_period,
+            yr_rgi=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent_dyn_spinup,
             precision_absolute=precision_absolute_dyn_spinup,
@@ -1288,7 +1299,10 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             output_filesuffix=output_filesuffix,
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
-            ignore_errors=False, ye=ye, **kwargs)
+            ignore_errors=False,
+            ye=ye,
+            make_compatible=True,
+            **kwargs)
 
         gdir.add_to_diagnostics('used_spinup_option', 'dynamic spinup only')
 
