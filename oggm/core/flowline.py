@@ -683,6 +683,8 @@ class FlowlineModel(object):
         self.fs = fs
         self.glen_n = cfg.PARAMS['glen_n']
         self.rho = cfg.PARAMS['ice_density']
+        if self.is_tidewater:
+            self.rho_o = cfg.PARAMS['ocean_density'] # Ocean density, must be >= ice density
         if check_for_boundaries is None:
             check_for_boundaries = cfg.PARAMS[('error_when_glacier_reaches_'
                                                'boundaries')]
@@ -694,7 +696,7 @@ class FlowlineModel(object):
         # Calving shenanigans
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
-        self.smb_asl_m3 = 0.
+        self.smb_asl_m3_since_y0 = 0.
         self.discharge_m3_since_y0 = 0.
 
         # Time
@@ -1417,7 +1419,7 @@ class FlowlineModel(object):
             if 'calving_rate' in ovars:
                 diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
             if 'smb_asl' in ovars:
-                diag_ds['smb_asl_m3'].data[i] = self.smb_asl_m3
+                diag_ds['smb_asl_m3'].data[i] = self.smb_asl_m3_since_y0
             if 'discharge' in ovars:
                 diag_ds['discharge_m3'].data[i] = self.discharge_m3_since_y0
             if 'volume_bsl' in ovars:
@@ -1605,7 +1607,7 @@ class FluxBasedModel(FlowlineModel):
                  min_dt=None, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_use_limiter=None,
-                 calving_limiter_frac=None, water_level=None,
+                 water_level=None,
                  **kwargs):
         """Instantiate the model.
 
@@ -1674,9 +1676,7 @@ class FluxBasedModel(FlowlineModel):
         calving_use_limiter : bool
             whether to switch on the calving limiter on the parameterisation
             makes the calving fronts thicker but the model is more stable
-        calving_limiter_frac : float
-            limit the front slope to a fraction of the calving front.
-            "3" means 1/3. Setting it to 0 limits the slope to sea-level.
+            (deprecated!)
         water_level : float
             the water level. It should be zero m a.s.l, but:
             - sometimes the frontal elevation is unrealistically high (or low).
@@ -1721,13 +1721,7 @@ class FluxBasedModel(FlowlineModel):
         if calving_use_limiter is None:
             calving_use_limiter = cfg.PARAMS['calving_use_limiter']
         self.calving_use_limiter = calving_use_limiter
-        if calving_limiter_frac is None:
-            calving_limiter_frac = cfg.PARAMS['calving_limiter_frac']
-        if calving_limiter_frac > 0:
-            raise NotImplementedError('calving limiter other than 0 not '
-                                      'implemented yet')
-        self.calving_limiter_frac = calving_limiter_frac
-        self.rho_o = cfg.PARAMS['ocean_density'] # Ocean density, must be >= ice density
+
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
         self.flux_gate_m3_since_y0 = 0.
@@ -1872,13 +1866,17 @@ class FluxBasedModel(FlowlineModel):
             depth_stag[1:-1] = (depth[0:-1] + depth[1:]) / 2.
             depth_stag[[0, -1]] = depth[[0, -1]]
 
+            # Resetting variables (necessary?)
             h = []
             d = []
             no_ice = []
             last_ice = []
             last_above_wl = []
             has_ice = []
+            bed_below_wl = []
             ice_above_wl = []
+            ice_below_wl = []
+            below_wl = []
 
             A = self.glen_a
             N = self.glen_n
@@ -1892,24 +1890,27 @@ class FluxBasedModel(FlowlineModel):
                 sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
                 sf_stag[[0, -1]] = sf[[0, -1]]
 
-            # Determine if and where ice bodies are; if no there is no ice above
-            # water_level, we fall back to the standard version in the else
-            # below.
-            ice_above_wl = np.any((fl.surface_h > self.water_level) &
-                                  (fl.thick > min_l) & \
-                                  (fl.bed_h < self.water_level))
+            # Determine where ice bodies are; if no there is no ice below
+            # water_level, we fall back to the standard ice dynamics
+            ice_below_wl = np.any((fl.bed_h < self.water_level) &
+                                  (fl.thick > min_l))
 
-            has_ice = np.any(fl.thick > min_l)
-
-            # We compute more complex dynamics when we have ice below water
-            if has_ice and ice_above_wl and self.do_calving:
-                last_above_wl = np.nonzero((fl.surface_h > self.water_level) &
-                                           (fl.bed_h < self.water_level) &
-                                           (fl.thick > min_l))[0][-1]
-                # last_above_wl = np.nonzero((fl.surface_h > self.water_level) &
-                                           # (fl.bed_h < self.water_level) &
-                                           # (fl.thick >= (self.rho_o/self.rho)*
-                                           #  depth))[0][-1]
+            # We compute more complex dynamics when we have ice grounded below water
+            if fl.has_ice() and ice_below_wl and self.do_calving:
+                ice_above_wl = np.any((fl.surface_h > self.water_level) &
+                                      (fl.bed_h < self.water_level) &
+                                      (fl.thick >= (self.rho_o / self.rho) * depth))
+                if ice_above_wl:
+                    last_above_wl = np.nonzero((fl.surface_h > self.water_level) &
+                                               (fl.bed_h < self.water_level) &
+                                               (fl.thick >= (self.rho_o/self.rho)*
+                                                depth))[0][-1]
+                else:
+                    last_above_wl = np.nonzero((fl.bed_h < self.water_level) &
+                                               (fl.thick > 0))[0][-1]
+                last_above_wl = int(utils.clip_max(last_above_wl, 
+                                                   len(fl.bed_h)-2))
+                
                 no_ice = np.nonzero((fl.thick < min_l))[0]
                 last_ice = np.where((fl.thick[no_ice-1] > min_l) & \
                                 (fl.surface_h[no_ice-1] > self.water_level))[0]
@@ -1922,7 +1923,7 @@ class FluxBasedModel(FlowlineModel):
                     first_ice = np.nonzero(fl.thick[(last_ice[-2]+1)\
                                            :(last_above_wl+1)] > min_l)[0][0]
                     first_ice = last_ice[-2]+first_ice
-                elif last_ice.size > 1 :
+                elif last_ice.size > 1:
                     first_ice = np.nonzero(fl.thick[0:(last_above_wl)]\
                                            > min_l)[0][-1]
                 else:
@@ -1933,19 +1934,16 @@ class FluxBasedModel(FlowlineModel):
                 d = h - (fl.surface_h[last_above_wl] - self.water_level)
                 thick_stag[last_above_wl+1] = h
                 depth_stag[last_above_wl+1] = d
-                last_thick = np.nonzero((fl.thick > 0) &
-                                        (fl.surface_h >
-                                         self.water_level))[0][-1]
 
                 # Determine height above buoancy
                 z_a_b = utils.clip_min(0,thick_stag - depth_stag *
-                                         (self.rho_o/self.rho))
+                                         (self.rho_o / self.rho))
 
                 # Compute net hydrostatic force at the front.
-                # One could think about incorporating ice melange / sea ice here
+                # One could think about incorporating ice mélange / sea ice here
                 # as an additional term. (And also in the frontal ablation
-                # formulation.)
-                if last_above_wl == last_thick:
+                # formulation below.)
+                if fl.bed_h[last_above_wl+1] < self.water_level:
                     pull_last = utils.clip_min(0,0.5 * G * (self.rho * h**2 -
                                                self.rho_o * d**2))
 
@@ -1973,12 +1971,12 @@ class FluxBasedModel(FlowlineModel):
                     if last_above_wl+1 < len(fl.bed_h) and \
                        stretch_first != stretch_last-1:
                         slope_stag[last_above_wl+1] = np.nanmean(slope_stag\
-                                                                 [stretch_first:\
-                                                                 stretch_last-1])
+                                                                 [stretch_first-1:\
+                                                                  stretch_last-1])
                 stress = self.rho*G*slope_stag*thick_stag
 
-                #Add "stretching stress" do basal shear stress
-                if last_above_wl == last_thick:
+                # Add "stretching stress" to basal shear stress
+                if fl.bed_h[last_above_wl+1] < self.water_level:
                     stress[stretch_first:stretch_last] = (stress[stretch_first:
                                                           stretch_last] +
                                                           stretch_factor *
@@ -2001,6 +1999,7 @@ class FluxBasedModel(FlowlineModel):
                 u_drag[last_above_wl+2:] = u_drag[last_above_wl+1]
 
                 u_stag[:] = u_drag + u_slide
+                u_stag = utils.clip_max(dx/dt, u_stag)
 
                 # Staggered section
                 # For the flux out of the last grid cell, the staggered section
@@ -2008,17 +2007,19 @@ class FluxBasedModel(FlowlineModel):
                 section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
                 section_stag[[0, -1]] = section[[0, -1]]
                 section_stag[last_above_wl+1] = section[last_above_wl]
-                self.discharge_m3_since_y0 += section_stag[last_above_wl+1] * \
-                                              u_stag[last_above_wl+1]  * dt
+                if fl.bed_h[last_above_wl+1] < self.water_level:
+                    self.discharge_m3_since_y0 += (section_stag[stretch_first]
+                                                   * u_stag[stretch_first] * dt)
 
-            # Usual ice dynamics without water at the front
+            # Usual ice dynamics
             else:
                 rhogh = (self.rho*G*slope_stag)**N
-                u_stag[:] = ((thick_stag**(N+1)) * self._fd * rhogh
-                              + (thick_stag**(N-1)) * self.fs * rhogh) * \
+                u_drag[:] = (thick_stag**(N+1)) * self._fd * rhogh * \
                               sf_stag**N
-                u_drag[:] = u_stag
-                u_slide[:] = 0
+                u_slide[:] = (thick_stag**(N-1)) * self.fs * rhogh * \
+                              sf_stag**N # Not sure if sf is correct here
+                u_stag[:] = u_drag + u_slide
+
                 # Staggered section
                 section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
                 section_stag[[0, -1]] = section[[0, -1]]
@@ -2087,55 +2088,63 @@ class FluxBasedModel(FlowlineModel):
             mb = mbs[fl_id]
             # Allow parabolic beds to grow
             mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
+
             # Prevent surface melt below water level
-            if self.do_calving:
-                bed_below_sl = (fl.bed_h < self.water_level) & (fl.thick > 0)
-                mb[bed_below_sl] = utils.clip_min(mb[bed_below_sl],
-                                                  -(fl.surface_h[bed_below_sl]
-                                                    - self.water_level) *
-                                                    widths[bed_below_sl] * dt)
-                mb[fl.surface_h < self.water_level] = 0
-                self.smb_asl_m3 += np.sum(mb[bed_below_sl]) * dx
+            bed_below_wl = np.any((fl.bed_h < self.water_level) & (fl.thick > 0))
+            if self.do_calving and fl.has_ice() and bed_below_wl:
+                bed_below_wl = np.nonzero((fl.bed_h < self.water_level) & 
+                                          (fl.thick > 0))[0]
+                if not np.any(fl.thick[:bed_below_wl[0]+1] == 0):
+                    mb[bed_below_wl] = utils.clip_min(mb[bed_below_wl],
+                                                      -(fl.surface_h[bed_below_wl]
+                                                        - self.water_level) *
+                                                        widths[bed_below_wl] * dt)
+                    mb[fl.surface_h < self.water_level] = 0
+                self.smb_asl_m3_since_y0 += np.sum(mb[bed_below_wl]) * dx
+
             # Update section with ice flow and mass balance
             new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt/dx +
                            trib_flux*dt/dx + mb)
             # Keep positive values only and store
             fl.section = utils.clip_min(new_section, 0)
-
+            section = fl.section
             self.calving_rate_myr = 0.
-            # Prevent remnants of detached ice below water level
-            section = fl.section
-            depth = utils.clip_min(0,self.water_level - fl.bed_h)            
-            if self.do_calving:
-                ice_above_wl = np.any((fl.surface_h > self.water_level) &
-                                      (fl.bed_h < self.water_level) &
-                                      (fl.thick >= (self.rho_o/self.rho) *
-                                       depth))
-            if ice_above_wl and self.do_calving:
-                last_last_wl = []
-                above_wl = np.nonzero((fl.surface_h > self.water_level) &
-                                      (fl.bed_h < self.water_level) &
-                                      (fl.thick > (self.rho_o/self.rho) * 
-                                       depth))[0]
-                for i in above_wl:
-                    if i+1 < len(fl.bed_h) and fl.thick[i+1] <= \
-                                               (self.rho_o/self.rho) * \
-                                               depth[i+1]:
-                        last_last_wl = np.append(last_last_wl, i)
-                if len(last_last_wl) > 0:
-                    last_above_wl = int(last_last_wl[0])
+            
+            # Remove detached bodies of ice in the water
+            bed_below_wl = np.any((fl.thick > 0) & (fl.bed_h < 
+                                   self.water_level))
+            if fl.has_ice() and bed_below_wl:
+                bed_below_wl = np.nonzero((fl.thick > 0) & (fl.bed_h < 
+                                           self.water_level))[0]
+                first_ice = []
+                no_ice = []
+                no_ice = np.nonzero(fl.thick < min_l)[0]
+                if no_ice != []:
+                    if no_ice[-1]+1 >= len(fl.bed_h):
+                        no_ice = np.delete(no_ice,-1)
+                    first_ice = np.where(fl.thick[no_ice+1] > min_l)
+                    first_ice = no_ice[first_ice]+1
+                if first_ice == []:
+                    pass
                 else:
-                    last_above_wl = above_wl[-1]
-                last_ice = np.nonzero(fl.thick > 0)[0][-1]
-                if last_ice > last_above_wl+1:
-                    for i in range(last_above_wl+2, last_ice+1):
-                        if section[i] > 0 and fl.bed_h[i] < self.water_level:
-                            add_calving = section[i] * dx
+                    for i in range(len(first_ice)):
+                        if fl.bed_h[first_ice[i]-1] < self.water_level:
+                            last_ice = []
+                            last_ice = np.nonzero((fl.thick[first_ice[i]:] > 0) &
+                                                 ((fl.bed_h[first_ice[i]:]) < 
+                                                   self.water_level))[0][-1]
+                            detached = np.arange(first_ice[i], 
+                                                 last_ice+first_ice[i]+1)
+                            detached = np.intersect1d(detached, bed_below_wl)                       
+                            add_calving = np.sum(section[detached] * dx)
                             self.calving_m3_since_y0 += add_calving
-                            self.calving_rate_myr += dx / dt * cfg.SEC_IN_YEAR
-                            section[i] = 0
-                    fl.section = section
-            section = fl.section
+                            self.calving_rate_myr += (np.size(section[detached])
+                                                      * dx / dt * 
+                                                      cfg.SEC_IN_YEAR)
+                            section[detached] = 0
+                            fl.section = section
+                            section = fl.section
+
             # If we use a flux-gate, store the total volume that came in
             self.flux_gate_m3_since_y0 += flx_stag[0] * dt
 
@@ -2162,30 +2171,38 @@ class FluxBasedModel(FlowlineModel):
                 continue
 
             # We do calving only if there is some ice above flotation
-            # ice_above_wl = np.any((fl.surface_h > self.water_level) &
-                                  # (fl.bed_h < self.water_level) &
-                                  # (fl.thick > 0))
+            depth = utils.clip_min(0,self.water_level - fl.bed_h)
             ice_above_wl = np.any((fl.surface_h > self.water_level) &
                                   (fl.bed_h < self.water_level) &
-                                  (fl.thick >= (self.rho_o/self.rho)*depth))
-
-            first_below_sl = np.nonzero((fl.bed_h < self.water_level) &
-                                        (fl.thick > 0))[0][0]
-
+                                  (fl.thick >= (self.rho_o / self.rho) * depth))
+            ice_below_wl = np.any((fl.bed_h < self.water_level) & (fl.thick  > 0))
+            add_calving = 0
             if ice_above_wl:
-                # last_above_wl = np.nonzero((fl.surface_h > self.water_level) &
-                                           # (fl.bed_h < self.water_level) &
-                                           # (fl.thick > 0))[0][-1]
                 last_above_wl = np.nonzero((fl.surface_h > self.water_level) &
                                            (fl.bed_h < self.water_level) &
-                                           (fl.thick >= (self.rho_o/self.rho)*
+                                           (fl.thick >= (self.rho_o/self.rho) *
                                             depth))[0][-1]
+                last_above_wl = int(utils.clip_max(last_above_wl, 
+                                                   len(fl.bed_h)-2))
+            # If there is only ice below flotation left, we remove that...
+            elif ice_below_wl:
+                ice_below_wl = np.nonzero((fl.bed_h < self.water_level) & 
+                                          (fl.thick  > 0))[0]
+                add_calving = np.sum(section[ice_below_wl] * dx)
+                self.calving_m3_since_y0 += add_calving
+                self.calving_rate_myr += (np.size(section[ice_below_wl])
+                                          * dx / dt * cfg.SEC_IN_YEAR)
+                section[ice_below_wl] = 0
+                fl.section = section
+                fl.calving_bucket_m3 = 0
+                continue
+            else:
+                continue
 
-                if fl.bed_h[last_above_wl+1] > self.water_level:
-                    continue
-
+            if ice_above_wl and (fl.bed_h[last_above_wl+1] < self.water_level):
                 # OK, we're really calving
                 # Calving law
+                section = fl.section
                 h = fl.thick[last_above_wl]
                 d = h - (fl.surface_h[last_above_wl] - self.water_level)
                 k = self.calving_k
@@ -2196,35 +2213,41 @@ class FluxBasedModel(FlowlineModel):
                 self.calving_m3_since_y0 += q_calving * dt
                 self.calving_rate_myr += (q_calving / section[last_above_wl] *
                                           cfg.SEC_IN_YEAR)
+
                 # See if we have ice below flotation to clean out first
-                below_sl = ((fl.bed_h < self.water_level) &
+                below_wl = ((fl.bed_h < self.water_level) &
                             (fl.thick < (self.rho_o/self.rho)*depth) &
                             (fl.thick > 0))
-
-                to_remove = np.sum(section[below_sl]) * fl.dx_meter
-                bed_below_sl = (fl.bed_h < self.water_level) & (fl.thick > 0)
+                to_remove = np.sum(section[below_wl]) * dx
+                bed_below_wl = np.any((fl.bed_h < self.water_level) & 
+                                      (fl.thick > 0))
+                if bed_below_wl: 
+                    bed_below_wl = np.nonzero((fl.bed_h < self.water_level) & 
+                                              (fl.thick > 0))[0]
+                else:
+                    bed_below_wl = 0
 
                 if 0 < to_remove < fl.calving_bucket_m3:
                     # This is easy, we remove everything
-                    section[below_sl] = 0
+                    section[below_wl] = 0
                     fl.calving_bucket_m3 -= to_remove
                 elif to_remove > 0:
                     # We can only remove part of if
-                    section[below_sl] = 0
+                    section[below_wl] = 0
                     section[last_above_wl+1] = ((to_remove - fl.calving_bucket_m3)
-                                                / fl.dx_meter)
+                                                / dx)
                     fl.calving_bucket_m3 = 0
                 # The rest of the bucket might calve an entire grid point
                 # (or more)
-                vol_last = section[last_above_wl] * fl.dx_meter
+                vol_last = section[last_above_wl] * dx
                 while fl.calving_bucket_m3 >= vol_last and \
-                last_above_wl >= bed_below_sl[0]:
+                last_above_wl >= bed_below_wl[0]:
                     fl.calving_bucket_m3 -= vol_last
                     section[last_above_wl] = 0
 
                     # OK check if we need to continue (unlikely)
                     last_above_wl -= 1
-                    vol_last = section[last_above_wl] * fl.dx_meter
+                    vol_last = section[last_above_wl] * dx
                 
                 # We update the glacier with our changes
                 fl.section = section
@@ -2234,70 +2257,20 @@ class FluxBasedModel(FlowlineModel):
                 # is then accumulated in the "last" grid cell. Everything that
                 # is higher than the previous grid point is therefore
                 # redistributed at the front or calved off.
-                section = fl.section
-                while ((last_above_wl+1 < len(fl.bed_h)) and
-                      (fl.surface_h[last_above_wl+1] > fl.surface_h[last_above_wl])
-                       and section[last_above_wl+1] > 0):
-                    add_calving = ((fl.surface_h[last_above_wl+1] -
-                                    fl.surface_h[last_above_wl]) *
-                                    fl.widths_m[last_above_wl+1] * dx)
+                if ((fl.surface_h[last_above_wl+1] > fl.surface_h[last_above_wl])
+                     and fl.section[last_above_wl+1] > 0):
+                    old_thick = fl.thick[last_above_wl+1]
+                    old_sec = fl.section[last_above_wl+1]
+                    new_thick = (old_thick - 
+                                (fl.surface_h[last_above_wl+1] - 
+                                 fl.surface_h[last_above_wl]))
+                    fl.thick[last_above_wl+1] = new_thick
+                    diff_sec = old_sec - fl.section[last_above_wl+1]
+                    self.calving_m3_since_y0 += (diff_sec * dx)
+                    self.calving_rate_myr += (diff_sec * dx / 
+                                              fl.section[last_above_wl+1] /
+                                              dt * cfg.SEC_IN_YEAR)
 
-                    if ((last_above_wl+2 < len(fl.bed_h)) and
-                        ((add_calving / (fl.widths_m[last_above_wl+2] * dx)) > \
-                        (self.rho_o/self.rho) * depth[last_above_wl+2])):
-                        section[last_above_wl+2] += add_calving / dx
-                    else:
-                        self.calving_m3_since_y0 += add_calving
-                        self.calving_rate_myr += ((add_calving /
-                                                   section[last_above_wl+1]) /
-                                                   dt * cfg.SEC_IN_YEAR)
-                    section[last_above_wl+1] -= add_calving / dx
-                    section[last_above_wl+1] = utils.clip_min(0,
-                                                       section[last_above_wl+1])
-                    fl.section = section
-                    section = fl.section
-                    last_above_wl += 1
-
-            # Here we remove detached ice that might be left
-            # section = fl.section
-            elif fl.thick[first_below_sl-1] == 0:                                    
-                leftover = ((fl.bed_h < self.water_level) &
-                            (fl.thick <= (self.rho_o/self.rho)*depth) &
-                            (fl.thick > 0))
-                add_calving = np.sum(section[leftover] * dx)
-                self.calving_m3_since_y0 += add_calving
-                self.calving_rate_myr += (np.size(section[leftover]) * dx / dt
-                                          * cfg.SEC_IN_YEAR)
-                section[leftover] = 0
-                fl.section = section
-
-            elif np.sum(section[first_below_sl:]) > 0:
-                section[first_below_sl] = np.sum(section[first_below_sl:])
-                section[first_below_sl+1:] = 0
-                fl.section = section
-                section = fl.section
-                while (first_below_sl < len(fl.bed_h)) and \
-                      (fl.surface_h[first_below_sl] >
-                       fl.surface_h[first_below_sl-1]):
-                    add_calving = ((fl.surface_h[first_below_sl] -
-                                    fl.surface_h[first_below_sl-1]) *
-                                    fl.widths_m[first_below_sl] * dx)
-
-                    if ((first_below_sl+1 < len(fl.bed_h)) and
-                        ((add_calving / (fl.widths_m[first_below_sl+1] * dx)) > \
-                        (self.rho_o / self.rho) * depth[first_below_sl+1])):
-                        section[first_below_sl+1] += add_calving / dx
-                    else:
-                        self.calving_m3_since_y0 += add_calving
-                        self.calving_rate_myr += ((add_calving /
-                                                   section[first_below_sl]) /
-                                                   dt * cfg.SEC_IN_YEAR)
-                    section[first_below_sl] -= add_calving / dx
-                    section[first_below_sl] = utils.clip_min(0,
-                                                       section[first_below_sl])
-                    fl.section = section
-                    section = fl.section
-                    first_below_sl += 1
         # Next step
         self.t += dt
         return dt

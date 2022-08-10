@@ -1482,6 +1482,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         # dmdtda: in meters water-equivalent per year -> we convert
         ref_mb *= 1000 # kg m-2 yr-1
     log.workflow('({}) ref. m.b.: {}'.format(gdir.rgi_id,ref_mb))
+
     # Do we have a calving glacier?
     # cmb = calving_mb(gdir)
     # if cmb != 0:
@@ -1513,9 +1514,8 @@ def mu_star_calibration_from_geodetic_mb(gdir,
             calving_will == 0:
             calving_will = (float(fa_will[idx, 6])+
                             float(fa_will[idx, 4])) / 2
-            terminus_change_will = ((float(fa_will[idx, 8]) *
-                                     corr_factor) + (float(fa_will[idx, 9]) *
-                                     corr_factor) / 2)
+            terminus_change_will = ((float(fa_will[idx, 8]) + 
+                                     float(fa_will[idx, 9])) * corr_factor / 2)
             unc_will = (float(fa_will[idx, 5])**2 +
                         float(fa_will[idx, 7])**2)**0.5 / 2
 

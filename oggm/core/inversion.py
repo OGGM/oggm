@@ -89,6 +89,9 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         rho = cfg.PARAMS['ice_density']
         flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
 
+        # Fraction of flux entering second-last grid cell arriving at last one
+        flux_fraction = cfg.PARAMS['fraction_flux_last']
+
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.info('(%s) has negative flux somewhere', gdir.rgi_id)
@@ -113,12 +116,12 @@ def prepare_for_inversion(gdir, add_debug_var=False,
             # flux here (an alternative would be to pmute the flux on a
             # staggered grid but I actually like the QC and its easier)
             # note that this value will be ignored if one uses the filter
-            # task afterwards
-            flux[-1] = flux[-2] / 3  # this is totally arbitrary
+            # task afterwards.
+            flux[-1] = flux[-2] / flux_fraction  # this is totally arbitrary
 
         if fl.flows_to is not None and flux[-1] <= 0:
             # Same for tributaries
-            flux[-1] = flux[-2] / 3  # this is totally arbitrary
+            flux[-1] = flux[-2] / flux_fraction  # this is totally arbitrary
 
         # Shape
         is_rectangular = fl.is_rectangular
@@ -261,7 +264,7 @@ def sia_thickness_via_optim(slope, width, flux, rel_h=1, a_factor=1,
 
     # To avoid geometrical inconsistencies
     max_h = width / t_lambda if shape == 'trapezoid' else 1e4
-
+    # TODO: add shape factors for lateral drag
     def to_minimize(h):
         u_drag = (rho * cfg.G * slope * h * a_factor)**n * h * fd
         u_slide = (rho * cfg.G * slope * a_factor)**n * fs * h**(n-1) * rel_h
@@ -409,7 +412,8 @@ def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
 @entity_task(log, writes=['inversion_output'])
 def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                                 filesuffix='', water_level=None,
-                                t_lambda=None, min_rel_h=1):
+                                t_lambda=None, min_rel_h=1, 
+                                fixed_water_depth=None):
     """ Compute the glacier thickness along the flowlines
 
     More or less following Farinotti et al., (2009).
@@ -480,7 +484,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         slope = cl['slope_angle']
         slope = utils.clip_array(slope, min_slope, np.pi/2.)
         sf = np.ones(slope.shape)  #  Default shape factor is 1
-        h_tol = 1e-1
+        h_tol = 0.1
         max_iter = 20
         # Glacier width
         w = cl['width']
@@ -488,26 +492,32 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         h_diff = np.ones(slope.shape)
         a0s = - cl['flux_a0'] / ((rho*cfg.G*slope)**3*fd)
         out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf, _inv_function)
-        
+   
         # Iteratively seeking glacier state including water-depth dependent
         # processes
         while k < max_iter and np.any(h_diff > h_tol):
             h_diff = out_thick
             if do_calving and n_cl==(len(cls)-1) and min_rel_h > 1:
-                f_b = cl['hgt'][-1] - water_level
+                f_b = utils.clip_min(1e-3,cl['hgt'][-1] - water_level)
                 out_thick[-1] = (((rho_o / rho) * min_rel_h * f_b) / 
                                  ((rho_o / rho) * min_rel_h - min_rel_h + 1))
-                bed_h = cl['hgt']-out_thick
+                bed_h = cl['hgt'] - out_thick
                 water_depth = utils.clip_min(0,-bed_h+water_level)
-                rel_h = out_thick / (out_thick-(rho_o/rho)*water_depth)
+                if fixed_water_depth:
+                    out_thick[-1] = ((min_rel_h * (rho_o / rho) * 
+                                      fixed_water_depth) / (min_rel_h - 1))
+                    water_depth[-1] = fixed_water_depth
+                rel_h = out_thick / (out_thick - (rho_o / rho) * water_depth)
                 wrong_rel_h = ((rel_h < 1) | ~np.isfinite(rel_h))
                 rel_h[wrong_rel_h & (water_depth > 0)] = min_rel_h
                 rel_h[wrong_rel_h & (water_depth == 0)] = 1
                 rel_h[-1] = min_rel_h
-                a_pull = a0s*0
+                a_pull = a0s * 0
                 length = len(cl['width']) * cl['dx']
-                stretch_dist = utils.clip_max(8e3,length)
-                n_stretch = np.rint(stretch_dist/cl['dx']).astype(int)
+                stretch_dist_p = cfg.PARAMS.get('stretch_dist', 8e3)
+                stretch_dist = utils.clip_max(stretch_dist_p,length)
+                stretch_dist = utils.clip_max(stretch_dist, length)
+                n_stretch = np.rint(stretch_dist / cl['dx']).astype(int)
                 pull_stress = utils.clip_min(0, 0.5 * cfg.G * (rho *
                                              out_thick[-1]**2 - rho_o *
                                              water_depth[-1]**2))
@@ -520,20 +530,20 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                     stretch_factor = stretch_dist / cl['dx']
                     n_stretch = 1
 
-                a_pull[-(n_stretch-1):] = (stretch_factor[:-1] * (pull_stress /
-                                                           stretch_dist))
+                a_pull[-(n_stretch):] = (stretch_factor[:] * (pull_stress /
+                                         stretch_dist))
                 a_factor = (a_pull / (rho*cfg.G*slope*out_thick)) + 1
                 a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
             else:
-                rel_h = out_thick*0+1
-                a_factor = out_thick*0+1
-            a3s = fs/fd*rel_h
-            a0s = - cl['flux_a0'] / ((rho*cfg.G*slope*a_factor)**3*fd)
+                rel_h = out_thick * 0 + 1
+                a_factor = out_thick * 0 + 1
+            a3s = fs / fd * rel_h
+            a0s = - cl['flux_a0'] / ((rho*cfg.G*slope*a_factor)**3 * fd)
             out_thick = _compute_thick(a0s, a3s, cl['flux_a0'], sf,
                                           _inv_function)
+            out_thick = utils.clip_min(out_thick, 1.5e-3) # To prevent errors
 
             if sf_func is not None:
-
                 # Start iteration for shape factor with first guess of 1
                 i = 0
                 sf_diff = np.ones(slope.shape)
@@ -545,7 +555,6 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                 while i < max_sf_iter and np.any(sf_diff > sf_tol):
                     out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf,
                                                _inv_function)
-
                     sf_diff[:] = sf[:]
                     sf = sf_func(w, out_thick, cl['is_rectangular'])
                     sf_diff = sf_diff - sf
@@ -778,7 +787,8 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
                 # This can trigger a divide by zero Warning
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
                 u_basal = fs * tau ** glen_n / thick
-
+            # TODO: add water-depth dependent formulation for water-terminating
+            # glaciers
             u_basal[~np.isfinite(u_basal)] = 0
 
             u_deformation = (2 * glen_a / (glen_n + 1)) * (tau**glen_n) * thick
@@ -1160,6 +1170,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
         prepare_for_inversion(gdir)
         v_ref = mass_conservation_inversion(gdir, water_level=water_level,
                                             glen_a=glen_a, fs=fs)
+        filter_inversion_output(gdir)
 
     # We have a stop condition on mu*
     prev_params = gdir.read_json('local_mustar')
@@ -1180,38 +1191,26 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
     min_slope = np.deg2rad(cfg.PARAMS[min_slope])
     slope = utils.clip_array(slope, min_slope, np.pi / 2.)
 
-
     cl = gdir.read_pickle('inversion_output')[-1]
-    #log.workflow('freeboard, thickness before water and frontal ablation: {},'
-    #             ' {}'.format(cls['hgt'][-1], cl['thick'][-1]))
+    log.workflow('({}) thickness, freeboard before water and frontal ablation:'
+                 ' {}, {}'.format(gdir.rgi_id, cl['thick'][-1], cls['hgt'][-1]))
     thick0 = cl['thick'][-1]
     th = cls['hgt'][-1]
     if water_level is None:
-        water_level = th - thick0 if thick0 > 10*th else 0
+        water_level = 0
         if gdir.is_lake_terminating:
             water_level = th - cfg.PARAMS['free_board_lake_terminating']
-    # Check that water level is within given bounds (deprecated!)
-    # vmin, vmax = cfg.PARAMS['free_board_marine_terminating']
-    # if water_level is None:
-        # th = cls['hgt'][-1]
-        # if gdir.is_lake_terminating:
-            # water_level = th - cfg.PARAMS['free_board_lake_terminating']
-        # else:
-            # water_level = utils.clip_scalar(0, th - thick0*vmax, th - thick0*vmin)
-            # chosemax = False
-            # chosemin = False
 
     # The functions all have the same shape: they decrease, then increase
     # We seek the absolute minimum first
     def to_minimize(rel_h):
-        f_b = cls['hgt'][-1] - water_level
+        f_b = th - water_level
         if fixed_water_depth:
             thick = (rel_h * (rho_o / rho) * fixed_water_depth) / (rel_h - 1)
             water_depth = fixed_water_depth
         else:
-            thick = (((rho_o / rho)* rel_h * f_b) / 
-                     ((rho_o / rho) * rel_h - rel_h + 1))
-            water_depth = thick - f_b
+            thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
+            water_depth = utils.clip_min(1e-3, thick - f_b)
         if fixed_water_depth:
             fl = calving_flux_from_depth(gdir, water_level=water_level,
                                          thick=thick, k=calving_k, 
@@ -1221,11 +1220,10 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
                                          k=calving_k, water_depth=water_depth)
 
         flux = fl['flux'] * 1e9 / cfg.SEC_IN_YEAR
-        #f_b = fl['free_board']
         thick = fl['thick']
-        a_pull = cls['width']*0
         length = len(cls['width']) * cls['dx']
-        stretch_dist = utils.clip_max(8e3,length)
+        stretch_dist_p = cfg.PARAMS.get('stretch_dist', 8e3)
+        stretch_dist = utils.clip_max(stretch_dist_p,length)
         n_stretch = np.rint(stretch_dist/cls['dx']).astype(int)
 
         pull_stress = utils.clip_min(0,0.5 * G * (rho * thick**2 -
@@ -1238,7 +1236,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
         if cls['dx'] > stretch_dist:
             stretch_factor = stretch_dist / cls['dx']
             n_stretch = 1
-        stretch_factor = stretch_factor[-2]
+        stretch_factor = stretch_factor[-1]
         a_pull = (stretch_factor * (pull_stress / stretch_dist))
         a_factor = ((a_pull / (rho*cfg.G*slope*thick)) + 1)
         a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
@@ -1274,55 +1272,13 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
     # Shift the water level if numerical solver can't find a value with 0
     min_wl = -thick0
+    max_wl = th - 1e-3
     success = 0
     step = th if th > thick0 else thick0
-    step = step/100
-    if thick0 > 10*th:
+    step /= 2e2
+    if thick0 > 10 * th and fixed_water_depth is None:
         while abs_min['fun'] > 0 or success == 0:
-            if water_level <= min_wl:
-                break
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level -= step
-                pass
-
-        while abs_min['fun'] > 0 or success == 0:
-            if water_level >= th:
-                break
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level += step
-                pass
-
-    else:
-        while abs_min['fun'] > 0 or success == 0:
-            if water_level >= th:
-                break
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level += step
-                pass
-
-        while abs_min['fun'] > 0 or success == 0:
-            if water_level <= min_wl:
-                break
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
+            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
                                         tol=1e-1)
             abs_min0 = abs_min['x'][0]
             try:
@@ -1331,41 +1287,75 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
             except ValueError:
                 water_level -= step
                 pass
+            if water_level <= min_wl:
+                water_level = min_wl
+                break
+
+        while abs_min['fun'] > 0 or success == 0:
+
+            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
+                                        tol=1e-1)
+            abs_min0 = abs_min['x'][0]
+            try:
+                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+                success = 1
+            except ValueError:
+                water_level += step
+                pass
+            if water_level >= max_wl:
+                water_level = max_wl
+                break
+
+    elif fixed_water_depth is None:
+        while abs_min['fun'] > 0 or success == 0:
+            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
+                                        tol=1e-1)
+            abs_min0 = abs_min['x'][0]
+            try:
+                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+                success = 1
+            except ValueError:
+                water_level += step
+                pass
+            if water_level >= max_wl:
+                water_level = max_wl
+                break
+
+        while abs_min['fun'] > 0 or success == 0:
+            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
+                                        tol=1e-1)
+            abs_min0 = abs_min['x'][0]
+            try:
+                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+                success = 1
+            except ValueError:
+                water_level -= step
+                pass
+            if water_level <= min_wl:
+                water_level = min_wl
+                break
 
     # Give the flux to the inversion and recompute
     # This is the thick guaranteeing OGGM Flux = Calving Law Flux
     try:
         rel_h = opt
-        f_b = cls['hgt'][-1] - water_level
+        f_b = th - water_level
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
-        water_depth = thick - f_b
+        water_depth = utils.clip_min(1e-3, thick - f_b)
     except:
-        # Mostly happening when front becomes very thin...
+        # Mostly happening when front becomes very thin or with fixed_water_depth...
         log.workflow('inversion routine not working as expected. '
                      'We just take random values and proceed...')
-        f_b = utils.clip_max(1*calving_k,0.9)
-        water_level = th - f_b
-        opt = 1e2
+        f_b = th / 100
+        if fixed_water_depth is not None:
+            water_level = 0
+        else:
+            water_level = th - f_b
+        opt = 1e3
         rel_h = opt
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
-        water_depth = thick - f_b
+        water_depth = utils.clip_min(1e-3, thick - f_b)
 
-    # Find volume with water, but without frontal ablation
-    # gdir.inversion_calving_rate = 0
-    # with utils.DisableLogger():
-        # climate.local_t_star(gdir)
-        # climate.mu_star_calibration(gdir)
-        # prepare_for_inversion(gdir)
-        # v_ref = mass_conservation_inversion(gdir, water_level=water_level,
-                                            # glen_a=glen_a, fs=fs,
-                                            # min_rel_h=opt)
-        #tasks.filter_inversion_output(gdir)
-    # Store for statistics
-    # gdir.add_to_diagnostics('volume_before_calving', v_ref)
-
-    #cl = gdir.read_pickle('inversion_output')[-1]
-    #log.workflow('freeboard, thickness before frontal ablation: {},'
-    #             ' {}'.format(cls['hgt'][-1]-water_level, cl['thick'][-1]))
     if fixed_water_depth is not None:
         thick = (rel_h * (rho_o / rho) * fixed_water_depth) / (rel_h - 1)
         out = calving_flux_from_depth(gdir, water_level=water_level, 
@@ -1400,8 +1390,14 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
         climate.mu_star_calibration(gdir, min_mu_star=min_mu_star)
         prepare_for_inversion(gdir)
-        mass_conservation_inversion(gdir, water_level=water_level,
-                                    glen_a=glen_a, fs=fs, min_rel_h=opt)
+        if fixed_water_depth is not None:
+            mass_conservation_inversion(gdir, water_level=water_level,
+                                        glen_a=glen_a, fs=fs, min_rel_h=opt,
+                                        fixed_water_depth=fixed_water_depth)
+       
+        else:
+            mass_conservation_inversion(gdir, water_level=water_level,
+                                        glen_a=glen_a, fs=fs, min_rel_h=opt)
 
     if fixed_water_depth is not None:
         out = calving_flux_from_depth(gdir, water_level=water_level,
@@ -1415,8 +1411,6 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
     fl = gdir.read_pickle('inversion_flowlines')[-1]
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
                  cfg.PARAMS['ice_density'])
-    #log.info('({}) find_inversion_calving_from_any_mb: found calving flux of '
-    #         '{:.03f} km3 yr-1'.format(gdir.rgi_id, f_calving))
     log.workflow('({}) found frontal thickness, water depth, freeboard, water '
                  'level of {}, {}, {}, {}'.format(gdir.rgi_id, out['thick'],
                  out['water_depth'],out['free_board'], out['water_level']))
@@ -1488,7 +1482,8 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
                                         mb_years=mb_years)
         prepare_for_inversion(gdir)
         v_ref = mass_conservation_inversion(gdir,glen_a=glen_a,fs=fs)
-        #tasks.filter_inversion_output(gdir)
+        #filter_inversion_output(gdir)
+
     # Store for statistics
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
 
@@ -1504,40 +1499,29 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     slope = utils.clip_array(slope, min_slope, np.pi / 2.)
 
     cl = gdir.read_pickle('inversion_output')[-1]
-    #log.workflow('freeboard, thickness before water and frontal ablation: {},'
-    #             ' {}'.format(cls['hgt'][-1], cl['thick'][-1]))
+    log.workflow('({}) thickness, freeboard before water and frontal ablation:'
+                 ' {}, {}'.format(gdir.rgi_id, cl['thick'][-1], cls['hgt'][-1]))
     thick0 = cl['thick'][-1]
     th = cls['hgt'][-1]
     if water_level is None:
-        water_level = th - thick0 if thick0 > 10*th else 0
+        water_level = 0
         if gdir.is_lake_terminating:
             water_level = th - cfg.PARAMS['free_board_lake_terminating']
-    # Check that water level is within given bounds (deprecated!)
-    # vmin, vmax = cfg.PARAMS['free_board_marine_terminating']
-    # if water_level is None:
-        # th = cls['hgt'][-1]
-        # if gdir.is_lake_terminating:
-            # water_level = th - cfg.PARAMS['free_board_lake_terminating']
-        # else:
-            # water_level = utils.clip_scalar(0, th - thick0*vmax, th - thick0*vmin)
-            # chosemax = False
-            # chosemin = False
 
     # The functions all have the same shape: they decrease, then increase
     # We seek the absolute minimum first
     def to_minimize(rel_h):
-        f_b = cls['hgt'][-1] - water_level
+        f_b = th - water_level
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
-        water_depth = thick - f_b
+        water_depth = utils.clip_min(1e-3, thick - f_b)
         fl = calving_flux_from_depth(gdir, water_level=water_level, k=calving_k,
                                      water_depth=water_depth)
 
         flux = fl['flux'] * 1e9 / cfg.SEC_IN_YEAR
-        f_b = fl['free_board']
         thick = fl['thick']
-        a_pull = cls['width']*0
         length = len(cls['width']) * cls['dx']
-        stretch_dist = utils.clip_max(8e3,length)
+        stretch_dist_p = cfg.PARAMS.get('stretch_dist', 8e3)
+        stretch_dist = utils.clip_max(stretch_dist_p,length)
         n_stretch = np.rint(stretch_dist/cls['dx']).astype(int)
 
         pull_stress = utils.clip_min(0,0.5 * G * (rho * thick**2 -
@@ -1550,7 +1534,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
         if cls['dx'] > stretch_dist:
             stretch_factor = stretch_dist / cls['dx']
             n_stretch = 1
-        stretch_factor = stretch_factor[-2]
+        stretch_factor = stretch_factor[-1]
         a_pull = (stretch_factor * (pull_stress / stretch_dist))
         a_factor = ((a_pull / (rho*cfg.G*slope*thick)) + 1)
         a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
@@ -1586,27 +1570,27 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     # Shift the water level if numerical solver can't find a value with 0
     min_wl = -thick0
+    max_wl = th - 1e-3
     success = 0
     step = th if th > thick0 else thick0
-    step = step/100
+    step /= 2e2
     if thick0 > 10*th:
         while abs_min['fun'] > 0 or success == 0:
-            if water_level <= min_wl:
-                break
             abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
                                         tol=1e-1)
             abs_min0 = abs_min['x'][0]
-
             try:
                 opt = optimize.brentq(to_minimize, abs_min0, 1e7)
                 success = 1
             except ValueError:
                 water_level -= step
                 pass
+            if water_level <= min_wl:
+                water_level = min_wl
+                break
 
         while abs_min['fun'] > 0 or success == 0:
-            if water_level >= th:
-                break
+
             abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
                                         tol=1e-1)
             abs_min0 = abs_min['x'][0]
@@ -1616,11 +1600,12 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
             except ValueError:
                 water_level += step
                 pass
+            if water_level >= max_wl:
+                water_level = max_wl
+                break
 
     else:
         while abs_min['fun'] > 0 or success == 0:
-            if water_level >= th:
-                break
             abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
                                         tol=1e-1)
             abs_min0 = abs_min['x'][0]
@@ -1630,10 +1615,11 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
             except ValueError:
                 water_level += step
                 pass
+            if water_level >= max_wl:
+                water_level = max_wl
+                break
 
         while abs_min['fun'] > 0 or success == 0:
-            if water_level <= min_wl:
-                break
             abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
                                         tol=1e-1)
             abs_min0 = abs_min['x'][0]
@@ -1643,41 +1629,28 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
             except ValueError:
                 water_level -= step
                 pass
+            if water_level <= min_wl:
+                water_level = min_wl
+                break
 
     # Give the flux to the inversion and recompute
     # This is the thick guaranteeing OGGM Flux = Calving Law Flux
     try:
         rel_h = opt
-        f_b = cls['hgt'][-1] - water_level
+        f_b = th - water_level
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
-        water_depth = thick - f_b
+        water_depth = utils.clip_min(1e-3, thick - f_b)
     except:
         # Mostly happening when front becomes very thin...
         log.workflow('inversion routine not working as expected. '
                      'We just take random values and proceed...')
-        f_b = utils.clip_max(1*calving_k,0.9)
+        f_b = th / 100
         water_level = th - f_b
-        opt = 1e2
+        opt = 1e3
         rel_h = opt
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
-        water_depth = thick - f_b
+        water_depth = utils.clip_min(1e-3, thick - f_b)
 
-    # Find volume with water, but without frontal ablation
-    #gdir.inversion_calving_rate = 0
-    #with utils.DisableLogger():
-        #climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
-        #                                mb_years=mb_years)
-        #prepare_for_inversion(gdir)
-        #v_ref = mass_conservation_inversion(gdir, water_level=water_level,
-        #                                       glen_a=glen_a, fs=fs,
-        #                                       min_rel_h=opt)
-        #tasks.filter_inversion_output(gdir)
-    # Store for statistics
-    #gdir.add_to_diagnostics('volume_before_calving', v_ref)
-
-    #cl = gdir.read_pickle('inversion_output')[-1]
-    #log.workflow('freeboard, thickness before frontal ablation: {},'
-    #             ' {}'.format(cls['hgt'][-1]-water_level, cl['thick'][-1]))
     out = calving_flux_from_depth(gdir, water_level=water_level, k=calving_k,
                                   water_depth=water_depth)
 
@@ -1689,22 +1662,18 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
                                         mb_years=mb_years)
         prepare_for_inversion(gdir)
         mass_conservation_inversion(gdir, water_level=water_level,
-                                       glen_a=glen_a, fs=fs, min_rel_h=opt)
-        #tasks.filter_inversion_output(gdir)
-    cl = gdir.read_pickle('inversion_output')[-1]
+                                    glen_a=glen_a, fs=fs, min_rel_h=opt)
     out = calving_flux_from_depth(gdir, water_level=water_level, k=calving_k)
 
     fl = gdir.read_pickle('inversion_flowlines')[-1]
-    cl = gdir.read_pickle('inversion_output')[-1]
-    #log.workflow('thickness after: {}, {}'.format(cl['thick'][-1], out['thick']))
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
                  cfg.PARAMS['ice_density'])
-
     log.workflow('({}) found frontal thickness, water depth, freeboard, water '
                  'level of {}, {}, {}, {}'.format(gdir.rgi_id, out['thick'],
                  out['water_depth'],out['free_board'], out['water_level']))
     log.workflow('({}) calving (law) flux of {} ({})'.format(gdir.rgi_id,
                  f_calving, out['flux']))
+
     # Store results
     odf = dict()
     odf['calving_flux'] = f_calving
