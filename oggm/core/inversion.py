@@ -1194,7 +1194,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
     cl = gdir.read_pickle('inversion_output')[-1]
     log.workflow('({}) thickness, freeboard before water and frontal ablation:'
                  ' {}, {}'.format(gdir.rgi_id, cl['thick'][-1], cls['hgt'][-1]))
-    thick0 = cl['thick'][-1]
+    thick0 = cl['thick'][-2]
     th = cls['hgt'][-1]
     if water_level is None:
         water_level = 0
@@ -1266,74 +1266,55 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
     abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
                                 tol=1e-1)
-    # if not abs_min['success']:
-        # raise RuntimeError('Could not find the absolute minimum in calving '
-                           # 'flux optimization: {}'.format(abs_min))
 
-    # Shift the water level if numerical solver can't find a value with 0
-    min_wl = -thick0
+    # Shift the water level if numerical solver can't find a value with 0,
+    # looking for a solution each shifting it up and down
+    min_wl = -th if th > thick0 else -thick0
     max_wl = th - 1e-3
     success = 0
-    step = th if th > thick0 else thick0
-    step /= 2e2
-    if thick0 > 10 * th and fixed_water_depth is None:
-        while abs_min['fun'] > 0 or success == 0:
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level -= step
-                pass
-            if water_level <= min_wl:
-                water_level = min_wl
-                break
+    step = 0.25
 
-        while abs_min['fun'] > 0 or success == 0:
+    while abs_min['fun'] > 0 or success == 0:
+        abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
+                                    tol=1e-1)
+        abs_min0 = abs_min['x'][0]
+        try:
+            opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+            success = 1
+        except ValueError:
+            water_level -= step
+            pass
+        if water_level <= min_wl:
+            water_level = min_wl
+            break
+    water_level_m = water_level
+    success_m = success
+ 
+    water_level = 0
+    success = 0
+    while abs_min['fun'] > 0 or success == 0:
+        abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
+                                    tol=1e-1)
+        abs_min0 = abs_min['x'][0]
+        try:
+            opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+            success = 1
+        except ValueError:
+            water_level += step
+            pass
+        if water_level >= max_wl:
+            water_level = max_wl
+            break
+    water_level_p = water_level
+    success_p = success
 
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level += step
-                pass
-            if water_level >= max_wl:
-                water_level = max_wl
-                break
-
-    elif fixed_water_depth is None:
-        while abs_min['fun'] > 0 or success == 0:
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level += step
-                pass
-            if water_level >= max_wl:
-                water_level = max_wl
-                break
-
-        while abs_min['fun'] > 0 or success == 0:
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7),),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level -= step
-                pass
-            if water_level <= min_wl:
-                water_level = min_wl
-                break
+    # We take the smallest absolute water level
+    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m):
+        water_level = water_level_p
+    elif success_m == 1:
+        water_level = water_level_m
+    else:
+        water_level = water_level_p
 
     # Give the flux to the inversion and recompute
     # This is the thick guaranteeing OGGM Flux = Calving Law Flux
@@ -1346,12 +1327,12 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
         # Mostly happening when front becomes very thin or with fixed_water_depth...
         log.workflow('inversion routine not working as expected. '
                      'We just take random values and proceed...')
-        f_b = th / 100
+        f_b = 1e-3
         if fixed_water_depth is not None:
             water_level = 0
         else:
             water_level = th - f_b
-        opt = 1e3
+        opt = 100
         rel_h = opt
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
         water_depth = utils.clip_min(1e-3, thick - f_b)
@@ -1501,7 +1482,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     cl = gdir.read_pickle('inversion_output')[-1]
     log.workflow('({}) thickness, freeboard before water and frontal ablation:'
                  ' {}, {}'.format(gdir.rgi_id, cl['thick'][-1], cls['hgt'][-1]))
-    thick0 = cl['thick'][-1]
+    thick0 = cl['thick'][-2]
     th = cls['hgt'][-1]
     if water_level is None:
         water_level = 0
@@ -1564,74 +1545,55 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
                                 tol=1e-1)
-    # if not abs_min['success']:
-        # raise RuntimeError('Could not find the absolute minimum in calving '
-                           # 'flux optimization: {}'.format(abs_min))
 
-    # Shift the water level if numerical solver can't find a value with 0
-    min_wl = -thick0
+    # Shift the water level if numerical solver can't find a value with 0,
+    # looking for a solution each shifting it up and down
+    min_wl = -th if th > thick0 else -thick0
     max_wl = th - 1e-3
     success = 0
-    step = th if th > thick0 else thick0
-    step /= 2e2
-    if thick0 > 10*th:
-        while abs_min['fun'] > 0 or success == 0:
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level -= step
-                pass
-            if water_level <= min_wl:
-                water_level = min_wl
-                break
+    step = 0.25
+    
+    while abs_min['fun'] > 0 or success == 0:
+        abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
+                                    tol=1e-1)
+        abs_min0 = abs_min['x'][0]
+        try:
+            opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+            success = 1
+        except ValueError:
+            water_level -= step
+            pass
+        if water_level <= min_wl:
+            water_level = min_wl
+            break
+    water_level_m = water_level
+    success_m = success
+ 
+    water_level = 0
+    success = 0
+    while abs_min['fun'] > 0 or success == 0:
+        abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
+                                    tol=1e-1)
+        abs_min0 = abs_min['x'][0]
+        try:
+            opt = optimize.brentq(to_minimize, abs_min0, 1e7)
+            success = 1
+        except ValueError:
+            water_level += step
+            pass
+        if water_level >= max_wl:
+            water_level = max_wl
+            break
+    water_level_p = water_level
+    success_p = success
 
-        while abs_min['fun'] > 0 or success == 0:
-
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level += step
-                pass
-            if water_level >= max_wl:
-                water_level = max_wl
-                break
-
+    # We take the smallest absolute water level
+    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m):
+        water_level = water_level_p
+    elif success_m == 1:
+        water_level = water_level_m
     else:
-        while abs_min['fun'] > 0 or success == 0:
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level += step
-                pass
-            if water_level >= max_wl:
-                water_level = max_wl
-                break
-
-        while abs_min['fun'] > 0 or success == 0:
-            abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
-                                        tol=1e-1)
-            abs_min0 = abs_min['x'][0]
-            try:
-                opt = optimize.brentq(to_minimize, abs_min0, 1e7)
-                success = 1
-            except ValueError:
-                water_level -= step
-                pass
-            if water_level <= min_wl:
-                water_level = min_wl
-                break
+        water_level = water_level_p
 
     # Give the flux to the inversion and recompute
     # This is the thick guaranteeing OGGM Flux = Calving Law Flux
@@ -1642,11 +1604,11 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
         water_depth = utils.clip_min(1e-3, thick - f_b)
     except:
         # Mostly happening when front becomes very thin...
-        log.workflow('inversion routine not working as expected. '
-                     'We just take random values and proceed...')
-        f_b = th / 100
+        log.workflow('({}) inversion routine not working as expected. We just '
+                     'take random values and proceed...'.format(gdir.rgi_id))
+        f_b = 1e-3
         water_level = th - f_b
-        opt = 1e3
+        opt = 100
         rel_h = opt
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
         water_depth = utils.clip_min(1e-3, thick - f_b)
