@@ -1272,7 +1272,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
     min_wl = -th if th > thick0 else -thick0
     max_wl = th - 1e-3
     success = 0
-    step = 0.25
+    step = cfg.PARAMS['water_level_step']
 
     while abs_min['fun'] > 0 or success == 0:
         abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
@@ -1551,7 +1551,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     min_wl = -th if th > thick0 else -thick0
     max_wl = th - 1e-3
     success = 0
-    step = 0.25
+    step = cfg.PARAMS['water_level_step']
     
     while abs_min['fun'] > 0 or success == 0:
         abs_min = optimize.minimize(to_minimize, [1.01], bounds=((1.01, 1e7), ),
