@@ -1052,7 +1052,11 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         min_ice_thickness = 0
 
     # Here we start with the actual model run
-    define_new_mu_star_in_gdir(gdir, mu_star)
+    if mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']:
+        # we do not need to define a new mu_star or do an inversion
+        do_inversion = False
+    else:
+        define_new_mu_star_in_gdir(gdir, mu_star)
 
     # this variable is used if an inverison is conducted to keep the original
     # model_flowline unchanged (-> to be able to conduct different dynamic
