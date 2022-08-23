@@ -66,13 +66,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         Ignored if `init_model_filesuffix` is set
     climate_input_filesuffix : str
         filesuffix for the input climate file
-    evolution_model : :class:oggm.core.FlowlineModel
+    evolution_model : :class:`oggm.core.FlowlineModel`
         which evolution model to use. Default: FluxBasedModel
-    mb_model_historical : :py:class:`core.MassBalanceModel`
+    mb_model_historical : :py:class:`oggm.core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a PastMassBalance model  together with the provided
         parameter climate_input_filesuffix.
-    mb_model_spinup : :py:class:`core.MassBalanceModel`
+    mb_model_spinup : :py:class:`oggm.core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
         historical run. Default is to use a ConstantMassBalance model together
         with the provided parameter climate_input_filesuffix and during the
