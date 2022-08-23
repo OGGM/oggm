@@ -2123,6 +2123,7 @@ class FileModel(object):
         try:
             with xr.open_dataset(path) as ds:
                 self._calving_m3_since_y0 = ds.calving_m3.values
+                self.water_level=ds.water_level
                 self.do_calving = True
         except AttributeError:
             self._calving_m3_since_y0 = 0
