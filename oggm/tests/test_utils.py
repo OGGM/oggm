@@ -1247,7 +1247,7 @@ class TestPreproCLI(unittest.TestCase):
         # Around RGI date they are close
         # have to exclude rgi_id 'RGI60-11.00719_d02', because no dmdtda data
         assert_allclose(dss.sel(time=2004).area[1:], dse.sel(time=2004).area[1:], rtol=0.01)
-        assert_allclose(dss.sel(time=2004).length[1:], dse.sel(time=2004).length[1:], atol=805)
+        assert_allclose(dss.sel(time=2004).length[1:], dse.sel(time=2004).length[1:], atol=940)
         assert_allclose(dss.sel(time=2004).volume[1:], dse.sel(time=2004).volume[1:], rtol=0.21)
 
         # Over the period they are... close enough

@@ -3774,13 +3774,13 @@ class TestHEF:
             gdir, max_mu_star=1000.,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion',
             ys=1979, ye=ye)
@@ -3834,13 +3834,13 @@ class TestHEF:
                     gdir, max_mu_star=1000.,
                     run_function=dynamic_mu_star_run_with_dynamic_spinup,
                     kwargs_run_function={'minimise_for': minimise_for,
-                                         'precision_percent_dyn_spinup': precision_percent,
-                                         'precision_absolute_dyn_spinup': precision_absolute,
+                                         'precision_percent': precision_percent,
+                                         'precision_absolute': precision_absolute,
                                          'do_inversion': do_inversion},
                     fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
                     kwargs_fallback_function={'minimise_for': minimise_for,
-                                              'precision_percent_dyn_spinup': precision_percent,
-                                              'precision_absolute_dyn_spinup': precision_absolute,
+                                              'precision_percent': precision_percent,
+                                              'precision_absolute': precision_absolute,
                                               'do_inversion': do_inversion},
                     output_filesuffix='_dyn_mu_calib_spinup_inversion',
                     ys=1979, ye=ye, init_model_fls=fls)
@@ -3860,13 +3860,13 @@ class TestHEF:
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_user_dmdtda',
             ys=1979, ye=ye)
@@ -3902,25 +3902,25 @@ class TestHEF:
                 output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
                 ignore_errors=False,
                 ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-                maxiter_mu_star=2)
+                maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic mu_star calibration (part success)'
@@ -3944,20 +3944,20 @@ class TestHEF:
             gdir, max_mu_star=1000.,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': 0.1,
-                                 'precision_absolute_dyn_spinup': 0.0001,
-                                 'maxiter_dyn_spinup': 2,
+                                 'precision_percent': 0.1,
+                                 'precision_absolute': 0.0001,
+                                 'maxiter': 2,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': 0.1,
-                                      'precision_absolute_dyn_spinup': 0.0001,
-                                      'maxiter_dyn_spinup': 2,
+                                      'precision_percent': 0.1,
+                                      'precision_absolute': 0.0001,
+                                      'maxiter': 2,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'fixed geometry spinup'
@@ -4151,7 +4151,7 @@ class TestHEF:
                 output_filesuffix='_dyn_mu_calib_error',
                 ignore_errors=False,
                 ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-                maxiter_mu_star=2)
+                maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_mu_star_calibration(
@@ -4161,7 +4161,7 @@ class TestHEF:
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic mu_star calibration (part success)'
@@ -4176,7 +4176,7 @@ class TestHEF:
             output_filesuffix='_dyn_mu_calib_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == 'no spinup'
 

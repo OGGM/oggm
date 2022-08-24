@@ -223,7 +223,6 @@ class TestFullRun(unittest.TestCase):
             gdirs, ignore_missing=True,
             volume_m3_reference=user_provided_volume_m3)
 
-        df = df.dropna()
         np.testing.assert_allclose(user_provided_volume_m3,
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.01)
