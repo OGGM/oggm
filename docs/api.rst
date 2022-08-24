@@ -164,6 +164,8 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.run_random_climate
     tasks.run_from_climate_data
     tasks.run_constant_climate
+    tasks.run_dynamic_spinup
+    tasks.run_dynamic_mu_star_calibration
     tasks.copy_to_basedir
     tasks.gdir_to_tar
 

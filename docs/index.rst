@@ -43,6 +43,7 @@ Core principles and structure of the OGGM modelling framework.
 * :doc:`geometry-evolution`
 * :doc:`inversion`
 * :doc:`frontal-ablation`
+* :doc:`dynamic-spinup`
 
 .. toctree::
     :maxdepth: 1
@@ -56,6 +57,7 @@ Core principles and structure of the OGGM modelling framework.
     geometry-evolution.rst
     inversion.rst
     frontal-ablation.rst
+    dynamic-spinup.rst
 
 Using OGGM
 ^^^^^^^^^^
