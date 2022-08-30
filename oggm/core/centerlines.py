@@ -2059,7 +2059,7 @@ def intersect_downstream_lines(gdir, candidates=None):
         list of tributary rgi_ids
     """
 
-    # make sure tributaries are iteratable
+    # make sure tributaries are iterable
     candidates = utils.tolist(candidates)
 
     # Buffer in pixels around the flowline

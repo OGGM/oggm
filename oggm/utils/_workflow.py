@@ -661,7 +661,7 @@ def get_centerline_lonlat(gdir,
     ensure_exterior_match : per design, OGGM centerlines match the underlying
     DEM grid. This may imply that they do not "touch" the exterior outlines
     of the glacier in vector space. Set this to True to correct for that.
-    geometrical_widths_output : for the geometrical witdths
+    geometrical_widths_output : for the geometrical widths
     corrected_widths_output : for the corrected widths
 
     Returns
@@ -3797,7 +3797,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     # If its a dict, select the relevant ones
     if isinstance(tribs, dict):
         tribs = tribs[main.rgi_id]
-    # make sure tributaries are iteratable
+    # make sure tributaries are iterable
     tribs = tolist(tribs)
 
     # read flowlines of the Main glacier

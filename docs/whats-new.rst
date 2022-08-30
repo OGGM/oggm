@@ -146,7 +146,7 @@ Enhancements & bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the 30m version of the
   `Copernicus DEM <https://spacedata.copernicus.eu>`_.
-  This DEM can be set with ``source='COPDEM30'`` and can be usefull for smaller sized glaciers.
+  This DEM can be set with ``source='COPDEM30'`` and can be useful for smaller sized glaciers.
   An account with Copernicus is required to access the DEM (free for academics).
   (:pull:`1364`). By `Matthias Dusch <https://github.com/matthiasdusch>`_
 - Added a new `merge_consecutive_run_outputs` entity task which allows to merge
