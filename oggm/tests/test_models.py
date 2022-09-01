@@ -3522,7 +3522,7 @@ class TestHEF:
                                        ignore_errors=ignore_errors,
                                        min_spinup_period=min_spinup_period,
                                        )
-                # check that all _dynamic_spinup files are deleted if error occured
+                # check that all _dynamic_spinup files are deleted if error occurred
                 for filename in ['model_geometry', 'fl_diagnostics',
                                  'model_diagnostics']:
                     assert not os.path.exists(
@@ -4354,7 +4354,7 @@ class TestHEF:
                                output_filesuffix=feedback,
                                store_monthly_step=True)))
         with warnings.catch_warnings():
-            # Waring about MB model update
+            # Warning about MB model update
             warnings.filterwarnings("ignore", category=UserWarning)
             workflow.execute_parallel_tasks(hef_gdir, tasks)
 
@@ -4785,7 +4785,7 @@ class TestHydro:
             odf_run = ds[sel_vars].to_dataframe().iloc[:-1]
 
         assert odf_hist.index[0] == 1980
-        assert odf_hist.index[-1] == 1998  # this matches becaus last year is removed above
+        assert odf_hist.index[-1] == 1998  # this matches because last year is removed above
         assert odf_run.index[0] == 1999
 
         odf = pd.concat([odf_hist, odf_run])

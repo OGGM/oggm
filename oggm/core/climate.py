@@ -802,7 +802,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
     # which years to look at
     ref_years = mbdf.index.values
 
-    # Average oberved mass balance
+    # Average observed mass balance
     ref_mb = np.mean(mbdf)
 
     # Compute one mu candidate per year and the associated statistics
@@ -1556,7 +1556,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
         # We have just picked the first, but to be fair it is arbitrary
         # We could also pick one randomly... but here we rather prefer to have
-        # the smallest ref_hgt change as possible (hence smalles temp. bias change)
+        # the smallest ref_hgt change as possible (hence smallest temp. bias change)
         mu_star = sel_mus[0]
         # Final correction of the data
         with utils.ncDataset(fpath, 'a') as nc:

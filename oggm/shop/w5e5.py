@@ -125,7 +125,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             # normally if I do the flattening, this here should not occur
 
-        # because of the flattening, there is no time dependece of lon and lat anymore!
+        # because of the flattening, there is no time dependence of lon and lat anymore!
         ds['longitude'] = ds.longitude  # .isel(time=0)
         ds['latitude'] = ds.latitude  # .isel(time=0)
 

@@ -996,7 +996,7 @@ class FlowlineModel(object):
             if set to true this will add all variables to the resulting dataset
             so it could be combined with any other one. This is necessary if
             different spinup methods are used. For example if using the dynamic
-            spinup and setting fixed geoemtry spinup as fallback, the variable
+            spinup and setting fixed geometry spinup as fallback, the variable
             'is_fixed_geometry_spinup' must be added to the dynamic spinup so
             it is possible to compile both glaciers together.
         Returns
@@ -1020,7 +1020,7 @@ class FlowlineModel(object):
                                      'mass balance model with an unambiguous '
                                      'hemisphere.')
 
-        # This is only needed for consistancy to be able to merge two runs
+        # This is only needed for consistency to be able to merge two runs
         if dynamic_spinup_min_ice_thick is None:
             dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
 
@@ -1457,7 +1457,7 @@ class FlowlineModel(object):
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
         """ Runs the model until an equilibrium state is reached.
 
-        Be careful: This only works for CONSTANT (not time-dependant)
+        Be careful: This only works for CONSTANT (not time-dependent)
         mass balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
@@ -1940,7 +1940,7 @@ class FluxBasedModel(FlowlineModel):
             - slope: -
             - ice_flux, tributary_flux: m3 of *ice* per second
             - ice_velocity: m per second (depth-section integrated)
-            - surface_ice_velocity: m per second (corrected for surface - simplifed)
+            - surface_ice_velocity: m per second (corrected for surface - simplified)
         """
         import pandas as pd
 

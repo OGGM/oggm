@@ -133,7 +133,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         MassBalanceModel in °C.
         Default is -2.
     t_bias_max_step_length : float
-        Defines the maximums allowed change of t_bias between two iteratons. Is
+        Defines the maximums allowed change of t_bias between two iterations. Is
         needed to avoid to large changes.
         Default is 2.
     maxiter : int
@@ -182,7 +182,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         if set to true this will add all variables to the resulting dataset
         so it could be combined with any other one. This is necessary if
         different spinup methods are used. For example if using the dynamic
-        spinup and setting fixed geoemtry spinup as fallback, the variable
+        spinup and setting fixed geometry spinup as fallback, the variable
         'is_fixed_geometry_spinup' must be added to the dynamic spinup so
         it is possible to compile both glaciers together.
     kwargs : dict
@@ -741,7 +741,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
             if abs(mismatch[-1]) < precision_percent:
                 return t_bias_guess, mismatch
 
-        # Ok when we end here the spinup could not find satifying match after
+        # Ok when we end here the spinup could not find satisfying match after
         # maxiter(ations)
         raise RuntimeError(f'Could not find mismatch smaller '
                            f'{precision_percent}% (only '
@@ -994,7 +994,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         MassBalanceModel in °C.
         Default is -2.
     t_bias_max_step_length : float
-        Defines the maximums allowed change of t_bias between two iteratons. Is
+        Defines the maximums allowed change of t_bias between two iterations. Is
         needed to avoid to large changes.
         Default is 2
     maxiter : int
@@ -1246,7 +1246,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         MassBalanceModel in °C.
         Default is -2.
     t_bias_max_step_length : float
-        Defines the maximums allowed change of t_bias between two iteratons. Is
+        Defines the maximums allowed change of t_bias between two iterations. Is
         needed to avoid to large changes.
         Default is 2
     maxiter : int
@@ -1279,7 +1279,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
                            'calibrate_inversion_from_consensus provided in '
                            'local_variables!')
 
-    # revert gdir to original state if neccessary
+    # revert gdir to original state if necessary
     if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
         define_new_mu_star_in_gdir(gdir, mu_star)
         if do_inversion:
@@ -1351,7 +1351,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
 
         gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
 
-        # set all dynamic diagnostics to None if there where some succesful
+        # set all dynamic diagnostics to None if there where some successful
         # runs
         diag = gdir.get_diagnostics()
         if minimise_for == 'area':
@@ -1416,7 +1416,7 @@ def dynamic_mu_star_run(
         this function in 'run_dynamic_mu_star_calibration'.
     yr_rgi : int or None
         The rgi year of the gdir.
-        Dafault is None
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1492,7 +1492,7 @@ def dynamic_mu_star_run_fallback(
         Default is FluxBasedModel
     yr_rgi : int or None
         The rgi year of the gdir.
-        Dafault is None
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1578,7 +1578,7 @@ def run_dynamic_mu_star_calibration(
         Upper absolute limit for mu*
         Default is None (-> cfg.PARAMS['max_mu_star'])
     mu_star_max_step_length : float
-        Defines the maximum allowed change of mu_star between two iteratons.
+        Defines the maximum allowed change of mu_star between two iterations.
         Is needed to avoid to large changes.
         Default is 5
     maxiter : int
