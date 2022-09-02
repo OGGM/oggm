@@ -1,5 +1,6 @@
 import logging
 import os
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -170,6 +171,11 @@ def add_millan_velocity(gdir, add_error=False):
         add the error data or not
     """
 
+    if gdir.rgi_region in ['05']:
+        raise NotImplementedError('Millan 22 does not provide velocity '
+                                  'products for Greenland - we would need to '
+                                  'implement MEASURES in the shop for this.')
+
     # Find out which file(s) we need
     gdf = _get_lookup_velocity()
     cp = shpg.Point(gdir.cenlon, gdir.cenlat)
@@ -212,10 +218,22 @@ def add_millan_velocity(gdir, add_error=False):
     vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
 
     # Scale back to match velocity
-    new_vel = np.sqrt(vx**2 + vy**2)
-    p_ok = np.isfinite(new_vel) & (new_vel > 1e-5)  # avoid div by zero
-    vx[p_ok] = vx[p_ok] * vel[p_ok] / new_vel[p_ok]
-    vy[p_ok] = vy[p_ok] * vel[p_ok] / new_vel[p_ok]
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        new_vel = np.sqrt(vx**2 + vy**2)
+        p_ok = np.isfinite(new_vel) & (new_vel > 1)  # avoid div by zero
+        scaler = vel[p_ok] / new_vel[p_ok]
+        vx[p_ok] = vx[p_ok] * scaler
+        vy[p_ok] = vy[p_ok] * scaler
+
+    vx = vx.filled(np.NaN)
+    vy = vy.filled(np.NaN)
+
+    if add_error:
+        err_vx, _, _ = _filter_and_reproj(gdir, 'err_vx', sel, allow_neg=False)
+        err_vy, _, _ = _filter_and_reproj(gdir, 'err_vy', sel, allow_neg=False)
+        err_vx[p_ok] = err_vx[p_ok] * scaler
+        err_vy[p_ok] = err_vy[p_ok] * scaler
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
@@ -253,6 +271,29 @@ def add_millan_velocity(gdir, add_error=False):
         v.data_source = files[0]
         v[:] = vy
 
+        if add_error:
+            vn = 'millan_err_vx'
+            if vn in nc.variables:
+                v = nc.variables[vn]
+            else:
+                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True)
+            v.units = 'm'
+            ln = 'Ice velocity error in map x direction from Millan et al. 2022'
+            v.long_name = ln
+            v.data_source = files[0]
+            v[:] = err_vx
+
+            vn = 'millan_err_vy'
+            if vn in nc.variables:
+                v = nc.variables[vn]
+            else:
+                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True)
+            v.units = 'm'
+            ln = 'Ice velocity error in map y direction from Millan et al. 2022'
+            v.long_name = ln
+            v.data_source = files[0]
+            v[:] = err_vy
+
 
 @utils.entity_task(log)
 def millan_statistics(gdir):
@@ -288,6 +329,12 @@ def millan_statistics(gdir):
             v = ds['millan_v'].where(ds['glacier_mask'], np.NaN).load()
             d['millan_avg_vel'] = np.nanmean(v)
             d['millan_max_vel'] = np.nanmax(v)
+
+            if 'millan_err_vx' in ds:
+                err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.NaN).load()
+                err_vy = ds['millan_err_vy'].where(ds['glacier_mask'], np.NaN).load()
+                err = (err_vx**2 + err_vy**2)**0.5
+                d['millan_avg_err_vel'] = np.nanmean(err)
 
     except (FileNotFoundError, AttributeError, KeyError):
         pass
