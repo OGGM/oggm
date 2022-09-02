@@ -2128,6 +2128,7 @@ class FileModel(object):
         except AttributeError:
             self._calving_m3_since_y0 = 0
             self.do_calving = False
+            self.water_level = 0
 
         # time
         self.reset_y0()
