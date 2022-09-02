@@ -25,23 +25,89 @@ log = logging.getLogger(__name__)
 default_base_url = 'https://cluster.klima.uni-bremen.de/~oggm/velocities/millan22/'
 
 _lookup_thickness = None
+_lookup_velocity = None
+
 
 def _get_lookup_thickness():
     global _lookup_thickness
     if _lookup_thickness is None:
-        fname = default_base_url + 'millan22_thickness_lookup_shp.zip'
+        fname = default_base_url + 'millan22_thickness_lookup_shp_20220902.zip'
         _lookup_thickness = gpd.read_file('zip://' + utils.file_downloader(fname))
     return _lookup_thickness
 
 
+def _get_lookup_velocity():
+    global _lookup_velocity
+    if _lookup_velocity is None:
+        fname = default_base_url + 'millan22_velocity_lookup_shp_20220902.zip'
+        _lookup_velocity = gpd.read_file('zip://' + utils.file_downloader(fname))
+    return _lookup_velocity
+
+
+def _filter(ds):
+    # Read the data and prevent bad surprises
+    data = ds.get_vardata().astype(np.float64)
+    # Nans with 0
+    data[~ np.isfinite(data)] = 0
+    nmax = np.nanmax(data)
+    if nmax == np.inf:
+        # Replace inf with 0
+        data[data == nmax] = 0
+
+    return data
+
+
+def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
+    """ Same code for thickness and error
+
+    Parameters
+    ----------
+    var : 'thickness' or 'err'
+    gdf : the lookup
+    """
+
+    # We may have more than one file
+    total_data = 0
+    grids_used = []
+    files_used = []
+    for i, s in gdf.iterrows():
+        # Fetch it
+        url = default_base_url + s[var]
+        input_file = utils.file_downloader(url)
+
+        # Subset to avoid mega files
+        dsb = salem.GeoTiff(input_file)
+        x0, x1, y0, y1 = gdir.grid.extent
+        dsb.set_subset(corners=((x0, y0), (x1, y1)), crs=gdir.grid.proj, margin=5)
+
+        data = _filter(dsb)
+        if not allow_neg:
+            # Replace negative values with 0
+            data[data < 0] = 0
+
+        if np.nansum(data) == 0:
+            # No need to continue
+            continue
+
+        # Reproject now
+        r_data = gdir.grid.map_gridded_data(data, dsb.grid, interp='linear')
+        total_data += r_data.filled(0)
+        grids_used.append(dsb)
+        files_used.append(s.file_id)
+
+    return total_data, files_used, grids_used
+
+
 @utils.entity_task(log, writes=['gridded_data'])
-def add_millan_thickness(gdir):
+def add_millan_thickness(gdir, add_error=False):
     """Add the Millan 22 thickness data to this glacier directory.
 
     Parameters
     ----------
-    gdir ::py:class:`oggm.GlacierDirectory`
+    gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    add_error : bool
+        add the error data or not
     """
 
     # Find out which file(s) we need
@@ -52,39 +118,17 @@ def add_millan_thickness(gdir):
         raise InvalidWorkflowError(f'There seems to be no Millan file for this '
                                    f'glacier: {gdir.rgi_id}')
 
-    # We may have more than one file
-    total_thick = 0
-    for i, s in sel.iterrows():
-        # Fetch it
-        url = default_base_url + s['thickness']
-        input_file = utils.file_downloader(url)
-
-        # Subset to avoid mega files
-        dsb = salem.GeoTiff(input_file)
-        x0, x1, y0, y1 = gdir.grid.extent
-        dsb.set_subset(corners=((x0, y0), (x1, y1)), crs=gdir.grid.proj, margin=5)
-
-        # Read the data and prevent bad surprises
-        thick = dsb.get_vardata().astype(np.float64)
-        # Nans with 0
-        thick[~ np.isfinite(thick)] = 0
-        nmax = np.nanmax(thick)
-        if nmax == np.inf:
-            # Replace inf with 0
-            thick[thick == nmax] = 0
-        # Replace negative values with 0
-        thick[thick < 0] = 0
-
-        if np.nansum(thick) == 0:
-            # No need to continue
-            continue
-
-        # Reproject now
-        r_thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear')
-        total_thick += r_thick.filled(0)
+    total_thick, files_used, _ = _filter_and_reproj(gdir, 'thickness', sel,
+                                                    allow_neg=False)
 
     # We mask zero ice as nodata
     total_thick = np.where(total_thick == 0, np.NaN, total_thick)
+
+    if add_error:
+        total_err, _, _ = _filter_and_reproj(gdir, 'err', sel, allow_neg=False)
+        total_err[~ np.isfinite(total_thick)] = np.NaN
+        # Error cannot be larger than ice thickness itself
+        total_err = utils.clip_max(total_err, total_thick)
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
@@ -97,7 +141,118 @@ def add_millan_thickness(gdir):
         v.units = 'm'
         ln = 'Ice thickness from Millan et al. 2022'
         v.long_name = ln
+        data_str = ' '.join(files_used) if len(files_used) > 1 else files_used[0]
+        v.data_source = data_str
         v[:] = total_thick
+
+        if add_error:
+            vn = 'millan_ice_thickness_err'
+            if vn in nc.variables:
+                v = nc.variables[vn]
+            else:
+                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True)
+            v.units = 'm'
+            ln = 'Ice thickness error from Millan et al. 2022'
+            v.long_name = ln
+            v.data_source = data_str
+            v[:] = total_err
+
+
+@utils.entity_task(log, writes=['gridded_data'])
+def add_millan_velocity(gdir, add_error=False):
+    """Add the Millan 22 thickness data to this glacier directory.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    add_error : bool
+        add the error data or not
+    """
+
+    # Find out which file(s) we need
+    gdf = _get_lookup_velocity()
+    cp = shpg.Point(gdir.cenlon, gdir.cenlat)
+    sel = gdf.loc[gdf.contains(cp)]
+    if len(sel) == 0:
+        raise InvalidWorkflowError(f'There seems to be no Millan file for this '
+                                   f'glacier: {gdir.rgi_id}')
+
+    vel, files, grids = _filter_and_reproj(gdir, 'v', sel, allow_neg=False)
+    assert len(grids) == 1, 'Multiple velocity grids - dont know what to do.'
+    sel = sel.loc[sel.file_id == files[0]]
+    vx, _, gridsx = _filter_and_reproj(gdir, 'vx', sel)
+    vy, _, gridsy = _filter_and_reproj(gdir, 'vy', sel)
+
+    dsx = gridsx[0]
+    dsy = gridsy[0]
+    grid_vel = dsx.grid
+    proj_vel = grid_vel.proj
+    grid_gla = gdir.grid
+
+    # Get the coords at t0
+    xx0, yy0 = grid_vel.center_grid.xy_coordinates
+
+    # Compute coords at t1
+    xx1 = _filter(dsx)
+    yy1 = _filter(dsy)
+    xx1 += xx0
+    yy1 += yy0
+
+    # Transform both to glacier proj
+    xx0, yy0 = salem.transform_proj(proj_vel, grid_gla.proj, xx0, yy0)
+    xx1, yy1 = salem.transform_proj(proj_vel, grid_gla.proj, xx1, yy1)
+
+    # Compute velocities from there
+    vx = xx1 - xx0
+    vy = yy1 - yy0
+
+    # And transform to local map
+    vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
+    vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
+
+    # Scale back to match velocity
+    new_vel = np.sqrt(vx**2 + vy**2)
+    p_ok = np.isfinite(new_vel) & (new_vel > 1e-5)  # avoid div by zero
+    vx[p_ok] = vx[p_ok] * vel[p_ok] / new_vel[p_ok]
+    vy[p_ok] = vy[p_ok] * vel[p_ok] / new_vel[p_ok]
+
+    # Write
+    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+
+        vn = 'millan_v'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+        v.units = 'm'
+        ln = 'Ice velocity from Millan et al. 2022'
+        v.long_name = ln
+        v.data_source = files[0]
+        v[:] = vel
+
+        vn = 'millan_vx'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+        v.units = 'm'
+        ln = 'Ice velocity in map x direction from Millan et al. 2022'
+        v.long_name = ln
+        v.data_source = files[0]
+        v[:] = vx
+
+        vn = 'millan_vy'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+        v.units = 'm'
+        ln = 'Ice velocity in map y direction from Millan et al. 2022'
+        v.long_name = ln
+        v.data_source = files[0]
+        v[:] = vy
+
 
 @utils.entity_task(log)
 def millan_statistics(gdir):
@@ -121,6 +276,19 @@ def millan_statistics(gdir):
             d['millan_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
             d['millan_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
             d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
+
+            if 'millan_ice_thickness_err' in ds:
+                err = ds['millan_ice_thickness_err'].where(ds['glacier_mask'], np.NaN).load()
+                d['millan_vol_err_km3'] = float(err.sum() * gdir.grid.dx ** 2 * 1e-9)
+    except (FileNotFoundError, AttributeError, KeyError):
+        pass
+
+    try:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            v = ds['millan_v'].where(ds['glacier_mask'], np.NaN).load()
+            d['millan_avg_vel'] = np.nanmean(v)
+            d['millan_max_vel'] = np.nanmax(v)
+
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 
