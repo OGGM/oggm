@@ -155,6 +155,7 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
+            'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
             base_extra_L4 in url or

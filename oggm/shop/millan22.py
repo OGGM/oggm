@@ -100,7 +100,7 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
 
 
 @utils.entity_task(log, writes=['gridded_data'])
-def add_millan_thickness(gdir, add_error=False):
+def thickness_to_gdir(gdir, add_error=False):
     """Add the Millan 22 thickness data to this glacier directory.
 
     Parameters
@@ -160,7 +160,7 @@ def add_millan_thickness(gdir, add_error=False):
 
 
 @utils.entity_task(log, writes=['gridded_data'])
-def add_millan_velocity(gdir, add_error=False):
+def velocity_to_gdir(gdir, add_error=False):
     """Add the Millan 22 thickness data to this glacier directory.
 
     Parameters

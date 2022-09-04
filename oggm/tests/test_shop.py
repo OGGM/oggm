@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo, bedtopo
+from oggm.shop import its_live, rgitopo, bedtopo, millan22
 from oggm.core import gis, centerlines, massbalance
 from oggm import cfg, tasks, workflow
 
@@ -104,6 +104,124 @@ class Test_its_live:
             smap.visualize(ax=ax, title='ITS_LIVE velocity',
                            cbar_title='m yr-1')
             ax.quiver(xx, yy, vx, vy)
+            plt.show()
+
+
+class Test_millan22:
+
+    @pytest.mark.slow
+    def test_thick_to_glacier(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        # use our files
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/millan22/'
+        monkeypatch.setattr(millan22, 'default_base_url', base_url)
+
+        millan22.thickness_to_gdir(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            thick = ds.millan_ice_thickness.where(mask).data
+
+        # Simply some coverage and sanity checks
+        assert np.isfinite(thick).sum() / mask.sum() > 0.98
+        assert np.nanmax(thick) > 800
+        assert np.nansum(thick) * gdir.grid.dx**2 * 1e-9 > 174
+
+        df = millan22.compile_millan_statistics([gdir]).iloc[0]
+        assert df['millan_perc_cov'] > 0.95
+        assert df['millan_vol_km3'] > 174
+
+        if DO_PLOT:
+            import matplotlib.pyplot as plt
+
+            smap = salem.Map(gdir.grid.center_grid, countries=False)
+            smap.set_shapefile(gdir.read_shapefile('outlines'))
+
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                smap.set_topography(gdir.get_filepath('dem'))
+
+            smap.set_data(thick)
+            smap.set_plot_params(cmap='Reds', vmin=None, vmax=None)
+
+            f, ax = plt.subplots()
+            smap.visualize(ax=ax, title='M22 thickness',
+                           cbar_title='m')
+            plt.show()
+
+    @pytest.mark.slow
+    def test_vel_to_glacier(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        # use our files
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/millan22/'
+        monkeypatch.setattr(millan22, 'default_base_url', base_url)
+
+        millan22.velocity_to_gdir(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            v = ds.millan_v.where(mask).data
+            vx = ds.millan_vx.where(mask).data
+            vy = ds.millan_vy.where(mask).data
+
+        # Simply some coverage and sanity checks
+        assert np.isfinite(v).sum() / mask.sum() > 0.98
+        assert np.nanmax(v) > 2000
+
+        df = millan22.compile_millan_statistics([gdir]).iloc[0]
+        assert df['millan_avg_vel'] > 180
+        assert df['millan_max_vel'] > 2000
+
+        if DO_PLOT:
+            import matplotlib.pyplot as plt
+
+            smap = salem.Map(gdir.grid.center_grid, countries=False)
+            smap.set_shapefile(gdir.read_shapefile('outlines'))
+
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                smap.set_topography(gdir.get_filepath('dem'))
+
+            smap.set_data(v)
+            smap.set_plot_params(cmap='Blues', vmin=None, vmax=None)
+
+            xx, yy = gdir.grid.center_grid.xy_coordinates
+            xx, yy = smap.grid.transform(xx, yy, crs=gdir.grid.proj)
+
+            yy = yy[2::5, 2::5]
+            xx = xx[2::5, 2::5]
+            vx = vx[2::5, 2::5]
+            vy = vy[2::5, 2::5]
+
+            f, ax = plt.subplots()
+            smap.visualize(ax=ax, title='M22 velocity',
+                           cbar_title='m yr-1')
+            ax.quiver(xx, yy, vx, vy)
+            plt.show()
             plt.show()
 
 
