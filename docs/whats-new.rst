@@ -40,6 +40,8 @@ Enhancements
   Level 5 now replaces level 4 and creates the minigdirs (where only the files
   for a model run are kept and no inversion is possible anymore) (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added support for Milland 22 velocity and thickness in the shop (:pull:`1443`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
