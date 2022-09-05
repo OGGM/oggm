@@ -99,6 +99,22 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(graphic_marker)
 
 
+@pytest.fixture(scope='function', autouse=True)
+def restore_oggm_cfg():
+    """Ensures a test cannot pollute cfg for other tests running after it"""
+    old_cfg = cfg.pack_config()
+    yield
+    cfg.unpack_config(old_cfg)
+
+
+@pytest.fixture(scope='class', autouse=True)
+def restore_oggm_class_cfg():
+    """Ensures a test-class cannot pollute cfg for other tests running after it"""
+    old_cfg = cfg.pack_config()
+    yield
+    cfg.unpack_config(old_cfg)
+
+
 @pytest.fixture(autouse=True)
 def patch_data_urls(monkeypatch):
     """This makes sure we never download the big files with our tests"""
