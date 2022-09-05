@@ -193,7 +193,7 @@ Check install (goal 10)
 The user will have two complementary ways to test the correct installation
 of OGGM:
 
-- `pytest --pyargs oggm --run-slow --mpl` will run the test suite. This test
+- `pytest.oggm --run-slow --mpl` will run the test suite. This test
   suite does not contain quantitative tests, i.e. it does not guarantee
   consistency of model results across platforms
 - `oggm.check_install()` will be a top level function performing quantitative 

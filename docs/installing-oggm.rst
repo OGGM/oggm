@@ -206,7 +206,7 @@ Test OGGM
 You can test your OGGM installation by running the following command from
 anywhere (don't forget to activate your environment first)::
 
-    pytest --pyargs oggm
+    pytest.oggm
 
 The tests can run for about 10 minutes (`we are trying to reduce this <https://github.com/OGGM/oggm/issues/1063>`_).
 If everything worked fine, you should see something like::
@@ -248,7 +248,7 @@ as long as the tests end without errors.
 This runs a minimal suite of tests. If you want to run the entire test suite
 (including graphics and slow running tests), type::
 
-    pytest --pyargs oggm --run-slow --mpl
+    pytest.oggm --run-slow --mpl
 
 **Congrats**, you are now set-up for the :doc:`getting-started` section!
 
@@ -377,6 +377,6 @@ Installing them with pip or conda should be much easier.
 Running the tests in this minimal environment works the same. Simply run
 from a terminal::
 
-    pytest --pyargs oggm
+    pytest.oggm
 
 The number of tests will be much smaller!
