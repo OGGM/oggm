@@ -833,13 +833,13 @@ def pack_config():
 
     return {
         'IS_INITIALIZED': IS_INITIALIZED,
-        'PARAMS': PARAMS,
-        'PATHS': PATHS,
-        'LRUHANDLERS': LRUHANDLERS,
-        'DATA': DATA,
+        'PARAMS': dict(PARAMS),
+        'PATHS': dict(PATHS),
+        'LRUHANDLERS': dict(LRUHANDLERS),
+        'DATA': dict(DATA),
         'BASENAMES': dict(BASENAMES),
-        'DL_VERIFIED': DL_VERIFIED,
-        'DEM_SOURCE_TABLE': DEM_SOURCE_TABLE
+        'DL_VERIFIED': dict(DL_VERIFIED),
+        'DEM_SOURCE_TABLE': dict(DEM_SOURCE_TABLE)
     }
 
 
@@ -850,12 +850,25 @@ def unpack_config(cfg_dict):
     global DL_VERIFIED, DEM_SOURCE_TABLE
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
-    PARAMS = cfg_dict['PARAMS']
-    PATHS = cfg_dict['PATHS']
-    LRUHANDLERS = cfg_dict['LRUHANDLERS']
-    DATA = cfg_dict['DATA']
-    DL_VERIFIED = cfg_dict['DL_VERIFIED']
-    DEM_SOURCE_TABLE = cfg_dict['DEM_SOURCE_TABLE']
+
+    prev_log = PARAMS.do_log
+    PARAMS.do_log = False
+
+    PARAMS.clear()
+    PATHS.clear()
+    LRUHANDLERS.clear()
+    DATA.clear()
+    DL_VERIFIED.clear()
+    DEM_SOURCE_TABLE.clear()
+
+    PARAMS.update(cfg_dict['PARAMS'])
+    PATHS.update(cfg_dict['PATHS'])
+    LRUHANDLERS.update(cfg_dict['LRUHANDLERS'])
+    DATA.update(cfg_dict['DATA'])
+    DL_VERIFIED.update(cfg_dict['DL_VERIFIED'])
+    DEM_SOURCE_TABLE.update(cfg_dict['DEM_SOURCE_TABLE'])
+
+    PARAMS.do_log = prev_log
 
     # BASENAMES is a DocumentedDict, which cannot be pickled because
     # set intentionally mismatches with get
