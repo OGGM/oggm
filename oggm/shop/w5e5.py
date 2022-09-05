@@ -120,7 +120,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         try:
             # computing all the distances and choose the nearest gridpoint
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         except ValueError:
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             # normally if I do the flattening, this here should not occur
@@ -149,7 +149,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         try:
             # ... prcp is also flattened
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         except ValueError:
             # this should not occur
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
@@ -164,7 +164,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         try:
             # Flattened  (only possibility at the moment)
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         except ValueError:
             # this should not occur
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
@@ -218,7 +218,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         try:
             # ... prcp is also flattened
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=c.argmin())
+            ds = ds.isel(points=np.argmin(c.data))
         except ValueError:
             # this should not occur
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')

@@ -337,6 +337,7 @@ class TestFullRun(unittest.TestCase):
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
                                      nyears=100, seed=0,
                                      store_monthly_step=True,
+                                     mb_elev_feedback='monthly',
                                      output_filesuffix='_test')
 
         for gd in gdirs:

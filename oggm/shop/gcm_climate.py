@@ -262,8 +262,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         c = ((tempds_gcm.longitude - glon) ** 2 +
              (tempds_gcm.latitude - glat) ** 2)
         # first select gridpoint, then merge, should be faster!!!
-        temp_a_gcm = tempds_gcm.isel(points=c.argmin())
-        temp_a_hist = tempds_hist.isel(points=c.argmin())
+        temp_a_gcm = tempds_gcm.isel(points=np.argmin(c.data))
+        temp_a_hist = tempds_hist.isel(points=np.argmin(c.data))
         # merge historical with gcm together
         # TODO: change to drop_conflicts when xarray version v0.17.0 can
         #  be used with salem
@@ -280,8 +280,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
 
         c = ((precipds_gcm.longitude - glon) ** 2 +
              (precipds_gcm.latitude - glat) ** 2)
-        precip_a_gcm = precipds_gcm.isel(points=c.argmin())
-        precip_a_hist = precipds_hist.isel(points=c.argmin())
+        precip_a_gcm = precipds_gcm.isel(points=np.argmin(c.data))
+        precip_a_hist = precipds_hist.isel(points=np.argmin(c.data))
         precip_a = xr.merge([precip_a_gcm, precip_a_hist],
                             combine_attrs='override')
 
