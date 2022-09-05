@@ -94,82 +94,43 @@ This is the recommended way to install OGGM for most users.
 Prerequisites
 ~~~~~~~~~~~~~
 
-You should have a recent version of the `conda`_ package manager.
-You can get `conda`_ by installing `miniconda`_ (the package manager alone -
-recommended)  or `anaconda`_ (the full suite - with many packages you won't
-need).
+You should have a recent version of the `conda`_ package manager. Our
+recommendation is to install `mambaforge`_. If you are completely
+new to these things, check out
+`this page <https://fabienmaussion.info/intro_to_programming/week_01/01-Installation.html>`_
+which explains how to install ``mambaforge`` and
+`this one <https://fabienmaussion.info/intro_to_programming/week_05/01-install-packages.html>`_
+for installing packages.
 
-
-.. _miniconda: http://conda.pydata.org/miniconda.html
-.. _anaconda: http://docs.continuum.io/anaconda/install
-
-Conda environment
-~~~~~~~~~~~~~~~~~
-
-We recommend to create a specific `environment`_ for OGGM. In a terminal
-window, type::
-
-    conda create --name oggm_env python=3.X
-
-
-where ``3.X`` is the Python version shipped with conda (currently 3.9).
-You can of course use any other name for your environment.
-
-Don't forget to activate it before going on::
-
-    source activate oggm_env
-
-
-.. _environment: https://conda.io/projects/conda/en/latest/user-guide/concepts/environments.html
-
-
-In a hurry? Try mamba (optional)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The conda package manager has been criticized for being slow (it *is*
-quite slow to be honest). A new, faster tool is now available
-to replace conda: `mamba <https://mamba.readthedocs.io>`_. Mamba is a drop-in
+We recommend to use `mamba <https://mamba.readthedocs.io>`_ over conda as an
+installation command. Mamba is a drop-in
 replacement for all conda commands. If you feel like it, install mamba in your conda
 environment (``conda install -c conda-forge mamba``)
 and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
-*Note March 2022*: soon, conda will use mamba per default. See
+*Note 2022*: soon, conda will use mamba per default. See
 `this post <https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community>`_
 for more info.
 
+.. _miniconda: http://conda.pydata.org/miniconda.html
+.. _mambaforge: https://github.com/conda-forge/miniforge#mambaforge
 
-Install dependencies
-~~~~~~~~~~~~~~~~~~~~
+The simplest way: with an environment file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Install all OGGM dependencies from the ``conda-forge`` and ``oggm`` conda channels::
+Download (right-click -> "save as") or copy the content of
+`this file <https://raw.githubusercontent.com/OGGM/oggm/master/docs/recommended_env.yml>`_
+into a file called ``environment.yml`` on your system.
 
-    mamba install -c oggm -c conda-forge oggm-deps
+From the location of the file,  run ``mamba env create -f environment.yml``.
 
-The ``oggm-deps`` package is a "meta package". It does not contain any code but
-will install all the packages OGGM needs automatically.
+This will create a new environment called ``oggm_env`` in your conda installation.
+For more information about conda environments, visit the
+`conda documentation on the topic <https://conda.io/projects/conda/en/latest/user-guide/concepts/environments.html>`_. Similarly,
+visit `conda documentation on environment files <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
+for more information about how to create an environment from a ``yml`` file.
 
-.. important::
-
-    The `conda-forge`_ channel ensures that the complex package dependencies are
-    handled correctly. Subsequent installations or upgrades from the default
-    conda channel might brake the chain. We strongly
-    recommend to **always** use the the `conda-forge`_ channel for your
-    installation.
-
-    You might consider setting `conda-forge`_  as your
-    default channel::
-
-        conda config --add channels conda-forge
-
-No scientific Python installation is complete without installing a good
-testing framework, as well as `IPython`_ and `Jupyter`_::
-
-    mamba install -c conda-forge pytest ipython jupyter
-
-.. _conda-forge: https://conda-forge.github.io/
-.. _IPython: https://ipython.org/
-.. _Jupyter: https://jupyter.org/
-
+Don't forget to :ref:`test-oggm` before using it!
 
 Install OGGM itself
 ~~~~~~~~~~~~~~~~~~~
@@ -188,11 +149,12 @@ First, choose which version of OGGM you would like to install:
 
 **‣ install the stable version:**
 
-If you are using conda, you can install stable OGGM as a normal conda package::
+.. note::
 
-    mamba install -c oggm oggm
+    If you installed OGGM with the environment file above, OGGM will be installed
+    already in the latest **stable** version.
 
-If you are using pip, you can install OGGM from `PyPI <https://pypi.python.org/pypi/oggm>`_::
+In your conda environment, use pip::
 
     pip install oggm
 
@@ -205,7 +167,6 @@ system. In your conda environment, simply do::
 
 With this command you can also update an already installed OGGM version
 to the latest version.
-
 
 **‣ install the dev version + get access to the OGGM code:**
 
@@ -235,9 +196,12 @@ And install OGGM in development mode (this is valid for both  **pip** and
 
 .. _git pull: https://git-scm.com/docs/git-pull
 
+Don't forget to :ref:`test-oggm` before using it!
 
-Testing OGGM
-~~~~~~~~~~~~
+.. _test-oggm:
+
+Test OGGM
+~~~~~~~~~
 
 You can test your OGGM installation by running the following command from
 anywhere (don't forget to activate your environment first)::
@@ -303,59 +267,8 @@ If the tests don't pass, a diagnostic of which package creates the errors
 might be necessary. Errors like ``segmentation fault`` or ``Proj Error``
 are frequent and point to errors in upstream packages, rarely in OGGM itself.
 
-If you are having troubles, installing the packages manually from a fresh
-environment might help. At the time of writing (20.01.2021), creating an
-environment from the following ``environment.yml`` file used to work::
-
-    name: oggm_env
-    channels:
-      - conda-forge
-    dependencies:
-      - jupyter
-      - jupyterlab
-      - numpy
-      - scipy
-      - pandas
-      - shapely
-      - matplotlib
-      - Pillow
-      - netcdf4
-      - scikit-image
-      - scikit-learn
-      - configobj
-      - xarray
-      - pytest
-      - dask
-      - bottleneck
-      - pyproj
-      - cartopy
-      - geopandas
-      - rasterio<1.2.10
-      - rioxarray
-      - seaborn
-      - pytables
-      - salem
-      - motionless
-      - sphinx
-      - sphinx-book-theme
-      - ipython
-      - numpydoc
-      - seaborn
-      - sphinx-intl
-      - pip:
-        - joblib
-        - progressbar2
-        - sphinx-togglebutton
-        - git+https://github.com/OGGM/pytest-mpl
-        - oggm
-
-
-See the
-`conda docs <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
-for more information about how to create an environment from a ``yml`` file, OR
-you can do what I usually do (much faster): install `mamba`_
-first, then run ``mamba env create -f environment.yml``.
-
+If you encounter issues, please get in touch with
+us `on github <https://github.com/OGGM/oggm/issues>`_.
 
 .. _virtualenv-install:
 
@@ -366,7 +279,7 @@ Install with pyenv (Linux)
 
    We recommend our users to use ``conda`` instead of ``pip``, because
    of the ease of installation with ``conda``. If you are familiar with ``pip`` and
-   ``pyenv``, the instructions below work as well: as of Sept 2020 (and thanks
+   ``pyenv``, the instructions below work as well: as of Sept 2022 (and thanks
    to pip wheels), a pyenv
    installation is possible without major issue on Debian/Ubuntu/Mint
    systems.

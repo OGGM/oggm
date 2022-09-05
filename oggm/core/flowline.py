@@ -1170,7 +1170,7 @@ class FlowlineModel(object):
             diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc
             diag_ds['is_fixed_geometry_spinup'].attrs['unit'] = '-'
         elif make_compatible:
-            is_spinup_time = np.full(len(monthly_time), False, dtype=np.bool)
+            is_spinup_time = np.full(len(monthly_time), False, dtype=bool)
             diag_ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
             desc = 'Part of the series which are spinup'
             diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc

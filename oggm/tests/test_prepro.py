@@ -2094,12 +2094,14 @@ class TestClimate(unittest.TestCase):
 
     def test_fake_ref_mb_glacier(self):
 
+        testdir = os.path.join(self.testdir, 'fake_ref')
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir1 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir1 = oggm.GlacierDirectory(entity, base_dir=testdir)
         climate.process_custom_climate_data(gdir1)
         entity['RGIId'] = 'RGI50-11.99999'
-        gdir2 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir2 = oggm.GlacierDirectory(entity, base_dir=testdir)
         climate.process_custom_climate_data(gdir2)
 
         ref_gd = utils.get_ref_mb_glaciers([gdir2])
