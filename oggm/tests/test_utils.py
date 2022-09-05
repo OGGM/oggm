@@ -388,7 +388,10 @@ class TestInitialize(unittest.TestCase):
             assert cfg.PARAMS['mp_processes'] >= 1
 
     def test_defaults(self):
-        self.assertFalse(cfg.PATHS['working_dir'])
+        if os.environ.get('OGGM_WORKDIR'):
+            self.assertTrue(cfg.PATHS['working_dir'])
+        else:
+            self.assertFalse(cfg.PATHS['working_dir'])
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')

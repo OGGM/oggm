@@ -1164,10 +1164,10 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_climate')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_climate_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
@@ -2094,14 +2094,12 @@ class TestClimate(unittest.TestCase):
 
     def test_fake_ref_mb_glacier(self):
 
-        testdir = os.path.join(self.testdir, 'fake_ref')
-
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir1 = oggm.GlacierDirectory(entity, base_dir=testdir)
+        gdir1 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         climate.process_custom_climate_data(gdir1)
         entity['RGIId'] = 'RGI50-11.99999'
-        gdir2 = oggm.GlacierDirectory(entity, base_dir=testdir)
+        gdir2 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         climate.process_custom_climate_data(gdir2)
 
         ref_gd = utils.get_ref_mb_glaciers([gdir2])
