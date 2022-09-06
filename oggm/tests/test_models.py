@@ -1065,8 +1065,14 @@ class TestMassBalanceModels:
 
         np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
         np.testing.assert_allclose(pf, 3.35713, rtol=1e-4)
+
+        with pytest.raises(InvalidParamsError):
+            # This does not work
+            mb = massbalance.ConstantMassBalance(gdir)
+
         cfg.PARAMS['use_winter_prcp_factor'] = False
         cfg.PARAMS['prcp_scaling_factor'] = prev_fac
+
 
 
 class TestModelFlowlines():

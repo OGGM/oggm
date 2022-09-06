@@ -633,7 +633,8 @@ class ConstantMassBalance(MassBalanceModel):
             you want to use (the default is to use the calibrated value)
         y0 : int, optional, default: tstar
             the year at the center of the period of interest. The default
-            is to use tstar as center.
+            is to use tstar as center. If t_star is not available, raises
+            an error.
         halfsize : int, optional
             the half-size of the time window (window size = 2 * halfsize + 1)
         filename : str, optional
@@ -651,7 +652,10 @@ class ConstantMassBalance(MassBalanceModel):
 
         if y0 is None:
             df = gdir.read_json('local_mustar')
-            y0 = df['t_star']
+            y0 = df.get('t_star', np.NaN)
+            if not np.isfinite(y0):
+                raise InvalidParamsError('t_star has not been set for this '
+                                         'glacier. Please set `y0` explicitly')
 
         # This is a quick'n dirty optimisation
         try:
@@ -851,7 +855,10 @@ class AvgClimateMassBalance(ConstantMassBalance):
 
         if y0 is None:
             df = gdir.read_json('local_mustar')
-            y0 = df['t_star']
+            y0 = df.get('t_star', np.NaN)
+            if not np.isfinite(y0):
+                raise InvalidParamsError('t_star has not been set for this '
+                                         'glacier. Please set `y0` explicitly')
 
         self.mbmod = PastMassBalance(gdir, mu_star=mu_star, bias=bias,
                                      filename=filename,
@@ -950,7 +957,10 @@ class RandomMassBalance(MassBalanceModel):
             else:
                 if y0 is None:
                     df = gdir.read_json('local_mustar')
-                    y0 = df['t_star']
+                    y0 = df.get('t_star', np.NaN)
+                    if not np.isfinite(y0):
+                        raise InvalidParamsError('t_star has not been set for this '
+                                                 'glacier. Please set `y0` explicitly')
                 self.years = np.arange(y0 - halfsize, y0 + halfsize + 1)
         else:
             self.rng = None
@@ -1247,7 +1257,11 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                     fl.rgi_id != gdir.rgi_id) and (_y0 is None):
 
                 df = gdir.read_json('local_mustar', filesuffix='_' + fl.rgi_id)
-                kwargs['y0'] = df['t_star']
+                y0 = df.get('t_star', np.NaN)
+                if not np.isfinite(y0):
+                    raise InvalidParamsError('t_star has not been set for this '
+                                             'glacier. Please set `y0` explicitly')
+                kwargs['y0'] = y0
 
             self.flowline_mb_models.append(
                 mb_model_class(gdir, mu_star=fl.mu_star, bias=fl_bias,
