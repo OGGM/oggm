@@ -19,6 +19,7 @@ from oggm import utils
 from oggm.utils import mkdir, _downloads
 from oggm.utils import oggm_urlretrieve
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
+from oggm.workflow import reset_multiprocessing
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ def pytest_collection_modifyitems(config, items):
 def restore_oggm_cfg():
     """Ensures a test cannot pollute cfg for other tests running after it"""
     old_cfg = cfg.pack_config()
+    reset_multiprocessing()
     yield
     cfg.unpack_config(old_cfg)
 
