@@ -541,10 +541,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
                                        "None if using a winter_prcp_factor")
 
         # Have we decided on a factor yet?
-        try:
-            df = gdir.read_json('local_mustar')
-        except FileNotFoundError:
-            df = {}
+        df = gdir.read_json('local_mustar', allow_empty=True)
         prcp_fac = df.get('glacier_prcp_scaling_factor')
         if prcp_fac is None:
             # Then decide and store
@@ -924,10 +921,7 @@ def _fallback_local_t_star(gdir):
 
     """
     # Scalars in a small dict for later
-    try:
-        df = gdir.read_json('local_mustar')
-    except FileNotFoundError:
-        df = {}
+    df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = np.nan
@@ -1062,10 +1056,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
                                           '{:.2f}'.format(gdir.rgi_id, mustar))
 
     # Scalars in a small dict for later
-    try:
-        df = gdir.read_json('local_mustar')
-    except FileNotFoundError:
-        df = {}
+    df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = int(tstar)
     df['bias'] = bias
@@ -1574,10 +1565,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     gdir.write_json(out, 'climate_info')
 
     # Store diagnostics
-    try:
-        df = gdir.read_json('local_mustar')
-    except FileNotFoundError:
-        df = {}
+    df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = 0

@@ -3067,7 +3067,7 @@ class GlacierDirectory(object):
         with _open(fp, 'wb') as f:
             pickle.dump(var, f, protocol=4)
 
-    def read_json(self, filename, filesuffix=''):
+    def read_json(self, filename, filesuffix='', allow_empty=False):
         """Reads a JSON file located in the directory.
 
         Parameters
@@ -3076,6 +3076,8 @@ class GlacierDirectory(object):
             file name (must be listed in cfg.BASENAME)
         filesuffix : str
             append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
 
         Returns
         -------
@@ -3087,8 +3089,15 @@ class GlacierDirectory(object):
             return self._read_deprecated_climate_info()
 
         fp = self.get_filepath(filename, filesuffix=filesuffix)
-        with open(fp, 'r') as f:
-            out = json.load(f)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = json.load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = json.load(f)
         return out
 
     def write_json(self, var, filename, filesuffix=''):
