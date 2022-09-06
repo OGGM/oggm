@@ -5284,6 +5284,7 @@ class TestMassRedis:
 
 @pytest.fixture(scope='class')
 def merged_hef_cfg(class_case_dir):
+
     # Init
     cfg.initialize()
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
@@ -5297,7 +5298,6 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['run_mb_calibration'] = True
-    cfg.PARAMS['use_multiprocessing'] = True
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
