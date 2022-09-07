@@ -1407,6 +1407,13 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         max_mu_star = cfg.PARAMS['max_mu_star']
 
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    if sm == 1:
+        # Check that the other hemisphere is set to 1 as well to avoid surprises
+        oh = 'sh' if gdir.hemisphere == 'nh' else 'nh'
+        if cfg.PARAMS['hydro_month_' + oh] != 1:
+            raise InvalidParamsError('Please set both hydro_month_nh and '
+                                     'hydro_month_sh to 1 for geodetic '
+                                     'calibration.')
     if sm != 1 and not ignore_hydro_months:
         raise InvalidParamsError('mu_star_calibration_from_geodetic_mb makes '
                                  'more sense when applied on calendar years '

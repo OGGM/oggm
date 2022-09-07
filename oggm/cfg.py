@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass
 
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # Local logger
 log = logging.getLogger(__name__)
@@ -114,6 +114,7 @@ class ParamsLoggingDict(ResettingOrderedDict):
 
     def __setitem__(self, key, value):
         # Overrides the original dic to log the change
+        self._check_input(key, value)
         if self.do_log:
             self._log_param_change(key, value)
         ResettingOrderedDict.__setitem__(self, key, value)
@@ -158,6 +159,15 @@ class ParamsLoggingDict(ResettingOrderedDict):
         log.workflow("PARAMS['{}'] changed from `{}` to `{}`.".format(key,
                                                                       prev,
                                                                       value))
+
+    def _check_input(self, key, value):
+
+        if key == 'hydro_month_sh' and value == 1:
+            nh = self.get('hydro_month_nh')
+            if nh is not None and nh != 1:
+                msg = ("When setting PARAMS['hydro_month_sh'] to 1, please set "
+                       "PARAMS['hydro_month_nh'] to 1 first.")
+                raise InvalidWorkflowError(msg)
 
 
 # Globals

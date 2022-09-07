@@ -26,6 +26,7 @@ from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
+                             InvalidWorkflowError,
                              DownloadVerificationFailedException)
 
 
@@ -392,6 +393,12 @@ class TestInitialize(unittest.TestCase):
             self.assertTrue(cfg.PATHS['working_dir'])
         else:
             self.assertFalse(cfg.PATHS['working_dir'])
+
+    def test_params_warn(self):
+        with pytest.raises(InvalidWorkflowError):
+            cfg.PARAMS['hydro_month_sh'] = 1
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
