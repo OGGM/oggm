@@ -195,7 +195,7 @@ def get_dl_verify_data(section):
     """
 
     verify_key = 'dl_verify_data_' + section
-    if cfg.DATA.get(verify_key) is not None:
+    if verify_key in cfg.DATA:
         return cfg.DATA[verify_key]
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
