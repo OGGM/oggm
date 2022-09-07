@@ -475,24 +475,24 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
-            opath = os.path.join(sum_dir, f'{rgi_reg}_centerlines.shp')
+            opath = os.path.join(sum_dir, f'centerlines_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'{rgi_reg}_centerlines_smoothed.shp')
+            opath = os.path.join(sum_dir, f'centerlines_smoothed_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              ensure_exterior_match=True,
                                              simplify_line=0.5,
                                              corner_cutting=5,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'{rgi_reg}_flowlines.shp')
+            opath = os.path.join(sum_dir, f'flowlines_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              flowlines_output=True,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'{rgi_reg}_geom_widths.shp')
+            opath = os.path.join(sum_dir, f'geom_widths_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              geometrical_widths_output=True,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'{rgi_reg}_widths.shp')
+            opath = os.path.join(sum_dir, f'widths_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              corrected_widths_output=True,
                                              path=opath)
