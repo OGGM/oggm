@@ -83,6 +83,13 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
     fpath = cfg.PATHS['climate_file']
     nc_ts = salem.GeoNetcdf(fpath)
 
+    # Avoid reading all data
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        nc_ts.set_subset(((gdir.cenlon, gdir.cenlat),
+                          (gdir.cenlon, gdir.cenlat)),
+                         margin=2)  # 2 is to be sure - also on small files
+
     # set temporal subset for the ts data (hydro years)
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     em = sm - 1 if (sm > 1) else 12
@@ -107,8 +114,8 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
                                                          'millimeter']
 
     # geoloc
-    lon = nc_ts._nc.variables['lon'][:]
-    lat = nc_ts._nc.variables['lat'][:]
+    lon = nc_ts.get_vardata('lon')
+    lat = nc_ts.get_vardata('lat')
 
     ilon = np.argmin(np.abs(lon - gdir.cenlon))
     ilat = np.argmin(np.abs(lat - gdir.cenlat))
