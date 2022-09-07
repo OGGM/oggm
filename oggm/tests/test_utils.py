@@ -1039,7 +1039,11 @@ class TestPreproCLI(unittest.TestCase):
                                       'glacier_statistics_11.csv'))
         assert 'main_flowline_length' in df
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
-                                           'summary', 'centerlines_11.tar.gz'))
+                                           'summary', '11_centerlines.tar.gz'))
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', '11_centerlines_smoothed.tar.gz'))
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', '11_widths.tar.gz'))
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'), index_col=0)

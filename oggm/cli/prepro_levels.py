@@ -20,11 +20,6 @@ import oggm.cfg as cfg
 from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
-from oggm.core.dynamic_spinup import (
-    dynamic_mu_star_run,
-    dynamic_mu_star_run_fallback,
-    dynamic_mu_star_run_with_dynamic_spinup,
-    dynamic_mu_star_run_with_dynamic_spinup_fallback)
 
 # Module logger
 from oggm.utils import get_prepro_base_url, file_downloader
@@ -165,8 +160,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
     continue_on_error : bool
-        if True the workflow continues if a task raise an error. For operational
-        runs it should be set to True. Default is True
+        if True the workflow continues if a task raises an error. For operational
+        runs it should be set to True (the default).
     """
 
     # Input check
@@ -480,8 +475,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
-            opath = os.path.join(sum_dir, 'centerlines_{}.shp'.format(rgi_reg))
+            opath = os.path.join(sum_dir, f'{rgi_reg}_centerlines.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'{rgi_reg}_centerlines_smoothed.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             ensure_exterior_match=True,
+                                             simplify_line=0.5,
+                                             corner_cutting=5,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'{rgi_reg}_flowlines.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             flowlines_output=True,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'{rgi_reg}_geom_widths.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             geometrical_widths_output=True,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'{rgi_reg}_widths.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             corrected_widths_output=True,
                                              path=opath)
 
         # L2 OK - compress all in output directory
