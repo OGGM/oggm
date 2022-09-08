@@ -2492,10 +2492,6 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue('Copernicus_DSM_10_N46_00_E007_00' in
                         [z[0][1], z[1][1]])
 
-        # we want an error if copdem does not find all or any
-        self.assertRaises(InvalidDEMError, utils.copdem_zone,
-                          [0, 1], [0, 1], 'COPDEM90')
-
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
         assert utils.is_dem_source_available('GIMP', [-25, -25], [71, 71])
