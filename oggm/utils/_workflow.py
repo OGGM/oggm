@@ -875,11 +875,13 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     odf = odf.sort_values(by='RGIID')
     odf.crs = to_crs
     # Sanity checks to avoid bad surprises
-    gtype = [g.type for g in odf.geometry]
-    if len(np.unique(gtype)) > 1:
-        errdf = odf.loc[gtype != 'LineString']
-        raise RuntimeError('Some geometries are not LineString at RGI Ids: '
-                           f'{errdf.RGIID.values}')
+    gtype = np.array([g.type for g in odf.geometry])
+    if 'GeometryCollection' in gtype:
+        errdf = odf.loc[gtype == 'GeometryCollection']
+        if not np.all(errdf.length) == 0:
+            errdf = errdf.loc[errdf.length > 0]
+            raise RuntimeError('Some geometries are non-empty GeometryCollection '
+                               f'at RGI Ids: {errdf.RGIID.values}')
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
