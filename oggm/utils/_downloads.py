@@ -680,7 +680,7 @@ def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
             logger.info("Downloading %s failed with FTPSDownloadError"
                         " error: '%s', retrying in %s seconds... %s/%s" %
                         (www_path, err.orgerr, sleep_on_retry, retry_counter, retry_max))
-            time.sleep(10)
+            time.sleep(sleep_on_retry)
             continue
 
     # See if we managed (fail is allowed)
