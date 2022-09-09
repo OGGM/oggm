@@ -608,13 +608,14 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def file_downloader(www_path, retry_max=5, cache_name=None,
-                    reset=False, auth=None, timeout=None):
+def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
+                    cache_name=None, reset=False, auth=None,
+                    timeout=None):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
     retry_counter = 0
-    while retry_counter <= retry_max:
+    while retry_counter < retry_max:
         # Try to download
         try:
             retry_counter += 1
@@ -629,18 +630,19 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
                 # Ok so this *should* be an ocean tile
                 return None
             elif err.code >= 500 and err.code < 600:
-                logger.info("Downloading %s failed with HTTP error %s, "
-                            "retrying in 10 seconds... %s/%s" %
-                            (www_path, err.code, retry_counter, retry_max))
-                time.sleep(10)
+                logger.info(f"Downloading {www_path} failed with "
+                            f"HTTP error {err.code}, "
+                            f"retrying in {sleep_on_retry} seconds... "
+                            f"{retry_counter}/{retry_max}")
+                time.sleep(sleep_on_retry)
                 continue
             else:
                 raise
         except HttpContentTooShortError as err:
             logger.info("Downloading %s failed with ContentTooShortError"
-                        " error %s, retrying in 10 seconds... %s/%s" %
-                        (www_path, err.code, retry_counter, retry_max))
-            time.sleep(10)
+                        " error %s, retrying in %s seconds... %s/%s" %
+                        (www_path, err.code, sleep_on_retry, retry_counter, retry_max))
+            time.sleep(sleep_on_retry)
             continue
         except DownloadVerificationFailedException as err:
             if (cfg.PATHS['dl_cache_dir'] and
@@ -670,15 +672,15 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
             else:
                 # in other cases: try again
                 logger.info("Downloading %s failed with ConnectionError, "
-                            "retrying in 10 seconds... %s/%s" %
-                            (www_path, retry_counter, retry_max))
-                time.sleep(10)
+                            "retrying in %s seconds... %s/%s" %
+                            (www_path, sleep_on_retry, retry_counter, retry_max))
+                time.sleep(sleep_on_retry)
                 continue
         except FTPSDownloadError as err:
             logger.info("Downloading %s failed with FTPSDownloadError"
-                        " error: '%s', retrying in 10 seconds... %s/%s" %
-                        (www_path, err.orgerr, retry_counter, retry_max))
-            time.sleep(10)
+                        " error: '%s', retrying in %s seconds... %s/%s" %
+                        (www_path, err.orgerr, sleep_on_retry, retry_counter, retry_max))
+            time.sleep(sleep_on_retry)
             continue
 
     # See if we managed (fail is allowed)
@@ -1562,14 +1564,14 @@ def copdem_zone(lon_ex, lat_ex, source):
             ew = 'W' if lon < 0 else 'E'
             lat_str = '{}{:02.0f}'.format(ns, abs(lat))
             lon_str = '{}{:03.0f}'.format(ew, abs(lon))
-            # COPDEM is global, if we miss tiles it is worth an error
             try:
                 filename = df.loc[(df['Long'] == lon_str) &
                                   (df['Lat'] == lat_str)]['CPP filename'].iloc[0]
                 flist.append((filename,
                               'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str)))
             except IndexError:
-                raise InvalidDEMError('Could not find a matching Copernicus DEM file.')
+                # COPDEM is global, if we miss tiles it is probably in the ocean
+                pass
     return flist
 
 
