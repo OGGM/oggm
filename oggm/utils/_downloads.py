@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'f94ba47fc7c3d0355b806e622e330106e08cc16f'
+SAMPLE_DATA_COMMIT = '8a3c41a36d190c6c78029b5032648ce94ee2026c'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -2206,17 +2206,15 @@ def default_dem_source(rgi_id):
     rgi_id = rgi_id[:14]
     if cfg.DEM_SOURCE_TABLE.get(rgi_reg) is None:
         fp = get_demo_file('rgi62_dem_frac.h5')
-        cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp, key=rgi_reg)
+        cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp)
 
     sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
-    for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
+    for s in ['NASADEM', 'COPDEM90', 'COPDEM30', 'GIMP', 'REMA',
+              'RAMP', 'TANDEM', 'MAPZEN']:
         if sel.loc[s] > 0.75:
-            # this can go as soon as 'rgi62_dem_frac.h5' is updated:
-            if s == 'COPDEM':
-                s = 'COPDEM90'
             return s
-
-    return None
+    # If nothing works, try COPDEM again
+    return 'COPDEM90'
 
 
 def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
