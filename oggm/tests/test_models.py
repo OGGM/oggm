@@ -213,6 +213,13 @@ def other_glacier_cfg():
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['min_mu_star'] = 25
+    cfg.PARAMS['max_mu_star'] = 10000
+    cfg.PARAMS['baseline_climate'] = 'CRU'
 
 
 @pytest.mark.usefixtures('other_glacier_cfg')
@@ -5207,6 +5214,11 @@ class TestMassRedis:
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['min_ice_thick_for_length'] = 5
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['climate_qc_months'] = 3
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -5304,6 +5316,11 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['run_mb_calibration'] = True
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['climate_qc_months'] = 3
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')

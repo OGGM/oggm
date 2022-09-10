@@ -50,6 +50,11 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
         cfg.PARAMS['border'] = 10
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['climate_qc_months'] = 3
         apply_test_ref_tstars()
 
         self.tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
@@ -465,6 +470,11 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['use_kcalving_for_inversion'] = True
         cfg.PARAMS['use_kcalving_for_run'] = True
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['climate_qc_months'] = 3
         apply_test_ref_tstars()
 
     def tearDown(self):
