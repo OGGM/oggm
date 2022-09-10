@@ -548,6 +548,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
+    PARAMS['use_tstar_calibration'] = cp.as_bool('use_tstar_calibration')
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
@@ -606,7 +607,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
-           'use_shape_factor_for_inversion', 'use_rgi_area',
+           'use_shape_factor_for_inversion', 'use_rgi_area', 'use_tstar_calibration',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',

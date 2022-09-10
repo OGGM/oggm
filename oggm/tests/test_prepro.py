@@ -807,6 +807,11 @@ class TestElevationBandFlowlines(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
 
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+
     def tearDown(self):
         self.rm_dir()
 
@@ -1180,6 +1185,11 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['baseline_climate'] = ''
+
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
 
     def tearDown(self):
         self.rm_dir()
@@ -1692,6 +1702,8 @@ class TestClimate(unittest.TestCase):
 
     def test_climate_qc(self):
 
+        cfg.PARAMS['climate_qc_months'] = 3
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
@@ -1759,6 +1771,9 @@ class TestClimate(unittest.TestCase):
 
     @pytest.mark.slow
     def test_find_tstars_multiple_mus(self):
+
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -2223,6 +2238,13 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
 
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
+
     def tearDown(self):
         self.rm_dir()
 
@@ -2402,6 +2424,11 @@ class TestInversion(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
+
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
 
     def tearDown(self):
         self.rm_dir()
@@ -2975,6 +3002,13 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
+
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
 
     def tearDown(self):
         self.rm_dir()
