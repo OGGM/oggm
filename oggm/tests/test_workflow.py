@@ -52,10 +52,10 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.initialize()
 
     # Use multiprocessing
-    # if use_mp is None:
-    #     cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
-    # else:
-    #     cfg.PARAMS['use_multiprocessing'] = use_mp
+    if use_mp is None:
+        cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
+    else:
+        cfg.PARAMS['use_multiprocessing'] = use_mp
 
     # Working dir
     cfg.PATHS['working_dir'] = _TEST_DIR

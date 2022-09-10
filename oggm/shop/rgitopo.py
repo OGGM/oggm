@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 DEMS_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v2/default'
 DEMS_HR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v1/highres/'
 
+
 def init_glacier_directories_from_rgitopo(rgidf=None, dem_source=None,
                                           resolution='default',
                                           keep_dem_folders=False,
