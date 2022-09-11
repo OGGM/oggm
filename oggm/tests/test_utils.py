@@ -846,6 +846,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
+        assert not kwargs['dynamic_spinup']
+        assert kwargs['dynamic_spinup_start_year'] == 1979
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -976,10 +978,12 @@ class TestPreproCLI(unittest.TestCase):
                                            '--match-geodetic-mb-per-glacier', 'hugonnet',
                                            '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
+                                           '--dynamic-spinup', 'area/dmdtda',
                                            ])
 
         assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
         assert kwargs['evolution_model'] == 'massredis'
+        assert kwargs['dynamic_spinup'] == 'area/dmdtda'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',

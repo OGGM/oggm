@@ -241,6 +241,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # takes a long time, so deactivating this can make sense
     cfg.PARAMS['dl_verify'] = not disable_dl_verify
 
+    # Prepare the download of climate file to be shared across processes
+    # TODO
+
     # Other things that make sense
     cfg.PARAMS['store_model_geometry'] = True
 
@@ -826,12 +829,12 @@ def parse_args(args):
                              'against a hash sum.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
-    parser.add_argument('--dynamic_spinup', type=str, default='area/dmdtda',
-                        help="include a dynamic spinup for matching 'area' OR "
-                             "'volume' at the RGI-date and 'dmdtda' from "
-                             "Hugonnet in the period 2000-2019")
-    parser.add_argument('--dynamic_spinup_start_year', type=int, default=1979,
-                        help="if --dynamic_spinup is set, define the starting"
+    parser.add_argument('--dynamic-spinup', type=str, default='',
+                        help="include a dynamic spinup for matching area ('area/dmdtda') "
+                             "OR volume ('area/dmdtda') at the RGI-date and "
+                             "dmdtda from Hugonnet in the period 2000-2019")
+    parser.add_argument('--dynamic-spinup-start-year', type=int, default=1979,
+                        help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
 
