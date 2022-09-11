@@ -1613,7 +1613,11 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof)
+                      test_topofile=topof,
+                      override_params={'baseline_climate': 'CRU',
+                                       'use_tstar_calibration': True,
+                                       'use_winter_prcp_factor': False,
+                                       })
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
                          index_col=0)

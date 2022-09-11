@@ -55,6 +55,7 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['climate_qc_months'] = 3
+        cfg.PARAMS['baseline_climate'] = 'CRU'
         apply_test_ref_tstars()
 
         self.tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
@@ -475,6 +476,8 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['climate_qc_months'] = 3
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['baseline_climate'] = 'CRU'
         apply_test_ref_tstars()
 
     def tearDown(self):

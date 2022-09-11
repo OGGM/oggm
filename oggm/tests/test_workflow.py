@@ -90,6 +90,7 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.PARAMS['hydro_month_nh'] = 10
     cfg.PARAMS['hydro_month_sh'] = 4
     cfg.PARAMS['climate_qc_months'] = 3
+    cfg.PARAMS['baseline_climate'] = 'CRU'
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
