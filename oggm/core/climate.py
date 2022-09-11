@@ -787,6 +787,10 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
 
     from oggm.core.massbalance import MultipleFlowlineMassBalance
 
+    if not cfg.PARAMS['use_tstar_calibration']:
+        raise InvalidParamsError('If using "old" mu* calibration, set '
+                                 "PARAMS['use_tstar_calibration'] to True.")
+
     if glacierwide is None:
         glacierwide = cfg.PARAMS['tstar_search_glacierwide']
 
@@ -975,6 +979,9 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     max_mu_star: bool, optional
         defaults to cfg.PARAMS['max_mu_star']
     """
+    if not cfg.PARAMS['use_tstar_calibration']:
+        raise InvalidParamsError('If using "old" mu* calibration, set '
+                                 "PARAMS['use_tstar_calibration'] to True.")
 
     if tstar is None or bias is None:
         # Do our own interpolation
@@ -1249,6 +1256,10 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
     max_mu_star: bool, optional
         defaults to cfg.PARAMS['max_mu_star']
     """
+
+    if not cfg.PARAMS['use_tstar_calibration']:
+        raise InvalidParamsError('If using "old" mu* calibration, set '
+                                 "PARAMS['use_tstar_calibration'] to True.")
 
     # Interpolated data
     df = gdir.read_json('local_mustar')

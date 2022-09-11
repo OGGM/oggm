@@ -350,6 +350,12 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['border'] = border
 
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['climate_qc_months'] = 3
+
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
@@ -439,6 +445,12 @@ def init_columbia(reset=False):
     cfg.PARAMS['border'] = 10
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['min_mu_star'] = 25
+    cfg.PARAMS['max_mu_star'] = 10000
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -476,6 +488,14 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['border'] = 10
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['min_mu_star'] = 5
+    cfg.PARAMS['max_mu_star'] = 10000
+    cfg.PARAMS['climate_qc_months'] = 3
+    cfg.PARAMS['baseline_climate'] = 'CRU'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity)

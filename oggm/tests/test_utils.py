@@ -395,6 +395,8 @@ class TestInitialize(unittest.TestCase):
             self.assertFalse(cfg.PATHS['working_dir'])
 
     def test_params_warn(self):
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
         with pytest.raises(InvalidWorkflowError):
             cfg.PARAMS['hydro_month_sh'] = 1
         cfg.PARAMS['hydro_month_nh'] = 1
@@ -1022,7 +1024,15 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_regional_geodetic_mb='hugonnet')
+                          test_topofile=topof, match_regional_geodetic_mb='hugonnet',
+                          override_params={'hydro_month_nh': 1,
+                                           'geodetic_mb_period':
+                                               '2000-01-01_2010-01-01',
+                                           'baseline_climate': 'CRU',
+                                           'use_tstar_calibration': True,
+                                           'use_winter_prcp_factor': False,
+                                           }
+                          )
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
@@ -1174,7 +1184,11 @@ class TestPreproCLI(unittest.TestCase):
                           test_topofile=topof, elev_bands=True,
                           override_params={'hydro_month_nh': 1,
                                            'geodetic_mb_period':
-                                           '2000-01-01_2010-01-01'})
+                                           '2000-01-01_2010-01-01',
+                                           'baseline_climate': 'CRU',
+                                           'use_tstar_calibration': True,
+                                           'use_winter_prcp_factor': False,
+                                           })
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
@@ -1286,6 +1300,9 @@ class TestPreproCLI(unittest.TestCase):
                   'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'hydro_month_nh': 1,
                   'hydro_month_sh': 1,
+                  'baseline_climate': 'CRU',
+                  'use_tstar_calibration': True,
+                  'use_winter_prcp_factor': False,
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1386,7 +1403,15 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
-                          logging_level='INFO', max_level=5)
+                          logging_level='INFO', max_level=5,
+                          override_params={'hydro_month_nh': 1,
+                                           'geodetic_mb_period':
+                                               '2000-01-01_2010-01-01',
+                                           'baseline_climate': 'CRU',
+                                           'use_tstar_calibration': True,
+                                           'use_winter_prcp_factor': False,
+                                           }
+                          )
 
         assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
@@ -1588,7 +1613,11 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof)
+                      test_topofile=topof,
+                      override_params={'baseline_climate': 'CRU',
+                                       'use_tstar_calibration': True,
+                                       'use_winter_prcp_factor': False,
+                                       })
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
                          index_col=0)
