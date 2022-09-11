@@ -2240,6 +2240,7 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
 
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
         cfg.PARAMS['hydro_month_nh'] = 10
