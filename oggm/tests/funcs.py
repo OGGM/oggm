@@ -451,6 +451,7 @@ def init_columbia(reset=False):
     cfg.PARAMS['hydro_month_sh'] = 4
     cfg.PARAMS['min_mu_star'] = 25
     cfg.PARAMS['max_mu_star'] = 10000
+    cfg.PARAMS['baseline_climate'] = 'CRU'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
