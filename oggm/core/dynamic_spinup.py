@@ -898,7 +898,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
-        **kwargs):
+        geodetic_mb_ice_density=850, **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -1020,6 +1020,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         glacier volume with the key 'vol_m3_ref' which is later used in the
         calibration during inversion.
         Default is False
+    geodetic_mb_ice_density : float
+        The ice density which was used to derive the geodetic mass balance from
+        the volume change over time. Default is 850 kg m-3
     do_inversion : bool
         If True a complete inversion is conducted using the provided mu_star
         before the actual calibration run.
@@ -1142,7 +1145,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
-                  cfg.PARAMS['ice_density'])
+                  geodetic_mb_ice_density)
 
     return model, dmdtda_mdl
 
@@ -1377,7 +1380,7 @@ def dynamic_mu_star_run(
         gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=FluxBasedModel,
         local_variables=None, set_local_variables=False, yr_rgi=None,
-        **kwargs):
+        geodetic_mb_ice_density=850, **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -1417,6 +1420,9 @@ def dynamic_mu_star_run(
     yr_rgi : int or None
         The rgi year of the gdir.
         Default is None
+    geodetic_mb_ice_density : float
+        The ice density which was used to derive the geodetic mass balance from
+        the volume change over time. Default is 850 kg m-3
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1454,7 +1460,7 @@ def dynamic_mu_star_run(
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
-                  cfg.PARAMS['ice_density'])
+                  geodetic_mb_ice_density)
 
     return model, dmdtda_mdl
 
@@ -1525,6 +1531,7 @@ def dynamic_mu_star_run_fallback(
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_mu_star_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None,
+        geodetic_mb_ice_density=850,
         ref_period='', ignore_hydro_months=False, min_mu_star=None,
         max_mu_star=None, mu_star_max_step_length=5, maxiter=20,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
@@ -1563,6 +1570,9 @@ def run_dynamic_mu_star_calibration(
         yr-1). Must always be a positive number. If None the data from Hugonett
         2021 is used.
         Default is None
+    geodetic_mb_ice_density : float
+        The ice density which was used to derive the geodetic mass balance from
+        the volume change over time. Default is 850 kg m-3
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
@@ -1789,6 +1799,7 @@ def run_dynamic_mu_star_calibration(
                                              fls_init=fls_init, ys=ys, ye=ye,
                                              output_filesuffix=output_filesuffix,
                                              local_variables=local_variables_run_function,
+                                             geodetic_mb_ice_density=geodetic_mb_ice_density,
                                              **kwargs_run_function)
 
             gdir.add_to_diagnostics(
@@ -1819,7 +1830,9 @@ def run_dynamic_mu_star_calibration(
     run_function(gdir=gdir, mu_star=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
                  local_variables=local_variables_run_function,
-                 set_local_variables=True, **kwargs_run_function)
+                 set_local_variables=True,
+                 geodetic_mb_ice_density=geodetic_mb_ice_density,
+                 **kwargs_run_function)
 
     # this is the actual model run which is executed each iteration in order to
     # minimise the mismatch of dmdtda of model and observation
@@ -1834,6 +1847,7 @@ def run_dynamic_mu_star_calibration(
                                          fls_init=fls_init, ys=ys, ye=ye,
                                          output_filesuffix=output_filesuffix,
                                          local_variables=local_variables_run_function,
+                                         geodetic_mb_ice_density=geodetic_mb_ice_density,
                                          **kwargs_run_function)
         return model, dmdtda_mdl
 

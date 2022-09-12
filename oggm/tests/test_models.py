@@ -3816,7 +3816,7 @@ class TestHEF:
                        ds.volume.loc[yr0_ref_dmdtda].values) /
                       gdir.rgi_area_m2 /
                       (yr1_ref_dmdtda - yr0_ref_dmdtda) *
-                      cfg.PARAMS['ice_density'])
+                      850)  # ice density used in Hugonnet
         assert np.isclose(dmdtda_mdl, ref_dmdtda,
                           rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
         assert gdir.get_diagnostics()['used_spinup_option'] == \
@@ -3890,7 +3890,7 @@ class TestHEF:
                        ds.volume.loc[yr0_ref_dmdtda].values) /
                       gdir.rgi_area_m2 /
                       (yr1_ref_dmdtda - yr0_ref_dmdtda) *
-                      cfg.PARAMS['ice_density'])
+                      850)  # ice density used in Hugonnet
         assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
                           rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
                                       (ref_dmdtda + delta_ref_dmdtda)))
