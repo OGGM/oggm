@@ -830,9 +830,11 @@ def parse_args(args):
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic-spinup', type=str, default='',
-                        help="include a dynamic spinup for matching area ('area/dmdtda') "
-                             "OR volume ('area/dmdtda') at the RGI-date and "
-                             "dmdtda from Hugonnet in the period 2000-2019")
+                        help="include a dynamic spinup for matching glacier area "
+                             "('area/dmdtda') OR volume ('volume/dmdtda') at "
+                             "the RGI-date, AND mass-change from Hugonnet "
+                             "in the period 2000-2019 (dynamic mu* "
+                             "calibration).")
     parser.add_argument('--dynamic-spinup-start-year', type=int, default=1979,
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "

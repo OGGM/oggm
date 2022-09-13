@@ -352,6 +352,7 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
 
     cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['prcp_scaling_factor'] = 2.5
     cfg.PARAMS['hydro_month_nh'] = 10
     cfg.PARAMS['hydro_month_sh'] = 4
     cfg.PARAMS['climate_qc_months'] = 3
@@ -447,6 +448,7 @@ def init_columbia(reset=False):
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['prcp_scaling_factor'] = 2.5
     cfg.PARAMS['hydro_month_nh'] = 10
     cfg.PARAMS['hydro_month_sh'] = 4
     cfg.PARAMS['min_mu_star'] = 25
@@ -491,6 +493,7 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['prcp_scaling_factor'] = 2.5
     cfg.PARAMS['hydro_month_nh'] = 10
     cfg.PARAMS['hydro_month_sh'] = 4
     cfg.PARAMS['min_mu_star'] = 5

@@ -809,6 +809,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
 
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
 
@@ -1188,6 +1189,7 @@ class TestClimate(unittest.TestCase):
 
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
 
@@ -2430,6 +2432,7 @@ class TestInversion(unittest.TestCase):
 
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
 
@@ -3008,6 +3011,7 @@ class TestCoxeCalving(unittest.TestCase):
 
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['min_mu_star'] = 25
@@ -3424,6 +3428,7 @@ class TestGrindelInvert(unittest.TestCase):
 
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['min_mu_star'] = 25
@@ -3593,6 +3598,7 @@ class TestGCMClimate(unittest.TestCase):
 
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['min_mu_star'] = 25

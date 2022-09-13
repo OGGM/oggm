@@ -1035,6 +1035,7 @@ class TestPreproCLI(unittest.TestCase):
                                            'baseline_climate': 'CRU',
                                            'use_tstar_calibration': True,
                                            'use_winter_prcp_factor': False,
+                                           'prcp_scaling_factor': 2.5,
                                            }
                           )
 
@@ -1192,6 +1193,7 @@ class TestPreproCLI(unittest.TestCase):
                                            'baseline_climate': 'CRU',
                                            'use_tstar_calibration': True,
                                            'use_winter_prcp_factor': False,
+                                           'prcp_scaling_factor': 2.5,
                                            })
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
@@ -1307,6 +1309,7 @@ class TestPreproCLI(unittest.TestCase):
                   'baseline_climate': 'CRU',
                   'use_tstar_calibration': True,
                   'use_winter_prcp_factor': False,
+                  'prcp_scaling_factor': 2.5,
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1414,6 +1417,7 @@ class TestPreproCLI(unittest.TestCase):
                                            'baseline_climate': 'CRU',
                                            'use_tstar_calibration': True,
                                            'use_winter_prcp_factor': False,
+                                           'prcp_scaling_factor': 2.5,
                                            }
                           )
 
@@ -1621,6 +1625,7 @@ class TestBenchmarkCLI(unittest.TestCase):
                       override_params={'baseline_climate': 'CRU',
                                        'use_tstar_calibration': True,
                                        'use_winter_prcp_factor': False,
+                                       'prcp_scaling_factor': 2.5,
                                        })
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
