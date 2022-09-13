@@ -215,6 +215,7 @@ def other_glacier_cfg():
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['prcp_scaling_factor'] = 2.5
     cfg.PARAMS['hydro_month_nh'] = 10
     cfg.PARAMS['hydro_month_sh'] = 4
     cfg.PARAMS['min_mu_star'] = 25
@@ -5216,6 +5217,7 @@ class TestMassRedis:
         cfg.PARAMS['min_ice_thick_for_length'] = 5
         cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['climate_qc_months'] = 3
