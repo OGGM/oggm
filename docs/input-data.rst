@@ -8,7 +8,7 @@ OGGM Shop
 
 OGGM needs various data files to run. **We rely exclusively on
 open-access data that can be downloaded automatically for the user**. We like
-to see this service as a "shop", allowing users to define a shopping list
+to call this service a "shop", allowing users to define a shopping list
 of data that they wish to add to their :ref:`glacierdir`.
 
 This page describes the various products you will find in the shop.
@@ -35,7 +35,7 @@ If you want to change some of these parameters, you *may* have to start a
 run from a lower processing level and re-run the processing tasks.
 Whether or not this is necessary depends on the stage of the workflow
 you'd like your computations to diverge from the
-defaults (this will become more clear as we provide an example below).
+defaults (this will become more clear as we provide examples below).
 
 To start from a pre-processed state, simply use the
 :py:func:`workflow.init_glacier_directories` function with the
@@ -57,32 +57,42 @@ Currently, there are six available levels of pre-processing:
 - **Level 1**: directories now contain the glacier topography data as well.
 - **Level 2**: at this stage, the flowlines and their downstream lines are
   computed and ready to be used.
-- **Level 3**: adding the baseline climate timeseries (CRU or ERA5, see below)
+- **Level 3**: adding the baseline climate timeseries (e.g. W5E5, CRU or ERA5)
   to the directories. Adding all necessary pre-processing tasks
   for a dynamical run, including the mass balance calibration, bed inversion,
   up to the :py:func:`tasks.init_present_time_glacier` task included.
   These directories still contain all data that were necessary for the processing,
-  i.e. the largest in size but also the most flexible since
+  i.e. large in size but also the most flexible since
   the processing chain can be re-run from any stage in them.
 - **Level 4**: includes a historical simulation without a spinup from
   the RGI date to the last possible date of the baseline climate file
-  (currently January 1st 2020 at 00H for CRU and ERA5), stored with the file suffix
-  ``_historical``. Moreover, includes a simulation including a spinup from 1979
+  (currently January 1st 2020 at 00H for most datasets), stored with the file suffix
+  ``_historical``. Moreover, it may include a simulation including a spinup from 1979
   to the last possible date of the baseline climate file, stored with the file suffix
-  ``_spinup_historical``. This spinup first tries to conduct a dynamic mu star
-  calibration and a dynamic spinup matching the RGI area. If this fails, only a
-  dynamic spinup is carried out. If this also fails a fixed geometry spinup is
-  conducted. To learn more about these different spinup types check out
-  `the dynamic spinup tutorial <https://oggm.org/tutorials/stable/notebooks/dynamical_spinup.html>`_.
-  Also be aware, that due to the spinup strategy it could be that the starting year
-  differs from 1979! Both of these runs can then be used for future projections.
-- **Level 5**: as level 4 but with all intermediate output files removed.
+  ``_spinup_historical`` (folder ``dynspin``). This spinup attempts to conduct a
+  dynamic mu star calibration and a dynamic spinup matching the RGI area.
+  If this fails, only a dynamic spinup is carried out. If this also fails, a
+  fixed geometry spinup is conducted. To learn more about these different spinup types,
+  check out :ref:`dynamic-spinup`.
+- **Level 5**: same as level 4 but with all intermediate output files removed.
   The strong advantage of level 5 files is that their size is considerably
   reduced, at the cost that certain operations (like plotting on maps or
   running the bed inversion algorithm again) are not possible anymore.
 
-In practice, most users are going to use level 2, level 3 or level 5 files. Here
-are some example use cases:
+In practice, most users are going to use level 2, level 3 or level 5 files. Depending
+on space available on our servers, level 4 data might be unavailable for some
+experiments (but easily recovered if needed).
+
+.. admonition:: **Differences to version 1.4 directories**
+    :class: note, dropdown
+
+   In previous versions, level 4 files were the "reduced" directories with intermediate
+   files removed. Level 5 was very similar, but without the dynamic spinup files.
+   I practice, most users wont really see a change.
+   **All v1.4 directories are still working with OGGM v1.6**.
+
+Here are some example use cases for glacier directories, and recommendations on which
+level to pick:
 
 1. *Running OGGM from GCM / RCM data with the default settings*: **start at level 5**
 2. *Using OGGM's flowlines but running your own baseline climate,
@@ -126,7 +136,6 @@ become. Here is an example with Hintereisferner in the Alps:
     @savefig plot_border_size.png width=100%
     plt.tight_layout(); plt.show()
 
-
 Users should choose the map border parameter depending
 on the expected glacier growth in their simulations. For simulations into
 the 21st century, a border value of 40 is
@@ -169,19 +178,17 @@ for your research question, and to start your runs from level 5 if possible.
 Available pre-processed configurations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. admonition:: **New in version 1.4!**
+OGGM has several configurations and directories to choose from,
+and the list is getting larger. Don't hesitate to ask us if you are
+unsure about which to use, or if you'd like to have more configurations
+to choose from!
 
-    OGGM now has several configurations and directories to choose from,
-    and the list is getting larger. Don't hesitate to ask us if you are
-    unsure about which to use, or if you'd like to have more configurations
-    to choose from!
+To choose from a specific model configuration, use the ``prepro_base_url``
+argument in your call to :py:func:`workflow.init_glacier_directories`,
+and set it to one of the urls listed below.
 
-    To choose from a specific model configuration, use the ``prepro_base_url``
-    argument in your call to :py:func:`workflow.init_glacier_directories`,
-    and set it to one of the urls listed below.
-
-    See `this tutorial <https://oggm.org/tutorials/stable/notebooks/elevation_bands_vs_centerlines.html>`_
-    for an example.
+See `this tutorial <https://oggm.org/tutorials/stable/notebooks/elevation_bands_vs_centerlines.html>`_
+for an example.
 
 
 A. Default
