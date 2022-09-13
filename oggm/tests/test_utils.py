@@ -720,6 +720,9 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                                   from_prepro_level=3,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -767,6 +770,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         with pytest.raises(AttributeError):
             fls[-1].point_lons[0]
 
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
@@ -802,6 +806,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 

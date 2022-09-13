@@ -364,7 +364,12 @@ class PastMassBalance(MassBalanceModel):
         self.t_melt = cfg.PARAMS['temp_melt']
 
         if cfg.PARAMS['prcp_scaling_factor'] is None:
-            prcp_fac = gdir.read_json('local_mustar')['glacier_prcp_scaling_factor']
+            try:
+                prcp_fac = gdir.read_json('local_mustar')['glacier_prcp_scaling_factor']
+            except KeyError:
+                raise InvalidWorkflowError('You seem to be using directories '
+                                           'which are not calibrated for a varying '
+                                           'prcp factor. ')
         else:
             prcp_fac = cfg.PARAMS['prcp_scaling_factor']
 

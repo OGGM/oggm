@@ -1006,7 +1006,8 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
             for k, v in ref_params.items():
                 if cfg.PARAMS[k] != v:
                     msg = ('The reference t* list you are trying to use was '
-                           'calibrated with different MB parameters.')
+                           'calibrated with different MB parameters: '
+                           f"PARAMS['{k}']: {cfg.PARAMS[k]} vs {v}.")
                     raise MassBalanceCalibrationError(msg)
 
         # Compute the distance to each glacier
