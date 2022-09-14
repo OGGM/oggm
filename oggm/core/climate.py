@@ -1625,10 +1625,10 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         sel_mus = mu_candidates[np.isfinite(mu_candidates)]
         if len(sel_mus) == 0:
             # Yeah nothing we can do here
-            raise MassBalanceCalibrationError('We could not find a way to '
+            raise MassBalanceCalibrationError(('({}) We could not find a way to '
                                               'correct the climate data and '
                                               'fit within the prescribed '
-                                              'bounds for mu*.')
+                                              'bounds for mu*.').format(gdir.rgi_id))
 
         # We have just picked the first, but to be fair it is arbitrary
         # We could also pick one randomly... but here we rather prefer to have

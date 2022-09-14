@@ -3322,7 +3322,7 @@ class TestColumbiaCalving(unittest.TestCase):
 
             # We pick symmetry around rgi date so show that somehow it works
             for vn in ['volume', 'calving', 'volume_bsl', 'volume_bwl']:
-                rtol = 0.333
+                rtol = 0.4
                 if 'bsl' in vn or 'bwl' in vn:
                     rtol = 0.6
                 np.testing.assert_allclose(ods[vn].sel(time=2010) -
