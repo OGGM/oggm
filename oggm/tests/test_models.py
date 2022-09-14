@@ -213,6 +213,14 @@ def other_glacier_cfg():
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['prcp_scaling_factor'] = 2.5
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['min_mu_star'] = 25
+    cfg.PARAMS['max_mu_star'] = 10000
+    cfg.PARAMS['baseline_climate'] = 'CRU'
 
 
 @pytest.mark.usefixtures('other_glacier_cfg')
@@ -1065,8 +1073,14 @@ class TestMassBalanceModels:
 
         np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
         np.testing.assert_allclose(pf, 3.35713, rtol=1e-4)
+
+        with pytest.raises(InvalidParamsError):
+            # This does not work
+            mb = massbalance.ConstantMassBalance(gdir)
+
         cfg.PARAMS['use_winter_prcp_factor'] = False
         cfg.PARAMS['prcp_scaling_factor'] = prev_fac
+
 
 
 class TestModelFlowlines():
@@ -3522,7 +3536,7 @@ class TestHEF:
                                        ignore_errors=ignore_errors,
                                        min_spinup_period=min_spinup_period,
                                        )
-                # check that all _dynamic_spinup files are deleted if error occured
+                # check that all _dynamic_spinup files are deleted if error occurred
                 for filename in ['model_geometry', 'fl_diagnostics',
                                  'model_diagnostics']:
                     assert not os.path.exists(
@@ -3774,13 +3788,13 @@ class TestHEF:
             gdir, max_mu_star=1000.,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion',
             ys=1979, ye=ye)
@@ -3834,13 +3848,13 @@ class TestHEF:
                     gdir, max_mu_star=1000.,
                     run_function=dynamic_mu_star_run_with_dynamic_spinup,
                     kwargs_run_function={'minimise_for': minimise_for,
-                                         'precision_percent_dyn_spinup': precision_percent,
-                                         'precision_absolute_dyn_spinup': precision_absolute,
+                                         'precision_percent': precision_percent,
+                                         'precision_absolute': precision_absolute,
                                          'do_inversion': do_inversion},
                     fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
                     kwargs_fallback_function={'minimise_for': minimise_for,
-                                              'precision_percent_dyn_spinup': precision_percent,
-                                              'precision_absolute_dyn_spinup': precision_absolute,
+                                              'precision_percent': precision_percent,
+                                              'precision_absolute': precision_absolute,
                                               'do_inversion': do_inversion},
                     output_filesuffix='_dyn_mu_calib_spinup_inversion',
                     ys=1979, ye=ye, init_model_fls=fls)
@@ -3860,13 +3874,13 @@ class TestHEF:
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_user_dmdtda',
             ys=1979, ye=ye)
@@ -3902,25 +3916,25 @@ class TestHEF:
                 output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
                 ignore_errors=False,
                 ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-                maxiter_mu_star=2)
+                maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_mu_star_calibration(
             gdir, max_mu_star=1000.,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': precision_percent,
-                                 'precision_absolute_dyn_spinup': precision_absolute,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': precision_percent,
-                                      'precision_absolute_dyn_spinup': precision_absolute,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic mu_star calibration (part success)'
@@ -3944,20 +3958,20 @@ class TestHEF:
             gdir, max_mu_star=1000.,
             run_function=dynamic_mu_star_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent_dyn_spinup': 0.1,
-                                 'precision_absolute_dyn_spinup': 0.0001,
-                                 'maxiter_dyn_spinup': 2,
+                                 'precision_percent': 0.1,
+                                 'precision_absolute': 0.0001,
+                                 'maxiter': 2,
                                  'do_inversion': do_inversion},
             fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
             kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent_dyn_spinup': 0.1,
-                                      'precision_absolute_dyn_spinup': 0.0001,
-                                      'maxiter_dyn_spinup': 2,
+                                      'precision_percent': 0.1,
+                                      'precision_absolute': 0.0001,
+                                      'maxiter': 2,
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'fixed geometry spinup'
@@ -4151,7 +4165,7 @@ class TestHEF:
                 output_filesuffix='_dyn_mu_calib_error',
                 ignore_errors=False,
                 ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-                maxiter_mu_star=2)
+                maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_mu_star_calibration(
@@ -4161,7 +4175,7 @@ class TestHEF:
             output_filesuffix='_dyn_mu_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic mu_star calibration (part success)'
@@ -4176,7 +4190,7 @@ class TestHEF:
             output_filesuffix='_dyn_mu_calib_error',
             ignore_errors=True,
             ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-            maxiter_mu_star=2)
+            maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == 'no spinup'
 
@@ -4354,7 +4368,7 @@ class TestHEF:
                                output_filesuffix=feedback,
                                store_monthly_step=True)))
         with warnings.catch_warnings():
-            # Waring about MB model update
+            # Warning about MB model update
             warnings.filterwarnings("ignore", category=UserWarning)
             workflow.execute_parallel_tasks(hef_gdir, tasks)
 
@@ -4785,7 +4799,7 @@ class TestHydro:
             odf_run = ds[sel_vars].to_dataframe().iloc[:-1]
 
         assert odf_hist.index[0] == 1980
-        assert odf_hist.index[-1] == 1998  # this matches becaus last year is removed above
+        assert odf_hist.index[-1] == 1998  # this matches because last year is removed above
         assert odf_run.index[0] == 1999
 
         odf = pd.concat([odf_hist, odf_run])
@@ -5201,6 +5215,12 @@ class TestMassRedis:
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['min_ice_thick_for_length'] = 5
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['climate_qc_months'] = 3
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -5284,6 +5304,7 @@ class TestMassRedis:
 
 @pytest.fixture(scope='class')
 def merged_hef_cfg(class_case_dir):
+
     # Init
     cfg.initialize()
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
@@ -5297,7 +5318,11 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['run_mb_calibration'] = True
-    cfg.PARAMS['use_multiprocessing'] = True
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['climate_qc_months'] = 3
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')

@@ -759,7 +759,12 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                         filter_inversion_output=filter_inversion_output)
         odf = df.copy()
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
-        return odf.dropna()
+        # if the user provides a glacier volume all glaciers are considered,
+        # dropna() below exclude glaciers where no ITMIX volume is available
+        if volume_m3_reference is None:
+            return odf.dropna()
+        else:
+            return odf
 
     def to_minimize(x):
         log.workflow('Consensus estimate optimisation with '

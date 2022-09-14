@@ -83,6 +83,13 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
     fpath = cfg.PATHS['climate_file']
     nc_ts = salem.GeoNetcdf(fpath)
 
+    # Avoid reading all data
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        nc_ts.set_subset(((gdir.cenlon, gdir.cenlat),
+                          (gdir.cenlon, gdir.cenlat)),
+                         margin=2)  # 2 is to be sure - also on small files
+
     # set temporal subset for the ts data (hydro years)
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     em = sm - 1 if (sm > 1) else 12
@@ -107,8 +114,8 @@ def process_custom_climate_data(gdir, y0=None, y1=None,
                                                          'millimeter']
 
     # geoloc
-    lon = nc_ts._nc.variables['lon'][:]
-    lat = nc_ts._nc.variables['lat'][:]
+    lon = nc_ts.get_vardata('lon')
+    lat = nc_ts.get_vardata('lat')
 
     ilon = np.argmin(np.abs(lon - gdir.cenlon))
     ilat = np.argmin(np.abs(lat - gdir.cenlat))
@@ -541,10 +548,7 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
                                        "None if using a winter_prcp_factor")
 
         # Have we decided on a factor yet?
-        try:
-            df = gdir.read_json('local_mustar')
-        except FileNotFoundError:
-            df = {}
+        df = gdir.read_json('local_mustar', allow_empty=True)
         prcp_fac = df.get('glacier_prcp_scaling_factor')
         if prcp_fac is None:
             # Then decide and store
@@ -783,6 +787,10 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
 
     from oggm.core.massbalance import MultipleFlowlineMassBalance
 
+    if not cfg.PARAMS['use_tstar_calibration']:
+        raise InvalidParamsError('If using "old" mu* calibration, set '
+                                 "PARAMS['use_tstar_calibration'] to True.")
+
     if glacierwide is None:
         glacierwide = cfg.PARAMS['tstar_search_glacierwide']
 
@@ -802,7 +810,7 @@ def t_star_from_refmb(gdir, mbdf=None, glacierwide=None,
     # which years to look at
     ref_years = mbdf.index.values
 
-    # Average oberved mass balance
+    # Average observed mass balance
     ref_mb = np.mean(mbdf)
 
     # Compute one mu candidate per year and the associated statistics
@@ -924,10 +932,7 @@ def _fallback_local_t_star(gdir):
 
     """
     # Scalars in a small dict for later
-    try:
-        df = gdir.read_json('local_mustar')
-    except FileNotFoundError:
-        df = {}
+    df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = np.nan
@@ -974,6 +979,9 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     max_mu_star: bool, optional
         defaults to cfg.PARAMS['max_mu_star']
     """
+    if not cfg.PARAMS['use_tstar_calibration']:
+        raise InvalidParamsError('If using "old" mu* calibration, set '
+                                 "PARAMS['use_tstar_calibration'] to True.")
 
     if tstar is None or bias is None:
         # Do our own interpolation
@@ -998,7 +1006,8 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
             for k, v in ref_params.items():
                 if cfg.PARAMS[k] != v:
                     msg = ('The reference t* list you are trying to use was '
-                           'calibrated with different MB parameters.')
+                           'calibrated with different MB parameters: '
+                           f"PARAMS['{k}']: {cfg.PARAMS[k]} vs {v}.")
                     raise MassBalanceCalibrationError(msg)
 
         # Compute the distance to each glacier
@@ -1062,10 +1071,7 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
                                           '{:.2f}'.format(gdir.rgi_id, mustar))
 
     # Scalars in a small dict for later
-    try:
-        df = gdir.read_json('local_mustar')
-    except FileNotFoundError:
-        df = {}
+    df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = int(tstar)
     df['bias'] = bias
@@ -1252,6 +1258,10 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
         defaults to cfg.PARAMS['max_mu_star']
     """
 
+    if not cfg.PARAMS['use_tstar_calibration']:
+        raise InvalidParamsError('If using "old" mu* calibration, set '
+                                 "PARAMS['use_tstar_calibration'] to True.")
+
     # Interpolated data
     df = gdir.read_json('local_mustar')
     t_star = df['t_star']
@@ -1432,6 +1442,13 @@ def mu_star_calibration_from_geodetic_mb(gdir,
                  'hydro_month_nh', 'hydro_month_sh']
 
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
+    if sm == 1:
+        # Check that the other hemisphere is set to 1 as well to avoid surprises
+        oh = 'sh' if gdir.hemisphere == 'nh' else 'nh'
+        if cfg.PARAMS['hydro_month_' + oh] != 1:
+            raise InvalidParamsError('Please set both hydro_month_nh and '
+                                     'hydro_month_sh to 1 for geodetic '
+                                     'calibration.')
     if sm != 1 and not ignore_hydro_months:
         raise InvalidParamsError('mu_star_calibration_from_geodetic_mb makes '
                                  'more sense when applied on calendar years '
@@ -1632,7 +1649,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
 
         # We have just picked the first, but to be fair it is arbitrary
         # We could also pick one randomly... but here we rather prefer to have
-        # the smallest ref_hgt change as possible (hence smalles temp. bias change)
+        # the smallest ref_hgt change as possible (hence smallest temp. bias change)
         mu_star = sel_mus[0]
         # Final correction of the data
         with utils.ncDataset(fpath, 'a') as nc:
@@ -1650,10 +1667,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     gdir.write_json(out, 'climate_info')
     log.workflow('({}) Found mu*: {}'.format(gdir.rgi_id,mu_star))
     # Store diagnostics
-    try:
-        df = gdir.read_json('local_mustar')
-    except FileNotFoundError:
-        df = {}
+    df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
     df['t_star'] = np.nan
     df['bias'] = 0

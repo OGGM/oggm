@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass
 
-from oggm.exceptions import InvalidParamsError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 # Local logger
 log = logging.getLogger(__name__)
@@ -114,6 +114,7 @@ class ParamsLoggingDict(ResettingOrderedDict):
 
     def __setitem__(self, key, value):
         # Overrides the original dic to log the change
+        self._check_input(key, value)
         if self.do_log:
             self._log_param_change(key, value)
         ResettingOrderedDict.__setitem__(self, key, value)
@@ -158,6 +159,15 @@ class ParamsLoggingDict(ResettingOrderedDict):
         log.workflow("PARAMS['{}'] changed from `{}` to `{}`.".format(key,
                                                                       prev,
                                                                       value))
+
+    def _check_input(self, key, value):
+
+        if key == 'hydro_month_sh' and value == 1:
+            nh = self.get('hydro_month_nh')
+            if nh is not None and nh != 1:
+                msg = ("When setting PARAMS['hydro_month_sh'] to 1, please set "
+                       "PARAMS['hydro_month_nh'] to 1 first.")
+                raise InvalidWorkflowError(msg)
 
 
 # Globals
@@ -538,6 +548,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
+    PARAMS['use_tstar_calibration'] = cp.as_bool('use_tstar_calibration')
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
@@ -596,7 +607,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
-           'use_shape_factor_for_inversion', 'use_rgi_area',
+           'use_shape_factor_for_inversion', 'use_rgi_area', 'use_tstar_calibration',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
@@ -833,13 +844,13 @@ def pack_config():
 
     return {
         'IS_INITIALIZED': IS_INITIALIZED,
-        'PARAMS': PARAMS,
-        'PATHS': PATHS,
-        'LRUHANDLERS': LRUHANDLERS,
-        'DATA': DATA,
+        'PARAMS': dict(PARAMS),
+        'PATHS': dict(PATHS),
+        'LRUHANDLERS': dict(LRUHANDLERS),
+        'DATA': dict(DATA),
         'BASENAMES': dict(BASENAMES),
-        'DL_VERIFIED': DL_VERIFIED,
-        'DEM_SOURCE_TABLE': DEM_SOURCE_TABLE
+        'DL_VERIFIED': dict(DL_VERIFIED),
+        'DEM_SOURCE_TABLE': dict(DEM_SOURCE_TABLE)
     }
 
 
@@ -850,12 +861,25 @@ def unpack_config(cfg_dict):
     global DL_VERIFIED, DEM_SOURCE_TABLE
 
     IS_INITIALIZED = cfg_dict['IS_INITIALIZED']
-    PARAMS = cfg_dict['PARAMS']
-    PATHS = cfg_dict['PATHS']
-    LRUHANDLERS = cfg_dict['LRUHANDLERS']
-    DATA = cfg_dict['DATA']
-    DL_VERIFIED = cfg_dict['DL_VERIFIED']
-    DEM_SOURCE_TABLE = cfg_dict['DEM_SOURCE_TABLE']
+
+    prev_log = PARAMS.do_log
+    PARAMS.do_log = False
+
+    PARAMS.clear()
+    PATHS.clear()
+    LRUHANDLERS.clear()
+    DATA.clear()
+    DL_VERIFIED.clear()
+    DEM_SOURCE_TABLE.clear()
+
+    PARAMS.update(cfg_dict['PARAMS'])
+    PATHS.update(cfg_dict['PATHS'])
+    LRUHANDLERS.update(cfg_dict['LRUHANDLERS'])
+    DATA.update(cfg_dict['DATA'])
+    DL_VERIFIED.update(cfg_dict['DL_VERIFIED'])
+    DEM_SOURCE_TABLE.update(cfg_dict['DEM_SOURCE_TABLE'])
+
+    PARAMS.do_log = prev_log
 
     # BASENAMES is a DocumentedDict, which cannot be pickled because
     # set intentionally mismatches with get

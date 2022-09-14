@@ -19,6 +19,7 @@ from oggm import utils
 from oggm.utils import mkdir, _downloads
 from oggm.utils import oggm_urlretrieve
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
+from oggm.workflow import reset_multiprocessing
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,23 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(graphic_marker)
 
 
+@pytest.fixture(scope='function', autouse=True)
+def restore_oggm_cfg():
+    """Ensures a test cannot pollute cfg for other tests running after it"""
+    old_cfg = cfg.pack_config()
+    reset_multiprocessing()
+    yield
+    cfg.unpack_config(old_cfg)
+
+
+@pytest.fixture(scope='class', autouse=True)
+def restore_oggm_class_cfg():
+    """Ensures a test-class cannot pollute cfg for other tests running after it"""
+    old_cfg = cfg.pack_config()
+    yield
+    cfg.unpack_config(old_cfg)
+
+
 @pytest.fixture(autouse=True)
 def patch_data_urls(monkeypatch):
     """This makes sure we never download the big files with our tests"""
@@ -155,6 +173,7 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
+            'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
             base_extra_L4 in url or

@@ -196,7 +196,7 @@ Then, in your script, so something similar to::
       pip install --upgrade pip setuptools
       # OPTIONAL: install another OGGM version (here provided by its git commit hash)
       pip install "git+https://github.com/OGGM/oggm.git@ce22ceb77f3f6ffc865be65964b568835617db0d"
-      # Finally, you can test OGGM with `pytest --pyargs oggm`, or run your script:
+      # Finally, you can test OGGM with `pytest.oggm`, or run your script:
       YOUR_RUN_SCRIPT_HERE
     EOF
 
@@ -231,7 +231,7 @@ Some explanations:
   `git tag <https://stackoverflow.com/questions/13685920/install-specific-git-commit-with-pip>`_
   as well). If you do that, you might want to run the tests once first to make sure 
   that it works as expected. You can do that by replacing ``YOUR_RUN_SCRIPT_HERE``
-  with ``pytest --pyargs oggm --run-slow``!
+  with ``pytest.oggm --run-slow``!
 - finally, the `YOUR_RUN_SCRIPT_HERE` is the actual command you want to run
   from this container! Most of the time, it will be a call to your python
   script.

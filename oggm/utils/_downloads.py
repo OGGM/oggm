@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'a27e6bd9badd53448515d36cc1574b8270c6da44'
+SAMPLE_DATA_COMMIT = '8a3c41a36d190c6c78029b5032648ce94ee2026c'
 
 GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
                  'L1-L2_files/centerlines/')
@@ -195,7 +195,7 @@ def get_dl_verify_data(section):
     """
 
     verify_key = 'dl_verify_data_' + section
-    if cfg.DATA.get(verify_key) is not None:
+    if verify_key in cfg.DATA:
         return cfg.DATA[verify_key]
 
     verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
@@ -608,13 +608,14 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     return _verified_download_helper(cache_obj_name, _dlf, reset)
 
 
-def file_downloader(www_path, retry_max=5, cache_name=None,
-                    reset=False, auth=None, timeout=None):
+def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
+                    cache_name=None, reset=False, auth=None,
+                    timeout=None):
     """A slightly better downloader: it tries more than once."""
 
     local_path = None
     retry_counter = 0
-    while retry_counter <= retry_max:
+    while retry_counter < retry_max:
         # Try to download
         try:
             retry_counter += 1
@@ -629,18 +630,19 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
                 # Ok so this *should* be an ocean tile
                 return None
             elif err.code >= 500 and err.code < 600:
-                logger.info("Downloading %s failed with HTTP error %s, "
-                            "retrying in 10 seconds... %s/%s" %
-                            (www_path, err.code, retry_counter, retry_max))
-                time.sleep(10)
+                logger.info(f"Downloading {www_path} failed with "
+                            f"HTTP error {err.code}, "
+                            f"retrying in {sleep_on_retry} seconds... "
+                            f"{retry_counter}/{retry_max}")
+                time.sleep(sleep_on_retry)
                 continue
             else:
                 raise
         except HttpContentTooShortError as err:
             logger.info("Downloading %s failed with ContentTooShortError"
-                        " error %s, retrying in 10 seconds... %s/%s" %
-                        (www_path, err.code, retry_counter, retry_max))
-            time.sleep(10)
+                        " error %s, retrying in %s seconds... %s/%s" %
+                        (www_path, err.code, sleep_on_retry, retry_counter, retry_max))
+            time.sleep(sleep_on_retry)
             continue
         except DownloadVerificationFailedException as err:
             if (cfg.PATHS['dl_cache_dir'] and
@@ -670,15 +672,15 @@ def file_downloader(www_path, retry_max=5, cache_name=None,
             else:
                 # in other cases: try again
                 logger.info("Downloading %s failed with ConnectionError, "
-                            "retrying in 10 seconds... %s/%s" %
-                            (www_path, retry_counter, retry_max))
-                time.sleep(10)
+                            "retrying in %s seconds... %s/%s" %
+                            (www_path, sleep_on_retry, retry_counter, retry_max))
+                time.sleep(sleep_on_retry)
                 continue
         except FTPSDownloadError as err:
             logger.info("Downloading %s failed with FTPSDownloadError"
-                        " error: '%s', retrying in 10 seconds... %s/%s" %
-                        (www_path, err.orgerr, retry_counter, retry_max))
-            time.sleep(10)
+                        " error: '%s', retrying in %s seconds... %s/%s" %
+                        (www_path, err.orgerr, sleep_on_retry, retry_counter, retry_max))
+            time.sleep(sleep_on_retry)
             continue
 
     # See if we managed (fail is allowed)
@@ -1562,14 +1564,14 @@ def copdem_zone(lon_ex, lat_ex, source):
             ew = 'W' if lon < 0 else 'E'
             lat_str = '{}{:02.0f}'.format(ns, abs(lat))
             lon_str = '{}{:03.0f}'.format(ew, abs(lon))
-            # COPDEM is global, if we miss tiles it is worth an error
             try:
                 filename = df.loc[(df['Long'] == lon_str) &
                                   (df['Lat'] == lat_str)]['CPP filename'].iloc[0]
                 flist.append((filename,
                               'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str)))
             except IndexError:
-                raise InvalidDEMError('Could not find a matching Copernicus DEM file.')
+                # COPDEM is global, if we miss tiles it is probably in the ocean
+                pass
     return flist
 
 
@@ -2204,17 +2206,15 @@ def default_dem_source(rgi_id):
     rgi_id = rgi_id[:14]
     if cfg.DEM_SOURCE_TABLE.get(rgi_reg) is None:
         fp = get_demo_file('rgi62_dem_frac.h5')
-        cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp, key=rgi_reg)
+        cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp)
 
     sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
-    for s in ['NASADEM', 'COPDEM', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
+    for s in ['NASADEM', 'COPDEM90', 'COPDEM30', 'GIMP', 'REMA',
+              'RAMP', 'TANDEM', 'MAPZEN']:
         if sel.loc[s] > 0.75:
-            # this can go as soon as 'rgi62_dem_frac.h5' is updated:
-            if s == 'COPDEM':
-                s = 'COPDEM90'
             return s
-
-    return None
+    # If nothing works, try COPDEM again
+    return 'COPDEM90'
 
 
 def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,

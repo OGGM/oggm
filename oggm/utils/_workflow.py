@@ -661,7 +661,7 @@ def get_centerline_lonlat(gdir,
     ensure_exterior_match : per design, OGGM centerlines match the underlying
     DEM grid. This may imply that they do not "touch" the exterior outlines
     of the glacier in vector space. Set this to True to correct for that.
-    geometrical_widths_output : for the geometrical witdths
+    geometrical_widths_output : for the geometrical widths
     corrected_widths_output : for the corrected widths
 
     Returns
@@ -742,7 +742,7 @@ def get_centerline_lonlat(gdir,
 
                 # Intersect with exterior geom
                 line = line.intersection(exterior)
-                if line.type == 'MultiLineString':
+                if line.type in ['MultiLineString', 'GeometryCollection']:
                     # Take the longest
                     lens = [il.length for il in line.geoms]
                     line = line.geoms[np.argmax(lens)]
@@ -874,6 +874,14 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
     odf = odf.sort_values(by='RGIID')
     odf.crs = to_crs
+    # Sanity checks to avoid bad surprises
+    gtype = np.array([g.type for g in odf.geometry])
+    if 'GeometryCollection' in gtype:
+        errdf = odf.loc[gtype == 'GeometryCollection']
+        if not np.all(errdf.length) == 0:
+            errdf = errdf.loc[errdf.length > 0]
+            raise RuntimeError('Some geometries are non-empty GeometryCollection '
+                               f'at RGI Ids: {errdf.RGIID.values}')
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
@@ -3067,7 +3075,7 @@ class GlacierDirectory(object):
         with _open(fp, 'wb') as f:
             pickle.dump(var, f, protocol=4)
 
-    def read_json(self, filename, filesuffix=''):
+    def read_json(self, filename, filesuffix='', allow_empty=False):
         """Reads a JSON file located in the directory.
 
         Parameters
@@ -3076,6 +3084,8 @@ class GlacierDirectory(object):
             file name (must be listed in cfg.BASENAME)
         filesuffix : str
             append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
 
         Returns
         -------
@@ -3087,8 +3097,15 @@ class GlacierDirectory(object):
             return self._read_deprecated_climate_info()
 
         fp = self.get_filepath(filename, filesuffix=filesuffix)
-        with open(fp, 'r') as f:
-            out = json.load(f)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = json.load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = json.load(f)
         return out
 
     def write_json(self, var, filename, filesuffix=''):
@@ -3797,7 +3814,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     # If its a dict, select the relevant ones
     if isinstance(tribs, dict):
         tribs = tribs[main.rgi_id]
-    # make sure tributaries are iteratable
+    # make sure tributaries are iterable
     tribs = tolist(tribs)
 
     # read flowlines of the Main glacier

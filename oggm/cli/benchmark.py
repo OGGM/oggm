@@ -31,7 +31,7 @@ def _add_time_to_df(df, index, t):
 def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
                   output_folder='', working_dir='', is_test=False,
                   test_rgidf=None, test_intersects_file=None,
-                  test_topofile=None):
+                  override_params=None, test_topofile=None):
     """Does the actual job.
 
     Parameters
@@ -54,6 +54,8 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
         for testing purposes only
     test_topofile : str
         for testing purposes only
+    override_params : dict
+        a dict of parameters to override.
     """
 
     # Module logger
@@ -63,11 +65,14 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     params = {}
 
     # Local paths
+    if override_params is None:
+        override_params = {}
+
     utils.mkdir(working_dir)
-    params['working_dir'] = working_dir
+    override_params['working_dir'] = working_dir
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level='WORKFLOW', params=params, future=True)
+    cfg.initialize(logging_level='WORKFLOW', params=override_params, future=True)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = True

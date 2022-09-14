@@ -26,6 +26,7 @@ from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
+                             InvalidWorkflowError,
                              DownloadVerificationFailedException)
 
 
@@ -388,7 +389,18 @@ class TestInitialize(unittest.TestCase):
             assert cfg.PARAMS['mp_processes'] >= 1
 
     def test_defaults(self):
-        self.assertFalse(cfg.PATHS['working_dir'])
+        if os.environ.get('OGGM_WORKDIR'):
+            self.assertTrue(cfg.PATHS['working_dir'])
+        else:
+            self.assertFalse(cfg.PATHS['working_dir'])
+
+    def test_params_warn(self):
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        with pytest.raises(InvalidWorkflowError):
+            cfg.PARAMS['hydro_month_sh'] = 1
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
 
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
@@ -708,6 +720,9 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                                   from_prepro_level=3,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+
         n_intersects = 0
         for gdir in gdirs:
             assert gdir.has_file('dem')
@@ -755,6 +770,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         with pytest.raises(AttributeError):
             fls[-1].point_lons[0]
 
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
@@ -790,6 +806,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
@@ -834,6 +851,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
+        assert not kwargs['dynamic_spinup']
+        assert kwargs['dynamic_spinup_start_year'] == 1979
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -964,10 +983,12 @@ class TestPreproCLI(unittest.TestCase):
                                            '--match-geodetic-mb-per-glacier', 'hugonnet',
                                            '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
+                                           '--dynamic-spinup', 'area/dmdtda',
                                            ])
 
         assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
         assert kwargs['evolution_model'] == 'massredis'
+        assert kwargs['dynamic_spinup'] == 'area/dmdtda'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1012,7 +1033,16 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_regional_geodetic_mb='hugonnet')
+                          test_topofile=topof, match_regional_geodetic_mb='hugonnet',
+                          override_params={'hydro_month_nh': 1,
+                                           'geodetic_mb_period':
+                                               '2000-01-01_2010-01-01',
+                                           'baseline_climate': 'CRU',
+                                           'use_tstar_calibration': True,
+                                           'use_winter_prcp_factor': False,
+                                           'prcp_scaling_factor': 2.5,
+                                           }
+                          )
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
@@ -1030,6 +1060,10 @@ class TestPreproCLI(unittest.TestCase):
         assert 'main_flowline_length' in df
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
                                            'summary', 'centerlines_11.tar.gz'))
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', 'centerlines_smoothed_11.tar.gz'))
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', 'widths_11.tar.gz'))
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'), index_col=0)
@@ -1160,7 +1194,12 @@ class TestPreproCLI(unittest.TestCase):
                           test_topofile=topof, elev_bands=True,
                           override_params={'hydro_month_nh': 1,
                                            'geodetic_mb_period':
-                                           '2000-01-01_2010-01-01'})
+                                           '2000-01-01_2010-01-01',
+                                           'baseline_climate': 'CRU',
+                                           'use_tstar_calibration': True,
+                                           'use_winter_prcp_factor': False,
+                                           'prcp_scaling_factor': 2.5,
+                                           })
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
                                       'glacier_statistics_11.csv'))
@@ -1247,7 +1286,7 @@ class TestPreproCLI(unittest.TestCase):
         # Around RGI date they are close
         # have to exclude rgi_id 'RGI60-11.00719_d02', because no dmdtda data
         assert_allclose(dss.sel(time=2004).area[1:], dse.sel(time=2004).area[1:], rtol=0.01)
-        assert_allclose(dss.sel(time=2004).length[1:], dse.sel(time=2004).length[1:], atol=805)
+        assert_allclose(dss.sel(time=2004).length[1:], dse.sel(time=2004).length[1:], atol=940)
         assert_allclose(dss.sel(time=2004).volume[1:], dse.sel(time=2004).volume[1:], rtol=0.21)
 
         # Over the period they are... close enough
@@ -1272,6 +1311,10 @@ class TestPreproCLI(unittest.TestCase):
                   'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'hydro_month_nh': 1,
                   'hydro_month_sh': 1,
+                  'baseline_climate': 'CRU',
+                  'use_tstar_calibration': True,
+                  'use_winter_prcp_factor': False,
+                  'prcp_scaling_factor': 2.5,
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1372,7 +1415,16 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
-                          logging_level='INFO', max_level=5)
+                          logging_level='INFO', max_level=5,
+                          override_params={'hydro_month_nh': 1,
+                                           'geodetic_mb_period':
+                                               '2000-01-01_2010-01-01',
+                                           'baseline_climate': 'CRU',
+                                           'use_tstar_calibration': True,
+                                           'use_winter_prcp_factor': False,
+                                           'prcp_scaling_factor': 2.5,
+                                           }
+                          )
 
         assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
         assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
@@ -1574,7 +1626,12 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof)
+                      test_topofile=topof,
+                      override_params={'baseline_climate': 'CRU',
+                                       'use_tstar_calibration': True,
+                                       'use_winter_prcp_factor': False,
+                                       'prcp_scaling_factor': 2.5,
+                                       })
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
                          index_col=0)
@@ -2478,10 +2535,6 @@ class TestDataFiles(unittest.TestCase):
         self.assertTrue('Copernicus_DSM_10_N46_00_E007_00' in
                         [z[0][1], z[1][1]])
 
-        # we want an error if copdem does not find all or any
-        self.assertRaises(InvalidDEMError, utils.copdem_zone,
-                          [0, 1], [0, 1], 'COPDEM90')
-
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
         assert utils.is_dem_source_available('GIMP', [-25, -25], [71, 71])
@@ -2499,6 +2552,8 @@ class TestDataFiles(unittest.TestCase):
         assert utils.default_dem_source('RGI60-11.00897') == 'NASADEM'
         assert utils.default_dem_source('RGI60-11.00897_merged') == 'NASADEM'
         assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM90'
+        assert utils.default_dem_source('RGI60-06.00483') == 'COPDEM90'
+        assert utils.default_dem_source('RGI60-19.01405') == 'COPDEM90'
         assert utils.default_dem_source('RGI60-19.00970') == 'REMA'
         assert utils.default_dem_source('RGI60-05.10315') == 'GIMP'
         assert utils.default_dem_source('RGI60-19.01820') == 'MAPZEN'

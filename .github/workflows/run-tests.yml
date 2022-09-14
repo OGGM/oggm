@@ -24,11 +24,11 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - ghcr.io/oggm/untested_base:20220320
-          - ghcr.io/oggm/untested_base:py3.7
+          - ghcr.io/oggm/untested_base:20220902
+          - ghcr.io/oggm/untested_base:py3.8
           - ghcr.io/oggm/untested_base:py3.9
         include:
-          - container: python:3.9-slim
+          - container: python:3.10-slim
             test-env: minimal
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}

@@ -40,6 +40,8 @@ Enhancements
   Level 5 now replaces level 4 and creates the minigdirs (where only the files
   for a model run are kept and no inversion is possible anymore) (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added support for Milland 22 velocity and thickness in the shop (:pull:`1443`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -146,7 +148,7 @@ Enhancements & bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the 30m version of the
   `Copernicus DEM <https://spacedata.copernicus.eu>`_.
-  This DEM can be set with ``source='COPDEM30'`` and can be usefull for smaller sized glaciers.
+  This DEM can be set with ``source='COPDEM30'`` and can be useful for smaller sized glaciers.
   An account with Copernicus is required to access the DEM (free for academics).
   (:pull:`1364`). By `Matthias Dusch <https://github.com/matthiasdusch>`_
 - Added a new `merge_consecutive_run_outputs` entity task which allows to merge

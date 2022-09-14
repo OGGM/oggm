@@ -46,6 +46,10 @@ more options to these, which we explain below.
 Processing levels
 ~~~~~~~~~~~~~~~~~
 
+.. admonition:: **New in version 1.6!**
+
+   Since v1.6, Level 4 and Level 5 have changed!
+
 Currently, there are six available levels of pre-processing:
 
 - **Level 0**: the lowest level, with directories containing the glacier
@@ -60,15 +64,22 @@ Currently, there are six available levels of pre-processing:
   These directories still contain all data that were necessary for the processing,
   i.e. the largest in size but also the most flexible since
   the processing chain can be re-run from any stage in them.
-- **Level 4**: same as level 3 but with all intermediate output files removed.
-  The strong advantage of level 4 files is that their size is considerably
+- **Level 4**: includes a historical simulation without a spinup from
+  the RGI date to the last possible date of the baseline climate file
+  (currently January 1st 2020 at 00H for CRU and ERA5), stored with the file suffix
+  ``_historical``. Moreover, includes a simulation including a spinup from 1979
+  to the last possible date of the baseline climate file, stored with the file suffix
+  ``_spinup_historical``. This spinup first tries to conduct a dynamic mu star
+  calibration and a dynamic spinup matching the RGI area. If this fails, only a
+  dynamic spinup is carried out. If this also fails a fixed geometry spinup is
+  conducted. To learn more about these different spinup types check out
+  `the dynamic spinup tutorial <https://oggm.org/tutorials/stable/notebooks/dynamical_spinup.html>`_.
+  Also be aware, that due to the spinup strategy it could be that the starting year
+  differs from 1979! Both of these runs can then be used for future projections.
+- **Level 5**: as level 4 but with all intermediate output files removed.
+  The strong advantage of level 5 files is that their size is considerably
   reduced, at the cost that certain operations (like plotting on maps or
   running the bed inversion algorithm again) are not possible anymore.
-- **Level 5**: on top of level 4, an additional historical simulation is run
-  from the RGI date to the last possible date of the baseline climate file
-  (currently January 1st 2020 at 00H for CRU and ERA5).
-  The state of the glacier (currently set as month 01 in hydrological year 2020) can then be
-  used for future projections.
 
 In practice, most users are going to use level 2, level 3 or level 5 files. Here
 are some example use cases:

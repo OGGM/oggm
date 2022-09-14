@@ -56,7 +56,7 @@ selind = np.searchsorted(years, mbdf.index)
 temp_yr = np.mean(temp_yr[selind])
 prcp_yr = np.mean(prcp_yr[selind])
 
-# Average oberved mass balance
+# Average observed mass balance
 ref_mb = mbdf.ANNUAL_BALANCE.mean()
 mb_per_mu = prcp_yr - mu_yr_clim * temp_yr
 

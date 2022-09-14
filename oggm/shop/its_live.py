@@ -78,7 +78,6 @@ def find_region(gdir):
 def _reproject_and_scale(gdir, do_error=False):
     """Reproject and scale itslive data, avoid code duplication for error"""
 
-
     reg = find_region(gdir)
     if reg is None:
         raise InvalidWorkflowError('There does not seem to be its_live data '
@@ -142,7 +141,7 @@ def _reproject_and_scale(gdir, do_error=False):
 
     # Scale back velocities - https://github.com/OGGM/oggm/issues/1014
     new_vel = np.sqrt(vx**2 + vy**2)
-    p_ok = new_vel > 1e-5  # avoid div by zero
+    p_ok = new_vel > 1  # avoid div by zero
     vx[p_ok] = vx[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
     vy[p_ok] = vy[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
 

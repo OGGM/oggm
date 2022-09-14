@@ -807,6 +807,12 @@ class TestElevationBandFlowlines(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
 
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+
     def tearDown(self):
         self.rm_dir()
 
@@ -1164,10 +1170,10 @@ class TestClimate(unittest.TestCase):
     def setUp(self):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_climate')
         if not os.path.exists(self.testdir):
             os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_cru')
+        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_climate_cru')
         if not os.path.exists(self.testdir_cru):
             os.makedirs(self.testdir_cru)
         self.clean_dir()
@@ -1180,6 +1186,12 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['baseline_climate'] = ''
+
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
 
     def tearDown(self):
         self.rm_dir()
@@ -1692,6 +1704,10 @@ class TestClimate(unittest.TestCase):
 
     def test_climate_qc(self):
 
+        cfg.PARAMS['climate_qc_months'] = 3
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
@@ -1759,6 +1775,9 @@ class TestClimate(unittest.TestCase):
 
     @pytest.mark.slow
     def test_find_tstars_multiple_mus(self):
+
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -2223,6 +2242,14 @@ class TestFilterNegFlux(unittest.TestCase):
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
 
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
+
     def tearDown(self):
         self.rm_dir()
 
@@ -2402,6 +2429,12 @@ class TestInversion(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
+
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
 
     def tearDown(self):
         self.rm_dir()
@@ -2976,6 +3009,14 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
 
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
+
     def tearDown(self):
         self.rm_dir()
 
@@ -3389,6 +3430,14 @@ class TestGrindelInvert(unittest.TestCase):
         cfg.PARAMS['section_smoothing'] = 0.
         cfg.PARAMS['prcp_scaling_factor'] = 1
 
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
+
     def tearDown(self):
         self.rm_dir()
 
@@ -3550,6 +3599,15 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['border'] = 10
+
+        cfg.PARAMS['use_tstar_calibration'] = True
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['hydro_month_nh'] = 10
+        cfg.PARAMS['hydro_month_sh'] = 4
+        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['max_mu_star'] = 10000
+        cfg.PARAMS['baseline_climate'] = 'CRU'
 
     def tearDown(self):
         self.rm_dir()

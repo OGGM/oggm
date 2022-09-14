@@ -2,6 +2,7 @@ import logging
 
 import os
 import shutil
+import warnings
 
 try:
     import salem
@@ -19,7 +20,7 @@ from oggm.exceptions import InvalidParamsError
 # Module logger
 log = logging.getLogger(__name__)
 
-DEMS_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v1/default/'
+DEMS_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v2/default'
 DEMS_HR_URL = 'https://cluster.klima.uni-bremen.de/data/gdirs/dems_v1/highres/'
 
 
@@ -70,6 +71,7 @@ def init_glacier_directories_from_rgitopo(rgidf=None, dem_source=None,
     elif resolution == 'lr':
         base_url = DEMS_URL
     elif resolution == 'hr':
+        log.warning('High-res DEMs not available yet in version 2 with COPDEM30')
         base_url = DEMS_HR_URL
     else:
         raise InvalidParamsError('`resolution` should be of `lr` or `hr`')

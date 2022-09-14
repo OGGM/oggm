@@ -1000,6 +1000,7 @@ class FlowlineModel(object):
                             stop_criterion=None,
                             fixed_geometry_spinup_yr=None,
                             dynamic_spinup_min_ice_thick=None,
+                            make_compatible=False
                             ):
         """Runs the model and returns intermediate steps in xarray datasets.
 
@@ -1058,6 +1059,13 @@ class FlowlineModel(object):
             area or the total volume. This is useful to smooth out yearly
             fluctuations when matching to observations. The names of this new
             variables include the suffix _min_h (e.g. 'area_m2_min_h')
+        make_compatible : bool
+            if set to true this will add all variables to the resulting dataset
+            so it could be combined with any other one. This is necessary if
+            different spinup methods are used. For example if using the dynamic
+            spinup and setting fixed geometry spinup as fallback, the variable
+            'is_fixed_geometry_spinup' must be added to the dynamic spinup so
+            it is possible to compile both glaciers together.
         Returns
         -------
         geom_ds : xarray.Dataset or None
@@ -1079,7 +1087,7 @@ class FlowlineModel(object):
                                      'mass balance model with an unambiguous '
                                      'hemisphere.')
 
-        # This is only needed for consistancy to be able to merge two runs
+        # This is only needed for consistency to be able to merge two runs
         if dynamic_spinup_min_ice_thick is None:
             dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
 
@@ -1254,6 +1262,12 @@ class FlowlineModel(object):
 
         if do_fixed_spinup:
             is_spinup_time = monthly_time < self.yr
+            diag_ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
+            desc = 'Part of the series which are spinup'
+            diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc
+            diag_ds['is_fixed_geometry_spinup'].attrs['unit'] = '-'
+        elif make_compatible:
+            is_spinup_time = np.full(len(monthly_time), False, dtype=bool)
             diag_ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
             desc = 'Part of the series which are spinup'
             diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc
@@ -1573,7 +1587,7 @@ class FlowlineModel(object):
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
         """ Runs the model until an equilibrium state is reached.
 
-        Be careful: This only works for CONSTANT (not time-dependant)
+        Be careful: This only works for CONSTANT (not time-dependent)
         mass balance models.
         Otherwise the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
@@ -2341,7 +2355,7 @@ class FluxBasedModel(FlowlineModel):
             - slope: -
             - ice_flux, tributary_flux: m3 of *ice* per second
             - ice_velocity: m per second (depth-section integrated)
-            - surface_ice_velocity: m per second (corrected for surface - simplifed)
+            - surface_ice_velocity: m per second (corrected for surface - simplified)
         """
         import pandas as pd
 
@@ -2541,10 +2555,12 @@ class FileModel(object):
         try:
             with xr.open_dataset(path) as ds:
                 self._calving_m3_since_y0 = ds.calving_m3.values
+                self.water_level = ds.water_level
                 self.do_calving = True
         except AttributeError:
             self._calving_m3_since_y0 = 0
             self.do_calving = False
+            self.water_level = 0
 
         # time
         self.reset_y0()

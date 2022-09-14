@@ -85,6 +85,13 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['store_model_geometry'] = True
+    cfg.PARAMS['use_tstar_calibration'] = True
+    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['hydro_month_nh'] = 10
+    cfg.PARAMS['hydro_month_sh'] = 4
+    cfg.PARAMS['climate_qc_months'] = 3
+    cfg.PARAMS['min_mu_star'] = 10
+    cfg.PARAMS['baseline_climate'] = 'CRU'
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
@@ -223,7 +230,6 @@ class TestFullRun(unittest.TestCase):
             gdirs, ignore_missing=True,
             volume_m3_reference=user_provided_volume_m3)
 
-        df = df.dropna()
         np.testing.assert_allclose(user_provided_volume_m3,
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.01)
@@ -338,6 +344,7 @@ class TestFullRun(unittest.TestCase):
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
                                      nyears=100, seed=0,
                                      store_monthly_step=True,
+                                     mb_elev_feedback='monthly',
                                      output_filesuffix='_test')
 
         for gd in gdirs:

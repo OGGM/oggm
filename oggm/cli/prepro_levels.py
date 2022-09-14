@@ -20,11 +20,6 @@ import oggm.cfg as cfg
 from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
 from oggm.exceptions import InvalidParamsError, InvalidDEMError
-from oggm.core.dynamic_spinup import (
-    dynamic_mu_star_run,
-    dynamic_mu_star_run_fallback,
-    dynamic_mu_star_run_with_dynamic_spinup,
-    dynamic_mu_star_run_with_dynamic_spinup_fallback)
 
 # Module logger
 from oggm.utils import get_prepro_base_url, file_downloader
@@ -165,8 +160,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
     continue_on_error : bool
-        if True the workflow continues if a task raise an error. For operational
-        runs it should be set to True. Default is True
+        if True the workflow continues if a task raises an error. For operational
+        runs it should be set to True (the default).
     """
 
     # Input check
@@ -245,6 +240,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
     # takes a long time, so deactivating this can make sense
     cfg.PARAMS['dl_verify'] = not disable_dl_verify
+
+    # Prepare the download of climate file to be shared across processes
+    # TODO
 
     # Other things that make sense
     cfg.PARAMS['store_model_geometry'] = True
@@ -480,8 +478,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
-            opath = os.path.join(sum_dir, 'centerlines_{}.shp'.format(rgi_reg))
+            opath = os.path.join(sum_dir, f'centerlines_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'centerlines_smoothed_{rgi_reg}.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             ensure_exterior_match=True,
+                                             simplify_line=0.5,
+                                             corner_cutting=5,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'flowlines_{rgi_reg}.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             flowlines_output=True,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'geom_widths_{rgi_reg}.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             geometrical_widths_output=True,
+                                             path=opath)
+            opath = os.path.join(sum_dir, f'widths_{rgi_reg}.shp')
+            utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
+                                             corrected_widths_output=True,
                                              path=opath)
 
         # L2 OK - compress all in output directory
@@ -813,12 +829,14 @@ def parse_args(args):
                              'against a hash sum.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
-    parser.add_argument('--dynamic_spinup', type=str, default='area/dmdtda',
-                        help="include a dynamic spinup for matching 'area' OR "
-                             "'volume' at the RGI-date and 'dmdtda' from "
-                             "Hugonnet in the period 2000-2019")
-    parser.add_argument('--dynamic_spinup_start_year', type=int, default=1979,
-                        help="if --dynamic_spinup is set, define the starting"
+    parser.add_argument('--dynamic-spinup', type=str, default='',
+                        help="include a dynamic spinup for matching glacier area "
+                             "('area/dmdtda') OR volume ('volume/dmdtda') at "
+                             "the RGI-date, AND mass-change from Hugonnet "
+                             "in the period 2000-2019 (dynamic mu* "
+                             "calibration).")
+    parser.add_argument('--dynamic-spinup-start-year', type=int, default=1979,
+                        help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
 
