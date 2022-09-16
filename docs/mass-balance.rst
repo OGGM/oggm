@@ -25,7 +25,7 @@ Here are some of the options available to our users to compute the mass balance:
     PyGEM <https://github.com/drounce/PyGEM>
     massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>
 
-.. admonition:: **Out of the oven!**
+.. admonition:: **Check out recent developments!**
 
     PyGEM is a standalone model that has been applied to High Mountain Asia (Rounce et al.,
     `2020a <https://doi.org/10.1017/jog.2019.91>`_,

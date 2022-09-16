@@ -649,12 +649,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         utils.mkdir(self.testdir, reset=True)
         utils.mkdir(self.dldir, reset=True)
 
-    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_1(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   from_prepro_level=1,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
@@ -665,14 +664,13 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_1_str(self):
 
         # Go - initialize working directories
         entities = self.rgidf.iloc[:2].RGIId
         cfg.PARAMS['border'] = 20
         gdirs = workflow.init_glacier_directories(entities,
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   prepro_rgi_version='61',
                                                   from_prepro_level=1)
         n_intersects = 0
@@ -694,12 +692,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_2(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   from_prepro_level=2,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
@@ -711,12 +708,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         assert n_intersects > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_3(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   from_prepro_level=3,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
@@ -751,12 +747,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 
-    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_start_from_level_4(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
@@ -770,12 +765,11 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
-    @mock.patch('oggm.utils._downloads.GDIR_L1L2_URL', TEST_GDIR_URL)
-    @mock.patch('oggm.utils._downloads.GDIR_L3L5_URL', TEST_GDIR_URL)
     def test_corrupted_file(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)

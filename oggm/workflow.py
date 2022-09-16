@@ -316,9 +316,8 @@ def init_glacier_regions(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: if you want to override the default
-        URL from which to download the gdirs. Default can be assessed with
-        ``from oggm.utils import GDIR_L3L5_URL``
+        for `from_prepro_level` only: the url from which you want to
+        download the glacier directories from.
     from_tar : bool, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -457,9 +456,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: if you want to override the default
-        URL from which to download the gdirs. Default can be accessed from
-        ``from oggm.utils import GDIR_L3L5_URL``
+        for `from_prepro_level` only: the preprocessed directory url from
+        which to download the directories (became mandatory in OGGM v1.6)
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -492,6 +490,12 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         if cfg.PARAMS['has_internet'] and not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
+        if 'oggm_v1.4' in url and from_prepro_level >=3 and not cfg.PARAMS['prcp_scaling_factor']:
+            log.warning('You seem to be using v1.4 directories with a more '
+                        'recent version of OGGM. While this is possible, be '
+                        'aware that some defaults parameters have changed. '
+                        'See the documentation for details: '
+                        'http://docs.oggm.org/en/stable/whats-new.html')
 
     # if reset delete also the log directory
     if reset:

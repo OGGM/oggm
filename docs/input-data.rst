@@ -89,7 +89,8 @@ experiments (but easily recovered if needed).
    In previous versions, level 4 files were the "reduced" directories with intermediate
    files removed. Level 5 was very similar, but without the dynamic spinup files.
    I practice, most users wont really see a change.
-   **All v1.4 directories are still working with OGGM v1.6**.
+   **All v1.4 directories are still working with OGGM v1.6: however, you may have to change
+   the run parameters back to their previous values**.
 
 Here are some example use cases for glacier directories, and recommendations on which
 level to pick:
@@ -339,6 +340,12 @@ Climate data
 ------------
 
 Here are the various climate datasets that OGGM handles automatically.
+
+W5E5
+~~~~
+
+Since OGGM v1.5, users can also use the reanalysis data W5E5, which is a
+bias-corrected ERA5...
 
 CRU
 ~~~

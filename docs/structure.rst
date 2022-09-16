@@ -112,7 +112,7 @@ the kind of data that can be added to glacier directories.
       co-exist if they agree on how a flowline is stored on disk.
     - multiprocessing is trivial: the same task can be run on many glaciers at
       once without having to share data across processes, since everything
-      is on disk and independent.
+      is located on disk and independent.
 
     **Cons**:
 
@@ -127,12 +127,13 @@ the kind of data that can be added to glacier directories.
       This can lead to silent bugs (for example mismatching model parameters
       between the preprocessing and the simulations, leading to incorrect results).
       Because of this issue, we had to implement safeguards against such mistakes
-      where possible.
+      wherever possible.
     - users can be confused by glacier directories. Since an OGGM program does not
-      always read like linear "A to Z" workflows (but for example "start from Q, then Q to Z"),
-      mistakes like the ones described above can happen unnoticed.
+      always read like linear "A to Z" workflows (but for example "start from Q, then
+      do Q to Z"), mistakes like the ones described above can happen unnoticed.
     - it can make certain types of sensitivity experiments more difficult to implement,
-      since users have to wrry not only about variable names, but also about data file names.
+      since users have to worry not only about variable names, but also about data file names.
+
 
 OGGM tasks
 ----------
