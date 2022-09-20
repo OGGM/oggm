@@ -132,7 +132,7 @@ on the expected glacier growth in their simulations. For simulations into
 the 21st century, a border value of 40 is
 sufficient, but 80 is safer in case temperature is stabilizing or cooling in
 certain regions / scenarios.
-For runs into the Little Ice Age, a border value of 160 is recommended.
+For runs into the Little Ice Age, a border value of 160 or 240 is recommended.
 
 Users should be aware that the amount of data to download isn't small,
 especially for full directories at processing level 3. Here is an indicative
