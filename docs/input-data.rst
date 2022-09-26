@@ -125,8 +125,16 @@ become. Here is an example with Hintereisferner in the Alps:
 
     base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/'
 
-.. ipython:: python
+..
+  replace with
+  .. ipython:: python
     :okwarning:
+    ...
+    @savefig plot_border_size.png width=100%
+    plt.tight_layout(); plt.show()
+  to test that this is still working
+
+.. code-block:: python
 
     f, axs = plt.subplots(2, 2, figsize=(8, 6))
     for ax, border in zip(np.array(axs).flatten(), [10, 80, 160, 240]):
@@ -137,8 +145,11 @@ become. Here is an example with Hintereisferner in the Alps:
         graphics.plot_domain(gdir, ax=ax, title='Border: {}'.format(border),
                              add_colorbar=False,
                              lonlat_contours_kwargs={'add_tick_labels':False})
-    @savefig plot_border_size.png width=100%
-    plt.tight_layout(); plt.show()
+
+
+.. figure:: _static/plot_border_size.png
+    :width: 100%
+    :align: left
 
 Users should choose the map border parameter depending
 on the expected glacier growth in their simulations. For simulations into
@@ -150,14 +161,14 @@ especially for full directories at processing level 3 and 4. Here is an indicati
 table for the total amount of data with ERA5 centerlines for all 19 RGI regions:
 
 ======  =====  =====  =====  =====
-Level   B  10  B  40  B  80  B 160
+Level   B  10  B  80  B 160  B 240
 ======  =====  =====  =====  =====
-**L0**  927M   927M   927M   927M
-**L1**  3.2G   7.3G   17G    47G
-**L2**  11G    23G    51G    144G
-**L3**  13G    26G    54G    147G
-**L4**         3.5G   3.7G   4.1G
-**L5**         7.2G   7.5G   8.3G
+**L0**  979M   979M   979M   979M
+**L1**  3.3G   17G    47G    95G
+**L2**  8.3G   49G    142G   285G
+**L3**  14G    55G    148G
+**L4**         58G    152G
+**L5**         11G    11G
 ======  =====  =====  =====  =====
 
 *L4 and L5 data are not available for border 10 (the domain is too small for
@@ -165,7 +176,7 @@ the downstream lines)*.
 
 Certain regions are much smaller than others of course. As an indication,
 with prepro level 3 and a map border of 160, the Alps are ~2.1G large, Greenland
-~21G, and Iceland ~664M.
+~21G, and Iceland ~660M.
 
 Therefore, it is recommended to always pick the smallest border value suitable
 for your research question, and to start your runs from level 5 if possible.

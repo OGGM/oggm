@@ -3,14 +3,24 @@
 Version history
 ===============
 
-v1.X.Y (unreleased)
+v1.6.0 (unreleased)
 -------------------
+
+A new major release of the OGGM with several important changes. We recommend
+all users to switch to this version only if they are ready for a new study,
+or rerun their simulations.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
 - we removed the ``init_glacier_regions`` task, which was deprecated since
-  a few versions.
+  a few OGGM versions. Similarly, other old functions
+  (e.g. ``process_cmip5_data``) were also removed.
+- several default parameters were updated to new values. See "migrating guide"
+  below to navigate through these changes.
+- the calibration of the mass balance models with the :math:`t^*` ("T star")
+  method is no longer supported. The code is here and can be used, but we
+  don't use it ourselves anymore.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -43,7 +53,7 @@ Enhancements
   Level 5 now replaces level 4 and creates the minigdirs (where only the files
   for a model run are kept and no inversion is possible anymore) (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Added support for Milland 22 velocity and thickness in the shop (:pull:`1443`).
+- Added support for Millan et al 2022 velocity and thickness in the shop (:pull:`1443`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
@@ -52,6 +62,11 @@ Bug fixes
 - corrected a but in ``apparent_mb_from_any_mb``, where only two years of MB
   would be used instead of a range of years (:pull:`1426`).
   By `Bowen <https://github.com/bowenbelongstonature>`_
+
+Migrating guide
+~~~~~~~~~~~~~~~
+
+Some text here.
 
 v1.5.3 (02.04.2022)
 -------------------
