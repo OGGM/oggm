@@ -6,7 +6,7 @@ Temperature index model calibrated on geodetic MB data
 As of OGGM v1.5.3, we implemented a simple mass balance model that can be
 calibrated on the geodetic mass balance data from
 `Hugonnet et al., 2021`_ (see also: :ref:`shop-geod`). This method has become the
-default in OGGM v1.6.
+standard for OGGM v1.6 pre-processed directories.
 
 .. _Hugonnet et al., 2021: https://www.nature.com/articles/s41586-021-03436-z
 

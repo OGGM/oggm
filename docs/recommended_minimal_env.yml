@@ -1,0 +1,19 @@
+name: oggm_minimal
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - shapely
+  - requests
+  - configobj
+  - netcdf4
+  - xarray
+  - pytables
+  - pytest
+  # For oggm-edu
+  - seaborn
+  pip:
+    - oggm

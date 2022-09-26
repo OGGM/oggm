@@ -3,14 +3,14 @@
 Mass balance models
 ===================
 
-Per design, OGGM allows to mix and compare many different implementations
+OGGM allows to mix and compare many different implementations
 of climatic mass balance (MB) models. These models all follow a predefined
-"interface" (programmin jargon for *naming conventions*) so that they can
+"interface" (programming jargon for *naming conventions*) so that they can
 communicate with the :doc:`geometry-evolution`.
 
-In fact, what OGGM calls a "mass balance model" is any object that provides
+In fact, what OGGM calls a "mass balance model" is any function that provides
 surface mass balance information to the geometry evolution model for the
-run. Therefore, while some of these MB models can be quite complex and take
+run. Therefore, while some mass balance models can be quite complex and take
 many processes into account, other model classes can implement idealized
 concepts, averages or simplifications of the more realistic ones.
 

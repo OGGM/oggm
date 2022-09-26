@@ -18,7 +18,7 @@ its features:
     Data preprocessing
       Acquisition, download and processing of a large number of digital
       elevation models, gridded climate datasets, reference datasets for model
-      calibration and validation )such as geodetic mass balance and velocity products),
+      calibration and validation such as geodetic mass balance and velocity products,
       and more...
 
     Climatic mass balance
@@ -44,7 +44,7 @@ its features:
       across platforms and HPCs.
 
     Community
-      Welcoming community of users and developers: get in touch and join us!
+      Welcoming community of users and developers: :ref:`get in touch <contact>` and join us!
 
 Example workflow
 ~~~~~~~~~~~~~~~~

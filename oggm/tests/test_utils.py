@@ -682,7 +682,15 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
 
         # One string
         cfg.PARAMS['border'] = 20
+
+        # Test error
+        with pytest.raises(InvalidParamsError):
+            workflow.init_glacier_directories('RGI60-11.00897',
+                                              prepro_rgi_version='61',
+                                              from_prepro_level=1)
+
         gdirs = workflow.init_glacier_directories('RGI60-11.00897',
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   prepro_rgi_version='61',
                                                   from_prepro_level=1)
         n_intersects = 0
@@ -786,6 +794,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # Since we already verified this will error
         with pytest.raises(tarfile.ReadError):
             workflow.init_glacier_directories(['RGI60-11.00787'],
+                                              prepro_base_url=TEST_GDIR_URL,
                                               from_prepro_level=4,
                                               prepro_rgi_version='61',
                                               prepro_border=20)
@@ -793,6 +802,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # This should retrigger a download and just work
         cfg.DL_VERIFIED.clear()
         gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
+                                                  prepro_base_url=TEST_GDIR_URL,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)

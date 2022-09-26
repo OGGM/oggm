@@ -9,6 +9,9 @@ v1.X.Y (unreleased)
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- we removed the ``init_glacier_regions`` task, which was deprecated since
+  a few versions.
+
 Enhancements
 ~~~~~~~~~~~~
 

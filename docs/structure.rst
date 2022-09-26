@@ -80,19 +80,21 @@ downloading and extracting these data locally:
 
     # Where to fetch the pre-processed directories - this can be changed
     server_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-    experiment_url = 'oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match'
+    experiment_url = 'oggm_v1.6/L3-L5_files/elev_bands/w5e5/qc0/pcpwin/match_geod_pergla'
     base_url = server_url + experiment_url
 
 .. ipython:: python
 
-    from oggm import workflow, graphics
+    from oggm import workflow, tasks, graphics
 
-    rgi_ids = ['RGI60-11.01328', 'RGI60-11.00897']
+    rgi_ids = ['RGI60-11.00897']
     gdirs = workflow.init_glacier_directories(rgi_ids,  # glaciers to download
                                               from_prepro_level=3,  # pre-processing level
+                                              prepro_border=10,  # pre-processing map size
                                               prepro_base_url=base_url)  # online repository
+    workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs);
     @savefig plot_example_inversion.png width=100%
-    graphics.plot_inversion(gdirs[0])
+    graphics.plot_distributed_thickness(gdirs[0])
 
 See also the documentation page for :doc:`input-data` for more examples of
 the kind of data that can be added to glacier directories.
@@ -147,7 +149,7 @@ OGGM workflow and are applied as such:
 
     # Initialize glacier directories
     from oggm import workflow, tasks
-    gdirs = workflow.init_glacier_directories(rgi_ids)
+    gdirs = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url)
 
     # Define the list of tasks
     task_list = [

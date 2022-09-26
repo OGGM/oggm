@@ -406,15 +406,6 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
 
 
 @entity_task(log, writes=['gcm_data'])
-def process_cmip5_data(*args, **kwargs):
-    """Renamed to process_cmip_data.
-    """
-    warnings.warn('The task `process_cmip5_data` is deprecated and renamed '
-                  'to `process_cmip_data`.', FutureWarning)
-    process_cmip_data(*args, **kwargs)
-
-
-@entity_task(log, writes=['gcm_data'])
 def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
                       fpath_precip=None, **kwargs):
     """Read, process and store the CMIP5 and CMIP6 climate data for this glacier.

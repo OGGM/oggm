@@ -1,3 +1,5 @@
+.. _dynamic-spinup:
+
 Dynamic spinup
 ==============
 

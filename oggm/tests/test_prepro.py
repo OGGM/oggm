@@ -157,18 +157,6 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(gis.read_geotiff_dem(gdir), totest,
                                    rtol=0.01)
 
-    def test_init_glacier_regions(self):
-
-        hef_rgi = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp'))
-        gdir = workflow.init_glacier_regions(hef_rgi)[0]
-        nx, ny = gdir.grid.nx, gdir.grid.ny
-
-        # Change something and note that no change occurs because dem is there
-        cfg.PARAMS['border'] = 12
-        gdir = workflow.init_glacier_regions(hef_rgi)[0]
-        assert nx == gdir.grid.nx
-        assert ny == gdir.grid.ny
-
     def test_divides_as_glaciers(self):
 
         hef_rgi = gpd.read_file(get_demo_file('divides_alps.shp'))

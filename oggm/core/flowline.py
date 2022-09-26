@@ -2846,11 +2846,6 @@ def init_present_time_glacier(gdir, filesuffix=''):
     gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
-def robust_model_run(*args, **kwargs):
-    warnings.warn('The task `robust_model_run` is deprecated.', FutureWarning)
-    return flowline_model_run(*args, **kwargs)
-
-
 @entity_task(log)
 def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,

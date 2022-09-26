@@ -5,7 +5,7 @@ Temperature index model calibrated on traditional MB data (deprecated)
 
 .. important::
 
-    This calibration procedure is not used since OGGM v1.6. It is still
+    This calibration procedure is not used anymore as of OGGM v1.6. It is still
     possible to run it and/or use glacier directories based on it, but
     we won't produce new directories based on this method.
 
