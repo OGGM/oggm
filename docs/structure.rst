@@ -80,19 +80,21 @@ downloading and extracting these data locally:
 
     # Where to fetch the pre-processed directories - this can be changed
     server_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-    experiment_url = 'oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match'
+    experiment_url = 'oggm_v1.6/L3-L5_files/elev_bands/w5e5/qc0/pcpwin/match_geod_pergla'
     base_url = server_url + experiment_url
 
 .. ipython:: python
 
-    from oggm import workflow, graphics
+    from oggm import workflow, tasks, graphics
 
-    rgi_ids = ['RGI60-11.01328', 'RGI60-11.00897']
+    rgi_ids = ['RGI60-11.00897']
     gdirs = workflow.init_glacier_directories(rgi_ids,  # glaciers to download
                                               from_prepro_level=3,  # pre-processing level
+                                              prepro_border=10,  # pre-processing map size
                                               prepro_base_url=base_url)  # online repository
+    workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs);
     @savefig plot_example_inversion.png width=100%
-    graphics.plot_inversion(gdirs[0])
+    graphics.plot_distributed_thickness(gdirs[0])
 
 See also the documentation page for :doc:`input-data` for more examples of
 the kind of data that can be added to glacier directories.
@@ -112,7 +114,7 @@ the kind of data that can be added to glacier directories.
       co-exist if they agree on how a flowline is stored on disk.
     - multiprocessing is trivial: the same task can be run on many glaciers at
       once without having to share data across processes, since everything
-      is on disk and independent.
+      is located on disk and independent.
 
     **Cons**:
 
@@ -127,12 +129,13 @@ the kind of data that can be added to glacier directories.
       This can lead to silent bugs (for example mismatching model parameters
       between the preprocessing and the simulations, leading to incorrect results).
       Because of this issue, we had to implement safeguards against such mistakes
-      where possible.
+      wherever possible.
     - users can be confused by glacier directories. Since an OGGM program does not
-      always read like linear "A to Z" workflows (but for example "start from Q, then Q to Z"),
-      mistakes like the ones described above can happen unnoticed.
+      always read like linear "A to Z" workflows (but for example "start from Q, then
+      do Q to Z"), mistakes like the ones described above can happen unnoticed.
     - it can make certain types of sensitivity experiments more difficult to implement,
-      since users have to wrry not only about variable names, but also about data file names.
+      since users have to worry not only about variable names, but also about data file names.
+
 
 OGGM tasks
 ----------
@@ -146,7 +149,7 @@ OGGM workflow and are applied as such:
 
     # Initialize glacier directories
     from oggm import workflow, tasks
-    gdirs = workflow.init_glacier_directories(rgi_ids)
+    gdirs = workflow.init_glacier_directories(rgi_ids, prepro_base_url=base_url)
 
     # Define the list of tasks
     task_list = [

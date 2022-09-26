@@ -878,10 +878,13 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     gtype = np.array([g.type for g in odf.geometry])
     if 'GeometryCollection' in gtype:
         errdf = odf.loc[gtype == 'GeometryCollection']
-        if not np.all(errdf.length) == 0:
-            errdf = errdf.loc[errdf.length > 0]
-            raise RuntimeError('Some geometries are non-empty GeometryCollection '
-                               f'at RGI Ids: {errdf.RGIID.values}')
+        with warnings.catch_warnings():
+            # errdf.length warns because of use of wgs84
+            warnings.filterwarnings("ignore", category=UserWarning)
+            if not np.all(errdf.length) == 0:
+                errdf = errdf.loc[errdf.length > 0]
+                raise RuntimeError('Some geometries are non-empty GeometryCollection '
+                                   f'at RGI Ids: {errdf.RGIID.values}')
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
@@ -934,17 +937,11 @@ class compile_to_netcdf(object):
         """Decorate."""
 
         @wraps(task_func)
-        def _compile_to_netcdf(gdirs, filesuffix='', input_filesuffix='',
-                               output_filesuffix='', path=True,
+        def _compile_to_netcdf(gdirs, input_filesuffix='',
+                               output_filesuffix='',
+                               path=True,
                                tmp_file_size=1000,
                                **kwargs):
-
-            # Check input
-            if filesuffix:
-                warnings.warn('The `filesuffix` kwarg is deprecated for '
-                              'compile_* tasks. Use input_filesuffix from '
-                              'now on.', FutureWarning)
-                input_filesuffix = filesuffix
 
             if not output_filesuffix:
                 output_filesuffix = input_filesuffix

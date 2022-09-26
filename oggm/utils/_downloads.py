@@ -71,13 +71,6 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 SAMPLE_DATA_COMMIT = '8a3c41a36d190c6c78029b5032648ce94ee2026c'
 
-GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'L1-L2_files/centerlines/')
-GDIR_L3L5_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/')
-DEMS_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'rgitopo/')
-
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
 CHECKSUM_LIFETIME = 24 * 60 * 60
@@ -1282,10 +1275,9 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     """Extended base url where to find the desired gdirs."""
 
     if base_url is None:
-        if prepro_level <= 2:
-            base_url = GDIR_L1L2_URL
-        else:
-            base_url = GDIR_L3L5_URL
+        raise InvalidParamsError('Starting with v1.6, users now have to '
+                                 'explicitly indicate the url they want '
+                                 'to start from.')
 
     if not base_url.endswith('/'):
         base_url += '/'

@@ -9,14 +9,15 @@ Shapefiles of glacier centerlines, flowlines and widths
 -------------------------------------------------------
 
 These variables are a standard output of OGGM, and can be useful to many.
-You will find the files here: https://cluster.klima.uni-bremen.de/~oggm/assets/oggm_v1.4/centerlines_shapes.
+You will find the files here: https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/centerlines/RGI62/b_010/L2/summary
 
 The following files are available:
 
-- RGIxx_centerlines: the geometrical centerlines
-- RGIxx_flowlines: the centerlines converted to "flowlines", i.e. interpolated to a regular grid and where upslope trajectories are cropped
-- RGIxx_geom_widths: the geometrical intersection of the flowlines' normals with the glacier outlines
-- RGIxx_widths: the geometrical widths corrected to reflect the glacier's elevation-area distribution
+- ``centerlines``: the geometrical centerlines
+- ``centerlines_smoothed``: the geometrical centerlines smoothed to look nicer and guaranteed to match the glacier outlines (not used in the model but useful outside of it)
+- ``flowlines``: the centerlines converted to "flowlines", i.e. interpolated to a regular grid and where upslope trajectories are cropped
+- ``geom_widths``: the geometrical intersection of the flowlines' normals with the glacier outlines
+- ``widths``: the geometrical widths corrected to reflect the glacier's elevation-area distribution
 
 If you use these data, please cite `Maussion et al., 2019 <https://gmd.copernicus.org/articles/12/909/2019/>`_.
 

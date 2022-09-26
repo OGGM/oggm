@@ -1,7 +1,13 @@
 .. currentmodule:: oggm
 
-Temperature index model calibrated on traditional MB data
-=========================================================
+Temperature index model calibrated on traditional MB data (deprecated)
+======================================================================
+
+.. important::
+
+    This calibration procedure is not used anymore as of OGGM v1.6. It is still
+    possible to run it and/or use glacier directories based on it, but
+    we won't produce new directories based on this method.
 
 The first mass balance (MB) model ever implemented in OGGM is an
 extended version of the temperature-index model presented by

@@ -6,14 +6,14 @@ Installing OGGM
    Did you know that you can try OGGM in your browser before installing it
    on your computer? Visit :doc:`cloud` for more information.
 
-OGGM itself is a pure Python package, but it has several dependencies which
+OGGM itself is a pure python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
 details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
-OGGM is fully `tested`_ with Python version 3.7, 3.8 and 3.9 on Linux.
-OGGM does not work with Python 2. We do not test OGGM automatically on
-Mac OSX, but it should probably run fine there as well.
+OGGM is fully `tested`_ with Python versions 3.8 to 3.10 on Linux.
+We do not test OGGM automatically on Mac OSX, but it should probably run
+fine there as well.
 
 .. warning::
 
@@ -30,7 +30,7 @@ Linux users with experience with `pip`_ can follow
 .. _tested: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
 .. _conda: https://conda.io/projects/conda/en/latest/user-guide/index.html
 .. _pip: https://docs.python.org/3/installing/
-.. _strongly recommend: http://python3statement.github.io/
+.. _mamba: https://mamba.readthedocs.io
 
 
 Dependencies
@@ -102,7 +102,7 @@ which explains how to install ``mambaforge`` and
 `this one <https://fabienmaussion.info/intro_to_programming/week_05/01-install-packages.html>`_
 for installing packages.
 
-We recommend to use `mamba <https://mamba.readthedocs.io>`_ over conda as an
+We recommend to use `mamba`_ over conda as an
 installation command. Mamba is a drop-in
 replacement for all conda commands. If you feel like it, install mamba in your conda
 environment (``conda install -c conda-forge mamba``)
@@ -118,11 +118,13 @@ for more info.
 The simplest way: with an environment file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Download (right-click -> "save as") or copy the content of
-`this file <https://raw.githubusercontent.com/OGGM/oggm/master/docs/recommended_env.yml>`_
-into a file called ``environment.yml`` on your system.
+Copy the content of the file below into a file called ``environment.yml`` on your system
+(alternatively, right-click -> "save as" on `this link <https://raw.githubusercontent.com/OGGM/oggm/master/docs/recommended_env.yml>`_).
 
-From the location of the file,  run ``mamba env create -f environment.yml``.
+.. include:: recommended_env.yml
+   :literal:
+
+From the folder where you saved the file,  run ``mamba env create -f environment.yml``.
 
 This will create a new environment called ``oggm_env`` in your conda installation.
 For more information about conda environments, visit the
@@ -138,13 +140,13 @@ Install OGGM itself
 First, choose which version of OGGM you would like to install:
 
 - **stable**: this is the latest version officially released and has a fixed
-  version number (e.g. v1.4).
+  version number (e.g. v1.5.3).
 - **dev**: this is the development version. It might contain new
   features and bug fixes, but is also likely to continue to change until a
   new release is made. This is the recommended way if you want to use the
   latest changes to the code.
-- **dev+code**: this is the recommended way if you plan to explore the OGGM
-  codebase, contribute to the model, and/or if you want to use the most
+- **dev+code**: this is the recommended way if you plan to
+  contribute to the model, and/or if you want to use the most
   recent model updates.
 
 **‣ install the stable version:**
@@ -208,33 +210,32 @@ anywhere (don't forget to activate your environment first)::
 
     pytest.oggm
 
-The tests can run for about 10 minutes (`we are trying to reduce this <https://github.com/OGGM/oggm/issues/1063>`_).
-If everything worked fine, you should see something like::
+The tests should run for about 5 minutes. If everything worked fine, you should see something like::
 
-    ================================ test session starts ================================
-    platform linux -- Python 3.8.5, pytest-6.0.2, py-1.9.0, pluggy-0.13.1
-    Matplotlib: 3.3.2
-    Freetype: 2.6.1
+    =================================== test session starts ====================================
+    platform linux -- Python 3.10.6, pytest-7.1.3, pluggy-1.0.0
+    Matplotlib: 3.5.3
+    Freetype: 2.12.1
     rootdir: /home/mowglie/disk/Dropbox/HomeDocs/git/oggm-fork, configfile: pytest.ini
-    plugins: mpl-0.122
-    collected 297 items
+    plugins: anyio-3.6.1, mpl-0.150.0
+    collected 373 items
 
-    oggm/tests/test_benchmarks.py .......                                         [  2%]
-    oggm/tests/test_graphics.py ...................X                              [  9%]
-    oggm/tests/test_minimal.py ...                                                [ 10%]
-    oggm/tests/test_models.py ..........................sss.......ssss..s.ss..sss [ 27%]
-    sss..sss                                                                      [ 29%]
-    oggm/tests/test_numerics.py .sssssssssss.ssss...s..ss.s                       [ 39%]
-    oggm/tests/test_prepro.py .................s........................s........ [ 56%]
-    ........s....s............                                                    [ 64%]
-    oggm/tests/test_shop.py .......                                               [ 67%]
-    oggm/tests/test_utils.py .................................................... [ 84%]
-    ss.ss..sssss.ssssss..sss...s.ss.ss.ss..                                       [ 97%]
-    oggm/tests/test_workflow.py ssssss                                            [100%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_benchmarks.py ...s.ss            [  1%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_graphics.py ..........s...s....s [  7%]
+    ss                                                                                   [  7%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_minimal.py ...                   [  8%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_models.py ...................... [ 14%]
+    .........ssss.......ssss.ss.ss..ssssssssss..ssssssssssssssssssssssssssssssss.s       [ 35%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_numerics.py sssss.ss.sssss.s.sss [ 40%]
+    ss.sss.sss.s                                                                         [ 43%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_prepro.py ..................s... [ 49%]
+    ...........s....ss...ss..s.....ss.....sssssss..sssss....s.......                     [ 67%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_shop.py ss..........s.           [ 70%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_utils.py ....................... [ 76%]
+    ....sss.......sss...s....................ss.s..ssss.ssssss..sss...s.ss.ss.ss....     [ 98%]
+    disk/Dropbox/HomeDocs/git/oggm-fork/oggm/tests/test_workflow.py ssssss               [100%]
 
-    ================================= warnings summary ==================================
-    (warnings are mostly ok)
-    ======== 223 passed, 73 skipped, 1 xpassed, 9 warnings in 771.11s (0:12:51) =========
+    ======================= 224 passed, 149 skipped in 217.03s (0:03:37) ======================
 
 
 You can safely ignore deprecation warnings and other messages (if any),
@@ -329,7 +330,7 @@ Install some packages one by one::
    $ pip install numpy scipy pandas shapely matplotlib pyproj \
        rasterio Pillow geopandas netcdf4 scikit-image configobj joblib \
        xarray progressbar2 pytest motionless dask bottleneck toolz \
-       tables rioxarray
+       tables rioxarray pytables
 
 A pinning of the NetCDF4 package to 1.3.1 might be necessary on some systems
 (`related issue <https://github.com/Unidata/netcdf4-python/issues/962>`_).
@@ -349,27 +350,10 @@ Install a minimal OGGM environment
 
 If you plan to use only the numerical core of OGGM (that is, for idealized
 simulations or teaching), you can skip many dependencies and only
-install this shorter list::
+install this shorter list:
 
-    name: oggm_minimal
-    channels:
-      - conda-forge
-    dependencies:
-      - numpy
-      - scipy
-      - pandas
-      - matplotlib
-      - shapely
-      - requests
-      - configobj
-      - netcdf4
-      - xarray
-      - pytables
-      - pytest
-      # For oggm-edu
-      - seaborn
-    pip:
-      - oggm
+.. include:: recommended_minimal_env.yml
+   :literal:
 
 Installing them with pip or conda should be much easier.
 `Install OGGM itself`_ then as above.

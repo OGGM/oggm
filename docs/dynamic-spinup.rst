@@ -1,3 +1,5 @@
+.. _dynamic-spinup:
+
 Dynamic spinup
 ==============
 
@@ -7,7 +9,7 @@ area OR volume at the RGI-date.
 
 Further, this dynamic spinup can be combined
 with a dynamic :math:`\mu ^{*}` calibration. This calibration also tries to
-calibrate :math:`\mu ^{*}` to match geodetic MB data as it is described in
+calibrate :math:`\mu ^{*}` to match geodetic MB data as described in
 :doc:`mass-balance-2012-pergla`, but further takes a dynamically changing glacier
 geometry into account.
 

@@ -1,6 +1,6 @@
-#############
-API Reference
-#############
+################################
+List of OGGM functions and tasks
+################################
 
 .. currentmodule:: oggm
 
@@ -148,7 +148,6 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_ecmwf_data
     tasks.process_gcm_data
     tasks.process_cesm_data
-    tasks.process_cmip5_data
     tasks.process_cmip_data
     tasks.prepare_for_inversion
     tasks.mass_conservation_inversion
@@ -265,8 +264,11 @@ pre-processed state available on the OGGM servers:
     cfg.initialize()  # always initialize before an OGGM task
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir')
+    # The base url is where to find the pre-processed directories
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/'
     gdirs = workflow.init_glacier_directories('RGI60-11.00897',
                                               from_prepro_level=1,
+                                              prepro_base_url=base_url,
                                               prepro_border=10)
     gdir = gdirs[0]  # init_glacier_directories always returns a list
 
@@ -447,8 +449,11 @@ including the model flowlines. This is achieved by choosing preprocessing level
     cfg.initialize()  # always initialize before an OGGM task
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir2')
+    # The base url is where to find the pre-processed directories
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/elev_bands/w5e5/qc0/pcpwin/match_geod_pergla/'
     gdirs = workflow.init_glacier_directories('RGI60-11.00897',
                                               from_prepro_level=5,
+                                              prepro_base_url=base_url,
                                               prepro_border=80)
     gdir = gdirs[0]  # init_glacier_directories always returns a list
 
