@@ -1524,7 +1524,7 @@ def dynamic_mu_star_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_mu_star_calibration(
-        gdir, ref_dmdtda=None, err_ref_dmdtda=None,
+        gdir, ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
         ref_period='', ignore_hydro_months=False, min_mu_star=None,
         max_mu_star=None, mu_star_max_step_length=5, maxiter=20,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
@@ -1563,6 +1563,20 @@ def run_dynamic_mu_star_calibration(
         yr-1). Must always be a positive number. If None the data from Hugonett
         2021 is used.
         Default is None
+    err_dmdtda_scaling_factor : float
+        The error of the geodetic mass balance is multiplied by this factor.
+        When looking at more glaciers you should set this factor smaller than
+        1 (Default), but the smaller this factor the more glaciers will fail
+        during calibration. The factor is only used if ref_dmdtda = None and
+        err_ref_dmdtda = None.
+        The idea is that we reduce the uncertainty of individual observations
+        to count for correlated uncertainties when looking at regional or
+        global scales. If err_scaling_factor is 1 (Default) and you look at the
+        results of more than one glacier this equals that all errors are
+        uncorrelated. Therefore the result will be outside the uncertainty
+        boundaries given in Hugonett 2021 e.g. for the global estimate, because
+        some correlation of the individual errors is assumed during aggregation
+        of glaciers to regions (for more details see paper Hugonett 2021).
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
@@ -1697,6 +1711,7 @@ def run_dynamic_mu_star_calibration(
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda *= err_dmdtda_scaling_factor
 
     if err_ref_dmdtda <= 0:
         raise RuntimeError('The provided error for the geodetic mass-balance '

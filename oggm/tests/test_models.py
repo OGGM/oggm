@@ -3835,6 +3835,57 @@ class TestHEF:
                            for fl_prev, fl_now in
                            zip(fls, gdir.read_pickle('model_flowlines'))])
 
+        # test err_dmdtda_scaling_factor (not working for volume with inversion)
+        if not (do_inversion and minimise_for == 'volume'):
+            err_dmdtda_scaling_factor = 0.2
+            run_dynamic_mu_star_calibration(
+                gdir, max_mu_star=1000.,
+                err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
+                run_function=dynamic_mu_star_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_mu_calib_err_scaling',
+                ys=1979, ye=ye)
+
+            # check that we are matching all desired ref values
+            ds = utils.compile_run_output(
+                gdir, input_filesuffix='_dyn_mu_calib_err_scaling',
+                path=False)
+            if minimise_for == 'volume':
+                assert np.isclose(ds.loc[{'time': yr_rgi}].volume.values * 1e-9,
+                                  ref_value_dynamic_spinup,
+                                  rtol=precision_percent / 100,
+                                  atol=precision_absolute)
+            elif minimise_for == 'area':
+                assert np.isclose(ds.loc[{'time': yr_rgi}].area.values * 1e-6,
+                                  ref_value_dynamic_spinup,
+                                  rtol=precision_percent / 100,
+                                  atol=precision_absolute)
+            dmdtda_mdl_scale = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                                 ds.volume.loc[yr0_ref_dmdtda].values) /
+                                gdir.rgi_area_m2 /
+                                (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                                cfg.PARAMS['ice_density'])
+            assert np.isclose(dmdtda_mdl_scale, ref_dmdtda,
+                              rtol=np.abs(err_ref_dmdtda *
+                                          err_dmdtda_scaling_factor / ref_dmdtda))
+            # check that calibration without scaling factor is outside adapted
+            # uncertainty (use previous result without err scaling factor), this
+            # tests if the scaling factor has any effect
+            assert not np.isclose(dmdtda_mdl, ref_dmdtda,
+                                  rtol=np.abs(err_ref_dmdtda *
+                                              err_dmdtda_scaling_factor /
+                                              ref_dmdtda))
+            assert gdir.get_diagnostics()['used_spinup_option'] == \
+                   'dynamic mu_star calibration (full success)'
+
         # test that error is raised if user provides flowlines but want to
         # include inversion during dynamic mu calibration
         if do_inversion:
@@ -4117,6 +4168,38 @@ class TestHEF:
                       cfg.PARAMS['ice_density'])
         assert np.isclose(dmdtda_mdl, ref_dmdtda,
                           rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
+        assert gdir.get_diagnostics()['used_spinup_option'] == \
+               'dynamic mu_star calibration (full success)'
+
+        # test err_dmdtda_scaling_factor
+        err_dmdtda_scaling_factor = 0.01
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
+            run_function=dynamic_mu_star_run,
+            fallback_function=dynamic_mu_star_run_fallback,
+            output_filesuffix='_dyn_mu_calib_err_scaling',
+            ys=1979, ye=ye)
+        # check that we are matching all desired ref values
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_mu_calib_err_scaling',
+            path=False)
+
+        dmdtda_mdl_scale = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                             ds.volume.loc[yr0_ref_dmdtda].values) /
+                            gdir.rgi_area_m2 /
+                            (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                            cfg.PARAMS['ice_density'])
+        assert np.isclose(dmdtda_mdl_scale, ref_dmdtda,
+                          rtol=np.abs(err_ref_dmdtda *
+                                      err_dmdtda_scaling_factor / ref_dmdtda))
+        # check that calibration without scaling factor is outside adapted
+        # uncertainty (use previous result without err scaling factor), this
+        # tests if the scaling factor has any effect
+        assert not np.isclose(dmdtda_mdl, ref_dmdtda,
+                              rtol=np.abs(err_ref_dmdtda *
+                                          err_dmdtda_scaling_factor /
+                                          ref_dmdtda))
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic mu_star calibration (full success)'
 
