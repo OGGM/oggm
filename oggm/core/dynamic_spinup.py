@@ -1084,17 +1084,22 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         define_new_mu_star_in_gdir(gdir, mu_star)
 
     if do_inversion:
-        apparent_mb_from_any_mb(gdir)
-        # do inversion with A calibration to current volume
-        calibrate_inversion_from_consensus(
-            [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
-            filter_inversion_output=True,
-            volume_m3_reference=local_variables['vol_m3_ref'])
+        with utils.DisableLogger():
+            apparent_mb_from_any_mb(gdir,
+                                    add_to_log_file=False,  # dont write to log
+                                    )
+            # do inversion with A calibration to current volume
+            calibrate_inversion_from_consensus(
+                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                filter_inversion_output=True,
+                volume_m3_reference=local_variables['vol_m3_ref'],
+                add_to_log_file=False)
 
     # this is used to keep the original model_flowline unchanged (-> to be able
     # to conduct different dynamic calibration runs in the same gdir)
     model_flowline_filesuffix = '_dyn_mu_calib'
-    init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix)
+    init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix,
+                              add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad' files are
@@ -1103,6 +1108,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         model, last_best_t_bias = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,  # dont write to log file in @entity_task
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1136,8 +1142,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         raise RuntimeError(f'Dynamic spinup raised error! (Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
-                                  path=False)
+    with utils.DisableLogger():
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                      path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -1283,11 +1290,12 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
         define_new_mu_star_in_gdir(gdir, mu_star)
         if do_inversion:
-            apparent_mb_from_any_mb(gdir)
-            calibrate_inversion_from_consensus(
-                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
-                filter_inversion_output=True,
-                volume_m3_reference=local_variables['vol_m3_ref'])
+            with utils.DisableLogger():
+                apparent_mb_from_any_mb(gdir)
+                calibrate_inversion_from_consensus(
+                    [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                    filter_inversion_output=True,
+                    volume_m3_reference=local_variables['vol_m3_ref'])
     if os.path.isfile(os.path.join(gdir.dir,
                                    'model_flowlines_dyn_mu_calib.pkl')):
         os.remove(os.path.join(gdir.dir,
