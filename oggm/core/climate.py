@@ -1568,6 +1568,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         tmb = (terminus_change_will * 1e12 / gdir.rgi_area_m2)
         log.workflow('({}) Terminus change substracted: {}'.format(gdir.rgi_id,tmb))
         ref_mb += tmb
+        log.workflow('({}) Resulting s.m.b.: {}'.format(gdir.rgi_id,ref_mb))
 
     try:
         mu_star = optimize.brentq(_mu_star_per_minimization,

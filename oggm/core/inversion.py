@@ -501,7 +501,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                 out_thick[-1] = (((rho_o / rho) * min_rel_h * f_b) / 
                                  ((rho_o / rho) * min_rel_h - min_rel_h + 1))
                 bed_h = cl['hgt'] - out_thick
-                water_depth = utils.clip_min(0,-bed_h+water_level)
+                water_depth = utils.clip_min(0,water_level - bed_h)
                 if fixed_water_depth:
                     out_thick[-1] = ((min_rel_h * (rho_o / rho) * 
                                       fixed_water_depth) / (min_rel_h - 1))
@@ -534,8 +534,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                 a_factor = (a_pull / (rho*cfg.G*slope*out_thick)) + 1
                 a_factor = np.nan_to_num(a_factor, nan=1, posinf=1, neginf=1)
             else:
-                rel_h = out_thick * 0 + 1
-                a_factor = out_thick * 0 + 1
+                rel_h = np.ones(slope.shape)
+                a_factor = np.ones(slope.shape)
             a3s = fs / fd * rel_h
             a0s = - cl['flux_a0'] / ((rho*cfg.G*slope*a_factor)**3 * fd)
             out_thick = _compute_thick(a0s, a3s, cl['flux_a0'], sf,
@@ -604,7 +604,6 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                         volume[i] = out_thick[i] * w[i] * cl['dx']
             h_diff = h_diff - out_thick
             k += 1
-
         # Sanity check
         if np.any(out_thick <= 0):
             log.warning("Found zero or negative thickness: "
@@ -1198,7 +1197,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
         # For glaciers that are already relatively thick compared to the 
         # freeboard given by the DEM, it seems useful to start with a lower 
         # water level in order not to underestimate the initial thickness.
-        water_level = -thick0/8 if thick0 > 8*th else 0
+        water_level = 0
         if gdir.is_lake_terminating:
             water_level = th - cfg.PARAMS['free_board_lake_terminating']
 
@@ -1311,8 +1310,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
     # We take the smallest absolute water level. (Except for cases where we 
     # start with a negative water level; see above.)
-    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m) and not \
-       thick0 > 8*th:
+    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m):
         water_level = water_level_p
     elif success_m == 1:
         water_level = water_level_m
@@ -1491,7 +1489,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
         # For glaciers that are already relatively thick compared to the 
         # freeboard given by the DEM, it seems useful to start with a lower 
         # water level in order not to underestimate the initial thickness.
-        water_level = -thick0/8 if thick0 > 8*th else 0
+        water_level = 0
         if gdir.is_lake_terminating:
             water_level = th - cfg.PARAMS['free_board_lake_terminating']
 
@@ -1595,8 +1593,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     # We take the smallest absolute water level. (Except for cases where we 
     # start with a negative water level; see above.)
-    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m) and not \
-       thick0 > 8*th:
+    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m):
         water_level = water_level_p
         opt = opt_p
     elif success_m == 1:
