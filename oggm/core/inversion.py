@@ -1197,7 +1197,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
         # For glaciers that are already relatively thick compared to the 
         # freeboard given by the DEM, it seems useful to start with a lower 
         # water level in order not to underestimate the initial thickness.
-        water_level = 0
+        water_level = -thick0/4 if thick0 > 8*th else 0
         if gdir.is_lake_terminating:
             water_level = th - cfg.PARAMS['free_board_lake_terminating']
 
@@ -1310,7 +1310,8 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
     # We take the smallest absolute water level. (Except for cases where we 
     # start with a negative water level; see above.)
-    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m):
+    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m) and not \
+       thick0 > 8*th:
         water_level = water_level_p
     elif success_m == 1:
         water_level = water_level_m
@@ -1489,7 +1490,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
         # For glaciers that are already relatively thick compared to the 
         # freeboard given by the DEM, it seems useful to start with a lower 
         # water level in order not to underestimate the initial thickness.
-        water_level = 0
+        water_level = -thick0/4 if thick0 > 8*th else 0
         if gdir.is_lake_terminating:
             water_level = th - cfg.PARAMS['free_board_lake_terminating']
 
@@ -1593,7 +1594,8 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     # We take the smallest absolute water level. (Except for cases where we 
     # start with a negative water level; see above.)
-    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m):
+    if success_p == 1 and np.abs(water_level_p) < np.abs(water_level_m) and not \
+       thick0 > 8*th:
         water_level = water_level_p
         opt = opt_p
     elif success_m == 1:
