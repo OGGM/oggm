@@ -1291,11 +1291,13 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         define_new_mu_star_in_gdir(gdir, mu_star)
         if do_inversion:
             with utils.DisableLogger():
-                apparent_mb_from_any_mb(gdir)
+                apparent_mb_from_any_mb(gdir,
+                                        add_to_log_file=False)
                 calibrate_inversion_from_consensus(
                     [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
                     filter_inversion_output=True,
-                    volume_m3_reference=local_variables['vol_m3_ref'])
+                    volume_m3_reference=local_variables['vol_m3_ref'],
+                    add_to_log_file=False)
     if os.path.isfile(os.path.join(gdir.dir,
                                    'model_flowlines_dyn_mu_calib.pkl')):
         os.remove(os.path.join(gdir.dir,
@@ -1317,6 +1319,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         model_end = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1349,7 +1352,9 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
                     'try is to conduct a run until ye without a dynamic '
                     'spinup.')
         model_end = run_from_climate_data(
-            gdir, min_ys=yr_clim_min, ye=ye,
+            gdir,
+            add_to_log_file=False,
+            min_ys=yr_clim_min, ye=ye,
             output_filesuffix=output_filesuffix,
             climate_input_filesuffix=climate_input_filesuffix,
             store_model_geometry=store_model_geometry,
@@ -1446,6 +1451,7 @@ def dynamic_mu_star_run(
         model = run_from_climate_data(gdir,
                                       # force to raise an error in @entity_task
                                       continue_on_error=False,
+                                      add_to_log_file=False,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
@@ -1456,8 +1462,9 @@ def dynamic_mu_star_run(
                            f'(Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
-                                  path=False)
+    with utils.DisableLogger():
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                      path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -1517,6 +1524,7 @@ def dynamic_mu_star_run_fallback(
         model = run_from_climate_data(gdir,
                                       # force to raise an error in @entity_task
                                       continue_on_error=False,
+                                      add_to_log_file=False,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
