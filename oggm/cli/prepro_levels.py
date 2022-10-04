@@ -84,7 +84,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
-                      dynamic_spinup=False, dynamic_spinup_start_year=1979,
+                      dynamic_spinup=False, err_dmdtda_scaling_factor=1,
+                      dynamic_spinup_start_year=1979,
                       continue_on_error=True):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -154,8 +155,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         a dict of parameters to override.
     disable_dl_verify : bool
         disable the hash verification of OGGM downloads
-    dynamic_spinup: str
-        include a dynamic spinup matching 'area' OR 'volume' at the RGI-date
+    dynamic_spinup : str
+        include a dynamic spinup matching 'area/dmdtda' OR 'volume/dmdtda' at
+        the RGI-date
+    err_dmdtda_scaling_factor : float
+        scaling factor to reduce individual geodetic mass balance uncertainty
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
@@ -645,6 +649,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             workflow.execute_entity_task(
                 tasks.run_dynamic_mu_star_calibration, gdirs,
+                err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
                 max_mu_star=used_max_mu_star,
                 kwargs_run_function={'evolution_model': evolution_model,
@@ -835,6 +840,11 @@ def parse_args(args):
                              "the RGI-date, AND mass-change from Hugonnet "
                              "in the period 2000-2019 (dynamic mu* "
                              "calibration).")
+    parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=1,
+                        help="scaling factor to account for correlated "
+                             "uncertainties of geodetic mass balance "
+                             "observations when looking at regional scale. "
+                             "Should be smaller or equal 1.")
     parser.add_argument('--dynamic-spinup-start-year', type=int, default=1979,
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
@@ -894,6 +904,7 @@ def parse_args(args):
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
                 dynamic_spinup=dynamic_spinup,
+                err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 )
 

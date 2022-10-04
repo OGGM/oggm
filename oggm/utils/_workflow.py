@@ -493,7 +493,8 @@ class entity_task(object):
                 if cfg.PARAMS['task_timeout'] > 0:
                     signal.alarm(0)
                 if task_name != 'gdir_to_tar':
-                    gdir.log(task_name, task_time=ex_t)
+                    if add_to_log_file:
+                        gdir.log(task_name, task_time=ex_t)
             except Exception as err:
                 # Something happened
                 out = None

@@ -502,7 +502,8 @@ def climate_tasks(gdirs, base_url=None):
 
 
 @global_task(log)
-def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
+def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
+                    add_to_log_file=True):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -511,6 +512,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    add_to_log_file : bool
+        if the called entity tasks should write into log of gdir. Default True
     """
 
     if cfg.PARAMS['use_kcalving_for_inversion']:
@@ -528,21 +531,28 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True):
                                                       len(gdirs_nc)))
 
         if gdirs_nc:
-            execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
+            execute_entity_task(tasks.prepare_for_inversion, gdirs_nc,
+                                add_to_log_file=add_to_log_file)
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
-                                glen_a=glen_a, fs=fs)
+                                glen_a=glen_a, fs=fs,
+                                add_to_log_file=add_to_log_file)
             if filter_inversion_output:
-                execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
+                execute_entity_task(tasks.filter_inversion_output, gdirs_nc,
+                                    add_to_log_file=add_to_log_file)
 
         if gdirs_c:
             execute_entity_task(tasks.find_inversion_calving, gdirs_c,
-                                glen_a=glen_a, fs=fs)
+                                glen_a=glen_a, fs=fs,
+                                add_to_log_file=add_to_log_file)
     else:
-        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+        execute_entity_task(tasks.prepare_for_inversion, gdirs,
+                            add_to_log_file=add_to_log_file)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
-                            glen_a=glen_a, fs=fs)
+                            glen_a=glen_a, fs=fs,
+                            add_to_log_file=add_to_log_file)
         if filter_inversion_output:
-            execute_entity_task(tasks.filter_inversion_output, gdirs)
+            execute_entity_task(tasks.filter_inversion_output, gdirs,
+                                add_to_log_file=add_to_log_file)
 
 
 @global_task(log)
@@ -551,7 +561,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        apply_fs_on_mismatch=False,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
-                                       volume_m3_reference=None):
+                                       volume_m3_reference=None,
+                                       add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -580,6 +591,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         output (needs the downstream lines to work).
     volume_m3_reference : float
         Option to give an own total glacier volume to match to
+    add_to_log_file : bool
+        if the called entity tasks should write into log of gdir. Default True
 
     Returns
     -------
@@ -606,9 +619,11 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
     def compute_vol(x):
         inversion_tasks(gdirs, glen_a=x*def_a, fs=fs,
-                        filter_inversion_output=filter_inversion_output)
+                        filter_inversion_output=filter_inversion_output,
+                        add_to_log_file=add_to_log_file)
         odf = df.copy()
-        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                          add_to_log_file=add_to_log_file)
         # if the user provides a glacier volume all glaciers are considered,
         # dropna() below exclude glaciers where no ITMIX volume is available
         if volume_m3_reference is None:
@@ -657,7 +672,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                                       fs=5.7e-20, a_bounds=a_bounds,
                                                       apply_fs_on_mismatch=False,
                                                       error_on_mismatch=error_on_mismatch,
-                                                      volume_m3_reference=volume_m3_reference)
+                                                      volume_m3_reference=volume_m3_reference,
+                                                      add_to_log_file=add_to_log_file)
         if error_on_mismatch:
             raise ValueError(msg)
 
@@ -669,8 +685,10 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
     # Compute the final volume with the correct A
     inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs,
-                    filter_inversion_output=filter_inversion_output)
-    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+                    filter_inversion_output=filter_inversion_output,
+                    add_to_log_file=add_to_log_file)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            add_to_log_file=add_to_log_file)
     return df
 
 

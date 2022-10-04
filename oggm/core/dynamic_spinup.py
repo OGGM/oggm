@@ -1084,17 +1084,22 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         define_new_mu_star_in_gdir(gdir, mu_star)
 
     if do_inversion:
-        apparent_mb_from_any_mb(gdir)
-        # do inversion with A calibration to current volume
-        calibrate_inversion_from_consensus(
-            [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
-            filter_inversion_output=True,
-            volume_m3_reference=local_variables['vol_m3_ref'])
+        with utils.DisableLogger():
+            apparent_mb_from_any_mb(gdir,
+                                    add_to_log_file=False,  # dont write to log
+                                    )
+            # do inversion with A calibration to current volume
+            calibrate_inversion_from_consensus(
+                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                filter_inversion_output=True,
+                volume_m3_reference=local_variables['vol_m3_ref'],
+                add_to_log_file=False)
 
     # this is used to keep the original model_flowline unchanged (-> to be able
     # to conduct different dynamic calibration runs in the same gdir)
     model_flowline_filesuffix = '_dyn_mu_calib'
-    init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix)
+    init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix,
+                              add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad' files are
@@ -1103,6 +1108,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         model, last_best_t_bias = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,  # dont write to log file in @entity_task
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1136,8 +1142,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         raise RuntimeError(f'Dynamic spinup raised error! (Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
-                                  path=False)
+    with utils.DisableLogger():
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                      path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -1283,11 +1290,14 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
         define_new_mu_star_in_gdir(gdir, mu_star)
         if do_inversion:
-            apparent_mb_from_any_mb(gdir)
-            calibrate_inversion_from_consensus(
-                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
-                filter_inversion_output=True,
-                volume_m3_reference=local_variables['vol_m3_ref'])
+            with utils.DisableLogger():
+                apparent_mb_from_any_mb(gdir,
+                                        add_to_log_file=False)
+                calibrate_inversion_from_consensus(
+                    [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                    filter_inversion_output=True,
+                    volume_m3_reference=local_variables['vol_m3_ref'],
+                    add_to_log_file=False)
     if os.path.isfile(os.path.join(gdir.dir,
                                    'model_flowlines_dyn_mu_calib.pkl')):
         os.remove(os.path.join(gdir.dir,
@@ -1309,6 +1319,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         model_end = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1341,7 +1352,9 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
                     'try is to conduct a run until ye without a dynamic '
                     'spinup.')
         model_end = run_from_climate_data(
-            gdir, min_ys=yr_clim_min, ye=ye,
+            gdir,
+            add_to_log_file=False,
+            min_ys=yr_clim_min, ye=ye,
             output_filesuffix=output_filesuffix,
             climate_input_filesuffix=climate_input_filesuffix,
             store_model_geometry=store_model_geometry,
@@ -1438,6 +1451,7 @@ def dynamic_mu_star_run(
         model = run_from_climate_data(gdir,
                                       # force to raise an error in @entity_task
                                       continue_on_error=False,
+                                      add_to_log_file=False,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
@@ -1448,8 +1462,9 @@ def dynamic_mu_star_run(
                            f'(Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
-                                  path=False)
+    with utils.DisableLogger():
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                      path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -1509,6 +1524,7 @@ def dynamic_mu_star_run_fallback(
         model = run_from_climate_data(gdir,
                                       # force to raise an error in @entity_task
                                       continue_on_error=False,
+                                      add_to_log_file=False,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
@@ -1524,7 +1540,7 @@ def dynamic_mu_star_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_mu_star_calibration(
-        gdir, ref_dmdtda=None, err_ref_dmdtda=None,
+        gdir, ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
         ref_period='', ignore_hydro_months=False, min_mu_star=None,
         max_mu_star=None, mu_star_max_step_length=5, maxiter=20,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
@@ -1563,6 +1579,20 @@ def run_dynamic_mu_star_calibration(
         yr-1). Must always be a positive number. If None the data from Hugonett
         2021 is used.
         Default is None
+    err_dmdtda_scaling_factor : float
+        The error of the geodetic mass balance is multiplied by this factor.
+        When looking at more glaciers you should set this factor smaller than
+        1 (Default), but the smaller this factor the more glaciers will fail
+        during calibration. The factor is only used if ref_dmdtda = None and
+        err_ref_dmdtda = None.
+        The idea is that we reduce the uncertainty of individual observations
+        to count for correlated uncertainties when looking at regional or
+        global scales. If err_scaling_factor is 1 (Default) and you look at the
+        results of more than one glacier this equals that all errors are
+        uncorrelated. Therefore the result will be outside the uncertainty
+        boundaries given in Hugonett 2021 e.g. for the global estimate, because
+        some correlation of the individual errors is assumed during aggregation
+        of glaciers to regions (for more details see paper Hugonett 2021).
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
@@ -1697,6 +1727,7 @@ def run_dynamic_mu_star_calibration(
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda *= err_dmdtda_scaling_factor
 
     if err_ref_dmdtda <= 0:
         raise RuntimeError('The provided error for the geodetic mass-balance '
