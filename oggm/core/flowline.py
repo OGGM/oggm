@@ -2787,14 +2787,26 @@ def init_present_time_glacier(gdir, filesuffix=''):
         lambdas[bed_shape == 0] = def_lambda
 
         if not gdir.is_tidewater and inv['is_last']:
-            # for valley glaciers, simply add the downstream line
+            # for valley glaciers, simply add the downstream line, depending on
+            # selected shape parabola or trapezoidal
             dic_ds = gdir.read_pickle('downstream_line')
-            bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
-            lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.NaN)
+            if cfg.PARAMS['downstream_line_shape'] == 'parabola':
+                bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
+                lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.NaN)
+                widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
+            elif cfg.PARAMS['downstream_line_shape'] == 'trapezoidal':
+                bed_shape = np.append(bed_shape, dic_ds['bedshapes'] * np.NaN)
+                lambdas = np.append(lambdas, np.ones(len(dic_ds['w0s'])) *
+                                    def_lambda)
+                widths_m = np.append(widths_m, dic_ds['w0s'])
+            else:
+                raise InvalidParamsError(
+                    f"Unknown cfg.PARAMS['downstream_line_shape'] = "
+                    f"{cfg.PARAMS['downstream_line_shape']} (options are "
+                    f"'parabola' and 'trapezoidal').")
             section = np.append(section, dic_ds['bedshapes'] * 0.)
             surface_h = np.append(surface_h, dic_ds['surface_h'])
             bed_h = np.append(bed_h, dic_ds['surface_h'])
-            widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
             line = dic_ds['full_line']
 
         if gdir.is_tidewater and inv['is_last']:
