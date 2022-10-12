@@ -526,6 +526,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['mpi_recv_buf_size'] = cp.as_int('mpi_recv_buf_size')
     PARAMS['use_multiple_flowlines'] = cp.as_bool('use_multiple_flowlines')
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
+    PARAMS['downstream_line_shape'] = cp['downstream_line_shape']
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
     PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
     PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
@@ -595,7 +596,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     except ValueError:
         PARAMS['prcp_scaling_factor'] = None
 
-     # Delete non-floats
+    # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
            'mp_processes', 'use_multiprocessing', 'climate_qc_months',
@@ -616,7 +617,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'tidewater_type', 'store_model_geometry', 'use_winter_prcp_factor',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
            'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_factor_ab',
-           'winter_prcp_factor_range', 'prcp_scaling_factor']
+           'winter_prcp_factor_range', 'prcp_scaling_factor',
+           'downstream_line_shape']
     for k in ltr:
         cp.pop(k, None)
 

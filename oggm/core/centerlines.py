@@ -1103,10 +1103,12 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
         donot_compute.append(_isborder)
 
     bed = []
+    terrain_heights = []
     for ic, (cc, dontcomp) in enumerate(zip(cs, donot_compute)):
 
         if dontcomp:
             bed.append(np.NaN)
+            terrain_heights.append(np.NaN)
             continue
 
         z = []
@@ -1128,6 +1130,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
         extr = scipy.signal.argrelextrema(dsts, np.less, mode='wrap')
         if len(extr[0]) == 0:
             bed.append(np.NaN)
+            terrain_heights.append(np.NaN)
             continue
 
         # from local minima find that with the minimum |x|
@@ -1144,6 +1147,10 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
 
         p = _approx_parabola(roNx, zN, y0=zHead)
 
+        # define terrain height as the maximum height difference of points used
+        # for the parabolic fitting and the bottom height
+        terrain_heights.append(float(np.max(zN - zHead)))
+
         # shift parabola to the ds-line
         p2 = np.copy(p)
         p2[2] = z[ro == 0]
@@ -1157,6 +1164,9 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
         else:
             bed.append(np.NaN)
 
+    terrain_heights = np.asarray(terrain_heights)
+    assert len(terrain_heights) == idl.nx, 'len(terrain_heights) == idl.nx'
+
     bed = np.asarray(bed)
     assert len(bed) == idl.nx, 'len(bed) == idl.nx'
     pvalid = np.sum(np.isfinite(bed)) / len(bed) * 100
@@ -1169,6 +1179,8 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # interpolation, filling the gaps
     default = cfg.PARAMS['default_parabolic_bedshape']
     bed_int = interp_nans(bed, default=default)
+    default = 100.  # assume a default terrain height of 100 m if all NaN
+    terrain_heights = interp_nans(terrain_heights, default=default)
 
     # We forbid super small shapes (important! This can lead to huge volumes)
     # Sometimes the parabola fits in flat areas are very good, implying very
@@ -1178,12 +1190,42 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # Smoothing
     bed_ma = pd.Series(bed_int)
     bed_ma = bed_ma.rolling(window=5, center=True, min_periods=1).mean()
-    return bed_ma.values
+    return bed_ma.values, terrain_heights
+
+
+def _trapezoidal_bottom_width_from_terrain_cross_section_area(
+        terrain_heights, Ps, lambdas, w0_min):
+    """This function calculates a bottom width for a trapezoidal downstream
+    line in a way that the terrain cross section area is preserved. The area to
+    preserve is defined by the fitted parabolic shape and the terrain height.
+
+    Parabolic formulas involved (Ap = area, h = terrain_height,
+    w = surface width, Ps = bed-shape parameter):
+        Ap = 2 / 3 * h * w
+        Ps = 4 * h / w^2
+
+    Trapezoidal formulas involved (At = area, h = terrain_height,
+    w = surface width, w0 = bottom width, lambda = defines angle of wall):
+        At = (w + w0) * h / 2
+        w = w0 + lambda * h
+
+    Putting all formulas together and setting Ap = At we get:
+        w0 = 4 / 3 * sqrt(h / Ps) - 1 / 2 * lambda * h
+    """
+
+    w0s = utils.clip_min(4 / 3 * np.sqrt(terrain_heights / Ps) -
+                         1 / 2 * lambdas * terrain_heights,
+                         w0_min)
+
+    return w0s
 
 
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_bedshape(gdir):
     """The bedshape obtained by fitting a parabola to the line's normals.
+    Further a trapezoidal shape is fitted to match the cross section area of
+    the valley. Which downstream shape (parabola or trapezoidal) is used can be
+    selected with cfg.PARAMS['downstream_line_shape'].
 
     Also computes the downstream's altitude.
 
@@ -1210,7 +1252,7 @@ def compute_downstream_bedshape(gdir):
     xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
     interpolator = RegularGridInterpolator(xy, topo)
 
-    bs = _parabolic_bed_from_topo(gdir, cl, interpolator)
+    bs, terrain_heights = _parabolic_bed_from_topo(gdir, cl, interpolator)
     assert len(bs) == cl.nx, 'len(bs) == cl.nx'
     assert np.all(np.isfinite(bs)), 'np.all(np.isfinite(bs))'
 
@@ -1222,10 +1264,20 @@ def compute_downstream_bedshape(gdir):
     # If smoothing, this is the moment
     hgts = gaussian_filter1d(hgts, cfg.PARAMS['flowline_height_smooth'])
 
+    # calculate bottom width of trapezoidal shapes
+    lambdas = np.ones(len(bs)) * cfg.PARAMS['trapezoid_lambdas']
+    w0_min = cfg.PARAMS['trapezoid_min_bottom_width']
+    w0s = _trapezoidal_bottom_width_from_terrain_cross_section_area(
+        terrain_heights, bs, lambdas, w0_min)
+    assert len(w0s) == cl.nx, 'len(w0s) == cl.nx'
+    assert np.all(np.isfinite(w0s)), 'np.all(np.isfinite(w0s))'
+    assert np.all(w0s >= w0_min), 'np.all(w0s >= w0_min)'
+
     # write output
     out = gdir.read_pickle('downstream_line')
     out['bedshapes'] = bs
     out['surface_h'] = hgts
+    out['w0s'] = w0s
     gdir.write_pickle(out, 'downstream_line')
 
 

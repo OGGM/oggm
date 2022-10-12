@@ -67,9 +67,11 @@ ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length',
 
 class TestInitPresentDayFlowline:
 
-    def test_init_present_time_glacier(self, hef_gdir):
+    @pytest.mark.parametrize('downstream_line_shape', ['parabola', 'trapezoidal'])
+    def test_init_present_time_glacier(self, hef_gdir, downstream_line_shape):
 
         gdir = hef_gdir
+        cfg.PARAMS['downstream_line_shape'] = downstream_line_shape
         init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -116,6 +118,19 @@ class TestInitPresentDayFlowline:
         np.testing.assert_allclose(gdir.rgi_area_km2, ref_area * 1e-6)
         np.testing.assert_allclose(gdir.rgi_area_km2, area)
 
+        # test that final downstream line has the desired shape
+        fl = fls[-1]
+        ice_mask = fls[-1].thick > 0.
+        if downstream_line_shape == 'parabola':
+            assert np.all(np.isfinite(fl.bed_shape[~ice_mask]))
+            assert np.all(~np.isfinite(fl._w0_m[~ice_mask]))
+        if downstream_line_shape == 'trapezoidal':
+            assert np.all(np.isfinite(fl._w0_m[~ice_mask]))
+            assert np.all(~np.isfinite(fl.bed_shape[~ice_mask]))
+            # check that bottom width of downstream line is larger than minimum
+            assert np.all(fl._w0_m[~ice_mask] >
+                          cfg.PARAMS['trapezoid_min_bottom_width'])
+
         if do_plot:
             plt.plot(fls[-1].bed_h, color='k')
             plt.plot(fls[-1].surface_h)
@@ -126,6 +141,10 @@ class TestInitPresentDayFlowline:
         # test if providing a filesuffix is working
         init_present_time_glacier(gdir, filesuffix='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
+
+        cfg.PARAMS['downstream_line_shape'] = 'free_shape'
+        with pytest.raises(InvalidParamsError):
+            init_present_time_glacier(gdir)
 
     def test_present_time_glacier_massbalance(self, hef_gdir):
 
