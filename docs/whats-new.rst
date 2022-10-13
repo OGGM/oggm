@@ -59,6 +59,9 @@ Enhancements
   ``cfg.PARAMS['downstream_line_shape']``, with the options ``'parabol'`` (default)
   or ``'trapezoidal'`` before calling ``init_present_time_glacier(gdir)``.
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
+  (:pull:`1496`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
