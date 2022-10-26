@@ -410,15 +410,25 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                     len(cfg.PARAMS['intersects_gdf']) == 0 and
                     not from_tar):
                 try:
-                    rgi_ids = np.unique(np.sort([entity.RGIId for entity in
+                    rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
                                                  entities]))
                     rgi_version = rgi_ids[0].split('-')[0][-2:]
                     fp = utils.get_rgi_intersects_entities(rgi_ids,
                                                            version=rgi_version)
                     cfg.set_intersects_db(fp)
                 except AttributeError:
-                    # List of str
-                    pass
+                    # RGI V6
+                    try:
+                        rgi_ids = np.unique(np.sort([entity.RGIId for entity in
+                                                     entities]))
+                        rgi_version = rgi_ids[0].split('-')[0][-2:]
+                        fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                               version=rgi_version)
+                        cfg.set_intersects_db(fp)
+                    except AttributeError:
+                        # List of str
+                        pass
+
 
             if _isdir(from_tar):
                 gdirs = execute_entity_task(gdir_from_tar, entities,
