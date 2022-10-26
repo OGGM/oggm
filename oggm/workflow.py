@@ -265,21 +265,30 @@ def gdir_from_tar(entity, from_tar):
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
-def _check_rgi_input(rgidf=None):
+def _check_rgi_input(rgidf=None, err_on_lvl2=False):
     """Complain if the input has duplicates."""
 
     if rgidf is None:
         return
+
+    msg = ('You have glaciers with connectivity level 2 in your list. '
+           'OGGM does not provide pre-processed directories for these.')
+
     # Check if dataframe or list of strs
     try:
         rgi_ids = rgidf.RGIId
         # if dataframe we can also check for connectivity
         if 'Connect' in rgidf and np.any(rgidf['Connect'] == 2):
-            log.workflow('WARNING! You have glaciers with connectivity level '
-                         '2 in your list. OGGM does not provide pre-processed '
-                         'directories for these.')
+            if err_on_lvl2:
+                raise RuntimeError(msg)
     except AttributeError:
         rgi_ids = utils.tolist(rgidf)
+        # Check for Connectivity level 2 here as well
+        not_good_ids = pd.read_csv(utils.get_demo_file('rgi6_ids_conn_lvl2.csv'),
+                                   index_col=0)
+        if err_on_lvl2 and len(not_good_ids.loc[rgi_ids]) > 0:
+            raise RuntimeError(msg)
+
     u, c = np.unique(rgi_ids, return_counts=True)
     if len(u) < len(rgi_ids):
         raise InvalidWorkflowError('Found duplicates in the list of '
@@ -342,7 +351,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         the initialised glacier directories
     """
 
-    _check_rgi_input(rgidf)
+    _check_rgi_input(rgidf, err_on_lvl2=from_prepro_level)
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
@@ -355,7 +364,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         if cfg.PARAMS['has_internet'] and not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
-        if 'oggm_v1.4' in url and from_prepro_level >=3 and not cfg.PARAMS['prcp_scaling_factor']:
+        if ('oggm_v1.4' in url and
+                from_prepro_level >= 3 and
+                not cfg.PARAMS['prcp_scaling_factor']):
             log.warning('You seem to be using v1.4 directories with a more '
                         'recent version of OGGM. While this is possible, be '
                         'aware that some defaults parameters have changed. '
