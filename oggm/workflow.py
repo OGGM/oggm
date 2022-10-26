@@ -286,8 +286,12 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
         # Check for Connectivity level 2 here as well
         not_good_ids = pd.read_csv(utils.get_demo_file('rgi6_ids_conn_lvl2.csv'),
                                    index_col=0)
-        if err_on_lvl2 and len(not_good_ids.loc[rgi_ids]) > 0:
-            raise RuntimeError(msg)
+        try:
+            if err_on_lvl2 and len(not_good_ids.loc[rgi_ids]) > 0:
+                raise RuntimeError(msg)
+        except KeyError:
+            # Were good
+            pass
 
     u, c = np.unique(rgi_ids, return_counts=True)
     if len(u) < len(rgi_ids):
