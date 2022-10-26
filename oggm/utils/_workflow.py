@@ -2560,7 +2560,7 @@ class GlacierDirectory(object):
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
-                _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                _shp = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
             crs = salem.check_crs(rgi_entity.crs)
