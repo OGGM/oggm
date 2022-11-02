@@ -836,14 +836,21 @@ class TestPreproCLI(unittest.TestCase):
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
 
         # Some changes for changes in OGGM
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
         inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_1]
         inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_2]
 
-        # Here as well - we don't do the custom RGI IDs anymore
-        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+        new_ids = []
+        count = 0
+        for s in rgidf.RGIId:
+            s = s.replace('RGI50', 'RGI60')
+            if '_d0' in s:
+                # We dont do this anymore
+                s = 'RGI60-11.{:05d}'.format(99999 - count)
+                count += 1
+            new_ids.append(s)
+        rgidf['RGIId'] = new_ids
 
         return inter, rgidf
 
@@ -1038,7 +1045,7 @@ class TestPreproCLI(unittest.TestCase):
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
-        np.random.seed(3)
+        np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
@@ -1168,12 +1175,12 @@ class TestPreproCLI(unittest.TestCase):
             new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.05)
+                                       rtol=0.02)
 
             vn = 'volume'
             np.testing.assert_allclose(ods[vn].sel(time=1990),
                                        ods[vn].sel(time=2015),
-                                       rtol=0.55)
+                                       rtol=0.3)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
@@ -1425,7 +1432,6 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           logging_level='INFO', max_level=5,
-                          disable_mp=True, continue_on_error=False,
                           override_params={'hydro_month_nh': 1,
                                            'geodetic_mb_period':
                                                '2000-01-01_2010-01-01',
