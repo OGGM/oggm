@@ -835,11 +835,16 @@ class TestPreproCLI(unittest.TestCase):
         inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
 
+        # Some changes for changes in OGGM
         rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
         inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_1]
         inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_2]
+
+        # Here as well - we don't do the custom RGI IDs anymore
+        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+
         return inter, rgidf
 
     def test_parse_args(self):
@@ -1420,6 +1425,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           logging_level='INFO', max_level=5,
+                          disable_mp=True, continue_on_error=False,
                           override_params={'hydro_month_nh': 1,
                                            'geodetic_mb_period':
                                                '2000-01-01_2010-01-01',

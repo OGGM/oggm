@@ -2952,7 +2952,7 @@ class TestInversion(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         miniglac = shpg.Point(entity.CenLon, entity.CenLat).buffer(0.0001)
         entity.geometry = miniglac
-        entity.RGIId = 'RGI50-11.fake'
+        entity.RGIId = 'RGI50-11.faked'
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
@@ -2969,7 +2969,7 @@ class TestInversion(unittest.TestCase):
         inversion.mass_conservation_inversion(gdir)
 
         rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
-                            'RGI50-11.fake')
+                            'RGI50-11.faked')
         self.assertTrue(os.path.exists(rdir))
 
         rdir = os.path.join(rdir, 'log.txt')

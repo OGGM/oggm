@@ -73,6 +73,8 @@ def up_to_climate(reset=False, use_mp=None):
 
     # Use RGI6
     rgidf['RGIId'] = [s.replace('RGI50', 'RGI60') for s in rgidf.RGIId]
+    # Here as well - we don't do the custom RGI IDs anymore
+    rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
     # Be sure data is downloaded
     cru.get_cru_cl_file()
