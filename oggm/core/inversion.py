@@ -581,7 +581,10 @@ def filter_inversion_output(gdir):
     For various reasons (but mostly: the equilibrium assumption), the last few
     grid points on a glacier flowline are often noisy and create unphysical
     depressions. Here we try to correct for that. It is not volume conserving,
-    but area conserving.
+    but area conserving. If a parabolic shape factor is getting smaller than
+    the minimum defined one (cfg.PARAMS['mixed_min_shape']) the grid point is
+    changed to a trapezoid, similar to what is done during the actual
+    physically-based inversion.
 
     Parameters
     ----------
@@ -602,41 +605,67 @@ def filter_inversion_output(gdir):
                                    'compute_downstream_bedshape tasks')
 
     dic_ds = gdir.read_pickle('downstream_line')
-    bs = np.average(dic_ds['bedshapes'][:3])
-
-    n = -5
-
     cls = gdir.read_pickle('inversion_output')
     cl = cls[-1]
 
-    # First guess thickness based on width
-    w = cl['width'][n:]
-    old_h = cl['thick'][n:]
-    s = w**3 * bs / 6
-    new_h = 3/2 * s / w
-    # Change only if it actually does what we want
-    new_h[old_h < new_h] = old_h[old_h < new_h]
+    # number of grid points to smooth, the more grid points the smoother the
+    # result, but the larger the volume error we introduce
+    n_smoothing = -5
 
-    # Smoothing things out a bit
-    hts = np.append(np.append(cl['thick'][n-3:n], new_h), 0)
-    h = utils.smooth1d(hts, 3)[n-1:-1]
+    cl_sfc_h = cl['hgt'][n_smoothing:]
+    cl_thick = cl['thick'][n_smoothing:]
+    cl_width = cl['width'][n_smoothing:]
+    cl_is_trap = cl['is_trapezoid'][n_smoothing:]
+    cl_is_rect = cl['is_rectangular'][n_smoothing:]
+    cl_bed_h = cl_sfc_h - cl_thick
 
-    # Recompute bedshape based on that
-    bs = utils.clip_min(4*h / w**2, cfg.PARAMS['mixed_min_shape'])
-
-    # OK, done
-    s = w**3 * bs / 6
-
-    # Change only if it actually does what we want
-    new_h = 3/2 * s / w
-    if np.any(new_h > old_h):
-        # No change in volume
+    # check if their is a 'large' depression and if we need smoothing
+    # max depression is calculated as the mean slope of the first four ice free
+    # grid points
+    downstream_sfc_h = dic_ds['surface_h'][:5]
+    max_depression = np.average(np.abs(np.diff(downstream_sfc_h)))
+    # if height difference is smaller do nothing
+    if max_depression < downstream_sfc_h[0] - cl_bed_h[-1]:
         return np.sum([np.sum(cl['volume']) for cl in cls])
 
-    cl['thick'][n:] = new_h
-    cl['volume'][n:] = s * cl['dx']
-    cl['is_trapezoid'][n:] = False
-    cl['is_rectangular'][n:] = False
+    # ok we need to smooth
+    # first smooth last grid point to have the same slope as the previous ones,
+    # because often the last grid point is 'extra' deep
+    avg_bed_h_diff = np.average(np.abs(np.diff(cl_bed_h)))
+    cl_bed_h[-1] = cl_bed_h[-2] - avg_bed_h_diff
+
+    # check if we still need to force the last grid point to max_depression and
+    # smooth
+    if max_depression < downstream_sfc_h[0] - cl_bed_h[-1]:
+        # ok force the last grid point height
+        new_last_bed_h = downstream_sfc_h[0] - max_depression
+        # now smoothly add the change of the bed height over all grid points
+        # which should be smoothed
+        all_bed_h_changes = np.linspace(0, new_last_bed_h - cl_bed_h[-1],
+                                        -n_smoothing)
+        cl_bed_h = cl_bed_h + all_bed_h_changes
+
+    # define new thick and check if new parabolic bed shape is smaller than
+    # minimum, if so change to trapezoid (as it is done during inversion)
+    new_thick = cl_sfc_h - cl_bed_h
+    new_bed_shape = 4 * new_thick / cl_width ** 2
+    # new trap = (is trap or shape factor small) and not rectangular, we
+    # conserve all bed shapes
+    new_is_trapezoid = ((cl_is_trap |
+                         (new_bed_shape < cfg.PARAMS['mixed_min_shape'])) &
+                        ~cl_is_rect)
+
+    # and calculate new volumes depending on shape
+    new_volume = np.where(
+        new_is_trapezoid,
+        cl_width * new_thick - cfg.PARAMS['trapezoid_lambdas'] / 2 *
+        new_thick ** 2,
+        np.where(cl_is_rect, 1, 2 / 3) * cl_width * new_thick)
+
+    # define new values
+    cl['thick'][n_smoothing:] = new_thick
+    cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
+    cl['volume'][n_smoothing:] = new_volume
 
     gdir.write_pickle(cls, 'inversion_output')
 
