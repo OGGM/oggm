@@ -841,16 +841,9 @@ class TestPreproCLI(unittest.TestCase):
         inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_2]
 
-        new_ids = []
-        count = 0
-        for s in rgidf.RGIId:
-            s = s.replace('RGI50', 'RGI60')
-            if '_d0' in s:
-                # We dont do this anymore
-                s = 'RGI60-11.{:05d}'.format(99999 - count)
-                count += 1
-            new_ids.append(s)
-        rgidf['RGIId'] = new_ids
+        # Here as well - we don't do the custom RGI IDs anymore
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
         return inter, rgidf
 
