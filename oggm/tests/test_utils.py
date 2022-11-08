@@ -1168,12 +1168,7 @@ class TestPreproCLI(unittest.TestCase):
             new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.02)
-
-            vn = 'volume'
-            np.testing.assert_allclose(ods[vn].sel(time=1990),
-                                       ods[vn].sel(time=2015),
-                                       rtol=0.3)
+                                       rtol=0.05)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
@@ -1198,6 +1193,7 @@ class TestPreproCLI(unittest.TestCase):
         # the test glaciers only go up to 2015
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                           output_folder=odir, working_dir=wdir, is_test=True,
+                          test_ids=['RGI60-11.00929'],
                           dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
                           test_intersects_file=inter,
                           test_topofile=topof, elev_bands=True,
@@ -1241,7 +1237,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm import tasks
         from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
-        rid = df.rgi_id.iloc[1]
+        rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L3
