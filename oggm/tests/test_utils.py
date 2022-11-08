@@ -508,7 +508,9 @@ class TestStartFromTar(unittest.TestCase):
 
         # Read in the RGI file
         rgi_file = utils.get_demo_file('rgi_oetztal.shp')
-        self.rgidf = gpd.read_file(rgi_file).sample(4)
+        rgidf = gpd.read_file(rgi_file)
+        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+        self.rgidf = rgidf.sample(4)
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
         self.clean_dir()
