@@ -72,7 +72,20 @@ def up_to_climate(reset=False, use_mp=None):
     rgidf.loc[1, 'GlacType'] = '0299'
 
     # Use RGI6
-    rgidf['RGIId'] = [s.replace('RGI50', 'RGI60') for s in rgidf.RGIId]
+    new_ids = []
+    count = 0
+    for s in rgidf.RGIId:
+        s = s.replace('RGI50', 'RGI60')
+        if '_d0' in s:
+            # We dont do this anymore
+            s = 'RGI60-11.{:05d}'.format(99999 - count)
+            count += 1
+        new_ids.append(s)
+    rgidf['RGIId'] = new_ids
+
+
+    # Here as well - we don't do the custom RGI IDs anymore
+    rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
     # Be sure data is downloaded
     cru.get_cru_cl_file()

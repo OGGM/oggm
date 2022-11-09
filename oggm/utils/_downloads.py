@@ -2106,8 +2106,12 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
         version = cfg.PARAMS['rgi_version']
     if len(version) == 1:
         version += '0'
+    try:
+        regions = [s.split('-')[3] for s in rgi_ids]
 
-    regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    except IndexError:
+        # RGI V6
+        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_intersects_region_file(reg,

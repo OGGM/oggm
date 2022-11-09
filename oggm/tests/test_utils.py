@@ -508,7 +508,9 @@ class TestStartFromTar(unittest.TestCase):
 
         # Read in the RGI file
         rgi_file = utils.get_demo_file('rgi_oetztal.shp')
-        self.rgidf = gpd.read_file(rgi_file).sample(4)
+        rgidf = gpd.read_file(rgi_file)
+        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+        self.rgidf = rgidf.sample(4)
         cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
         cfg.PATHS['working_dir'] = self.testdir
         self.clean_dir()
@@ -835,11 +837,16 @@ class TestPreproCLI(unittest.TestCase):
         inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
         rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
 
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        # Some changes for changes in OGGM
         inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_1]
         inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
                             for rid in inter.RGIId_2]
+
+        # Here as well - we don't do the custom RGI IDs anymore
+        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+
         return inter, rgidf
 
     def test_parse_args(self):
@@ -1163,12 +1170,7 @@ class TestPreproCLI(unittest.TestCase):
             new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.02)
-
-            vn = 'volume'
-            np.testing.assert_allclose(ods[vn].sel(time=1990),
-                                       ods[vn].sel(time=2015),
-                                       rtol=0.3)
+                                       rtol=0.05)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
@@ -1193,6 +1195,7 @@ class TestPreproCLI(unittest.TestCase):
         # the test glaciers only go up to 2015
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                           output_folder=odir, working_dir=wdir, is_test=True,
+                          test_ids=['RGI60-11.00929'],
                           dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
                           test_intersects_file=inter,
                           test_topofile=topof, elev_bands=True,
@@ -1236,7 +1239,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm import tasks
         from oggm.core.flowline import FlowlineModel, FileModel
         cfg.PARAMS['continue_on_error'] = False
-        rid = df.rgi_id.iloc[1]
+        rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         # L3
@@ -1606,7 +1609,7 @@ class TestBenchmarkCLI(unittest.TestCase):
             assert kwargs['border'] == 120
 
     @pytest.mark.slow
-    def test_full_run(self):
+    def test_full_benchmark_run(self):
 
         from oggm.cli.benchmark import run_benchmark
 
