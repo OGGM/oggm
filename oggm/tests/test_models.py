@@ -4764,7 +4764,7 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.027)
+        assert_allclose(frac, 0, atol=0.03)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [True, False], ids=['monthly', 'annual'])
