@@ -417,7 +417,6 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
     v = inversion.mass_conservation_inversion(gdir, fs=fs,
                                               glen_a=glen_a,
                                               write=True)
-    inversion.filter_inversion_output(gdir)
 
     inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
