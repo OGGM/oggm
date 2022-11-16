@@ -333,7 +333,16 @@ def define_glacier_region(gdir, entity=None, source=None):
 
     # Open DEM
     # We test DEM availability for glacier only (maps can grow big)
-    if not is_dem_source_available(source, *gdir.extent_ll):
+    if isinstance(source, list):  # when multiple sources are provided, try them sequentially
+        for i, src in enumerate(source):
+            source_exists = is_dem_source_available(src, *gdir.extent_ll)
+            if source_exists:
+                source = source[i]  # pick the first source which exists
+                break
+    else:
+        source_exists = is_dem_source_available(source, *gdir.extent_ll)
+        
+    if source_exists is False:
         raise InvalidWorkflowError(f'Source: {source} is not available for '
                                    f'glacier {gdir.rgi_id} with border '
                                    f"{cfg.PARAMS['border']}")
