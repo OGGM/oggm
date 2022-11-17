@@ -70,7 +70,7 @@ Bug fixes
   would be used instead of a range of years (:pull:`1426`).
   By `Bowen <https://github.com/bowenbelongstonature>`_
 - Corrected ``source`` argument in ``tasks.define_glacier_region`` to handle a
-  list of DEM sources. (:pull:`1503`).
+  list of DEM sources. (:pull:`1506`).
   By `Daniel Otto <https://github.com/d-otto>`_
 
 Migrating guide
