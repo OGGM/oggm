@@ -16,6 +16,7 @@ import warnings
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
+from scipy.linalg import solve_banded
 
 # Optional libs
 try:
@@ -2091,6 +2092,277 @@ class KarthausModel(FlowlineModel):
         # Next step
         self.t += dt
         return dt
+
+
+class SemiImplicitModel(FlowlineModel):
+    """Semi implicit flowline model.
+
+    It solves the same equation as the FluxBasedModel, but the ice flux q is
+    implemented as q^t = D^t * (ds/dx)^(t+1).
+
+    It supports only a single flowline (no tributaries) with bed shapes
+    rectangular, trapezoidal or a mixture of both.
+    """
+
+    def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
+                 inplace=False, fixed_dt=None, cfl_number=0.6, min_dt=None,
+                 **kwargs):
+        """Instantiate the model.
+
+        Parameters
+        ----------
+        flowlines : list
+            the glacier flowlines
+        mb_model : MassBalanceModel
+            the mass balance model
+        y0 : int
+            initial year of the simulation
+        glen_a : float
+            Glen's creep parameter
+        fs : float
+            Oerlemans sliding parameter
+        inplace : bool
+            whether or not to make a copy of the flowline objects for the run
+            setting to True implies that your objects will be modified at run
+            time by the model (can help to spare memory)
+        fixed_dt : float
+            set to a value (in seconds) to prevent adaptive time-stepping.
+        cfl_number : float
+            For adaptive time stepping (the default), dt is chosen from the
+            CFL criterion (dt = cfl_number * dx^2 / max(D/w)).
+            Can be set to higher values compared to the FluxBasedModel.
+            Default is 0.6, but need further investigation.
+        min_dt : float
+            Defaults to cfg.PARAMS['cfl_min_dt'].
+            At high velocities, time steps can become very small and your
+            model might run very slowly. In production, it might be useful to
+            set a limit below which the model will just error.
+        kwargs : dict
+            Further keyword arguments for FlowlineModel
+
+        """
+
+        super(SemiImplicitModel, self).__init__(flowlines, mb_model=mb_model,
+                                                y0=y0, glen_a=glen_a, fs=fs,
+                                                inplace=inplace, **kwargs)
+
+        if len(self.fls) > 1:
+            raise ValueError('Implicit model does not work with '
+                             'tributaries.')
+
+        # convert pure RectangularBedFlowline to TrapezoidalBedFlowline with
+        # lambda = 0
+        if isinstance(self.fls[0], RectangularBedFlowline):
+            self.fls[0] = TrapezoidalBedFlowline(
+                line=self.fls[-1].line, dx=self.fls[-1].dx,
+                map_dx=self.fls[-1].map_dx, surface_h=self.fls[-1].surface_h,
+                bed_h=self.fls[-1].bed_h, widths=self.fls[-1].widths,
+                lambdas=0, rgi_id=self.fls[-1].rgi_id,
+                water_level=self.fls[-1].water_level, gdir=None)
+
+        if isinstance(self.fls[0], MixedBedFlowline):
+            if ~np.all(self.fls[0].is_trapezoid):
+                raise ValueError('Implicit model only works with a pure '
+                                 'trapezoidal flowline! But different lambdas '
+                                 'along the flowline possible (lambda=0 is'
+                                 'rectangular).')
+        elif not isinstance(self.fls[0], TrapezoidalBedFlowline):
+            raise ValueError('Implicit model only works with a pure '
+                             'trapezoidal flowline! But different lambdas '
+                             'along the flowline possible (lambda=0 is'
+                             'rectangular).')
+
+        if cfg.PARAMS['use_kcalving_for_run']:
+            raise NotImplementedError("Calving is not implemented in the"
+                                      "SemiImplicitModel! Set "
+                                      "cfg.PARAMS['use_kcalving_for_run'] = "
+                                      "False.")
+
+        self.fixed_dt = fixed_dt
+        if min_dt is None:
+            min_dt = cfg.PARAMS['cfl_min_dt']
+        self.min_dt = min_dt
+
+        if cfl_number is None:
+            cfl_number = cfg.PARAMS['cfl_number']
+        if cfl_number < 0.1:
+            raise InvalidParamsError("For the SemiImplicitModel you can use "
+                                     "cfl numbers in the order of 0.1 - 0.6 "
+                                     f"(you set {cfl_number}).")
+        self.cfl_number = cfl_number
+
+        # Special output
+        self._surf_vel_fac = (self.glen_n + 2) / (self.glen_n + 1)
+
+        # optim
+        nx = self.fls[-1].nx
+        self.u_stag = [np.zeros(nx + 1)]
+        bed_h_exp = np.concatenate(([self.fls[-1].bed_h[0]],
+                                    self.fls[-1].bed_h,
+                                    [self.fls[-1].bed_h[-1]]))
+        self.dbed_h_exp_dx = ((bed_h_exp[1:] - bed_h_exp[:-1]) /
+                              self.fls[0].dx_meter)
+        self.D_stag = [np.zeros(nx + 1)]
+        self.Amat_banded = np.zeros((3, nx))
+        w0 = self.fls[0]._w0_m
+        self.w0_stag = (w0[0:-1] + w0[1:]) / 2
+        self.flux_stag = [np.zeros(nx + 1)]
+        self.slope_stag = [np.zeros(nx + 1)]
+        self.thick_stag = [np.zeros(nx + 1)]
+
+    def step(self, dt):
+        """Advance one step."""
+
+        # Just a check to avoid useless computations
+        if dt <= 0:
+            raise InvalidParamsError('dt needs to be strictly positive')
+
+        # read out variables from current flowline
+        fl = self.fls[0]
+        dx = fl.dx_meter
+        width = fl.widths_m
+        thick = fl.thick
+        surface_h = fl.surface_h
+
+        # some variables needed later
+        N = self.glen_n
+        rhog = (self.rho * G) ** N
+
+        # calculate staggered variables
+        width_stag = (width[0:-1] + width[1:]) / 2
+        w0_stag = self.w0_stag
+        thick_stag = (thick[0:-1] + thick[1:]) / 2.
+        dsdx_stag = (surface_h[1:] - surface_h[0:-1]) / dx
+
+        # calculate diffusivity
+        # boundary condition D_stag_0 = D_stag_end = 0
+        D_stag = self.D_stag[0]
+        D_stag[1:-1] = ((self._fd * thick_stag ** (N + 2) +
+                         self.fs * thick_stag ** N) * rhog *
+                        (w0_stag + width_stag) / 2 *
+                        np.abs(dsdx_stag) ** (N - 1))
+
+        # insert stability criterion dt <= dx^2 / max(D/w) * cfl_number
+        if not self.fixed_dt:
+            divisor = np.max(np.abs(D_stag[1:-1] / width_stag))
+            if divisor > cfg.FLOAT_EPS:
+                cfl_dt = self.cfl_number * dx ** 2 / divisor
+            else:
+                cfl_dt = dt
+
+            if cfl_dt < dt:
+                dt = cfl_dt
+                if cfl_dt < self.min_dt:
+                    raise RuntimeError(
+                        'CFL error: required time step smaller '
+                        'than the minimum allowed: '
+                        '{:.1f}s vs {:.1f}s. Happening at '
+                        'simulation year {:.1f}, fl_id {}, '
+                        'bin_id {} and max_D {:.3f} m2 yr-1.'
+                        ''.format(cfl_dt, self.min_dt, self.yr, 0,
+                                  np.argmax(np.abs(D_stag)),
+                                  divisor * cfg.SEC_IN_YEAR))
+
+        # calculate diagonals of Amat
+        d0 = dt / dx ** 2 * (D_stag[:-1] + D_stag[1:]) / width
+        dm = - dt / dx ** 2 * D_stag[:-1] / width
+        dp = - dt / dx ** 2 * D_stag[1:] / width
+
+        # construct banded form of the matrix, which is used during solving
+        # (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.solve_banded.html)
+        # original matrix:
+        # Amat = (np.diag(dp[:-1], 1) +
+        #         np.diag(np.ones(len(d0)) + d0) +
+        #         np.diag(dm[1:], -1))
+        self.Amat_banded[0, 1:] = dp[:-1]
+        self.Amat_banded[1, :] = np.ones(len(d0)) + d0
+        self.Amat_banded[2, :-1] = dm[1:]
+
+        # correction term for glacier bed (original equation is an equation for
+        # the surface height s, which is transformed in an equation for h, as
+        # s = h + b the term below comes from the '- b'
+        b_corr = - D_stag * self.dbed_h_exp_dx
+
+        # prepare rhs
+        smb = self.get_mb(surface_h, self.yr, fl_id=0)
+        rhs = thick + smb * dt + dt / width * (b_corr[:-1] - b_corr[1:]) / dx
+
+        # solve matrix and update flowline thickness
+        thick_new = utils.clip_min(
+            solve_banded((1, 1), self.Amat_banded, rhs),
+            0)
+        fl.thick = thick_new
+
+        # -------------------- calculate some diagnostics ---------------------
+        # TODO: not needed at each timestep, e.g. only if we end at a
+        #  full year or month, could do it maybe in run_until_and_store or
+        #  checking dt we are now landing on (self.t + dt). Could be that this
+        #  shifts the velocity for one time step comparing to FluxBasedModel,
+        #  but should not be a large difference
+        #  This calculations could also be included in the equations above if
+        #  no other solution possible
+        u_stag = self.u_stag[0]
+        flux_stag = self.flux_stag[0]
+        slope_stag = self.slope_stag[0]
+        thick_stag = self.thick_stag[0]
+
+        section_stag = (fl.section[0:-1] + fl.section[1:]) / 2.
+        thick_stag[1:-1] = (fl.thick[0:-1] + fl.thick[1:]) / 2.
+        thick_stag[[0, -1]] = fl.thick[[0, -1]]
+        # slope = - dsurface_h / dx
+        slope_stag[1:-1] = (fl.surface_h[0:-1] - fl.surface_h[1:]) / dx
+        flux_stag[:] = D_stag * slope_stag
+        u_stag[1:-1] = np.where(thick_stag[1:-1] > 0.,
+                                flux_stag[1:-1] / section_stag, 0.)
+        # ---------------------------------------------------------------------
+
+        # Next step
+        self.t += dt
+
+        return dt
+
+    def get_diagnostics(self, fl_id=-1):
+        """Obtain model diagnostics in a pandas DataFrame.
+
+        Parameters
+        ----------
+        fl_id : int
+            the index of the flowline of interest, from 0 to n_flowline-1.
+            Default is to take the last (main) one
+
+        Returns
+        -------
+        a pandas DataFrame, which index is distance along flowline (m). Units:
+            - surface_h, bed_h, ice_tick, section_width: m
+            - section_area: m2
+            - slope: -
+            - ice_flux, tributary_flux: m3 of *ice* per second
+            - ice_velocity: m per second (depth-section integrated)
+            - surface_ice_velocity: m per second (corrected for surface - simplified)
+        """
+        import pandas as pd
+
+        fl = self.fls[fl_id]
+        nx = fl.nx
+
+        df = pd.DataFrame(index=fl.dx_meter * np.arange(nx))
+        df.index.name = 'distance_along_flowline'
+        df['surface_h'] = fl.surface_h
+        df['bed_h'] = fl.bed_h
+        df['ice_thick'] = fl.thick
+        df['section_width'] = fl.widths_m
+        df['section_area'] = fl.section
+
+        # Staggered
+        var = self.slope_stag[fl_id]
+        df['slope'] = (var[1:nx+1] + var[:nx])/2
+        var = self.flux_stag[fl_id]
+        df['ice_flux'] = (var[1:nx+1] + var[:nx])/2
+        var = self.u_stag[fl_id]
+        df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
+        df['surface_ice_velocity'] = df['ice_velocity'] * self._surf_vel_fac
+
+        return df
 
 
 class FileModel(object):

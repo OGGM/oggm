@@ -159,6 +159,39 @@ def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
     return [fls]
 
 
+def dummy_mixed_trap_rect_bed(deflambdas=2., map_dx=100., mixslice=None):
+    dx = 1.
+    nx = 200
+
+    surface_h = np.linspace(3000, 1000, nx)
+    bed_h = surface_h
+    shape = np.ones(nx) * np.NaN
+    is_trapezoid = ~np.isfinite(shape)
+    lambdas = shape * 0.
+    lambdas[is_trapezoid] = deflambdas
+    # use a second value for lambda in between
+    lambdas[15:20] = deflambdas / 2
+    widths_m = bed_h * 0. + 10
+    if mixslice:
+        lambdas[mixslice] = 0
+        widths_m[mixslice] = 25
+    else:
+        lambdas[0:10] = 0
+        widths_m[0:10] = 25
+    section = bed_h * 0.
+
+    coords = np.arange(0, nx - 0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+    fls = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                    surface_h=surface_h, bed_h=bed_h,
+                                    section=section, bed_shape=shape,
+                                    is_trapezoid=is_trapezoid,
+                                    lambdas=lambdas, widths_m=widths_m)
+
+    return [fls]
+
+
 def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
                           def_lambdas=2):
 
