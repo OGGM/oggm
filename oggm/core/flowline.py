@@ -2196,7 +2196,6 @@ class SemiImplicitModel(FlowlineModel):
 
         # optim
         nx = self.fls[-1].nx
-        self.u_stag = [np.zeros(nx + 1)]
         bed_h_exp = np.concatenate(([self.fls[-1].bed_h[0]],
                                     self.fls[-1].bed_h,
                                     [self.fls[-1].bed_h[-1]]))
@@ -2206,9 +2205,78 @@ class SemiImplicitModel(FlowlineModel):
         self.Amat_banded = np.zeros((3, nx))
         w0 = self.fls[0]._w0_m
         self.w0_stag = (w0[0:-1] + w0[1:]) / 2
-        self.flux_stag = [np.zeros(nx + 1)]
-        self.slope_stag = [np.zeros(nx + 1)]
-        self.thick_stag = [np.zeros(nx + 1)]
+        self.rhog = (self.rho * G) ** self.glen_n
+
+        # variables needed for the calculation of some diagnostics, this
+        # calculations are done with @property, because they are not computed
+        # on the fly during the dynamic run as in FluxBasedModel
+        self._u_stag = [np.zeros(nx + 1)]
+        self._flux_stag = [np.zeros(nx + 1)]
+        self._slope_stag = [np.zeros(nx + 1)]
+        self._thick_stag = [np.zeros(nx + 1)]
+        self._section_stag = [np.zeros(nx + 1)]
+
+    @property
+    def slope_stag(self):
+        slope_stag = self._slope_stag[0]
+
+        surface_h = self.fls[0].surface_h
+        dx = self.fls[0].dx_meter
+
+        slope_stag[0] = 0
+        slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
+        slope_stag[-1] = slope_stag[-2]
+
+        return [slope_stag]
+
+    @property
+    def thick_stag(self):
+        thick_stag = self._thick_stag[0]
+
+        thick = self.fls[0].thick
+
+        thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
+        thick_stag[[0, -1]] = thick[[0, -1]]
+
+        return [thick_stag]
+
+    @property
+    def section_stag(self):
+        section_stag = self._section_stag[0]
+
+        section = self.fls[0].section
+
+        section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
+        section_stag[[0, -1]] = section[[0, -1]]
+
+        return [section_stag]
+
+    @property
+    def u_stag(self):
+        u_stag = self._u_stag[0]
+
+        slope_stag = self.slope_stag[0]
+        thick_stag = self.thick_stag[0]
+        N = self.glen_n
+        rhog = self.rhog
+
+        rhogh = rhog * slope_stag ** N
+
+        u_stag[:] = ((thick_stag**(N+1)) * self._fd * rhogh +
+                     (thick_stag**(N-1)) * self.fs * rhogh)
+
+        return [u_stag]
+
+    @property
+    def flux_stag(self):
+        flux_stag = self._flux_stag[0]
+
+        section_stag = self.section_stag[0]
+        u_stag = self.u_stag[0]
+
+        flux_stag[:] = u_stag * section_stag
+
+        return [flux_stag]
 
     def step(self, dt):
         """Advance one step."""
@@ -2226,7 +2294,7 @@ class SemiImplicitModel(FlowlineModel):
 
         # some variables needed later
         N = self.glen_n
-        rhog = (self.rho * G) ** N
+        rhog = self.rhog
 
         # calculate staggered variables
         width_stag = (width[0:-1] + width[1:]) / 2
@@ -2292,29 +2360,6 @@ class SemiImplicitModel(FlowlineModel):
             solve_banded((1, 1), self.Amat_banded, rhs),
             0)
         fl.thick = thick_new
-
-        # -------------------- calculate some diagnostics ---------------------
-        # TODO: not needed at each timestep, e.g. only if we end at a
-        #  full year or month, could do it maybe in run_until_and_store or
-        #  checking dt we are now landing on (self.t + dt). Could be that this
-        #  shifts the velocity for one time step comparing to FluxBasedModel,
-        #  but should not be a large difference
-        #  This calculations could also be included in the equations above if
-        #  no other solution possible
-        u_stag = self.u_stag[0]
-        flux_stag = self.flux_stag[0]
-        slope_stag = self.slope_stag[0]
-        thick_stag = self.thick_stag[0]
-
-        section_stag = (fl.section[0:-1] + fl.section[1:]) / 2.
-        thick_stag[1:-1] = (fl.thick[0:-1] + fl.thick[1:]) / 2.
-        thick_stag[[0, -1]] = fl.thick[[0, -1]]
-        # slope = - dsurface_h / dx
-        slope_stag[1:-1] = (fl.surface_h[0:-1] - fl.surface_h[1:]) / dx
-        flux_stag[:] = D_stag * slope_stag
-        u_stag[1:-1] = np.where(thick_stag[1:-1] > 0.,
-                                flux_stag[1:-1] / section_stag, 0.)
-        # ---------------------------------------------------------------------
 
         # Next step
         self.t += dt
