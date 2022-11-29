@@ -69,6 +69,9 @@ Bug fixes
 - corrected a but in ``apparent_mb_from_any_mb``, where only two years of MB
   would be used instead of a range of years (:pull:`1426`).
   By `Bowen <https://github.com/bowenbelongstonature>`_
+- Corrected ``source`` argument in ``tasks.define_glacier_region`` to handle a
+  list of DEM sources. (:pull:`1506`).
+  By `Daniel Otto <https://github.com/d-otto>`_
 
 Migrating guide
 ~~~~~~~~~~~~~~~
