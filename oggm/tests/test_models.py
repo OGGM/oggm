@@ -38,7 +38,7 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_with_hydro)
+                                run_with_hydro, SemiImplicitModel)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_mu_star_calibration,
     dynamic_mu_star_run_with_dynamic_spinup,
@@ -5529,3 +5529,218 @@ class TestMergedHEF:
         # Merged glacier should have a larger area after 200yrs from advancing
         assert (ds_entity.area.isel(time=200).sum() <
                 ds_merged.area.isel(time=200))
+
+
+class TestSemiImplicitModel:
+
+    @pytest.mark.slow
+    def test_equilibrium(self, hef_elev_gdir, inversion_params):
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        mb_mod = massbalance.ConstantMassBalance(hef_elev_gdir)
+
+        fls = hef_elev_gdir.read_pickle('model_flowlines')
+        model = SemiImplicitModel(fls, mb_model=mb_mod, y0=0,
+                                  fs=inversion_params['inversion_fs'],
+                                  glen_a=inversion_params['inversion_glen_a'],
+                                  mb_elev_feedback='never')
+
+        ref_vol = model.volume_km3
+        ref_area = model.area_km2
+        ref_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_area, hef_elev_gdir.rgi_area_km2)
+
+        model.run_until_equilibrium(rate=1e-4)
+        assert model.yr >= 50
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=200.01)
+
+        # compare to FluxBasedModel
+        model_flux = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                    fs=inversion_params['inversion_fs'],
+                                    glen_a=inversion_params['inversion_glen_a'],
+                                    mb_elev_feedback='never')
+        model_flux.run_until_equilibrium(rate=1e-4)
+
+        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=7e-5)
+        np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=6e-5)
+        np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len)
+
+        # now glacier wide with MultipleFlowlineMassBalance
+        cl = massbalance.ConstantMassBalance
+        mb_mod = massbalance.MultipleFlowlineMassBalance(hef_elev_gdir,
+                                                         mb_model_class=cl)
+
+        model = SemiImplicitModel(fls, mb_model=mb_mod, y0=0,
+                                  fs=inversion_params['inversion_fs'],
+                                  glen_a=inversion_params['inversion_glen_a'],
+                                  mb_elev_feedback='never')
+        model.run_until_equilibrium(rate=1e-4)
+
+        model_flux = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                    fs=inversion_params['inversion_fs'],
+                                    glen_a=inversion_params['inversion_glen_a'],
+                                    mb_elev_feedback='never')
+        model_flux.run_until_equilibrium(rate=1e-4)
+        assert model.yr >= 50
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=5e-4)
+        np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=2e-5)
+        np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len,
+                                   atol=100.1)
+
+    @pytest.mark.slow
+    def test_random(self, hef_elev_gdir, inversion_params):
+        cfg.PARAMS['store_model_geometry'] = True
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+
+        init_present_time_glacier(hef_elev_gdir)
+        run_random_climate(hef_elev_gdir, nyears=100, seed=6,
+                           fs=inversion_params['inversion_fs'],
+                           glen_a=inversion_params['inversion_glen_a'],
+                           bias=0, output_filesuffix='_rdn',
+                           evolution_model=SemiImplicitModel)
+        run_constant_climate(hef_elev_gdir, nyears=100,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct',
+                             evolution_model=SemiImplicitModel)
+
+        paths = [hef_elev_gdir.get_filepath('model_geometry', filesuffix='_rdn'),
+                 hef_elev_gdir.get_filepath('model_geometry', filesuffix='_ct'),
+                 ]
+
+        for path in paths:
+            model = FileModel(path)
+            vol = model.volume_km3_ts()
+            area = model.area_km2_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                       rtol=0.12)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                       rtol=0.1)
+
+    @pytest.mark.slow
+    def test_sliding_and_compare_to_fluxbased(self, hef_elev_gdir,
+                                              inversion_params):
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        start_time_impl = time.time()
+        run_random_climate(hef_elev_gdir, nyears=1000, seed=6,
+                           fs=5.7e-20,
+                           glen_a=inversion_params['inversion_glen_a'],
+                           bias=0, output_filesuffix='_implicit_run',
+                           evolution_model=SemiImplicitModel)
+        impl_time_needed = time.time() - start_time_impl
+
+        start_time_expl = time.time()
+        run_random_climate(hef_elev_gdir, nyears=1000, seed=6,
+                           fs=5.7e-20,
+                           glen_a=inversion_params['inversion_glen_a'],
+                           bias=0, output_filesuffix='_fluxbased_run',
+                           evolution_model=FluxBasedModel)
+        flux_time_needed = time.time() - start_time_expl
+
+        assert impl_time_needed < flux_time_needed / 2
+
+        fmod_impl = FileModel(
+            hef_elev_gdir.get_filepath('model_geometry',
+                                       filesuffix='_implicit_run'))
+        fmod_flux = FileModel(
+            hef_elev_gdir.get_filepath('model_geometry',
+                                       filesuffix='_fluxbased_run'))
+
+        # check that the two runs are close the whole time
+        assert utils.rmsd(fmod_impl.volume_km3_ts(),
+                          fmod_flux.volume_km3_ts()) < 4e-4
+        assert utils.rmsd(fmod_impl.area_km2_ts(),
+                          fmod_flux.area_km2_ts()) < 6e-3
+
+        years = np.arange(0, 1001)
+        if do_plot:
+            plt.figure()
+            plt.plot(years, fmod_impl.volume_km3_ts(), 'r')
+            plt.plot(years, fmod_flux.volume_km3_ts(), 'b')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km3]')
+            plt.legend(['Implicit', 'Flux'], loc=2)
+
+            plt.figure()
+            plt.plot(years, fmod_impl.area_km2_ts(), 'r')
+            plt.plot(years, fmod_flux.area_km2_ts(), 'b')
+            plt.title('Compare Area')
+            plt.xlabel('years')
+            plt.ylabel('[km2]')
+            plt.legend(['Implicit', 'Flux'], loc=2)
+
+            plt.show()
+
+        for year in years:
+            fmod_impl.run_until(year)
+            fmod_flux.run_until(year)
+
+            np.testing.assert_allclose(fmod_flux.fls[-1].length_m,
+                                       fmod_impl.fls[-1].length_m,
+                                       atol=100.1)
+            assert utils.rmsd(fmod_impl.fls[-1].thick,
+                              fmod_flux.fls[-1].thick) < 1.2
+
+        # compare velocities
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_implicit_run')
+        with xr.open_dataset(f, group='fl_0') as ds_impl:
+            ds_impl = ds_impl.load()
+
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_fluxbased_run')
+        with xr.open_dataset(f, group='fl_0') as ds_flux:
+            ds_flux = ds_flux.load()
+
+        # only used to plot the velocity with the largest difference
+        max_velocity_rmsd = 0
+        max_velocity_year = 0
+
+        for year in np.arange(1, 1001):
+            velocity_impl = ds_impl.ice_velocity_myr.loc[{'time': year}].values
+            velocity_flux = ds_flux.ice_velocity_myr.loc[{'time': year}].values
+
+            velocity_rmsd = utils.rmsd(velocity_impl, velocity_flux)
+            if velocity_rmsd > max_velocity_rmsd:
+                max_velocity_rmsd = velocity_rmsd
+                max_velocity_year = year
+
+            assert velocity_rmsd < 3.2
+
+        if do_plot:
+            plt.figure()
+            plt.plot(ds_impl.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'r')
+            plt.plot(ds_flux.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'b')
+            plt.title(f'Compare Velocity at year {max_velocity_year}')
+            plt.xlabel('gridpoints along flowline')
+            plt.ylabel('[m yr-1]')
+            plt.legend(['Implicit', 'Flux'], loc=2)
+
+            plt.show()
