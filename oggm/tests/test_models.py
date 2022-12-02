@@ -5630,7 +5630,7 @@ class TestSemiImplicitModel:
             vol = model.volume_km3_ts()
             area = model.area_km2_ts()
             np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                       rtol=0.12)
+                                       rtol=0.26)
             np.testing.assert_allclose(area.iloc[0], np.mean(area),
                                        rtol=0.1)
 
@@ -5674,7 +5674,7 @@ class TestSemiImplicitModel:
         assert utils.rmsd(fmod_impl.volume_km3_ts(),
                           fmod_flux.volume_km3_ts()) < 4e-4
         assert utils.rmsd(fmod_impl.area_km2_ts(),
-                          fmod_flux.area_km2_ts()) < 6e-3
+                          fmod_flux.area_km2_ts()) < 8e-3
 
         years = np.arange(0, 1001)
         if do_plot:
