@@ -5561,7 +5561,7 @@ class TestSemiImplicitModel:
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.2)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
         np.testing.assert_allclose(ref_len, after_len, atol=200.01)
 
@@ -5572,7 +5572,9 @@ class TestSemiImplicitModel:
                                     mb_elev_feedback='never')
         model_flux.run_until_equilibrium(rate=1e-5)
 
-        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=7e-5)
+        assert model.yr == model_flux.yr
+
+        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=6e-4)
         np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=6e-5)
         np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len)
 
@@ -5591,8 +5593,11 @@ class TestSemiImplicitModel:
                                     fs=inversion_params['inversion_fs'],
                                     glen_a=inversion_params['inversion_glen_a'],
                                     mb_elev_feedback='never')
-        model_flux.run_until_equilibrium(rate=1e-4)
+        model_flux.run_until_equilibrium(rate=1e-5)
+
         assert model.yr >= 50
+        assert model.yr == model_flux.yr
+
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -5661,8 +5666,6 @@ class TestSemiImplicitModel:
                            evolution_model=FluxBasedModel)
         flux_time_needed = time.time() - start_time_expl
 
-        assert impl_time_needed < flux_time_needed / 2
-
         fmod_impl = FileModel(
             hef_elev_gdir.get_filepath('model_geometry',
                                        filesuffix='_implicit_run'))
@@ -5730,7 +5733,7 @@ class TestSemiImplicitModel:
                 max_velocity_rmsd = velocity_rmsd
                 max_velocity_year = year
 
-            assert velocity_rmsd < 4.
+            assert velocity_rmsd < 4.5
 
         if do_plot:
             plt.figure()
@@ -5744,3 +5747,8 @@ class TestSemiImplicitModel:
             plt.legend(['Implicit', 'Flux'], loc=2)
 
             plt.show()
+
+        # Testing the run times should be the last test, as it is not
+        # independent of the computing environment and by putting it as the
+        # last test all other tests will still be executed
+        assert impl_time_needed < flux_time_needed / 2
