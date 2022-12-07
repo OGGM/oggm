@@ -129,8 +129,8 @@ def combine_grids(gdirs):
         dy = gdir.grid.dy
         if dx_use is None or dx_use > dx:
             dx_use = dx
-        # dy is negative
-        if dy_use is None or dy_use < dy:
+        # dy could be negative
+        if dy_use is None or abs(dy_use) > abs(dy):
             dy_use = dy
 
     # calculate nx and ny, the final extend could be one grid point larger or
@@ -139,7 +139,10 @@ def combine_grids(gdirs):
     ny_use = round((top_use - bottom_use) / abs(dy_use))
 
     # finally define the last values of the new grid
-    new_grid['x0y0'] = (left_use, top_use)
+    if np.sign(dy_use) < 0:
+        new_grid['x0y0'] = (left_use, top_use)
+    else:
+        new_grid['x0y0'] = (left_use, bottom_use)
     new_grid['nxny'] = (nx_use, ny_use)
     new_grid['dxdy'] = (dx_use, dy_use)
 
