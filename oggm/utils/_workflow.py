@@ -2871,8 +2871,14 @@ class GlacierDirectory(object):
     def rgi_area_km2(self):
         """The glacier's RGI area (km2)."""
         try:
-            _area = self.read_shapefile('outlines')['Area']
+            _area = self.read_shapefile('outlines')['area_km2']
             return np.round(float(_area), decimals=3)
+
+        except KeyError:
+            # RGI V6
+                _area = self.read_shapefile('outlines')['Area']
+                return np.round(float(_area), decimals=3)
+
         except OSError:
             raise RuntimeError('No outlines available')
 
