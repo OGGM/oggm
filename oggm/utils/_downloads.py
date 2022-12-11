@@ -951,7 +951,7 @@ def _download_tandem_file_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     bname = zone.split('/')[-1] + '_DEM.tif'
-    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/DEM/'
                '{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, bname)
 
@@ -1387,6 +1387,7 @@ def srtm_zone(lon_ex, lat_ex):
 def _tandem_path(lon_tile, lat_tile):
 
     # OK we have a proper tile now
+    # This changed in December 2022
 
     # First folder level is sorted from S to N
     level_0 = 'S' if lat_tile < 0 else 'N'

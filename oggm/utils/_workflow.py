@@ -2586,9 +2586,6 @@ class GlacierDirectory(object):
         except AttributeError:
             pass
 
-
-
-
         try:
             self.rgi_id = rgi_entity.rgi_id
             self.glims_id = rgi_entity.glims_id
@@ -2596,6 +2593,7 @@ class GlacierDirectory(object):
             # RGI V6
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
+
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
             try:
@@ -2638,7 +2636,6 @@ class GlacierDirectory(object):
             except AttributeError:
                 # temporary default for RGI V7:
                 gtype = ['0', '0']
-
 
         try:
             gstatus = rgi_entity.RGIFlag[0]
@@ -2873,9 +2870,12 @@ class GlacierDirectory(object):
         """The glacier's RGI area (km2)."""
         try:
             _area = self.read_shapefile('outlines')['Area']
-            return np.round(float(_area), decimals=3)
         except OSError:
             raise RuntimeError('No outlines available')
+        except KeyError:
+            # RGI V7
+            _area = self.read_shapefile('outlines')['area_km2']
+        return np.round(float(_area), decimals=3)
 
     @lazy_property
     def intersects_ids(self):
@@ -3000,7 +3000,6 @@ class GlacierDirectory(object):
         if not out and (filename == 'climate_info'):
             # Try pickle
             out = os.path.exists(fp.replace('.json', '.pkl'))
-
         return out
 
     def _read_deprecated_climate_info(self):
