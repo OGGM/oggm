@@ -2651,9 +2651,10 @@ class GlacierDirectory(object):
                 gstatus = '0'
 
         # rgi version can be useful
-        rgi_version = self.rgi_id.split('-')[1][1] + self.rgi_id.split('-')[1][3]
-        if rgi_version == '70':
-            self.rgi_version = rgi_version
+        # RGI2000-v7.0-G-06-00029
+        # RGI60-07.00245
+        if self.rgi_id.count('-') == 4:
+            self.rgi_version = '70'
         else:
             rgi_version = self.rgi_id.split('-')[0][-2:]
             if rgi_version not in ['50', '60', '61']:
