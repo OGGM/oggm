@@ -218,9 +218,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                f'the start year of the provided climate data '
                                f'(= {yr_min})!')
         if spinup_start_yr is not None:
-            if spinup_start_yr_max <= spinup_start_yr:
+            if spinup_start_yr_max < spinup_start_yr:
                 raise RuntimeError(f'The provided start year (= '
-                                   f'{spinup_start_yr} must be smaller than '
+                                   f'{spinup_start_yr}) must be smaller than '
                                    f'the maximum start year '
                                    f'{spinup_start_yr_max}!')
         if (yr_rgi - spinup_start_yr_max) > min_spinup_period:
@@ -898,7 +898,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
-        **kwargs):
+        spinup_start_yr_max=None, **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -1024,6 +1024,12 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         If True a complete inversion is conducted using the provided mu_star
         before the actual calibration run.
         Default is False
+    spinup_start_yr_max : int or None
+        Possibility to provide a maximum year where the dynamic spinup must
+        start from at least. If set, this overrides the min_spinup_period if
+        yr_rgi - spinup_start_yr_max > min_spinup_period. If None it is set to
+        yr0_ref_mb.
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1060,6 +1066,15 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
+
+    if spinup_start_yr_max is None:
+        spinup_start_yr_max = yr0_ref_mb
+
+    if spinup_start_yr_max > yr0_ref_mb:
+        log.workflow('The provided maximum start year is larger then the '
+                     'start year of the geodetic period, therefore it will be '
+                     'set to the start year of the geodetic period!')
+        spinup_start_yr_max = yr0_ref_mb
 
     # check that inversion is only possible without providing own fls
     if do_inversion:
@@ -1116,7 +1131,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             mb_model_spinup=mb_model_spinup,
             spinup_period=spinup_period,
             spinup_start_yr=ys,
-            spinup_start_yr_max=yr0_ref_mb,
+            spinup_start_yr_max=spinup_start_yr_max,
             min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -1163,7 +1178,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         precision_absolute=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        do_inversion=True, **kwargs):
+        do_inversion=True, spinup_start_yr_max=None, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run_with_dynamic_spinup', which are provided
@@ -1271,6 +1286,11 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         If True a complete inversion is conducted using the provided mu_star
         before the actual fallback run.
         Default is False
+    spinup_start_yr_max : int or None
+        Possibility to provide a maximum year where the dynamic spinup must
+        start from at least. If set, this overrides the min_spinup_period if
+        yr_rgi - spinup_start_yr_max > min_spinup_period.
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1328,6 +1348,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             spinup_period=spinup_period,
             spinup_start_yr=ys,
             min_spinup_period=min_spinup_period,
+            spinup_start_yr_max=spinup_start_yr_max,
             yr_rgi=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,

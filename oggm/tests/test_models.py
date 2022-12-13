@@ -4125,6 +4125,75 @@ class TestHEF:
                 minimise_for=minimise_for
             )
 
+        # check if spinup_start_year_max works as expected, for this use a
+        # glacier where the period is shorten
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00033'],
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_dmdtda = float(
+            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
+                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+        precision_percent = 10
+        precision_absolute = 0.1
+        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+
+        # run without max limit
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_reduce_period_no_limit',
+            ys=1979, ye=ye)
+        # run with max limit
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            ignore_errors=True,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'spinup_start_yr_max': 1979,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'spinup_start_yr_max': 1979,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_reduce_period',
+            ys=1979, ye=ye)
+
+        run_no_limit = xr.open_dataset(
+            gdir.get_filepath(
+                'model_diagnostics',
+                filesuffix='_dyn_mu_calib_spinup_reduce_period_no_limit'))
+        run_with_limit = xr.open_dataset(
+            gdir.get_filepath(
+                'model_diagnostics',
+                filesuffix='_dyn_mu_calib_spinup_reduce_period'))
+
+        assert run_no_limit.time.values[0] > run_with_limit.time.values[0]
+        assert run_with_limit.time.values[0] == 1979
+
         # change settings back to default
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
