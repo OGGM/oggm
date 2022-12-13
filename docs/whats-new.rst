@@ -60,7 +60,12 @@ Enhancements
   or ``'trapezoidal'`` before calling ``init_present_time_glacier(gdir)``.
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
-  (:pull:`1496`)
+  (:pull:`1496`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added option to extend the plot limits when plotting multiple gdirs. Could be
+  used with ``extend_plot_limits=True``, e.g.
+  ``graphics.plot_modeloutput_map(gdirs, extend_plot_limits=True)``
+  (:pull:`1508`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
