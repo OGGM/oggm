@@ -451,7 +451,7 @@ def test_plot_region_model():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
     graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
                                   filesuffix='_plot', vmax=250,
                                   modelyr=10, linewidth=1.5)
