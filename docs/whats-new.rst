@@ -62,6 +62,10 @@ Enhancements
 - Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
   (:pull:`1496`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added new argument ``add_fixed_geometry_spinup`` to extend the model run of
+  ``run_dynamic_spinup`` with a fixed-geometry-spinup if the spinup period is
+  shortened(:pull:`1514`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
