@@ -41,7 +41,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_bias_best=False, ye=None,
                        model_flowline_filesuffix='', make_compatible=False,
-                       **kwargs):
+                       add_fixed_geometry_spinup=False, **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -185,6 +185,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         spinup and setting fixed geometry spinup as fallback, the variable
         'is_fixed_geometry_spinup' must be added to the dynamic spinup so
         it is possible to compile both glaciers together.
+        Default is False
+    add_fixed_geometry_spinup : bool
+        If True and the original spinup_period must be shortened (due to
+        ice-free or out-of-boundary error) a fixed geometry spinup is added at
+        the beginning so that the resulting model run always starts from the
+        defined start year (could be defined through spinup_period or
+        spinup_start_yr). Only has an effect if store_model_evolution is True.
+        Default is False
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -404,6 +412,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
                 dynamic_spinup_min_ice_thick=min_ice_thickness,
+                fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 make_compatible=make_compatible)
             if type(ds) == tuple:
                 ds = ds[0]
@@ -767,6 +776,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         spinup_periods_to_try = [spinup_period_initial,
                                  int((spinup_period_initial + min_spinup_period) / 2),
                                  min_spinup_period]
+    # after defining the initial spinup period we can define the year for the
+    # fixed_geometry_spinup
+    if add_fixed_geometry_spinup:
+        fixed_geometry_spinup_yr = yr_rgi - spinup_period_initial
+    else:
+        fixed_geometry_spinup_yr = None
 
     # check if the user provided an mb_model_spinup, otherwise we must define a
     # new one each iteration
@@ -898,7 +913,8 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
-        spinup_start_yr_max=None, **kwargs):
+        spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
+        **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_mu_star_calibration' function (the corresponding
@@ -1030,6 +1046,12 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         yr_rgi - spinup_start_yr_max > min_spinup_period. If None it is set to
         yr0_ref_mb.
         Default is None
+    add_fixed_geometry_spinup : bool
+        If True and the original spinup_period of the dynamical spinup must be
+        shortened (due to ice-free or out-of-boundary error) a
+        fixed-geometry-spinup is added at the beginning so that the resulting
+        model run always starts from ys.
+        Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1147,6 +1169,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             store_fl_diagnostics=store_fl_diagnostics,
             model_flowline_filesuffix=model_flowline_filesuffix,
             make_compatible=True,
+            add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
         # save the temperature bias which was successful in the last iteration
         # as we expect we are not so far away in the next iteration (only
@@ -1178,7 +1201,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         precision_absolute=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        do_inversion=True, spinup_start_yr_max=None, **kwargs):
+        do_inversion=True, spinup_start_yr_max=None,
+        add_fixed_geometry_spinup=True, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run_with_dynamic_spinup', which are provided
@@ -1291,6 +1315,12 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         start from at least. If set, this overrides the min_spinup_period if
         yr_rgi - spinup_start_yr_max > min_spinup_period.
         Default is None
+    add_fixed_geometry_spinup : bool
+        If True and the original spinup_period of the dynamical spinup must be
+        shortened (due to ice-free or out-of-boundary error) a
+        fixed-geometry-spinup is added at the beginning so that the resulting
+        model run always starts from ys.
+        Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1363,6 +1393,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             ignore_errors=False,
             ye=ye,
             make_compatible=True,
+            add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
 
         gdir.add_to_diagnostics('used_spinup_option', 'dynamic spinup only')
