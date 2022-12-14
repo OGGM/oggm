@@ -3739,7 +3739,7 @@ class TestHEF:
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                             'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
                             'match_geod_pergla/')[0]
-        yr_rgi = gdir.rgi_date
+        yr_rgi = gdir.rgi_date + 1  # + 1 for hydro year
         run_dynamic_spinup(
             gdir,
             spinup_start_yr=1979,
@@ -3770,7 +3770,7 @@ class TestHEF:
 
         # test that fixed_geometry_spinup is added correctly if spinup period
         # is shorten, with spinup period
-        spinup_period = 20
+        spinup_period = yr_rgi - 1979
         run_dynamic_spinup(
             gdir,
             spinup_period=spinup_period,
