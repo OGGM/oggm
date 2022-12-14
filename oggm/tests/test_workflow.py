@@ -424,8 +424,12 @@ def test_plot_region_inversion():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, ax = plt.subplots()
-    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5, vmax=250)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5, vmax=250)
+
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_inversion(gdirs, ax=ax2, linewidth=1.5, vmax=250,
+                            extend_plot_limit=True)
 
     fig.tight_layout()
     return fig
@@ -451,10 +455,15 @@ def test_plot_region_model():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, ax = plt.subplots()
-    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax,
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
                                   filesuffix='_plot', vmax=250,
                                   modelyr=10, linewidth=1.5)
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_modeloutput_map(gdirs, ax=ax2,
+                                  filesuffix='_plot', vmax=250,
+                                  modelyr=10, linewidth=1.5,
+                                  extend_plot_limit=True)
 
     fig.tight_layout()
     return fig
