@@ -71,6 +71,8 @@ Enhancements
   ``run_dynamic_spinup`` with a fixed-geometry-spinup if the spinup period is
   shortened(:pull:`1514`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~

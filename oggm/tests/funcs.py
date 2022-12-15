@@ -159,6 +159,39 @@ def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
     return [fls]
 
 
+def dummy_mixed_trap_rect_bed(deflambdas=2., map_dx=100., mixslice=None):
+    dx = 1.
+    nx = 200
+
+    surface_h = np.linspace(3000, 1000, nx)
+    bed_h = surface_h
+    shape = np.ones(nx) * np.NaN
+    is_trapezoid = ~np.isfinite(shape)
+    lambdas = shape * 0.
+    lambdas[is_trapezoid] = deflambdas
+    # use a second value for lambda in between
+    lambdas[15:20] = deflambdas / 2
+    widths_m = bed_h * 0. + 10
+    if mixslice:
+        lambdas[mixslice] = 0
+        widths_m[mixslice] = 25
+    else:
+        lambdas[0:10] = 0
+        widths_m[0:10] = 25
+    section = bed_h * 0.
+
+    coords = np.arange(0, nx - 0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+    fls = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                    surface_h=surface_h, bed_h=bed_h,
+                                    section=section, bed_shape=shape,
+                                    is_trapezoid=is_trapezoid,
+                                    lambdas=lambdas, widths_m=widths_m)
+
+    return [fls]
+
+
 def dummy_trapezoidal_bed(hmax=3000., hmin=1000., nx=200, map_dx=100.,
                           def_lambdas=2):
 
@@ -326,7 +359,24 @@ def get_test_dir():
     return _TEST_DIR
 
 
-def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
+def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
+             flowline_type='centerlines'):
+    """
+
+    Parameters
+    ----------
+    reset
+    border
+    logging_level
+    rgi_id
+    flowline_type : str
+        Select which flowline type should be used.
+        Options: 'centerlines' (default), 'elevation_bands'
+
+    Returns
+    -------
+
+    """
 
     from oggm.core import gis, inversion, climate, centerlines, flowline
     import geopandas as gpd
@@ -373,15 +423,23 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
         return gdir
 
     gis.define_glacier_region(gdir)
-    execute_entity_task(gis.glacier_masks, [gdir])
-    execute_entity_task(centerlines.compute_centerlines, [gdir])
-    centerlines.initialize_flowlines(gdir)
+    if flowline_type == 'centerlines':
+        execute_entity_task(gis.glacier_masks, [gdir])
+        execute_entity_task(centerlines.compute_centerlines, [gdir])
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+    elif flowline_type == 'elevation_bands':
+        execute_entity_task(tasks.simple_glacier_masks, [gdir])
+        execute_entity_task(tasks.elevation_band_flowline, [gdir])
+        execute_entity_task(tasks.fixed_dx_elevation_band_flowline, [gdir])
+    else:
+        raise NotImplementedError(f'flowline_type {flowline_type} not'
+                                  f'implemented!')
     centerlines.compute_downstream_line(gdir)
     centerlines.compute_downstream_bedshape(gdir)
-    centerlines.catchment_area(gdir)
-    centerlines.catchment_intersections(gdir)
-    centerlines.catchment_width_geom(gdir)
-    centerlines.catchment_width_correction(gdir)
     climate.process_custom_climate_data(gdir)
     if rgi_id is not None:
         gdir.rgi_id = 'RGI50-11.00897'
@@ -419,7 +477,8 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
                                               write=True)
     inversion.filter_inversion_output(gdir)
 
-    inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
+    if flowline_type == 'centerlines':
+        inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
 
     flowline.init_present_time_glacier(gdir)
