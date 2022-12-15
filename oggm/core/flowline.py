@@ -2201,8 +2201,8 @@ class SemiImplicitModel(FlowlineModel):
                                     [self.fls[-1].bed_h[-1]]))
         self.dbed_h_exp_dx = ((bed_h_exp[1:] - bed_h_exp[:-1]) /
                               self.fls[0].dx_meter)
-        self.D_stag = [np.zeros(nx + 1)]
-        self.Amat_banded = np.zeros((3, nx))
+        self.d_stag = [np.zeros(nx + 1)]
+        self.d_matrix_banded = np.zeros((3, nx))
         w0 = self.fls[0]._w0_m
         self.w0_stag = (w0[0:-1] + w0[1:]) / 2
         self.rhog = (self.rho * G) ** self.glen_n
@@ -2303,16 +2303,16 @@ class SemiImplicitModel(FlowlineModel):
         dsdx_stag = (surface_h[1:] - surface_h[0:-1]) / dx
 
         # calculate diffusivity
-        # boundary condition D_stag_0 = D_stag_end = 0
-        D_stag = self.D_stag[0]
-        D_stag[1:-1] = ((self._fd * thick_stag ** (N + 2) +
+        # boundary condition d_stag_0 = d_stag_end = 0
+        d_stag = self.d_stag[0]
+        d_stag[1:-1] = ((self._fd * thick_stag ** (N + 2) +
                          self.fs * thick_stag ** N) * rhog *
                         (w0_stag + width_stag) / 2 *
                         np.abs(dsdx_stag) ** (N - 1))
 
         # insert stability criterion dt <= dx^2 / max(D/w) * cfl_number
         if not self.fixed_dt:
-            divisor = np.max(np.abs(D_stag[1:-1] / width_stag))
+            divisor = np.max(np.abs(d_stag[1:-1] / width_stag))
             if divisor > cfg.FLOAT_EPS:
                 cfl_dt = self.cfl_number * dx ** 2 / divisor
             else:
@@ -2328,28 +2328,28 @@ class SemiImplicitModel(FlowlineModel):
                         'simulation year {:.1f}, fl_id {}, '
                         'bin_id {} and max_D {:.3f} m2 yr-1.'
                         ''.format(cfl_dt, self.min_dt, self.yr, 0,
-                                  np.argmax(np.abs(D_stag)),
+                                  np.argmax(np.abs(d_stag)),
                                   divisor * cfg.SEC_IN_YEAR))
 
         # calculate diagonals of Amat
-        d0 = dt / dx ** 2 * (D_stag[:-1] + D_stag[1:]) / width
-        dm = - dt / dx ** 2 * D_stag[:-1] / width
-        dp = - dt / dx ** 2 * D_stag[1:] / width
+        d0 = dt / dx ** 2 * (d_stag[:-1] + d_stag[1:]) / width
+        dm = - dt / dx ** 2 * d_stag[:-1] / width
+        dp = - dt / dx ** 2 * d_stag[1:] / width
 
         # construct banded form of the matrix, which is used during solving
         # (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.solve_banded.html)
         # original matrix:
-        # Amat = (np.diag(dp[:-1], 1) +
-        #         np.diag(np.ones(len(d0)) + d0) +
-        #         np.diag(dm[1:], -1))
-        self.Amat_banded[0, 1:] = dp[:-1]
-        self.Amat_banded[1, :] = np.ones(len(d0)) + d0
-        self.Amat_banded[2, :-1] = dm[1:]
+        # d_matrix = (np.diag(dp[:-1], 1) +
+        #             np.diag(np.ones(len(d0)) + d0) +
+        #             np.diag(dm[1:], -1))
+        self.d_matrix_banded[0, 1:] = dp[:-1]
+        self.d_matrix_banded[1, :] = np.ones(len(d0)) + d0
+        self.d_matrix_banded[2, :-1] = dm[1:]
 
         # correction term for glacier bed (original equation is an equation for
         # the surface height s, which is transformed in an equation for h, as
         # s = h + b the term below comes from the '- b'
-        b_corr = - D_stag * self.dbed_h_exp_dx
+        b_corr = - d_stag * self.dbed_h_exp_dx
 
         # prepare rhs
         smb = self.get_mb(surface_h, self.yr, fl_id=0)
@@ -2357,7 +2357,7 @@ class SemiImplicitModel(FlowlineModel):
 
         # solve matrix and update flowline thickness
         thick_new = utils.clip_min(
-            solve_banded((1, 1), self.Amat_banded, rhs),
+            solve_banded((1, 1), self.d_matrix_banded, rhs),
             0)
         fl.thick = thick_new
 
