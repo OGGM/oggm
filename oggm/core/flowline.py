@@ -2105,7 +2105,7 @@ class SemiImplicitModel(FlowlineModel):
     """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
-                 inplace=False, fixed_dt=None, cfl_number=0.6, min_dt=None,
+                 inplace=False, fixed_dt=None, cfl_number=0.5, min_dt=None,
                  **kwargs):
         """Instantiate the model.
 
@@ -2131,7 +2131,7 @@ class SemiImplicitModel(FlowlineModel):
             For adaptive time stepping (the default), dt is chosen from the
             CFL criterion (dt = cfl_number * dx^2 / max(D/w)).
             Can be set to higher values compared to the FluxBasedModel.
-            Default is 0.6, but need further investigation.
+            Default is 0.5, but need further investigation.
         min_dt : float
             Defaults to cfg.PARAMS['cfl_min_dt'].
             At high velocities, time steps can become very small and your
@@ -2187,7 +2187,7 @@ class SemiImplicitModel(FlowlineModel):
             cfl_number = cfg.PARAMS['cfl_number']
         if cfl_number < 0.1:
             raise InvalidParamsError("For the SemiImplicitModel you can use "
-                                     "cfl numbers in the order of 0.1 - 0.6 "
+                                     "cfl numbers in the order of 0.1 - 0.5 "
                                      f"(you set {cfl_number}).")
         self.cfl_number = cfl_number
 

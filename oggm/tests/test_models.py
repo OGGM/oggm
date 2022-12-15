@@ -5751,4 +5751,7 @@ class TestSemiImplicitModel:
         # Testing the run times should be the last test, as it is not
         # independent of the computing environment and by putting it as the
         # last test all other tests will still be executed
-        assert impl_time_needed < flux_time_needed / 2
+        if impl_time_needed > flux_time_needed / 2:
+            pytest.xfail(f'SemiImplicitModel ({impl_time_needed:.2f} s) is '
+                         f'not twice as fast as FluxBasedModel ('
+                         f'{flux_time_needed:.2f} s).')
