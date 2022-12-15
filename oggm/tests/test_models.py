@@ -5574,7 +5574,7 @@ class TestSemiImplicitModel:
 
         assert model.yr == model_flux.yr
 
-        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=6e-4)
+        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=7e-4)
         np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=6e-5)
         np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len)
 
