@@ -62,6 +62,8 @@ Enhancements
 - Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
   (:pull:`1496`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
