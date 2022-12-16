@@ -5936,3 +5936,62 @@ class TestSemiImplicitModel:
             pytest.xfail(f'SemiImplicitModel ({impl_time_needed:.2f} s) is '
                          f'not twice as fast as FluxBasedModel ('
                          f'{flux_time_needed:.2f} s).')
+
+    @pytest.mark.slow
+    def test_fixed_dt(self, hef_elev_gdir, inversion_params):
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+
+        # test if a large fixed_dt results in an instability
+        run_constant_climate(hef_elev_gdir, nyears=100,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_cfl_criterion',
+                             evolution_model=SemiImplicitModel)
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_cfl_criterion')
+        with xr.open_dataset(f, group='fl_0') as ds_cfl:
+            ds_cfl = ds_cfl.load()
+
+        run_constant_climate(hef_elev_gdir, nyears=100,
+                             fixed_dt=SEC_IN_MONTH,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_fixed_dt',
+                             evolution_model=SemiImplicitModel)
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_fixed_dt')
+        with xr.open_dataset(f, group='fl_0') as ds_fixed_dt:
+            ds_fixed_dt = ds_fixed_dt.load()
+
+        # check their are instabilities when using fixed_dt
+        max_velocity_rmsd = 0
+        max_velocity_year = 0
+
+        for year in np.arange(1, 101):
+            velocity_cfl = ds_cfl.ice_velocity_myr.loc[{'time': year}].values
+            velocity_fixed_dt = ds_fixed_dt.ice_velocity_myr.loc[{'time': year}].values
+
+            velocity_rmsd = utils.rmsd(velocity_cfl, velocity_fixed_dt)
+            if velocity_rmsd > max_velocity_rmsd:
+                max_velocity_rmsd = velocity_rmsd
+                max_velocity_year = year
+
+        assert max_velocity_rmsd > 200
+
+        if do_plot:
+            plt.figure()
+            plt.plot(ds_cfl.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'r')
+            plt.plot(ds_fixed_dt.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'b')
+            plt.title(f'Compare Velocity at year {max_velocity_year}')
+            plt.xlabel('gridpoints along flowline')
+            plt.ylabel('[m yr-1]')
+            plt.legend(['CFL', 'Fixed dt'], loc=2)
+
+            plt.show()

@@ -2310,8 +2310,13 @@ class SemiImplicitModel(FlowlineModel):
                         (w0_stag + width_stag) / 2 *
                         np.abs(dsdx_stag) ** (N - 1))
 
-        # insert stability criterion dt <= dx^2 / max(D/w) * cfl_number
-        if not self.fixed_dt:
+        # Time step
+        if self.fixed_dt:
+            # change only if step dt is larger than the chosen dt
+            if self.fixed_dt < dt:
+                dt = self.fixed_dt
+        else:
+            # use stability criterion dt <= dx^2 / max(D/w) * cfl_number
             divisor = np.max(np.abs(d_stag[1:-1] / width_stag))
             if divisor > cfg.FLOAT_EPS:
                 cfl_dt = self.cfl_number * dx ** 2 / divisor
