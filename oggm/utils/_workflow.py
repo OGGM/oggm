@@ -1960,7 +1960,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             # Climate and MB at t*
             mbcl = ConstantMassBalance
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                bias=0,
+                                                bias=0, halfsize=halfsize,
                                                 use_inversion_flowlines=True)
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
@@ -1997,7 +1997,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                 fs = '{}-{}'.format(y0 - halfsize, y0 + halfsize)
                 mbcl = ConstantMassBalance
                 mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                    y0=y0,
+                                                    y0=y0, halfsize=halfsize,
                                                     use_inversion_flowlines=True,
                                                     input_filesuffix=input_filesuffix)
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
