@@ -32,7 +32,7 @@ except ImportError:
 # Locals
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils._downloads import get_demo_file
+from oggm.utils._downloads import get_demo_file, file_downloader
 from oggm.exceptions import InvalidParamsError, InvalidGeometryError
 
 # Module logger
@@ -68,12 +68,21 @@ def parse_rgi_meta(version=None):
         return _RGI_METADATA[version]
 
     # Parse RGI metadata
-    reg_names = pd.read_csv(get_demo_file('rgi_regions.csv'), index_col=0)
-    if version in ['4', '5']:
+    if version == '7':
+        reg_names = gpd.read_file(file_downloader('https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/00_rgi70_O1Regions/00_rgi70_O1Regions.dbf'))
+        reg_names.index = reg_names['o1region'].astype(int)
+        reg_names = reg_names['full_name']
+        subreg_names = gpd.read_file(file_downloader('https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/00_rgi70_O2Regions/00_rgi70_O2Regions.dbf'))
+        subreg_names.index = subreg_names['o2region']
+        subreg_names = subreg_names['full_name']
+
+    elif version in ['4', '5']:
+        reg_names = pd.read_csv(get_demo_file('rgi_regions.csv'), index_col=0)
         # The files where different back then
         subreg_names = pd.read_csv(get_demo_file('rgi_subregions_V5.csv'),
                                    index_col=0)
     else:
+        reg_names = pd.read_csv(get_demo_file('rgi_regions.csv'), index_col=0)
         f = os.path.join(get_demo_file('rgi_subregions_'
                                        'V{}.csv'.format(version)))
         subreg_names = pd.read_csv(f)

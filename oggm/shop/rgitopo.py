@@ -57,13 +57,6 @@ def init_glacier_directories_from_rgitopo(rgidf=None, dem_source=None,
     -------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the initialised glacier directories
-
-    Notes
-    -----
-    This task is very similar to init_glacier_regions, with one main
-    difference: it does not process the DEMs for this glacier.
-    Eventually, init_glacier_regions will be deprecated and removed from the
-    codebase.
     """
 
     if resolution == 'default':

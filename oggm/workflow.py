@@ -265,154 +265,38 @@ def gdir_from_tar(entity, from_tar):
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
-def _check_rgi_input(rgidf=None):
+def _check_rgi_input(rgidf=None, err_on_lvl2=False):
     """Complain if the input has duplicates."""
 
     if rgidf is None:
         return
+
+    msg = ('You have glaciers with connectivity level 2 in your list. '
+           'OGGM does not provide pre-processed directories for these.')
+
     # Check if dataframe or list of strs
     try:
         rgi_ids = rgidf.RGIId
         # if dataframe we can also check for connectivity
         if 'Connect' in rgidf and np.any(rgidf['Connect'] == 2):
-            log.workflow('WARNING! You have glaciers with connectivity level '
-                         '2 in your list. OGGM does not provide pre-processed '
-                         'directories for these.')
+            if err_on_lvl2:
+                raise RuntimeError(msg)
     except AttributeError:
         rgi_ids = utils.tolist(rgidf)
+        # Check for Connectivity level 2 here as well
+        not_good_ids = pd.read_csv(utils.get_demo_file('rgi6_ids_conn_lvl2.csv'),
+                                   index_col=0)
+        try:
+            if err_on_lvl2 and len(not_good_ids.loc[rgi_ids]) > 0:
+                raise RuntimeError(msg)
+        except KeyError:
+            # Were good
+            pass
+
     u, c = np.unique(rgi_ids, return_counts=True)
     if len(u) < len(rgi_ids):
         raise InvalidWorkflowError('Found duplicates in the list of '
                                    'RGI IDs: {}'.format(u[c > 1]))
-
-
-def init_glacier_regions(rgidf=None, *, reset=False, force=False,
-                         from_prepro_level=None, prepro_border=None,
-                         prepro_rgi_version=None, prepro_base_url=None,
-                         from_tar=False, delete_tar=False):
-    """DEPRECATED: Initializes the list of Glacier Directories for this run.
-
-    This is the very first task to do (always). If the directories are already
-    available in the working directory, use them. If not, create new ones.
-
-    Parameters
-    ----------
-    rgidf : GeoDataFrame or list of ids, optional for pre-computed runs
-        the RGI glacier outlines. If unavailable, OGGM will parse the
-        information from the glacier directories found in the working
-        directory. It is required for new runs.
-    reset : bool
-        delete the existing glacier directories if found.
-    force : bool
-        setting `reset=True` will trigger a yes/no question to the user. Set
-        `force=True` to avoid this.
-    from_prepro_level : int
-        get the gdir data from the official pre-processed pool. See the
-        documentation for more information
-    prepro_border : int
-        for `from_prepro_level` only: if you want to override the default
-        behavior which is to use `cfg.PARAMS['border']`
-    prepro_rgi_version : str
-        for `from_prepro_level` only: if you want to override the default
-        behavior which is to use `cfg.PARAMS['rgi_version']`
-    prepro_base_url : str
-        for `from_prepro_level` only: if you want to override the default
-        URL from which to download the gdirs. Default can be assessed with
-        ``from oggm.utils import GDIR_L3L5_URL``
-    from_tar : bool, default=False
-        extract the gdir data from a tar file. If set to `True`,
-        will check for a tar file at the expected location in `base_dir`.
-    delete_tar : bool, default=False
-        delete the original tar file after extraction.
-    delete_tar : bool, default=False
-        delete the original tar file after extraction.
-
-    Returns
-    -------
-    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
-        the initialised glacier directories
-
-    Notes
-    -----
-    This task is deprecated in favor of the more explicit
-    init_glacier_directories. Indeed, init_glacier_directories is very
-    similar to init_glacier_regions, but it does not process the DEMs:
-    a glacier directory is valid also without DEM.
-    """
-
-    _check_rgi_input(rgidf)
-
-    if reset and not force:
-        reset = utils.query_yes_no('Delete all glacier directories?')
-
-    if prepro_border is None:
-        prepro_border = int(cfg.PARAMS['border'])
-
-    # if reset delete also the log directory
-    if reset:
-        fpath = os.path.join(cfg.PATHS['working_dir'], 'log')
-        if os.path.exists(fpath):
-            shutil.rmtree(fpath)
-
-    gdirs = []
-    new_gdirs = []
-    if rgidf is None:
-        if reset:
-            raise ValueError('Cannot use reset without setting rgidf')
-        log.workflow('init_glacier_regions by parsing available folders '
-                     '(can be slow).')
-        # The dirs should be there already
-        gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
-        for root, _, files in os.walk(gl_dir):
-            if files and ('dem.tif' in files):
-                gdirs.append(oggm.GlacierDirectory(os.path.basename(root)))
-    else:
-
-        # Check if dataframe or list of strs
-        try:
-            entities = []
-            for _, entity in rgidf.iterrows():
-                entities.append(entity)
-        except AttributeError:
-            entities = utils.tolist(rgidf)
-
-        if from_prepro_level is not None:
-            log.workflow('init_glacier_regions from prepro level {} on '
-                         '{} glaciers.'.format(from_prepro_level,
-                                               len(entities)))
-            # Read the hash dictionary before we use multiproc
-            if cfg.PARAMS['dl_verify']:
-                utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
-            gdirs = execute_entity_task(gdir_from_prepro, entities,
-                                        from_prepro_level=from_prepro_level,
-                                        prepro_border=prepro_border,
-                                        prepro_rgi_version=prepro_rgi_version,
-                                        base_url=prepro_base_url)
-        else:
-            # We can set the intersects file automatically here
-            if (cfg.PARAMS['use_intersects'] and
-                    len(cfg.PARAMS['intersects_gdf']) == 0):
-                rgi_ids = np.unique(np.sort([entity.RGIId for entity in
-                                             entities]))
-                rgi_version = rgi_ids[0].split('-')[0][-2:]
-                fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                       version=rgi_version)
-                cfg.set_intersects_db(fp)
-
-            gdirs = execute_entity_task(utils.GlacierDirectory, entities,
-                                        reset=reset,
-                                        from_tar=from_tar,
-                                        delete_tar=delete_tar)
-
-            for gdir in gdirs:
-                if not os.path.exists(gdir.get_filepath('dem')):
-                    new_gdirs.append(gdir)
-
-    if len(new_gdirs) > 0:
-        # If not initialized, run the task in parallel
-        execute_entity_task(tasks.define_glacier_region, new_gdirs)
-
-    return gdirs
 
 
 def _isdir(path):
@@ -457,9 +341,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: if you want to override the default
-        URL from which to download the gdirs. Default can be accessed from
-        ``from oggm.utils import GDIR_L3L5_URL``
+        for `from_prepro_level` only: the preprocessed directory url from
+        which to download the directories (became mandatory in OGGM v1.6)
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -470,16 +353,9 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
     -------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the initialised glacier directories
-
-    Notes
-    -----
-    This task is very similar to init_glacier_regions, with one main
-    difference: it does not process the DEMs for this glacier.
-    Eventually, init_glacier_regions will be deprecated and removed from the
-    codebase.
     """
 
-    _check_rgi_input(rgidf)
+    _check_rgi_input(rgidf, err_on_lvl2=from_prepro_level)
 
     if reset and not force:
         reset = utils.query_yes_no('Delete all glacier directories?')
@@ -492,6 +368,14 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         if cfg.PARAMS['has_internet'] and not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
+        if ('oggm_v1.4' in url and
+                from_prepro_level >= 3 and
+                not cfg.PARAMS['prcp_scaling_factor']):
+            log.warning('You seem to be using v1.4 directories with a more '
+                        'recent version of OGGM. While this is possible, be '
+                        'aware that some defaults parameters have changed. '
+                        'See the documentation for details: '
+                        'http://docs.oggm.org/en/stable/whats-new.html')
 
     # if reset delete also the log directory
     if reset:
@@ -541,15 +425,25 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                     len(cfg.PARAMS['intersects_gdf']) == 0 and
                     not from_tar):
                 try:
-                    rgi_ids = np.unique(np.sort([entity.RGIId for entity in
+                    rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
                                                  entities]))
                     rgi_version = rgi_ids[0].split('-')[0][-2:]
                     fp = utils.get_rgi_intersects_entities(rgi_ids,
                                                            version=rgi_version)
                     cfg.set_intersects_db(fp)
                 except AttributeError:
-                    # List of str
-                    pass
+                    # RGI V6
+                    try:
+                        rgi_ids = np.unique(np.sort([entity.RGIId for entity in
+                                                     entities]))
+                        rgi_version = rgi_ids[0].split('-')[0][-2:]
+                        fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                               version=rgi_version)
+                        cfg.set_intersects_db(fp)
+                    except AttributeError:
+                        # List of str
+                        pass
+
 
             if _isdir(from_tar):
                 gdirs = execute_entity_task(gdir_from_tar, entities,
@@ -634,7 +528,7 @@ def climate_tasks(gdirs, base_url=None):
 
 @global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
-                    use_geodetic=False, ref_period=None):
+                    use_geodetic=False, ref_period=None, add_to_log_file=True):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -645,6 +539,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
         the glacier directories to process
     ref_period : years of mass balance that should be taken into account in
         inversion
+    add_to_log_file : bool
+        if the called entity tasks should write into log of gdir. Default True
     """
 
     if ref_period is None and use_geodetic:
@@ -674,11 +570,14 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                                                       len(gdirs_nc)))
 
         if gdirs_nc:
-            execute_entity_task(tasks.prepare_for_inversion, gdirs_nc)
+            execute_entity_task(tasks.prepare_for_inversion, gdirs_nc,
+                                add_to_log_file=add_to_log_file)
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
-                                glen_a=glen_a, fs=fs)
+                                glen_a=glen_a, fs=fs,
+                                add_to_log_file=add_to_log_file)
             if filter_inversion_output:
-                execute_entity_task(tasks.filter_inversion_output, gdirs_nc)
+                execute_entity_task(tasks.filter_inversion_output, gdirs_nc,
+                                    add_to_log_file=add_to_log_file)
 
         if gdirs_c and use_geodetic:
             execute_entity_task(tasks.find_inversion_calving_from_any_mb,
@@ -686,13 +585,17 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                                 mb_years=mb_years)
         elif gdirs_c:
             execute_entity_task(tasks.find_inversion_calving, gdirs_c,
-                                glen_a=glen_a, fs=fs)
+                                glen_a=glen_a, fs=fs,
+                                add_to_log_file=add_to_log_file)
     else:
-        execute_entity_task(tasks.prepare_for_inversion, gdirs)
+        execute_entity_task(tasks.prepare_for_inversion, gdirs,
+                            add_to_log_file=add_to_log_file)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
-                            glen_a=glen_a, fs=fs)
+                            glen_a=glen_a, fs=fs,
+                            add_to_log_file=add_to_log_file)
         if filter_inversion_output:
-            execute_entity_task(tasks.filter_inversion_output, gdirs)
+            execute_entity_task(tasks.filter_inversion_output, gdirs,
+                                add_to_log_file=add_to_log_file)
 
 
 @global_task(log)
@@ -701,7 +604,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        apply_fs_on_mismatch=False,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
-                                       volume_m3_reference=None):
+                                       volume_m3_reference=None,
+                                       add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -730,6 +634,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         output (needs the downstream lines to work).
     volume_m3_reference : float
         Option to give an own total glacier volume to match to
+    add_to_log_file : bool
+        if the called entity tasks should write into log of gdir. Default True
 
     Returns
     -------
@@ -756,9 +662,11 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
     def compute_vol(x):
         inversion_tasks(gdirs, glen_a=x*def_a, fs=fs,
-                        filter_inversion_output=filter_inversion_output)
+                        filter_inversion_output=filter_inversion_output,
+                        add_to_log_file=add_to_log_file)
         odf = df.copy()
-        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                          add_to_log_file=add_to_log_file)
         # if the user provides a glacier volume all glaciers are considered,
         # dropna() below exclude glaciers where no ITMIX volume is available
         if volume_m3_reference is None:
@@ -807,7 +715,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                                       fs=5.7e-20, a_bounds=a_bounds,
                                                       apply_fs_on_mismatch=False,
                                                       error_on_mismatch=error_on_mismatch,
-                                                      volume_m3_reference=volume_m3_reference)
+                                                      volume_m3_reference=volume_m3_reference,
+                                                      add_to_log_file=add_to_log_file)
         if error_on_mismatch:
             raise ValueError(msg)
 
@@ -819,8 +728,10 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
     # Compute the final volume with the correct A
     inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs,
-                    filter_inversion_output=filter_inversion_output)
-    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+                    filter_inversion_output=filter_inversion_output,
+                    add_to_log_file=add_to_log_file)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            add_to_log_file=add_to_log_file)
     return df
 
 

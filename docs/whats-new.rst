@@ -3,11 +3,24 @@
 Version history
 ===============
 
-v1.X.Y (unreleased)
+v1.6.0 (unreleased)
 -------------------
+
+A new major release of the OGGM with several important changes. We recommend
+all users to switch to this version only if they are ready for a new study,
+or rerun their simulations.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
+
+- we removed the ``init_glacier_regions`` task, which was deprecated since
+  a few OGGM versions. Similarly, other old functions
+  (e.g. ``process_cmip5_data``) were also removed.
+- several default parameters were updated to new values. See "migrating guide"
+  below to navigate through these changes.
+- the calibration of the mass balance models with the :math:`t^*` ("T star")
+  method is no longer supported. The code is here and can be used, but we
+  don't use it ourselves anymore.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -40,8 +53,26 @@ Enhancements
   Level 5 now replaces level 4 and creates the minigdirs (where only the files
   for a model run are kept and no inversion is possible anymore) (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Added support for Milland 22 velocity and thickness in the shop (:pull:`1443`).
+- Added support for Millan et al 2022 velocity and thickness in the shop (:pull:`1443`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added trapezoidal downstream line (:pull:`1491`). Can be selected with
+  ``cfg.PARAMS['downstream_line_shape']``, with the options ``'parabol'`` (default)
+  or ``'trapezoidal'`` before calling ``init_present_time_glacier(gdir)``.
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
+  (:pull:`1496`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added option to extend the plot limits when plotting multiple gdirs. Could be
+  used with ``extend_plot_limits=True``, e.g.
+  ``graphics.plot_modeloutput_map(gdirs, extend_plot_limits=True)``
+  (:pull:`1508`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added new argument ``add_fixed_geometry_spinup`` to extend the model run of
+  ``run_dynamic_spinup`` with a fixed-geometry-spinup if the spinup period is
+  shortened(:pull:`1514`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -49,6 +80,14 @@ Bug fixes
 - corrected a but in ``apparent_mb_from_any_mb``, where only two years of MB
   would be used instead of a range of years (:pull:`1426`).
   By `Bowen <https://github.com/bowenbelongstonature>`_
+- Corrected ``source`` argument in ``tasks.define_glacier_region`` to handle a
+  list of DEM sources. (:pull:`1506`).
+  By `Daniel Otto <https://github.com/d-otto>`_
+
+Migrating guide
+~~~~~~~~~~~~~~~
+
+Some text here.
 
 v1.5.3 (02.04.2022)
 -------------------

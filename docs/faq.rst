@@ -15,7 +15,7 @@ What is the difference between OGGM and other glacier models?
 
 There are plenty of established ice dynamics models, and some of them are
 **open-source** (e.g. `PISM <http://www.pism-docs.org/wiki/doku.php>`_,
-`Elmer/Ice <http://elmerice.elmerfem.org/>`_).
+`Elmer/Ice <http://elmerice.elmerfem.org/>`_, `IGM <https://github.com/jouvetg/igm>`_).
 
 The purpose of OGGM is to be an *easy to use*, *fully automated*
 **global glacier model**, i.e. applicable to any glacier in the
@@ -26,10 +26,10 @@ set of unified tools with eases the process of working with many mountain
 glaciers at once.
 
 There is a standard modelling chain in OGGM (with a mass balance model
-and a multiple flowline model) but there is no obligation to use all
+and a flowline model) but there is no obligation to use all
 of these tools. For example, we can easily picture a workflow where people will
 use OGGM to create homogenized initial conditions (topography, climate) but
-use a higher order dynamical model like PISM instead of the simplified OGGM
+use a higher order dynamical model like IGM instead of the simplified OGGM
 dynamics. For these kind of workflows, we created the
 `OGGM-contrib <https://github.com/OGGM/oggmcontrib>`_ example package which
 should help OGGM users to implement their own physics in OGGM.
@@ -41,8 +41,8 @@ Can I use OGGM to simulate <my favourite glacier>?
 The short answer is: "yes, but..."
 
 The longer answer is that OGGM has been designed to work with *all* the world's
-glaciers, and calibrated only on a few hundreds of them (and that's only
-the mass balance model...). We are quite confident that OGGM provides
+glaciers and calibrated as well as we can, but with publicly available global
+datasets. We are quite confident that OGGM provides
 reasonable global estimates of glacier mass balance and glacier change: this
 is a result of the law of large numbers, assuming that the uncertainty for
 each single glacier can be large but random and Gaussian.
@@ -51,7 +51,6 @@ If you use OGGM for a single or a handful of glaciers, chances are that the
 outcome is disappointing. For these kind of applications, you'll probably
 need to re-calibrate OGGM using local data, for example of mass balance
 or observations of past glacier change.
-
 
 Can I use OGGM to simulate long-term glacier evolution?
 -------------------------------------------------------
@@ -65,14 +64,15 @@ but have disappeared today.
 
 Also, if glaciers grow into large ice complexes and ice caps, the
 flowline assumption becomes much less valid than for typical valley glaciers
-found today. For these situations, fully distributed models like PISM
+found today. For these situations, fully distributed models like IGM or PISM
 are more appropriate.
 
 In addition, there is some issues about glacier growth: you have to be sure the
 limit border you have defined is large enough to allow a large growth of glaciers ;
-secondly, you need to authorize the merge of glaciers which is not yet implemented
-into OGGM ; last, there might be not negligible changes in the landscape around
-the glacier as well as evolution of the glacier bed for long-term simulations.
+secondly, you need to authorize the merge of glaciers which is implemented
+into OGGM but not automated ; last, there might be not negligible changes
+in the landscape around the glacier as well as evolution of the glacier
+bed for long-term simulations.
 
 We are currently in the process of testing and tuning OGGM for post-LIA
 simulations in the Alps. Reach out if you would like to know more about our
@@ -87,7 +87,6 @@ so that everybody can learn from all questions and their answers.
 You can also join our Slack discussion channel if you want a 
 more interactive forum. Keep in touch with us per email if you'd 
 like to join, we are a very open community!
-
 
 Usage
 =====

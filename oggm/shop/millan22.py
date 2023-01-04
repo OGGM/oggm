@@ -78,8 +78,10 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
 
         # Subset to avoid mega files
         dsb = salem.GeoTiff(input_file)
-        x0, x1, y0, y1 = gdir.grid.extent
-        dsb.set_subset(corners=((x0, y0), (x1, y1)), crs=gdir.grid.proj, margin=5)
+        x0, x1, y0, y1 = gdir.grid.extent_in_crs(dsb.grid.proj)
+        dsb.set_subset(corners=((x0, y0), (x1, y1)),
+                       crs=dsb.grid.proj,
+                       margin=5)
 
         data = _filter(dsb)
         if not allow_neg:
@@ -185,7 +187,11 @@ def velocity_to_gdir(gdir, add_error=False):
                                    f'glacier: {gdir.rgi_id}')
 
     vel, files, grids = _filter_and_reproj(gdir, 'v', sel, allow_neg=False)
-    assert len(grids) == 1, 'Multiple velocity grids - dont know what to do.'
+    if len(grids) == 0:
+        raise RuntimeError('There is no velocity data for this glacier')
+    if len(grids) > 1:
+        raise RuntimeError('Multiple velocity grids - dont know what to do.')
+
     sel = sel.loc[sel.file_id == files[0]]
     vx, _, gridsx = _filter_and_reproj(gdir, 'vx', sel)
     vy, _, gridsy = _filter_and_reproj(gdir, 'vy', sel)

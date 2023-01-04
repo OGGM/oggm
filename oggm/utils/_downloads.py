@@ -69,14 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '8a3c41a36d190c6c78029b5032648ce94ee2026c'
-
-GDIR_L1L2_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'L1-L2_files/centerlines/')
-GDIR_L3L5_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match/')
-DEMS_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                 'rgitopo/')
+SAMPLE_DATA_COMMIT = 'd9f01846960a141690bab9d38a85524d89a0d9ae'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -1282,10 +1275,9 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     """Extended base url where to find the desired gdirs."""
 
     if base_url is None:
-        if prepro_level <= 2:
-            base_url = GDIR_L1L2_URL
-        else:
-            base_url = GDIR_L3L5_URL
+        raise InvalidParamsError('Starting with v1.6, users now have to '
+                                 'explicitly indicate the url they want '
+                                 'to start from.')
 
     if not base_url.endswith('/'):
         base_url += '/'
@@ -1924,7 +1916,7 @@ def get_rgi_region_file(region, version=None, reset=False):
     """
 
     rgi_dir = get_rgi_dir(version=version, reset=reset)
-    f = list(glob.glob(rgi_dir + "/*/{}_*.shp".format(region)))
+    f = list(glob.glob(rgi_dir + "/*/*{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
 
@@ -2114,8 +2106,12 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
         version = cfg.PARAMS['rgi_version']
     if len(version) == 1:
         version += '0'
+    try:
+        regions = [s.split('-')[3] for s in rgi_ids]
 
-    regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    except IndexError:
+        # RGI V6
+        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_intersects_region_file(reg,

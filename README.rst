@@ -90,4 +90,4 @@ About
 
     See the `version history`_ for a list of all contributors.
 
-    .. _version history: http://docs.oggm.org/en/latest/whats-new.html
+    .. _version history: http://docs.oggm.org/en/stable/whats-new.html

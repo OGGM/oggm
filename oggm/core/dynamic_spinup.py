@@ -41,7 +41,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_bias_best=False, ye=None,
                        model_flowline_filesuffix='', make_compatible=False,
-                       **kwargs):
+                       add_fixed_geometry_spinup=False, **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -185,6 +185,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         spinup and setting fixed geometry spinup as fallback, the variable
         'is_fixed_geometry_spinup' must be added to the dynamic spinup so
         it is possible to compile both glaciers together.
+        Default is False
+    add_fixed_geometry_spinup : bool
+        If True and the original spinup_period must be shortened (due to
+        ice-free or out-of-boundary error) a fixed geometry spinup is added at
+        the beginning so that the resulting model run always starts from the
+        defined start year (could be defined through spinup_period or
+        spinup_start_yr). Only has an effect if store_model_evolution is True.
+        Default is False
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -218,9 +226,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                f'the start year of the provided climate data '
                                f'(= {yr_min})!')
         if spinup_start_yr is not None:
-            if spinup_start_yr_max <= spinup_start_yr:
+            if spinup_start_yr_max < spinup_start_yr:
                 raise RuntimeError(f'The provided start year (= '
-                                   f'{spinup_start_yr} must be smaller than '
+                                   f'{spinup_start_yr}) must be smaller than '
                                    f'the maximum start year '
                                    f'{spinup_start_yr_max}!')
         if (yr_rgi - spinup_start_yr_max) > min_spinup_period:
@@ -404,6 +412,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
                 dynamic_spinup_min_ice_thick=min_ice_thickness,
+                fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 make_compatible=make_compatible)
             if type(ds) == tuple:
                 ds = ds[0]
@@ -767,6 +776,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         spinup_periods_to_try = [spinup_period_initial,
                                  int((spinup_period_initial + min_spinup_period) / 2),
                                  min_spinup_period]
+    # after defining the initial spinup period we can define the year for the
+    # fixed_geometry_spinup
+    if add_fixed_geometry_spinup:
+        fixed_geometry_spinup_yr = yr_rgi - spinup_period_initial
+    else:
+        fixed_geometry_spinup_yr = None
 
     # check if the user provided an mb_model_spinup, otherwise we must define a
     # new one each iteration
@@ -898,6 +913,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
+        spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1024,6 +1040,18 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         If True a complete inversion is conducted using the provided mu_star
         before the actual calibration run.
         Default is False
+    spinup_start_yr_max : int or None
+        Possibility to provide a maximum year where the dynamic spinup must
+        start from at least. If set, this overrides the min_spinup_period if
+        yr_rgi - spinup_start_yr_max > min_spinup_period. If None it is set to
+        yr0_ref_mb.
+        Default is None
+    add_fixed_geometry_spinup : bool
+        If True and the original spinup_period of the dynamical spinup must be
+        shortened (due to ice-free or out-of-boundary error) a
+        fixed-geometry-spinup is added at the beginning so that the resulting
+        model run always starts from ys.
+        Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1061,6 +1089,15 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
 
+    if spinup_start_yr_max is None:
+        spinup_start_yr_max = yr0_ref_mb
+
+    if spinup_start_yr_max > yr0_ref_mb:
+        log.workflow('The provided maximum start year is larger then the '
+                     'start year of the geodetic period, therefore it will be '
+                     'set to the start year of the geodetic period!')
+        spinup_start_yr_max = yr0_ref_mb
+
     # check that inversion is only possible without providing own fls
     if do_inversion:
         if not np.all([np.all(getattr(fl_prov, 'surface_h') ==
@@ -1084,17 +1121,22 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         define_new_mu_star_in_gdir(gdir, mu_star)
 
     if do_inversion:
-        apparent_mb_from_any_mb(gdir)
-        # do inversion with A calibration to current volume
-        calibrate_inversion_from_consensus(
-            [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
-            filter_inversion_output=True,
-            volume_m3_reference=local_variables['vol_m3_ref'])
+        with utils.DisableLogger():
+            apparent_mb_from_any_mb(gdir,
+                                    add_to_log_file=False,  # dont write to log
+                                    )
+            # do inversion with A calibration to current volume
+            calibrate_inversion_from_consensus(
+                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                filter_inversion_output=True,
+                volume_m3_reference=local_variables['vol_m3_ref'],
+                add_to_log_file=False)
 
     # this is used to keep the original model_flowline unchanged (-> to be able
     # to conduct different dynamic calibration runs in the same gdir)
     model_flowline_filesuffix = '_dyn_mu_calib'
-    init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix)
+    init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix,
+                              add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad' files are
@@ -1103,6 +1145,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         model, last_best_t_bias = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,  # dont write to log file in @entity_task
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1110,7 +1153,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             mb_model_spinup=mb_model_spinup,
             spinup_period=spinup_period,
             spinup_start_yr=ys,
-            spinup_start_yr_max=yr0_ref_mb,
+            spinup_start_yr_max=spinup_start_yr_max,
             min_spinup_period=min_spinup_period, yr_rgi=yr_rgi,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -1126,6 +1169,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
             store_fl_diagnostics=store_fl_diagnostics,
             model_flowline_filesuffix=model_flowline_filesuffix,
             make_compatible=True,
+            add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
         # save the temperature bias which was successful in the last iteration
         # as we expect we are not so far away in the next iteration (only
@@ -1136,8 +1180,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         raise RuntimeError(f'Dynamic spinup raised error! (Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
-                                  path=False)
+    with utils.DisableLogger():
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                      path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -1156,7 +1201,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         precision_absolute=1, min_ice_thickness=10,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
-        do_inversion=True, **kwargs):
+        do_inversion=True, spinup_start_yr_max=None,
+        add_fixed_geometry_spinup=True, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_mu_star_run_with_dynamic_spinup', which are provided
@@ -1264,6 +1310,17 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         If True a complete inversion is conducted using the provided mu_star
         before the actual fallback run.
         Default is False
+    spinup_start_yr_max : int or None
+        Possibility to provide a maximum year where the dynamic spinup must
+        start from at least. If set, this overrides the min_spinup_period if
+        yr_rgi - spinup_start_yr_max > min_spinup_period.
+        Default is None
+    add_fixed_geometry_spinup : bool
+        If True and the original spinup_period of the dynamical spinup must be
+        shortened (due to ice-free or out-of-boundary error) a
+        fixed-geometry-spinup is added at the beginning so that the resulting
+        model run always starts from ys.
+        Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1283,11 +1340,14 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
         define_new_mu_star_in_gdir(gdir, mu_star)
         if do_inversion:
-            apparent_mb_from_any_mb(gdir)
-            calibrate_inversion_from_consensus(
-                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
-                filter_inversion_output=True,
-                volume_m3_reference=local_variables['vol_m3_ref'])
+            with utils.DisableLogger():
+                apparent_mb_from_any_mb(gdir,
+                                        add_to_log_file=False)
+                calibrate_inversion_from_consensus(
+                    [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                    filter_inversion_output=True,
+                    volume_m3_reference=local_variables['vol_m3_ref'],
+                    add_to_log_file=False)
     if os.path.isfile(os.path.join(gdir.dir,
                                    'model_flowlines_dyn_mu_calib.pkl')):
         os.remove(os.path.join(gdir.dir,
@@ -1309,6 +1369,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         model_end = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
@@ -1317,6 +1378,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             spinup_period=spinup_period,
             spinup_start_yr=ys,
             min_spinup_period=min_spinup_period,
+            spinup_start_yr_max=spinup_start_yr_max,
             yr_rgi=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
@@ -1331,6 +1393,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
             ignore_errors=False,
             ye=ye,
             make_compatible=True,
+            add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
 
         gdir.add_to_diagnostics('used_spinup_option', 'dynamic spinup only')
@@ -1341,7 +1404,9 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
                     'try is to conduct a run until ye without a dynamic '
                     'spinup.')
         model_end = run_from_climate_data(
-            gdir, min_ys=yr_clim_min, ye=ye,
+            gdir,
+            add_to_log_file=False,
+            min_ys=yr_clim_min, ye=ye,
             output_filesuffix=output_filesuffix,
             climate_input_filesuffix=climate_input_filesuffix,
             store_model_geometry=store_model_geometry,
@@ -1438,6 +1503,7 @@ def dynamic_mu_star_run(
         model = run_from_climate_data(gdir,
                                       # force to raise an error in @entity_task
                                       continue_on_error=False,
+                                      add_to_log_file=False,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
@@ -1448,8 +1514,9 @@ def dynamic_mu_star_run(
                            f'(Message: {e})')
 
     # calculate dmdtda from previous simulation here
-    ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
-                                  path=False)
+    with utils.DisableLogger():
+        ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
+                                      path=False)
     dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
                    ds.volume.loc[yr0_ref_mb].values) /
                   gdir.rgi_area_m2 /
@@ -1509,6 +1576,7 @@ def dynamic_mu_star_run_fallback(
         model = run_from_climate_data(gdir,
                                       # force to raise an error in @entity_task
                                       continue_on_error=False,
+                                      add_to_log_file=False,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
@@ -1524,7 +1592,7 @@ def dynamic_mu_star_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_mu_star_calibration(
-        gdir, ref_dmdtda=None, err_ref_dmdtda=None,
+        gdir, ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
         ref_period='', ignore_hydro_months=False, min_mu_star=None,
         max_mu_star=None, mu_star_max_step_length=5, maxiter=20,
         ignore_errors=False, output_filesuffix='_dynamic_mu_star',
@@ -1563,6 +1631,20 @@ def run_dynamic_mu_star_calibration(
         yr-1). Must always be a positive number. If None the data from Hugonett
         2021 is used.
         Default is None
+    err_dmdtda_scaling_factor : float
+        The error of the geodetic mass balance is multiplied by this factor.
+        When looking at more glaciers you should set this factor smaller than
+        1 (Default), but the smaller this factor the more glaciers will fail
+        during calibration. The factor is only used if ref_dmdtda = None and
+        err_ref_dmdtda = None.
+        The idea is that we reduce the uncertainty of individual observations
+        to count for correlated uncertainties when looking at regional or
+        global scales. If err_scaling_factor is 1 (Default) and you look at the
+        results of more than one glacier this equals that all errors are
+        uncorrelated. Therefore the result will be outside the uncertainty
+        boundaries given in Hugonett 2021 e.g. for the global estimate, because
+        some correlation of the individual errors is assumed during aggregation
+        of glaciers to regions (for more details see paper Hugonett 2021).
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
@@ -1697,6 +1779,7 @@ def run_dynamic_mu_star_calibration(
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda *= err_dmdtda_scaling_factor
 
     if err_ref_dmdtda <= 0:
         raise RuntimeError('The provided error for the geodetic mass-balance '

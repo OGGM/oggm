@@ -72,7 +72,20 @@ def up_to_climate(reset=False, use_mp=None):
     rgidf.loc[1, 'GlacType'] = '0299'
 
     # Use RGI6
-    rgidf['RGIId'] = [s.replace('RGI50', 'RGI60') for s in rgidf.RGIId]
+    new_ids = []
+    count = 0
+    for s in rgidf.RGIId:
+        s = s.replace('RGI50', 'RGI60')
+        if '_d0' in s:
+            # We dont do this anymore
+            s = 'RGI60-11.{:05d}'.format(99999 - count)
+            count += 1
+        new_ids.append(s)
+    rgidf['RGIId'] = new_ids
+
+
+    # Here as well - we don't do the custom RGI IDs anymore
+    rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
     # Be sure data is downloaded
     cru.get_cru_cl_file()
@@ -411,8 +424,12 @@ def test_plot_region_inversion():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, ax = plt.subplots()
-    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5, vmax=250)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5, vmax=250)
+
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_inversion(gdirs, ax=ax2, linewidth=1.5, vmax=250,
+                            extend_plot_limit=True)
 
     fig.tight_layout()
     return fig
@@ -438,10 +455,15 @@ def test_plot_region_model():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, ax = plt.subplots()
-    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax,
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
                                   filesuffix='_plot', vmax=250,
                                   modelyr=10, linewidth=1.5)
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_modeloutput_map(gdirs, ax=ax2,
+                                  filesuffix='_plot', vmax=250,
+                                  modelyr=10, linewidth=1.5,
+                                  extend_plot_limit=True)
 
     fig.tight_layout()
     return fig

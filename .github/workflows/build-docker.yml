@@ -25,9 +25,9 @@ jobs:
     - name: Set Names
       id: names
       run: |
-        echo "::set-output name=name::ghcr.io/oggm/oggm"
-        echo "::set-output name=date::$(date +%Y%m%d)"
-        echo "::set-output name=sha::$GITHUB_SHA"
+        echo "name=ghcr.io/oggm/oggm" >> $GITHUB_OUTPUT
+        echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+        echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
     - name: Stop Commands
       run: T="$(echo -n ${{ github.token }} | sha256sum | head -c 64)" && echo -e "::add-mask::${T}\n::stop-commands::${T}"
     - name: Build image

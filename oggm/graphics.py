@@ -5,6 +5,7 @@ import logging
 from collections import OrderedDict
 import itertools
 import textwrap
+import xarray as xr
 
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
@@ -33,6 +34,7 @@ def set_oggm_cmaps():
     OGGM_CMAPS['terrain'] = colormap.terrain
     OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlGnBu')
     OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
+    OGGM_CMAPS['ice_velocity'] = plt.cm.get_cmap('Reds')
 
 
 set_oggm_cmaps()
@@ -74,6 +76,79 @@ def surf_to_nan(surf_h, thick):
     return surf_h
 
 
+def combine_grids(gdirs):
+    """ Combines individual grids of different glacier directories to show
+        multiple glaciers in the same plot. The resulting grid extent includes
+        all individual grids completely.
+
+    Parameters
+    ----------
+    gdirs : [], required
+        A list of GlacierDirectories.
+
+    Returns
+    -------
+    salem.gis.Grid
+    """
+
+    new_grid = {
+        'proj': None,
+        'nxny': None,
+        'dxdy': None,
+        'x0y0': None,
+        'pixel_ref': None
+    }
+
+    left_use = None
+    right_use = None
+    bottom_use = None
+    top_use = None
+    dx_use = None
+    dy_use = None
+
+    for gdir in gdirs:
+        # use the first gdir to define some values
+        if new_grid['proj'] is None:
+            new_grid['proj'] = gdir.grid.proj
+        if new_grid['pixel_ref'] is None:
+            new_grid['pixel_ref'] = gdir.grid.pixel_ref
+
+        # find largest extend including all grids completely
+        (left, right, bottom, top) = gdir.grid.extent_in_crs(new_grid['proj'])
+        if (left_use is None) or (left_use > left):
+            left_use = left
+        if right_use is None or right_use < right:
+            right_use = right
+        if bottom_use is None or bottom_use > bottom:
+            bottom_use = bottom
+        if top_use is None or top_use < top:
+            top_use = top
+
+        # find smallest dx and dy for the estimation of nx and ny
+        dx = gdir.grid.dx
+        dy = gdir.grid.dy
+        if dx_use is None or dx_use > dx:
+            dx_use = dx
+        # dy could be negative
+        if dy_use is None or abs(dy_use) > abs(dy):
+            dy_use = dy
+
+    # calculate nx and ny, the final extend could be one grid point larger or
+    # smaller due to round()
+    nx_use = round((right_use - left_use) / dx_use)
+    ny_use = round((top_use - bottom_use) / abs(dy_use))
+
+    # finally define the last values of the new grid
+    if np.sign(dy_use) < 0:
+        new_grid['x0y0'] = (left_use, top_use)
+    else:
+        new_grid['x0y0'] = (left_use, bottom_use)
+    new_grid['nxny'] = (nx_use, ny_use)
+    new_grid['dxdy'] = (dx_use, dy_use)
+
+    return salem.gis.Grid.from_dict(new_grid)
+
+
 def _plot_map(plotfunc):
     """
     Decorator for common salem.Map plotting logic
@@ -112,6 +187,8 @@ def _plot_map(plotfunc):
         save the figure to a file instead of displaying it
     savefig_kwargs : dict, optional
         the kwargs to plt.savefig
+    extend_plot_limit : bool, optional
+        set to True to extend the plotting limits for all provided gdirs grids
     """
 
     # Build on the original docstring
@@ -122,7 +199,7 @@ def _plot_map(plotfunc):
                     title_comment=None, horizontal_colorbar=False,
                     lonlat_contours_kwargs=None, cbar_ax=None, autosave=False,
                     add_scalebar=True, figsize=None, savefig=None,
-                    savefig_kwargs=None,
+                    savefig_kwargs=None, extend_plot_limit=False,
                     **kwargs):
 
         dofig = False
@@ -135,8 +212,13 @@ def _plot_map(plotfunc):
         gdirs = utils.tolist(gdirs)
 
         if smap is None:
-            mp = salem.Map(gdirs[0].grid, countries=False,
-                           nx=gdirs[0].grid.nx)
+            if extend_plot_limit:
+                grid_combined = combine_grids(gdirs)
+                mp = salem.Map(grid_combined, countries=False,
+                               nx=grid_combined.nx)
+            else:
+                mp = salem.Map(gdirs[0].grid, countries=False,
+                               nx=gdirs[0].grid.nx)
         else:
             mp = smap
 
@@ -622,8 +704,31 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
 @_plot_map
 def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                          vmax=None, linewidth=3, filesuffix='',
-                         modelyr=None):
-    """Plots the result of the model output."""
+                         modelyr=None, plotting_var='thickness'):
+    """Plots the result of the model output.
+
+    Parameters
+    ----------
+    gdirs
+    ax
+    smap
+    model
+    vmax
+    linewidth
+    filesuffix
+    modelyr
+    plotting_var : str
+        Defines which variable should be plotted. Options are 'thickness'
+        (default) and 'velocity'. If you want to plot velocity the flowline
+        diagnostics of the run are needed (set
+        cfg.PARAMS['store_fl_diagnostics'] = True, before the
+        actual simulation) and be aware that there is no velocity available for
+        the first year of the simulation.
+
+    Returns
+    -------
+
+    """
 
     gdir = gdirs[0]
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -635,7 +740,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
     except ValueError:
         pass
 
-    toplot_th = np.array([])
+    toplot_var = np.array([])
     toplot_lines = []
     toplot_crs = []
 
@@ -648,6 +753,10 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
             models.append(model)
     else:
         models = utils.tolist(model)
+
+    if modelyr is None:
+        modelyr = models[0].yr
+
     for gdir, model in zip(gdirs, models):
         geom = gdir.read_pickle('geometries')
         poly_pix = geom['polygon_pix']
@@ -660,12 +769,21 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
             for l in _poly.interiors:
                 smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
+        if plotting_var == 'velocity':
+            f_fl_diag = gdir.get_filepath('fl_diagnostics',
+                                          filesuffix=filesuffix)
+
         # plot Centerlines
         cls = model.fls
-        for l in cls:
+        for fl_id, l in enumerate(cls):
             smap.set_geometry(l.line, crs=crs, color='gray',
                               linewidth=1.2, zorder=50)
-            toplot_th = np.append(toplot_th, l.thick)
+            if plotting_var == 'thickness':
+                toplot_var = np.append(toplot_var, l.thick)
+            elif plotting_var == 'velocity':
+                with xr.open_dataset(f_fl_diag, group=f'fl_{fl_id}') as ds:
+                    toplot_var = np.append(toplot_var,
+                                           ds.sel(dict(time=modelyr)).ice_velocity_myr)
             widths = l.widths.copy()
             widths = np.where(l.thick > 0, widths, 0.)
             for wi, cur, (n1, n2) in zip(widths, l.line.coords, l.normals):
@@ -674,14 +792,20 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                 toplot_lines.append(line)
                 toplot_crs.append(crs)
 
-    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'],
-                          data=toplot_th, vmin=0, vmax=vmax)
+    if plotting_var == 'thickness':
+        cmap = OGGM_CMAPS['section_thickness']
+        cbar_label = 'Section thickness [m]'
+    elif plotting_var == 'velocity':
+        cmap = OGGM_CMAPS['ice_velocity']
+        cbar_label = 'Ice velocity [m yr-1]'
+    dl = salem.DataLevels(cmap=cmap,
+                          data=toplot_var, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
         smap.set_geometry(l, crs=crs, color=c,
                           linewidth=linewidth, zorder=50)
     smap.plot(ax)
-    return dict(cbar_label='Section thickness [m]',
+    return dict(cbar_label=cbar_label,
                 cbar_primitive=dl,
                 title_comment=' -- year: {:d}'.format(np.int64(model.yr)))
 
