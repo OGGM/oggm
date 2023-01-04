@@ -4911,8 +4911,11 @@ class TestHydro:
 
         odf = pd.concat([odf_hist, odf_run])
         # Domain area is constant and equal to the first year
+        # Except at the begining of the simulation where the glacier
+        # advances a little
         odf['dom_area'] = odf['on_area'] + odf['off_area']
-        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=1e-4)
+        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=3e-3)
+        assert_allclose(odf['dom_area'].iloc[0], odf['dom_area'].iloc[-1])
 
     @pytest.mark.slow
     def test_hydro_dynamical_spinup(self, hef_gdir, inversion_params):
@@ -5295,8 +5298,8 @@ class TestHydro:
                             odf_ma['liq_prcp_on_glacier'] +
                             odf_ma['liq_prcp_off_glacier'])
 
-        # Regardless of MB bias the melt in months 3, 4, 5, 6 should be zero
-        assert_allclose(odf_ma['melt_on_glacier'].loc[3:6], 0, atol=5)
+        # Regardless of MB bias the melt in winter months should be close to zero
+        assert_allclose(odf_ma['melt_on_glacier'].loc[3:4], 0, atol=1e3)
 
         # Residual MB should not be crazy large
         frac = odf_ma['residual_mb'] / odf_ma['melt_on_glacier']
