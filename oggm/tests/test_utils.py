@@ -2169,8 +2169,8 @@ class TestFakeDownloads(unittest.TestCase):
                               fakefile='TDM1_DEM__30_N60W146.tif')
 
         def down_check(url, *args, **kwargs):
-            expect = ('https://download.geoservice.dlr.de/TDM90/files/N60/' +
-                      'W140/' + 'TDM1_DEM__30_N60W146.zip')
+            expect = ('https://download.geoservice.dlr.de/TDM90/files/DEM/'
+                      'N60/W140/TDM1_DEM__30_N60W146.zip')
             self.assertEqual(url, expect)
             return tf
 
@@ -2202,7 +2202,7 @@ class TestFakeDownloads(unittest.TestCase):
             file = tf.get(url.split('/')[-1])
             self.assertIsNotNone(file)
 
-            expect = 'https://download.geoservice.dlr.de/TDM90/files/N60/W140/'
+            expect = 'https://download.geoservice.dlr.de/TDM90/files/DEM/N60/W140/'
             expect += file.split('/')[-1].replace('tif', '.zip')
             self.assertEqual(url, expect)
 
