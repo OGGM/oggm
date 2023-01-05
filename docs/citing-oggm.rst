@@ -59,16 +59,39 @@ The OGGM logos are free to use!
 
 .. image:: _static/logo.png
 
-
 **full logo**:
 `pdf <_static/logos/oggm.pdf>`_,
-`large (2004x856) <_static/logos/oggm_l.png>`_,
-`large (2004x856) with alpha channel <_static/logos/oggm_l_alpha.png>`_,
-`small (502x214) <_static/logos/oggm_s.png>`_,
-`small (502x214) with alpha channel <_static/logos/oggm_s_alpha.png>`_
+`logo large (2008x858) <_static/logos/oggm_l.png>`_,
+`logo large (2008x858) with alpha channel <_static/logos/oggm_l_alpha.png>`_,
+`logo small (502x215) <_static/logos/oggm_s.png>`_,
+`logo small (502x215) with alpha channel <_static/logos/oggm_s_alpha.png>`_
 
 .. image:: _static/logos/oggm_icon.png
 
 **icon logo**:
-`small (135x157) <_static/logos/oggm_icon.png>`_,
-`small (135x157) with alpha channel <_static/logos/oggm_icon_alpha.png>`_
+`icon small (135x157) <_static/logos/oggm_icon.png>`_,
+`icon small (135x157) with alpha channel <_static/logos/oggm_icon_alpha.png>`_
+
+.. image:: _static/logos/oggm_dark_s_alpha.png
+
+**dark background logo**:
+`dark large (2008x858) with alpha channel <_static/logos/oggm_dark_l_alpha.png>`_,
+`dark small (502x215) with alpha channel <_static/logos/oggm_dark_s_alpha.png>`_
+
+.. image:: _static/logos/oggm_rainbow_s_alpha.png
+
+**OGGM rainbow**:
+`rainbow large (2004x856) with alpha channel <_static/logos/oggm_rainbow_l_alpha.png>`_,
+`rainbow small (502x215) with alpha channel <_static/logos/oggm_rainbow_s_alpha.png>`_
+
+.. image:: _static/logos/oggm_night_s_alpha.png
+
+**night dark background logo**:
+`night dark large (2008x858) with alpha channel <_static/logos/oggm_night_l_alpha.png>`_,
+`night dark small (502x215) with alpha channel <_static/logos/oggm_night_s_alpha.png>`_
+
+.. image:: _static/logos/oggm_pride_s_alpha.png
+
+**OGGM pride**:
+`pride large (2004x856) with alpha channel <_static/logos/oggm_pride_l_alpha.png>`_,
+`pride small (502x215) with alpha channel <_static/logos/oggm_pride_s_alpha.png>`_
