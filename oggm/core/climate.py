@@ -556,6 +556,11 @@ def mb_climate_on_height(gdir, heights, *, time_range=None, year_range=None):
             df['glacier_prcp_scaling_factor'] = prcp_fac
             gdir.write_json(df, 'local_mustar')
     else:
+        if not cfg.PARAMS['prcp_scaling_factor']:
+            msg = ("If `PARAMS['use_winter_prcp_factor']` is set to False, "
+                   "you need to set `PARAMS['prcp_scaling_factor']` "
+                   "accordingly")
+            raise InvalidWorkflowError(msg)
         prcp_fac = cfg.PARAMS['prcp_scaling_factor']
     default_grad = cfg.PARAMS['temp_default_gradient']
     g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
