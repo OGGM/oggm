@@ -2814,7 +2814,7 @@ class GlacierDirectory(object):
             entity['Area'] = area
 
         # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
-        for k, s in entity.iteritems():
+        for k, s in entity.items():
             if type(s) in [np.int32, np.int64]:
                 entity[k] = int(s)
         towrite = gpd.GeoDataFrame(entity).T
