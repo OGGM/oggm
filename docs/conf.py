@@ -42,6 +42,11 @@ try:
 except ImportError:
     print("no pandas")
 try:
+    import shapely
+    print("shapely: %s, %s" % (shapely.__version__, shapely.__file__))
+except ImportError:
+    print("no shapely")
+try:
     import geopandas
     print("geopandas: %s, %s" % (geopandas.__version__, geopandas.__file__))
 except ImportError:
@@ -63,11 +68,10 @@ try:
 except ImportError:
     print("no rasterio")
 try:
-    import gdal
     import osgeo.gdal
-    print("gdal: %s, %s" % (osgeo.gdal.__version__, gdal.__file__))
+    print("osgeo.gdal: %s, %s" % (osgeo.gdal.__version__, osgeo.gdal.__file__))
 except ImportError:
-    print("no gdal")
+    print("no osgeo.gdal")
 try:
     import pyproj
     print("pyproj: %s, %s" % (pyproj.__version__, pyproj.__file__))
