@@ -95,3 +95,7 @@ The OGGM logos are free to use!
 **OGGM pride**:
 `pride large (2004x856) with alpha channel <_static/logos/oggm_pride_l_alpha.png>`_,
 `pride small (502x215) with alpha channel <_static/logos/oggm_pride_s_alpha.png>`_
+
+|
+
+**Acknowledgments:** thanks to Ben Marzeion for the original logo design, and Larissa van der Laan for the rainbow and dark logos!
