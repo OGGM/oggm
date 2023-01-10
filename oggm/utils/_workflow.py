@@ -1960,7 +1960,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             # Climate and MB at t*
             mbcl = ConstantMassBalance
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                bias=0,
+                                                bias=0, halfsize=halfsize,
                                                 use_inversion_flowlines=True)
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
@@ -1997,7 +1997,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                 fs = '{}-{}'.format(y0 - halfsize, y0 + halfsize)
                 mbcl = ConstantMassBalance
                 mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                    y0=y0,
+                                                    y0=y0, halfsize=halfsize,
                                                     use_inversion_flowlines=True,
                                                     input_filesuffix=input_filesuffix)
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
@@ -2549,7 +2549,7 @@ class GlacierDirectory(object):
         if isinstance(rgi_entity, str):
             # Get the meta from the shape file directly
             if from_tar:
-                _dir = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                _dir = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity)
                 # Avoid bad surprises
                 if os.path.exists(_dir):
@@ -2560,7 +2560,7 @@ class GlacierDirectory(object):
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
-                _shp = os.path.join(base_dir, rgi_entity[:8], rgi_entity[:11],
+                _shp = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
             crs = salem.check_crs(rgi_entity.crs)
@@ -2586,52 +2586,95 @@ class GlacierDirectory(object):
         except AttributeError:
             pass
 
-        self.rgi_id = rgi_entity.RGIId
-        self.glims_id = rgi_entity.GLIMSId
+        try:
+            self.rgi_id = rgi_entity.rgi_id
+            self.glims_id = rgi_entity.glims_id
+        except AttributeError:
+            # RGI V6
+            self.rgi_id = rgi_entity.RGIId
+            self.glims_id = rgi_entity.GLIMSId
 
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
-            self.cenlon = float(rgi_entity.CenLon)
-            self.cenlat = float(rgi_entity.CenLat)
+            try:
+                self.cenlon = float(rgi_entity.cenlon)
+                self.cenlat = float(rgi_entity.cenlat)
+            except AttributeError:
+                # RGI V6
+                self.cenlon = float(rgi_entity.CenLon)
+                self.cenlat = float(rgi_entity.CenLat)
         else:
             cenlon, cenlat = rgi_entity.geometry.representative_point().xy
             self.cenlon = float(cenlon[0])
             self.cenlat = float(cenlat[0])
 
-        self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
-        self.rgi_subregion = (self.rgi_region + '-' +
-                              '{:02d}'.format(int(rgi_entity.O2Region)))
-        name = rgi_entity.Name
-        rgi_datestr = rgi_entity.BgnDate
+        try:
+            self.rgi_region = rgi_entity.o1region
+            self.rgi_subregion = rgi_entity.o2region
+        except AttributeError:
+            # RGI V6
+            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
+            self.rgi_subregion = (self.rgi_region + '-' +
+                                  '{:02d}'.format(int(rgi_entity.O2Region)))
+
+
+        try:
+            name = str(rgi_entity.name)
+            rgi_datestr = rgi_entity.src_date
+        except AttributeError:
+            # RGI V6
+            name = rgi_entity.Name
+            rgi_datestr = rgi_entity.BgnDate
+
 
         try:
             gtype = rgi_entity.GlacType
         except AttributeError:
-            # RGI V6
-            gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
+            try:
+                # RGI V6
+                gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
+            except AttributeError:
+                # temporary default for RGI V7:
+                gtype = ['0', '0']
 
         try:
             gstatus = rgi_entity.RGIFlag[0]
         except AttributeError:
-            # RGI V6
-            gstatus = rgi_entity.Status
+            try:
+                # RGI V6
+                gstatus = rgi_entity.Status
+            except AttributeError:
+                # temporary default for RGI V7:
+                gstatus = '0'
 
         # rgi version can be useful
-        self.rgi_version = self.rgi_id.split('-')[0][-2:]
-        if self.rgi_version not in ['50', '60', '61']:
-            raise RuntimeError('RGI Version not supported: '
-                               '{}'.format(self.rgi_version))
-
+        # RGI2000-v7.0-G-06-00029
+        # RGI60-07.00245
+        if self.rgi_id.count('-') == 4:
+            self.rgi_version = '70'
+        else:
+            rgi_version = self.rgi_id.split('-')[0][-2:]
+            if rgi_version not in ['50', '60', '61']:
+                raise RuntimeError('RGI Version not supported: '
+                                   '{}'.format(self.rgi_version))
+            else:
+                self.rgi_version = rgi_version
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
         # region
         reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version[0])
-        n = reg_names.loc[int(self.rgi_region)].values[0]
-        self.rgi_region_name = self.rgi_region + ': ' + n
+        reg_name = reg_names.loc[int(self.rgi_region)]
+        # RGI V6
+        if not isinstance(reg_name, str):
+            reg_name = reg_name.values[0]
+        self.rgi_region_name = self.rgi_region + ': ' + reg_name
         try:
-            n = subreg_names.loc[self.rgi_subregion].values[0]
-            self.rgi_subregion_name = self.rgi_subregion + ': ' + n
+            subreg_name = subreg_names.loc[self.rgi_subregion]
+            # RGI V6
+            if not isinstance(subreg_name, str):
+                subreg_name = subreg_name.values[0]
+            self.rgi_subregion_name = self.rgi_subregion + ': ' + subreg_name
         except KeyError:
             self.rgi_subregion_name = self.rgi_subregion + ': NoName'
 
@@ -2690,11 +2733,10 @@ class GlacierDirectory(object):
         if rgi_date < 0:
             rgi_date = RGI_DATE[self.rgi_region]
         self.rgi_date = rgi_date
-
         # Root directory
         self.base_dir = os.path.normpath(base_dir)
-        self.dir = os.path.join(self.base_dir, self.rgi_id[:8],
-                                self.rgi_id[:11], self.rgi_id)
+        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
+                                self.rgi_id[:-3], self.rgi_id)
 
         # Do we have to extract the files first?
         if (reset or from_tar) and os.path.exists(self.dir):
@@ -2772,7 +2814,7 @@ class GlacierDirectory(object):
             entity['Area'] = area
 
         # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
-        for k, s in entity.iteritems():
+        for k, s in entity.items():
             if type(s) in [np.int32, np.int64]:
                 entity[k] = int(s)
         towrite = gpd.GeoDataFrame(entity).T
@@ -2828,9 +2870,12 @@ class GlacierDirectory(object):
         """The glacier's RGI area (km2)."""
         try:
             _area = self.read_shapefile('outlines')['Area']
-            return np.round(float(_area), decimals=3)
         except OSError:
             raise RuntimeError('No outlines available')
+        except KeyError:
+            # RGI V7
+            _area = self.read_shapefile('outlines')['area_km2']
+        return np.round(float(_area), decimals=3)
 
     @lazy_property
     def intersects_ids(self):
@@ -2955,7 +3000,6 @@ class GlacierDirectory(object):
         if not out and (filename == 'climate_info'):
             # Try pickle
             out = os.path.exists(fp.replace('.json', '.pkl'))
-
         return out
 
     def _read_deprecated_climate_info(self):

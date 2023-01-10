@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'dbd57434df8fade8d8df9206839b9bf26a1ef8e6'
+SAMPLE_DATA_COMMIT = 'd9f01846960a141690bab9d38a85524d89a0d9ae'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -951,7 +951,7 @@ def _download_tandem_file_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     bname = zone.split('/')[-1] + '_DEM.tif'
-    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/DEM/'
                '{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, bname)
 
@@ -1387,6 +1387,7 @@ def srtm_zone(lon_ex, lat_ex):
 def _tandem_path(lon_tile, lat_tile):
 
     # OK we have a proper tile now
+    # This changed in December 2022
 
     # First folder level is sorted from S to N
     level_0 = 'S' if lat_tile < 0 else 'N'
@@ -1916,7 +1917,7 @@ def get_rgi_region_file(region, version=None, reset=False):
     """
 
     rgi_dir = get_rgi_dir(version=version, reset=reset)
-    f = list(glob.glob(rgi_dir + "/*/{}_*.shp".format(region)))
+    f = list(glob.glob(rgi_dir + "/*/*{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
 
@@ -2106,8 +2107,12 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
         version = cfg.PARAMS['rgi_version']
     if len(version) == 1:
         version += '0'
+    try:
+        regions = [s.split('-')[3] for s in rgi_ids]
 
-    regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    except IndexError:
+        # RGI V6
+        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_intersects_region_file(reg,

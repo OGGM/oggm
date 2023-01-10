@@ -38,7 +38,7 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_with_hydro)
+                                run_with_hydro, SemiImplicitModel)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_mu_star_calibration,
     dynamic_mu_star_run_with_dynamic_spinup,
@@ -3731,6 +3731,74 @@ class TestHEF:
                 minimise_for=minimise_for)
         cfg.PARAMS['use_kcalving_for_run'] = False
 
+        # test that fixed_geometry_spinup is added correctly if spinup period
+        # is shorten, with fixed year (spinup_start_yr)
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00033'],
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        yr_rgi = gdir.rgi_date + 1  # + 1 for hydro year
+        run_dynamic_spinup(
+            gdir,
+            spinup_start_yr=1979,
+            precision_percent=2,
+            minimise_for=minimise_for,
+            output_filesuffix='_without_fixed_spinup',
+            init_model_yr=yr_rgi,
+            add_fixed_geometry_spinup=False)
+        fp = gdir.get_filepath('model_diagnostics',
+                               filesuffix='_without_fixed_spinup')
+        with xr.open_dataset(fp) as ds:
+            run_without_fixed_spinup = ds.load()
+        run_dynamic_spinup(
+            gdir,
+            spinup_start_yr=1979,
+            precision_percent=2,
+            minimise_for=minimise_for,
+            output_filesuffix='_with_fixed_spinup',
+            init_model_yr=yr_rgi,
+            add_fixed_geometry_spinup=True)
+        fp = gdir.get_filepath('model_diagnostics',
+                               filesuffix='_with_fixed_spinup')
+        with xr.open_dataset(fp) as ds:
+            run_with_fixed_spinup = ds.load()
+        assert (run_without_fixed_spinup.time.values[0] >
+                run_with_fixed_spinup.time.values[0])
+        assert run_with_fixed_spinup.time.values[0] == 1979
+
+        # test that fixed_geometry_spinup is added correctly if spinup period
+        # is shorten, with spinup period
+        spinup_period = yr_rgi - 1979
+        run_dynamic_spinup(
+            gdir,
+            spinup_period=spinup_period,
+            precision_percent=2,
+            minimise_for=minimise_for,
+            output_filesuffix='_without_fixed_spinup',
+            init_model_yr=yr_rgi,
+            add_fixed_geometry_spinup=False)
+        fp = gdir.get_filepath('model_diagnostics',
+                               filesuffix='_without_fixed_spinup')
+        with xr.open_dataset(fp) as ds:
+            run_without_fixed_spinup = ds.load()
+        run_dynamic_spinup(
+            gdir,
+            spinup_period=spinup_period,
+            precision_percent=2,
+            minimise_for=minimise_for,
+            output_filesuffix='_with_fixed_spinup',
+            init_model_yr=yr_rgi,
+            add_fixed_geometry_spinup=True)
+        fp = gdir.get_filepath('model_diagnostics',
+                               filesuffix='_with_fixed_spinup')
+        with xr.open_dataset(fp) as ds:
+            run_with_fixed_spinup = ds.load()
+        assert (run_without_fixed_spinup.time.values[0] >
+                run_with_fixed_spinup.time.values[0])
+        assert run_with_fixed_spinup.time.values[0] == yr_rgi - spinup_period
+
         # change settings back to default
         cfg.PARAMS['use_inversion_params_for_run'] = True
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
@@ -4124,6 +4192,119 @@ class TestHEF:
                 local_variables=None,
                 minimise_for=minimise_for
             )
+
+        # check if spinup_start_year_max works as expected, for this use a
+        # glacier where the period is shorten
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00033'],
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
+                            'match_geod_pergla/')[0]
+        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_dmdtda = float(
+            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
+                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+        precision_percent = 10
+        precision_absolute = 0.1
+        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+
+        # run without max limit
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
+                                 'do_inversion': do_inversion,
+                                 'add_fixed_geometry_spinup': False},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
+                                      'do_inversion': do_inversion,
+                                      'add_fixed_geometry_spinup': False},
+            output_filesuffix='_dyn_mu_calib_spinup_reduce_period_no_limit',
+            ys=1979, ye=ye)
+        # run with max limit
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            ignore_errors=True,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'spinup_start_yr_max': 1979,
+                                 'add_fixed_geometry_spinup': False,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'spinup_start_yr_max': 1979,
+                                      'add_fixed_geometry_spinup': False,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_spinup_reduce_period',
+            ys=1979, ye=ye)
+
+        with xr.open_dataset(
+            gdir.get_filepath(
+                'model_diagnostics',
+                filesuffix='_dyn_mu_calib_spinup_reduce_period_'
+                           'no_limit')) as ds:
+            run_no_limit = ds.load()
+        with xr.open_dataset(
+            gdir.get_filepath(
+                'model_diagnostics',
+                filesuffix='_dyn_mu_calib_spinup_reduce_period')) as ds:
+            run_with_limit = ds.load()
+
+        assert run_no_limit.time.values[0] > run_with_limit.time.values[0]
+        assert run_with_limit.time.values[0] == 1979
+
+        # test if add_fixed_geomtry_spinup of dynamic spinup works here as well
+        # run with add_fixed_geometry_spinup
+        run_dynamic_mu_star_calibration(
+            gdir, max_mu_star=1000.,
+            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            ignore_errors=True,
+            run_function=dynamic_mu_star_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'add_fixed_geometry_spinup': True,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'add_fixed_geometry_spinup': True,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_mu_calib_add_fixed_spinup',
+            ys=1979, ye=ye)
+        with xr.open_dataset(
+            gdir.get_filepath(
+                'model_diagnostics',
+                filesuffix='_dyn_mu_calib_add_fixed_spinup')) as ds:
+            run_with_fixed_spinup = ds.load()
+
+        assert (run_no_limit.time.values[0] >
+                run_with_fixed_spinup.time.values[0])
+        assert run_with_fixed_spinup.time.values[0] == 1979
+        # also compare the difference of spinup_start_yr_max and
+        # add_fixed_geometry_spinup
+        assert (run_with_limit.time.values[0] ==
+                run_with_fixed_spinup.time.values[0])
+        assert (run_with_fixed_spinup.is_fixed_geometry_spinup.sum() <
+                run_with_limit.is_fixed_geometry_spinup.sum())
 
         # change settings back to default
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
@@ -5537,3 +5718,288 @@ class TestMergedHEF:
         # Merged glacier should have a larger area after 200yrs from advancing
         assert (ds_entity.area.isel(time=200).sum() <
                 ds_merged.area.isel(time=200))
+
+
+class TestSemiImplicitModel:
+
+    @pytest.mark.slow
+    def test_equilibrium(self, hef_elev_gdir, inversion_params):
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        mb_mod = massbalance.ConstantMassBalance(hef_elev_gdir)
+
+        fls = hef_elev_gdir.read_pickle('model_flowlines')
+        model = SemiImplicitModel(fls, mb_model=mb_mod, y0=0,
+                                  fs=inversion_params['inversion_fs'],
+                                  glen_a=inversion_params['inversion_glen_a'],
+                                  mb_elev_feedback='never')
+
+        ref_vol = model.volume_km3
+        ref_area = model.area_km2
+        ref_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_area, hef_elev_gdir.rgi_area_km2)
+
+        model.run_until_equilibrium(rate=1e-5)
+        assert model.yr >= 50
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.2)
+        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
+        np.testing.assert_allclose(ref_len, after_len, atol=200.01)
+
+        # compare to FluxBasedModel
+        model_flux = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                    fs=inversion_params['inversion_fs'],
+                                    glen_a=inversion_params['inversion_glen_a'],
+                                    mb_elev_feedback='never')
+        model_flux.run_until_equilibrium(rate=1e-5)
+
+        assert model.yr == model_flux.yr
+
+        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=7e-4)
+        np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=6e-5)
+        np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len)
+
+        # now glacier wide with MultipleFlowlineMassBalance
+        cl = massbalance.ConstantMassBalance
+        mb_mod = massbalance.MultipleFlowlineMassBalance(hef_elev_gdir,
+                                                         mb_model_class=cl)
+
+        model = SemiImplicitModel(fls, mb_model=mb_mod, y0=0,
+                                  fs=inversion_params['inversion_fs'],
+                                  glen_a=inversion_params['inversion_glen_a'],
+                                  mb_elev_feedback='never')
+        model.run_until_equilibrium(rate=1e-5)
+
+        model_flux = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                                    fs=inversion_params['inversion_fs'],
+                                    glen_a=inversion_params['inversion_glen_a'],
+                                    mb_elev_feedback='never')
+        model_flux.run_until_equilibrium(rate=1e-5)
+
+        assert model.yr >= 50
+        assert model.yr == model_flux.yr
+
+        after_vol = model.volume_km3
+        after_area = model.area_km2
+        after_len = model.fls[-1].length_m
+
+        np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=5e-4)
+        np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=2e-5)
+        np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len,
+                                   atol=100.1)
+
+    @pytest.mark.slow
+    def test_random(self, hef_elev_gdir, inversion_params):
+        cfg.PARAMS['store_model_geometry'] = True
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+
+        init_present_time_glacier(hef_elev_gdir)
+        run_random_climate(hef_elev_gdir, nyears=100, seed=6,
+                           fs=inversion_params['inversion_fs'],
+                           glen_a=inversion_params['inversion_glen_a'],
+                           bias=0, output_filesuffix='_rdn',
+                           evolution_model=SemiImplicitModel)
+        run_constant_climate(hef_elev_gdir, nyears=100,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_ct',
+                             evolution_model=SemiImplicitModel)
+
+        paths = [hef_elev_gdir.get_filepath('model_geometry', filesuffix='_rdn'),
+                 hef_elev_gdir.get_filepath('model_geometry', filesuffix='_ct'),
+                 ]
+
+        for path in paths:
+            model = FileModel(path)
+            vol = model.volume_km3_ts()
+            area = model.area_km2_ts()
+            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
+                                       rtol=0.26)
+            np.testing.assert_allclose(area.iloc[0], np.mean(area),
+                                       rtol=0.1)
+
+    @pytest.mark.slow
+    def test_sliding_and_compare_to_fluxbased(self, hef_elev_gdir,
+                                              inversion_params):
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        start_time_impl = time.time()
+        run_random_climate(hef_elev_gdir, nyears=1000, seed=6,
+                           fs=5.7e-20,
+                           glen_a=inversion_params['inversion_glen_a'],
+                           bias=0, output_filesuffix='_implicit_run',
+                           evolution_model=SemiImplicitModel)
+        impl_time_needed = time.time() - start_time_impl
+
+        start_time_expl = time.time()
+        run_random_climate(hef_elev_gdir, nyears=1000, seed=6,
+                           fs=5.7e-20,
+                           glen_a=inversion_params['inversion_glen_a'],
+                           bias=0, output_filesuffix='_fluxbased_run',
+                           evolution_model=FluxBasedModel)
+        flux_time_needed = time.time() - start_time_expl
+
+        fmod_impl = FileModel(
+            hef_elev_gdir.get_filepath('model_geometry',
+                                       filesuffix='_implicit_run'))
+        fmod_flux = FileModel(
+            hef_elev_gdir.get_filepath('model_geometry',
+                                       filesuffix='_fluxbased_run'))
+
+        # check that the two runs are close the whole time
+        assert utils.rmsd(fmod_impl.volume_km3_ts(),
+                          fmod_flux.volume_km3_ts()) < 4e-4
+        assert utils.rmsd(fmod_impl.area_km2_ts(),
+                          fmod_flux.area_km2_ts()) < 8e-3
+
+        years = np.arange(0, 1001)
+        if do_plot:
+            plt.figure()
+            plt.plot(years, fmod_impl.volume_km3_ts(), 'r')
+            plt.plot(years, fmod_flux.volume_km3_ts(), 'b')
+            plt.title('Compare Volume')
+            plt.xlabel('years')
+            plt.ylabel('[km3]')
+            plt.legend(['Implicit', 'Flux'], loc=2)
+
+            plt.figure()
+            plt.plot(years, fmod_impl.area_km2_ts(), 'r')
+            plt.plot(years, fmod_flux.area_km2_ts(), 'b')
+            plt.title('Compare Area')
+            plt.xlabel('years')
+            plt.ylabel('[km2]')
+            plt.legend(['Implicit', 'Flux'], loc=2)
+
+            plt.show()
+
+        for year in years:
+            fmod_impl.run_until(year)
+            fmod_flux.run_until(year)
+
+            np.testing.assert_allclose(fmod_flux.fls[-1].length_m,
+                                       fmod_impl.fls[-1].length_m,
+                                       atol=100.1)
+            assert utils.rmsd(fmod_impl.fls[-1].thick,
+                              fmod_flux.fls[-1].thick) < 1.2
+
+        # compare velocities
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_implicit_run')
+        with xr.open_dataset(f, group='fl_0') as ds_impl:
+            ds_impl = ds_impl.load()
+
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_fluxbased_run')
+        with xr.open_dataset(f, group='fl_0') as ds_flux:
+            ds_flux = ds_flux.load()
+
+        # only used to plot the velocity with the largest difference
+        max_velocity_rmsd = 0
+        max_velocity_year = 0
+
+        for year in np.arange(1, 1001):
+            velocity_impl = ds_impl.ice_velocity_myr.loc[{'time': year}].values
+            velocity_flux = ds_flux.ice_velocity_myr.loc[{'time': year}].values
+
+            velocity_rmsd = utils.rmsd(velocity_impl, velocity_flux)
+            if velocity_rmsd > max_velocity_rmsd:
+                max_velocity_rmsd = velocity_rmsd
+                max_velocity_year = year
+
+            assert velocity_rmsd < 4.5
+
+        if do_plot:
+            plt.figure()
+            plt.plot(ds_impl.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'r')
+            plt.plot(ds_flux.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'b')
+            plt.title(f'Compare Velocity at year {max_velocity_year}')
+            plt.xlabel('gridpoints along flowline')
+            plt.ylabel('[m yr-1]')
+            plt.legend(['Implicit', 'Flux'], loc=2)
+
+            plt.show()
+
+        # Testing the run times should be the last test, as it is not
+        # independent of the computing environment and by putting it as the
+        # last test all other tests will still be executed
+        if impl_time_needed > flux_time_needed / 2:
+            pytest.xfail(f'SemiImplicitModel ({impl_time_needed:.2f} s) is '
+                         f'not twice as fast as FluxBasedModel ('
+                         f'{flux_time_needed:.2f} s).')
+
+    @pytest.mark.slow
+    def test_fixed_dt(self, hef_elev_gdir, inversion_params):
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+
+        # test if a large fixed_dt results in an instability
+        run_constant_climate(hef_elev_gdir, nyears=100,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_cfl_criterion',
+                             evolution_model=SemiImplicitModel)
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_cfl_criterion')
+        with xr.open_dataset(f, group='fl_0') as ds_cfl:
+            ds_cfl = ds_cfl.load()
+
+        run_constant_climate(hef_elev_gdir, nyears=100,
+                             fixed_dt=SEC_IN_MONTH,
+                             fs=inversion_params['inversion_fs'],
+                             glen_a=inversion_params['inversion_glen_a'],
+                             bias=0, output_filesuffix='_fixed_dt',
+                             evolution_model=SemiImplicitModel)
+        f = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                       filesuffix='_fixed_dt')
+        with xr.open_dataset(f, group='fl_0') as ds_fixed_dt:
+            ds_fixed_dt = ds_fixed_dt.load()
+
+        # check their are instabilities when using fixed_dt
+        max_velocity_rmsd = 0
+        max_velocity_year = 0
+
+        for year in np.arange(1, 101):
+            velocity_cfl = ds_cfl.ice_velocity_myr.loc[{'time': year}].values
+            velocity_fixed_dt = ds_fixed_dt.ice_velocity_myr.loc[{'time': year}].values
+
+            velocity_rmsd = utils.rmsd(velocity_cfl, velocity_fixed_dt)
+            if velocity_rmsd > max_velocity_rmsd:
+                max_velocity_rmsd = velocity_rmsd
+                max_velocity_year = year
+
+        assert max_velocity_rmsd > 200
+
+        if do_plot:
+            plt.figure()
+            plt.plot(ds_cfl.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'r')
+            plt.plot(ds_fixed_dt.ice_velocity_myr.loc[{'time': max_velocity_year}].values,
+                     'b')
+            plt.title(f'Compare Velocity at year {max_velocity_year}')
+            plt.xlabel('gridpoints along flowline')
+            plt.ylabel('[m yr-1]')
+            plt.legend(['CFL', 'Fixed dt'], loc=2)
+
+            plt.show()

@@ -60,7 +60,18 @@ Enhancements
   or ``'trapezoidal'`` before calling ``init_present_time_glacier(gdir)``.
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
-  (:pull:`1496`)
+  (:pull:`1496`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added option to extend the plot limits when plotting multiple gdirs. Could be
+  used with ``extend_plot_limits=True``, e.g.
+  ``graphics.plot_modeloutput_map(gdirs, extend_plot_limits=True)``
+  (:pull:`1508`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added new argument ``add_fixed_geometry_spinup`` to extend the model run of
+  ``run_dynamic_spinup`` with a fixed-geometry-spinup if the spinup period is
+  shortened(:pull:`1514`)
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
@@ -69,6 +80,9 @@ Bug fixes
 - corrected a but in ``apparent_mb_from_any_mb``, where only two years of MB
   would be used instead of a range of years (:pull:`1426`).
   By `Bowen <https://github.com/bowenbelongstonature>`_
+- Corrected ``source`` argument in ``tasks.define_glacier_region`` to handle a
+  list of DEM sources. (:pull:`1506`).
+  By `Daniel Otto <https://github.com/d-otto>`_
 
 Migrating guide
 ~~~~~~~~~~~~~~~
