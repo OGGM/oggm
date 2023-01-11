@@ -2930,7 +2930,7 @@ class TestHEF:
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 25
+        assert model.yr >= 40
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -3053,7 +3053,7 @@ class TestHEF:
 
         model.run_until_equilibrium(rate=1e-4)
 
-        assert model.yr >= 25
+        assert model.yr >= 40
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -3076,7 +3076,7 @@ class TestHEF:
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                flux_gate=0.03, flux_gate_build_up=50)
         model.run_until(500)
-        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0, rtol=4e-6)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
         # Make sure that we cover the types of beds
         beds = np.unique(model.fls[-1].shape_str[model.fls[-1].thick > 0])
         assert len(beds) == 3
@@ -4694,7 +4694,7 @@ class TestHEF:
         # using relative large min ice thick due to overdeepening of inversion
         # -> sometimes small thicknesses after overdeepening (important for
         # terminus thickness check)
-        cfg.PARAMS['min_ice_thick_for_length'] = 15
+        cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
         tasks.run_from_climate_data(gdir, min_ys=1980,
@@ -4749,9 +4749,7 @@ class TestHEF:
 
             assert np.all(ds.terminus_thick_0 > 0.1)
             assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
-            # changed here to < because of a overdeepening due to the
-            # inversion and don't using filter_inversion_output
-            assert np.all(ds.terminus_thick_2 < ds.terminus_thick_1)
+            assert np.all(ds.terminus_thick_2 > ds.terminus_thick_1)
 
             for vn in ['area']:
                 ref = ds[vn]
@@ -4945,7 +4943,7 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.03)
+        assert_allclose(frac, 0, atol=0.02)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [True, False], ids=['monthly', 'annual'])
