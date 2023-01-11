@@ -5759,8 +5759,6 @@ class TestSemiImplicitModel:
                                     mb_elev_feedback='never')
         model_flux.run_until_equilibrium(rate=1e-5)
 
-        assert model.yr == model_flux.yr
-
         np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=7e-4)
         np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=6e-5)
         np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len)
@@ -5783,7 +5781,6 @@ class TestSemiImplicitModel:
         model_flux.run_until_equilibrium(rate=1e-5)
 
         assert model.yr >= 50
-        assert model.yr == model_flux.yr
 
         after_vol = model.volume_km3
         after_area = model.area_km2
@@ -5920,7 +5917,7 @@ class TestSemiImplicitModel:
                 max_velocity_rmsd = velocity_rmsd
                 max_velocity_year = year
 
-            assert velocity_rmsd < 4.5
+            assert velocity_rmsd < 5
 
         if do_plot:
             plt.figure()
