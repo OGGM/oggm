@@ -1960,7 +1960,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             # Climate and MB at t*
             mbcl = ConstantMassBalance
             mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                bias=0,
+                                                bias=0, halfsize=halfsize,
                                                 use_inversion_flowlines=True)
             h, w, mbh = mbmod.get_annual_mb_on_flowlines()
             mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
@@ -1997,7 +1997,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                 fs = '{}-{}'.format(y0 - halfsize, y0 + halfsize)
                 mbcl = ConstantMassBalance
                 mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                    y0=y0,
+                                                    y0=y0, halfsize=halfsize,
                                                     use_inversion_flowlines=True,
                                                     input_filesuffix=input_filesuffix)
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
@@ -2586,9 +2586,6 @@ class GlacierDirectory(object):
         except AttributeError:
             pass
 
-
-
-
         try:
             self.rgi_id = rgi_entity.rgi_id
             self.glims_id = rgi_entity.glims_id
@@ -2596,6 +2593,7 @@ class GlacierDirectory(object):
             # RGI V6
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
+
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
             try:
@@ -2639,7 +2637,6 @@ class GlacierDirectory(object):
                 # temporary default for RGI V7:
                 gtype = ['0', '0']
 
-
         try:
             gstatus = rgi_entity.RGIFlag[0]
         except AttributeError:
@@ -2651,9 +2648,10 @@ class GlacierDirectory(object):
                 gstatus = '0'
 
         # rgi version can be useful
-        rgi_version = self.rgi_id.split('-')[1][1] + self.rgi_id.split('-')[1][3]
-        if rgi_version == '70':
-            self.rgi_version = rgi_version
+        # RGI2000-v7.0-G-06-00029
+        # RGI60-07.00245
+        if self.rgi_id.count('-') == 4:
+            self.rgi_version = '70'
         else:
             rgi_version = self.rgi_id.split('-')[0][-2:]
             if rgi_version not in ['50', '60', '61']:
@@ -2816,7 +2814,7 @@ class GlacierDirectory(object):
             entity['Area'] = area
 
         # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
-        for k, s in entity.iteritems():
+        for k, s in entity.items():
             if type(s) in [np.int32, np.int64]:
                 entity[k] = int(s)
         towrite = gpd.GeoDataFrame(entity).T
@@ -2872,9 +2870,12 @@ class GlacierDirectory(object):
         """The glacier's RGI area (km2)."""
         try:
             _area = self.read_shapefile('outlines')['Area']
-            return np.round(float(_area), decimals=3)
         except OSError:
             raise RuntimeError('No outlines available')
+        except KeyError:
+            # RGI V7
+            _area = self.read_shapefile('outlines')['area_km2']
+        return np.round(float(_area), decimals=3)
 
     @lazy_property
     def intersects_ids(self):
@@ -2999,7 +3000,6 @@ class GlacierDirectory(object):
         if not out and (filename == 'climate_info'):
             # Try pickle
             out = os.path.exists(fp.replace('.json', '.pkl'))
-
         return out
 
     def _read_deprecated_climate_info(self):

@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '8a3c41a36d190c6c78029b5032648ce94ee2026c'
+SAMPLE_DATA_COMMIT = 'd9f01846960a141690bab9d38a85524d89a0d9ae'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -951,7 +951,7 @@ def _download_tandem_file_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     bname = zone.split('/')[-1] + '_DEM.tif'
-    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/DEM/'
                '{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, bname)
 
@@ -1387,6 +1387,7 @@ def srtm_zone(lon_ex, lat_ex):
 def _tandem_path(lon_tile, lat_tile):
 
     # OK we have a proper tile now
+    # This changed in December 2022
 
     # First folder level is sorted from S to N
     level_0 = 'S' if lat_tile < 0 else 'N'
@@ -1916,7 +1917,7 @@ def get_rgi_region_file(region, version=None, reset=False):
     """
 
     rgi_dir = get_rgi_dir(version=version, reset=reset)
-    f = list(glob.glob(rgi_dir + "/*/{}_*.shp".format(region)))
+    f = list(glob.glob(rgi_dir + "/*/*{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
 

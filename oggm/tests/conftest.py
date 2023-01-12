@@ -286,6 +286,23 @@ def hef_copy_gdir_base(request, test_dir):
         return init_hef(rgi_id='RGI50-11.99999')
 
 
+@pytest.fixture(scope='module')
+def hef_elev_gdir_base(request, test_dir):
+    """ Same as hef_gdir, but with elevation bands instead of centerlines.
+        Further, also a different RGI ID so that a unique directory is created
+        (as the RGI ID defines the final folder name) and to have no
+        collisions with hef_gdir
+    """
+    try:
+        module = request.module
+        border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
+        return init_hef(border=border, flowline_type='elevation_bands',
+                        rgi_id='RGI50-11.99998')
+    except AttributeError:
+        return init_hef(flowline_type='elevation_bands',
+                        rgi_id='RGI50-11.99998')
+
+
 @pytest.fixture(scope='class')
 def hef_gdir(hef_gdir_base, class_case_dir):
     """ Provides a copy of the base Hintereisenferner glacier directory in
@@ -301,4 +318,12 @@ def hef_copy_gdir(hef_copy_gdir_base, class_case_dir):
     """Same as hef_gdir but with another RGI ID (for testing)
     """
     return tasks.copy_to_basedir(hef_copy_gdir_base, base_dir=class_case_dir,
+                                 setup='all')
+
+
+@pytest.fixture(scope='class')
+def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
+    """ Same as hef_gdir but with elevation bands instead of centerlines.
+    """
+    return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')

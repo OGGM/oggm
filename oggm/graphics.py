@@ -76,6 +76,79 @@ def surf_to_nan(surf_h, thick):
     return surf_h
 
 
+def combine_grids(gdirs):
+    """ Combines individual grids of different glacier directories to show
+        multiple glaciers in the same plot. The resulting grid extent includes
+        all individual grids completely.
+
+    Parameters
+    ----------
+    gdirs : [], required
+        A list of GlacierDirectories.
+
+    Returns
+    -------
+    salem.gis.Grid
+    """
+
+    new_grid = {
+        'proj': None,
+        'nxny': None,
+        'dxdy': None,
+        'x0y0': None,
+        'pixel_ref': None
+    }
+
+    left_use = None
+    right_use = None
+    bottom_use = None
+    top_use = None
+    dx_use = None
+    dy_use = None
+
+    for gdir in gdirs:
+        # use the first gdir to define some values
+        if new_grid['proj'] is None:
+            new_grid['proj'] = gdir.grid.proj
+        if new_grid['pixel_ref'] is None:
+            new_grid['pixel_ref'] = gdir.grid.pixel_ref
+
+        # find largest extend including all grids completely
+        (left, right, bottom, top) = gdir.grid.extent_in_crs(new_grid['proj'])
+        if (left_use is None) or (left_use > left):
+            left_use = left
+        if right_use is None or right_use < right:
+            right_use = right
+        if bottom_use is None or bottom_use > bottom:
+            bottom_use = bottom
+        if top_use is None or top_use < top:
+            top_use = top
+
+        # find smallest dx and dy for the estimation of nx and ny
+        dx = gdir.grid.dx
+        dy = gdir.grid.dy
+        if dx_use is None or dx_use > dx:
+            dx_use = dx
+        # dy could be negative
+        if dy_use is None or abs(dy_use) > abs(dy):
+            dy_use = dy
+
+    # calculate nx and ny, the final extend could be one grid point larger or
+    # smaller due to round()
+    nx_use = round((right_use - left_use) / dx_use)
+    ny_use = round((top_use - bottom_use) / abs(dy_use))
+
+    # finally define the last values of the new grid
+    if np.sign(dy_use) < 0:
+        new_grid['x0y0'] = (left_use, top_use)
+    else:
+        new_grid['x0y0'] = (left_use, bottom_use)
+    new_grid['nxny'] = (nx_use, ny_use)
+    new_grid['dxdy'] = (dx_use, dy_use)
+
+    return salem.gis.Grid.from_dict(new_grid)
+
+
 def _plot_map(plotfunc):
     """
     Decorator for common salem.Map plotting logic
@@ -114,6 +187,8 @@ def _plot_map(plotfunc):
         save the figure to a file instead of displaying it
     savefig_kwargs : dict, optional
         the kwargs to plt.savefig
+    extend_plot_limit : bool, optional
+        set to True to extend the plotting limits for all provided gdirs grids
     """
 
     # Build on the original docstring
@@ -124,7 +199,7 @@ def _plot_map(plotfunc):
                     title_comment=None, horizontal_colorbar=False,
                     lonlat_contours_kwargs=None, cbar_ax=None, autosave=False,
                     add_scalebar=True, figsize=None, savefig=None,
-                    savefig_kwargs=None,
+                    savefig_kwargs=None, extend_plot_limit=False,
                     **kwargs):
 
         dofig = False
@@ -137,8 +212,13 @@ def _plot_map(plotfunc):
         gdirs = utils.tolist(gdirs)
 
         if smap is None:
-            mp = salem.Map(gdirs[0].grid, countries=False,
-                           nx=gdirs[0].grid.nx)
+            if extend_plot_limit:
+                grid_combined = combine_grids(gdirs)
+                mp = salem.Map(grid_combined, countries=False,
+                               nx=grid_combined.nx)
+            else:
+                mp = salem.Map(gdirs[0].grid, countries=False,
+                               nx=gdirs[0].grid.nx)
         else:
             mp = smap
 

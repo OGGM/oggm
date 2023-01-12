@@ -509,7 +509,7 @@ def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
 
         # Interpolate heights
         x, y = new_line.xy
-        hgts = interpolator((y, x))
+        hgts = interpolator((np.array(y), np.array(x)))
 
         # If smoothing, this is the moment
         hgts = gaussian_filter1d(hgts, sw)
