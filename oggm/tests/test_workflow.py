@@ -467,3 +467,20 @@ def test_plot_region_model():
 
     fig.tight_layout()
     return fig
+
+
+def test_rgi7_glacier_dirs():
+    # create test dir
+    if not os.path.exists(_TEST_DIR):
+        os.makedirs(_TEST_DIR)
+    # initialize
+    cfg.initialize()
+    # no intersects for RGI7 available
+    cfg.PARAMS['use_intersects'] = False
+    cfg.PATHS['working_dir'] = _TEST_DIR
+    # load and read test data
+    hef_rgi7_df = gpd.read_file(get_demo_file('Hintereisferner_RGI7.shp'))
+    # create GDIR
+    gdirs = workflow.init_glacier_directories(hef_rgi7_df)
+    assert gdirs
+
