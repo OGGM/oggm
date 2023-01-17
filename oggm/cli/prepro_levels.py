@@ -80,6 +80,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       match_regional_geodetic_mb=False,
                       match_geodetic_mb_per_glacier=False,
                       evolution_model='fl_sia',
+                      downstream_line_shape='parabola',
                       centerlines_only=False, override_params=None,
                       add_consensus=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
@@ -138,7 +139,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         (currently only 'hugonnet': Hugonnet et al., 2020).
     evolution_model : str
         which geometry evolution model to use: `fl_sia` (default),
-        or `massredis` (mass redistribution curve).
+        `massredis` (mass redistribution curve), or 'implicit' (semi implicit
+        model).
+    downstream_line_shape : str
+        which downstream line bed shape to use: `parabola` (default), or
+        `trapezoidal` (required for semi implicit model).
     add_consensus : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -189,9 +194,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         raise InvalidParamsError('Currently only `hugonnet` is available for '
                                  'match_geodetic_mb_per_glacier.')
 
-    if evolution_model not in ['fl_sia', 'massredis']:
+    if evolution_model not in ['fl_sia', 'massredis', 'implicit']:
         raise InvalidParamsError('evolution_model should be one of '
-                                 "['fl_sia', 'massredis'].")
+                                 "['fl_sia', 'massredis', 'implicit'].")
+
+    if downstream_line_shape not in ['parabola', 'trapezoidal']:
+        raise InvalidParamsError('downstream_line_shape should be one of '
+                                 "['parabola', 'trapezoidal']")
+
+    if evolution_model == 'implicit' and downstream_line_shape != 'trapezoidal':
+        raise InvalidParamsError('SemiImplicitModel needs trapezoidal'
+                                 'downstream line!')
 
     if dynamic_spinup:
         if dynamic_spinup not in ['area/dmdtda', 'volume/dmdtda']:
@@ -250,6 +263,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Other things that make sense
     cfg.PARAMS['store_model_geometry'] = True
+
+    # define the used downstream line bed shape
+    cfg.PARAMS['downstream_line_shape'] = downstream_line_shape
 
     # Log the parameters
     msg = '# OGGM Run parameters:'
@@ -618,6 +634,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if evolution_model == 'massredis':
             from oggm.core.flowline import MassRedistributionCurveModel
             evolution_model = MassRedistributionCurveModel
+        elif evolution_model == 'implicit':
+            from oggm.core.flowline import SemiImplicitModel
+            evolution_model = SemiImplicitModel
         else:
             from oggm.core.flowline import FluxBasedModel
             evolution_model = FluxBasedModel
@@ -803,8 +822,13 @@ def parse_args(args):
                              '2020 only.')
     parser.add_argument('--evolution-model', type=str, default='fl_sia',
                         help='which geometry evolution model to use: '
-                             '`fl_sia` (default), or `massredis` (mass '
-                             'redistribution curve).')
+                             '`fl_sia` (default), `massredis` (mass '
+                             'redistribution curve), or `implicit` (semi '
+                             'implicit model).')
+    parser.add_argument('--downstream-line-shape', type=str, default='parabola',
+                        help='which downstream line bed shape to use: '
+                             '`parabola` (default), or `trapezoidal` '
+                             '(required for semi implicit model).')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -838,7 +862,7 @@ def parse_args(args):
                         help="include a dynamic spinup for matching glacier area "
                              "('area/dmdtda') OR volume ('volume/dmdtda') at "
                              "the RGI-date, AND mass-change from Hugonnet "
-                             "in the period 2000-2019 (dynamic mu* "
+                             "in the period 2000-2020 (dynamic mu* "
                              "calibration).")
     parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=1,
                         help="scaling factor to account for correlated "
@@ -903,6 +927,7 @@ def parse_args(args):
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
+                downstream_line_shape=args.downstream_line_shape,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
