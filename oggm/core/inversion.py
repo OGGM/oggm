@@ -595,45 +595,51 @@ def filter_inversion_output(gdir):
     # result, but the larger the volume error we introduce
     n_smoothing = -5
 
+    # minimum ice thickness after smoothing
+    min_ice_thick = 1
+
     cl_sfc_h = cl['hgt'][n_smoothing:]
     cl_thick = cl['thick'][n_smoothing:]
     cl_width = cl['width'][n_smoothing:]
     cl_is_trap = cl['is_trapezoid'][n_smoothing:]
     cl_is_rect = cl['is_rectangular'][n_smoothing:]
     cl_bed_h = cl_sfc_h - cl_thick
-
-    # check if their is a 'large' depression and if we need smoothing
-    # max depression is calculated as the mean slope of the first four ice free
-    # grid points
     downstream_sfc_h = dic_ds['surface_h'][:5]
-    max_depression = np.average(np.abs(np.diff(downstream_sfc_h)))
-    # if height difference is smaller do nothing
-    if max_depression > downstream_sfc_h[0] - cl_bed_h[-1]:
-        return np.sum([np.sum(cl['volume']) for cl in cls])
 
-    # ok we need to smooth
     # first smooth last grid point to have the same slope as the previous ones,
-    # because often the last grid point is 'extra' deep
-    avg_bed_h_diff = np.average(np.abs(np.diff(cl_bed_h)))
-    cl_bed_h[-1] = cl_bed_h[-2] - avg_bed_h_diff
+    # because the last grid point has zero thickness due to construction of the
+    # inversion approach
+    cl_bed_h[-1] = 2 * cl_bed_h[-2] - cl_bed_h[-3]
 
-    # check if we still need to force the last grid point to max_depression and
-    # smooth
-    if max_depression < downstream_sfc_h[0] - cl_bed_h[-1]:
-        # ok force the last grid point height
-        new_last_bed_h = downstream_sfc_h[0] - max_depression
-        # now smoothly add the change of the bed height over all grid points
-        # which should be smoothed
+    # we additionally smooth if the depression is larger than 1 m
+    if downstream_sfc_h[0] - cl_bed_h[-1] > 1:
+        # force the last grid point height to continue the downstream slope
+        down_slope_avg = np.average(np.abs(np.diff(downstream_sfc_h)))
+        new_last_bed_h = downstream_sfc_h[0] + down_slope_avg
+
+        # now smoothly add the change of the bed height over all smoothing grid
+        # points
         all_bed_h_changes = np.linspace(0, new_last_bed_h - cl_bed_h[-1],
                                         -n_smoothing)
         cl_bed_h = cl_bed_h + all_bed_h_changes
 
-    # define new thick and check if new parabolic bed shape is smaller than
-    # minimum, if so change to trapezoid (as it is done during inversion)
+    # define new thick and clip, maximum value needed to avoid geometrical
+    # inconsistencies with trapezoidal bed shape
     new_thick = cl_sfc_h - cl_bed_h
-    new_bed_shape = 4 * new_thick / cl_width ** 2
+    # max
+    max_h = np.where(cl_is_trap,
+                     # -0.5 to get w0 > 0 at the end and not w0 = 0
+                     cl_width / cfg.PARAMS['trapezoid_lambdas'] - 0.5,
+                     1e4)
+    new_thick = np.where(new_thick > max_h, max_h, new_thick)
+    # min
+    new_thick = np.where(new_thick < min_ice_thick, min_ice_thick, new_thick)
+
     # new trap = (is trap or shape factor small) and not rectangular, we
     # conserve all bed shapes
+    # if new bed shape is smaller than defined minimum it is converted to a
+    # trapezoidal (as it is done during inversion)
+    new_bed_shape = 4 * new_thick / cl_width ** 2
     new_is_trapezoid = ((cl_is_trap |
                          (new_bed_shape < cfg.PARAMS['mixed_min_shape'])) &
                         ~cl_is_rect)
