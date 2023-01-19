@@ -104,21 +104,6 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                        '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux[-1]))
                 raise RuntimeError(msg)
 
-            # This contradicts the statement above which has been around for
-            # quite some time, for the reason that it is a quality check: per
-            # construction, the flux at the last grid point should be zero
-            # HOWEVER, it is also meaningful to have a non-zero ice thickness
-            # at the last grid point. Therefore, we add some artificial
-            # flux here (an alternative would be to pmute the flux on a
-            # staggered grid but I actually like the QC and its easier)
-            # note that this value will be ignored if one uses the filter
-            # task afterwards
-            flux[-1] = flux[-2] / 3  # this is totally arbitrary
-
-        if fl.flows_to is not None and flux[-1] <= 0:
-            # Same for tributaries
-            flux[-1] = flux[-2] / 3  # this is totally arbitrary
-
         # Shape
         is_rectangular = fl.is_rectangular
         if not invert_with_rectangular:
