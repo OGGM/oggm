@@ -73,6 +73,11 @@ Enhancements
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added SemiImplicitModel for a single trapezoid or rectangular flowline developed by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`)
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added the possibility to use the UTM map proj instead of the local TM used
+  by OGGM usually (:pull:`1526`). Leads to qualitative and quantitative
+  differences when used.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~
