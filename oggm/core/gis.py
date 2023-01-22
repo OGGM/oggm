@@ -286,18 +286,17 @@ def glacier_grid_params(gdir):
 def define_glacier_region(gdir, entity=None, source=None):
     """Very first task after initialization: define the glacier's local grid.
 
-    Defines the local projection (Transverse Mercator), centered on the
-    glacier. There is some options to set the resolution of the local grid.
-    It can be adapted depending on the size of the glacier with::
+    Defines the local projection (Transverse Mercator or UTM depending on
+    user choice), centered on the glacier.
+    There is some options to set the resolution of the local grid.
+    It can be adapted depending on the size of the glacier.
+    See ``params.cfg`` for setting these options.
 
-        dx (m) = d1 * AREA (km) + d2 ; clipped to dmax
-
-    or be set to a fixed value. See ``params.cfg`` for setting these options.
     Default values of the adapted mode lead to a resolution of 50 m for
     Hintereisferner, which is approx. 8 km2 large.
+
     After defining the grid, the topography and the outlines of the glacier
-    are transformed into the local projection. The default interpolation for
-    the topography is `cubic`.
+    are transformed into the local projection.
 
     Parameters
     ----------
