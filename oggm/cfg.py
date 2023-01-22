@@ -283,6 +283,10 @@ BASENAMES['gcm_data'] = ('gcm_data.nc', _doc)
 _doc = "A dict containing the glacier's t*, bias, and the flowlines' mu*"
 BASENAMES['local_mustar'] = ('local_mustar.json', _doc)
 
+_doc = ("A dict containing the glacier's mass balance calibration parameters, "
+       "2nd generation! Currently in test phase.")
+BASENAMES['mb_calib'] = ('mb_calib.json', _doc)
+
 _doc = 'List of dicts containing the data needed for the inversion.'
 BASENAMES['inversion_input'] = ('inversion_input.pkl', _doc)
 

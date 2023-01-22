@@ -1404,6 +1404,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     This is similar to mu_star_calibration but using the reference geodetic
     MB data instead, and this does NOT compute the apparent mass balance at
     the same time - users need to run apparent_mb_from_any_mb separately.
+
     Currently only works for single flowlines.
 
     Parameters

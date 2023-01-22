@@ -1959,6 +1959,82 @@ class TestClimate(unittest.TestCase):
         # Check that inversion works
         climate.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
 
+    def test_geodetic_mb_calibration_next_gen(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        cfg.PARAMS['hydro_month_nh'] = 1
+        cfg.PARAMS['hydro_month_sh'] = 1
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
+        climate.process_custom_climate_data(gdir, y0=1900, y1=2002)
+
+        mbdf = gdir.get_ref_mb_data()
+        ref_mb = mbdf.ANNUAL_BALANCE.mean()
+        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1]+1}-01-01'
+        from oggm.core import massbalance_sandbox
+        massbalance_2ndgen.mb_calibration_from_geodetic_mb(gdir,
+                                                           ref_mb=ref_mb,
+                                                           ref_period=ref_period)
+        # mb_new = massbalance.PastMassBalance(gdir)
+        #
+        # h, w = gdir.get_inversion_flowline_hw()
+        # mbdf['old_mb'] = mb_old.get_specific_mb(h, w, year=mbdf.index)
+        # mbdf['new_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+        #
+        # # Check that results are all the same
+        # np.testing.assert_allclose(ref_mb, mbdf['old_mb'].mean())
+        # np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
+        # np.testing.assert_allclose(1, mbdf.corr()['new_mb']['old_mb'], atol=0.01)
+        #
+        # # Check that model parameters
+        # np.testing.assert_allclose(mb_old.mu_star, mb_new.mu_star, atol=2)
+        # np.testing.assert_allclose(mb_new.bias, 0)
+        #
+        # # OK now check what happens with unrealistic climate input
+        # # Very positive
+        # ref_mb = 2000
+        # climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
+        #                                              min_mu_star=5,
+        #                                              max_mu_star=500,
+        #                                              ref_period='1953-01-01_2004-01-01',
+        #                                              ignore_hydro_months=True)
+        # mb_new = massbalance.PastMassBalance(gdir)
+        # mbdf['new_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+        # np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
+        # fpath = gdir.get_filepath('climate_historical')
+        # with utils.ncDataset(fpath, 'r') as nc:
+        #     assert nc.ref_hgt < nc.uncorrected_ref_hgt
+        #     assert (gdir.get_diagnostics()['ref_hgt_calib_diff'] ==
+        #             nc.ref_hgt - nc.uncorrected_ref_hgt)
+        # assert 5 < mb_new.mu_star < 500
+        #
+        # # Very negative
+        # ref_mb = -10000
+        # climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
+        #                                              min_mu_star=5,
+        #                                              max_mu_star=500,
+        #                                              ref_period='1953-01-01_2004-01-01',
+        #                                              ignore_hydro_months=True)
+        # mb_new = massbalance.PastMassBalance(gdir)
+        # mbdf['new_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+        # np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
+        # fpath = gdir.get_filepath('climate_historical')
+        # with utils.ncDataset(fpath, 'r') as nc:
+        #     assert nc.ref_hgt > nc.uncorrected_ref_hgt
+        #     assert (gdir.get_diagnostics()['ref_hgt_calib_diff'] ==
+        #             nc.ref_hgt - nc.uncorrected_ref_hgt)
+        # assert 5 < mb_new.mu_star < 500
+        #
+        # # Check that inversion works
+        # climate.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+
+
     @pytest.mark.slow
     def test_geodetic_mb_calibration_multiple_fl(self):
 
