@@ -2090,7 +2090,7 @@ class TestIdealisedInversion():
     def simple_plot(self, model, gdir):  # pragma: no cover
         ocls = gdir.read_pickle('inversion_output')
         ithick = ocls[-1]['thick']
-        pg = model.fls[-1].thick > 0
+        pg = np.where((model.fls[-1].thick > 0) & (model.fls[-1].widths_m > 1))
         plt.figure()
         bh = model.fls[-1].bed_h[pg]
         sh = model.fls[-1].surface_h[pg]

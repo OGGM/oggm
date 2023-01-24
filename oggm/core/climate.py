@@ -1651,13 +1651,17 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
         fl.set_apparent_mb(mbz)
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
+    flux_last_point = fls[-1].flux[-1]
+    smb_last = fls[-1].apparent_mb[-1] * fls[-1].widths[-1] * fls[-1].dx
+    if smb_last < 0:
+        flux_last_point += smb_last
+    aflux = flux_last_point * 1e-9 / rho * gdir.grid.dx**2
     # If not marine and a bit far from zero, warning
     if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
         log.info('(%s) flux should be zero, but is: '
                  '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
     # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
+    if cmb == 0 and not np.allclose(flux_last_point, 0., atol=1):
         msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                .format(gdir.rgi_id, aflux))
         raise MassBalanceCalibrationError(msg)
