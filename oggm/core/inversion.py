@@ -98,7 +98,12 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                         "negative flux: this should not happen.")
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
-            if not np.allclose(flux[-1], 0., atol=0.1):
+            flux_last_point = flux[-1]
+            smb_last = (fls[-1].apparent_mb[-1] * fls[-1].widths[-1] *
+                        fls[-1].dx) * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
+            if smb_last < 0:
+                flux_last_point += smb_last
+            if not np.allclose(flux_last_point, 0., atol=0.1):
                 # TODO: this test doesn't seem meaningful here
                 msg = ('({}) flux at terminus should be zero, but is: '
                        '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux[-1]))

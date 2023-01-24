@@ -278,15 +278,21 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         # Add MB to current flux and sum
         # no more changes should happen after that
+        smb = mb * self.widths * self.dx
+        # differentiate between positive and negative smb, negative is shifted
+        # one position and subtracted only after the ice flew through the cell
+        smb_pos = np.concatenate((np.where(smb > 0, smb, 0), [0]))
+        smb_neg = np.concatenate(([0], np.where(smb < 0, smb, 0)))
+        flux_ext = np.concatenate((self.flux, [0]))
         flux_needs_correction = False
-        flux = np.cumsum(self.flux + mb * self.widths * self.dx)
+        flux = np.cumsum(flux_ext + smb_pos + smb_neg)
 
         # We filter only lines with two negative grid points,
-        # the rest we can cope with
-        if flux[-2] < 0:
+        # the rest we can cope with, -3 and not -2 because of flux_ext
+        if flux[-3] < 0:
             flux_needs_correction = True
 
-        self.flux = flux
+        self.flux = flux[:-1]
         self.flux_needs_correction = flux_needs_correction
 
         # Add to outflow. That's why it should happen in order
