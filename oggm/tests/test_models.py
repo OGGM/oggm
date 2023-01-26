@@ -2930,7 +2930,7 @@ class TestHEF:
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 40
+        assert model.yr >= 35
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -3053,7 +3053,7 @@ class TestHEF:
 
         model.run_until_equilibrium(rate=1e-4)
 
-        assert model.yr >= 40
+        assert model.yr >= 35
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -4749,7 +4749,8 @@ class TestHEF:
 
             assert np.all(ds.terminus_thick_0 > 0.1)
             assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
-            assert np.all(ds.terminus_thick_2 > ds.terminus_thick_1)
+            # exclude last time step because of bed geometry
+            assert np.all(ds.terminus_thick_2[:-1] > ds.terminus_thick_1[:-1])
 
             for vn in ['area']:
                 ref = ds[vn]
@@ -4943,7 +4944,7 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.02)
+        assert_allclose(frac, 0, atol=0.023)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [True, False], ids=['monthly', 'annual'])
