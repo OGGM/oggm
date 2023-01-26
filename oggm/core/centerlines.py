@@ -128,6 +128,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self.flux = None  # Flux (kg m-2)
         self.flux_needs_correction = False  # whether this branch was baaad
         self.rgi_id = rgi_id  # Useful if line is used with another glacier
+        self.flux_out = None  # Flux (kg m-2) flowing out of the centerline
 
     def set_flows_to(self, other, check_tail=True, to_head=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -260,7 +261,7 @@ class Centerline(object, metaclass=SuperclassMeta):
     def surface_h(self, value):
         self._surface_h = value
 
-    def set_apparent_mb(self, mb, mu_star=None):
+    def set_apparent_mb(self, mb, mu_star=None, is_calving=False):
         """Set the apparent mb and flux for the flowline.
 
         MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
@@ -271,6 +272,12 @@ class Centerline(object, metaclass=SuperclassMeta):
         ----------
         mu_star : float
             if appropriate, the mu_star associated with this apparent mb
+        is_calving : bool
+            if calving line the last grid cell is seen as a pure calving cell
+            (the ice flux through the last cell is equal the calving flux),
+            in the other case the flux is calculated incorporating the smb of
+            the last grid cell (the ice flux through the last cell is equal to
+            the smb)
         """
 
         self.apparent_mb = mb
@@ -279,13 +286,20 @@ class Centerline(object, metaclass=SuperclassMeta):
         # Add MB to current flux and sum
         # no more changes should happen after that
         smb = mb * self.widths * self.dx
-        # differentiate between positive and negative smb, negative is shifted
-        # one position and subtracted only after the ice flew through the cell
-        smb_pos = np.concatenate((np.where(smb > 0, smb, 0), [0]))
-        smb_neg = np.concatenate(([0], np.where(smb < 0, smb, 0)))
+        if is_calving:
+            # in a calving case we see the last grid cell as the calving cell
+            # and the extra added cell has no meaning
+            smb_add = np.concatenate((smb, [0]))
+        else:
+            # differentiate between positive and negative smb, negative is
+            # shifted one position and subtracted only after the ice flew
+            # through the cell
+            smb_pos = np.concatenate((np.where(smb > 0, smb, 0), [0]))
+            smb_neg = np.concatenate(([0], np.where(smb < 0, smb, 0)))
+            smb_add = smb_pos + smb_neg
         flux_ext = np.concatenate((self.flux, [0]))
         flux_needs_correction = False
-        flux = np.cumsum(flux_ext + smb_pos + smb_neg)
+        flux = np.cumsum(flux_ext + smb_add)
 
         # We filter only lines with two negative grid points,
         # the rest we can cope with, -3 and not -2 because of flux_ext
@@ -293,6 +307,7 @@ class Centerline(object, metaclass=SuperclassMeta):
             flux_needs_correction = True
 
         self.flux = flux[:-1]
+        self.flux_out = flux[-1]
         self.flux_needs_correction = flux_needs_correction
 
         # Add to outflow. That's why it should happen in order
