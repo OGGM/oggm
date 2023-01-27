@@ -17,7 +17,7 @@ gpd = pytest.importorskip('geopandas')
 # Local imports
 import oggm
 from oggm.core import (gis, inversion, climate, centerlines,
-                       flowline, massbalance)
+                       flowline, massbalance, massbalance_sandbox)
 from oggm.shop import gcm_climate
 import oggm.cfg as cfg
 from oggm import utils, tasks
@@ -1975,64 +1975,266 @@ class TestClimate(unittest.TestCase):
         climate.process_custom_climate_data(gdir, y0=1900, y1=2002)
 
         mbdf = gdir.get_ref_mb_data()
+        mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
         ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1]+1}-01-01'
-        from oggm.core import massbalance_sandbox
-        massbalance_2ndgen.mb_calibration_from_geodetic_mb(gdir,
-                                                           ref_mb=ref_mb,
-                                                           ref_period=ref_period)
-        # mb_new = massbalance.PastMassBalance(gdir)
-        #
-        # h, w = gdir.get_inversion_flowline_hw()
-        # mbdf['old_mb'] = mb_old.get_specific_mb(h, w, year=mbdf.index)
-        # mbdf['new_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-        #
-        # # Check that results are all the same
-        # np.testing.assert_allclose(ref_mb, mbdf['old_mb'].mean())
-        # np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
-        # np.testing.assert_allclose(1, mbdf.corr()['new_mb']['old_mb'], atol=0.01)
-        #
-        # # Check that model parameters
-        # np.testing.assert_allclose(mb_old.mu_star, mb_new.mu_star, atol=2)
-        # np.testing.assert_allclose(mb_new.bias, 0)
-        #
-        # # OK now check what happens with unrealistic climate input
-        # # Very positive
-        # ref_mb = 2000
-        # climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
-        #                                              min_mu_star=5,
-        #                                              max_mu_star=500,
-        #                                              ref_period='1953-01-01_2004-01-01',
-        #                                              ignore_hydro_months=True)
-        # mb_new = massbalance.PastMassBalance(gdir)
-        # mbdf['new_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-        # np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
-        # fpath = gdir.get_filepath('climate_historical')
-        # with utils.ncDataset(fpath, 'r') as nc:
-        #     assert nc.ref_hgt < nc.uncorrected_ref_hgt
-        #     assert (gdir.get_diagnostics()['ref_hgt_calib_diff'] ==
-        #             nc.ref_hgt - nc.uncorrected_ref_hgt)
-        # assert 5 < mb_new.mu_star < 500
-        #
-        # # Very negative
-        # ref_mb = -10000
-        # climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
-        #                                              min_mu_star=5,
-        #                                              max_mu_star=500,
-        #                                              ref_period='1953-01-01_2004-01-01',
-        #                                              ignore_hydro_months=True)
-        # mb_new = massbalance.PastMassBalance(gdir)
-        # mbdf['new_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-        # np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
-        # fpath = gdir.get_filepath('climate_historical')
-        # with utils.ncDataset(fpath, 'r') as nc:
-        #     assert nc.ref_hgt > nc.uncorrected_ref_hgt
-        #     assert (gdir.get_diagnostics()['ref_hgt_calib_diff'] ==
-        #             nc.ref_hgt - nc.uncorrected_ref_hgt)
-        # assert 5 < mb_new.mu_star < 500
-        #
-        # # Check that inversion works
-        # climate.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+
+        # Default is to calibrate melt_f
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period)
+
+        h, w = gdir.get_inversion_flowline_hw()
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb'].mean())
+        # Yeah, it correlates but also not too crazy
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb'],
+                                   atol=0.35)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == 0
+        assert pdf['melt_f'] != cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+
+        # Let's calibrate on temp_bias
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param1='temp_bias')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['temp_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['temp_mb'].mean())
+        # Yeah, it correlates but also not too crazy
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['temp_mb'],
+                                   atol=0.35)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] != 0
+        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+
+        # Let's calibrate on precip
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param1='prcp_fac')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['prcp_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['prcp_mb'].mean())
+        # Yeah, it correlates but also not too crazy
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['prcp_mb'],
+                                   atol=0.35)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == 0
+        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] != cfg.PARAMS['prcp_scaling_factor']
+
+        # mbdf[['ref_mb', 'melt_mb', 'temp_mb', 'prcp_mb']].plot()
+        # plt.show()
+
+        # OK now check what happens with unrealistic climate input
+        # Very positive
+        ref_mb = 2000
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period)
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param2='temp_bias')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
+        # It should correlate even less
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+                                   atol=0.55)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] < 0
+        assert pdf['melt_f'] != cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_min']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+
+        # Very negative
+        ref_mb = -10000
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period)
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param2='temp_bias')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
+        # It should correlate even less (maybe not)
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+                                   atol=0.5)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] > 0
+        assert pdf['melt_f'] != cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_max']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+
+        # Try with prcp_fac as variable 1
+        # Very positive
+        ref_mb = 2000
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac')
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param1='prcp_fac',
+                                                            calibrate_param2='temp_bias')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
+        # It should correlate even less (maybe not)
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+                                   atol=0.45)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] < 0
+        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] > cfg.PARAMS['prcp_scaling_factor']
+
+        # Very negative
+        ref_mb = -10000
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac')
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param1='prcp_fac',
+                                                            calibrate_param2='temp_bias')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
+        # It should correlate even less (maybe not)
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+                                   atol=0.45)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] > 0
+        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] < cfg.PARAMS['prcp_scaling_factor']
+
+        # Extremely negative
+        ref_mb = -20000
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac')
+
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac',
+                                                                calibrate_param2='temp_bias')
+
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param1='prcp_fac',
+                                                            calibrate_param2='temp_bias',
+                                                            calibrate_param3='melt_f')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb3'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb3'].mean())
+        # It should correlate even less (maybe not)
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb3'],
+                                   atol=0.5)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_max']
+        assert pdf['melt_f'] > cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_min']
+
+        # Unmatchable positive
+        ref_mb = 10000
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac',
+                                                                calibrate_param2='temp_bias',
+                                                                calibrate_param3='melt_f')
+
+        # Matchable positive with less range
+        ref_mb = 1000
+        cfg.PARAMS['temp_bias_min'] = -0.5
+        cfg.PARAMS['temp_bias_max'] = 0.5
+        cfg.PARAMS['prcp_scaling_factor_min'] = 2
+        cfg.PARAMS['prcp_scaling_factor_max'] = 3
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac')
+
+        with pytest.raises(RuntimeError):
+            massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                                ref_mb=ref_mb,
+                                                                ref_period=ref_period,
+                                                                calibrate_param1='prcp_fac',
+                                                                calibrate_param2='temp_bias')
+
+        massbalance_sandbox.mb_calibration_from_geodetic_mb(gdir,
+                                                            ref_mb=ref_mb,
+                                                            ref_period=ref_period,
+                                                            calibrate_param1='prcp_fac',
+                                                            calibrate_param2='temp_bias',
+                                                            calibrate_param3='melt_f')
+
+        mb_new = massbalance_sandbox.MonthlyTIModel(gdir)
+        mbdf['melt_mb3'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb3'].mean())
+        # It should correlate even less (maybe not)
+        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb3'],
+                                   atol=0.5)
+
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
+        assert pdf['melt_f'] < cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_max']
 
 
     @pytest.mark.slow

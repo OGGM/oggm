@@ -1,4 +1,5 @@
-"""Mass balance models"""
+"""Mass balance models - next generation"""
+
 # Built ins
 import logging
 # External libs
@@ -17,46 +18,68 @@ from oggm.utils import (get_geodetic_mb_dataframe, floatyear_to_date,
                         weighted_average_1d)
 from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
 from oggm.core.massbalance import MassBalanceModel
+from oggm.core.climate import decide_winter_precip_factor
 from oggm import entity_task
 
 # Module logger
 log = logging.getLogger(__name__)
 
+# Climate relevant global params - not optimised
+MB_GLOBAL_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
+                    'temp_melt', 'climate_qc_months',
+                    'hydro_month_nh', 'hydro_month_sh']
+
 
 class MonthlyTIModel(MassBalanceModel):
-    """Montly temperature index model.
+    """Monthly temperature index model.
 
     """
     def __init__(self, gdir,
+                 filename='climate_historical',
+                 input_filesuffix='',
                  melt_f=None,
                  temp_bias=None,
                  prcp_fac=None,
                  bias=0,
-                 filename='climate_historical', input_filesuffix='',
-                 repeat=False, ys=None, ye=None):
+                 ys=None,
+                 ye=None,
+                 repeat=False,
+                 check_calib_params=True,
+                 ):
         """Initialize.
 
         Parameters
         ----------
         gdir : GlacierDirectory
             the glacier directory
-        melt_f : float, optional
-            set to the alternative value of the melt factor you want to use
-            (the default is to use the calibrated value).
         filename : str, optional
             set to a different BASENAME if you want to use alternative climate
-            data.
-        input_filesuffix : str
-            the file suffix of the input climate file
-        repeat : bool
-            Whether the climate period given by [ys, ye] should be repeated
-            indefinitely in a circular way
+            data. Default is 'climate_historical'
+        input_filesuffix : str, optional
+            append a suffix to the filename (useful for GCM runs).
+        melt_f : float, optional
+            set to the value of the melt factor you want to use
+            (the default is to use the calibrated value).
+        temp_bias : float, optional
+            set to the value of the temperature bias you want to use
+            (the default is to use the calibrated value).
+        prcp_fac : float, optional
+            set to the value of the precipitation factor you want to use
+            (the default is to use the calibrated value).
         ys : int
             The start of the climate period where the MB model is valid
             (default: the period with available data)
         ye : int
             The end of the climate period where the MB model is valid
             (default: the period with available data)
+        repeat : bool
+            Whether the climate period given by [ys, ye] should be repeated
+            indefinitely in a circular way
+        check_calib_params : bool
+            OGGM will try hard not to use wrongly calibrated parameters
+            by checking the global parameters used during calibration and
+            the ones you are using at run time. If they don't match, it will
+            raise an error. Set to "False" to suppress this check.
         """
 
         super(MonthlyTIModel, self).__init__()
@@ -67,17 +90,30 @@ class MonthlyTIModel(MassBalanceModel):
             melt_f = df['melt_f']
 
         if temp_bias is None:
-            df = gdir.read_json('mb_calib')
+            df = df if df else gdir.read_json('mb_calib')
             temp_bias = df['temp_bias']
 
         if prcp_fac is None:
-            df = gdir.read_json('mb_calib')
+            df = df if df else gdir.read_json('mb_calib')
             prcp_fac = df['prcp_fac']
+
+        # Check the climate related params to the GlacierDir to make sure
+        if check_calib_params and 'mb_calib_params' in gdir.get_climate_info():
+            mb_calib = gdir.get_climate_info()['mb_calib_params']
+            for k, v in mb_calib.items():
+                if v != cfg.PARAMS[k]:
+                    msg = ('You seem to use different mass balance parameters '
+                           'than used for the calibration: '
+                           f"you use cfg.PARAMS['{k}']={cfg.PARAMS[k]} while "
+                           f"it was calibrated with cfg.PARAMS['{k}']={v}. "
+                           'Set `check_calib_params=False` to ignore this '
+                           'warning.')
+                    raise InvalidWorkflowError(msg)
 
         self.melt_f = melt_f
         self.bias = bias
 
-        # Parameters
+        # Global parameters
         self.t_solid = cfg.PARAMS['temp_all_solid']
         self.t_liq = cfg.PARAMS['temp_all_liq']
         self.t_melt = cfg.PARAMS['temp_melt']
@@ -105,7 +141,7 @@ class MonthlyTIModel(MassBalanceModel):
         # same for temp bias
         self._temp_bias = temp_bias
 
-        # Read file
+        # Read climate file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
             # time
@@ -118,22 +154,27 @@ class MonthlyTIModel(MassBalanceModel):
             ny, r = divmod(len(time), 12)
             if r != 0:
                 raise ValueError('Climate data should be N full years')
-            # This is where we switch to hydro float year format
-            # Last year gives the tone of the hydro year
-            self.years = np.repeat(np.arange(time[-1].year - ny + 1,
-                                             time[-1].year + 1), 12)
 
+            # We check for calendar years
+            if (time[0].month != 1) or (time[-1].month != 12):
+                raise InvalidWorkflowError('We now work exclusively with '
+                                           'calendar years.')
+
+            # Quick trick because we now the size of our array
+            years = np.repeat(np.arange(time[-1].year - ny + 1,
+                                        time[-1].year + 1), 12)
             pok = slice(None)  # take all is default (optim)
             if ys is not None:
-                pok = self.years >= ys
+                pok = years >= ys
             if ye is not None:
                 try:
-                    pok = pok & (self.years <= ye)
+                    pok = pok & (years <= ye)
                 except TypeError:
-                    pok = self.years <= ye
+                    pok = years <= ye
 
-            self.years = self.years[pok]
+            self.years = years[pok]
             self.months = np.tile(np.arange(1, 13), ny)[pok]
+
             # Read timeseries and correct it
             self.temp = nc.variables['temp'][pok].astype(np.float64) + self._temp_bias
             self.prcp = nc.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
@@ -311,13 +352,12 @@ def _fallback_mb_calibration(gdir):
 
     """
     # read json
-    try:
-        df = gdir.read_json('mb_calib')
-    except FileNotFoundError:
-        df = dict()
-        df['temp_bias'] = np.nan
-        df['melt_f'] = np.nan
-        df['prcp_fac'] = np.nan
+    df = gdir.read_json('mb_calib', allow_empty=True)
+    df['rgi_id'] = gdir.rgi_id
+    df['bias'] = 0
+    df['temp_bias'] = np.nan
+    df['melt_f'] = np.nan
+    df['prcp_fac'] = np.nan
     # write
     gdir.write_json(df, 'mb_calib')
 
@@ -341,15 +381,24 @@ def calving_mb(gdir):
 def mb_calibration_from_geodetic_mb(gdir,
                                     ref_mb=None,
                                     ref_period='',
-                                    min_melt_f=None,
-                                    max_melt_f=None):
-    """Compute the flowlines' mu* from the reference geodetic MB data.
+                                    calibrate_param1='melt_f',
+                                    calibrate_param2=None,
+                                    calibrate_param3=None,
+                                    monthly_melt_f_default=None,
+                                    monthly_melt_f_min=None,
+                                    monthly_melt_f_max=None,
+                                    prcp_scaling_factor=None,
+                                    prcp_scaling_factor_min=None,
+                                    prcp_scaling_factor_max=None,
+                                    temp_bias_min=None,
+                                    temp_bias_max=None,
+                                    ):
+    """Determine the mass balance parameters from geodetic MB data.
 
-    This calibrates the mass balance parameters using the reference geodetic
-    MB data instead, and this does NOT compute the apparent mass balance at
+    This calibrates the mass balance parameters using a reference geodetic
+    MB data over a given period (instead of using the old tstar),
+    and this does NOT compute the apparent mass balance at
     the same time - users need to run apparent_mb_from_any_mb separately.
-
-    Currently only works for single flowlines.
 
     Parameters
     ----------
@@ -362,17 +411,23 @@ def mb_calibration_from_geodetic_mb(gdir,
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
         the same format but can be any date.
-    min_melt_f: bool, optional
-        defaults to cfg.PARAMS['min_mu_star']
-    max_melt_f: bool, optional
-        defaults to cfg.PARAMS['max_mu_star']
     """
 
-    # mu* constraints
-    if min_melt_f is None:
-        min_melt_f = cfg.PARAMS['min_mu_star']
-    if max_melt_f is None:
-        max_melt_f = cfg.PARAMS['max_mu_star']
+    # Param constraints
+    if monthly_melt_f_min is None:
+        monthly_melt_f_min = cfg.PARAMS['monthly_melt_f_min']
+    if monthly_melt_f_max is None:
+        monthly_melt_f_max = cfg.PARAMS['monthly_melt_f_max']
+    if prcp_scaling_factor_min is None:
+        prcp_scaling_factor_min = cfg.PARAMS['prcp_scaling_factor_min']
+    if prcp_scaling_factor_max is None:
+        prcp_scaling_factor_max = cfg.PARAMS['prcp_scaling_factor_max']
+    if monthly_melt_f_default is None:
+        monthly_melt_f_default = cfg.PARAMS['monthly_melt_f_default']
+    if temp_bias_min is None:
+        temp_bias_min = cfg.PARAMS['temp_bias_min']
+    if temp_bias_max is None:
+        temp_bias_max = cfg.PARAMS['temp_bias_max']
 
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     if sm == 1:
@@ -389,7 +444,6 @@ def mb_calibration_from_geodetic_mb(gdir,
                                  "`PARAMS['hydro_month_sh']=1). If you want "
                                  "to ignore this error.")
 
-    # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
 
     # If someone called another task before we need to reset this
@@ -403,7 +457,7 @@ def mb_calibration_from_geodetic_mb(gdir,
     y0, y1 = ref_period.split('_')
     y0 = int(y0.split('-')[0])
     y1 = int(y1.split('-')[0])
-    yr_range = [y0, y1 - 1]
+    years = np.arange(y0, y1)
 
     # Get the reference data
     if ref_mb is None:
@@ -419,125 +473,140 @@ def mb_calibration_from_geodetic_mb(gdir,
                                   'yet, but it should actually work. Well keep '
                                   'you posted!')
 
+    # Ok, regardless on how we want to calibrate, we start with defaults
+    temp_bias = 0
+    melt_f = monthly_melt_f_default
+    if prcp_scaling_factor is None:
+        if cfg.PARAMS['use_winter_prcp_factor']:
+            # Some sanity check
+            if cfg.PARAMS['prcp_scaling_factor'] is not None:
+                raise InvalidWorkflowError("Set PARAMS['prcp_scaling_factor'] "
+                                           "to None if using winter_prcp_factor")
+            prcp_fac = decide_winter_precip_factor(gdir)
+        else:
+            prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+            if prcp_fac is None:
+                raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_factor'] "
+                                           "or PARAMS['winter_prcp_factor'].")
+
     # Create the MB model we will calibrate upon
     mb_mod = MonthlyTIModel(gdir,
-                            melt_f=100,
-                            temp_bias=0,
-                            prcp_fac=2.7)
+                            melt_f=melt_f,
+                            temp_bias=temp_bias,
+                            prcp_fac=prcp_fac)
 
-    def to_minimize(x, ref_mb, model_attr):
+    if calibrate_param1 == 'melt_f':
+        min_range, max_range = monthly_melt_f_min, monthly_melt_f_max
+    elif calibrate_param1 == 'prcp_fac':
+        min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
+    elif calibrate_param1 == 'temp_bias':
+        min_range, max_range = temp_bias_min, temp_bias_max
+    else:
+        raise InvalidParamsError("calibrate_param1 must be one of "
+                                 "['melt_f', 'prcp_fac', 'temp_bias']")
+
+    def to_minimize(x, model_attr):
         # Set the new attr value
         setattr(mb_mod, model_attr, x)
-        out = mb_mod.get_specific_mb(fls=fls, year=np.arange(*yr_range)).mean()
+        out = mb_mod.get_specific_mb(fls=fls, year=years).mean()
         return np.mean(out - ref_mb)
 
     try:
-        param = optimize.brentq(to_minimize,
-                                -10, 10,
-                                args=(ref_mb, 'temp_bias'),
-                                xtol=2e-12)
+        optim_param1 = optimize.brentq(to_minimize,
+                                       min_range, max_range,
+                                       args=(calibrate_param1,)
+                                       )
     except ValueError:
-        raise
-    t = 1
-    #     # This happens when out of bounds
-    #
-    #     # Funny enough, this bias correction is arbitrary.
-    #     # Here I'm trying something arbitrary as well.
-    #     # Let's try to find a range of corrections that would lead to an
-    #     # allowed mu* and pick one
-    #
-    #     # Here we ignore the previous QC correction - if any -
-    #     # to ensure that results are the same even after previous correction
-    #     fpath = gdir.get_filepath('climate_historical')
-    #     with utils.ncDataset(fpath, 'a') as nc:
-    #         start = getattr(nc, 'uncorrected_ref_hgt', nc.ref_hgt)
-    #         nc.uncorrected_ref_hgt = start
-    #         nc.ref_hgt = start
-    #
-    #     # Read timeseries again after reset
-    #     _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
-    #                                                 year_range=yr_range,
-    #                                                 flatten=False)
-    #
-    #     # Check in which direction we should correct the temp
-    #     _lim0 = _mu_star_per_minimization(min_mu_star, fls, ref_mb, temp,
-    #                                       prcp, widths)
-    #     if _lim0 < 0:
-    #         # The mass balances are too positive to be matched - we need to
-    #         # cool down the climate data
-    #         step = -step_height_for_corr
-    #         end = -max_height_change_for_corr
-    #     else:
-    #         # The other way around
-    #         step = step_height_for_corr
-    #         end = max_height_change_for_corr
-    #
-    #     steps = np.arange(start, start + end, step, dtype=np.int64)
-    #     mu_candidates = steps * np.NaN
-    #     for i, h in enumerate(steps):
-    #         with utils.ncDataset(fpath, 'a') as nc:
-    #             nc.ref_hgt = h
-    #
-    #         # Read timeseries
-    #         _, temp, prcp = mb_yearly_climate_on_height(gdir, heights,
-    #                                                     year_range=yr_range,
-    #                                                     flatten=False)
-    #
-    #         try:
-    #             mu_star = optimize.brentq(_mu_star_per_minimization,
-    #                                       min_mu_star, max_mu_star,
-    #                                       args=(fls, ref_mb, temp, prcp, widths),
-    #                                       xtol=_brentq_xtol)
-    #         except ValueError:
-    #             mu_star = np.NaN
-    #
-    #         # Done - store for later
-    #         mu_candidates[i] = mu_star
-    #         # if we find one working mu_star we can actually stop
-    #         # the loop to make it faster.
-    #         # We are here only interested in the candidate which
-    #         # changes the ref_hgt the least!
-    #         if np.isfinite(mu_star):
-    #             break
-    #
-    #     # the workflow below works in general when having more candidates
-    #     # but also works for one candidate (as we stopped the loop)
-    #     sel_steps = steps[np.isfinite(mu_candidates)]
-    #     sel_mus = mu_candidates[np.isfinite(mu_candidates)]
-    #     if len(sel_mus) == 0:
-    #         # Yeah nothing we can do here
-    #         raise MassBalanceCalibrationError('We could not find a way to '
-    #                                           'correct the climate data and '
-    #                                           'fit within the prescribed '
-    #                                           'bounds for mu*.')
-    #
-    #     # We have just picked the first, but to be fair it is arbitrary
-    #     # We could also pick one randomly... but here we rather prefer to have
-    #     # the smallest ref_hgt change as possible (hence smallest temp. bias change)
-    #     mu_star = sel_mus[0]
-    #     # Final correction of the data
-    #     with utils.ncDataset(fpath, 'a') as nc:
-    #         nc.ref_hgt = sel_steps[0]
-    #     gdir.add_to_diagnostics('ref_hgt_calib_diff', float(sel_steps[0] - start))
-    #
-    # if not np.isfinite(mu_star):
-    #     raise MassBalanceCalibrationError('{} '.format(gdir.rgi_id) +
-    #                                       'has a non finite mu.')
-    #
-    # # Add the climate related params to the GlacierDir to make sure
-    # # other tools cannot fool around without re-calibration
-    # out = gdir.get_climate_info()
-    # out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in MB_PARAMS}
-    # gdir.write_json(out, 'climate_info')
-    #
-    # # Store diagnostics
-    # df = gdir.read_json('local_mustar', allow_empty=True)
-    # df['rgi_id'] = gdir.rgi_id
-    # df['t_star'] = np.nan
-    # df['bias'] = 0
-    # df['mu_star_per_flowline'] = [mu_star] * len(fls)
-    # df['mu_star_glacierwide'] = mu_star
-    # df['mu_star_flowline_avg'] = mu_star
-    # df['mu_star_allsame'] = True
-    # # Write
-    # gdir.write_json(df, 'local_mustar')
+        if not calibrate_param2:
+            raise RuntimeError(f'{gdir.rgi_id}: ref mb not matched. '
+                               f'Try to set calibrate_param2.')
+
+        # Check which direction we need to go
+        diff_1 = to_minimize(min_range, calibrate_param1)
+        diff_2 = to_minimize(max_range, calibrate_param1)
+        optim_param1 = min_range if abs(diff_1) < abs(diff_2) else max_range
+        setattr(mb_mod, calibrate_param1, optim_param1)
+
+        # Second step
+        if calibrate_param2 == 'melt_f':
+            min_range, max_range = monthly_melt_f_min, monthly_melt_f_max
+        elif calibrate_param2 == 'prcp_fac':
+            min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
+        elif calibrate_param2 == 'temp_bias':
+            min_range, max_range = temp_bias_min, temp_bias_max
+        else:
+            raise InvalidParamsError("calibrate_param2 must be one of "
+                                     "['melt_f', 'prcp_fac', 'temp_bias']")
+        try:
+            optim_param2 = optimize.brentq(to_minimize,
+                                           min_range, max_range,
+                                           args=(calibrate_param2,)
+                                           )
+        except ValueError:
+            # Third step
+            if not calibrate_param3:
+                raise RuntimeError(f'{gdir.rgi_id}: ref mb not matched. '
+                                   f'Try to set calibrate_param3.')
+
+            # Check which direction we need to go
+            diff_1 = to_minimize(min_range, calibrate_param2)
+            diff_2 = to_minimize(max_range, calibrate_param2)
+            optim_param2 = min_range if abs(diff_1) < abs(diff_2) else max_range
+            setattr(mb_mod, calibrate_param2, optim_param2)
+
+            # Third step
+            if calibrate_param3 == 'melt_f':
+                min_range, max_range = monthly_melt_f_min, monthly_melt_f_max
+            elif calibrate_param3 == 'prcp_fac':
+                min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
+            elif calibrate_param3 == 'temp_bias':
+                min_range, max_range = temp_bias_min, temp_bias_max
+            else:
+                raise InvalidParamsError("calibrate_param3 must be one of "
+                                         "['melt_f', 'prcp_fac', 'temp_bias']")
+            try:
+                optim_param3 = optimize.brentq(to_minimize,
+                                               min_range, max_range,
+                                               args=(calibrate_param3,)
+                                               )
+            except ValueError:
+                raise RuntimeError(f'{gdir.rgi_id}: we tried very hard but we '
+                                   f'could not find a combination of '
+                                   f'parameters that works for this ref mb.')
+
+            if calibrate_param3 == 'melt_f':
+                melt_f = optim_param3
+            elif calibrate_param3 == 'prcp_fac':
+                prcp_fac = optim_param3
+            elif calibrate_param3 == 'temp_bias':
+                temp_bias = optim_param3
+
+        if calibrate_param2 == 'melt_f':
+            melt_f = optim_param2
+        elif calibrate_param2 == 'prcp_fac':
+            prcp_fac = optim_param2
+        elif calibrate_param2 == 'temp_bias':
+            temp_bias = optim_param2
+
+    if calibrate_param1 == 'melt_f':
+        melt_f = optim_param1
+    elif calibrate_param1 == 'prcp_fac':
+        prcp_fac = optim_param1
+    elif calibrate_param1 == 'temp_bias':
+        temp_bias = optim_param1
+
+    # Add the climate related params to the GlacierDir to make sure
+    # other tools cannot fool around without re-calibration
+    out = gdir.get_climate_info()
+    out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
+    gdir.write_json(out, 'climate_info')
+
+    # Store parameters
+    df = gdir.read_json('mb_calib', allow_empty=True)
+    df['rgi_id'] = gdir.rgi_id
+    df['bias'] = 0
+    df['melt_f'] = melt_f
+    df['prcp_fac'] = prcp_fac
+    df['temp_bias'] = temp_bias
+    # Write
+    gdir.write_json(df, 'mb_calib')
