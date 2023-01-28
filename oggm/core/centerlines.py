@@ -301,9 +301,9 @@ class Centerline(object, metaclass=SuperclassMeta):
         flux_needs_correction = False
         flux = np.cumsum(flux_ext + smb_add)
 
-        # We filter lines with a negative out flux, the threshold of -1e-5 is
-        # needed to avoid problems with numeric precision
-        if flux[-1] < -1e-5:
+        # We filter lines with a negative flux at the last grid point, the
+        # threshold f -1e-5 is needed to avoid problems with numeric precision
+        if flux[-2] < -1e-5:
             flux_needs_correction = True
 
         self.flux = flux[:-1]
