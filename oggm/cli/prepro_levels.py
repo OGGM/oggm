@@ -81,7 +81,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       match_geodetic_mb_per_glacier=False,
                       evolution_model='fl_sia',
                       centerlines_only=False, override_params=None,
-                      add_consensus=False, start_level=None,
+                      add_consensus=False, add_millan_thickness=False,
+                      add_millan_velocity=False, start_level=None,
                       start_base_url=None, max_level=5, ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
@@ -141,6 +142,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         or `massredis` (mass redistribution curve).
     add_consensus : bool
         adds (reprojects) the consensus estimates thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_millan_thickness : bool
+        adds (reprojects) the millan thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_millan_velocity : bool
+        adds (reprojects) the millan velocity to the glacier
         directories. With elev_bands=True, the data will also be binned.
     start_level : int
         the pre-processed level to start from (default is to start from
@@ -430,17 +437,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
+        bin_variables = []
         if add_consensus:
             from oggm.shop.bedtopo import add_consensus_thickness
             workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
             workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+            bin_variables.append('consensus_ice_thickness')
+        if add_millan_thickness:
+            from oggm.shop.millan22 import thickness_to_gdir
+            workflow.execute_entity_task(thickness_to_gdir, gdirs_band)
+            workflow.execute_entity_task(thickness_to_gdir, gdirs_cent)
+            bin_variables.append('millan_ice_thickness')
+        if add_millan_velocity:
+            from oggm.shop.millan22 import velocity_to_gdir
+            workflow.execute_entity_task(velocity_to_gdir, gdirs_band)
+            workflow.execute_entity_task(velocity_to_gdir, gdirs_cent)
+            bin_variables.append('millan_v')
 
-            # Elev bands with var data
-            vn = 'consensus_ice_thickness'
+        if bin_variables:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
-                                         gdirs_band, bin_variables=vn)
+                                         gdirs_band, bin_variables=bin_variables)
             workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
-                                         gdirs_band, bin_variables=vn)
+                                         gdirs_band, bin_variables=bin_variables)
         else:
             # HH2015 method without it
             task_list = [
@@ -479,6 +497,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
+
+        if add_millan_thickness or add_millan_velocity:
+            from oggm.shop.millan22 import compile_millan_statistics
+            opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))
+            compile_millan_statistics(gdirs, path=opath)
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
@@ -819,6 +842,16 @@ def parse_args(args):
                              'thickness to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
+    parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan thickness '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-millan-velocity', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan velocity '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -900,6 +933,8 @@ def parse_args(args):
                 match_regional_geodetic_mb=args.match_regional_geodetic_mb,
                 match_geodetic_mb_per_glacier=args.match_geodetic_mb_per_glacier,
                 add_consensus=args.add_consensus,
+                add_millan_thickness=args.add_millan_thickness,
+                add_millan_velocity=args.add_millan_velocity,
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
