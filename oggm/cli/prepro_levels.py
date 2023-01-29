@@ -82,8 +82,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       evolution_model='fl_sia',
                       centerlines_only=False, override_params=None,
                       add_consensus=False, add_millan_thickness=False,
-                      add_millan_velocity=False, start_level=None,
-                      start_base_url=None, max_level=5, ref_tstars_base_url='',
+                      add_millan_velocity=False, add_hugonnet_dhdt=False,
+                      start_level=None, start_base_url=None, max_level=5,
+                      ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
                       dynamic_spinup_start_year=1979,
@@ -148,6 +149,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         directories. With elev_bands=True, the data will also be binned.
     add_millan_velocity : bool
         adds (reprojects) the millan velocity to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_hugonnet_dhdt : bool
+        adds (reprojects) the hugonnet dhdt maps to the glacier
         directories. With elev_bands=True, the data will also be binned.
     start_level : int
         the pre-processed level to start from (default is to start from
@@ -453,8 +457,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(velocity_to_gdir, gdirs_band)
             workflow.execute_entity_task(velocity_to_gdir, gdirs_cent)
             bin_variables.append('millan_v')
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import hugonnet_to_gdir
+            workflow.execute_entity_task(hugonnet_to_gdir, gdirs_band)
+            workflow.execute_entity_task(hugonnet_to_gdir, gdirs_cent)
+            bin_variables.append('hugonnet_dhdt')
 
-        if bin_variables:
+        if bin_variables and gdirs_band:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
                                          gdirs_band, bin_variables=bin_variables)
             workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
@@ -852,6 +861,11 @@ def parse_args(args):
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
+    parser.add_argument('--add-hugonnet-dhdt', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan dhdt '
+                             'maps to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -935,6 +949,7 @@ def parse_args(args):
                 add_consensus=args.add_consensus,
                 add_millan_thickness=args.add_millan_thickness,
                 add_millan_velocity=args.add_millan_velocity,
+                add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
