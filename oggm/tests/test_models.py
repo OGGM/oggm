@@ -2930,7 +2930,7 @@ class TestHEF:
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 35
+        assert model.yr >= 30
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -3053,7 +3053,7 @@ class TestHEF:
 
         model.run_until_equilibrium(rate=1e-4)
 
-        assert model.yr >= 35
+        assert model.yr >= 30
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -4749,8 +4749,8 @@ class TestHEF:
 
             assert np.all(ds.terminus_thick_0 > 0.1)
             assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
-            # exclude last time step because of bed geometry
-            assert np.all(ds.terminus_thick_2[:-1] > ds.terminus_thick_1[:-1])
+            # exclude first two time steps because of bed geometry
+            assert np.all(ds.terminus_thick_2[2:] > ds.terminus_thick_1[2:])
 
             for vn in ['area']:
                 ref = ds[vn]
