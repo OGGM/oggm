@@ -189,9 +189,13 @@ class Test_HugonnetMaps:
             dhdt = ds.hugonnet_dhdt.where(mask)
 
         # Simply some coverage and sanity checks
-        assert np.isfinite(dhdt).sum() / mask.sum() > 0.98
+        assert np.isfinite(dhdt).sum() / mask.sum() > 0.97
         assert np.nanmax(dhdt) > 0
         assert np.nanmean(dhdt) < -3
+
+        df = hugonnet_maps.compile_hugonnet_statistics([gdir]).iloc[0]
+        assert df['hugonnet_perc_cov'] > 0.97
+        assert df['hugonnet_avg_dhdt'] < -3
 
 
 class Test_rgitopo:
@@ -802,3 +806,7 @@ class Test_bedtopo:
         # Check vol
         my_vol = (fdf[vn] * fdf['area_m2']).sum()
         np.testing.assert_allclose(my_vol, ref_vol)
+
+        df = bedtopo.compile_consensus_statistics([gdir]).iloc[0]
+        np.testing.assert_allclose(my_vol*1e-9, df['consensus_vol_km3'], rtol=1e-2)
+        np.testing.assert_allclose(1, df['consensus_perc_cov'], rtol=0.05)

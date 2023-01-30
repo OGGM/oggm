@@ -511,6 +511,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.shop.millan22 import compile_millan_statistics
             opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))
             compile_millan_statistics(gdirs, path=opath)
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
+            opath = os.path.join(sum_dir, 'hugonnet_statistics_{}.csv'.format(rgi_reg))
+            compile_hugonnet_statistics(gdirs, path=opath)
+        if add_consensus_thickness:
+            from oggm.shop.bedtopo import compile_consensus_statistics
+            opath = os.path.join(sum_dir, 'consensus_statistics_{}.csv'.format(rgi_reg))
+            compile_consensus_statistics(gdirs, path=opath)
+
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:

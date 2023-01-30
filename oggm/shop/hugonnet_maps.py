@@ -3,6 +3,8 @@ from packaging.version import Version
 
 import numpy as np
 import pandas as pd
+import xarray as xr
+import os
 
 try:
     import rasterio
@@ -146,3 +148,64 @@ def hugonnet_to_gdir(gdir, add_error=False):
         data_str = ' '.join(flist) if len(flist) > 1 else flist[0]
         v.data_source = data_str
         v[:] = np.squeeze(dst_array)
+
+
+@utils.entity_task(log)
+def hugonnet_statistics(gdir):
+    """Gather statistics about the Hugonnet data interpolated to this glacier.
+    """
+
+    d = dict()
+
+    # Easy stats - this should always be possible
+    d['rgi_id'] = gdir.rgi_id
+    d['rgi_region'] = gdir.rgi_region
+    d['rgi_subregion'] = gdir.rgi_subregion
+    d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['hugonnet_area_km2'] = 0
+    d['hugonnet_perc_cov'] = 0
+    d['hugonnet_avg_dhdt'] = np.NaN
+
+    try:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            dhdt = ds['hugonnet_dhdt'].where(ds['glacier_mask'], np.NaN).load()
+            d['hugonnet_area_km2'] = float((~dhdt.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
+            d['hugonnet_perc_cov'] = float(d['hugonnet_area_km2'] / gdir.rgi_area_km2)
+            d['hugonnet_avg_dhdt'] = np.nanmean(dhdt.data)
+    except (FileNotFoundError, AttributeError, KeyError):
+        pass
+
+    return d
+
+
+@utils.global_task(log)
+def compile_hugonnet_statistics(gdirs, filesuffix='', path=True):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    It can be used to do result diagnostics and other stuffs.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(hugonnet_statistics, gdirs)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('hugonnet_statistics' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+
+    return out
