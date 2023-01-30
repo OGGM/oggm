@@ -26,7 +26,7 @@ except URLError:
     HAS_INTERNET = False
 
 
-def mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=4.5, **kwargs):
+def mpl_image_compare(baseline_dir=BASELINE_DIR, tolerance=1, **kwargs):
     return pytest.mark.mpl_image_compare(baseline_dir=baseline_dir,
                                          tolerance=tolerance,
                                          **kwargs)

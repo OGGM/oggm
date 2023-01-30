@@ -561,7 +561,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
 
 @entity_task(log, writes=['inversion_output'])
-def filter_inversion_output(gdir):
+def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
+                            max_depression=5.):
     """Filters the last few grid points after the physically-based inversion.
     For various reasons (but mostly: the equilibrium assumption), the last few
     grid points on a glacier flowline are often noisy and create unphysical
@@ -574,6 +575,12 @@ def filter_inversion_output(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    n_smoothing : int
+        number of grid points which should be smoothed. Default is 5
+    min_ice_thick : float
+        the minimum ice thickness after the smoothing. Default is 1 m
+    max_depression : float
+        the limit allowed bed depression without smoothing. Default is 5 m
     """
 
     if gdir.is_tidewater:
@@ -592,12 +599,8 @@ def filter_inversion_output(gdir):
     cls = gdir.read_pickle('inversion_output')
     cl = cls[-1]
 
-    # number of grid points to smooth, the more grid points the smoother the
-    # result, but the larger the volume error we introduce
-    n_smoothing = -5
-
-    # minimum ice thickness after smoothing
-    min_ice_thick = 1
+    # convert to negative number for indexing
+    n_smoothing = -abs(n_smoothing)
 
     cl_sfc_h = cl['hgt'][n_smoothing:]
     cl_thick = cl['thick'][n_smoothing:]
@@ -607,13 +610,8 @@ def filter_inversion_output(gdir):
     cl_bed_h = cl_sfc_h - cl_thick
     downstream_sfc_h = dic_ds['surface_h'][:5]
 
-    # first smooth last grid point to have the same slope as the previous ones,
-    # because the last grid point has zero thickness due to construction of the
-    # inversion approach
-    cl_bed_h[-1] = 2 * cl_bed_h[-2] - cl_bed_h[-3]
-
-    # we additionally smooth if the depression is larger than 1 m
-    if downstream_sfc_h[0] - cl_bed_h[-1] > 1:
+    # we smooth if the depression is larger than max_depression
+    if downstream_sfc_h[0] - cl_bed_h[-1] > max_depression:
         # force the last grid point height to continue the downstream slope
         down_slope_avg = np.average(np.abs(np.diff(downstream_sfc_h)))
         new_last_bed_h = downstream_sfc_h[0] + down_slope_avg
@@ -629,8 +627,8 @@ def filter_inversion_output(gdir):
     new_thick = cl_sfc_h - cl_bed_h
     # max
     max_h = np.where(cl_is_trap,
-                     # -0.5 to get w0 > 0 at the end and not w0 = 0
-                     cl_width / cfg.PARAMS['trapezoid_lambdas'] - 0.5,
+                     # -1. to get w0 > 0 at the end and not w0 = 0
+                     cl_width / cfg.PARAMS['trapezoid_lambdas'] - 1.,
                      1e4)
     new_thick = np.where(new_thick > max_h, max_h, new_thick)
     # min
