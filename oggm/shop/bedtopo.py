@@ -1,13 +1,16 @@
 import logging
+import os
 
 import numpy as np
+import pandas as pd
+import xarray as xr
 
 try:
     import salem
 except ImportError:
     pass
 
-from oggm import utils
+from oggm import utils, cfg
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -68,3 +71,62 @@ def add_consensus_thickness(gdir, base_url=None):
         v.long_name = ln
         v.base_url = base_url
         v[:] = thick
+
+
+@utils.entity_task(log)
+def consensus_statistics(gdir):
+    """Gather statistics about the consensus data interpolated to this glacier.
+    """
+
+    d = dict()
+
+    # Easy stats - this should always be possible
+    d['rgi_id'] = gdir.rgi_id
+    d['rgi_region'] = gdir.rgi_region
+    d['rgi_subregion'] = gdir.rgi_subregion
+    d['rgi_area_km2'] = gdir.rgi_area_km2
+    d['consensus_vol_km3'] = 0
+    d['consensus_area_km2'] = 0
+    d['consensus_perc_cov'] = 0
+
+    try:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            thick = ds['consensus_ice_thickness'].where(ds['glacier_mask'], np.NaN).load()
+            d['consensus_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
+            d['consensus_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
+            d['consensus_perc_cov'] = float(d['consensus_area_km2'] / gdir.rgi_area_km2)
+    except (FileNotFoundError, AttributeError, KeyError):
+        pass
+
+    return d
+
+
+@utils.global_task(log)
+def compile_consensus_statistics(gdirs, filesuffix='', path=True):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(consensus_statistics, gdirs)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('consensus_statistics' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+
+    return out

@@ -1,6 +1,7 @@
 import os
 import warnings
 
+import matplotlib.pyplot as plt
 import pytest
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
@@ -12,7 +13,7 @@ import numpy as np
 import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo, bedtopo, millan22
+from oggm.shop import its_live, rgitopo, bedtopo, millan22, hugonnet_maps
 from oggm.core import gis, centerlines, massbalance
 from oggm import cfg, tasks, workflow
 
@@ -158,6 +159,43 @@ class Test_millan22:
         assert df['millan_max_vel'] > 2000
         assert df['millan_perc_cov'] > 0.95
         assert df['millan_vol_km3'] > 174
+
+
+class Test_HugonnetMaps:
+
+    @pytest.mark.slow
+    def test_dhdt_to_glacier(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        # use our files
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/geodetic_ref_mb_maps/'
+        monkeypatch.setattr(hugonnet_maps, 'default_base_url', base_url)
+
+        hugonnet_maps.hugonnet_to_gdir(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            dhdt = ds.hugonnet_dhdt.where(mask)
+
+        # Simply some coverage and sanity checks
+        assert np.isfinite(dhdt).sum() / mask.sum() > 0.97
+        assert np.nanmax(dhdt) > 0
+        assert np.nanmean(dhdt) < -3
+
+        df = hugonnet_maps.compile_hugonnet_statistics([gdir]).iloc[0]
+        assert df['hugonnet_perc_cov'] > 0.97
+        assert df['hugonnet_avg_dhdt'] < -3
 
 
 class Test_rgitopo:
@@ -768,3 +806,7 @@ class Test_bedtopo:
         # Check vol
         my_vol = (fdf[vn] * fdf['area_m2']).sum()
         np.testing.assert_allclose(my_vol, ref_vol)
+
+        df = bedtopo.compile_consensus_statistics([gdir]).iloc[0]
+        np.testing.assert_allclose(my_vol*1e-9, df['consensus_vol_km3'], rtol=1e-2)
+        np.testing.assert_allclose(1, df['consensus_perc_cov'], rtol=0.05)
