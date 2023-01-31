@@ -90,9 +90,6 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
         flux_out = fl.flux_out * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
 
-        # Fraction of flux entering second-last grid cell arriving at last one
-        flux_fraction = cfg.PARAMS['fraction_flux_last']
-
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.info('(%s) has negative flux somewhere', gdir.rgi_id)
