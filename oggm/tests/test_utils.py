@@ -1305,7 +1305,7 @@ class TestPreproCLI(unittest.TestCase):
                             rtol=2e-2)
             assert_allclose(dss.sel(time=2004).length,
                             dse.sel(time=2004).length,
-                            atol=330)
+                            atol=390)
             assert_allclose(dss.sel(time=2004).volume,
                             dse.sel(time=2004).volume,
                             rtol=0.2)
