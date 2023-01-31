@@ -81,7 +81,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       match_geodetic_mb_per_glacier=False,
                       evolution_model='fl_sia',
                       centerlines_only=False, override_params=None,
-                      add_consensus=False, add_millan_thickness=False,
+                      add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
                       ref_tstars_base_url='',
@@ -141,7 +141,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     evolution_model : str
         which geometry evolution model to use: `fl_sia` (default),
         or `massredis` (mass redistribution curve).
-    add_consensus : bool
+    add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
     add_millan_thickness : bool
@@ -442,7 +442,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
         bin_variables = []
-        if add_consensus:
+        if add_consensus_thickness:
             from oggm.shop.bedtopo import add_consensus_thickness
             workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
             workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
@@ -519,7 +519,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.shop.bedtopo import compile_consensus_statistics
             opath = os.path.join(sum_dir, 'consensus_statistics_{}.csv'.format(rgi_reg))
             compile_consensus_statistics(gdirs, path=opath)
-
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
@@ -855,9 +854,9 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
-    parser.add_argument('--add-consensus', nargs='?', const=True, default=False,
-                        help='adds (reprojects) the consensus estimates '
-                             'thickness to the glacier directories. '
+    parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the consensus thickness '
+                             'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
     parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
@@ -955,7 +954,7 @@ def parse_args(args):
                 centerlines_only=args.centerlines_only,
                 match_regional_geodetic_mb=args.match_regional_geodetic_mb,
                 match_geodetic_mb_per_glacier=args.match_geodetic_mb_per_glacier,
-                add_consensus=args.add_consensus,
+                add_consensus_thickness=args.add_consensus_thickness,
                 add_millan_thickness=args.add_millan_thickness,
                 add_millan_velocity=args.add_millan_velocity,
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
