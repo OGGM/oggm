@@ -519,6 +519,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     # Some non-trivial params
     PARAMS['continue_on_error'] = cp.as_bool('continue_on_error')
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
+    PARAMS['map_proj'] = cp['map_proj']
     PARAMS['topo_interp'] = cp['topo_interp']
     PARAMS['use_intersects'] = cp.as_bool('use_intersects')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
@@ -603,7 +604,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'tstar_search_glacierwide', 'border',
-           'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star',
+           'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star', 'map_proj',
            'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',

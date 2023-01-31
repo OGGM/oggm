@@ -2789,11 +2789,27 @@ class GlacierDirectory(object):
     def _reproject_and_write_shapefile(self, entity):
 
         # Make a local glacier map
-        params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
-                      k=0.9996, x_0=0, y_0=0, datum='WGS84')
-        proj4_str = "+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " \
-                    "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**params)
-
+        if cfg.PARAMS['map_proj'] == 'utm':
+            from pyproj.aoi import AreaOfInterest
+            from pyproj.database import query_utm_crs_info
+            utm_crs_list = query_utm_crs_info(
+                datum_name="WGS 84",
+                area_of_interest=AreaOfInterest(
+                    west_lon_degree=self.cenlon,
+                    south_lat_degree=self.cenlat,
+                    east_lon_degree=self.cenlon,
+                    north_lat_degree=self.cenlat,
+                ),
+            )
+            proj4_str = utm_crs_list[0].code
+        elif cfg.PARAMS['map_proj'] == 'tmerc':
+            params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
+                          k=0.9996, x_0=0, y_0=0, datum='WGS84')
+            proj4_str = ("+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " 
+                         "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**params))
+        else:
+            raise InvalidParamsError("cfg.PARAMS['map_proj'] must be one of "
+                                     "'tmerc', 'utm'.")
         # Reproject
         proj_in = pyproj.Proj("epsg:4326", preserve_units=True)
         proj_out = pyproj.Proj(proj4_str, preserve_units=True)
