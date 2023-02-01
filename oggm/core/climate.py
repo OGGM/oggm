@@ -1084,23 +1084,23 @@ def local_t_star(gdir, *, ref_df=None, tstar=None, bias=None,
     gdir.write_json(df, 'local_mustar')
 
 
-def _check_terminus_mass_flux(gdir, fls, cmb):
+def _check_terminus_mass_flux(gdir, fls):
     # Avoid code duplication
-
     rho = cfg.PARAMS['ice_density']
+    cmb = calving_mb(gdir)
 
     # This variable is in "sensible" units normalized by width
-    flux = fls[-1].flux[-1]
-    aflux = flux * (gdir.grid.dx ** 2) / rho  # m3 ice per year
+    flux = fls[-1].flux_out
+    aflux = flux * (gdir.grid.dx ** 2) / rho * 1e-9  # km3 ice per year
 
     # If not marine and a bit far from zero, warning
-    if cmb == 0 and flux > 0 and not np.allclose(flux, 0, atol=0.01):
+    if cmb == 0 and not np.allclose(flux, 0, atol=0.01):
         log.info('(%s) flux should be zero, but is: '
-                 '%.4f m3 ice yr-1', gdir.rgi_id, aflux)
+                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
 
     # If not marine and quite far from zero, error
-    if cmb == 0 and flux > 0 and not np.allclose(flux, 0, atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} m3 ice yr-1'
+    if cmb == 0 and not np.allclose(flux, 0, atol=1):
+        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
                .format(gdir.rgi_id, aflux))
         raise MassBalanceCalibrationError(msg)
 
@@ -1126,6 +1126,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
     # The calving mass balance is distributed over the valid tributaries of the
     # main line, i.e. bad tributaries are not considered for calving
     cmb = calving_mb(gdir) if first_call else 0.
+    is_calving = cmb != 0.
 
     # Climate period
     mu_hp = int(cfg.PARAMS['mu_star_halfperiod'])
@@ -1176,7 +1177,7 @@ def _recursive_mu_star_calibration(gdir, fls, t_star, first_call=True,
                                               flatten=False)
         mu = fl.mu_star if fl.mu_star_is_valid else mu_star
         fl.set_apparent_mb(np.mean(p, axis=1) - mu*np.mean(t, axis=1),
-                           mu_star=mu)
+                           mu_star=mu, is_calving=is_calving)
 
     # Sometimes, low lying tributaries have a non-physically consistent
     # Mass balance. These tributaries wouldn't exist with a single
@@ -1314,18 +1315,7 @@ def mu_star_calibration(gdir, min_mu_star=None, max_mu_star=None):
         return mu_star_calibration(gdir, reset=True)
 
     # Check and write
-    rho = cfg.PARAMS['ice_density']
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
-    # If not marine and a bit far from zero, warning
-    cmb = calving_mb(gdir)
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.info('(%s) flux should be zero, but is: '
-                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
-    # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
-               .format(gdir.rgi_id, aflux))
-        raise MassBalanceCalibrationError(msg)
+    _check_terminus_mass_flux(gdir, fls)
     gdir.write_pickle(fls, 'inversion_flowlines')
 
     # Store diagnostics
@@ -1700,6 +1690,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
+    is_calving = cmb != 0.
 
     # Get the height and widths along the fls
     h, w = gdir.get_inversion_flowline_hw()
@@ -1725,19 +1716,10 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
     for fl in fls:
         mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
-        fl.set_apparent_mb(mbz)
+        fl.set_apparent_mb(mbz, is_calving=is_calving)
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
-    # If not marine and a bit far from zero, warning
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.info('(%s) flux should be zero, but is: '
-                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
-    # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
-               .format(gdir.rgi_id, aflux))
-        raise MassBalanceCalibrationError(msg)
+    _check_terminus_mass_flux(gdir, fls)
     gdir.write_pickle(fls, 'inversion_flowlines')
     gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
                       'linear_mb_params')
@@ -1769,6 +1751,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
+    is_calving = cmb != 0
 
     # For each flowline compute the apparent MB
     fls = gdir.read_pickle('inversion_flowlines')
@@ -1808,23 +1791,15 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
             mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
                                           fls=fls, fl_id=fl_id)
         mbz = mbz / len(mb_years)
-        fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual)
-        if (fl_id < len(fls) and (fl.flux[-1]) < -1e3):
+        fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual,
+                           is_calving=is_calving)
+        if (fl_id < len(fls) and (fl.flux_out) < -1e3):
             log.warning('({}) a tributary has a strongly negative flux. '
                         'Inversion works but is physically quite '
                         'questionable.'.format(gdir.rgi_id))
 
     # Check and write
-    aflux = fls[-1].flux[-1] * 1e-9 / rho * gdir.grid.dx**2
-    # If not marine and a bit far from zero, warning
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=0.01):
-        log.info('(%s) flux should be zero, but is: '
-                 '%.4f km3 ice yr-1', gdir.rgi_id, aflux)
-    # If not marine and quite far from zero, error
-    if cmb == 0 and not np.allclose(fls[-1].flux[-1], 0., atol=1):
-        msg = ('({}) flux should be zero, but is: {:.4f} km3 ice yr-1'
-               .format(gdir.rgi_id, aflux))
-        raise MassBalanceCalibrationError(msg)
+    _check_terminus_mass_flux(gdir, fls)
     gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
     gdir.write_pickle(fls, 'inversion_flowlines')
 

@@ -69,9 +69,16 @@ Enhancements
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added new argument ``add_fixed_geometry_spinup`` to extend the model run of
   ``run_dynamic_spinup`` with a fixed-geometry-spinup if the spinup period is
-  shortened(:pull:`1514`)
+  shortened(:pull:`1514`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`)
+- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed
+  by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Adapted ``filter_inversion_output`` to conserve the bed shape during
+  filtering (:pull:`1502`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Adapted calculation of inversion flux to avoid zero thickness at last grid
+  point (:pull:`1502`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added the possibility to use the UTM map proj instead of the local TM used
   by OGGM usually (:pull:`1526`). Leads to qualitative and quantitative

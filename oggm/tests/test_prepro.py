@@ -1845,7 +1845,7 @@ class TestClimate(unittest.TestCase):
             tmb += np.sum(fl.apparent_mb * fl.widths)
             assert not fl.flux_needs_correction
         np.testing.assert_allclose(tmb, 0., atol=0.01)
-        np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
+        np.testing.assert_allclose(fls[-1].flux_out, 0., atol=0.01)
 
         df = gdir.read_json('local_mustar')
         assert df['mu_star_allsame']

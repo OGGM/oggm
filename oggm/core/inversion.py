@@ -88,6 +88,7 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
         rho = cfg.PARAMS['ice_density']
         flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
+        flux_out = fl.flux_out * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
 
         # Fraction of flux entering second-last grid cell arriving at last one
         flux_fraction = cfg.PARAMS['fraction_flux_last']
@@ -102,26 +103,11 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                         "negative flux: this should not happen.")
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
-            if not np.allclose(flux[-1], 0., atol=0.1):
+            if not np.allclose(flux_out, 0., atol=0.1):
                 # TODO: this test doesn't seem meaningful here
                 msg = ('({}) flux at terminus should be zero, but is: '
-                       '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux[-1]))
+                       '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux_out))
                 raise RuntimeError(msg)
-
-            # This contradicts the statement above which has been around for
-            # quite some time, for the reason that it is a quality check: per
-            # construction, the flux at the last grid point should be zero
-            # HOWEVER, it is also meaningful to have a non-zero ice thickness
-            # at the last grid point. Therefore, we add some artificial
-            # flux here (an alternative would be to pmute the flux on a
-            # staggered grid but I actually like the QC and its easier)
-            # note that this value will be ignored if one uses the filter
-            # task afterwards.
-            flux[-1] = flux[-2] / flux_fraction  # this is totally arbitrary
-
-        if fl.flows_to is not None and flux[-1] <= 0:
-            # Same for tributaries
-            flux[-1] = flux[-2] / flux_fraction  # this is totally arbitrary
 
         # Shape
         is_rectangular = fl.is_rectangular
@@ -648,18 +634,26 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
 
 @entity_task(log, writes=['inversion_output'])
-def filter_inversion_output(gdir):
+def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
+                            max_depression=5.):
     """Filters the last few grid points after the physically-based inversion.
-
     For various reasons (but mostly: the equilibrium assumption), the last few
     grid points on a glacier flowline are often noisy and create unphysical
     depressions. Here we try to correct for that. It is not volume conserving,
-    but area conserving.
-
+    but area conserving. If a parabolic shape factor is getting smaller than
+    the minimum defined one (cfg.PARAMS['mixed_min_shape']) the grid point is
+    changed to a trapezoid, similar to what is done during the actual
+    physically-based inversion.
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    n_smoothing : int
+        number of grid points which should be smoothed. Default is 5
+    min_ice_thick : float
+        the minimum ice thickness after the smoothing. Default is 1 m
+    max_depression : float
+        the limit allowed bed depression without smoothing. Default is 5 m
     """
 
     if gdir.is_tidewater:
@@ -675,41 +669,64 @@ def filter_inversion_output(gdir):
                                    'compute_downstream_bedshape tasks')
 
     dic_ds = gdir.read_pickle('downstream_line')
-    bs = np.average(dic_ds['bedshapes'][:3])
-
-    n = -5
-
     cls = gdir.read_pickle('inversion_output')
     cl = cls[-1]
 
-    # First guess thickness based on width
-    w = cl['width'][n:]
-    old_h = cl['thick'][n:]
-    s = w**3 * bs / 6
-    new_h = 3/2 * s / w
-    # Change only if it actually does what we want
-    new_h[old_h < new_h] = old_h[old_h < new_h]
+    # convert to negative number for indexing
+    n_smoothing = -abs(n_smoothing)
 
-    # Smoothing things out a bit
-    hts = np.append(np.append(cl['thick'][n-3:n], new_h), 0)
-    h = utils.smooth1d(hts, 3)[n-1:-1]
+    cl_sfc_h = cl['hgt'][n_smoothing:]
+    cl_thick = cl['thick'][n_smoothing:]
+    cl_width = cl['width'][n_smoothing:]
+    cl_is_trap = cl['is_trapezoid'][n_smoothing:]
+    cl_is_rect = cl['is_rectangular'][n_smoothing:]
+    cl_bed_h = cl_sfc_h - cl_thick
+    downstream_sfc_h = dic_ds['surface_h'][:5]
 
-    # Recompute bedshape based on that
-    bs = utils.clip_min(4*h / w**2, cfg.PARAMS['mixed_min_shape'])
+    # we smooth if the depression is larger than max_depression
+    if downstream_sfc_h[0] - cl_bed_h[-1] > max_depression:
+        # force the last grid point height to continue the downstream slope
+        down_slope_avg = np.average(np.abs(np.diff(downstream_sfc_h)))
+        new_last_bed_h = downstream_sfc_h[0] + down_slope_avg
 
-    # OK, done
-    s = w**3 * bs / 6
+        # now smoothly add the change of the bed height over all smoothing grid
+        # points
+        all_bed_h_changes = np.linspace(0, new_last_bed_h - cl_bed_h[-1],
+                                        -n_smoothing)
+        cl_bed_h = cl_bed_h + all_bed_h_changes
 
-    # Change only if it actually does what we want
-    new_h = 3/2 * s / w
-    if np.any(new_h > old_h):
-        # No change in volume
-        return np.sum([np.sum(cl['volume']) for cl in cls])
+    # define new thick and clip, maximum value needed to avoid geometrical
+    # inconsistencies with trapezoidal bed shape
+    new_thick = cl_sfc_h - cl_bed_h
+    # max
+    max_h = np.where(cl_is_trap,
+                     # -1. to get w0 > 0 at the end and not w0 = 0
+                     cl_width / cfg.PARAMS['trapezoid_lambdas'] - 1.,
+                     1e4)
+    new_thick = np.where(new_thick > max_h, max_h, new_thick)
+    # min
+    new_thick = np.where(new_thick < min_ice_thick, min_ice_thick, new_thick)
 
-    cl['thick'][n:] = new_h
-    cl['volume'][n:] = s * cl['dx']
-    cl['is_trapezoid'][n:] = False
-    cl['is_rectangular'][n:] = False
+    # new trap = (is trap or shape factor small) and not rectangular, we
+    # conserve all bed shapes
+    # if new bed shape is smaller than defined minimum it is converted to a
+    # trapezoidal (as it is done during inversion)
+    new_bed_shape = 4 * new_thick / cl_width ** 2
+    new_is_trapezoid = ((cl_is_trap |
+                         (new_bed_shape < cfg.PARAMS['mixed_min_shape'])) &
+                        ~cl_is_rect)
+
+    # and calculate new volumes depending on shape
+    new_volume = np.where(
+        new_is_trapezoid,
+        cl_width * new_thick - cfg.PARAMS['trapezoid_lambdas'] / 2 *
+        new_thick ** 2,
+        np.where(cl_is_rect, 1, 2 / 3) * cl_width * new_thick) * cl['dx']
+
+    # define new values
+    cl['thick'][n_smoothing:] = new_thick
+    cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
+    cl['volume'][n_smoothing:] = new_volume
 
     gdir.write_pickle(cls, 'inversion_output')
 

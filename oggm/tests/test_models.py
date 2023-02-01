@@ -2090,7 +2090,7 @@ class TestIdealisedInversion():
     def simple_plot(self, model, gdir):  # pragma: no cover
         ocls = gdir.read_pickle('inversion_output')
         ithick = ocls[-1]['thick']
-        pg = model.fls[-1].thick > 0
+        pg = np.where((model.fls[-1].thick > 0) & (model.fls[-1].widths_m > 1))
         plt.figure()
         bh = model.fls[-1].bed_h[pg]
         sh = model.fls[-1].surface_h[pg]
@@ -2930,7 +2930,7 @@ class TestHEF:
         np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
 
         model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 50
+        assert model.yr >= 30
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -3053,7 +3053,7 @@ class TestHEF:
 
         model.run_until_equilibrium(rate=1e-4)
 
-        assert model.yr >= 50
+        assert model.yr >= 30
         after_vol = model.volume_km3
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
@@ -4691,6 +4691,9 @@ class TestHEF:
                                                     'terminus_thick_2',
                                                     ]
         cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
+        # using relative large min ice thick due to overdeepening of inversion
+        # -> sometimes small thicknesses after overdeepening (important for
+        # terminus thickness check)
         cfg.PARAMS['min_ice_thick_for_length'] = 0.1
 
         init_present_time_glacier(gdir)
@@ -4746,7 +4749,8 @@ class TestHEF:
 
             assert np.all(ds.terminus_thick_0 > 0.1)
             assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
-            assert np.all(ds.terminus_thick_2 > ds.terminus_thick_1)
+            # exclude first two time steps because of bed geometry
+            assert np.all(ds.terminus_thick_2[2:] > ds.terminus_thick_1[2:])
 
             for vn in ['area']:
                 ref = ds[vn]
@@ -4757,7 +4761,7 @@ class TestHEF:
 
             # We pick symmetry around rgi date so show that somehow it works
             for vn in ['volume']:
-                rtol = 0.4
+                rtol = 0.5
                 np.testing.assert_allclose(ods[vn].sel(time=2000) -
                                            ods[vn].sel(time=1990),
                                            ods[vn].sel(time=1990) -
@@ -4940,7 +4944,7 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.02)
+        assert_allclose(frac, 0, atol=0.025)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [True, False], ids=['monthly', 'annual'])
@@ -5087,8 +5091,11 @@ class TestHydro:
 
         odf = pd.concat([odf_hist, odf_run])
         # Domain area is constant and equal to the first year
+        # Except at the begining of the simulation where the glacier
+        # advances a little
         odf['dom_area'] = odf['on_area'] + odf['off_area']
-        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=1e-4)
+        assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=3e-3)
+        assert_allclose(odf['dom_area'].iloc[0], odf['dom_area'].iloc[-1])
 
     @pytest.mark.slow
     def test_hydro_dynamical_spinup(self, hef_gdir, inversion_params):
@@ -5388,7 +5395,7 @@ class TestHydro:
 
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
-        assert_allclose(frac, 0, atol=0.04)  # annual can be large (prob)
+        assert_allclose(frac, 0, atol=0.044)  # annual can be large (prob)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_type', ['random', 'const', 'hist'])
@@ -5471,8 +5478,8 @@ class TestHydro:
                             odf_ma['liq_prcp_on_glacier'] +
                             odf_ma['liq_prcp_off_glacier'])
 
-        # Regardless of MB bias the melt in months 3, 4, 5, 6 should be zero
-        assert_allclose(odf_ma['melt_on_glacier'].loc[3:6], 0, atol=5)
+        # Regardless of MB bias the melt in winter months should be close to zero
+        assert_allclose(odf_ma['melt_on_glacier'].loc[3:4], 0, atol=1e3)
 
         # Residual MB should not be crazy large
         frac = odf_ma['residual_mb'] / odf_ma['melt_on_glacier']
@@ -5753,8 +5760,6 @@ class TestSemiImplicitModel:
                                     mb_elev_feedback='never')
         model_flux.run_until_equilibrium(rate=1e-5)
 
-        assert model.yr == model_flux.yr
-
         np.testing.assert_allclose(model_flux.volume_km3, after_vol, rtol=7e-4)
         np.testing.assert_allclose(model_flux.area_km2, after_area, rtol=6e-5)
         np.testing.assert_allclose(model_flux.fls[-1].length_m, after_len)
@@ -5777,7 +5782,6 @@ class TestSemiImplicitModel:
         model_flux.run_until_equilibrium(rate=1e-5)
 
         assert model.yr >= 50
-        assert model.yr == model_flux.yr
 
         after_vol = model.volume_km3
         after_area = model.area_km2
@@ -5914,7 +5918,7 @@ class TestSemiImplicitModel:
                 max_velocity_rmsd = velocity_rmsd
                 max_velocity_year = year
 
-            assert velocity_rmsd < 4.5
+            assert velocity_rmsd < 5
 
         if do_plot:
             plt.figure()

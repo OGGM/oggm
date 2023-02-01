@@ -537,8 +537,12 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
-    ref_period : years of mass balance that should be taken into account in
-        inversion
+    use_geodetic : bool
+        when using geodetic calibration data, make sure to use
+        the same years of mb in the inversion. Default False
+    ref_period : str
+        years of mass balance that should be taken into account in
+        inversion. Default None
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
     """
