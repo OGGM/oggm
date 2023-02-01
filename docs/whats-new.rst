@@ -55,6 +55,8 @@ Enhancements
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added support for Millan et al 2022 velocity and thickness in the shop (:pull:`1443`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added support for Hugonnet et al 2021 dhdt in the shop (:pull:`1529`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added trapezoidal downstream line (:pull:`1491`). Can be selected with
   ``cfg.PARAMS['downstream_line_shape']``, with the options ``'parabol'`` (default)
   or ``'trapezoidal'`` before calling ``init_present_time_glacier(gdir)``.

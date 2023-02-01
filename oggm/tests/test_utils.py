@@ -864,6 +864,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
+        assert not kwargs['add_consensus_thickness']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -931,6 +932,10 @@ class TestPreproCLI(unittest.TestCase):
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
                                            '--dem-source', 'ALL',
+                                           '--add-consensus-thickness',
+                                           '--add-millan-thickness',
+                                           '--add-millan-velocity',
+                                           '--add-hugonnet-dhdt',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -945,6 +950,10 @@ class TestPreproCLI(unittest.TestCase):
         assert not kwargs['elev_bands']
         assert not kwargs['match_regional_geodetic_mb']
         assert not kwargs['centerlines_only']
+        assert kwargs['add_consensus_thickness']
+        assert kwargs['add_millan_thickness']
+        assert kwargs['add_millan_velocity']
+        assert kwargs['add_hugonnet_dhdt']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
