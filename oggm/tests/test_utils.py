@@ -1004,11 +1004,15 @@ class TestPreproCLI(unittest.TestCase):
                                            '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
+                                           '--err-dmdtda-scaling-factor', '0.5',
+                                           '--downstream-line-shape', 'trapezoidal',
                                            ])
 
         assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
         assert kwargs['evolution_model'] == 'massredis'
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
+        assert kwargs['err_dmdtda_scaling_factor'] == 0.5
+        assert kwargs['downstream_line_shape'] == 'trapezoidal'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1185,129 +1189,156 @@ class TestPreproCLI(unittest.TestCase):
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_and_spinup_run(self):
+    def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        for evolution_model, downstream_line_shape in [('fl_sia', 'parabola'),
+                                                       ('implicit', 'trapezoidal')]:
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir, reset=True)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
-        np.random.seed(0)
-        border = 80
-        bstr = 'b_080'
+            # Read in the RGI file
+            inter, rgidf = self._read_shp()
 
-        # change the reference geodetic mb period, because the climate data of
-        # the test glaciers only go up to 2015
-        run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
-                          output_folder=odir, working_dir=wdir, is_test=True,
-                          test_ids=['RGI60-11.00929'],
-                          dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
-                          test_intersects_file=inter,
-                          test_topofile=topof, elev_bands=True,
-                          override_params={'hydro_month_nh': 1,
-                                           'geodetic_mb_period':
-                                           '2000-01-01_2010-01-01',
-                                           'baseline_climate': 'CRU',
-                                           'use_tstar_calibration': True,
-                                           'use_winter_prcp_factor': False,
-                                           'prcp_scaling_factor': 2.5,
-                                           })
+            wdir = os.path.join(self.testdir, 'wd')
+            utils.mkdir(wdir, reset=True)
+            odir = os.path.join(self.testdir, 'my_levs')
+            topof = utils.get_demo_file('srtm_oetztal.tif')
+            np.random.seed(0)
+            border = 80
+            bstr = 'b_080'
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
-                                      'glacier_statistics_11.csv'))
-        assert 'glacier_type' in df
+            # change the reference geodetic mb period, because the climate data of
+            # the test glaciers only go up to 2015
+            run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
+                              output_folder=odir, working_dir=wdir, is_test=True,
+                              test_ids=['RGI60-11.00929'],
+                              dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
+                              evolution_model=evolution_model,
+                              downstream_line_shape=downstream_line_shape,
+                              test_intersects_file=inter,
+                              test_topofile=topof, elev_bands=True,
+                              override_params={'hydro_month_nh': 1,
+                                               'geodetic_mb_period':
+                                               '2000-01-01_2010-01-01',
+                                               'baseline_climate': 'CRU',
+                                               'use_tstar_calibration': True,
+                                               'use_winter_prcp_factor': False,
+                                               'prcp_scaling_factor': 2.5,
+                                               })
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L1', 'summary',
-                                      'glacier_statistics_11.csv'))
-        assert 'dem_source' in df
+            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
+                                          'glacier_statistics_11.csv'))
+            assert 'glacier_type' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L2', 'summary',
-                                      'glacier_statistics_11.csv'))
-        assert 'main_flowline_length' in df
+            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L1', 'summary',
+                                          'glacier_statistics_11.csv'))
+            assert 'dem_source' in df
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L3', 'summary',
-                                      'glacier_statistics_11.csv'))
-        assert 'inv_volume_km3' in df
-        df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L3', 'summary',
-                                      'climate_statistics_11.csv'))
-        assert '1980-2010_avg_prcp' in df
+            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L2', 'summary',
+                                          'glacier_statistics_11.csv'))
+            assert 'main_flowline_length' in df
 
-        assert os.path.isfile(os.path.join(odir, 'RGI61', bstr,
-                                           'package_versions.txt'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L1'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L2'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L3'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L4'))
-        assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L5'))
+            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L3', 'summary',
+                                          'glacier_statistics_11.csv'))
+            assert 'inv_volume_km3' in df
+            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L3', 'summary',
+                                          'climate_statistics_11.csv'))
+            assert '1980-2010_avg_prcp' in df
 
-        # See if we can start from L3 and L4
-        from oggm import tasks
-        from oggm.core.flowline import FlowlineModel, FileModel
-        cfg.PARAMS['continue_on_error'] = False
-        rid = df.rgi_id.iloc[0]
-        entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
+            assert os.path.isfile(os.path.join(odir, 'RGI61', bstr,
+                                               'package_versions.txt'))
+            assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L1'))
+            assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L2'))
+            assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L3'))
+            assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L4'))
+            assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L5'))
 
-        # L3
-        tarf = os.path.join(odir, 'RGI61', bstr, 'L3',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = tasks.run_random_climate(gdir, nyears=10)
-        assert isinstance(model, FlowlineModel)
+            # See if we can start from L3 and L4
+            from oggm import tasks
+            from oggm.core.flowline import FlowlineModel, FileModel
+            cfg.PARAMS['continue_on_error'] = False
+            rid = df.rgi_id.iloc[0]
+            entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
-        # L4
-        tarf = os.path.join(odir, 'RGI61', bstr, 'L4',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = tasks.run_random_climate(gdir, nyears=10)
-        assert isinstance(model, FlowlineModel)
-        model = FileModel(gdir.get_filepath('model_geometry',
-                                            filesuffix='_historical'))
-        assert model.y0 == 2004
-        assert model.last_yr == 2015
-        model = FileModel(gdir.get_filepath('model_geometry',
-                                            filesuffix='_spinup_historical'))
-        assert model.y0 == 1979
-        assert model.last_yr == 2015
+            # L3
+            tarf = os.path.join(odir, 'RGI61', bstr, 'L3',
+                                rid[:8], rid[:11], rid + '.tar.gz')
+            assert not os.path.isfile(tarf)
+            gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+            model = tasks.run_random_climate(gdir, nyears=10)
+            assert isinstance(model, FlowlineModel)
 
-        # L5
-        tarf = os.path.join(odir, 'RGI61', bstr, 'L5',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        with pytest.raises(FileNotFoundError):
-            # We can't create this because the glacier dir is mini
-            tasks.init_present_time_glacier(gdir)
+            # L4
+            tarf = os.path.join(odir, 'RGI61', bstr, 'L4',
+                                rid[:8], rid[:11], rid + '.tar.gz')
+            assert not os.path.isfile(tarf)
+            gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+            model = tasks.run_random_climate(gdir, nyears=10)
+            assert isinstance(model, FlowlineModel)
+            model = FileModel(gdir.get_filepath('model_geometry',
+                                                filesuffix='_historical'))
+            assert model.y0 == 2004
+            assert model.last_yr == 2015
+            model = FileModel(gdir.get_filepath('model_geometry',
+                                                filesuffix='_spinup_historical'))
+            assert model.y0 == 1979
+            assert model.last_yr == 2015
 
-        # Summary
-        ef = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
-                          'historical_run_output_extended_11.nc')
-        sf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
-                          'spinup_historical_run_output_11.nc')
+            # L5
+            tarf = os.path.join(odir, 'RGI61', bstr, 'L5',
+                                rid[:8], rid[:11], rid + '.tar.gz')
+            assert not os.path.isfile(tarf)
+            gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+            with pytest.raises(FileNotFoundError):
+                # We can't create this because the glacier dir is mini
+                tasks.init_present_time_glacier(gdir)
 
-        with xr.open_dataset(ef) as dse:
-            dse = dse.load()
-        with xr.open_dataset(sf) as dss:
-            dss = dss.load()
+            # Summary
+            ef = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
+                              'historical_run_output_extended_11.nc')
+            sf = os.path.join(odir, 'RGI61', bstr, 'L5', 'summary',
+                              'spinup_historical_run_output_11.nc')
 
-        assert dss.time[0] == 1979
-        # comparison with fixed geometry spinup
-        dse = dse.sel(time=slice(dss.time[0], dss.time[-1]))
+            with xr.open_dataset(ef) as dse:
+                dse = dse.load()
+            with xr.open_dataset(sf) as dss:
+                dss = dss.load()
 
-        # Around RGI date they are close
-        # have to exclude rgi_id 'RGI60-11.00719_d02', because no dmdtda data
-        assert_allclose(dss.sel(time=2004).area[1:], dse.sel(time=2004).area[1:], rtol=0.01)
-        assert_allclose(dss.sel(time=2004).length[1:], dse.sel(time=2004).length[1:], atol=940)
-        assert_allclose(dss.sel(time=2004).volume[1:], dse.sel(time=2004).volume[1:], rtol=0.21)
+            assert dss.time[0] == 1979
+            # comparison with fixed geometry spinup
+            dse = dse.sel(time=slice(dss.time[0], dss.time[-1]))
 
-        # Over the period they are... close enough
-        assert_allclose(dss.volume[:, 1:], dse.volume[:, 1:], rtol=0.34)
-        assert_allclose(dss.area[:, 1:], dse.area[:, 1:], rtol=0.2)
+            # Around RGI date they are close
+            assert_allclose(dss.sel(time=2004).area,
+                            dse.sel(time=2004).area,
+                            rtol=2e-2)
+            assert_allclose(dss.sel(time=2004).length,
+                            dse.sel(time=2004).length,
+                            atol=390)
+            assert_allclose(dss.sel(time=2004).volume,
+                            dse.sel(time=2004).volume,
+                            rtol=0.2)
+
+            # Over the period they are... close enough
+            assert_allclose(dss.volume,
+                            dse.volume,
+                            rtol=0.24)
+            assert_allclose(dss.area,
+                            dse.area,
+                            rtol=0.1)
+
+            if evolution_model == 'fl_sia':
+                dss_flux = dss
+            else:
+                dss_implicit = dss
+
+        # compare FluxBased/parabola with Implicit/trapezoidal
+        assert_allclose(dss_flux.volume,
+                        dss_implicit.volume,
+                        rtol=0.04)
+        assert_allclose(dss_flux.area,
+                        dss_implicit.area,
+                        rtol=0.02)
 
     @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):
