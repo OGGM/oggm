@@ -204,7 +204,7 @@ def execute_parallel_tasks(gdir, tasks):
     gdir : :py:class:`oggm.GlacierDirectory`
          the directory to process.
     tasks : list
-         the the list of entity tasks to apply.
+         the list of entity tasks to apply.
          Optionally, each list element can be a tuple, with the first element
          being the task, and the second element a dict that
          will be passed to the task function as ``**kwargs``.

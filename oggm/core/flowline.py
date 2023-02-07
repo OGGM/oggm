@@ -74,7 +74,7 @@ class Flowline(Centerline):
             The water level (to compute volume below sea-level)
         """
 
-        # This is do add flexibility for testing
+        # This is to add flexibility for testing
         if dx is None:
             dx = 1.
         if line is None:
@@ -192,13 +192,6 @@ class Flowline(Centerline):
         thick = np.copy(self.thick)
         n_thick = np.copy(thick)
         bwl = (self.bed_h < water_level) & (thick > 0)
-        # We only look at the last part, a.k.a. tongue
-        bwl_idx = np.where(bwl)[0]
-        bwl_idx = np.split(bwl_idx, np.where(np.diff(bwl_idx) > 1)[0]+1)[-1]
-        bwl = np.isin(np.arange(len(thick)), bwl_idx)
-        if bwl_idx.size > 0:
-            if np.any(self.bed_h[bwl_idx[-1]:] > water_level):
-                bwl = np.full(len(thick), False)
         n_thick[~bwl] = 0
         self.thick = n_thick
         vol_tot = np.sum(self.section * self.dx_meter)
@@ -209,30 +202,6 @@ class Flowline(Centerline):
         self.thick = thick
         fac = vol_bwl / vol_tot if vol_tot > 0 else 0
         return utils.clip_min(vol_bwl -
-                              getattr(self, 'calving_bucket_m3', 0) * fac, 0)
-                              
-    def _vol_above_level(self, water_level=0):
-
-        thick = np.copy(self.thick)
-        n_thick = np.copy(thick)
-        bwl = (self.bed_h < water_level) & (thick > 0)
-        # We only look at the last part, a.k.a. tongue
-        bwl_idx = np.where(bwl)[0]
-        bwl_idx = np.split(bwl_idx, np.where(np.diff(bwl_idx) > 1)[0]+1)[-1]
-        bwl = np.isin(np.arange(len(thick)), bwl_idx)
-        if bwl_idx.size > 0:
-            if np.any(self.bed_h[bwl_idx[-1]:] > water_level):
-                bwl = np.full(len(thick), False)
-        n_thick[~bwl] = 0
-        self.thick = n_thick
-        vol_tot = np.sum(self.section * self.dx_meter)
-        n_thick[bwl] = utils.clip_max(self.surface_h[bwl],
-                                      water_level) - self.bed_h[bwl]
-        self.thick = n_thick
-        vol_bwl = np.sum(self.section * self.dx_meter)
-        self.thick = thick
-        fac = 1 - (vol_bwl / vol_tot) if vol_tot > 0 else 0
-        return utils.clip_min(fac * vol_tot -
                               getattr(self, 'calving_bucket_m3', 0) * fac, 0)
 
     @property
@@ -249,23 +218,7 @@ class Flowline(Centerline):
 
     @property
     def volume_bwl_km3(self):
-        return self.volume_bwl_m3 * 1e-9    
-        
-    @property
-    def volume_asl_m3(self):
-        return self._vol_above_level(water_level=0)
-
-    @property
-    def volume_asl_km3(self):
-        return self.volume_asl_m3 * 1e-9
-
-    @property
-    def volume_awl_m3(self):
-        return self._vol_above_level(water_level=self.water_level)
-
-    @property
-    def volume_awl_km3(self):
-        return self.volume_awl_m3 * 1e-9
+        return self.volume_bwl_m3 * 1e-9
 
     @property
     def area_m2(self):
@@ -318,8 +271,8 @@ class Flowline(Centerline):
         ds.coords['dis_along_flowline'] = np.arange(nx) * self.map_dx * self.dx
         try:
             # This is a bit bad design, but basically if some task
-            # computed to the lons of the flowlines before, use it
-            # we don't have access to gdir here so we cant convert the coords
+            # computed to the lons of the flowlines before use it,
+            # we don't have access to gdir here, so we cant convert the coords
             ds['point_lons'] = (['dis_along_flowline'], self.point_lons)
             ds['point_lons'].attrs['description'] = 'Longitude along the flowline'
             ds['point_lons'].attrs['unit'] = 'deg'
@@ -699,7 +652,8 @@ class FlowlineModel(object):
         self.glen_n = cfg.PARAMS['glen_n']
         self.rho = cfg.PARAMS['ice_density']
         if self.is_tidewater:
-            self.rho_o = cfg.PARAMS['ocean_density'] # Ocean density, must be >= ice density
+            # Ocean density, must be >= ice density
+            self.rho_o = cfg.PARAMS['ocean_density']
         if check_for_boundaries is None:
             check_for_boundaries = cfg.PARAMS[('error_when_glacier_reaches_'
                                                'boundaries')]
@@ -711,8 +665,6 @@ class FlowlineModel(object):
         # Calving shenanigans
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
-        self.smb_awl_m3_since_y0 = 0. # S.m.b. on ice grounded below water level
-        self.discharge_m3_since_y0 = 0. # Discharge
 
         # Time
         if required_model_steps not in ['annual', 'monthly']:
@@ -828,23 +780,7 @@ class FlowlineModel(object):
 
     @property
     def volume_bwl_km3(self):
-        return self.volume_bwl_m3 * 1e-9    
-        
-    @property
-    def volume_asl_m3(self):
-        return np.sum([f.volume_asl_m3 for f in self.fls])
-
-    @property
-    def volume_asl_km3(self):
-        return self.volume_asl_m3 * 1e-9
-
-    @property
-    def volume_awl_m3(self):
-        return np.sum([f.volume_awl_m3 for f in self.fls])
-
-    @property
-    def volume_awl_km3(self):
-        return self.volume_awl_m3 * 1e-9
+        return self.volume_bwl_m3 * 1e-9
 
     @property
     def area_km2(self):
@@ -1054,18 +990,18 @@ class FlowlineModel(object):
             glacier wide diagnostic files - all other outputs are set
             to constants during "spinup"
         dynamic_spinup_min_ice_thick : float or None
-            if set to an float, additional variables are saved which are useful
+            if set to a float, additional variables are saved which are useful
             in combination with the dynamic spinup. In particular only grid
             points with a minimum ice thickness are considered for the total
             area or the total volume. This is useful to smooth out yearly
             fluctuations when matching to observations. The names of this new
             variables include the suffix _min_h (e.g. 'area_m2_min_h')
         make_compatible : bool
-            if set to true this will add all variables to the resulting dataset
+            if set to true this will add all variables to the resulting dataset,
             so it could be combined with any other one. This is necessary if
             different spinup methods are used. For example if using the dynamic
             spinup and setting fixed geometry spinup as fallback, the variable
-            'is_fixed_geometry_spinup' must be added to the dynamic spinup so
+            'is_fixed_geometry_spinup' must be added to the dynamic spinup, so
             it is possible to compile both glaciers together.
         Returns
         -------
@@ -1193,25 +1129,7 @@ class FlowlineModel(object):
             diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
                                                              'below '
                                                              'water-level')
-            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'        
-            
-        if 'volume_asl' in ovars:
-            diag_ds['volume_asl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_asl_m3'].attrs['description'] = ('Glacier volume '
-                                                             'above '
-                                                             'sea-level with '
-                                                             'bed below sea-'
-                                                             'level')
-            diag_ds['volume_asl_m3'].attrs['unit'] = 'm 3'
-
-        if 'volume_awl' in ovars:
-            diag_ds['volume_awl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_awl_m3'].attrs['description'] = ('Glacier volume '
-                                                             'below '
-                                                             'water-level with '
-                                                             'bed below sea-'
-                                                             'level')
-            diag_ds['volume_awl_m3'].attrs['unit'] = 'm 3'
+            diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
 
         if 'area' in ovars:
             diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
@@ -1240,18 +1158,6 @@ class FlowlineModel(object):
             diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
             diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
-
-        if 'smb_awl' in ovars:
-            diag_ds['smb_awl_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['smb_awl_m3'].attrs['description'] = ('Surface mass balance '
-                                                          'above water level')
-            diag_ds['smb_awl_m3'].attrs['unit'] = 'm 3'
-
-        if 'discharge' in ovars:
-            diag_ds['discharge_m3'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['discharge_m3'].attrs['description'] = ('Ice flux through '
-                                                            'terminal boundary')
-            diag_ds['discharge_m3'].attrs['unit'] = 'm 3'
 
         for gi in range(10):
             vn = f'terminus_thick_{gi}'
@@ -1317,25 +1223,7 @@ class FlowlineModel(object):
                 if 'volume_bwl' in ovars_fl:
                     ds['volume_bwl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
                     ds['volume_bwl_m3'].attrs['description'] = 'Section volume below water level'
-                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'                
-                if 'volume_asl' in ovars_fl:
-                    ds['volume_asl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
-                    ds['volume_asl_m3'].attrs['description'] = ('Section volume '
-                                                                'above sea '
-                                                                'level with bed '
-                                                                'below sea level')
-                    ds['volume_asl_m3'].attrs['unit'] = 'm 3'
-                if 'volume_bwl' in ovars_fl:
-                    ds['volume_bwl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
-                    ds['volume_bwl_m3'].attrs['description'] = 'Section volume below water level'
-                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'                
-                if 'volume_awl' in ovars_fl:
-                    ds['volume_awl_m3'] = (('time', 'dis_along_flowline'), sect * 0)
-                    ds['volume_awl_m3'].attrs['description'] = ('Section volume '
-                                                                'above water '
-                                                                'level with bed '
-                                                                'below sea level')
-                    ds['volume_awl_m3'].attrs['unit'] = 'm 3'
+                    ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
                 if 'area' in ovars_fl:
                     ds['area_m2'] = (('time', 'dis_along_flowline'), width)
                     ds['area_m2'].attrs['description'] = 'Section area'
@@ -1374,7 +1262,8 @@ class FlowlineModel(object):
 
                 for j, yr in enumerate(monthly_time[is_spinup_time]):
                     smb = self.get_mb(h, year=yr, fl_id=fl_id, fls=self.fls)
-                    spinup_vol[j] -= np.sum(smb * a)  # per second and minus because backwards
+                    # per second and minus because backwards
+                    spinup_vol[j] -= np.sum(smb * a)
 
             # per unit time
             dt = (monthly_time[1:] - monthly_time[:-1]) * cfg.SEC_IN_YEAR
@@ -1411,19 +1300,25 @@ class FlowlineModel(object):
                         if 'volume_bsl' in ovars_fl:
                             ds['volume_bsl_m3'].data[j, :] = fl.volume_bsl_m3
                         if 'volume_bwl' in ovars_fl:
-                            ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3                        
-                        if 'volume_asl' in ovars_fl:
-                            ds['volume_asl_m3'].data[j, :] = fl.volume_asl_m3
-                        if 'volume_awl' in ovars_fl:
-                            ds['volume_awl_m3'].data[j, :] = fl.volume_awl_m3
+                            ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3
                         if 'ice_velocity' in ovars_fl and (yr > self.y0):
                             # Velocity can only be computed with dynamics
-                            var = self.u_drag[fl_id]
-                            var2 = self.u_slide[fl_id]
-                            val = ((var[1:fl.nx + 1] + var[:fl.nx]) / 2 * 
-                                    self._surf_vel_fac + 
-                                    (var2[1:fl.nx + 1] + var2[:fl.nx]) / 2)
-                            ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
+                            if hasattr(self, 'u_drag'):
+                                var = self.u_drag[fl_id]
+                                var2 = self.u_slide[fl_id]
+                                val = ((var[1:fl.nx + 1] + var[:fl.nx]) / 2 *
+                                       self._surf_vel_fac +
+                                       (var2[1:fl.nx + 1] + var2[:fl.nx]) / 2)
+                                ds['ice_velocity_myr'].data[j, :] = (val *
+                                                                cfg.SEC_IN_YEAR)
+                            else:
+                            # TODO: the factor for surface velocity does not
+                            # have to be applied to sliding, as it is uniform!
+                                var = self.u_stag[fl_id]
+                                val = ((var[1:fl.nx + 1] + var[:fl.nx]) / 
+                                       2 * self._surf_vel_fac)
+                                ds['ice_velocity_myr'].data[j, :] = (val *
+                                                                cfg.SEC_IN_YEAR)                               
                 # j is the yearly index in case we have monthly output
                 # we have to count it ourselves
                 j += 1
@@ -1447,18 +1342,10 @@ class FlowlineModel(object):
                 diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
             if 'calving_rate' in ovars:
                 diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
-            if 'smb_awl' in ovars:
-                diag_ds['smb_awl_m3'].data[i] = self.smb_awl_m3_since_y0
-            if 'discharge' in ovars:
-                diag_ds['discharge_m3'].data[i] = self.discharge_m3_since_y0
             if 'volume_bsl' in ovars:
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
-                diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3            
-            if 'volume_asl' in ovars:
-                diag_ds['volume_asl_m3'].data[i] = self.volume_asl_m3
-            if 'volume_awl' in ovars:
-                diag_ds['volume_awl_m3'].data[i] = self.volume_awl_m3
+                diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
             # Terminus thick is a bit more logic
             ti = None
             for gi in range(10):
@@ -1590,7 +1477,7 @@ class FlowlineModel(object):
 
         Be careful: This only works for CONSTANT (not time-dependent)
         mass balance models.
-        Otherwise the returned state will not be in equilibrium! Don't try to
+        Otherwise, the returned state will not be in equilibrium! Don't try to
         calculate an equilibrium state with a RandomMassBalance model!
         """
 
@@ -1636,8 +1523,7 @@ class FluxBasedModel(FlowlineModel):
                  min_dt=None, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_use_limiter=None,
-                 water_level=None,
-                 **kwargs):
+                 water_level=None, **kwargs):
         """Instantiate the model.
 
         Parameters
@@ -1702,10 +1588,6 @@ class FluxBasedModel(FlowlineModel):
         calving_k : float
             the calving proportionality constant (units: yr-1). Use the
             one from PARAMS per default
-        calving_use_limiter : bool
-            whether to switch on the calving limiter on the parameterisation
-            makes the calving fronts thicker but the model is more stable
-            (deprecated!)
         water_level : float
             the water level. It should be zero m a.s.l, but:
             - sometimes the frontal elevation is unrealistically high (or low).
@@ -1744,17 +1626,12 @@ class FluxBasedModel(FlowlineModel):
             do_kcalving = cfg.PARAMS['use_kcalving_for_run']
         self.do_calving = do_kcalving and self.is_tidewater
         if calving_k is None:
-           calving_k = cfg.PARAMS['calving_k']
+            calving_k = cfg.PARAMS['calving_k']
         if do_kcalving:
             self.calving_k = calving_k / cfg.SEC_IN_YEAR
 
         self.ovars = cfg.PARAMS['store_diagnostic_variables']
-        # This is deprecated and should not have an effect anymore
-        # with the implementation of frontal dynamics below.
-        # if calving_use_limiter is None:
-        #     calving_use_limiter = cfg.PARAMS['calving_use_limiter']
-        # self.calving_use_limiter = calving_use_limiter
-        
+
         # Stretching distance (or stress coupling length) for frontal dynamics
         if self.do_calving:
             self.stretch_dist_p = cfg.PARAMS.get('stretch_dist', 8e3)
@@ -1815,7 +1692,7 @@ class FluxBasedModel(FlowlineModel):
             nx = fl.nx
             # This is not staggered
             self.trib_flux.append(np.zeros(nx))
-            # We add an additional fake grid point at the end of tributaries
+            # We add an fake grid point at the end of tributaries
             if trib[0] is not None:
                 nx = fl.nx + 1
             # +1 is for the staggered grid
@@ -1862,7 +1739,7 @@ class FluxBasedModel(FlowlineModel):
             width = fl.widths_m
             section = fl.section
             dx = fl.dx_meter
-            depth = utils.clip_min(0,self.water_level - fl.bed_h)
+            depth = utils.clip_min(0, self.water_level - fl.bed_h)
 
             # If it is a tributary, we use the branch it flows into to compute
             # the slope of the last grid point
@@ -1875,21 +1752,8 @@ class FluxBasedModel(FlowlineModel):
                 section = np.append(section, section[-1])
                 width = np.append(width, width[-1])
                 depth = np.append(depth, depth[-1])
-            # elif self.do_calving and self.calving_use_limiter:
-                # We lower the max possible ice deformation
-                # by clipping the surface slope here. It is completely
-                # arbitrary but reduces ice deformation at the calving front.
-                # I think that in essence, it is also partly
-                # a "calving process", because this ice deformation must
-                # be less at the calving front. The result is that calving
-                # front "free boards" are quite high.
-                # Note that 0 is arbitrary, it could be any value below SL
-                #
-                # This is deprecated and should not have an effect anymore
-                # with the implementation of frontal dynamics below.
-                # surface_h = utils.clip_min(surface_h, self.water_level)
 
-            # Staggered gradient            
+            # Staggered gradient
             slope_stag[0] = 0
             slope_stag[1:-1] = (surface_h[0:-1] - surface_h[1:]) / dx
             slope_stag[-1] = slope_stag[-2]
@@ -1936,40 +1800,45 @@ class FluxBasedModel(FlowlineModel):
             if fl.has_ice() and np.any(ice_below_wl) and self.do_calving:
                 ice_above_wl = ((fl.bed_h < self.water_level) &
                                 (fl.thick >= (self.rho_o / self.rho) * depth))
+                # Some shenanigans to make sure we are at the front and not
+                # an upstream basin
                 if np.any(ice_above_wl):
                     last_above_wl = np.where(ice_above_wl)[0][-1]
                 else:
                     last_above_wl = np.where(ice_below_wl)[0][0]
                 if fl.bed_h[last_above_wl+1] > self.water_level and \
-                    np.any(ice_below_wl[last_above_wl+1:]):
+                        np.any(ice_below_wl[last_above_wl+1:]):
                     last_above_wl = (np.where(ice_below_wl[last_above_wl+1:])[0][0] +
                                      last_above_wl+1)
-                
-                last_above_wl = int(utils.clip_max(last_above_wl, 
+
+                last_above_wl = int(utils.clip_max(last_above_wl,
                                                    len(fl.bed_h)-2))
                 first_ice = np.where(fl.thick[0:last_above_wl+1] > 0)[0][0]
-                land_interface = ((fl.bed_h[last_above_wl+1] > self.water_level) 
-                                   & (fl.thick[last_above_wl+1] > 0))
+                # Check that the "last_above_wl" is not just the last in an
+                # upstream basin connected to ice "above_wl" downstream
+                land_interface = ((fl.bed_h[last_above_wl+1] > self.water_level)
+                                  & (fl.thick[last_above_wl+1] > 0))
 
                 # Determine water depth at the front
                 h = fl.thick[last_above_wl]
                 d = h - (fl.surface_h[last_above_wl] - self.water_level)
                 thick_stag[last_above_wl+1] = h
                 depth_stag[last_above_wl+1] = d
-                                         
-                # Determine height above buoancy
-                z_a_b = utils.clip_min(0,thick_stag - depth_stag *
-                                         (self.rho_o / self.rho))
 
-                # Compute net hydrostatic force at the front. One could think 
-                # about incorporating ice mélange / sea ice here as an 
+                # Determine height above buoancy
+                z_a_b = utils.clip_min(0, thick_stag - depth_stag *
+                                       (self.rho_o / self.rho))
+
+                # Compute net hydrostatic force at the front. One could think
+                # about incorporating ice mélange / sea ice here as an
                 # additional backstress term. (And also in the frontal ablation
                 # formulation below.)
                 if not land_interface:
-                    pull_last = utils.clip_min(0,0.5 * G * (self.rho * h**2 -
+                    # Calculate the additional (pull) force
+                    pull_last = utils.clip_min(0, 0.5 * G * (self.rho * h**2 -
                                                self.rho_o * d**2))
 
-                    # Determine distance over which above stress is distributed
+                    # Determine distance over which above force is distributed
                     stretch_length = (last_above_wl - first_ice) * dx
                     stretch_length = utils.clip_min(stretch_length, dx)
                     stretch_dist = utils.clip_max(stretch_length,
@@ -1984,19 +1853,19 @@ class FluxBasedModel(FlowlineModel):
                         stretch_factor = stretch_dist / dx
                         n_stretch = 1
 
-                    stretch_first = utils.clip_min(0,(last_above_wl+2)-
-                                                      n_stretch).astype(int)
+                    stretch_first = utils.clip_min(0, (last_above_wl+2) -
+                                                   n_stretch).astype(int)
                     stretch_last = last_above_wl+2
 
-                    # Take slope for stress calculation at boundary grid cell 
-                    # as the mean over the "stretched" distance (see above)
+                    # Take slope for stress calculation at boundary grid cell
+                    # as the mean over the stretched distance (see above)
                     if stretch_first != stretch_last-1:
                         slope_stag[last_above_wl+1] = np.nanmean(slope_stag
                                                                  [stretch_first-1:
                                                                   stretch_last-1])
                 stress = self.rho * G * slope_stag * thick_stag
-                if not land_interface:
                 # Add "stretching stress" to basal shear/driving stress
+                if not land_interface:
                     stress[stretch_first:stretch_last] = (stress[stretch_first:
                                                           stretch_last] +
                                                           stretch_factor *
@@ -2008,12 +1877,15 @@ class FluxBasedModel(FlowlineModel):
                 # Arbitrarily manipulating u_slide for grid cells
                 # approaching buoyancy to prevent it from going
                 # towards infinity...
-                u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N # Not sure if sf_stag is correct here
-                u_slide = np.where(z_a_b <= 0.01 * thick_stag, 4 * u_drag, 
+                # Not sure if sf_stag is correct here
+                u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N
+                u_slide = np.where(z_a_b <= 0.01 * thick_stag, 4 * u_drag,
                                    u_slide)
 
                 # Force velocity beyond grounding line to be zero in order to
-                # prevent shelf dynamics
+                # prevent shelf dynamics. This might accumulate too much volume
+                # in the last_above_wl+1 grid cell, which we deal with in the
+                # calving scheme below
                 if not land_interface:
                     u_slide[last_above_wl+2:] = 0
                     u_drag[last_above_wl+2:] = 0
@@ -2022,27 +1894,25 @@ class FluxBasedModel(FlowlineModel):
 
                 # Staggered section
                 # For the flux out of the last grid cell, the staggered section
-                # is set to the cross section of the calving front.
+                # is set to the cross section of the calving front, as we are
+                # dealing with a terminal cliff.
                 section_stag[1:-1] = (section[0:-1] + section[1:]) / 2.
                 section_stag[[0, -1]] = section[[0, -1]]
                 if not land_interface:
                     section_stag[last_above_wl+1] = section[last_above_wl]
-                # We calculate the "baseline" calving flux and discharge here to
-                # be consistent with the dynamics above
+                # We calculate the "baseline" calving flux here to be consistent
+                # with the dynamics:
                     k = self.calving_k
-                    self.calving_flux = utils.clip_min(0, k * d * h * 
+                    self.calving_flux = utils.clip_min(0, k * d * h *
                                                        fl.widths_m[last_above_wl])
-                    if 'discharge' in self.ovars:
-                        self.discharge = (u_stag[last_above_wl+1] * 
-                                          section[last_above_wl])
 
             # Usual ice dynamics
             else:
                 rhogh = (self.rho*G*slope_stag)**N
                 u_drag[:] = (thick_stag**(N+1)) * self._fd * rhogh * \
-                              sf_stag**N
+                             sf_stag**N
                 u_slide[:] = (thick_stag**(N-1)) * self.fs * rhogh * \
-                              sf_stag**N # Not sure if sf is correct here
+                              sf_stag**N  # Not sure if sf is correct here
                 u_stag[:] = u_drag + u_slide
 
                 # Staggered section
@@ -2092,14 +1962,10 @@ class FluxBasedModel(FlowlineModel):
             # change only if step dt is larger than the chosen dt
             if self.fixed_dt < dt:
                 dt = self.fixed_dt
-                
-        # Calculate total discharged volume
-        if self.do_calving and 'discharge' in self.ovars:
-            self.discharge_m3_since_y0 += self.discharge * dt
-        
+
         # A second loop for the mass exchange
         for fl_id, fl in enumerate(self.fls):
-            
+            # We empty the calving bucket, if there is no ice below water
             if not np.any((fl.thick > 0) & (fl.bed_h < self.water_level)):
                 fl.calving_bucket_m3 = 0
 
@@ -2125,30 +1991,29 @@ class FluxBasedModel(FlowlineModel):
             bed_below_wl = (fl.bed_h < self.water_level) & (fl.thick > 0)
             if self.do_calving and fl.has_ice() and np.any(bed_below_wl):
                 bed_below_wl = np.where(bed_below_wl)[0]
-                # We only look at the last part, a.k.a. tongue
-                diff_bwl = np.diff(bed_below_wl) 
-                bed_below_wl = np.split(bed_below_wl, 
+                # We only look at the last part, a.k.a. tongue here
+                diff_bwl = np.diff(bed_below_wl)
+                bed_below_wl = np.split(bed_below_wl,
                                         np.where(diff_bwl > 1)[0]+1)[-1]
                 if not np.any(fl.thick[:bed_below_wl[0]+1] == 0) and not \
-                       np.any(fl.bed_h[bed_below_wl[-1]:] > self.water_level):
-                    mb_limit_awl = ((-fl.surface_h[bed_below_wl] + 
+                        np.any(fl.bed_h[bed_below_wl[-1]:] > self.water_level):
+                    mb_limit_awl = ((-fl.surface_h[bed_below_wl] +
                                      self.water_level) * widths[bed_below_wl])
-                    mb[bed_below_wl] = utils.clip_min(mb[bed_below_wl], 
+                    mb[bed_below_wl] = utils.clip_min(mb[bed_below_wl],
                                                       mb_limit_awl)
                     mb[fl.surface_h < self.water_level] = 0
-                if not np.any(fl.bed_h[bed_below_wl[-1]:] > self.water_level) \
-                    and 'smb_asl' in self.ovars:
-                    self.smb_awl_m3_since_y0 += np.sum(mb[bed_below_wl]) * dx
 
             # Update section with ice flow and mass balance
             new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt/dx +
                            trib_flux*dt/dx + mb)
+
             # Keep positive values only and store
             fl.section = utils.clip_min(new_section, 0)
 
             section = fl.section
             self.calving_rate_myr = 0.
-            # Remove detached bodies of ice in the water
+            # Remove detached bodies of ice in the water, which can happen as
+            # a result of dynamics + surface melt
             bed_below_wl = (fl.thick > 0) & (fl.bed_h < self.water_level)
             if fl.has_ice() and np.any(bed_below_wl) and self.do_calving:
                 bed_below_wl = np.where(bed_below_wl)[0]
@@ -2158,24 +2023,24 @@ class FluxBasedModel(FlowlineModel):
                                     (fl.bed_h < self.water_level))[0]
                 if len(no_ice) > 0:
                     if no_ice[-1]+1 >= len(fl.bed_h):
-                        no_ice = np.delete(no_ice,-1)
-                    first_ice = np.where((fl.thick[no_ice+1] > 0) & 
+                        no_ice = np.delete(no_ice, -1)
+                    first_ice = np.where((fl.thick[no_ice+1] > 0) &
                                          (fl.bed_h[no_ice+1] < self.water_level))
                     first_ice = no_ice[first_ice]+1
                 if len(first_ice) > 0:
                     for i in range(len(first_ice)):
                         last_ice = []
-                        last_ice = np.nonzero((fl.thick[first_ice[i]:] > 0) & 
-                                              (fl.bed_h[first_ice[i]:] < 
+                        last_ice = np.nonzero((fl.thick[first_ice[i]:] > 0) &
+                                              (fl.bed_h[first_ice[i]:] <
                                                self.water_level))[0]
                         if len(last_ice) > 0:
                             last_ice = last_ice[-1]
-                            detached = np.arange(first_ice[i], 
+                            detached = np.arange(first_ice[i],
                                                  last_ice+first_ice[i]+1)
                             detached = np.intersect1d(detached, bed_below_wl)
                             add_calving = np.sum(section[detached]) * dx
                             self.calving_m3_since_y0 += add_calving
-                            self.calving_rate_myr += (np.size(detached) * dx / 
+                            self.calving_rate_myr += (np.size(detached) * dx /
                                                       dt * cfg.SEC_IN_YEAR)
                             section[detached] = 0
                             fl.section = section
@@ -2206,43 +2071,46 @@ class FluxBasedModel(FlowlineModel):
             if fl.bed_h[fl.thick > 0][-1] > self.water_level:
                 continue
             # We do calving only if there is some ice grounded below water
-            depth = utils.clip_min(0,self.water_level - fl.bed_h)
+            depth = utils.clip_min(0, self.water_level - fl.bed_h)
             ice_above_wl = ((fl.bed_h < self.water_level) &
                             (fl.thick >= (self.rho_o / self.rho) * depth))
-            ice_below_wl = ((fl.bed_h < self.water_level) & (fl.thick  > 0))
+            ice_below_wl = ((fl.bed_h < self.water_level) & (fl.thick > 0))
             # If there is only ice below water, we just remove it
             if np.all(fl.surface_h[fl.thick > 0] < self.water_level):
                 add_calving = np.sum(section) * dx
                 self.calving_m3_since_y0 += add_calving
-                self.calving_rate_myr += (np.sum(fl.surface_h[fl.thick > 0] < 
-                                          self.water_level) * dx / dt * 
+                self.calving_rate_myr += (np.sum(fl.surface_h[fl.thick > 0] <
+                                          self.water_level) * dx / dt *
                                           cfg.SEC_IN_YEAR)
                 section[:] = 0
                 fl.section = section
                 fl.calving_bucket_m3 = 0
-                continue  
+                continue
             if np.any(ice_above_wl):
                 last_above_wl = np.where(ice_above_wl)[0][-1]
             elif np.any(ice_below_wl):
                 last_above_wl = np.where(ice_below_wl)[0][0]
+            # Make sure again we are where we want to be; the end of the glacier
             if fl.bed_h[last_above_wl+1] > self.water_level and \
                np.any(ice_below_wl[last_above_wl+1:]):
                 last_above_wl = (np.where(ice_below_wl[last_above_wl+1:])[0][0] +
                                  last_above_wl+1)
-            last_above_wl = int(utils.clip_max(last_above_wl, len(fl.bed_h)-2))            
-            if (fl.bed_h[last_above_wl+1] > self.water_level and 
-                fl.thick[last_above_wl+1] > 0):
+            last_above_wl = int(utils.clip_max(last_above_wl, len(fl.bed_h)-2))
+            # As above in the dynamics, make sure we are not at a land-interface
+            if (fl.bed_h[last_above_wl+1] > self.water_level and
+                    fl.thick[last_above_wl+1] > 0):
                 continue
 
             # OK, we're really calving
-            # Make sure that we have a smooth front
+            # Make sure that we have a smooth front. Necessary due to inhibiting
+            # ice flux beyond the grounding line in the dynamics above
             section = fl.section
-            while ((fl.surface_h[last_above_wl] > fl.surface_h[last_above_wl-1]) 
-                and fl.thick[last_above_wl] > 0) and last_above_wl > 0:
+            while ((fl.surface_h[last_above_wl] > fl.surface_h[last_above_wl-1])
+                   and fl.thick[last_above_wl] > 0) and last_above_wl > 0:
                 diff_sec = 0
                 old_thick = fl.thick[last_above_wl]
                 old_sec = fl.section[last_above_wl]
-                new_thick = (old_thick - (fl.surface_h[last_above_wl] - 
+                new_thick = (old_thick - (fl.surface_h[last_above_wl] -
                                           fl.surface_h[last_above_wl-1]))
                 fl.thick[last_above_wl] = new_thick
                 diff_sec = old_sec - fl.section[last_above_wl]
@@ -2251,20 +2119,28 @@ class FluxBasedModel(FlowlineModel):
                 fl.section = section
                 section = fl.section
                 if ((fl.bed_h[last_above_wl+1] < self.water_level) &
-                    (fl.thick[last_above_wl+1] >= (self.rho_o / self.rho) * 
+                    (fl.thick[last_above_wl+1] >= (self.rho_o / self.rho) *
                      depth[last_above_wl+1])):
                     last_above_wl += 1
                 else:
                     break
-            # Add to the bucket and the diagnostics
+
             q_calving = self.calving_flux * dt
+            # Remove ice below flotation beyond the first grid cell after the
+            # grounding line. That cell is the "advance" bucket, meaning it can
+            # contain ice below flotation.
             add_calving = np.sum(section[last_above_wl+2:]) * dx
+            # Add to the bucket and the diagnostics. As we calculated the
+            # calving flux from the glacier state at the start of the time step,
+            # we do not add to the calving bucket what is already removed by the 
+            # flotation criterion to avoid double counting.
             self.calving_m3_since_y0 += utils.clip_min(q_calving, add_calving)
             fl.calving_bucket_m3 += utils.clip_min(0, q_calving - add_calving)
-            self.calving_rate_myr += (utils.clip_min(q_calving, add_calving) / 
+            self.calving_rate_myr += (utils.clip_min(q_calving, add_calving) /
                                       fl.section[last_above_wl] / dt *
                                       cfg.SEC_IN_YEAR)
             section[last_above_wl+2:] = 0
+            # This is what remains to be removed by the calving bucket.
             to_remove = section[last_above_wl+1] * dx
             if 0 < to_remove < fl.calving_bucket_m3:
                 # This is easy, we remove everything
@@ -2272,13 +2148,13 @@ class FluxBasedModel(FlowlineModel):
                 fl.calving_bucket_m3 -= to_remove
             elif to_remove > 0:
                 # We can only remove part of it
-                section[last_above_wl+1] = ((to_remove - 
+                section[last_above_wl+1] = ((to_remove -
                                              fl.calving_bucket_m3) / dx)
                 fl.calving_bucket_m3 = 0
 
             vol_last = section[last_above_wl] * dx
             while fl.calving_bucket_m3 >= vol_last and \
-                  fl.bed_h[last_above_wl] < self.water_level:
+                    fl.bed_h[last_above_wl] < self.water_level:
                 fl.calving_bucket_m3 -= vol_last
                 section[last_above_wl] = 0
 
@@ -2342,8 +2218,8 @@ class FluxBasedModel(FlowlineModel):
         var2 = self.u_slide[fl_id]
         _u_slide = (var2[1:nx+1] + var2[:nx])/2
         df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2 + _u_slide
-        df['surface_ice_velocity'] = ((df['ice_velocity'] * self._surf_vel_fac) +
-                                      _u_slide)
+        df['surface_ice_velocity'] = (((var[1:nx+1] + var[:nx])/2  *
+                                       self._surf_vel_fac) + _u_slide)
         var = self.shapefac_stag[fl_id]
         df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
 
@@ -2587,7 +2463,7 @@ class SemiImplicitModel(FlowlineModel):
         self.w0_stag = (w0[0:-1] + w0[1:]) / 2
         self.rhog = (self.rho * G) ** self.glen_n
 
-        # variables needed for the calculation of some diagnostics, this
+        # variables needed for the calculation of some diagnostics, these
         # calculations are done with @property, because they are not computed
         # on the fly during the dynamic run as in FluxBasedModel
         self._u_stag = [np.zeros(nx + 1)]
@@ -2919,7 +2795,8 @@ class FileModel(object):
         """rollmin is the number of years you want to smooth onto"""
         sel = 0
         for fl, fl_ts in zip(self.fls, self.fl_tss):
-            widths = np.where(fl_ts['ts_section'] > 0., fl_ts['ts_width_m'], 0.)
+            widths = np.where(fl_ts['ts_section'] > 0.,
+                              fl_ts['ts_width_m'], 0.)
             sel += widths.sum(axis=1) * fl.dx_meter
         sel = pd.Series(data=sel, index=self.time, name='area_m2')
         if rollmin != 0:
@@ -3578,7 +3455,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     output_filesuffix : str
-        this add a suffix to the output file (useful to avoid overwriting
+        this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
     mb_model : :py:class:`core.MassBalanceModel`
         a MassBalanceModel instance
@@ -3658,10 +3535,10 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         fs = cfg.PARAMS['fs']
         glen_a = cfg.PARAMS['glen_a']
         calving_k = cfg.PARAMS['calving_k']
-
-    kwargs.setdefault('fs', fs)
-    kwargs.setdefault('glen_a', glen_a)
-    kwargs.setdefault('calving_k', calving_k)
+    if evolution_model != SemiImplicitModel:
+        kwargs.setdefault('fs', fs)
+        kwargs.setdefault('glen_a', glen_a)
+        kwargs.setdefault('calving_k', calving_k)
 
     if store_model_geometry is None:
         store_model_geometry = cfg.PARAMS['store_model_geometry']
@@ -3708,11 +3585,11 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                                        'to prevent this error.')
 
     model = evolution_model(fls, mb_model=mb_model, y0=ys,
-                           inplace=True,
-                           is_tidewater=gdir.is_tidewater,
-                           is_lake_terminating=gdir.is_lake_terminating,
-                           water_level=water_level,
-                           **kwargs)
+                            inplace=True,
+                            is_tidewater=gdir.is_tidewater,
+                            is_lake_terminating=gdir.is_lake_terminating,
+                            water_level=water_level,
+                            **kwargs)
 
     with np.warnings.catch_warnings():
         # For operational runs we ignore the warnings
@@ -3795,7 +3672,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
-        this add a suffix to the output file (useful to avoid overwriting
+        this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
     init_model_filesuffix : str
         if you want to start from a previous model run state. Can be
@@ -3914,7 +3791,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
-        this add a suffix to the output file (useful to avoid overwriting
+        this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
@@ -4413,7 +4290,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                 # Update bucket with accumulation and melt
                 snow_bucket += prcpsol_off_g
                 # It can only melt that much
-                melt_off_g = np.where((snow_bucket - melt_off_g) >= 0, melt_off_g, snow_bucket)
+                melt_off_g = np.where((snow_bucket - melt_off_g) >= 0, 
+                                      melt_off_g, snow_bucket)
                 # Update bucket
                 snow_bucket -= melt_off_g
 
@@ -4434,7 +4312,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                 # Snow bucket is a state variable - stored at end of timestamp
                 if store_monthly_hydro:
                     if m == 12:
-                        out['snow_bucket']['data'][i+1, 0] += np.sum(snow_bucket)
+                        out['snow_bucket']['data'][i + 1, 0] += np.sum(snow_bucket)
                     else:
                         out['snow_bucket']['data'][i, m] += np.sum(snow_bucket)
                 else:
@@ -4472,7 +4350,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         else:
             # Correct for mass-conservation and match the ice-dynamics model
             fmod.run_until(yr + 1)
-            model_mb = (fmod.volume_m3 - prev_model_vol) * cfg.PARAMS['ice_density']
+            model_mb = (fmod.volume_m3 - prev_model_vol) *  cfg.PARAMS['ice_density']
             prev_model_vol = fmod.volume_m3
 
             reconstructed_mb = (out['snowfall_on_glacier']['data'][i, :].sum() -
@@ -4512,7 +4390,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         ods.coords['month_2d'] = ('month_2d', np.arange(1, 13))
         # For the user later
         sm = cfg.PARAMS['hydro_month_' + mb_mod.hemisphere]
-        ods.coords['calendar_month_2d'] = ('month_2d', (np.arange(12) + sm - 1) % 12 + 1)
+        ods.coords['calendar_month_2d'] = ('month_2d', 
+                                           (np.arange(12) + sm - 1) % 12 + 1)
     for varname, d in out.items():
         data = d.pop('data')
         if varname not in out_vars:
@@ -4618,7 +4497,8 @@ def spec_mb_stop_criterion(model, state, spec_mb_threshold=50, n_years=60):
     if area < 1 or len(state['volume_m3']) == 0:
         spec_mb = np.NaN
     else:
-        spec_mb = (volume - state['volume_m3'][-1]) / area * cfg.PARAMS['ice_density']
+        spec_mb = ((volume - state['volume_m3'][-1]) / 
+                   area * cfg.PARAMS['ice_density'])
 
     state['spec_mb'] = np.append(state['spec_mb'], [spec_mb])
     state['volume_m3'] = np.append(state['volume_m3'], [volume])
@@ -4771,7 +4651,7 @@ def clean_merged_flowlines(gdir, buffer=None):
     After matching flowlines were found and merged to one glacier directory
     this function makes them nice:
     There should only be one flowline per bed, so overlapping lines have to be
-    cut, attributed to a another flowline and ordered.
+    cut, attributed to another flowline and ordered.
 
     Parameters
     ----------
@@ -4831,7 +4711,7 @@ def clean_merged_flowlines(gdir, buffer=None):
                 for _i, _p in enumerate(fl1.line.coords):
                     if _p == _ov1:
                         oix = _i
-                # low indices are more likely due to an wrong overlap
+                # low indices are more likely due to a wrong overlap
                 if oix < 10:
                     oix = 9999
             ol_index.append(oix)
