@@ -1382,15 +1382,13 @@ def decide_winter_precip_factor(gdir):
 @entity_task(log, writes=['inversion_flowlines'],
              fallback=_fallback_mu_star_calibration)
 def mu_star_calibration_from_geodetic_mb(gdir,
-                                         fa_data_path=None,
                                          ref_mb=None,
                                          ref_period='',
                                          step_height_for_corr=25,
                                          max_height_change_for_corr=3000,
                                          ignore_hydro_months=False,
                                          min_mu_star=None,
-                                         max_mu_star=None,
-                                         corr_factor=0.75, unc='no'):
+                                         max_mu_star=None):
     """Compute the flowlines' mu* from the reference geodetic MB data.
 
     This is similar to mu_star_calibration but using the reference geodetic
@@ -1402,8 +1400,6 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
-    fa_data_path : str
-        path to frontal ablation data used for calibration
     ref_mb : float
         the reference mass balance to match (units: kg m-2 yr-1)
     ref_period : str, default: PARAMS['geodetic_mb_period']
@@ -1416,25 +1412,13 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         defaults to cfg.PARAMS['min_mu_star']
     max_mu_star: bool, optional
         defaults to cfg.PARAMS['max_mu_star']
-    corr_factor: float
-        assumed fraction of volume change below water level in calibration data
-    unc: string, optional
-        flag for handling uncertainties in frontal ablation data to be able
-        to find a value for mu
     """
-
-    diag = gdir.get_diagnostics()
-    unc = diag.get('unc_fa', unc)
 
     # mu* constraints
     if min_mu_star is None:
         min_mu_star = cfg.PARAMS['min_mu_star']
     if max_mu_star is None:
         max_mu_star = cfg.PARAMS['max_mu_star']
-
-    MB_PARAMS = ['temp_default_gradient', 'temp_all_solid', 'temp_all_liq',
-                 'temp_melt', 'prcp_scaling_factor', 'climate_qc_months',
-                 'hydro_month_nh', 'hydro_month_sh']
 
     sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
     if sm == 1:
@@ -1492,78 +1476,17 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         ref_mb = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
         ref_mb = float(ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda'])
         # dmdtda: in meters water-equivalent per year -> we convert
-        ref_mb *= 1000 # kg m-2 yr-1
-    log.workflow('({}) ref. m.b.: {}'.format(gdir.rgi_id,ref_mb))
+        ref_mb *= 1000  # kg m-2 yr-1
 
     # Do we have a calving glacier?
-    # cmb = calving_mb(gdir)
-    # if cmb != 0:
-    #     raise NotImplementedError('Calving with geodetic MB is not implemented '
-    #                               'yet, but it should actually work. Well keep '
-    #                               'you posted!')
+    cmb = calving_mb(gdir)
+    if cmb != 0:
+        raise NotImplementedError('Calving with geodetic MB is not implemented '
+                                  'yet, but it should actually work. Well keep '
+                                  'you posted!')
 
-    # Here we add the frontal ablation and mass changes below water level to
-    # the mix, but it's dirty...
-    do_calving = cfg.PARAMS['use_kcalving_for_run'] and \
-                 cfg.PARAMS['use_kcalving_for_inversion'] and gdir.is_tidewater
-    if do_calving:
-        fa_will = np.genfromtxt(fa_data_path, delimiter=',',
-                                usecols=np.arange(0, 10), dtype='unicode')
-        rgi_list = fa_will[1:,0]
-        rgi_id = gdir.rgi_id
-        idx = np.where(fa_will[:, 0] == rgi_id)
-        if ref_period[:4] == '2000' and ref_period[11:15] == '2010':
-            calving_will = float(fa_will[idx, 4])
-            terminus_change_will = (float(fa_will[idx, 8]) * corr_factor)
-            unc_will = float(fa_will[idx, 5])
-
-        elif ref_period[:4] == '2010' and ref_period[11:15] == '2020':
-            calving_will = float(fa_will[idx, 6])
-            terminus_change_will = (float(fa_will[idx, 9]) * corr_factor)
-            unc_will = float(fa_will[idx, 7])
-
-        if (ref_period[:4] == '2000' and ref_period[11:15] == '2020') or \
-            calving_will == 0:
-            calving_will = (float(fa_will[idx, 6])+
-                            float(fa_will[idx, 4])) / 2
-            terminus_change_will = ((float(fa_will[idx, 8]) + 
-                                     float(fa_will[idx, 9])) * corr_factor / 2)
-            unc_will = (float(fa_will[idx, 5])**2 +
-                        float(fa_will[idx, 7])**2)**0.5 / 2
-
-        # Shift the frontal ablation estimate, if the mu calculating function
-        # is not able to find a value. (Probably because frontal ablation
-        # estimate and geodetic mass change don't fit together.)
-        log.workflow('({}) Unc. applied: {}'.format(gdir.rgi_id,unc))
-        if unc == 'low':
-            calving_will_unc = calving_will - unc_will
-            calving_will_unc = utils.clip_min(calving_will_unc, 0.1*calving_will)
-            terminus_change_will = (terminus_change_will *
-                                    (calving_will_unc / calving_will))
-            calving_will = calving_will_unc
-        if unc == 'half':
-            calving_will = 0.5*calving_will
-            terminus_change_will = 0.5*terminus_change_will
-        if unc == 'vlow':
-            calving_will = 0.1*calving_will
-            terminus_change_will = 0.1*terminus_change_will
-        if unc == 'ulow':
-            calving_will = 0.01*calving_will
-            terminus_change_will = 0.01*terminus_change_will
-        if unc == 'high':
-            calving_will_unc = calving_will + unc_will
-            terminus_change_will = (terminus_change_will *
-                                    (calving_will_unc / calving_will))
-            calving_will = calving_will_unc
-
-        cmb = (calving_will * 1e12 / gdir.rgi_area_m2)
-        log.workflow('({}) Frontal ablation added: {}'.format(gdir.rgi_id,cmb))
-        # _mu_star_per_minimization solves for 0, we add calving to the match
-        ref_mb += cmb
-        tmb = (terminus_change_will * 1e12 / gdir.rgi_area_m2)
-        log.workflow('({}) Terminus change substracted: {}'.format(gdir.rgi_id,tmb))
-        ref_mb += tmb
-        log.workflow('({}) Resulting s.m.b.: {}'.format(gdir.rgi_id,ref_mb))
+    # _mu_star_per_minimization solves for 0, we add calving to the match
+    ref_mb += cmb
 
     try:
         mu_star = optimize.brentq(_mu_star_per_minimization,
@@ -1638,10 +1561,10 @@ def mu_star_calibration_from_geodetic_mb(gdir,
         sel_mus = mu_candidates[np.isfinite(mu_candidates)]
         if len(sel_mus) == 0:
             # Yeah nothing we can do here
-            raise MassBalanceCalibrationError(('({}) We could not find a way to '
+            raise MassBalanceCalibrationError('We could not find a way to '
                                               'correct the climate data and '
                                               'fit within the prescribed '
-                                              'bounds for mu*.').format(gdir.rgi_id))
+                                              'bounds for mu*.')
 
         # We have just picked the first, but to be fair it is arbitrary
         # We could also pick one randomly... but here we rather prefer to have
@@ -1661,7 +1584,7 @@ def mu_star_calibration_from_geodetic_mb(gdir,
     out = gdir.get_climate_info()
     out['mb_calib_params'] = {k: cfg.PARAMS[k] for k in MB_PARAMS}
     gdir.write_json(out, 'climate_info')
-    log.workflow('({}) Found mu*: {}'.format(gdir.rgi_id,mu_star))
+
     # Store diagnostics
     df = gdir.read_json('local_mustar', allow_empty=True)
     df['rgi_id'] = gdir.rgi_id
