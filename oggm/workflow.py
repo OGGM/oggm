@@ -586,7 +586,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
         if gdirs_c and use_geodetic:
             execute_entity_task(tasks.find_inversion_calving_from_any_mb,
                                 gdirs_c, glen_a=glen_a, fs=fs,
-                                mb_years=mb_years)
+                                mb_years=mb_years,
+                                add_to_log_file=add_to_log_file)
         elif gdirs_c:
             execute_entity_task(tasks.find_inversion_calving, gdirs_c,
                                 glen_a=glen_a, fs=fs,
