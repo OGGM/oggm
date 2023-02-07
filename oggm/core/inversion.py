@@ -1225,7 +1225,7 @@ def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
 
     # The functions all have the same shape: they decrease, then increase
     # We seek the absolute minimum first. We seek for rel_h = h / h* (see Malles
-    # et al. for details).
+    # et al. 2023 for details).
     def to_minimize(rel_h):
         f_b = th - water_level
         if fixed_water_depth:
@@ -1522,7 +1522,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     # The functions all have the same shape: they decrease, then increase
     # We seek the absolute minimum first. We seek for rel_h = h / h* (see Malles
-    # et al. for details).
+    # et al. 2023 for details).
     def to_minimize(rel_h):
         f_b = th - water_level
         thick = ((rho_o/rho)*rel_h*f_b) / ((rho_o/rho) * rel_h - rel_h + 1)
