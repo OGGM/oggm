@@ -334,7 +334,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if is_test:
         if test_ids is not None:
-            rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+            try:
+                rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+            except AttributeError:
+                #RGI7
+                rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
 

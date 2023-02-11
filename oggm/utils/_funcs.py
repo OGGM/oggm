@@ -69,10 +69,11 @@ def parse_rgi_meta(version=None):
 
     # Parse RGI metadata
     if version == '7':
-        reg_names = gpd.read_file(file_downloader('https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/00_rgi70_O1Regions/00_rgi70_O1Regions.dbf'))
+        rgi7url = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/'
+        reg_names = gpd.read_file(file_downloader(rgi7url + '00_rgi70_O1Regions/00_rgi70_O1Regions.dbf'))
         reg_names.index = reg_names['o1region'].astype(int)
         reg_names = reg_names['full_name']
-        subreg_names = gpd.read_file(file_downloader('https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/00_rgi70_O2Regions/00_rgi70_O2Regions.dbf'))
+        subreg_names = gpd.read_file(file_downloader(rgi7url + '00_rgi70_O2Regions/00_rgi70_O2Regions.dbf'))
         subreg_names.index = subreg_names['o2region']
         subreg_names = subreg_names['full_name']
 

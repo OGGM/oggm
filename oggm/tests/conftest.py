@@ -177,7 +177,7 @@ def secure_url_retrieve(url, *args, **kwargs):
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
             # this URL might be removed again after the final integration of RGI7 OGGM
-            'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data' in url or
+            'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/' in url or
             base_extra_L4 in url or
             base_extra_L3 in url
             )

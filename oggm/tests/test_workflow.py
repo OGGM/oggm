@@ -481,6 +481,7 @@ def test_rgi7_glacier_dirs():
     # load and read test data
     hef_rgi7_df = gpd.read_file(get_demo_file('Hintereisferner_RGI7.shp'))
     # create GDIR
-    gdirs = workflow.init_glacier_directories(hef_rgi7_df)
-    assert gdirs
-
+    gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
+    assert gdir
+    assert gdir.rgi_region == '11'
+    assert gdir.rgi_area_km2 > 8
