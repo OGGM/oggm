@@ -1120,7 +1120,7 @@ class TestGeometry(unittest.TestCase):
                          50.)
         h1, b = np.histogram(hgt, weights=harea, density=True, bins=bins)
         h2, b = np.histogram(rhgt, density=True, bins=bins)
-        self.assertTrue(utils.rmsd(h1*100*50, h2*100*50) < 1)
+        assert utils.rmsd(h1*100*50, h2*100*50) < 1
 
         # Check that utility function is doing what is expected
         hh, ww = gdir.get_inversion_flowline_hw()
@@ -1845,7 +1845,7 @@ class TestClimate(unittest.TestCase):
             tmb += np.sum(fl.apparent_mb * fl.widths)
             assert not fl.flux_needs_correction
         np.testing.assert_allclose(tmb, 0., atol=0.01)
-        np.testing.assert_allclose(fls[-1].flux[-1], 0., atol=0.01)
+        np.testing.assert_allclose(fls[-1].flux_out, 0., atol=0.01)
 
         df = gdir.read_json('local_mustar')
         assert df['mu_star_allsame']
