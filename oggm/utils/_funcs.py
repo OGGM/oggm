@@ -741,7 +741,10 @@ def filter_rgi_name(name):
     This seems to be unnecessary with RGI V6
     """
 
-    if name is None or len(name) == 0:
+    try:
+        if name is None or len(name) == 0:
+            return ''
+    except TypeError:
         return ''
 
     if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°', '¾',

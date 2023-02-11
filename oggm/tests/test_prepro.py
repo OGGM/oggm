@@ -666,7 +666,7 @@ class TestCenterlines(unittest.TestCase):
                 x = nc.variables['x'][:]
                 y = nc.variables['y'][:]
             xy = (np.arange(0, len(y) - 0.1, 1), np.arange(0, len(x) - 0.1, 1))
-            interpolator = RegularGridInterpolator(xy, topo)
+            interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
             zref = [interpolator((p.xy[1][0], p.xy[0][0])) for p in points]
 
