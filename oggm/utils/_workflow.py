@@ -2617,7 +2617,6 @@ class GlacierDirectory(object):
             self.rgi_subregion = (self.rgi_region + '-' +
                                   '{:02d}'.format(int(rgi_entity.O2Region)))
 
-
         try:
             name = str(rgi_entity.name)
             rgi_datestr = rgi_entity.src_date

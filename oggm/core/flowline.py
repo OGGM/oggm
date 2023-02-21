@@ -3330,9 +3330,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                            water_level=water_level,
                            **kwargs)
 
-    with np.warnings.catch_warnings():
+    with warnings.catch_warnings():
         # For operational runs we ignore the warnings
-        np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+        warnings.filterwarnings('ignore', category=RuntimeWarning)
         model.run_until_and_store(ye,
                                   geom_path=geom_path,
                                   diag_path=diag_path,

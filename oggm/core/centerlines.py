@@ -513,7 +513,7 @@ def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     # (0, 0) is also located in the center of the pixel
     xy = (np.arange(0, gdir.grid.ny-0.1, 1),
           np.arange(0, gdir.grid.nx-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
+    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     olines = [lines[0]]
     oheads = [heads[0]]
@@ -1271,7 +1271,7 @@ def compute_downstream_bedshape(gdir):
         x = nc.variables['x'][:]
         y = nc.variables['y'][:]
     xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
+    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     bs, terrain_heights = _parabolic_bed_from_topo(gdir, cl, interpolator)
     assert len(bs) == cl.nx, 'len(bs) == cl.nx'
@@ -1732,7 +1732,7 @@ def initialize_flowlines(gdir):
     # (0, 0) is also located in the center of the pixel
     xy = (np.arange(0, gdir.grid.ny-0.1, 1),
           np.arange(0, gdir.grid.nx-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
+    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     # Smooth window
     sw = cfg.PARAMS['flowline_height_smooth']
