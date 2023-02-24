@@ -2039,7 +2039,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         def down_check(url, *args, **kwargs):
             expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-90-DGED/2021_1/'
+                        'COP-DEM_GLO-90-DGED/2022_1/'
                         'DEM1_SAR_DGE_90_20110517T170701_20140817T170857_ADS_'
                         '000000_3682.DEM.tar')
             self.assertEqual(expected, url)
@@ -2069,9 +2069,9 @@ class TestFakeDownloads(unittest.TestCase):
 
         def down_check(url, *args, **kwargs):
             expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-30-DGED/2021_1/'
+                        'COP-DEM_GLO-30-DGED/2022_1/'
                         'DEM1_SAR_DGE_30_20110517T170701_20140817T170857_ADS_'
-                        '000000_bma2.DEM.tar')
+                        '000000_1IGo.DEM.tar')
             self.assertEqual(expected, url)
             return tf
 
@@ -2559,13 +2559,13 @@ class TestDataFiles(unittest.TestCase):
         z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM90')
         self.assertTrue(len(z) == 1)
         self.assertEqual(('DEM1_SAR_DGE_90_20110427T104941_20140819T105300_'
-                          'ADS_000000_7913.DEM.tar'), z[0][0])
+                          'ADS_000000_2733.DEM.tar'), z[0][0])
         self.assertEqual('Copernicus_DSM_30_S10_00_W078_00', z[0][1])
 
         z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM30')
         self.assertTrue(len(z) == 1)
         self.assertEqual(('DEM1_SAR_DGE_30_20110427T104941_20140819T105300_'
-                          'ADS_000000_elyt.DEM.tar'), z[0][0])
+                          'ADS_000000_MNxh.DEM.tar'), z[0][0])
         self.assertEqual('Copernicus_DSM_10_S10_00_W078_00', z[0][1])
 
         z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM90')

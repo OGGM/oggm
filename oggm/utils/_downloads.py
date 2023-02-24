@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'a7cca19707bbb7f38c911cc94659ff34334a1d63'
+SAMPLE_DATA_COMMIT = 'b951ac488f86ed376aaffaedded92726707b3c89'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -1174,7 +1174,7 @@ def _download_copdem_file_unlocked(cppfile, tilename, source):
 
     # Did we download it yet?
     ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-{}-DGED/2021_1/'.format(source[-2:]) +
+               'datasets/COP-DEM_GLO-{}-DGED/2022_1/'.format(source[-2:]) +
                cppfile)
 
     dest_file = download_with_authentication(ftpfile,
@@ -1541,7 +1541,7 @@ def copdem_zone(lon_ex, lat_ex, source):
     if source in cfg.DATA:
         df = cfg.DATA[source]
     else:
-        df = pd.read_csv(get_demo_file('{}_2021_1.csv'.format(source.lower())))
+        df = pd.read_csv(get_demo_file('{}_2022_1.csv'.format(source.lower())))
         cfg.DATA[source] = df
 
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0
