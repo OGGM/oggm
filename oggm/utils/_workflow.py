@@ -743,7 +743,7 @@ def get_centerline_lonlat(gdir,
 
                 # Intersect with exterior geom
                 line = line.intersection(exterior)
-                if line.type in ['MultiLineString', 'GeometryCollection']:
+                if line.geom_type in ['MultiLineString', 'GeometryCollection']:
                     # Take the longest
                     lens = [il.length for il in line.geoms]
                     line = line.geoms[np.argmax(lens)]
@@ -876,7 +876,7 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     odf = odf.sort_values(by='RGIID')
     odf.crs = to_crs
     # Sanity checks to avoid bad surprises
-    gtype = np.array([g.type for g in odf.geometry])
+    gtype = np.array([g.geom_type for g in odf.geometry])
     if 'GeometryCollection' in gtype:
         errdf = odf.loc[gtype == 'GeometryCollection']
         with warnings.catch_warnings():
