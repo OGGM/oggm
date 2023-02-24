@@ -353,28 +353,28 @@ def _filter_heads(heads, heads_height, radius, polygon):
         head = heads[i]
         pbuffer = head.buffer(radius)
         inter_poly = pbuffer.intersection(polygon.exterior)
-        if inter_poly.type in ['MultiPolygon',
-                               'GeometryCollection',
-                               'MultiLineString']:
+        if inter_poly.geom_type in ['MultiPolygon',
+                                    'GeometryCollection',
+                                    'MultiLineString']:
             #  In the case of a junction point, we have to do a check
             # http://lists.gispython.org/pipermail/community/
             # 2015-January/003357.html
-            if inter_poly.type == 'MultiLineString':
+            if inter_poly.geom_type == 'MultiLineString':
                 inter_poly = shapely.ops.linemerge(inter_poly)
 
-            if inter_poly.type != 'LineString':
+            if inter_poly.geom_type != 'LineString':
                 # keep the local polygon only
                 for sub_poly in inter_poly.geoms:
                     if sub_poly.intersects(head):
                         inter_poly = sub_poly
                         break
-        elif inter_poly.type == 'LineString':
+        elif inter_poly.geom_type == 'LineString':
             inter_poly = shpg.Polygon(np.asarray(inter_poly.xy).T)
-        elif inter_poly.type == 'Polygon':
+        elif inter_poly.geom_type == 'Polygon':
             pass
         else:
             extext = ('Geometry collection not expected: '
-                      '{}'.format(inter_poly.type))
+                      '{}'.format(inter_poly.geom_type))
             raise InvalidGeometryError(extext)
 
         # Find other points in radius and in polygon
@@ -436,7 +436,7 @@ def _filter_lines(lines, heads, k, r):
                 # loop over all remaining lines and compute their diff
                 # to the last longest line
                 diff = l.difference(toremove)
-                if diff.type == 'MultiLineString':
+                if diff.geom_type == 'MultiLineString':
                     # Remove the lines that have no head
                     diff = list(diff.geoms)
                     for il in diff:
@@ -830,10 +830,10 @@ def _line_extend(uline, dline, dx):
     while True:
         pref = points[-1]
         pbs = pref.buffer(dx).boundary.intersection(dline)
-        if pbs.type in ['LineString', 'GeometryCollection']:
+        if pbs.geom_type in ['LineString', 'GeometryCollection']:
             # Very rare
             pbs = pref.buffer(dx+1e-12).boundary.intersection(dline)
-        if pbs.type == 'Point':
+        if pbs.geom_type == 'Point':
             pbs = [pbs]
 
         try:
@@ -1376,13 +1376,13 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
 
     # First use the external boundaries only
     line = normal.intersection(poly_no_nunataks)
-    if line.type == 'LineString':
+    if line.geom_type == 'LineString':
         pass  # Nothing to be done
-    elif line.type in ['MultiLineString', 'GeometryCollection']:
+    elif line.geom_type in ['MultiLineString', 'GeometryCollection']:
         # Take the one that contains the centerline
         oline = None
         for l in line.geoms:
-            if l.type != 'LineString':
+            if l.geom_type != 'LineString':
                 continue
             if l.intersects(centerline.line):
                 oline = l
@@ -1391,33 +1391,33 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
             return np.NaN, shpg.MultiLineString()
         line = oline
     else:
-        extext = 'Geometry collection not expected: {}'.format(line.type)
+        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
         raise InvalidGeometryError(extext)
 
     # Then take the nunataks into account
     # Make sure we are always returning a MultiLineString for later
     line = line.intersection(poly)
-    if line.type == 'LineString':
+    if line.geom_type == 'LineString':
         try:
             line = shpg.MultiLineString([line])
         except shapely.errors.EmptyPartError:
             return np.NaN, shpg.MultiLineString()
-    elif line.type == 'MultiLineString':
+    elif line.geom_type == 'MultiLineString':
         pass  # nothing to be done
-    elif line.type == 'GeometryCollection':
+    elif line.geom_type == 'GeometryCollection':
         oline = []
         for l in line:
-            if l.type != 'LineString':
+            if l.geom_type != 'LineString':
                 continue
             oline.append(l)
         if len(oline) == 0:
             return np.NaN, shpg.MultiLineString()
         line = shpg.MultiLineString(oline)
     else:
-        extext = 'Geometry collection not expected: {}'.format(line.type)
+        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
         raise InvalidGeometryError(extext)
 
-    assert line.type == 'MultiLineString', 'Should be MultiLineString'
+    assert line.geom_type == 'MultiLineString', 'Should be MultiLineString'
     width = np.sum([l.length for l in line.geoms])
 
     return width, line
