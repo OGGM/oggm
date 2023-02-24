@@ -2039,7 +2039,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         def down_check(url, *args, **kwargs):
             expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-90-DGED/2021_1/'
+                        'COP-DEM_GLO-90-DGED/2022_1/'
                         'DEM1_SAR_DGE_90_20110517T170701_20140817T170857_ADS_'
                         '000000_3682.DEM.tar')
             self.assertEqual(expected, url)
@@ -2069,9 +2069,9 @@ class TestFakeDownloads(unittest.TestCase):
 
         def down_check(url, *args, **kwargs):
             expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-30-DGED/2021_1/'
+                        'COP-DEM_GLO-30-DGED/2022_1/'
                         'DEM1_SAR_DGE_30_20110517T170701_20140817T170857_ADS_'
-                        '000000_bma2.DEM.tar')
+                        '000000_1IGo.DEM.tar')
             self.assertEqual(expected, url)
             return tf
 
