@@ -1651,7 +1651,7 @@ class TestKCalving():
 
         _, ds1, df_diag1 = default_calving
 
-        model = FluxBasedModel(bu_tidewater_bed(split_flowline_before_water=5),
+        model = FluxBasedModel(bu_tidewater_bed(split_flowline_before_water=30),
                                mb_model=ScalarMassBalance(),
                                is_tidewater=True, calving_use_limiter=True,
                                smooth_trib_influx=False,
