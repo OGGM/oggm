@@ -533,14 +533,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
     PARAMS['downstream_line_shape'] = cp['downstream_line_shape']
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
-    PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
-    PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
-    PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
-    PARAMS['clip_mu_star'] = cp.as_bool('clip_mu_star')
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
     PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
@@ -554,13 +550,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
-    PARAMS['use_tstar_calibration'] = cp.as_bool('use_tstar_calibration')
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
-    PARAMS['climate_qc_months'] = cp.as_int('climate_qc_months')
     PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
-    PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
     PARAMS['use_winter_prcp_factor'] = cp.as_bool('use_winter_prcp_factor')
 
@@ -570,11 +563,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'tstar_search_window'
-    PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
-    PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
     k = 'free_board_marine_terminating'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'store_diagnostic_variables'
@@ -603,22 +593,22 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
-           'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
-           'mp_processes', 'use_multiprocessing', 'climate_qc_months',
+           'grid_dx_method', 'compress_climate_netcdf',
+           'mp_processes', 'use_multiprocessing',
            'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines', 'tstar_search_glacierwide', 'border',
-           'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star', 'map_proj',
-           'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
+           'use_multiple_flowlines', 'border',
+           'mpi_recv_buf_size', 'map_proj',
+           'hydro_month_sh', 'hydro_month_nh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
-           'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
+           'auto_skip_task','ref_mb_valid_window',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
-           'use_shape_factor_for_inversion', 'use_rgi_area', 'use_tstar_calibration',
+           'use_shape_factor_for_inversion', 'use_rgi_area',
            'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
-           'use_inversion_params_for_run', 'ref_mb_valid_window',
+           'use_inversion_params_for_run',
            'tidewater_type', 'store_model_geometry', 'use_winter_prcp_factor',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
            'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_factor_ab',

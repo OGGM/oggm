@@ -522,9 +522,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Climate
         workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        if cfg.PARAMS['climate_qc_months'] > 0:
-            workflow.execute_entity_task(tasks.historical_climate_qc, gdirs)
-
         if match_geodetic_mb_per_glacier:
             utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
             workflow.execute_entity_task(tasks.mu_star_calibration_from_geodetic_mb, gdirs)

@@ -30,7 +30,6 @@ Tools to set-up and run OGGM.
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
     workflow.download_ref_tstars
-    workflow.climate_tasks
     workflow.inversion_tasks
     workflow.merge_glacier_tasks
     workflow.calibrate_inversion_from_consensus
@@ -135,7 +134,6 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.process_climate_data
     tasks.process_custom_climate_data
     tasks.historical_delta_method
-    tasks.historical_climate_qc
     tasks.local_t_star
     tasks.mu_star_calibration
     tasks.apparent_mb_from_linear_mb
@@ -182,7 +180,6 @@ but might use multiprocessing internally.
     :nosignatures:
 
     global_tasks.gis_prepro_tasks
-    global_tasks.climate_tasks
     global_tasks.inversion_tasks
     global_tasks.calibrate_inversion_from_consensus
     global_tasks.match_regional_geodetic_mb

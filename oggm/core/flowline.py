@@ -33,8 +33,7 @@ from oggm import entity_task
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
-                                   PastMassBalance,
-                                   AvgClimateMassBalance,
+                                   MonthlyTIModel,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
 from oggm.core.inversion import find_sia_flux_from_thickness
@@ -3346,13 +3345,12 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 
 @entity_task(log)
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
-                       bias=None, seed=None, temperature_bias=None,
+                       bias=0, seed=None, temperature_bias=None,
                        precipitation_factor=None,
                        store_monthly_step=False,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
                        climate_filename='climate_historical',
-                       mb_model=None,
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
                        init_model_filesuffix=None,
@@ -3403,11 +3401,6 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
-    mb_model : :py:class:`core.MassBalanceModel`
-        User-povided MassBalanceModel instance. Default is to use a
-        RandomMassBalance together with the provided parameters y0, halfsize,
-        bias, seed, climate_filename, climate_input_filesuffix and
-        unique_samples
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3433,14 +3426,13 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    if mb_model is None:
-        mb_model = MultipleFlowlineMassBalance(gdir,
-                                               mb_model_class=RandomMassBalance,
-                                               y0=y0, halfsize=halfsize,
-                                               bias=bias, seed=seed,
-                                               filename=climate_filename,
-                                               input_filesuffix=climate_input_filesuffix,
-                                               unique_samples=unique_samples)
+    mb_model = MultipleFlowlineMassBalance(gdir,
+                                           mb_model_class=RandomMassBalance,
+                                           y0=y0, halfsize=halfsize,
+                                           bias=bias, seed=seed,
+                                           filename=climate_filename,
+                                           input_filesuffix=climate_input_filesuffix,
+                                           unique_samples=unique_samples)
 
     if temperature_bias is not None:
         mb_model.temp_bias = temperature_bias

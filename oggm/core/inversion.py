@@ -86,8 +86,11 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
         rho = cfg.PARAMS['ice_density']
-        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
-
+        try:
+            flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
+        except TypeError:
+            raise InvalidWorkflowError('Flux through flowline unknown. '
+                                       'Did you compute the apparent MB?')
         # Clip flux to 0
         if np.any(flux < -0.1):
             log.info('(%s) has negative flux somewhere', gdir.rgi_id)

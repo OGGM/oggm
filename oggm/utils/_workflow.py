@@ -948,33 +948,6 @@ class compile_to_netcdf(object):
                 output_filesuffix = input_filesuffix
 
             gdirs = tolist(gdirs)
-
-            if cfg.PARAMS['hydro_month_nh'] != cfg.PARAMS['hydro_month_sh']:
-                # Check some stuff
-                hemisphere = [gd.hemisphere for gd in gdirs]
-                if len(np.unique(hemisphere)) == 2:
-                    if path is not True:
-                        raise InvalidParamsError('With glaciers from both '
-                                                 'hemispheres, set `path=True`.')
-                    self.log.workflow('compile_*: you gave me a list of gdirs from '
-                                      'both hemispheres. I am going to write two '
-                                      'files out of it with _sh and _nh suffixes.')
-                    _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
-                    _compile_to_netcdf(_gdirs,
-                                       input_filesuffix=input_filesuffix,
-                                       output_filesuffix=output_filesuffix + '_sh',
-                                       path=True,
-                                       tmp_file_size=tmp_file_size,
-                                       **kwargs)
-                    _gdirs = [gd for gd in gdirs if gd.hemisphere == 'nh']
-                    _compile_to_netcdf(_gdirs,
-                                       input_filesuffix=input_filesuffix,
-                                       output_filesuffix=output_filesuffix + '_nh',
-                                       path=True,
-                                       tmp_file_size=tmp_file_size,
-                                       **kwargs)
-                    return
-
             task_name = task_func.__name__
             output_base = task_name.replace('compile_', '')
 
@@ -1182,7 +1155,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         # Copy coordinates
         time = time_info['time']
         ds.coords['time'] = ('time', time)
-        ds['time'].attrs['description'] = 'Floating hydrological year'
+        ds['time'].attrs['description'] = 'Floating year'
         # New coord
         ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
         ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
@@ -1334,9 +1307,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
         cmonths = ds_clim['time.month']
         has_grad = 'gradient' in ds_clim.variables
         sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
-        yrs, months = calendardate_to_hydrodate(cyrs, cmonths, start_month=sm)
-        assert months[0] == 1, 'Expected the first hydro month to be 1'
-        time = date_to_floatyear(yrs, months)
+        hyrs, hmonths = calendardate_to_hydrodate(cyrs, cmonths, start_month=sm)
+        time = date_to_floatyear(cyrs, cmonths)
 
     # Prepare output
     ds = xr.Dataset()
@@ -1350,11 +1322,11 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     # Coordinates
     ds.coords['time'] = ('time', time)
     ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
-    ds.coords['hydro_year'] = ('time', yrs)
-    ds.coords['hydro_month'] = ('time', months)
+    ds.coords['hydro_year'] = ('time', hyrs)
+    ds.coords['hydro_month'] = ('time', hmonths)
     ds.coords['calendar_year'] = ('time', cyrs.data)
     ds.coords['calendar_month'] = ('time', cmonths.data)
-    ds['time'].attrs['description'] = 'Floating hydrological year'
+    ds['time'].attrs['description'] = 'Floating year'
     ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
     ds['hydro_year'].attrs['description'] = 'Hydrological year'
     ds['hydro_month'].attrs['description'] = 'Hydrological month'
@@ -2211,6 +2183,7 @@ def extend_past_climate_run(past_run_file=None,
         ods = past_ds.reindex({'time': years})
 
         # Time
+        raise NotImplementedError('Something needs to be checked here')
         ods['hydro_year'].data[:] = years
         ods['hydro_month'].data[:] = ods['hydro_month'][-1]
         if ods['hydro_month'][-1] == 1:
@@ -3208,8 +3181,8 @@ class GlacierDirectory(object):
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
-                out['baseline_hydro_yr_0'] = nc.hydro_yr_0
-                out['baseline_hydro_yr_1'] = nc.hydro_yr_1
+                out['baseline_yr_0'] = nc.yr_0
+                out['baseline_yr_1'] = nc.yr_1
         except (AttributeError, FileNotFoundError):
             pass
 
@@ -3369,14 +3342,8 @@ class GlacierDirectory(object):
                                        ref_pix_lon, ref_pix_lat)
             nc.climate_source = source
 
-            # hydro_year corresponds to the last month of the data
-            if time[0].month == 1:
-                # if first_month = 1, last_month = 12, so y0 is hydro_yr_0
-                nc.hydro_yr_0 = y0
-            else:
-                # if first_month>1, then the last_month is in the next year,
-                nc.hydro_yr_0 = y0 + 1
-            nc.hydro_yr_1 = y1
+            nc.yr_0 = y0
+            nc.yr_1 = y1
 
             nc.createDimension('time', None)
 
@@ -3512,11 +3479,11 @@ class GlacierDirectory(object):
 
         if y0 is None or y1 is None:
             ci = self.get_climate_info(input_filesuffix=input_filesuffix)
-            if 'baseline_hydro_yr_0' not in ci:
+            if 'baseline_yr_0' not in ci:
                 raise InvalidWorkflowError('Please process some climate data '
                                            'before call')
-            y0 = ci['baseline_hydro_yr_0'] if y0 is None else y0
-            y1 = ci['baseline_hydro_yr_1'] if y1 is None else y1
+            y0 = ci['baseline_yr_0'] if y0 is None else y0
+            y1 = ci['baseline_yr_1'] if y1 is None else y1
 
         if len(self._mbdf) > 1:
             out = self._mbdf.loc[y0:y1]
@@ -3595,10 +3562,10 @@ class GlacierDirectory(object):
             self._mbprofdf_cte_dh = pd.read_csv(reff, index_col=0)
 
         ci = self.get_climate_info(input_filesuffix=input_filesuffix)
-        if 'baseline_hydro_yr_0' not in ci:
+        if 'baseline_yr_0' not in ci:
             raise RuntimeError('Please process some climate data before call')
-        y0 = ci['baseline_hydro_yr_0']
-        y1 = ci['baseline_hydro_yr_1']
+        y0 = ci['baseline_yr_0']
+        y1 = ci['baseline_yr_1']
         if not constant_dh:
             if len(self._mbprofdf) > 1:
                 out = self._mbprofdf.loc[y0:y1]

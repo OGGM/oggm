@@ -5,13 +5,10 @@ This module is simply a shortcut to the core functions
 # flake8: noqa
 
 from oggm.workflow import gis_prepro_tasks
-from oggm.workflow import climate_tasks
 from oggm.workflow import inversion_tasks
 from oggm.workflow import calibrate_inversion_from_consensus
 from oggm.workflow import match_regional_geodetic_mb
 from oggm.workflow import merge_glacier_tasks
-
-from oggm.core.climate import compute_ref_t_stars
 
 from oggm.utils import get_ref_mb_glaciers
 from oggm.utils import write_centerlines_to_shape

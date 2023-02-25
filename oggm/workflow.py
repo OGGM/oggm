@@ -501,32 +501,6 @@ def download_ref_tstars(base_url=None):
 
 
 @global_task(log)
-def climate_tasks(gdirs, base_url=None):
-    """Run all climate related entity tasks on a list of glaciers.
-
-    Parameters
-    ----------
-    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
-        the glacier directories to process
-    base_url : str, optional
-        url of the params file.
-    """
-
-    # Process climate data
-    execute_entity_task(tasks.process_climate_data, gdirs)
-
-    # Then, calibration?
-    if cfg.PARAMS['run_mb_calibration']:
-        climate.compute_ref_t_stars(gdirs)
-    elif base_url:
-        download_ref_tstars(base_url=base_url)
-
-    # Mustar and the apparent mass balance
-    execute_entity_task(tasks.local_t_star, gdirs)
-    execute_entity_task(tasks.mu_star_calibration, gdirs)
-
-
-@global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                     add_to_log_file=True):
     """Run all ice thickness inversion tasks on a list of glaciers.

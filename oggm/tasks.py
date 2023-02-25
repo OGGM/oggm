@@ -22,18 +22,13 @@ from oggm.core.centerlines import catchment_width_correction
 from oggm.core.centerlines import terminus_width_correction
 from oggm.core.centerlines import elevation_band_flowline
 from oggm.core.centerlines import fixed_dx_elevation_band_flowline
-from oggm.core.climate import glacier_mu_candidates
 from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import historical_delta_method
-from oggm.core.climate import historical_climate_qc
-from oggm.core.climate import local_t_star
-from oggm.core.climate import mu_star_calibration
-from oggm.core.climate import mu_star_calibration_from_geodetic_mb
-from oggm.core.climate import apparent_mb_from_linear_mb
-from oggm.core.climate import apparent_mb_from_any_mb
-from oggm.core.massbalance import fixed_geometry_mass_balance
-from oggm.core.massbalance import compute_ela
+from oggm.core.massbalance import apparent_mb_from_linear_mb
+from oggm.core.massbalance import apparent_mb_from_any_mb
+# from oggm.core.massbalance import fixed_geometry_mass_balance
+# from oggm.core.massbalance import compute_ela
 from oggm.shop.w5e5 import process_w5e5_data
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file

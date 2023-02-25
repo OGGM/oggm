@@ -13,10 +13,10 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-from oggm.core.massbalance import (MultipleFlowlineMassBalance,
-                                   ConstantMassBalance,
-                                   PastMassBalance)
-from oggm.core.climate import apparent_mb_from_any_mb
+# from oggm.core.massbalance import (MultipleFlowlineMassBalance,
+#                                    ConstantMassBalance,
+#                                    PastMassBalance)
+# from oggm.core.climate import apparent_mb_from_any_mb
 from oggm.core.flowline import (FluxBasedModel, FileModel,
                                 init_present_time_glacier,
                                 run_from_climate_data)
