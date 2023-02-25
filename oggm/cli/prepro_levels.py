@@ -80,9 +80,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       match_regional_geodetic_mb=False,
                       match_geodetic_mb_per_glacier=False,
                       evolution_model='fl_sia',
+                      downstream_line_shape='parabola',
                       centerlines_only=False, override_params=None,
-                      add_consensus=False, start_level=None,
-                      start_base_url=None, max_level=5, ref_tstars_base_url='',
+                      add_consensus_thickness=False, add_millan_thickness=False,
+                      add_millan_velocity=False, add_hugonnet_dhdt=False,
+                      start_level=None, start_base_url=None, max_level=5,
+                      ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
                       dynamic_spinup_start_year=1979,
@@ -138,9 +141,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         (currently only 'hugonnet': Hugonnet et al., 2020).
     evolution_model : str
         which geometry evolution model to use: `fl_sia` (default),
-        or `massredis` (mass redistribution curve).
-    add_consensus : bool
+        `massredis` (mass redistribution curve), or 'implicit' (semi implicit
+        model).
+    downstream_line_shape : str
+        which downstream line bed shape to use: `parabola` (default), or
+        `trapezoidal` (required for semi implicit model).
+    add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_millan_thickness : bool
+        adds (reprojects) the millan thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_millan_velocity : bool
+        adds (reprojects) the millan velocity to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_hugonnet_dhdt : bool
+        adds (reprojects) the hugonnet dhdt maps to the glacier
         directories. With elev_bands=True, the data will also be binned.
     start_level : int
         the pre-processed level to start from (default is to start from
@@ -189,9 +205,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         raise InvalidParamsError('Currently only `hugonnet` is available for '
                                  'match_geodetic_mb_per_glacier.')
 
-    if evolution_model not in ['fl_sia', 'massredis']:
+    if evolution_model not in ['fl_sia', 'massredis', 'implicit']:
         raise InvalidParamsError('evolution_model should be one of '
-                                 "['fl_sia', 'massredis'].")
+                                 "['fl_sia', 'massredis', 'implicit'].")
+
+    if downstream_line_shape not in ['parabola', 'trapezoidal']:
+        raise InvalidParamsError('downstream_line_shape should be one of '
+                                 "['parabola', 'trapezoidal']")
+
+    if evolution_model == 'implicit' and downstream_line_shape != 'trapezoidal':
+        raise InvalidParamsError('SemiImplicitModel needs trapezoidal'
+                                 'downstream line!')
 
     if dynamic_spinup:
         if dynamic_spinup not in ['area/dmdtda', 'volume/dmdtda']:
@@ -251,6 +275,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Other things that make sense
     cfg.PARAMS['store_model_geometry'] = True
 
+    # define the used downstream line bed shape
+    cfg.PARAMS['downstream_line_shape'] = downstream_line_shape
+
     # Log the parameters
     msg = '# OGGM Run parameters:'
     for k, v in cfg.PARAMS.items():
@@ -307,7 +334,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if is_test:
         if test_ids is not None:
-            rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+            try:
+                rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+            except AttributeError:
+                #RGI7
+                rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
 
@@ -430,17 +461,33 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
-        if add_consensus:
+        bin_variables = []
+        if add_consensus_thickness:
             from oggm.shop.bedtopo import add_consensus_thickness
             workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
             workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+            bin_variables.append('consensus_ice_thickness')
+        if add_millan_thickness:
+            from oggm.shop.millan22 import thickness_to_gdir
+            workflow.execute_entity_task(thickness_to_gdir, gdirs_band)
+            workflow.execute_entity_task(thickness_to_gdir, gdirs_cent)
+            bin_variables.append('millan_ice_thickness')
+        if add_millan_velocity:
+            from oggm.shop.millan22 import velocity_to_gdir
+            workflow.execute_entity_task(velocity_to_gdir, gdirs_band)
+            workflow.execute_entity_task(velocity_to_gdir, gdirs_cent)
+            bin_variables.append('millan_v')
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import hugonnet_to_gdir
+            workflow.execute_entity_task(hugonnet_to_gdir, gdirs_band)
+            workflow.execute_entity_task(hugonnet_to_gdir, gdirs_cent)
+            bin_variables.append('hugonnet_dhdt')
 
-            # Elev bands with var data
-            vn = 'consensus_ice_thickness'
+        if bin_variables and gdirs_band:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
-                                         gdirs_band, bin_variables=vn)
+                                         gdirs_band, bin_variables=bin_variables)
             workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
-                                         gdirs_band, bin_variables=vn)
+                                         gdirs_band, bin_variables=bin_variables)
         else:
             # HH2015 method without it
             task_list = [
@@ -479,6 +526,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
+
+        if add_millan_thickness or add_millan_velocity:
+            from oggm.shop.millan22 import compile_millan_statistics
+            opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))
+            compile_millan_statistics(gdirs, path=opath)
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
+            opath = os.path.join(sum_dir, 'hugonnet_statistics_{}.csv'.format(rgi_reg))
+            compile_hugonnet_statistics(gdirs, path=opath)
+        if add_consensus_thickness:
+            from oggm.shop.bedtopo import compile_consensus_statistics
+            opath = os.path.join(sum_dir, 'consensus_statistics_{}.csv'.format(rgi_reg))
+            compile_consensus_statistics(gdirs, path=opath)
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
@@ -615,6 +675,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if evolution_model == 'massredis':
             from oggm.core.flowline import MassRedistributionCurveModel
             evolution_model = MassRedistributionCurveModel
+        elif evolution_model == 'implicit':
+            from oggm.core.flowline import SemiImplicitModel
+            evolution_model = SemiImplicitModel
         else:
             from oggm.core.flowline import FluxBasedModel
             evolution_model = FluxBasedModel
@@ -800,8 +863,13 @@ def parse_args(args):
                              '2020 only.')
     parser.add_argument('--evolution-model', type=str, default='fl_sia',
                         help='which geometry evolution model to use: '
-                             '`fl_sia` (default), or `massredis` (mass '
-                             'redistribution curve).')
+                             '`fl_sia` (default), `massredis` (mass '
+                             'redistribution curve), or `implicit` (semi '
+                             'implicit model).')
+    parser.add_argument('--downstream-line-shape', type=str, default='parabola',
+                        help='which downstream line bed shape to use: '
+                             '`parabola` (default), or `trapezoidal` '
+                             '(required for semi implicit model).')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -811,9 +879,24 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
-    parser.add_argument('--add-consensus', nargs='?', const=True, default=False,
-                        help='adds (reprojects) the consensus estimates '
-                             'thickness to the glacier directories. '
+    parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the consensus thickness '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan thickness '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-millan-velocity', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan velocity '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-hugonnet-dhdt', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan dhdt '
+                             'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
@@ -835,7 +918,7 @@ def parse_args(args):
                         help="include a dynamic spinup for matching glacier area "
                              "('area/dmdtda') OR volume ('volume/dmdtda') at "
                              "the RGI-date, AND mass-change from Hugonnet "
-                             "in the period 2000-2019 (dynamic mu* "
+                             "in the period 2000-2020 (dynamic mu* "
                              "calibration).")
     parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=1,
                         help="scaling factor to account for correlated "
@@ -896,10 +979,14 @@ def parse_args(args):
                 centerlines_only=args.centerlines_only,
                 match_regional_geodetic_mb=args.match_regional_geodetic_mb,
                 match_geodetic_mb_per_glacier=args.match_geodetic_mb_per_glacier,
-                add_consensus=args.add_consensus,
+                add_consensus_thickness=args.add_consensus_thickness,
+                add_millan_thickness=args.add_millan_thickness,
+                add_millan_velocity=args.add_millan_velocity,
+                add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 disable_dl_verify=args.disable_dl_verify,
                 ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
+                downstream_line_shape=args.downstream_line_shape,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,

@@ -3,6 +3,7 @@
 import logging
 import copy
 import os
+import warnings
 
 # External libs
 import numpy as np
@@ -309,13 +310,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                                    y0=yr_use,
                                                    **kwargs)
 
-        with np.warnings.catch_warnings():
+        with warnings.catch_warnings():
             if ye < yr_use:
                 yr_run = yr_use
             else:
                 yr_run = ye
             # For operational runs we ignore the warnings
-            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
             model_dynamic_spinup_end.run_until_and_store(
                 yr_run,
                 geom_path=geom_path,
@@ -860,9 +861,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
     # here only save the final model state if store_model_evolution = False
     if not store_model_evolution:
-        with np.warnings.catch_warnings():
+        with warnings.catch_warnings():
             # For operational runs we ignore the warnings
-            np.warnings.filterwarnings('ignore', category=RuntimeWarning)
+            warnings.filterwarnings('ignore', category=RuntimeWarning)
             model_dynamic_spinup_end[-1].run_until_and_store(
                 yr_rgi,
                 geom_path=geom_path,

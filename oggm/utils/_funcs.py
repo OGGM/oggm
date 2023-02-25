@@ -69,10 +69,11 @@ def parse_rgi_meta(version=None):
 
     # Parse RGI metadata
     if version == '7':
-        reg_names = gpd.read_file(file_downloader('https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/00_rgi70_O1Regions/00_rgi70_O1Regions.dbf'))
+        rgi7url = 'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/'
+        reg_names = gpd.read_file(file_downloader(rgi7url + '00_rgi70_O1Regions/00_rgi70_O1Regions.dbf'))
         reg_names.index = reg_names['o1region'].astype(int)
         reg_names = reg_names['full_name']
-        subreg_names = gpd.read_file(file_downloader('https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/00_rgi70_O2Regions/00_rgi70_O2Regions.dbf'))
+        subreg_names = gpd.read_file(file_downloader(rgi7url + '00_rgi70_O2Regions/00_rgi70_O2Regions.dbf'))
         subreg_names.index = subreg_names['o2region']
         subreg_names = subreg_names['full_name']
 
@@ -306,25 +307,25 @@ def line_interpol(line, dx):
     while True:
         pref = points[-1]
         pbs = pref.buffer(dx).boundary.intersection(line)
-        if pbs.type == 'Point':
+        if pbs.geom_type == 'Point':
             pbs = [pbs]
-        elif pbs.type == 'LineString':
+        elif pbs.geom_type == 'LineString':
             # This is rare
             pbs = [shpg.Point(c) for c in pbs.coords]
             assert len(pbs) == 2
-        elif pbs.type == 'GeometryCollection':
+        elif pbs.geom_type == 'GeometryCollection':
             # This is rare
             opbs = []
             for p in pbs.geoms:
-                if p.type == 'Point':
+                if p.geom_type == 'Point':
                     opbs.append(p)
-                elif p.type == 'LineString':
+                elif p.geom_type == 'LineString':
                     opbs.extend([shpg.Point(c) for c in p.coords])
             pbs = opbs
         else:
-            if pbs.type != 'MultiPoint':
+            if pbs.geom_type != 'MultiPoint':
                 raise RuntimeError('line_interpol: we expect a MultiPoint '
-                                   'but got a {}.'.format(pbs.type))
+                                   'but got a {}.'.format(pbs.geom_type))
 
         try:
             # Shapely v2 compat
@@ -526,7 +527,7 @@ def polygon_intersections(gdf):
                 if not isinstance(line, shpg.linestring.LineString):
                     raise RuntimeError('polygon_intersections: we expect'
                                        'a LineString but got a '
-                                       '{}.'.format(line.type))
+                                       '{}.'.format(line.geom_type))
                 line = gpd.GeoDataFrame([[i, j, line]],
                                         columns=out_cols)
                 out = pd.concat([out, line])
@@ -552,10 +553,10 @@ def multipolygon_to_polygon(geometry, gdir=None):
     # Log
     rid = gdir.rgi_id + ': ' if gdir is not None else ''
 
-    if 'Multi' in geometry.type:
+    if 'Multi' in geometry.geom_type:
         parts = np.array(geometry)
         for p in parts:
-            assert p.type == 'Polygon'
+            assert p.geom_type == 'Polygon'
         areas = np.array([p.area for p in parts])
         parts = parts[np.argsort(areas)][::-1]
         areas = areas[np.argsort(areas)][::-1]
@@ -579,7 +580,7 @@ def multipolygon_to_polygon(geometry, gdir=None):
             if np.any(areas[1:] > (areas[0] / 4)):
                 log.info('Geometry {} lost quite a chunk.'.format(rid))
 
-    if geometry.type != 'Polygon':
+    if geometry.geom_type != 'Polygon':
         raise InvalidGeometryError('Geometry {} is not a Polygon.'.format(rid))
     return geometry
 
@@ -740,7 +741,10 @@ def filter_rgi_name(name):
     This seems to be unnecessary with RGI V6
     """
 
-    if name is None or len(name) == 0:
+    try:
+        if name is None or len(name) == 0:
+            return ''
+    except TypeError:
         return ''
 
     if name[-1] in ['À', 'È', 'è', '\x9c', '3', 'Ð', '°', '¾',

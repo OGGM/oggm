@@ -194,7 +194,7 @@ def _polygon_to_pix(polygon):
                                    'OGGM.')
 
     # sometimes the glacier gets cut out in parts
-    if tmp.type == 'MultiPolygon':
+    if tmp.geom_type == 'MultiPolygon':
         # If only small arms are cut out, remove them
         area = np.array([_tmp.area for _tmp in tmp.geoms])
         _tokeep = np.argmax(area).item()
@@ -211,7 +211,7 @@ def _polygon_to_pix(polygon):
                 for b in np.arange(0., 1., 0.01):
                     tmp = shapely.ops.transform(project, polygon.buffer(b))
                     tmp = tmp.buffer(0)
-                    if tmp.type == 'MultiPolygon':
+                    if tmp.geom_type == 'MultiPolygon':
                         continue
                     if tmp.is_valid:
                         break

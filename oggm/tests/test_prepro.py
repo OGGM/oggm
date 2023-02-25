@@ -666,7 +666,7 @@ class TestCenterlines(unittest.TestCase):
                 x = nc.variables['x'][:]
                 y = nc.variables['y'][:]
             xy = (np.arange(0, len(y) - 0.1, 1), np.arange(0, len(x) - 0.1, 1))
-            interpolator = RegularGridInterpolator(xy, topo)
+            interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
             zref = [interpolator((p.xy[1][0], p.xy[0][0])) for p in points]
 
@@ -1463,17 +1463,16 @@ class TestClimate(unittest.TestCase):
         # mbdf[['ref_mb', 'melt_mb', 'temp_mb', 'prcp_mb']].plot()
         # plt.show()
 
-        # OK now check what happens with unrealistic climate input
-        # Very positive
-        ref_mb = 2000
-        with pytest.raises(RuntimeError):
-            massbalance.mb_calibration_from_geodetic_mb(gdir,
-                                                        ref_mb=ref_mb,
-                                                        ref_period=ref_period)
-        massbalance.mb_calibration_from_geodetic_mb(gdir,
-                                                    ref_mb=ref_mb,
-                                                    ref_period=ref_period,
-                                                    calibrate_param2='temp_bias')
+        # Check for apparent mb to be zeros
+        fls = gdir.read_pickle('inversion_flowlines')
+        tmb = 0.
+        for fl in fls:
+            self.assertTrue(fl.apparent_mb.shape == fl.widths.shape)
+            np.testing.assert_allclose(mu_ref, fl.mu_star, atol=1e-3)
+            tmb += np.sum(fl.apparent_mb * fl.widths)
+            assert not fl.flux_needs_correction
+        np.testing.assert_allclose(tmb, 0., atol=0.01)
+        np.testing.assert_allclose(fls[-1].flux_out, 0., atol=0.01)
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)

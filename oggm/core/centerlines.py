@@ -128,6 +128,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         self.flux = None  # Flux (kg m-2)
         self.flux_needs_correction = False  # whether this branch was baaad
         self.rgi_id = rgi_id  # Useful if line is used with another glacier
+        self.flux_out = None  # Flux (kg m-2) flowing out of the centerline
 
     def set_flows_to(self, other, check_tail=True, to_head=False):
         """Find the closest point in "other" and sets all the corresponding
@@ -260,7 +261,7 @@ class Centerline(object, metaclass=SuperclassMeta):
     def surface_h(self, value):
         self._surface_h = value
 
-    def set_apparent_mb(self, mb, mu_star=None):
+    def set_apparent_mb(self, mb, mu_star=None, is_calving=False):
         """Set the apparent mb and flux for the flowline.
 
         MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
@@ -271,6 +272,12 @@ class Centerline(object, metaclass=SuperclassMeta):
         ----------
         mu_star : float
             if appropriate, the mu_star associated with this apparent mb
+        is_calving : bool
+            if calving line the last grid cell is seen as a pure calving cell
+            (the ice flux through the last cell is equal the calving flux),
+            in the other case the flux is calculated incorporating the smb of
+            the last grid cell (the ice flux through the last cell is equal to
+            the smb)
         """
 
         self.apparent_mb = mb
@@ -278,15 +285,29 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         # Add MB to current flux and sum
         # no more changes should happen after that
+        smb = mb * self.widths * self.dx
+        if is_calving:
+            # in a calving case we see the last grid cell as the calving cell
+            # and the extra added cell has no meaning
+            smb_add = np.concatenate((smb, [0]))
+        else:
+            # differentiate between positive and negative smb, negative is
+            # shifted one position and subtracted only after the ice flew
+            # through the cell
+            smb_pos = np.concatenate((np.where(smb > 0, smb, 0), [0]))
+            smb_neg = np.concatenate(([0], np.where(smb < 0, smb, 0)))
+            smb_add = smb_pos + smb_neg
+        flux_ext = np.concatenate((self.flux, [0]))
         flux_needs_correction = False
-        flux = np.cumsum(self.flux + mb * self.widths * self.dx)
+        flux = np.cumsum(flux_ext + smb_add)
 
-        # We filter only lines with two negative grid points,
-        # the rest we can cope with
-        if flux[-2] < 0:
+        # We filter lines with a negative flux at the last grid point, the
+        # threshold of -1e-5 is needed to avoid problems with numeric precision
+        if flux[-2] < -1e-5:
             flux_needs_correction = True
 
-        self.flux = flux
+        self.flux = flux[:-1]
+        self.flux_out = flux[-1]
         self.flux_needs_correction = flux_needs_correction
 
         # Add to outflow. That's why it should happen in order
@@ -332,28 +353,28 @@ def _filter_heads(heads, heads_height, radius, polygon):
         head = heads[i]
         pbuffer = head.buffer(radius)
         inter_poly = pbuffer.intersection(polygon.exterior)
-        if inter_poly.type in ['MultiPolygon',
-                               'GeometryCollection',
-                               'MultiLineString']:
+        if inter_poly.geom_type in ['MultiPolygon',
+                                    'GeometryCollection',
+                                    'MultiLineString']:
             #  In the case of a junction point, we have to do a check
             # http://lists.gispython.org/pipermail/community/
             # 2015-January/003357.html
-            if inter_poly.type == 'MultiLineString':
+            if inter_poly.geom_type == 'MultiLineString':
                 inter_poly = shapely.ops.linemerge(inter_poly)
 
-            if inter_poly.type != 'LineString':
+            if inter_poly.geom_type != 'LineString':
                 # keep the local polygon only
                 for sub_poly in inter_poly.geoms:
                     if sub_poly.intersects(head):
                         inter_poly = sub_poly
                         break
-        elif inter_poly.type == 'LineString':
+        elif inter_poly.geom_type == 'LineString':
             inter_poly = shpg.Polygon(np.asarray(inter_poly.xy).T)
-        elif inter_poly.type == 'Polygon':
+        elif inter_poly.geom_type == 'Polygon':
             pass
         else:
             extext = ('Geometry collection not expected: '
-                      '{}'.format(inter_poly.type))
+                      '{}'.format(inter_poly.geom_type))
             raise InvalidGeometryError(extext)
 
         # Find other points in radius and in polygon
@@ -415,7 +436,7 @@ def _filter_lines(lines, heads, k, r):
                 # loop over all remaining lines and compute their diff
                 # to the last longest line
                 diff = l.difference(toremove)
-                if diff.type == 'MultiLineString':
+                if diff.geom_type == 'MultiLineString':
                     # Remove the lines that have no head
                     diff = list(diff.geoms)
                     for il in diff:
@@ -492,7 +513,7 @@ def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     # (0, 0) is also located in the center of the pixel
     xy = (np.arange(0, gdir.grid.ny-0.1, 1),
           np.arange(0, gdir.grid.nx-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
+    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     olines = [lines[0]]
     oheads = [heads[0]]
@@ -809,10 +830,10 @@ def _line_extend(uline, dline, dx):
     while True:
         pref = points[-1]
         pbs = pref.buffer(dx).boundary.intersection(dline)
-        if pbs.type in ['LineString', 'GeometryCollection']:
+        if pbs.geom_type in ['LineString', 'GeometryCollection']:
             # Very rare
             pbs = pref.buffer(dx+1e-12).boundary.intersection(dline)
-        if pbs.type == 'Point':
+        if pbs.geom_type == 'Point':
             pbs = [pbs]
 
         try:
@@ -1250,7 +1271,7 @@ def compute_downstream_bedshape(gdir):
         x = nc.variables['x'][:]
         y = nc.variables['y'][:]
     xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
+    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     bs, terrain_heights = _parabolic_bed_from_topo(gdir, cl, interpolator)
     assert len(bs) == cl.nx, 'len(bs) == cl.nx'
@@ -1355,13 +1376,13 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
 
     # First use the external boundaries only
     line = normal.intersection(poly_no_nunataks)
-    if line.type == 'LineString':
+    if line.geom_type == 'LineString':
         pass  # Nothing to be done
-    elif line.type in ['MultiLineString', 'GeometryCollection']:
+    elif line.geom_type in ['MultiLineString', 'GeometryCollection']:
         # Take the one that contains the centerline
         oline = None
         for l in line.geoms:
-            if l.type != 'LineString':
+            if l.geom_type != 'LineString':
                 continue
             if l.intersects(centerline.line):
                 oline = l
@@ -1370,33 +1391,33 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
             return np.NaN, shpg.MultiLineString()
         line = oline
     else:
-        extext = 'Geometry collection not expected: {}'.format(line.type)
+        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
         raise InvalidGeometryError(extext)
 
     # Then take the nunataks into account
     # Make sure we are always returning a MultiLineString for later
     line = line.intersection(poly)
-    if line.type == 'LineString':
+    if line.geom_type == 'LineString':
         try:
             line = shpg.MultiLineString([line])
         except shapely.errors.EmptyPartError:
             return np.NaN, shpg.MultiLineString()
-    elif line.type == 'MultiLineString':
+    elif line.geom_type == 'MultiLineString':
         pass  # nothing to be done
-    elif line.type == 'GeometryCollection':
+    elif line.geom_type == 'GeometryCollection':
         oline = []
         for l in line:
-            if l.type != 'LineString':
+            if l.geom_type != 'LineString':
                 continue
             oline.append(l)
         if len(oline) == 0:
             return np.NaN, shpg.MultiLineString()
         line = shpg.MultiLineString(oline)
     else:
-        extext = 'Geometry collection not expected: {}'.format(line.type)
+        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
         raise InvalidGeometryError(extext)
 
-    assert line.type == 'MultiLineString', 'Should be MultiLineString'
+    assert line.geom_type == 'MultiLineString', 'Should be MultiLineString'
     width = np.sum([l.length for l in line.geoms])
 
     return width, line
@@ -1711,7 +1732,7 @@ def initialize_flowlines(gdir):
     # (0, 0) is also located in the center of the pixel
     xy = (np.arange(0, gdir.grid.ny-0.1, 1),
           np.arange(0, gdir.grid.nx-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo)
+    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     # Smooth window
     sw = cfg.PARAMS['flowline_height_smooth']
