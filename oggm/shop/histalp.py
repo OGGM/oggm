@@ -77,11 +77,11 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
         the starting year of the timeseries to write. The default is to take
         1850 (because the data is quite bad before that)
     y1 : int
-        the starting year of the timeseries to write. The default is to take
+        the ending year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
     output_filesuffix : str
-        this add a suffix to the output file (useful to avoid overwriting
+        this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
     """
 
@@ -115,16 +115,12 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
     # set temporal subset for the ts data (hydro years)
     # the reference time is given by precip, which is shorter
-    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
     y0 = yrs[0] if y0 is None else y0
     y1 = yrs[-1] if y1 is None else y1
 
-    nc_ts_tmp.set_period(t0='{}-{:02d}-01'.format(y0, sm),
-                         t1='{}-{:02d}-01'.format(y1, em))
-    nc_ts_pre.set_period(t0='{}-{:02d}-01'.format(y0, sm),
-                         t1='{}-{:02d}-01'.format(y1, em))
+    nc_ts_tmp.set_period(t0=f'{y0}-01-01', t1=f'{y1}-12-01')
+    nc_ts_pre.set_period(t0=f'{y0}-01-01', t1=f'{y1}-12-01')
     time = nc_ts_pre.time
     ny, r = divmod(len(time), 12)
     assert r == 0

@@ -151,7 +151,7 @@ class TestInitPresentDayFlowline:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.PastMassBalance(gdir)
+        mb_mod = massbalance.MonthlyTIModel(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = FlowlineModel(fls)
@@ -232,13 +232,8 @@ def other_glacier_cfg():
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
     cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['min_mu_star'] = 25
-    cfg.PARAMS['max_mu_star'] = 10000
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
 
@@ -270,8 +265,12 @@ class TestInitFlowlineOtherGlacier:
         centerlines.catchment_width_correction(gdir)
         cfg.PARAMS['baseline_climate'] = ''
         climate.process_custom_climate_data(gdir)
-        climate.local_t_star(gdir, tstar=1930, bias=0)
-        climate.mu_star_calibration(gdir)
+        ref_period = '1980-01-01_2000-01-01'
+        ref_mb = -500
+        massbalance.mb_calibration_from_geodetic_mb(gdir,
+                                                    ref_mb=ref_mb,
+                                                    ref_period=ref_period)
+        massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1980, 2000))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir)
         init_present_time_glacier(gdir)
@@ -325,56 +324,32 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        df = gdir.read_json('local_mustar')
-        mu_star = df['mu_star_glacierwide']
-        bias = df['bias']
+        df = gdir.read_json('mb_calib')
 
         # Climate period
         yrp = [1851, 2000]
 
         # Flowlines height
         h, w = gdir.get_inversion_flowline_hw()
-        _, t, p = climate.mb_yearly_climate_on_height(gdir, h,
-                                                      year_range=yrp)
 
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0)
+        mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
         for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
-            ref_mb_on_h = p[:, i] - mu_star * t[:, i]
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
-            np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h,
-                                       atol=1e-2)
             ela_z = mb_mod.get_ela(year=yr)
             totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
             assert_allclose(totest[0], 0, atol=1)
 
-        mb_mod = massbalance.PastMassBalance(gdir)
+        mb_mod = massbalance.MonthlyTIModel(gdir)
         for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
-            ref_mb_on_h = p[:, i] - mu_star * t[:, i]
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
-            np.testing.assert_allclose(ref_mb_on_h, my_mb_on_h + bias,
-                                       atol=1e-2)
             ela_z = mb_mod.get_ela(year=yr)
             totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
             assert_allclose(totest[0], 0, atol=1)
-
-        for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
-
-            ref_mb_on_h = p[:, i] - mu_star * t[:, i]
-            my_mb_on_h = ref_mb_on_h * 0.
-            for m in np.arange(12):
-                yrm = utils.date_to_floatyear(yr, m + 1)
-                tmp = mb_mod.get_monthly_mb(h, yrm) * SEC_IN_MONTH * rho
-                my_mb_on_h += tmp
-
-            np.testing.assert_allclose(ref_mb_on_h,
-                                       my_mb_on_h + bias,
-                                       atol=1e-2)
 
         # real data
         h, w = gdir.get_inversion_flowline_hw()
         mbdf = gdir.get_ref_mb_data()
         mbdf.loc[yr, 'MY_MB'] = np.NaN
-        mb_mod = massbalance.PastMassBalance(gdir)
+        mb_mod = massbalance.MonthlyTIModel(gdir)
         for yr in mbdf.index.values:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
@@ -384,18 +359,18 @@ class TestMassBalanceModels:
                                    atol=1e-2)
         mbdf['MY_ELA'] = mb_mod.get_ela(year=mbdf.index.values)
         assert mbdf[['MY_ELA', 'MY_MB']].corr().values[0, 1] < -0.9
-        assert mbdf[['MY_ELA', 'ANNUAL_BALANCE']].corr().values[0, 1] < -0.7
+        assert mbdf[['MY_ELA', 'ANNUAL_BALANCE']].corr().values[0, 1] < -0.6
 
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0)
+        mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
         for yr in mbdf.index.values:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
-        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean() + bias,
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
                                    mbdf['MY_MB'].mean(),
                                    atol=1e-2)
 
-        mb_mod = massbalance.PastMassBalance(gdir)
+        mb_mod = massbalance.MonthlyTIModel(gdir)
         for yr in mbdf.index.values:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
@@ -410,7 +385,7 @@ class TestMassBalanceModels:
         assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
 
         # Repeat
-        mb_mod = massbalance.PastMassBalance(gdir, repeat=True,
+        mb_mod = massbalance.MonthlyTIModel(gdir, repeat=True,
                                              ys=1901, ye=1950)
         yrs = np.arange(100) + 1901
         mb = mb_mod.get_specific_mb(h, w, year=yrs)
@@ -427,7 +402,7 @@ class TestMassBalanceModels:
         # Test massbalance task
         s = massbalance.fixed_geometry_mass_balance(gdir)
         assert s.index[0] == 1802
-        assert s.index[-1] == 2003
+        assert s.index[-1] == 2002
 
         s = massbalance.fixed_geometry_mass_balance(gdir, ys=1990, ye=2000)
         assert s.index[0] == 1990
@@ -442,22 +417,23 @@ class TestMassBalanceModels:
 
         expected = dedent("""\
         <oggm.MassBalanceModel>
-          Class: PastMassBalance
+          Class: MonthlyTIModel
           Attributes:
             - hemisphere: nh
+            - melt_f: 200.59
+            - prcp_fac: 2.50
+            - temp_bias: 0.00
+            - bias: 0.00
             - rho: 900.0
-            - mu_star: 198.95
-            - bias: 0
             - t_solid: 0.0
             - t_liq: 2.0
             - t_melt: -1.0
             - repeat: False
             - ref_hgt: 3160.0
             - ys: 1802
-            - ye: 2003
+            - ye: 2002
         """)
-
-        mb_mod = massbalance.PastMassBalance(hef_gdir, bias=0)
+        mb_mod = massbalance.MonthlyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
     def test_prcp_fac_temp_bias_update(self, hef_gdir):
@@ -465,7 +441,7 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.PastMassBalance(gdir, bias=0)
+        mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
@@ -511,7 +487,7 @@ class TestMassBalanceModels:
         with pytest.raises(InvalidParamsError):
             mb_mod.prcp_fac = -100
 
-    @pytest.mark.parametrize("cl", [massbalance.PastMassBalance,
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
                                     massbalance.ConstantMassBalance,
                                     massbalance.RandomMassBalance])
     def test_glacierwide_mb_model(self, hef_gdir, cl):
@@ -528,7 +504,9 @@ class TestMassBalanceModels:
         yrs = np.arange(100) + 1901
 
         if cl is massbalance.RandomMassBalance:
-            kwargs = {'seed': 0}
+            kwargs = {'seed': 0, 'y0': 1985}
+        elif cl is massbalance.ConstantMassBalance:
+            kwargs = {'y0': 1985}
         else:
             kwargs = {}
 
@@ -579,7 +557,7 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_ela(year=yrs[:10]),
                         mb_gw.get_ela(year=yrs[:10]))
 
-        if cl is massbalance.PastMassBalance:
+        if cl is massbalance.MonthlyTIModel:
             mb = cl(gdir)
             mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
                                                             mb_model_class=cl)
@@ -603,42 +581,46 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        df = gdir.read_json('local_mustar')
-        bias = df['bias']
-
         h, w = gdir.get_inversion_flowline_hw()
 
-        cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        # We calibrate to zero
+        df = massbalance.mb_calibration_from_geodetic_mb(gdir,
+                                                         calibrate_param1='temp_bias',
+                                                         ref_mb=0,
+                                                         ref_mb_years=(1970, 2001),
+                                                         write_to_gdir=False)
+
+        cmb_mod = massbalance.ConstantMassBalance(gdir,
+                                                  melt_f=df['melt_f'],
+                                                  temp_bias=df['temp_bias'],
+                                                  prcp_fac=df['prcp_fac'],
+                                                  y0=1985)
         ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0., otmb, atol=0.2)
 
-        cmb_mod = massbalance.ConstantMassBalance(gdir)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
-        otmb = np.average(ombh, weights=w)
-        np.testing.assert_allclose(0, otmb + bias, atol=0.2)
-
-        mb_mod = massbalance.ConstantMassBalance(gdir, y0=2003 - 15)
+        mb_mod = massbalance.ConstantMassBalance(gdir, y0=2002 - 15)
         nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         ntmb = np.average(nmbh, weights=w)
 
         assert ntmb < otmb
 
         if do_plot:  # pragma: no cover
-            plt.plot(h, ombh, 'o', label='tstar')
+            plt.plot(h, ombh, 'o', label='zero')
             plt.plot(h, nmbh, 'o', label='today')
             plt.legend()
             plt.show()
 
-        cmb_mod.temp_bias = 1
+        orig_bias = cmb_mod.temp_bias
+        cmb_mod.temp_bias = orig_bias + 1
         biasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         biasotmb = np.average(biasombh, weights=w)
         assert biasotmb < (otmb - 500)
 
-        cmb_mod.temp_bias = 0
+        cmb_mod.temp_bias = orig_bias
         nobiasombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         nobiasotmb = np.average(nobiasombh, weights=w)
-        np.testing.assert_allclose(0, nobiasotmb + bias, atol=0.2)
+        np.testing.assert_allclose(0, nobiasotmb, atol=0.2)
 
         months = np.arange(12)
         monthly_1 = months * 0.
@@ -646,24 +628,17 @@ class TestMassBalanceModels:
         monthly_3 = months * 0.
         for m in months:
             yr = utils.date_to_floatyear(0, m + 1)
-            cmb_mod.temp_bias = 0
+            cmb_mod.temp_bias = orig_bias
             tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
             monthly_1[m] = np.average(tmp, weights=w)
-            cmb_mod.temp_bias = 1
+            cmb_mod.temp_bias = orig_bias + 1
             tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
             monthly_2[m] = np.average(tmp, weights=w)
-            cmb_mod.temp_bias = [0] * 6 + [1] + [0] * 5
-            cmb_mod.prcp_fac = [10] * 3 + [2.5] * 9
+            cmb_mod.temp_bias = [orig_bias] * 6 + [orig_bias + 1] + [orig_bias] * 5
+            cmb_mod.prcp_fac = [10] * 3 + [2.5] * 9  # This adds solid precip in win
             tmp = cmb_mod.get_monthly_mb(h, yr) * SEC_IN_MONTH * rho
             monthly_3[m] = np.average(tmp, weights=w)
             cmb_mod.prcp_fac = 2.5
-
-        # check that the winter months are close but summer months no
-        np.testing.assert_allclose(monthly_1[1: 5], monthly_2[1: 5], atol=1)
-        np.testing.assert_allclose(monthly_1[1: 2], monthly_3[1: 2], atol=1)
-        assert np.mean(monthly_1[5:]) > (np.mean(monthly_2[5:]) + 100)
-        assert np.mean(monthly_3[3:5]) > (np.mean(monthly_1[3:5]) + 100)
-        assert monthly_3[9] == monthly_2[9]
 
         if do_plot:  # pragma: no cover
             plt.plot(monthly_1, '-', label='Normal')
@@ -672,9 +647,19 @@ class TestMassBalanceModels:
             plt.legend()
             plt.show()
 
+        # check that the winter months are close but summer months no
+        np.testing.assert_allclose(monthly_1[:4], monthly_2[:4], atol=1)
+        assert np.mean(monthly_3[:4]) > (np.mean(monthly_1[:4]) + 100)
+        assert monthly_3[6] == monthly_2[6]
+        assert monthly_3[7] != monthly_2[7]
+
         # Climate info
         h = np.sort(h)
-        cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        cmb_mod = massbalance.ConstantMassBalance(gdir,
+                                                  melt_f=df['melt_f'],
+                                                  temp_bias=df['temp_bias'],
+                                                  prcp_fac=df['prcp_fac'],
+                                                  y0=1985)
         t, tm, p, ps = cmb_mod.get_annual_climate(h)
 
         # Simple sanity checks
@@ -699,51 +684,17 @@ class TestMassBalanceModels:
         # ELA
         elah = cmb_mod.get_ela()
         t, tm, p, ps = cmb_mod.get_annual_climate([elah])
-        mb = ps - cmb_mod.mbmod.mu_star * tm
+        mb = ps - cmb_mod.mbmod.melt_f * tm
         # not perfect because of time/months/zinterp issues
-        np.testing.assert_allclose(mb, 0, atol=0.12)
-
-    def test_avgclimate_mb_model(self, hef_gdir):
-
-        rho = cfg.PARAMS['ice_density']
-
-        gdir = hef_gdir
-        init_present_time_glacier(gdir)
-
-        df = gdir.read_json('local_mustar')
-        bias = df['bias']
-
-        h, w = gdir.get_inversion_flowline_hw()
-
-        cmb_mod = massbalance.ConstantMassBalance(gdir, bias=0)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
-        otmb = np.average(ombh, weights=w)
-        np.testing.assert_allclose(0., otmb, atol=0.2)
-
-        avg_mod = massbalance.AvgClimateMassBalance(gdir, bias=0)
-        ombh = avg_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
-        otmb = np.average(ombh, weights=w)
-        # This is now wrong -> but not too far we hope...
-        np.testing.assert_allclose(0., otmb, atol=130)
-
-        # Another simulation
-        cmb_mod = massbalance.ConstantMassBalance(gdir, y0=1991, halfsize=10)
-        ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
-        otmb = np.average(ombh, weights=w)
-
-        avg_mod = massbalance.AvgClimateMassBalance(gdir, y0=1991, halfsize=10)
-        _ombh = avg_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
-        _otmb = np.average(_ombh, weights=w)
-        # This is now wrong -> but not too far we hope...
-        np.testing.assert_allclose(otmb, _otmb, atol=200)
+        np.testing.assert_allclose(mb, 0, atol=0.2)
 
     def test_random_mb(self, hef_gdir):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        ref_mod = massbalance.ConstantMassBalance(gdir)
-        mb_mod = massbalance.RandomMassBalance(gdir, seed=10)
+        ref_mod = massbalance.ConstantMassBalance(gdir, y0=1985)
+        mb_mod = massbalance.RandomMassBalance(gdir, seed=10, y0=1985)
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -780,21 +731,21 @@ class TestMassBalanceModels:
         assert np.mean(r_mbh) < np.mean(r_mbh_b)
 
         # Compare sigma from real climate and mine
-        mb_ref = massbalance.PastMassBalance(gdir)
-        mb_mod = massbalance.RandomMassBalance(gdir, y0=2003 - 15,
+        mb_ref = massbalance.MonthlyTIModel(gdir)
+        mb_mod = massbalance.RandomMassBalance(gdir, y0=2002 - 15,
                                                seed=10)
         mb_ts = []
         mb_ts2 = []
-        yrs = np.arange(1973, 2004, 1)
+        yrs = np.arange(1972, 2003, 1)
         for yr in yrs:
             mb_ts.append(np.average(mb_ref.get_annual_mb(h, yr) * SEC_IN_YEAR,
                                     weights=w))
             mb_ts2.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
                                      weights=w))
-        np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.1)
+        np.testing.assert_allclose(np.std(mb_ts), np.std(mb_ts2), rtol=0.15)
 
         # Monthly
-        time = pd.date_range('1/1/1973', periods=31 * 12, freq='MS')
+        time = pd.date_range('1/1/1972', periods=31 * 12, freq='MS')
         yrs = utils.date_to_floatyear(time.year, time.month)
 
         ref_mb = np.zeros(12)
@@ -814,7 +765,7 @@ class TestMassBalanceModels:
 
         mb_ts = []
         mb_ts2 = []
-        yrs = np.arange(1973, 2004, 1)
+        yrs = np.arange(1972, 2003, 1)
         for yr in yrs:
             mb_ts.append(np.average(mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR,
                                     weights=w))
@@ -828,14 +779,18 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
 
         ref_mod = massbalance.ConstantMassBalance(gdir,
+                                                  y0=2002 - 15,
                                                   halfsize=15)
         mb_mod = massbalance.RandomMassBalance(gdir, seed=10,
+                                               y0=2002 - 15,
                                                unique_samples=True,
                                                halfsize=15)
         mb_mod2 = massbalance.RandomMassBalance(gdir, seed=20,
+                                                y0=2002 - 15,
                                                 unique_samples=True,
                                                 halfsize=15)
         mb_mod3 = massbalance.RandomMassBalance(gdir, seed=20,
+                                                y0=2002 - 15,
                                                 unique_samples=True,
                                                 halfsize=15)
 
@@ -910,7 +865,7 @@ class TestMassBalanceModels:
 
         gdir = hef_gdir
 
-        ref_mod = massbalance.ConstantMassBalance(gdir, bias=0)
+        ref_mod = massbalance.ConstantMassBalance(gdir, y0=2002-15)
 
         # only change bias: this works as before
         mb_mod = massbalance.UncertainMassBalance(ref_mod,
@@ -961,7 +916,7 @@ class TestMassBalanceModels:
         assert np.std(unc_mb) > 50
 
         # Other MBs
-        ref_mod = massbalance.PastMassBalance(gdir)
+        ref_mod = massbalance.MonthlyTIModel(gdir)
         mb_mod = massbalance.UncertainMassBalance(ref_mod)
 
         yrs = np.arange(100) + 1901
@@ -976,7 +931,7 @@ class TestMassBalanceModels:
         assert np.corrcoef(ref_mb, unc_mb)[0, 1] > 0.5
 
         # Other MBs
-        ref_mod = massbalance.RandomMassBalance(gdir)
+        ref_mod = massbalance.RandomMassBalance(gdir, y0=2002-15)
         mb_mod = massbalance.UncertainMassBalance(ref_mod)
 
         yrs = np.arange(100) + 1901
@@ -1014,16 +969,16 @@ class TestMassBalanceModels:
         h, w = gdir.get_inversion_flowline_hw()
 
         # Climate period, 10 day timestep
-        yrs = np.arange(1850, 2003, 10 / 365)
+        yrs = np.arange(1850, 2002, 10 / 365)
 
         # models
         start_time = time.time()
-        mb1 = massbalance.ConstantMassBalance(gdir)
+        mb1 = massbalance.ConstantMassBalance(gdir, y0=2002-15)
         for yr in yrs:
             mb1.get_monthly_mb(h, yr)
         t1 = time.time() - start_time
         start_time = time.time()
-        mb2 = massbalance.PastMassBalance(gdir)
+        mb2 = massbalance.MonthlyTIModel(gdir)
         for yr in yrs:
             mb2.get_monthly_mb(h, yr)
         t2 = time.time() - start_time
@@ -1034,72 +989,6 @@ class TestMassBalanceModels:
         except AssertionError:
             # no big deal
             pytest.skip('Allowed failure')
-
-    def test_hef_mu_star_calibration_from_geodetic_mb(self, hef_gdir):
-
-        pd_geodetic = utils.get_geodetic_mb_dataframe()[
-            utils.get_geodetic_mb_dataframe().period == '2000-01-01_2020-01-01']
-        # hef_gdir is of RGI50, geodetic of RGI60, it won't matter here for the test
-        gdir = hef_gdir
-        df = ['RGI60-11.00897']
-        cfg.PARAMS['use_multiprocessing'] = False
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
-        ref_mb_geodetic = pd_geodetic.loc[df[0]].dmdtda * 1000
-        cfg.PARAMS['baseline_climate'] = 'CRU'
-        # the test CRU climate goes only until end of 2014, but we can create
-        # instead a fake climate for 2000-2019
-        tasks.process_dummy_cru_file(gdir, y0=2000, y1=2019)
-        # tasks.process_cru_data(gdir)  # , y0=2000, y1=2019)
-        cfg.PARAMS['max_mu_star'] = 600
-        climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
-                                                     ref_period='2000-01-01_2020-01-01',
-                                                     ignore_hydro_months=False)
-
-        h, w = gdir.get_inversion_flowline_hw()
-        mb = massbalance.PastMassBalance(gdir)
-        mb_modelled = mb.get_specific_mb(h, w, year=np.arange(2000, 2020, 1))
-
-        np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
-        # before, the 21-year period was matched instead of the 20-year period
-        # mb_modelled_wrong = mb.get_specific_mb(h, w, year=np.arange(1999,2020,1))
-        # np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
-
-        # this should only work with W5E5 or GSWP3_W5E5
-        cfg.PARAMS['use_winter_prcp_factor'] = True
-        with pytest.raises(InvalidWorkflowError):
-            climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
-                                                         ref_period='2000-01-01_2020-01-01',
-                                                         ignore_hydro_months=False)
-        cfg.PARAMS['baseline_climate'] = 'W5E5'
-        tasks.process_climate_data(gdir)
-
-        with pytest.raises(InvalidWorkflowError):
-            climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
-                                                         ref_period='2000-01-01_2020-01-01',
-                                                         ignore_hydro_months=False)
-
-        prev_fac = cfg.PARAMS['prcp_scaling_factor']
-        cfg.PARAMS['prcp_scaling_factor'] = None
-        climate.mu_star_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb_geodetic,
-                                                     ref_period='2000-01-01_2020-01-01',
-                                                     ignore_hydro_months=False)
-        h, w = gdir.get_inversion_flowline_hw()
-        mb = massbalance.PastMassBalance(gdir)
-        pf = gdir.read_json('local_mustar')['glacier_prcp_scaling_factor']
-        assert mb.prcp_fac == pf
-        mb_modelled = mb.get_specific_mb(h, w, year=np.arange(2000, 2020, 1))
-
-        np.testing.assert_allclose(ref_mb_geodetic, mb_modelled.mean())
-        np.testing.assert_allclose(pf, 3.35713, rtol=1e-4)
-
-        with pytest.raises(InvalidParamsError):
-            # This does not work
-            mb = massbalance.ConstantMassBalance(gdir)
-
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = prev_fac
-
 
 
 class TestModelFlowlines():
@@ -2006,7 +1895,7 @@ class TestIO():
         task_status = new_gdir.get_task_status('init_present_time_glacier')
         assert task_status == 'SUCCESS'
         assert new_gdir.grid
-        run_random_climate(new_gdir, nyears=10)
+        run_random_climate(new_gdir, nyears=10, y0=1985)
         shutil.rmtree(new_dir)
 
         new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
@@ -2014,7 +1903,7 @@ class TestIO():
         inversion.prepare_for_inversion(new_gdir, invert_all_rectangular=True)
         inversion.mass_conservation_inversion(new_gdir)
         init_present_time_glacier(new_gdir)
-        run_constant_climate(new_gdir, nyears=10, bias=0)
+        run_constant_climate(new_gdir, nyears=10, bias=0, y0=1985)
         shutil.rmtree(new_dir)
 
     def test_hef(self, class_case_dir, hef_gdir):
@@ -2138,7 +2027,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2212,7 +2101,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
 
         # Equations
         mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
@@ -2250,7 +2139,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.01)
@@ -2331,7 +2220,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.02)
@@ -2391,7 +2280,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.03)
@@ -2448,7 +2337,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2477,7 +2366,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2512,7 +2401,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2550,7 +2439,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2580,7 +2469,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2614,7 +2503,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2651,7 +2540,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2685,7 +2574,7 @@ class TestIdealisedInversion():
 
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2724,7 +2613,7 @@ class TestIdealisedInversion():
 
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2765,7 +2654,7 @@ class TestIdealisedInversion():
 
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2800,7 +2689,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2831,7 +2720,7 @@ class TestIdealisedInversion():
             fls.append(flo)
         inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
 
-        climate.apparent_mb_from_linear_mb(inversion_gdir)
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
         v = inversion.mass_conservation_inversion(inversion_gdir)
 
@@ -2906,38 +2795,6 @@ def inversion_params(hef_gdir):
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHEF:
-
-    @pytest.mark.slow
-    def test_equilibrium(self, hef_gdir, inversion_params):
-
-        # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        init_present_time_glacier(hef_gdir)
-        cfg.PARAMS['min_ice_thick_for_length'] = 1
-
-        mb_mod = massbalance.ConstantMassBalance(hef_gdir)
-
-        fls = hef_gdir.read_pickle('model_flowlines')
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               fs=inversion_params['inversion_fs'],
-                               glen_a=inversion_params['inversion_glen_a'],
-                               mb_elev_feedback='never')
-
-        ref_vol = model.volume_km3
-        ref_area = model.area_km2
-        ref_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_area, hef_gdir.rgi_area_km2)
-
-        model.run_until_equilibrium(rate=1e-4)
-        assert model.yr >= 30
-        after_vol = model.volume_km3
-        after_area = model.area_km2
-        after_len = model.fls[-1].length_m
-
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
-        np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
-        np.testing.assert_allclose(ref_len, after_len, atol=200.01)
 
     @pytest.mark.slow
     def test_stop_criterion(self, hef_gdir, inversion_params):
@@ -3032,12 +2889,32 @@ class TestHEF:
 
         # As long as hef_gdir uses 1, we need to use 1 here as well
         cfg.PARAMS['trapezoid_lambdas'] = 1
-        init_present_time_glacier(hef_gdir)
         cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        # We calibrate to zero
+        df = massbalance.mb_calibration_from_geodetic_mb(hef_gdir,
+                                                         calibrate_param1='temp_bias',
+                                                         ref_mb=0,
+                                                         ref_mb_years=(1970, 2001),
+                                                         write_to_gdir=False)
 
         cl = massbalance.ConstantMassBalance
         mb_mod = massbalance.MultipleFlowlineMassBalance(hef_gdir,
+                                                         melt_f=df['melt_f'],
+                                                         temp_bias=df['temp_bias'],
+                                                         prcp_fac=df['prcp_fac'],
+                                                         y0=1985,
                                                          mb_model_class=cl)
+
+        # We invert again
+        massbalance.apparent_mb_from_any_mb(hef_gdir, mb_model=mb_mod,
+                                            mb_years=(1970, 2001))
+
+        inversion.mass_conservation_inversion(hef_gdir,
+                                              fs=inversion_params['inversion_fs'],
+                                              glen_a=inversion_params['inversion_glen_a'])
+        init_present_time_glacier(hef_gdir)
+
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -3058,7 +2935,7 @@ class TestHEF:
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.02)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.08)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
         np.testing.assert_allclose(ref_len, after_len, atol=200.01)
 
@@ -3092,7 +2969,7 @@ class TestHEF:
         cfg.PARAMS['trapezoid_lambdas'] = 1
         init_present_time_glacier(hef_gdir)
 
-        mb_mod = massbalance.ConstantMassBalance(hef_gdir, y0=2003 - 15)
+        mb_mod = massbalance.ConstantMassBalance(hef_gdir, y0=2002 - 15)
 
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -3143,14 +3020,30 @@ class TestHEF:
         cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(hef_gdir)
-        run_random_climate(hef_gdir, nyears=100, seed=6,
+
+        # Try something else here - find out the bias needed for 0 mb
+        dfo = hef_gdir.read_json('mb_calib')
+        df = massbalance.mb_calibration_from_geodetic_mb(hef_gdir,
+                                                         calibrate_param1='temp_bias',
+                                                         monthly_melt_f_default=dfo['melt_f'],
+                                                         ref_mb=0,
+                                                         ref_mb_years=(1970, 2001),
+                                                         write_to_gdir=False)
+
+        assert dfo['temp_bias'] == 0
+        assert dfo['melt_f'] == df['melt_f']
+        assert df['temp_bias'] < 0.5
+
+        run_random_climate(hef_gdir, nyears=100, seed=6, y0=2002 - 15,
                            fs=inversion_params['inversion_fs'],
                            glen_a=inversion_params['inversion_glen_a'],
-                           bias=0, output_filesuffix='_rdn')
-        run_constant_climate(hef_gdir, nyears=100,
+                           bias=0, output_filesuffix='_rdn',
+                           temperature_bias=df['temp_bias'])
+        run_constant_climate(hef_gdir, nyears=100, y0=2002 - 15,
                              fs=inversion_params['inversion_fs'],
                              glen_a=inversion_params['inversion_glen_a'],
-                             bias=0, output_filesuffix='_ct')
+                             bias=0, output_filesuffix='_ct',
+                             temperature_bias=df['temp_bias'])
 
         paths = [hef_gdir.get_filepath('model_geometry', filesuffix='_rdn'),
                  hef_gdir.get_filepath('model_geometry', filesuffix='_ct'),
@@ -3171,16 +3064,16 @@ class TestHEF:
         cfg.PARAMS['store_model_geometry'] = True
 
         init_present_time_glacier(hef_gdir)
-        run_constant_climate(hef_gdir, nyears=20,
+        run_constant_climate(hef_gdir, nyears=20, y0=1985,
                              fs=inversion_params['inversion_fs'],
                              glen_a=inversion_params['inversion_glen_a'],
                              bias=0, output_filesuffix='_ct')
 
-        run_constant_climate(hef_gdir, nyears=10,
+        run_constant_climate(hef_gdir, nyears=10, y0=1985,
                              fs=inversion_params['inversion_fs'],
                              glen_a=inversion_params['inversion_glen_a'],
                              bias=0, output_filesuffix='_ct_1')
-        run_constant_climate(hef_gdir, nyears=10,
+        run_constant_climate(hef_gdir, nyears=10, y0=1985,
                              fs=inversion_params['inversion_fs'],
                              glen_a=inversion_params['inversion_glen_a'],
                              init_model_filesuffix='_ct_1',
@@ -3194,76 +3087,15 @@ class TestHEF:
         np.testing.assert_allclose(ds.volume, ds_.volume, rtol=1e-5)
 
     @pytest.mark.slow
-    def test_random_sh(self, gdir_sh, hef_gdir):
-
-        cfg.PARAMS['store_model_geometry'] = True
-
-        gdir = hef_gdir
-        init_present_time_glacier(gdir_sh)
-
-        cfg.PATHS['climate_file'] = ''
-        cfg.PARAMS['baseline_climate'] = 'CRU'
-        cfg.PARAMS['run_mb_calibration'] = True
-        tasks.process_cru_data(gdir_sh)
-        climate.compute_ref_t_stars([gdir_sh])
-        climate.local_t_star(gdir_sh)
-
-        run_random_climate(gdir_sh, nyears=20, seed=4,
-                           bias=0, output_filesuffix='_rdn')
-        run_constant_climate(gdir_sh, nyears=20,
-                             bias=0, output_filesuffix='_ct')
-
-        paths = [gdir_sh.get_filepath('model_diagnostics', filesuffix='_rdn'),
-                 gdir_sh.get_filepath('model_diagnostics', filesuffix='_ct'),
-                 ]
-        for path in paths:
-            with xr.open_dataset(path) as ds:
-                assert ds.calendar_month[0] == 4
-
-        paths = [gdir_sh.get_filepath('model_geometry', filesuffix='_rdn'),
-                 gdir_sh.get_filepath('model_geometry', filesuffix='_ct'),
-                 ]
-        for path in paths:
-            model = FileModel(path)
-            vol = model.volume_km3_ts()
-            area = model.area_km2_ts()
-            np.testing.assert_allclose(vol.iloc[0], np.mean(vol),
-                                       rtol=0.1)
-            np.testing.assert_allclose(area.iloc[0], np.mean(area),
-                                       rtol=0.1)
-
-        # Test a SH/NH mix
-        init_present_time_glacier(gdir)
-        run_constant_climate(gdir, nyears=20,
-                             bias=0, output_filesuffix='_ct')
-
-        utils.compile_climate_input([gdir_sh, gdir])
-        utils.compile_run_output([gdir_sh, gdir],
-                                 input_filesuffix='_ct')
-
-        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_sh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 4
-        f = os.path.join(cfg.PATHS['working_dir'], 'run_output_ct_nh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 10
-        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_sh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 4
-        f = os.path.join(cfg.PATHS['working_dir'], 'climate_input_nh.nc')
-        with xr.open_dataset(f) as ds:
-            assert ds.calendar_month[0] == 10
-
-    @pytest.mark.slow
     def test_compile_calving(self, hef_gdir, gdir_calving):
 
         # This works because no calving output
         cfg.PARAMS['use_kcalving_for_run'] = False
         init_present_time_glacier(hef_gdir)
         init_present_time_glacier(gdir_calving)
-        run_constant_climate(hef_gdir, nyears=10,
+        run_constant_climate(hef_gdir, nyears=10, y0=1985,
                              bias=0, output_filesuffix='_def')
-        run_constant_climate(gdir_calving, nyears=10,
+        run_constant_climate(gdir_calving, nyears=10, y0=1985,
                              bias=0, output_filesuffix='_def')
         utils.compile_run_output([gdir_calving, hef_gdir],
                                  input_filesuffix='_def',
@@ -3273,10 +3105,10 @@ class TestHEF:
         cfg.PARAMS['use_kcalving_for_run'] = True
         init_present_time_glacier(hef_gdir)
         init_present_time_glacier(gdir_calving)
-        run_constant_climate(hef_gdir, nyears=10,
+        run_constant_climate(hef_gdir, nyears=10, y0=1985,
                              bias=0, output_filesuffix='_def')
         run_constant_climate(gdir_calving, nyears=10, water_level=0,
-                             bias=0, output_filesuffix='_def')
+                             bias=0, y0=1985, output_filesuffix='_def')
         utils.compile_run_output([gdir_calving, hef_gdir],
                                  input_filesuffix='_def',
                                  tmp_file_size=1)
@@ -3296,10 +3128,6 @@ class TestHEF:
 
         # Make a dummy run for 0 years
         run_from_climate_data(hef_gdir, ye=2004, output_filesuffix='_1')
-
-        with pytest.warns(FutureWarning):
-            fp = hef_gdir.get_filepath('model_run', filesuffix='_1')
-            assert fp == hef_gdir.get_filepath('model_geometry', filesuffix='_1')
 
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_1')
         fmod = FileModel(fp)
@@ -3365,7 +3193,7 @@ class TestHEF:
         fp = hef_gdir.get_filepath('model_geometry', filesuffix='_4')
         fmod = FileModel(fp)
         assert fmod.y0 == 2002
-        assert fmod.last_yr == 2004
+        assert fmod.last_yr == 2003
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
@@ -4564,9 +4392,8 @@ class TestHEF:
             np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
 
         # Mass balance models
-        mb_cru = massbalance.PastMassBalance(gdir)
-        mb_cesm = massbalance.PastMassBalance(gdir,
-                                              filename='gcm_data')
+        mb_cru = massbalance.MonthlyTIModel(gdir)
+        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data')
 
         # Average over 1961-1990
         h, w = gdir.get_inversion_flowline_hw()
@@ -4578,7 +4405,7 @@ class TestHEF:
         assert np.abs(np.mean(ts1) - np.mean(ts2)) < 100
 
         # For my own interest, some statistics
-        yrs = np.arange(1851, 2004)
+        yrs = np.arange(1851, 2003)
         ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
         ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
         if do_plot:
@@ -4616,7 +4443,8 @@ class TestHEF:
                         rtol=0.1)
 
         # Do a spinup run
-        run_constant_climate(gdir, nyears=100, temperature_bias=-0.5,
+        run_constant_climate(gdir, nyears=100, y0=1985,
+                             temperature_bias=-1,
                              output_filesuffix='_spinup')
         run_from_climate_data(gdir, ys=1961, ye=1990,
                               init_model_filesuffix='_spinup',
@@ -4624,7 +4452,7 @@ class TestHEF:
         ds3 = utils.compile_run_output([gdir], path=False,
                                        input_filesuffix='_afterspinup')
         assert (ds1.volume.isel(rgi_id=0, time=-1).data <
-                0.75 * ds3.volume.isel(rgi_id=0, time=-1).data)
+                0.85 * ds3.volume.isel(rgi_id=0, time=-1).data)
         ds3.close()
 
         # Try the compile optimisation
@@ -4647,7 +4475,9 @@ class TestHEF:
         tasks = []
         for feedback in feedbacks:
             tasks.append((run_random_climate,
-                          dict(nyears=200, seed=5, mb_elev_feedback=feedback,
+                          dict(nyears=200, seed=5,
+                               y0=1985, temperature_bias=-0.5,
+                               mb_elev_feedback=feedback,
                                output_filesuffix=feedback,
                                store_monthly_step=True)))
         with warnings.catch_warnings():
@@ -4786,7 +4616,7 @@ class TestHydro:
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                              store_monthly_hydro=store_monthly_hydro,
-                             bias=0, nyears=50, zero_initial_glacier=True,
+                             y0=1985, nyears=50, zero_initial_glacier=True,
                              output_filesuffix='_const')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -4835,7 +4665,7 @@ class TestHydro:
         # Now with zero ref area
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                              store_monthly_hydro=store_monthly_hydro,
-                             bias=0, nyears=50, zero_initial_glacier=True,
+                             y0=1985, nyears=50, zero_initial_glacier=True,
                              ref_area_from_y0=True, output_filesuffix='_const_y0')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -4897,7 +4727,7 @@ class TestHydro:
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                              store_monthly_hydro=store_monthly_hydro,
-                             nyears=100, y0=2003 - 5, halfsize=5,
+                             nyears=100, y0=2002 - 5, halfsize=5,
                              output_filesuffix='_const')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -5048,7 +4878,7 @@ class TestHydro:
             odf_ma = nds[sel_vars].mean(dim=('time', 'rgi_id')).to_dataframe()
             odf_ma.columns = [c.replace('_monthly', '') for c in odf_ma.columns]
             # Runoff peak should follow a temperature curve
-            assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 11, atol=1.1)
+            assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 8)
 
     @pytest.mark.slow
     def test_hydro_ref_area(self, hef_gdir, inversion_params):
@@ -5349,7 +5179,7 @@ class TestHydro:
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
                              store_monthly_hydro=store_monthly_hydro,
-                             seed=0, nyears=100, y0=2003 - 5, halfsize=5,
+                             seed=0, nyears=100, y0=2002 - 5, halfsize=5,
                              output_filesuffix='_rand')
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -5390,7 +5220,6 @@ class TestHydro:
 
         # Qualitative assessments
         assert odf['melt_on_glacier'].iloc[-1] < odf['melt_on_glacier'].iloc[0] * 0.7
-        assert odf['liq_prcp_off_glacier'].iloc[-1] > odf['liq_prcp_on_glacier'].iloc[-1]
         assert odf['liq_prcp_off_glacier'].iloc[0] < odf['liq_prcp_on_glacier'].iloc[0]
 
         # Residual MB should not be crazy large
@@ -5417,23 +5246,23 @@ class TestHydro:
             tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
                                  bias=mb_bias,
                                  store_monthly_hydro=False,
-                                 seed=0, nyears=20, y0=2003 - 5, halfsize=5,
+                                 seed=0, nyears=20, y0=2002 - 5, halfsize=5,
                                  output_filesuffix='_annual')
             tasks.run_with_hydro(gdir, run_task=tasks.run_random_climate,
                                  bias=mb_bias,
                                  store_monthly_hydro=True,
-                                 seed=0, nyears=20, y0=2003 - 5, halfsize=5,
+                                 seed=0, nyears=20, y0=2002 - 5, halfsize=5,
                                  output_filesuffix='_monthly')
         elif mb_type == 'const':
             tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                                  bias=mb_bias,
                                  store_monthly_hydro=False,
-                                 nyears=20, y0=2003 - 5, halfsize=5,
+                                 nyears=20, y0=2002 - 5, halfsize=5,
                                  output_filesuffix='_annual')
             tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                                  bias=mb_bias,
                                  store_monthly_hydro=True,
-                                 nyears=20, y0=2003 - 5, halfsize=5,
+                                 nyears=20, y0=2002 - 5, halfsize=5,
                                  output_filesuffix='_monthly')
         elif mb_type == 'hist':
             tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
@@ -5447,6 +5276,8 @@ class TestHydro:
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                filesuffix='_annual')) as ds:
+            assert_allclose(ds.calendar_month.data, 1)
+            assert_allclose(ds.hydro_month.data, 4)
             odf_a = ds.to_dataframe()
 
         with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -5460,12 +5291,16 @@ class TestHydro:
         # Check that yearly equals monthly
         np.testing.assert_array_equal(odf_a.columns, odf_m.columns)
         for c in odf_a.columns:
-            rtol = 1e-5
             if c == 'melt_off_glacier':
-                rtol = 0.15
+                # This one is quite different - reason is snow cover buildup
+                # and melt. Monthly is better than annual
+                assert_allclose(odf_a[c].iloc[-5:].mean(),
+                                odf_m[c].iloc[-5:].mean(),
+                                rtol=0.15)
+                continue
             if c in ['snow_bucket']:
                 continue
-            assert_allclose(odf_a[c], odf_m[c], rtol=rtol)
+            assert_allclose(odf_a[c], odf_m[c], rtol=1e-5)
 
         # Check monthly stuff
         odf_ma['tot_prcp'] = (odf_ma['liq_prcp_off_glacier'] +
@@ -5479,7 +5314,7 @@ class TestHydro:
                             odf_ma['liq_prcp_off_glacier'])
 
         # Regardless of MB bias the melt in winter months should be close to zero
-        assert_allclose(odf_ma['melt_on_glacier'].loc[3:4], 0, atol=1e3)
+        assert_allclose(odf_ma['melt_on_glacier'].loc[[12, 1, 2]], 0, atol=1e4)
 
         # Residual MB should not be crazy large
         frac = odf_ma['residual_mb'] / odf_ma['melt_on_glacier']
@@ -5487,7 +5322,7 @@ class TestHydro:
         assert_allclose(frac.loc[~frac.isnull()], 0, atol=0.01)
 
         # Runoff peak should follow a temperature curve
-        assert_allclose(odf_ma['runoff'].idxmax(), 11, atol=1.1)
+        assert_allclose(odf_ma['runoff'].idxmax(), 8)
 
 
 class TestMassRedis:
@@ -5505,12 +5340,8 @@ class TestMassRedis:
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['min_ice_thick_for_length'] = 5
-        cfg.PARAMS['use_tstar_calibration'] = True
         cfg.PARAMS['use_winter_prcp_factor'] = False
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['climate_qc_months'] = 3
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -5608,11 +5439,7 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['run_mb_calibration'] = True
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')

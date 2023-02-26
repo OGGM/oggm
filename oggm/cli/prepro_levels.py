@@ -85,7 +85,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
-                      ref_tstars_base_url='',
                       logging_level='WORKFLOW', disable_dl_verify=False,
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
                       dynamic_spinup_start_year=1979,
@@ -106,9 +105,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         which DEM source to use: default, SOURCE_NAME or ALL
     working_dir : str
         path to the OGGM working directory
-    ref_tstars_base_url : str
-        url where to find the pre-calibrated reference tstar list.
-        Required as of v1.4.
     params_file : str
         path to the OGGM parameter file (to override defaults)
     is_test : bool
@@ -248,12 +244,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                    logging_level=logging_level,
                    future=True)
 
-    if match_geodetic_mb_per_glacier and (cfg.PARAMS['hydro_month_nh'] != 1 or
-                                          cfg.PARAMS['hydro_month_sh'] != 1):
-        raise InvalidParamsError('We recommend to set hydro_month_nh and sh '
-                                 'to 1 for the geodetic MB calibration per '
-                                 'glacier.')
-
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = not disable_mp
 
@@ -341,13 +331,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
-
-        if max_level > 2:
-            # Also use ref tstars
-            utils.apply_test_ref_tstars()
-
-    if max_level > 2 and ref_tstars_base_url:
-        workflow.download_ref_tstars(base_url=ref_tstars_base_url)
 
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
@@ -664,9 +647,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             if i >= len(gdirs):
                 raise RuntimeError('Found no valid glaciers!')
             try:
-                y0 = gdirs[i].get_climate_info()['baseline_hydro_yr_0']
+                y0 = gdirs[i].get_climate_info()['baseline_yr_0']
                 # One adds 1 because the run ends at the end of the year
-                ye = gdirs[i].get_climate_info()['baseline_hydro_yr_1'] + 1
+                ye = gdirs[i].get_climate_info()['baseline_yr_1'] + 1
                 break
             except BaseException:
                 i += 1
@@ -833,9 +816,6 @@ def parse_args(args):
     parser.add_argument('--params-file', type=str,
                         help='path to the OGGM parameter file to use in place '
                              'of the default one.')
-    parser.add_argument('--ref-tstars-base-url', type=str,
-                        help='the url where to find the pre-calibrated '
-                             'reference tstar list. Required as of v1.4.')
     parser.add_argument('--output', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -984,7 +964,6 @@ def parse_args(args):
                 add_millan_velocity=args.add_millan_velocity,
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 disable_dl_verify=args.disable_dl_verify,
-                ref_tstars_base_url=args.ref_tstars_base_url,
                 evolution_model=args.evolution_model,
                 downstream_line_shape=args.downstream_line_shape,
                 dynamic_spinup=dynamic_spinup,

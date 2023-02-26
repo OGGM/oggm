@@ -36,11 +36,11 @@ log = logging.getLogger(__name__)
 def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the climate data from a user-defined climate file.
 
-    The input file must have a specific format (see
-    https://github.com/OGGM/oggm-sample-data ->test-files/histalp_merged_hef.nc
-    for an example).
+    The input file must have a specific format
+    (see https://github.com/OGGM/oggm-sample-data
+    ->test-files/histalp_merged_hef.nc for an example).
 
-    This is the way OGGM used to do it for HISTALP before it got automatised.
+    This is the way OGGM used to do it for HISTALP before it got added to the shop.
 
     Parameters
     ----------

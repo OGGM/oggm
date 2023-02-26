@@ -1234,18 +1234,14 @@ def gridded_mb_attributes(gdir):
                            .format(np.sum(lin_mb_on_z)))
 
     # Normal OGGM (a bit tweaked)
-    df = gdir.read_json('local_mustar')
-
-    def to_minimize(mu_star):
-        mbmod = ConstantMassBalance(gdir, mu_star=mu_star, bias=0,
-                                    check_calib_params=False,
-                                    y0=df['t_star'])
+    def to_minimize(temp_bias):
+        mbmod = ConstantMassBalance(gdir, temp_bias=temp_bias, y0=1995,
+                                    check_calib_params=False)
         smb = mbmod.get_annual_mb(heights=topo)
         return np.sum(smb)**2
-    mu_star = optimization.minimize(to_minimize, [0.], method='Powell')
-    mbmod = ConstantMassBalance(gdir, mu_star=float(mu_star['x']), bias=0,
-                                check_calib_params=False,
-                                y0=df['t_star'])
+    opt = optimization.minimize(to_minimize, [0.], method='Powell')
+    mbmod = ConstantMassBalance(gdir, temp_bias=float(opt['x']), y0=1995,
+                                check_calib_params=False)
     oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
     if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=10):
         raise RuntimeError('Spec mass balance should be zero but is: {}'

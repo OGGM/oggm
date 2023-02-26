@@ -17,7 +17,6 @@ salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
 import oggm
-from oggm.core.massbalance import PastMassBalance, compute_ela
 from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
@@ -394,14 +393,6 @@ class TestInitialize(unittest.TestCase):
         else:
             self.assertFalse(cfg.PATHS['working_dir'])
 
-    def test_params_warn(self):
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        with pytest.raises(InvalidWorkflowError):
-            cfg.PARAMS['hydro_month_sh'] = 1
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
-
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
@@ -433,7 +424,7 @@ class TestWorkflowTools(unittest.TestCase):
         assert df.name == 'Hintereis'
         assert len(df) == 105
 
-    def test_glacier_characs(self):
+    def test_glacier_statistics_and_climate(self):
 
         gdir = init_hef()
 
@@ -451,10 +442,6 @@ class TestWorkflowTools(unittest.TestCase):
 
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)
-        np.testing.assert_allclose(df['tstar_avg_prcp'],
-                                   2853, atol=5)
-        np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],
-                                   2811, atol=5)
         np.testing.assert_allclose(df['1970-2000_avg_prcpsol_max_elev'],
                                    2811, atol=200)
 
@@ -467,18 +454,6 @@ class TestWorkflowTools(unittest.TestCase):
         assert utils.demo_glacier_id('Mer de Glace') == 'RGI60-11.03643'
         assert utils.demo_glacier_id('RGI60-11.03643') == 'RGI60-11.03643'
         assert utils.demo_glacier_id('Mer Glace') is None
-
-    def test_download_ref_tstars(self):
-
-        cfg.initialize()
-        cfg.PATHS['working_dir'] = self.testdir
-        url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
-               'oggm_v1.4/RGIV62/CRU/centerlines/qc3/pcp2.5/')
-        workflow.download_ref_tstars(url)
-        assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
-                                           'ref_tstars.csv'))
-        assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
-                                           'ref_tstars_params.json'))
 
     def test_ref_data_manager(self):
 
@@ -734,12 +709,10 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
             assert gdir.has_file('dem')
             assert gdir.has_file('gridded_data')
             assert gdir.has_file('climate_historical')
-            assert gdir.has_file('climate_info')
             n_intersects += gdir.has_file('intersects')
         assert n_intersects > 0
 
         assert gdir.get_climate_info()
-        assert gdir.read_pickle('climate_info')
         fls = gdir.read_pickle('inversion_flowlines')
         with pytest.raises(AttributeError):
             # This is going to raise as long as we keep the "old" prepro gdirs
@@ -1058,11 +1031,9 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           test_topofile=topof, match_regional_geodetic_mb='hugonnet',
-                          override_params={'hydro_month_nh': 1,
-                                           'geodetic_mb_period':
+                          override_params={'geodetic_mb_period':
                                                '2000-01-01_2010-01-01',
                                            'baseline_climate': 'CRU',
-                                           'use_tstar_calibration': True,
                                            'use_winter_prcp_factor': False,
                                            'prcp_scaling_factor': 2.5,
                                            }
@@ -1217,11 +1188,9 @@ class TestPreproCLI(unittest.TestCase):
                               downstream_line_shape=downstream_line_shape,
                               test_intersects_file=inter,
                               test_topofile=topof, elev_bands=True,
-                              override_params={'hydro_month_nh': 1,
-                                               'geodetic_mb_period':
+                              override_params={'geodetic_mb_period':
                                                '2000-01-01_2010-01-01',
                                                'baseline_climate': 'CRU',
-                                               'use_tstar_calibration': True,
                                                'use_winter_prcp_factor': False,
                                                'prcp_scaling_factor': 2.5,
                                                })
@@ -1356,10 +1325,7 @@ class TestPreproCLI(unittest.TestCase):
 
         params = {'max_mu_star': 600,
                   'geodetic_mb_period': '2000-01-01_2010-01-01',
-                  'hydro_month_nh': 1,
-                  'hydro_month_sh': 1,
                   'baseline_climate': 'CRU',
-                  'use_tstar_calibration': True,
                   'use_winter_prcp_factor': False,
                   'prcp_scaling_factor': 2.5,
                   }
@@ -1463,11 +1429,9 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           logging_level='INFO', max_level=5,
-                          override_params={'hydro_month_nh': 1,
-                                           'geodetic_mb_period':
+                          override_params={'geodetic_mb_period':
                                                '2000-01-01_2010-01-01',
                                            'baseline_climate': 'CRU',
-                                           'use_tstar_calibration': True,
                                            'use_winter_prcp_factor': False,
                                            'prcp_scaling_factor': 2.5,
                                            }
@@ -1673,9 +1637,11 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof,
-                      override_params={'baseline_climate': 'CRU',
-                                       'use_tstar_calibration': True,
+                      test_topofile=topof, logging_level='INFO',
+                      override_params={'continue_on_error': False,
+                                       'use_multiprocessing': False,
+                                       'geodetic_mb_period': '2000-01-01_2010-01-01',
+                                       'baseline_climate': 'CRU',
                                        'use_winter_prcp_factor': False,
                                        'prcp_scaling_factor': 2.5,
                                        })
@@ -2957,6 +2923,8 @@ class TestSkyIsFalling(unittest.TestCase):
 
 class TestELAComputation(unittest.TestCase):
     def test_computing_ela(self):
+        from oggm.core.massbalance import MonthlyTIModel, compute_ela
+
         gdir = init_hef()
 
         ys = 1990
@@ -2964,15 +2932,15 @@ class TestELAComputation(unittest.TestCase):
         ELA1 = compute_ela(gdir, ys=ys, ye=ye)
         ELA2 = compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
 
-        mbmod = PastMassBalance(gdir)
+        mbmod = MonthlyTIModel(gdir)
 
         mb = []
         for yr in np.arange(ys, ye):
             height = ELA1[yr]
             mb = np.append(mb, mbmod.get_annual_mb([height], year=yr))
 
-        assert(np.all(np.isfinite(ELA1)))
-        assert([ELA1 < ELA2])
+        assert (np.all(np.isfinite(ELA1)))
+        assert ([ELA1 < ELA2])
         assert_allclose(np.mean(mb * SEC_IN_YEAR), 0, atol=1e-3)
 
     def test_compile(self):

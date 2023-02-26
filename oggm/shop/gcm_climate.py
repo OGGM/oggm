@@ -78,21 +78,15 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     months = temp['time.month']
     if months[0] != 1:
         raise ValueError('We expect the files to start in January!')
-    if months[-1] < 10:
+    if months[-1] != 12:
         raise ValueError('We expect the files to end in December!')
 
     if (np.abs(temp['lon']) > 180) or (np.abs(prcp['lon']) > 180):
         raise ValueError('We expect the longitude coordinates to be within '
                          '[-180, 180].')
 
-    # from normal years to hydrological years
-    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    if sm != 1:
-        prcp = prcp[sm-1:sm-13].load()
-        temp = temp[sm-1:sm-13].load()
-
-    assert len(prcp) // 12 == len(prcp) / 12, 'Somehow we didn\'t get full years'
-    assert len(temp) // 12 == len(temp) / 12, 'Somehow we didn\'t get full years'
+    assert len(prcp) // 12 == len(prcp) / 12, "Somehow we didn't get full years"
+    assert len(temp) // 12 == len(temp) / 12, "Somehow we didn't get full years"
 
     # Get the reference data to apply the anomaly to
     fpath = gdir.get_filepath('climate_historical')
@@ -113,9 +107,6 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                              'for this to work')
                 ts_tmp_std = ts_tmp_sel.groupby('time.month').std(dim='time')
                 std_fac = ds_ref.temp.groupby('time.month').std(dim='time') / ts_tmp_std
-                if sm != 1:
-                    # Just to avoid useless roll
-                    std_fac = std_fac.roll(month=13-sm, roll_coords=True)
                 std_fac = np.tile(std_fac.data, len(temp) // 12)
                 # We need an even number of years for this to work
                 win_size = len(ts_tmp_sel) + 1

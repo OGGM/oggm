@@ -139,19 +139,14 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     lat = gdir.cenlat
     with xr.open_dataset(get_ecmwf_file(dataset, 'tmp')) as ds:
         _check_ds_validity(ds)
-        # set temporal subset for the ts data (hydro years)
-        sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-        em = sm - 1 if (sm > 1) else 12
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1
         if dataset == 'ERA5dr':
             # Last year incomplete
             assert ds['time.month'][-1] == 5
-            if em > 5:
-                y1 -= 1
-        ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                               '{}-{:02d}-01'.format(y1, em)))
+            y1 -= 1
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
         try:
@@ -167,8 +162,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
         _check_ds_validity(ds)
-        ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                               '{}-{:02d}-01'.format(y1, em)))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
         try:
@@ -199,15 +193,13 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     if dataset == 'ERA5dr':
         with xr.open_dataset(get_ecmwf_file(dataset, 'lapserates')) as ds:
             _check_ds_validity(ds)
-            ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                                   '{}-{:02d}-01'.format(y1, em)))
+            ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             gradient = ds['lapserate'].data
 
         with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
             _check_ds_validity(ds)
-            ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                                   '{}-{:02d}-01'.format(y1, em)))
+            ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             temp_std = ds['t2m_std'].data
 

@@ -13,8 +13,7 @@ gpd = pytest.importorskip('geopandas')
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import (init_columbia_eb, init_hef,
-                              get_test_dir, apply_test_ref_tstars)
+from oggm.tests.funcs import init_columbia_eb, init_hef, get_test_dir
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
                        massbalance)
@@ -178,14 +177,9 @@ def test_multiple_inversion():
     cfg.PARAMS['border'] = 40
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     cfg.PARAMS['trapezoid_lambdas'] = 1
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
     cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
     cfg.PATHS['working_dir'] = testdir
-    apply_test_ref_tstars()
 
     # Get the RGI ID
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
@@ -193,7 +187,11 @@ def test_multiple_inversion():
 
     gdirs = workflow.init_glacier_directories(hef_rgi)
     workflow.gis_prepro_tasks(gdirs)
-    workflow.climate_tasks(gdirs)
+    workflow.execute_entity_task(climate.process_climate_data, gdirs)
+    workflow.execute_entity_task(massbalance.mb_calibration_from_geodetic_mb,
+                                 gdirs, ref_mb_years=(1980, 2000), ref_mb=0)
+    workflow.execute_entity_task(massbalance.apparent_mb_from_any_mb,
+                                 gdirs, mb_years=(1980, 2000))
     workflow.inversion_tasks(gdirs)
 
     fig, ax = plt.subplots()
@@ -264,14 +262,9 @@ def test_multiple_models():
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     cfg.PARAMS['trapezoid_lambdas'] = 1
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
     cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
     cfg.PARAMS['border'] = 40
-    apply_test_ref_tstars()
 
     # Get the RGI ID
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
@@ -279,7 +272,11 @@ def test_multiple_models():
 
     gdirs = workflow.init_glacier_directories(hef_rgi)
     workflow.gis_prepro_tasks(gdirs)
-    workflow.climate_tasks(gdirs)
+    workflow.execute_entity_task(climate.process_climate_data, gdirs)
+    workflow.execute_entity_task(massbalance.mb_calibration_from_geodetic_mb,
+                                 gdirs, ref_mb_years=(1980, 2000), ref_mb=0)
+    workflow.execute_entity_task(massbalance.apparent_mb_from_any_mb,
+                                 gdirs, mb_years=(1980, 2000))
     workflow.inversion_tasks(gdirs)
 
     models = []
@@ -355,12 +352,8 @@ def test_chhota_shigri():
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['trapezoid_lambdas'] = 1
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
     cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
 
     hef_file = get_demo_file('divides_RGI50-14.15990.shp')
     df = gpd.read_file(hef_file)
@@ -370,7 +363,7 @@ def test_chhota_shigri():
     gdirs = workflow.init_glacier_directories(df)
     workflow.gis_prepro_tasks(gdirs)
     for gdir in gdirs:
-        climate.apparent_mb_from_linear_mb(gdir)
+        massbalance.apparent_mb_from_linear_mb(gdir)
     workflow.execute_entity_task(inversion.prepare_for_inversion, gdirs)
     workflow.execute_entity_task(inversion.mass_conservation_inversion, gdirs)
     workflow.execute_entity_task(inversion.filter_inversion_output, gdirs)
@@ -403,12 +396,8 @@ def test_ice_cap():
     cfg.PARAMS['border'] = 60
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['trapezoid_lambdas'] = 1
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
     cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
 
     df = gpd.read_file(get_demo_file('divides_RGI50-05.08389.shp'))
     df['Area'] = df.Area * 1e-6  # cause it was in m2
@@ -449,12 +438,8 @@ def test_coxe():
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['trapezoid_lambdas'] = 1
-    cfg.PARAMS['use_tstar_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
     cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
     entity = gpd.read_file(hef_file).iloc[0]
@@ -470,7 +455,7 @@ def test_coxe():
     centerlines.catchment_intersections(gdir)
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
-    climate.apparent_mb_from_linear_mb(gdir)
+    massbalance.apparent_mb_from_linear_mb(gdir)
     inversion.prepare_for_inversion(gdir)
     inversion.mass_conservation_inversion(gdir)
     inversion.filter_inversion_output(gdir)

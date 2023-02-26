@@ -1043,10 +1043,9 @@ class FlowlineModel(object):
         else:
             monthly_time = np.arange(np.floor(y0), np.floor(y1)+1)
 
-        sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
-
         yrs, months = utils.floatyear_to_date(monthly_time)
-        cyrs, cmonths = utils.hydrodate_to_calendardate(yrs, months,
+        sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
+        hyrs, hmonths = utils.calendardate_to_hydrodate(yrs, months,
                                                         start_month=sm)
 
         # init output
@@ -1056,9 +1055,9 @@ class FlowlineModel(object):
         ny = len(yearly_time)
         if ny == 1:
             yrs = [yrs]
-            cyrs = [cyrs]
+            hyrs = [hyrs]
             months = [months]
-            cmonths = [cmonths]
+            hmonths = [hmonths]
         nm = len(monthly_time)
 
         if do_geom or do_fl_diag:
@@ -1087,16 +1086,16 @@ class FlowlineModel(object):
 
         # Coordinates
         diag_ds.coords['time'] = ('time', monthly_time)
-        diag_ds.coords['hydro_year'] = ('time', yrs)
-        diag_ds.coords['hydro_month'] = ('time', months)
-        diag_ds.coords['calendar_year'] = ('time', cyrs)
-        diag_ds.coords['calendar_month'] = ('time', cmonths)
+        diag_ds.coords['calendar_year'] = ('time', yrs)
+        diag_ds.coords['calendar_month'] = ('time', months)
+        diag_ds.coords['hydro_year'] = ('time', hyrs)
+        diag_ds.coords['hydro_month'] = ('time', hmonths)
 
-        diag_ds['time'].attrs['description'] = 'Floating hydrological year'
-        diag_ds['hydro_year'].attrs['description'] = 'Hydrological year'
-        diag_ds['hydro_month'].attrs['description'] = 'Hydrological month'
+        diag_ds['time'].attrs['description'] = 'Floating year'
         diag_ds['calendar_year'].attrs['description'] = 'Calendar year'
         diag_ds['calendar_month'].attrs['description'] = 'Calendar month'
+        diag_ds['hydro_year'].attrs['description'] = 'Hydrological year'
+        diag_ds['hydro_month'].attrs['description'] = 'Hydrological month'
 
         # Variables and attributes
         ovars = cfg.PARAMS['store_diagnostic_variables']
@@ -3157,8 +3156,6 @@ def init_present_time_glacier(gdir, filesuffix=''):
                                gdir=gdir)
 
         # Update attrs
-        nfl.mu_star = cl.mu_star
-
         if cl.flows_to:
             flows_to_ids.append(cls.index(cl.flows_to))
         else:
@@ -3375,19 +3372,18 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     halfsize : int, optional
         the half-size of the time window (window size = 2 * halfsize + 1)
     bias : float
-        bias of the mb model. Default is to use the calibrated one, which
-        is often a better idea. For t* experiments it can be useful to set it
-        to zero
+        bias of the mb model (offset to add to the MB). Default is zero.
     seed : int
         seed for the random generator. If you ignore this, the runs will be
         different each time. Setting it to a fixed seed across glaciers can
         be useful if you want to have the same climate years for all of them
     temperature_bias : float
-        add a bias to the temperature timeseries
+        add a bias to the temperature timeseries (note that this is added
+        to any bias that the calibration decided is needed)
     precipitation_factor: float
-        multiply a factor to the precipitation time series
-        default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        multiply a factor to the precipitation time series (note that
+        this factor is multiplied to any factor that was decided during
+        calibration or by global parameters)
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -3435,9 +3431,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                                            unique_samples=unique_samples)
 
     if temperature_bias is not None:
-        mb_model.temp_bias = temperature_bias
+        mb_model.temp_bias += temperature_bias
     if precipitation_factor is not None:
-        mb_model.prcp_fac = precipitation_factor
+        mb_model.prcp_fac *= precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
                               mb_model=mb_model, ys=0, ye=nyears,
@@ -3453,7 +3449,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
-                         bias=None, temperature_bias=None,
+                         bias=0, temperature_bias=None,
                          precipitation_factor=None,
                          store_monthly_step=False,
                          store_model_geometry=None,
@@ -3466,7 +3462,6 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
-                         use_avg_climate=False,
                          **kwargs):
     """Runs the constant mass balance model for a given number of years.
 
@@ -3487,15 +3482,14 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     halfsize : int, optional
         the half-size of the time window (window size = 2 * halfsize + 1)
     bias : float
-        bias of the mb model. Default is to use the calibrated one, which
-        is often a better idea. For t* experiments it can be useful to set it
-        to zero
+        bias of the mb model (offset to add to the MB). Default is zero.
     temperature_bias : float
-        add a bias to the temperature timeseries
+        add a bias to the temperature timeseries (note that this is added
+        to any bias that the calibration decided is needed)
     precipitation_factor: float
-        multiply a factor to the precipitation time series
-        default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        multiply a factor to the precipitation time series (note that
+        this factor is multiplied to any factor that was decided during
+        calibration or by global parameters)
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
@@ -3518,7 +3512,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     mb_model : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance. Default is to use a
         ConstantMassBalance together with the provided parameters y0, halfsize,
-        bias, climate_filename and climate_input_filesuffix.
+        climate_filename, climate_input_filesuffix, etc.
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3527,19 +3521,13 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
     init_model_fls : []
-        list of flowlines to use to initialise the model (the default is the
+        list of flowlines to use to initialize the model (the default is the
         present_time_glacier file from the glacier directory)
-    use_avg_climate : bool
-        use the average climate instead of the correct MB model. This is
-        for testing only!!!
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """
 
-    if use_avg_climate:
-        mb_model_class = AvgClimateMassBalance
-    else:
-        mb_model_class = ConstantMassBalance
+    mb_model_class = ConstantMassBalance
 
     if mb_model is None:
         mb_model = MultipleFlowlineMassBalance(gdir,
@@ -3550,9 +3538,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                                                input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
-        mb_model.temp_bias = temperature_bias
+        mb_model.temp_bias += temperature_bias
     if precipitation_factor is not None:
-        mb_model.prcp_fac = precipitation_factor
+        mb_model.prcp_fac *= precipitation_factor
 
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
                               mb_model=mb_model, ys=0, ye=nyears,
@@ -3577,7 +3565,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
-                          bias=None, temperature_bias=None,
+                          bias=0, temperature_bias=None,
                           precipitation_factor=None, **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
@@ -3616,7 +3604,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         'gcm_data'
     mb_model : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance. Default is to use a
-        PastMassBalance together with the provided parameters climate_filename,
+        MonthlyTIModel together with the provided parameters climate_filename,
         bias and climate_input_filesuffix.
     climate_input_filesuffix: str
         filesuffix for the input climate file
@@ -3635,15 +3623,14 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
     bias : float
-        bias of the mb model. Default is to use the calibrated one, which
-        is often a better idea. For t* experiments it can be useful to set it
-        to zero
+        bias of the mb model (offset to add to the MB). Default is zero.
     temperature_bias : float
-        add a bias to the temperature timeseries
+        add a bias to the temperature timeseries (note that this is added
+        to any bias that the calibration decided is needed)
     precipitation_factor: float
-        multiply a factor to the precipitation time series
-        default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        multiply a factor to the precipitation time series (note that
+        this factor is multiplied to any factor that was decided during
+        calibration or by global parameters)
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     fixed_geometry_spinup_yr : int
@@ -3672,12 +3659,9 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
     # Take from rgi date if not set yet
     if ys is None:
-        # The RGI timestamp is in calendar date - we convert to hydro date,
-        # i.e. 2003 becomes 2004 if hydro_month is not 1 (January)
-        # (so that we don't count the MB year 2003 in the simulation)
         # See also: https://github.com/OGGM/oggm/issues/1020
-        # even if hydro_month is 1, we prefer to start from Jan 2004
-        # as in the alps the rgi is from Aug 2003
+        # Even in calendar dates, we prefer to start in the next year
+        # as the rgi is often from snow free images the year before (e.g. Aug)
         ys = rgi_year + 1
 
     if ys <= rgi_year and init_model_filesuffix is None:
@@ -3694,15 +3678,15 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
     if mb_model is None:
         mb_model = MultipleFlowlineMassBalance(gdir,
-                                               mb_model_class=PastMassBalance,
+                                               mb_model_class=MonthlyTIModel,
                                                filename=climate_filename,
                                                bias=bias,
                                                input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
-        mb_model.temp_bias = temperature_bias
+        mb_model.temp_bias += temperature_bias
     if precipitation_factor is not None:
-        mb_model.prcp_fac = precipitation_factor
+        mb_model.prcp_fac *= precipitation_factor
 
     if ye is None:
         # Decide from climate (we can run the last year with data as well)
@@ -4120,7 +4104,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         ods.coords['month_2d'] = ('month_2d', np.arange(1, 13))
         # For the user later
         sm = cfg.PARAMS['hydro_month_' + mb_mod.hemisphere]
-        ods.coords['calendar_month_2d'] = ('month_2d', (np.arange(12) + sm - 1) % 12 + 1)
+        ods.coords['hydro_month_2d'] = ('month_2d', (np.arange(12) + 12 - sm + 1) % 12 + 1)
+        ods.coords['calendar_month_2d'] = ('month_2d', np.arange(1, 13))
     for varname, d in out.items():
         data = d.pop('data')
         if varname not in out_vars:
@@ -4305,7 +4290,7 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
         # read tributary flowlines and append to list
         tfls = trib.read_pickle('model_flowlines')
 
-        # copy climate file and local_mustar to new gdir
+        # copy climate file and calib to new gdir
         # if we have a merge-merge situation we need to copy multiple files
         rgiids = set([fl.rgi_id for fl in tfls])
 
@@ -4323,7 +4308,7 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
             shutil.copyfile(os.path.join(trib.dir, climfile_in),
                             os.path.join(main.dir, climfile_out))
 
-            _m = os.path.basename(trib.get_filepath('local_mustar')).split('.')
+            _m = os.path.basename(trib.get_filepath('mb_calib')).split('.')
             muin = _m[0] + in_id + '.' + _m[1]
             muout = _m[0] + '_' + out_id + '.' + _m[1]
 

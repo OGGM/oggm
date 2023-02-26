@@ -30,8 +30,9 @@ def _add_time_to_df(df, index, t):
 
 def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
                   output_folder='', working_dir='', is_test=False,
-                  test_rgidf=None, test_intersects_file=None,
-                  override_params=None, test_topofile=None):
+                  logging_level='WORKFLOW', test_rgidf=None,
+                  test_intersects_file=None, override_params=None,
+                  test_topofile=None):
     """Does the actual job.
 
     Parameters
@@ -62,9 +63,6 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     log = logging.getLogger(__name__)
 
     # Params
-    params = {}
-
-    # Local paths
     if override_params is None:
         override_params = {}
 
@@ -72,7 +70,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     override_params['working_dir'] = working_dir
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level='WORKFLOW', params=override_params, future=True)
+    cfg.initialize(logging_level=logging_level, params=override_params, future=True)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = True
@@ -126,7 +124,6 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     # Input
     if test_topofile:
         cfg.PATHS['dem_file'] = test_topofile
-    utils.apply_test_ref_tstars()
 
     # Initialize working directories
     start = time.time()
@@ -146,8 +143,8 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
         tasks.catchment_intersections,
         tasks.catchment_width_geom,
         tasks.catchment_width_correction,
-        tasks.local_t_star,
-        tasks.mu_star_calibration,
+        tasks.mb_calibration_from_geodetic_mb,
+        tasks.apparent_mb_from_any_mb,
         tasks.prepare_for_inversion,
         tasks.mass_conservation_inversion,
         tasks.filter_inversion_output,
@@ -160,15 +157,16 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
 
     # Runs
     start = time.time()
-    workflow.execute_entity_task(tasks.run_random_climate, gdirs,
-                                 nyears=250, bias=0, seed=0,
-                                 output_filesuffix='_tstar')
-    _add_time_to_df(odf, 'run_random_climate_tstar_250', time.time()-start)
+    workflow.execute_entity_task(tasks.run_constant_climate, gdirs,
+                                 nyears=250, y0=1995, seed=0,
+                                 temperature_bias=-0.5,
+                                 output_filesuffix='_constant')
+    _add_time_to_df(odf, 'run_constant_climate_commit_250', time.time()-start)
 
     start = time.time()
     workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                  nyears=250, y0=1995, seed=0,
-                                 output_filesuffix='_commit')
+                                 output_filesuffix='_random')
     _add_time_to_df(odf, 'run_random_climate_commit_250', time.time()-start)
 
     # Compile results
@@ -182,12 +180,12 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     _add_time_to_df(odf, 'compile_climate_statistics', time.time()-start)
 
     start = time.time()
-    utils.compile_run_output(gdirs, input_filesuffix='_tstar')
-    _add_time_to_df(odf, 'compile_run_output_tstar', time.time()-start)
+    utils.compile_run_output(gdirs, input_filesuffix='_constant')
+    _add_time_to_df(odf, 'compile_run_output_constant', time.time()-start)
 
     start = time.time()
-    utils.compile_run_output(gdirs, input_filesuffix='_commit')
-    _add_time_to_df(odf, 'compile_run_output_commit', time.time()-start)
+    utils.compile_run_output(gdirs, input_filesuffix='_random')
+    _add_time_to_df(odf, 'compile_run_output_random', time.time()-start)
 
     # Log
     opath = os.path.join(base_dir, 'benchmarks_b{:03d}.csv'.format(border))

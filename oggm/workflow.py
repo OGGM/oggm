@@ -483,21 +483,20 @@ def gis_prepro_tasks(gdirs):
         execute_entity_task(task, gdirs)
 
 
-def download_ref_tstars(base_url=None):
-    """Downloads and copies the reference list of t* to the working directory.
-
-    Example url:
-    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/RGIV62/CRU/centerlines/qc3/pcp2.5
-
+@global_task(log)
+def climate_tasks(gdirs):
+    """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
-    base_url : str
-        url of the params file.
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
     """
-    shutil.copyfile(utils.file_downloader(base_url + '/ref_tstars.csv'),
-                    os.path.join(cfg.PATHS['working_dir'], 'ref_tstars.csv'))
-    shutil.copyfile(utils.file_downloader(base_url + '/ref_tstars_params.json'),
-                    os.path.join(cfg.PATHS['working_dir'], 'ref_tstars_params.json'))
+
+    # Process climate data
+    execute_entity_task(tasks.process_climate_data, gdirs)
+    # mass balance and the apparent mass balance
+    execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs)
+    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
 
 @global_task(log)
@@ -540,7 +539,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                                     add_to_log_file=add_to_log_file)
 
         if gdirs_c:
-            execute_entity_task(tasks.find_inversion_calving, gdirs_c,
+            execute_entity_task(tasks.find_inversion_calving_from_any_mb,
+                                gdirs_c,
                                 glen_a=glen_a, fs=fs,
                                 add_to_log_file=add_to_log_file)
     else:
@@ -689,223 +689,6 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             add_to_log_file=add_to_log_file)
     return df
-
-
-@global_task(log)
-def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
-                               period='2000-01-01_2020-01-01'):
-    """Regional shift of the mass balance residual to match observations.
-
-    This is useful for operational runs, but also quite hacky.
-    Let's hope we won't need this for too long.
-
-    Parameters
-    ----------
-    gdirs : the list of gdirs (ideally the entire region)
-    rgi_reg : str
-       the rgi region to match
-    dataset : str
-       'hugonnet', or 'zemp'
-    period : str
-       for 'hugonnet' only. One of
-       '2000-01-01_2010-01-01',
-       '2010-01-01_2020-01-01',
-       '2006-01-01_2019-01-01',
-       '2000-01-01_2020-01-01'.
-       For 'zemp', the period is always 2006-2016.
-    """
-
-    # Get the mass balance OGGM would give out of the box
-    df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
-    df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
-
-    # And also the Area and calving fluxes
-    dfs = utils.compile_glacier_statistics(gdirs, path=False)
-
-    if dataset == 'hugonnet':
-        y0 = int(period.split('_')[0].split('-')[0])
-        y1 = int(period.split('_')[1].split('-')[0]) - 1
-    elif dataset == 'zemp':
-        y0, y1 = 2006, 2015
-
-    odf = pd.DataFrame(df.loc[y0:y1].mean(), columns=['SMB'])
-
-    odf['AREA'] = dfs.rgi_area_km2 * 1e6
-    # Just take the calving rate and change its units
-    # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
-    rho = cfg.PARAMS['ice_density']
-    if 'calving_flux' in dfs:
-        odf['CALVING'] = dfs['calving_flux'].fillna(0) * 1e9 * rho / odf['AREA']
-    else:
-        odf['CALVING'] = 0
-
-    # We have to drop nans here, which occur when calving glaciers fail to run
-    odf = odf.dropna()
-
-    # Compare area with total RGI area
-    rdf = 'rgi62_areas.csv'
-    rdf = pd.read_csv(utils.get_demo_file(rdf), dtype={'O1Region': str})
-    ref_area = rdf.loc[rdf['O1Region'] == rgi_reg].iloc[0]['AreaNoC2NoNominal']
-    diff = (1 - odf['AREA'].sum() * 1e-6 / ref_area) * 100
-    msg = 'Applying geodetic MB correction on RGI reg {}. Diff area: {:.2f}%'
-    log.workflow(msg.format(rgi_reg, diff))
-
-    # Total MB OGGM
-    out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
-    out_cal = np.average(odf['CALVING'], weights=odf['AREA'])  # for logging
-    smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
-
-    # Total MB Reference
-    if dataset == 'hugonnet':
-        df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-        df = pd.read_csv(utils.get_demo_file(df))
-        df = df.loc[df.period == period].set_index('reg')
-        smb_ref = df.loc[int(rgi_reg), 'dmdtda']
-    elif dataset == 'zemp':
-        df = 'zemp_ref_2006_2016.csv'
-        df = pd.read_csv(utils.get_demo_file(df), index_col=0)
-        smb_ref = df.loc[int(rgi_reg), 'SMB'] * 1000
-
-    # Diff between the two
-    residual = smb_ref - smb_oggm
-
-    # Let's just shift
-    log.workflow('Shifting regional MB bias by {}'.format(residual))
-    log.workflow('Observations give {}'.format(smb_ref))
-    log.workflow('OGGM SMB gives {}'.format(out_smb))
-    log.workflow('OGGM frontal ablation gives {}'.format(out_cal))
-    for gdir in gdirs:
-        try:
-            df = gdir.read_json('local_mustar')
-            gdir.add_to_diagnostics('mb_bias_before_geodetic_corr', df['bias'])
-            df['bias'] = df['bias'] - residual
-            gdir.write_json(df, 'local_mustar')
-        except FileNotFoundError:
-            pass
-
-
-@global_task(log)
-def match_geodetic_mb_for_selection(gdirs, period='2000-01-01_2020-01-01',
-                                    file_path=None, fail_safe=False):
-    """Shift the mass balance residual to match geodetic mb observations.
-
-    It is similar to match_regional_geodetic_mb but uses the raw, glacier
-    per glacier tabular data.
-
-    This method finds the "best mass balance residual" to match all glaciers in
-    gdirs with available OGGM mass balance and available geodetic mass balance
-    measurements from Hugonnet 2021 or any other file with the same format.
-
-    The default is to use hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf
-    in  https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/
-
-    Parameters
-    ----------
-    gdirs : the list of gdirs
-    period : str
-       One of
-       '2000-01-01_2020-01-01',
-       '2000-01-01_2010-01-01',
-       '2010-01-01_2020-01-01'.
-    file_path: str
-       local file path to tabular file containing geodetic measurements, file must
-       contain the columns:
-           - 'rgiid': is the RGIId as in the RGI 6.0
-           - 'period': time interval of the measurements in the format shown
-             above
-           - 'dmdtda': the specific-mass change rate in meters water-equivalent
-             per year,
-           - 'area': is the glacier area (same as in RGI 6.0) in meters square
-    fail_safe : bool
-        some glaciers in the obs data have been corrected with the regional
-        average. We don't use these values, unless there is no other choice and
-        in which case you can set fail_safe to True
-    """
-
-    # Get the mass balance OGGM would give out of the box
-    df = utils.compile_fixed_geometry_mass_balance(gdirs, path=False)
-    df = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
-
-    # And also the Area and calving fluxes
-    dfs = utils.compile_glacier_statistics(gdirs, path=False)
-
-    y0 = int(period.split('_')[0].split('-')[0])
-    y1 = int(period.split('_')[1].split('-')[0]) - 1
-
-    odf = pd.DataFrame(df.loc[y0:y1].mean(), columns=['SMB'])
-
-    odf['AREA'] = dfs.rgi_area_km2 * 1e6
-    # Just take the calving rate and change its units
-    # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
-    rho = cfg.PARAMS['ice_density']
-    if 'calving_flux' in dfs:
-        odf['CALVING'] = dfs['calving_flux'].fillna(0) * 1e9 * rho / odf['AREA']
-    else:
-        odf['CALVING'] = 0
-
-    # We have to drop nans here, which occur when calving glaciers fail to run
-    odf = odf.dropna()
-
-    # save all rgi_ids for which a valid OGGM mb is available
-    rgi_ids_oggm = odf.index.values
-
-    # Fetch the reference data
-    df = utils.get_geodetic_mb_dataframe(file_path=file_path)
-
-    # get the correct period from the whole dataset
-    df = df.loc[df['period'] == period]
-
-    # get only geodetic measurements for which a valid OGGM mb is available
-    rdf_all = df.loc[rgi_ids_oggm]
-    if rdf_all.empty:
-        raise InvalidWorkflowError('No geodetic MB measurements available for '
-                                   'this glacier selection!')
-
-    # drop glaciers with no valid geodetic measurements
-    rdf = rdf_all.loc[~rdf_all['is_cor']]
-    if rdf.empty:
-        if not fail_safe:
-            raise InvalidWorkflowError('No gedoetic MB measurements available for '
-                                       'this glacier selection! Set '
-                                       'fail_safe=True to use the '
-                                       'corrected values.')
-        rdf = rdf_all
-
-    # the remaining glaciers now have a OGGM mb and geodetic measurements
-    rgi_ids = rdf.index.values
-    msg = ('Applying geodetic MB correction using {} of {} glaciers, with '
-           'available OGGM MB and available geodetic measurements.')
-    log.workflow(msg.format(len(rgi_ids), len(gdirs)))
-
-    # Total MB OGGM, only using glaciers with OGGM mb and geodetic measurements
-    odf = odf.loc[rgi_ids]
-    out_smb = np.average(odf['SMB'], weights=odf['AREA'])  # for logging
-    out_cal = np.average(odf['CALVING'], weights=odf['AREA'])  # for logging
-    smb_oggm = np.average(odf['SMB'] - odf['CALVING'], weights=odf['AREA'])
-
-    # Total geodetic MB, no need for indexing
-    smb_ref = rdf.dmdtda.values * 1000  # m to mm conversion
-    area_ref = rdf.area.values
-    smb_ref = np.average(smb_ref, weights=area_ref)
-
-    # Diff between the two
-    residual = smb_ref - smb_oggm
-
-    # Let's just shift
-    log.workflow('Shifting regional MB bias by {}'.format(residual))
-    log.workflow('Observations give {}'.format(smb_ref))
-    log.workflow('OGGM SMB gives {}'.format(out_smb))
-    log.workflow('OGGM frontal ablation gives {}'.format(out_cal))
-
-    # This time we shift over all glaciers
-    for gdir in gdirs:
-        try:
-            df = gdir.read_json('local_mustar')
-            gdir.add_to_diagnostics('mb_bias_before_geodetic_corr', df['bias'])
-            df['bias'] = df['bias'] - residual
-            gdir.write_json(df, 'local_mustar')
-        except FileNotFoundError:
-            pass
 
 
 @global_task(log)

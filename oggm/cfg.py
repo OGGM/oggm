@@ -114,8 +114,9 @@ class ParamsLoggingDict(ResettingOrderedDict):
 
     def __setitem__(self, key, value):
         # Overrides the original dic to log the change
-        self._check_input(key, value)
         if self.do_log:
+            if key not in self:
+                raise InvalidParamsError(f'Parameter `{key}` not in PARAMS')
             self._log_param_change(key, value)
         ResettingOrderedDict.__setitem__(self, key, value)
 
@@ -160,16 +161,6 @@ class ParamsLoggingDict(ResettingOrderedDict):
                                                                       prev,
                                                                       value))
 
-    def _check_input(self, key, value):
-
-        if key == 'hydro_month_sh' and value == 1:
-            nh = self.get('hydro_month_nh')
-            if nh is not None and nh != 1:
-                msg = ("When setting PARAMS['hydro_month_sh'] to 1, please set "
-                       "PARAMS['hydro_month_nh'] to 1 first.")
-                raise InvalidWorkflowError(msg)
-
-
 # Globals
 IS_INITIALIZED = False
 PARAMS = ParamsLoggingDict()
@@ -201,27 +192,27 @@ _doc = ('A glacier mask geotiff file with the same extend and projection as '
         ' value 0 at unglaciated points.')
 BASENAMES['glacier_mask'] = ('glacier_mask.tif', _doc)
 
-_doc = ('The glacier outlines in the local map projection (Transverse '
-        'Mercator).')
+_doc = ('The glacier outlines in the local map projection '
+        '(Transverse Mercator or UTM).')
 BASENAMES['outlines'] = ('outlines.shp', _doc)
 
-_doc = ('The glacier intersects in the local map projection (Transverse '
-        'Mercator).')
+_doc = 'The glacier intersects in the local map projection.'
 BASENAMES['intersects'] = ('intersects.shp', _doc)
 
 _doc = ('Each flowline has a catchment area computed from flow routing '
         'algorithms: this shapefile stores the catchment outlines (in the '
-        'local map projection (Transverse Mercator).')
+        'local map projection).')
 BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 
 _doc = ('The intersections between catchments (shapefile) in the local map '
-        'projection (Transverse Mercator).')
+        'projection.')
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
-_doc = 'A dictionary containing runtime diagnostics useful for debugging.'
+_doc = ('A dictionary containing runtime diagnostics useful for debugging or ' 
+        'logging of run parameters.')
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
 _doc = ('A netcdf file containing several gridded data variables such as '
@@ -254,7 +245,7 @@ BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 _doc = 'A list of :py:class:`oggm.Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
-_doc = ('A "better" version of the Centerlines, now on a regular spacing '
+_doc = ('A "better" version of the centerlines, now on a regular spacing '
         'i.e., not on the gridded (i, j) indices. The tails of the '
         'tributaries are cut out to make more realistic junctions. '
         'They are now "1.5D" i.e., with a width.')
@@ -263,29 +254,18 @@ BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 _doc = 'The historical monthly climate timeseries stored in a netCDF file.'
 BASENAMES['climate_historical'] = ('climate_historical.nc', _doc)
 
-# so far, this is only ERA5_daily and does not work with the default OGGM
-# mass balance module
+# so far, this is only ERA5 or E5E5 daily and does not work with the default
+# OGGM mass balance module, only with sandbox
 _doc = ('The historical daily climate timeseries stored in a netCDF file.'
         '(only temperature is really changing on daily basis,'
         'precipitation is just assumed constant for every day')
 BASENAMES['climate_historical_daily'] = ('climate_historical_daily.nc', _doc)
 
-_doc = 'Deprecated: old name for `climate_historical`.'
-BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
-
-_doc = ('Some information (dictionary) about the mass '
-        'balance parameters for this glacier.')
-BASENAMES['climate_info'] = ('climate_info.json', _doc)
+_doc = "A dict containing the glacier's mass balance calibration parameters."
+BASENAMES['mb_calib'] = ('mb_calib.json', _doc)
 
 _doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['gcm_data'] = ('gcm_data.nc', _doc)
-
-_doc = "A dict containing the glacier's t*, bias, and the flowlines' mu*"
-BASENAMES['local_mustar'] = ('local_mustar.json', _doc)
-
-_doc = ("A dict containing the glacier's mass balance calibration parameters, "
-       "2nd generation! Currently in test phase.")
-BASENAMES['mb_calib'] = ('mb_calib.json', _doc)
 
 _doc = 'List of dicts containing the data needed for the inversion.'
 BASENAMES['inversion_input'] = ('inversion_input.pkl', _doc)
@@ -300,11 +280,8 @@ _doc = ('When using a linear mass balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
 
-_doc = 'Deprecated: renamed to `model_geometry`.'
-BASENAMES['model_run'] = ('model_run.nc', _doc)
-
 _doc = ('A netcdf file containing enough information to reconstruct the '
-        'entire flowline glacier geometry along the run (can be expensive'
+        'entire flowline glacier geometry along the run (can be expensive '
         'in disk space).')
 BASENAMES['model_geometry'] = ('model_geometry.nc', _doc)
 

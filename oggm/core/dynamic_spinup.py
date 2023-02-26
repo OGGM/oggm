@@ -14,10 +14,10 @@ import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-# from oggm.core.massbalance import (MultipleFlowlineMassBalance,
-#                                    ConstantMassBalance,
-#                                    PastMassBalance)
-# from oggm.core.climate import apparent_mb_from_any_mb
+from oggm.core.massbalance import (MultipleFlowlineMassBalance,
+                                   ConstantMassBalance,
+                                   MonthlyTIModel,
+                                   apparent_mb_from_any_mb)
 from oggm.core.flowline import (FluxBasedModel, FileModel,
                                 init_present_time_glacier,
                                 run_from_climate_data)
@@ -71,7 +71,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         which evolution model to use. Default: FluxBasedModel
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
-        is to use a PastMassBalance model  together with the provided
+        is to use a MonthlyTIModel model  together with the provided
         parameter climate_input_filesuffix.
     mb_model_spinup : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
@@ -214,7 +214,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         raise RuntimeError(f'The provided end year (ye = {ye}) must be larger'
                            f'than the rgi date (yr_rgi = {yr_rgi}!')
 
-    yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+    yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
         min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
@@ -253,7 +253,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     # MassBalance for actual run from yr_spinup to yr_rgi
     if mb_model_historical is None:
         mb_model_historical = MultipleFlowlineMassBalance(
-            gdir, mb_model_class=PastMassBalance,
+            gdir, mb_model_class=MonthlyTIModel,
             filename='climate_historical',
             input_filesuffix=climate_input_filesuffix)
 
@@ -878,7 +878,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
 def define_new_mu_star_in_gdir(gdir, new_mu_star, bias=0):
     """
-    Helper function to define a new mu star in an gdir. Is used inside the run
+    Helper function to define a new mu star in a gdir. Is used inside the run
     functions of the dynamic mu star calibration.
 
     Parameters
@@ -953,7 +953,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         Default is FluxBasedModel
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
-        is to use a PastMassBalance model  together with the provided
+        is to use a MonthlyTIModel model  together with the provided
         parameter climate_input_filesuffix.
     mb_model_spinup : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
@@ -1235,7 +1235,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         Default is FluxBasedModel
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
-        is to use a PastMassBalance model  together with the provided
+        is to use a MonthlyTIModel model  together with the provided
         parameter climate_input_filesuffix.
     mb_model_spinup : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
@@ -1365,7 +1365,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
 
-    yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+    yr_clim_min = gdir.get_climate_info()['baseline_yr_0']
     try:
         model_end = run_dynamic_spinup(
             gdir,
@@ -1791,16 +1791,18 @@ def run_dynamic_mu_star_calibration(
     yr0_ref_mb = int(yr0_ref_mb.split('-')[0])
     yr1_ref_mb = int(yr1_ref_mb.split('-')[0])
 
+    clim_info = gdir.get_climate_info()
+
     if ye is None:
         # One adds 1 because the run ends at the end of the year
-        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+        ye = clim_info['baseline_yr_1'] + 1
 
     if ye < yr1_ref_mb:
         raise RuntimeError('The provided ye is smaller than the end year of '
                            'the given geodetic_mb_period!')
 
     if ys is None:
-        ys = gdir.get_climate_info()['baseline_hydro_yr_0']
+        ys = clim_info['baseline_yr_0']
 
     if ys > yr0_ref_mb:
         raise RuntimeError('The provided ys is larger than the start year of '

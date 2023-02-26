@@ -25,10 +25,11 @@ from oggm.core.centerlines import fixed_dx_elevation_band_flowline
 from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import historical_delta_method
+from oggm.core.massbalance import mb_calibration_from_insitu_mb
+from oggm.core.massbalance import mb_calibration_from_geodetic_mb
 from oggm.core.massbalance import apparent_mb_from_linear_mb
 from oggm.core.massbalance import apparent_mb_from_any_mb
-# from oggm.core.massbalance import fixed_geometry_mass_balance
-# from oggm.core.massbalance import compute_ela
+from oggm.core.massbalance import fixed_geometry_mass_balance
 from oggm.shop.w5e5 import process_w5e5_data
 from oggm.shop.cru import process_cru_data
 from oggm.shop.cru import process_dummy_cru_file
@@ -45,7 +46,6 @@ from oggm.core.inversion import get_inversion_volume
 from oggm.core.inversion import compute_velocities
 from oggm.core.inversion import distribute_thickness_per_altitude
 from oggm.core.inversion import distribute_thickness_interp
-from oggm.core.inversion import find_inversion_calving
 from oggm.core.inversion import find_inversion_calving_from_any_mb
 from oggm.core.flowline import init_present_time_glacier
 from oggm.core.flowline import flowline_model_run
