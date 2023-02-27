@@ -3077,8 +3077,16 @@ class GlacierDirectory(object):
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
-                out['baseline_yr_0'] = nc.yr_0
-                out['baseline_yr_1'] = nc.yr_1
+                try:
+                    out['baseline_yr_0'] = nc.yr_0
+                except AttributeError:
+                    # needed for back-compatibility before v1.6
+                    out['baseline_yr_0'] = nc.hydro_yr_0
+                try:
+                    out['baseline_yr_1'] = nc.yr_1
+                except AttributeError:
+                    # needed for back-compatibility before v1.6
+                    out['baseline_yr_1'] = nc.hydro_yr_1
         except (AttributeError, FileNotFoundError):
             pass
 

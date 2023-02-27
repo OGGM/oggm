@@ -646,19 +646,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             minimise_for = dynamic_spinup.split('/')[0]
 
-            used_max_mu_star = cfg.PARAMS['max_mu_star']
-            if cfg.PARAMS['max_mu_star'] > 1000.:
-                log.warning("For the dynamic calibration of mu_star the upper "
+            used_max_melt_f = cfg.PARAMS['monthly_melt_f_max']
+            if cfg.PARAMS['monthly_melt_f_max'] > 1000.:
+                log.warning("For the dynamic calibration of melt_f the upper "
                             "limit is set to 1000! Current "
-                            "cfg.PARAMS['max_mu_star'] = "
-                            f"{cfg.PARAMS['max_mu_star']}.")
-                used_max_mu_star = 1000.
+                            "cfg.PARAMS['monthly_melt_f_max'] = "
+                            f"{cfg.PARAMS['monthly_melt_f_max']}.")
+                used_max_melt_f = 1000.
 
             workflow.execute_entity_task(
-                tasks.run_dynamic_mu_star_calibration, gdirs,
+                tasks.run_dynamic_melt_f_calibration, gdirs,
                 err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
-                max_mu_star=used_max_mu_star,
+                monthly_melt_f_max=used_max_melt_f,
                 kwargs_run_function={'evolution_model': evolution_model,
                                      'minimise_for': minimise_for},
                 ignore_errors=True,

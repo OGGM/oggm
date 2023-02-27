@@ -3071,7 +3071,7 @@ def init_present_time_glacier(gdir, filesuffix=''):
         the glacier directory to process
     filesuffix : str
             append a suffix to the model_flowlines filename (e.g. useful for
-            dynamic mu_star calibration including an inversion, so the original
+            dynamic melt_f calibration including an inversion, so the original
             model_flowlines are not changed).
     """
 
