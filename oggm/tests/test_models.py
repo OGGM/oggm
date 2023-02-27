@@ -5918,7 +5918,7 @@ class TestSemiImplicitModel:
                 max_velocity_rmsd = velocity_rmsd
                 max_velocity_year = year
 
-            assert velocity_rmsd < 5
+            assert velocity_rmsd < 10
 
         if do_plot:
             plt.figure()

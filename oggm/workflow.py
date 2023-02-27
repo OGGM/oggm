@@ -204,7 +204,7 @@ def execute_parallel_tasks(gdir, tasks):
     gdir : :py:class:`oggm.GlacierDirectory`
          the directory to process.
     tasks : list
-         the the list of entity tasks to apply.
+         the list of entity tasks to apply.
          Optionally, each list element can be a tuple, with the first element
          being the task, and the second element a dict that
          will be passed to the task function as ``**kwargs``.
@@ -528,7 +528,7 @@ def climate_tasks(gdirs, base_url=None):
 
 @global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
-                    add_to_log_file=True):
+                    use_geodetic=False, ref_period=None, add_to_log_file=True):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -537,9 +537,27 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    use_geodetic : bool
+        when using geodetic calibration data, make sure to use
+        the same years of mb in the inversion. Default False
+    ref_period : str
+        years of mass balance that should be taken into account in
+        inversion. Default None
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
     """
+
+    if ref_period is None and use_geodetic:
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+        y0, y1 = ref_period.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        mb_years = [y0, y1-1]
+    elif use_geodetic:
+        y0, y1 = ref_period.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        mb_years = [y0, y1-1]
 
     if cfg.PARAMS['use_kcalving_for_inversion']:
         # Differentiate between calving and non-calving glaciers
@@ -565,7 +583,12 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc,
                                     add_to_log_file=add_to_log_file)
 
-        if gdirs_c:
+        if gdirs_c and use_geodetic:
+            execute_entity_task(tasks.find_inversion_calving_from_any_mb,
+                                gdirs_c, glen_a=glen_a, fs=fs,
+                                mb_years=mb_years,
+                                add_to_log_file=add_to_log_file)
+        elif gdirs_c:
             execute_entity_task(tasks.find_inversion_calving, gdirs_c,
                                 glen_a=glen_a, fs=fs,
                                 add_to_log_file=add_to_log_file)
