@@ -1415,7 +1415,7 @@ def mb_calibration_from_insitu_mb(gdir, **kwargs):
     mbdf = gdir.get_ref_mb_data()
     ref_mb = mbdf.ANNUAL_BALANCE.mean()
     ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-
+    # TODO: this could be wrong if not all years are there!
     mb_calibration_from_geodetic_mb(gdir,
                                     ref_mb=ref_mb,
                                     ref_period=ref_period,
@@ -1670,6 +1670,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                                        'a previous calibration.')
         gdir.write_json(df, 'mb_calib')
     return df
+
 
 def _check_terminus_mass_flux(gdir, fls):
     # Check that we have done this correctly

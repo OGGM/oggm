@@ -543,7 +543,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
         utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs)
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                                     calibrate_param2='temp_bias')
         workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
         # Inversion: we match the consensus
