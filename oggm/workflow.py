@@ -484,7 +484,8 @@ def gis_prepro_tasks(gdirs):
 
 
 @global_task(log)
-def climate_tasks(gdirs):
+def climate_tasks(gdirs, ref_mb_years=None, overwrite_gdir=False,
+                  override_missing=None):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
@@ -495,8 +496,12 @@ def climate_tasks(gdirs):
     # Process climate data
     execute_entity_task(tasks.process_climate_data, gdirs)
     # mass balance and the apparent mass balance
-    execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs)
-    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+    execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                        override_missing=override_missing,
+                        overwrite_gdir=overwrite_gdir,
+                        ref_mb_years=ref_mb_years)
+    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                        mb_years=ref_mb_years)
 
 
 @global_task(log)

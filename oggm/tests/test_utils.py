@@ -789,6 +789,23 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         workflow.execute_entity_task(tasks.run_random_climate, gdirs,
                                      nyears=10)
 
+def _read_shp():
+    # Read in the RGI file
+    inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+    rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
+    # Some changes for changes in OGGM
+    inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                        for rid in inter.RGIId_1]
+    inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                        for rid in inter.RGIId_2]
+
+    # Here as well - we don't do the custom RGI IDs anymore
+    rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+    rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+
+    return inter, rgidf
+
 
 class TestPreproCLI(unittest.TestCase):
 
@@ -804,23 +821,6 @@ class TestPreproCLI(unittest.TestCase):
 
     def reset_dir(self):
         utils.mkdir(self.testdir, reset=True)
-
-    def _read_shp(self):
-        # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        # Some changes for changes in OGGM
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
-
-        # Here as well - we don't do the custom RGI IDs anymore
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
-
-        return inter, rgidf
 
     def test_parse_args(self):
 
@@ -843,7 +843,6 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--start-level', '2',
                                            '--start-base-url', 'http://foo',
-                                           '--ref-tstars-base-url', 'http://bar',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -854,7 +853,6 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert kwargs['start_level'] == 2
         assert kwargs['start_base_url'] == 'http://foo'
-        assert kwargs['ref_tstars_base_url'] == 'http://bar'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
@@ -921,8 +919,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
-        assert not kwargs['match_regional_geodetic_mb']
-        assert not kwargs['centerlines_only']
+        assert not kwargs['centerlines']
         assert kwargs['add_consensus_thickness']
         assert kwargs['add_millan_thickness']
         assert kwargs['add_millan_velocity']
@@ -951,8 +948,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
-                                           '--centerlines-only',
-                                           '--match-regional-geodetic-mb', 'zemp',
+                                           '--centerlines',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -964,16 +960,13 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
-        assert kwargs['match_regional_geodetic_mb'] == 'zemp'
-        assert kwargs['centerlines_only']
+        assert kwargs['centerlines']
         assert kwargs['evolution_model'] == 'fl_sia'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
-                                           '--centerlines-only',
-                                           '--match-geodetic-mb-per-glacier', 'hugonnet',
                                            '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
@@ -981,7 +974,6 @@ class TestPreproCLI(unittest.TestCase):
                                            '--downstream-line-shape', 'trapezoidal',
                                            ])
 
-        assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
         assert kwargs['evolution_model'] == 'massredis'
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
         assert kwargs['err_dmdtda_scaling_factor'] == 0.5
@@ -1020,19 +1012,21 @@ class TestPreproCLI(unittest.TestCase):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
+        ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_regional_geodetic_mb='hugonnet',
-                          override_params={'geodetic_mb_period':
-                                               '2000-01-01_2010-01-01',
+                          test_rgidf=rgidf,
+                          test_intersects_file=inter,
+                          test_topofile=topof,
+                          centerlines=True,
+                          override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_factor': False,
                                            'prcp_scaling_factor': 2.5,
@@ -1063,7 +1057,10 @@ class TestPreproCLI(unittest.TestCase):
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'), index_col=0)
         assert 'inv_volume_km3' in df
-        assert 'mb_bias_before_geodetic_corr' in df
+        assert 'melt_f' in df
+        assert 'flowline_min_elev' in df
+        assert 'n_centerlines' in df
+        assert df['inv_volume_km3'].sum() > 0
 
         dfm = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                        'fixed_geometry_mass_balance_11.csv'),
@@ -1078,7 +1075,13 @@ class TestPreproCLI(unittest.TestCase):
         dfh = pd.read_csv(utils.get_demo_file(dfh))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda']
-        np.testing.assert_allclose(smb_oggm, smb_ref)
+        np.testing.assert_allclose(smb_oggm, smb_ref, atol=150)  # Whole Alps
+
+        odf = pd.DataFrame(dfm.loc[2000:2009].mean(), columns=['SMB'])
+        ref_mb = utils.get_geodetic_mb_dataframe().loc[odf.index]
+        ref_mb = ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda']
+        odf['ref'] = ref_mb * 1000  # kg m-2 yr-1
+        np.testing.assert_allclose(odf['SMB'], odf['ref'])
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
@@ -1118,7 +1121,7 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = tasks.run_random_climate(gdir, nyears=10)
+        model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
 
         # L4
@@ -1126,7 +1129,7 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = tasks.run_random_climate(gdir, nyears=10)
+        model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             # cannot be the same after tuning
@@ -1149,7 +1152,6 @@ class TestPreproCLI(unittest.TestCase):
         fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
                           'historical_run_output_extended_11.nc')
         with xr.open_dataset(fp) as ods:
-
             ref = ods.volume
             new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.isel(time=-1),
@@ -1158,6 +1160,7 @@ class TestPreproCLI(unittest.TestCase):
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
+
 
     @pytest.mark.slow
     def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
@@ -1168,7 +1171,7 @@ class TestPreproCLI(unittest.TestCase):
                                                        ('implicit', 'trapezoidal')]:
 
             # Read in the RGI file
-            inter, rgidf = self._read_shp()
+            inter, rgidf = _read_shp()
 
             wdir = os.path.join(self.testdir, 'wd')
             utils.mkdir(wdir, reset=True)
@@ -1180,6 +1183,7 @@ class TestPreproCLI(unittest.TestCase):
 
             # change the reference geodetic mb period, because the climate data of
             # the test glaciers only go up to 2015
+            ref_period = '2000-01-01_2010-01-01'
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
@@ -1188,8 +1192,7 @@ class TestPreproCLI(unittest.TestCase):
                               downstream_line_shape=downstream_line_shape,
                               test_intersects_file=inter,
                               test_topofile=topof, elev_bands=True,
-                              override_params={'geodetic_mb_period':
-                                               '2000-01-01_2010-01-01',
+                              override_params={'geodetic_mb_period':ref_period,
                                                'baseline_climate': 'CRU',
                                                'use_winter_prcp_factor': False,
                                                'prcp_scaling_factor': 2.5,
@@ -1315,7 +1318,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -1323,8 +1326,7 @@ class TestPreproCLI(unittest.TestCase):
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
 
-        params = {'max_mu_star': 600,
-                  'geodetic_mb_period': '2000-01-01_2010-01-01',
+        params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'baseline_climate': 'CRU',
                   'use_winter_prcp_factor': False,
                   'prcp_scaling_factor': 2.5,
@@ -1335,7 +1337,6 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          match_geodetic_mb_per_glacier='hugonnet',
                           evolution_model='massredis',
                           override_params=params,
                           test_topofile=topof, elev_bands=True)
@@ -1409,7 +1410,8 @@ class TestPreproCLI(unittest.TestCase):
 
         # Some time stuff
         np.testing.assert_allclose(ds.hydro_year, ds.calendar_year)
-        np.testing.assert_allclose(ds.hydro_month, ds.calendar_month)
+        np.testing.assert_allclose(ds.hydro_month, 4)
+        np.testing.assert_allclose(ds.calendar_month, 1)
 
     def test_start_from_prepro(self):
 
@@ -1419,18 +1421,18 @@ class TestPreproCLI(unittest.TestCase):
                     'oggm_v1.1/')
 
         # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
+        ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
-                          logging_level='INFO', max_level=5,
-                          override_params={'geodetic_mb_period':
-                                               '2000-01-01_2010-01-01',
+                          logging_level='INFO', max_level=5, elev_bands=True,
+                          override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_factor': False,
                                            'prcp_scaling_factor': 2.5,
@@ -1464,7 +1466,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
         rgidf = rgidf.iloc[:4]
 
         wdir = os.path.join(self.testdir, 'wd')
@@ -1618,17 +1620,8 @@ class TestBenchmarkCLI(unittest.TestCase):
         from oggm.cli.benchmark import run_benchmark
 
         # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
-
+        inter, rgidf = _read_shp()
         cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')

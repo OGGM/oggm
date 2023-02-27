@@ -76,12 +76,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      disable_mp=False, params_file=None, elev_bands=False,
-                      match_regional_geodetic_mb=False,
-                      match_geodetic_mb_per_glacier=False,
-                      evolution_model='fl_sia',
+                      disable_mp=False, params_file=None,
+                      elev_bands=False, centerlines=False,
+                      evolution_model='fl_sia', override_params=None,
                       downstream_line_shape='parabola',
-                      centerlines_only=False, override_params=None,
                       add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
@@ -124,17 +122,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     disable_mp : bool
         disable multiprocessing
     elev_bands : bool
-        compute all flowlines based on the Huss&Hock 2015 method instead
-        of the OGGM default, which is a mix of elev_bands and centerlines.
-    centerlines_only : bool
-        compute all flowlines based on the OGGM centerline(s) method instead
-        of the OGGM default, which is a mix of elev_bands and centerlines.
-    match_regional_geodetic_mb : str
-        match the regional mass balance estimates at the regional level
-        ('hugonnet': Hugonnet et al., 2020 or 'zemp': Zemp et al., 2019).
-    match_geodetic_mb_per_glacier : str
-        match the mass balance estimates at the glacier level
-        (currently only 'hugonnet': Hugonnet et al., 2020).
+        compute all flowlines based on the Huss & Farinotti 2012 method.
+    centerlines : bool
+        compute all flowlines based on the OGGM centerline(s) method.
     evolution_model : str
         which geometry evolution model to use: `fl_sia` (default),
         `massredis` (mass redistribution curve), or 'implicit' (semi implicit
@@ -192,14 +182,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      'start_base_url')
     else:
         start_level = 0
-
-    if match_regional_geodetic_mb and match_geodetic_mb_per_glacier:
-        raise InvalidParamsError('match_regional_geodetic_mb incompatible with '
-                                 'match_geodetic_mb_per_glacier!')
-
-    if match_geodetic_mb_per_glacier and match_geodetic_mb_per_glacier != 'hugonnet':
-        raise InvalidParamsError('Currently only `hugonnet` is available for '
-                                 'match_geodetic_mb_per_glacier.')
 
     if evolution_model not in ['fl_sia', 'massredis', 'implicit']:
         raise InvalidParamsError('evolution_model should be one of '
@@ -423,15 +405,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if elev_bands:
             gdirs_band = gdirs
             gdirs_cent = []
-        elif centerlines_only:
+        elif centerlines:
             gdirs_band = []
             gdirs_cent = gdirs
         else:
-            # Default is to centerlines_only, but it used to be a mix
-            # (e.g. bands for ice caps, etc)
-            # I still keep this logic here in case we want to mix again
-            gdirs_band = []
-            gdirs_cent = gdirs
+            raise InvalidParamsError('Need to specify if `elev_bands` or '
+                                     '`centerlines` type.')
 
         log.workflow('Start flowline processing with: '
                      'N centerline type: {}, '
@@ -447,30 +426,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         bin_variables = []
         if add_consensus_thickness:
             from oggm.shop.bedtopo import add_consensus_thickness
-            workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
-            workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+            workflow.execute_entity_task(add_consensus_thickness, gdirs)
             bin_variables.append('consensus_ice_thickness')
         if add_millan_thickness:
             from oggm.shop.millan22 import thickness_to_gdir
-            workflow.execute_entity_task(thickness_to_gdir, gdirs_band)
-            workflow.execute_entity_task(thickness_to_gdir, gdirs_cent)
+            workflow.execute_entity_task(thickness_to_gdir, gdirs)
             bin_variables.append('millan_ice_thickness')
         if add_millan_velocity:
             from oggm.shop.millan22 import velocity_to_gdir
-            workflow.execute_entity_task(velocity_to_gdir, gdirs_band)
-            workflow.execute_entity_task(velocity_to_gdir, gdirs_cent)
+            workflow.execute_entity_task(velocity_to_gdir, gdirs)
             bin_variables.append('millan_v')
         if add_hugonnet_dhdt:
             from oggm.shop.hugonnet_maps import hugonnet_to_gdir
-            workflow.execute_entity_task(hugonnet_to_gdir, gdirs_band)
-            workflow.execute_entity_task(hugonnet_to_gdir, gdirs_cent)
+            workflow.execute_entity_task(hugonnet_to_gdir, gdirs)
             bin_variables.append('hugonnet_dhdt')
 
         if bin_variables and gdirs_band:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
-                                         gdirs_band, bin_variables=bin_variables)
+                                         gdirs_band,
+                                         bin_variables=bin_variables)
             workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
-                                         gdirs_band, bin_variables=bin_variables)
+                                         gdirs_band,
+                                         bin_variables=bin_variables)
         else:
             # HH2015 method without it
             task_list = [
@@ -565,13 +542,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Climate
         workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        if match_geodetic_mb_per_glacier:
-            utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
-            workflow.execute_entity_task(tasks.mu_star_calibration_from_geodetic_mb, gdirs)
-            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
-        else:
-            workflow.execute_entity_task(tasks.local_t_star, gdirs)
-            workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
+        utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs)
+        workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
         # Inversion: we match the consensus
         filter = border >= 20
@@ -579,16 +552,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                     apply_fs_on_mismatch=True,
                                                     error_on_mismatch=False,
                                                     filter_inversion_output=filter)
-
-        # Do we want to match geodetic estimates?
-        # This affects only the bias so we can actually do this *after*
-        # the inversion, but we really want to take calving into account here
-        if match_regional_geodetic_mb:
-            opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
-                                          'before_match_{}.csv'.format(rgi_reg))
-            utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
-            workflow.match_regional_geodetic_mb(gdirs, rgi_reg=rgi_reg,
-                                                dataset=match_regional_geodetic_mb)
 
         # We get ready for modelling
         if border >= 20:
@@ -665,8 +628,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.core.flowline import FluxBasedModel
             evolution_model = FluxBasedModel
 
-        # conduct historical run before dynamic mu calibration (for comparisons
-        # to old default behavior)
+        # conduct historical run before dynamic mu calibration
+        # (for comparison to old default behavior)
         workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                      min_ys=y0, ye=ye,
                                      evolution_model=evolution_model,
@@ -824,23 +787,11 @@ def parse_args(args):
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
     parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
-                        help='compute the flowlines based on the Huss&Hock '
-                             '2015 method instead of the OGGM default, which is '
-                             'a mix of elev_bands and centerlines.')
-    parser.add_argument('--centerlines-only', nargs='?', const=True, default=False,
+                        help='compute the flowlines based on the Huss & Farinotti '
+                             '2012 method.')
+    parser.add_argument('--centerlines', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the OGGM '
-                             'centerline(s) method instead of the OGGM '
-                             'default, which is a mix of elev_bands and '
-                             'centerlines.')
-    parser.add_argument('--match-regional-geodetic-mb', type=str, default='',
-                        help='match regional SMB values to geodetic estimates '
-                             '(currently hugonnet: Hugonnet et al., 2020, or '
-                             'zemp: Zemp et al, 2019) '
-                             'by shifting the SMB residual.')
-    parser.add_argument('--match-geodetic-mb-per-glacier', type=str, default='',
-                        help='match SMB values to geodetic estimates '
-                             '(currently hugonnet: Hugonnet et al., '
-                             '2020 only.')
+                             'centerline(s) method.')
     parser.add_argument('--evolution-model', type=str, default='fl_sia',
                         help='which geometry evolution model to use: '
                              '`fl_sia` (default), `massredis` (mass '
@@ -955,10 +906,9 @@ def parse_args(args):
                 demo=args.demo, dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 max_level=args.max_level, disable_mp=args.disable_mp,
-                logging_level=args.logging_level, elev_bands=args.elev_bands,
-                centerlines_only=args.centerlines_only,
-                match_regional_geodetic_mb=args.match_regional_geodetic_mb,
-                match_geodetic_mb_per_glacier=args.match_geodetic_mb_per_glacier,
+                logging_level=args.logging_level,
+                elev_bands=args.elev_bands,
+                centerlines=args.centerlines,
                 add_consensus_thickness=args.add_consensus_thickness,
                 add_millan_thickness=args.add_millan_thickness,
                 add_millan_velocity=args.add_millan_velocity,

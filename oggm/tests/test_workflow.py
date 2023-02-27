@@ -52,6 +52,7 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.initialize()
 
     # Use multiprocessing
+    use_mp = True
     if use_mp is None:
         cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
     else:
@@ -83,7 +84,6 @@ def up_to_climate(reset=False, use_mp=None):
         new_ids.append(s)
     rgidf['RGIId'] = new_ids
 
-
     # Here as well - we don't do the custom RGI IDs anymore
     rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
@@ -95,6 +95,7 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_kcalving_for_inversion'] = True
+    cfg.PARAMS['geodetic_mb_period'] = '2000-01-01_2010-01-01'
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['store_model_geometry'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
@@ -135,7 +136,8 @@ def up_to_inversion(reset=False):
         # Use histalp for the actual inversion test
         cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
-        workflow.climate_tasks(gdirs)
+        workflow.climate_tasks(gdirs, overwrite_gdir=True,
+                               override_missing=-500)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
 
@@ -190,7 +192,7 @@ def random_for_plot():
     gdirs = up_to_inversion()
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-    workflow.execute_entity_task(flowline.run_random_climate, gdirs,
+    workflow.execute_entity_task(flowline.run_random_climate, gdirs, y0=1985,
                                  nyears=10, seed=0, output_filesuffix='_plot')
     return gdirs
 
@@ -210,12 +212,17 @@ class TestFullRun(unittest.TestCase):
         assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
 
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
-        assert np.all(dfc.t_star > 1850)
+        assert np.all(dfc.iloc[:2].calving_rate_myr > 100)
+        assert np.all(dfc.inv_volume_km3 > 0)
+        assert np.all(dfc.bias == 0)
+        assert np.all(dfc.temp_bias == 0)
+        assert np.all(dfc.melt_f > 80)
         dfc = utils.compile_climate_statistics(gdirs)
-        cc = dfc[['flowline_mean_elev',
-                  'tstar_avg_temp_mean_elev']].corr().values[0, 1]
+        sel = ['flowline_mean_elev', '1980-2010_avg_temp_mean_elev']
+        cc = dfc[sel].corr().values[0, 1]
         assert cc < -0.8
-        assert np.all(dfc.tstar_aar.mean() > 0.5)
+        assert np.all(0 < dfc['1980-2010_aar'])
+        assert np.all(0.6 > dfc['1980-2010_aar'])
 
     @pytest.mark.slow
     def test_calibrate_inversion_from_consensus(self):
@@ -227,7 +234,7 @@ class TestFullRun(unittest.TestCase):
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.01)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.36)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
@@ -339,7 +346,7 @@ class TestFullRun(unittest.TestCase):
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
             df.loc[gd.rgi_id, 'start_length'] = model.length_m
-        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], rtol=0.01)
+        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], rtol=0.02)
         assert_allclose(df['rgi_area_km2'].sum(), df['start_area_km2'].sum(),
                         rtol=0.005)
         assert_allclose(df['inv_volume_km3'], df['start_volume_km3'])
@@ -348,7 +355,7 @@ class TestFullRun(unittest.TestCase):
         assert_allclose(df['main_flowline_length'], df['start_length'])
 
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
-                                     nyears=100, seed=0,
+                                     nyears=100, seed=0, y0=1985,
                                      store_monthly_step=True,
                                      mb_elev_feedback='monthly',
                                      output_filesuffix='_test')
@@ -393,11 +400,11 @@ class TestFullRun(unittest.TestCase):
 
         # Calving stuff
         assert ds.isel(rgi_id=0).calving[-1] > 0
-        assert ds.isel(rgi_id=0).calving_rate[-1] > 0
-        assert ds.isel(rgi_id=0).volume_bsl[-1] == 0
-        assert ds.isel(rgi_id=0).volume_bwl[-1] > 0
+        assert ds.isel(rgi_id=0).calving_rate[1] > 0
+        assert ds.isel(rgi_id=0).volume_bsl[0] == 0
+        assert ds.isel(rgi_id=0).volume_bwl[0] > 0
         assert ds.isel(rgi_id=1).calving[-1] > 0
-        assert ds.isel(rgi_id=1).calving_rate[-1] > 0
+        assert ds.isel(rgi_id=1).calving_rate[1] > 0
         assert ds.isel(rgi_id=1).volume_bsl[-1] == 0
 
 

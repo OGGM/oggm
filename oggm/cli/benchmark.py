@@ -158,7 +158,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     # Runs
     start = time.time()
     workflow.execute_entity_task(tasks.run_constant_climate, gdirs,
-                                 nyears=250, y0=1995, seed=0,
+                                 nyears=250, y0=1995,
                                  temperature_bias=-0.5,
                                  output_filesuffix='_constant')
     _add_time_to_df(odf, 'run_constant_climate_commit_250', time.time()-start)

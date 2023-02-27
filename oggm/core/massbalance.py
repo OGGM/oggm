@@ -1429,6 +1429,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                                     ref_mb_years=None,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
+                                    override_missing=None,
                                     calibrate_param1='melt_f',
                                     calibrate_param2=None,
                                     calibrate_param3=None,
@@ -1503,10 +1504,15 @@ def mb_calibration_from_geodetic_mb(gdir,
 
     # Get the reference data
     if ref_mb is None:
-        ref_mb = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        ref_mb = float(ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda'])
-        # dmdtda: in meters water-equivalent per year -> we convert
-        ref_mb *= 1000  # kg m-2 yr-1
+        try:
+            ref_mb = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+            ref_mb = float(ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda'])
+            # dmdtda: in meters water-equivalent per year -> we convert
+            ref_mb *= 1000  # kg m-2 yr-1
+        except KeyError:
+            if override_missing is None:
+                raise
+            ref_mb = override_missing
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)

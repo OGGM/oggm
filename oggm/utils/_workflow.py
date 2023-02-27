@@ -1643,7 +1643,11 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
             # MB calib
             mb_calib = gdir.read_json('mb_calib')
             for k, v in mb_calib.items():
-                d[k] = v
+                if np.isscalar(v):
+                    d[k] = v
+                else:
+                    for k2, v2 in v.items():
+                        d[k2] = v2
         except BaseException:
             pass
 
@@ -2143,20 +2147,14 @@ def extend_past_climate_run(past_run_file=None,
         # Time
         ods['hydro_year'].data[:] = years
         ods['hydro_month'].data[:] = ods['hydro_month'][-1]
-        if ods['hydro_month'][-1] == 1:
-            ods['calendar_year'].data[:] = years
-        else:
-            raise NotImplementedError('Is this still needed?')
-            ods['calendar_year'].data[:] = years - 1
+        ods['calendar_year'].data[:] = years
         ods['calendar_month'].data[:] = ods['calendar_month'][-1]
-        for vn in ['hydro_year', 'hydro_month',
-                   'calendar_year', 'calendar_month']:
+        for vn in ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']:
             ods[vn] = ods[vn].astype(int)
 
         # New vars
         for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_m2_min_h', 'length', 'calving',
-                   'calving_rate']:
+                   'area', 'area_m2_min_h', 'length', 'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
