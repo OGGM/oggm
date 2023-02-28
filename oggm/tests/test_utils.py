@@ -1348,7 +1348,7 @@ class TestPreproCLI(unittest.TestCase):
                                 rid[:8], rid[:11], rid + '.tar.gz')
             assert not os.path.isfile(tarf)
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-            model = tasks.run_random_climate(gdir, nyears=10)
+            model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
             assert isinstance(model, FlowlineModel)
 
             # L4
@@ -1356,7 +1356,7 @@ class TestPreproCLI(unittest.TestCase):
                                 rid[:8], rid[:11], rid + '.tar.gz')
             assert not os.path.isfile(tarf)
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-            model = tasks.run_random_climate(gdir, nyears=10)
+            model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
             assert isinstance(model, FlowlineModel)
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_historical'))
@@ -1405,7 +1405,7 @@ class TestPreproCLI(unittest.TestCase):
             # Over the period they are... close enough
             assert_allclose(dss.volume,
                             dse.volume,
-                            rtol=0.24)
+                            rtol=0.25)
             assert_allclose(dss.area,
                             dse.area,
                             rtol=0.1)

@@ -1443,17 +1443,20 @@ def mb_calibration_from_geodetic_mb(gdir,
                                     temp_bias_min=None,
                                     temp_bias_max=None,
                                     ):
-    """Determine the mass balance parameters from geodetic MB data.
+    """Determine the mass balance parameters from a scalar mass-balance value.
 
-    This calibrates the mass balance parameters using a reference geodetic
-    MB data over a given period (instead of using the old tstar),
-    and this does NOT compute the apparent mass balance at
-    the same time - users need to run apparent_mb_from_any_mb separately.
+    This calibrates the mass balance parameters using a reference average
+    MB data over a given period (e.g. average in-situ SMB or geodetic MB).
+    This flexible calibration allows to calibrate three parameters.
+
+    Note that this does not compute the apparent mass balance at
+    the same time - users need to run `apparent_mb_from_any_mb after`
+    calibration.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
+        the glacier directory to calibrate
     ref_mb : float
         the reference mass balance to match (units: kg m-2 yr-1)
         If None, use the default Hugonnet file.
@@ -1461,10 +1464,11 @@ def mb_calibration_from_geodetic_mb(gdir,
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
         the same format but can be any date.
-    ref_mb_years : tuple of length 2 (range)
-        convenience kwarg to override ref_period.
-        If a tuple of length 2 is given, all years
-        between this range (excluding the last one) are used.
+    ref_mb_years : tuple of length 2 (range) or list of years.
+        convenience kwarg to override ref_period. If a tuple of length 2 is
+        given, all years between this range (excluding the last one) are used.
+        If a list  of years is given, all these will be used (useful for
+        data with gaps)
     """
 
     # Param constraints
@@ -1488,20 +1492,22 @@ def mb_calibration_from_geodetic_mb(gdir,
 
     fls = gdir.read_pickle('inversion_flowlines')
 
-    # If someone called another task before we need to reset this
-    for fl in fls:
-        fl.mu_star_is_valid = False
-
     # Let's go
     # Climate period
     if ref_mb_years:
-        ref_period = f'{int(ref_mb_years[0])}-01-01_{int(ref_mb_years[1])}-01-01'
-    if not ref_period:
-        ref_period = cfg.PARAMS['geodetic_mb_period']
-    y0, y1 = ref_period.split('_')
-    y0 = int(y0.split('-')[0])
-    y1 = int(y1.split('-')[0])
-    years = np.arange(y0, y1)
+        if len(ref_mb_years) > 2:
+            years = np.asarray(ref_mb_years)
+        else:
+            years = np.arange(*ref_mb_years)
+            # In case they meant us to use the data file
+            ref_period = ''
+    else:
+        if not ref_period:
+            ref_period = cfg.PARAMS['geodetic_mb_period']
+        y0, y1 = ref_period.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        years = np.arange(y0, y1)
 
     # Get the reference data
     if ref_mb is None:
