@@ -31,9 +31,15 @@ from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
 
 pytestmark = pytest.mark.test_env("utils")
 
-TEST_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
-                 'test_gdirs/oggm_v1.1/')
+TEST_GDIR_URL_v11 = ('https://cluster.klima.uni-bremen.de/~oggm/'
+                     'test_gdirs/oggm_v1.1/')
 
+TEST_GDIR_URL_v14_L12 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                         'oggm_v1.4/L1-L2_files/elev_bands/')
+
+TEST_GDIR_URL_v14_L35 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                         'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
+                         'no_match/')
 
 def clean_dir(testdir):
     shutil.rmtree(testdir)
@@ -596,7 +602,7 @@ class TestStartFromTar(unittest.TestCase):
             assert new_base_dir in new_gdir.base_dir
 
 
-class TestStartFromOnlinePrepro(unittest.TestCase):
+class TestDLVerify(unittest.TestCase):
 
     def setUp(self):
         # test directory
@@ -626,143 +632,17 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         utils.mkdir(self.testdir, reset=True)
         utils.mkdir(self.dldir, reset=True)
 
-    def test_start_from_level_1(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=1,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-    def test_start_from_level_1_str(self):
-
-        # Go - initialize working directories
-        entities = self.rgidf.iloc[:2].RGIId
-        cfg.PARAMS['border'] = 20
-        gdirs = workflow.init_glacier_directories(entities,
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  prepro_rgi_version='61',
-                                                  from_prepro_level=1)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-        # One string
-        cfg.PARAMS['border'] = 20
-
-        # Test error
-        with pytest.raises(InvalidParamsError):
-            workflow.init_glacier_directories('RGI60-11.00897',
-                                              prepro_rgi_version='61',
-                                              from_prepro_level=1)
-
-        gdirs = workflow.init_glacier_directories('RGI60-11.00897',
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  prepro_rgi_version='61',
-                                                  from_prepro_level=1)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-    def test_start_from_level_2(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=2,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            assert gdir.has_file('climate_historical')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-    def test_start_from_level_3(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=3,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            assert gdir.has_file('gridded_data')
-            assert gdir.has_file('climate_historical')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-
-        assert gdir.get_climate_info()
-        fls = gdir.read_pickle('inversion_flowlines')
-        with pytest.raises(AttributeError):
-            # This is going to raise as long as we keep the "old" prepro gdirs
-            # remove this test after update.
-            # At least we can read the old pickles
-            fls[0].widths_m
-
-        df = utils.compile_glacier_statistics(gdirs)
-        assert 'dem_med_elev' in df
-
-        df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
-                                                                         1960,
-                                                                         2000],
-                                              add_raw_climate_statistics=True)
-        assert 'tstar_avg_temp_mean_elev' in df
-        assert '1905-1935_avg_temp_mean_elev' in df
-        assert '1905-1935_uncorrected_winter_daily_mean_prcp' in df
-
-        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
-
-    def test_start_from_level_4(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=4,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-
-        # Check that flowlines have lon lat info
-        # Ah no this doesn't work on these old dirs unfortunately
-        fls = gdirs[0].read_pickle('model_flowlines')
-        with pytest.raises(AttributeError):
-            fls[-1].point_lons[0]
-
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
-                                     nyears=10)
-
     def test_corrupted_file(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                  prepro_base_url=TEST_GDIR_URL,
+                                                  prepro_base_url=TEST_GDIR_URL_v11,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
 
         cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 20, 4,
-                                      base_url=TEST_GDIR_URL)
+                                      base_url=TEST_GDIR_URL_v11)
         assert 'cluster.klima.uni-bremen.de/~oggm/' in cfile
 
         # Replace with a dummy file
@@ -773,7 +653,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # Since we already verified this will error
         with pytest.raises(tarfile.ReadError):
             workflow.init_glacier_directories(['RGI60-11.00787'],
-                                              prepro_base_url=TEST_GDIR_URL,
+                                              prepro_base_url=TEST_GDIR_URL_v11,
                                               from_prepro_level=4,
                                               prepro_rgi_version='61',
                                               prepro_border=20)
@@ -781,13 +661,102 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # This should retrigger a download and just work
         cfg.DL_VERIFIED.clear()
         gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                  prepro_base_url=TEST_GDIR_URL,
+                                                  prepro_base_url=TEST_GDIR_URL_v11,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
+        assert gdirs[0].has_file('model_flowlines')
+
+class TestStartFromV14(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_tools')
+        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = self.dldir
+        cfg.PATHS['working_dir'] = self.testdir
+        self.clean_dir()
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+        shutil.rmtree(self.dldir)
+
+    def clean_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.dldir, reset=True)
+
+    def test_start_from_level_1(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(['RGI60-15.13005'],
+                                                  prepro_base_url=TEST_GDIR_URL_v14_L12,
+                                                  from_prepro_level=1,
+                                                  prepro_rgi_version='62',
+                                                  prepro_border=40)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    def test_start_from_level_2(self):
+
+        cfg.PARAMS['border'] = 40
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(['RGI60-15.13005'],
+                                                  prepro_base_url=TEST_GDIR_URL_v14_L12,
+                                                  from_prepro_level=2,
+                                                  prepro_rgi_version='62')
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    def test_start_from_level_3(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(['RGI60-15.13005'],
+                                                  prepro_base_url=TEST_GDIR_URL_v14_L35,
+                                                  from_prepro_level=3,
+                                                  prepro_rgi_version='62',
+                                                  prepro_border=40)
+
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
-                                     nyears=10)
+        cfg.PARAMS['use_winter_prcp_factor'] = False
+
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert gdir.has_file('gridded_data')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+
+        assert gdir.get_climate_info()
+        # This we can read
+        gdir.read_pickle('inversion_flowlines')
+
+        df = utils.compile_glacier_statistics(gdirs)
+        assert 'dem_med_elev' in df
+
+        df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
+                                                                         1960,
+                                                                         2000],
+                                              add_raw_climate_statistics=True)
+        # This doesnt work cause not calibrated
+        assert '1905-1935_avg_temp_mean_elev' not in df
+        # This should work
+        assert '1905-1935_uncorrected_winter_daily_mean_prcp' in df
+
 
 def _read_shp():
     # Read in the RGI file
