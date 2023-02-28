@@ -1596,8 +1596,8 @@ def dynamic_melt_f_run_fallback(
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_melt_f_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
-        ref_period='', monthly_melt_f_min=None,
-        monthly_melt_f_max=None, melt_f_max_step_length=5, maxiter=20,
+        ref_period='', melt_f_min=None,
+        melt_f_max=None, melt_f_max_step_length=5, maxiter=20,
         ignore_errors=False, output_filesuffix='_dynamic_melt_f',
         ys=None, ye=None,
         run_function=dynamic_melt_f_run_with_dynamic_spinup,
@@ -1653,12 +1653,12 @@ def run_dynamic_melt_f_calibration(
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
         set, this should still match the same format but can be any date.
         Default is '' (-> PARAMS['geodetic_mb_period'])
-    monthly_melt_f_min : float or None
+    melt_f_min : float or None
         Lower absolute limit for melt_f.
-        Default is None (-> cfg.PARAMS['monthly_melt_f_min'])
-    monthly_melt_f_max : float or None
+        Default is None (-> cfg.PARAMS['melt_f_min'])
+    melt_f_max : float or None
         Upper absolute limit for melt_f.
-        Default is None (-> cfg.PARAMS['monthly_melt_f_max'])
+        Default is None (-> cfg.PARAMS['melt_f_max'])
     melt_f_max_step_length : float
         Defines the maximum allowed change of melt_f between two iterations.
         Is needed to avoid to large changes.
@@ -1730,24 +1730,15 @@ def run_dynamic_melt_f_calibration(
         evolution_model, by default a FluxBasedModel.
     """
     # melt_f constraints
-    if monthly_melt_f_min is None:
-        monthly_melt_f_min = cfg.PARAMS['monthly_melt_f_min']
-    if monthly_melt_f_max is None:
-        monthly_melt_f_max = cfg.PARAMS['monthly_melt_f_max']
+    if melt_f_min is None:
+        melt_f_min = cfg.PARAMS['melt_f_min']
+    if melt_f_max is None:
+        melt_f_max = cfg.PARAMS['melt_f_max']
 
     if kwargs_run_function is None:
         kwargs_run_function = {}
     if kwargs_fallback_function is None:
         kwargs_fallback_function = {}
-
-    if monthly_melt_f_max > 1000:
-        raise InvalidParamsError('You seem to have set a very high '
-                                 'monthly_melt_f_max for this run. This is not '
-                                 'how this task is supposed to work, and '
-                                 'we recommend a value lower than 1000 '
-                                 '(or even 600). You can directly provide a '
-                                 'value for monthly_melt_f_max or set '
-                                 "cfg.PARAMS['monthly_melt_f_max'] to a smaller value!")
 
     # geodetic mb stuff
     if not ref_period:
@@ -1967,7 +1958,7 @@ def run_dynamic_melt_f_calibration(
                     else:
                         # ok we set a new lower limit, consider also minimum
                         # limit
-                        melt_f_limits[0] = max(monthly_melt_f_min,
+                        melt_f_limits[0] = max(melt_f_min,
                                                melt_f_limits[0] -
                                                melt_f_max_step_length)
             elif melt_f > melt_f_limits[1]:
@@ -1984,7 +1975,7 @@ def run_dynamic_melt_f_calibration(
                     else:
                         # ok we set a new upper limit, consider also maximum
                         # limit
-                        melt_f_limits[1] = min(monthly_melt_f_max,
+                        melt_f_limits[1] = min(melt_f_max,
                                                melt_f_limits[1] +
                                                melt_f_max_step_length)
 

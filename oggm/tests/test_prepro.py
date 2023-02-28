@@ -1411,7 +1411,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == 0
-        assert pdf['melt_f'] != cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] != cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Let's calibrate on temp_bias
@@ -1431,7 +1431,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] != 0
-        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Let's calibrate on precip
@@ -1451,7 +1451,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == 0
-        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] != cfg.PARAMS['prcp_scaling_factor']
 
         # mbdf[['ref_mb', 'melt_mb', 'temp_mb', 'prcp_mb']].plot()
@@ -1480,8 +1480,8 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] < 0
-        assert pdf['melt_f'] != cfg.PARAMS['monthly_melt_f_default']
-        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_min']
+        assert pdf['melt_f'] != cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f_min']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Very negative
@@ -1506,13 +1506,13 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] > 0
-        assert pdf['melt_f'] != cfg.PARAMS['monthly_melt_f_default']
-        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_max']
+        assert pdf['melt_f'] != cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f_max']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Try with prcp_fac as variable 1
         # Very positive
-        ref_mb = 2000
+        ref_mb = 3000
         with pytest.raises(RuntimeError):
             mb_calibration_from_geodetic_mb(gdir,
                                             ref_mb=ref_mb,
@@ -1535,7 +1535,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] < 0
-        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] > cfg.PARAMS['prcp_scaling_factor']
 
         # Very negative
@@ -1558,11 +1558,11 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
         # It should correlate even less (maybe not)
         np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
-                                   atol=0.45)
+                                   atol=0.5)
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] > 0
-        assert pdf['melt_f'] == cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] < cfg.PARAMS['prcp_scaling_factor']
 
         # Extremely negative
@@ -1598,7 +1598,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_max']
-        assert pdf['melt_f'] > cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] > cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_min']
 
         # Unmatchable positive
@@ -1648,7 +1648,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
-        assert pdf['melt_f'] < cfg.PARAMS['monthly_melt_f_default']
+        assert pdf['melt_f'] < cfg.PARAMS['melt_f_default']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_max']
 
 

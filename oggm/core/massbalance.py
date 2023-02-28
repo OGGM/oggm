@@ -537,6 +537,10 @@ class MonthlyTIModel(MassBalanceModel):
                 summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
 
+    @property
+    def monthly_melt_f(self):
+        return self.melt_f * 365 / 12
+
     # adds the possibility of changing prcp_fac
     # after instantiation with properly changing the prcp time series
     @property
@@ -680,7 +684,7 @@ class MonthlyTIModel(MassBalanceModel):
     def get_monthly_mb(self, heights, year=None, add_climate=False, **kwargs):
 
         t, tmelt, prcp, prcpsol = self.get_monthly_climate(heights, year=year)
-        mb_month = prcpsol - self.melt_f * tmelt
+        mb_month = prcpsol - self.monthly_melt_f * tmelt
         mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
         if add_climate:
             return (mb_month / SEC_IN_MONTH / self.rho, t, tmelt,
@@ -690,7 +694,7 @@ class MonthlyTIModel(MassBalanceModel):
     def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
 
         t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
-        mb_annual = np.sum(prcpsol - self.melt_f * tmelt, axis=1)
+        mb_annual = np.sum(prcpsol - self.monthly_melt_f * tmelt, axis=1)
         mb_annual = (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
         if add_climate:
             return (mb_annual, t.mean(axis=1), tmelt.sum(axis=1),
@@ -1440,9 +1444,9 @@ def mb_calibration_from_geodetic_mb(gdir,
                                     calibrate_param1='melt_f',
                                     calibrate_param2=None,
                                     calibrate_param3=None,
-                                    monthly_melt_f_default=None,
-                                    monthly_melt_f_min=None,
-                                    monthly_melt_f_max=None,
+                                    melt_f_default=None,
+                                    melt_f_min=None,
+                                    melt_f_max=None,
                                     prcp_scaling_factor=None,
                                     prcp_scaling_factor_min=None,
                                     prcp_scaling_factor_max=None,
@@ -1479,16 +1483,16 @@ def mb_calibration_from_geodetic_mb(gdir,
     """
 
     # Param constraints
-    if monthly_melt_f_min is None:
-        monthly_melt_f_min = cfg.PARAMS['monthly_melt_f_min']
-    if monthly_melt_f_max is None:
-        monthly_melt_f_max = cfg.PARAMS['monthly_melt_f_max']
+    if melt_f_min is None:
+        melt_f_min = cfg.PARAMS['melt_f_min']
+    if melt_f_max is None:
+        melt_f_max = cfg.PARAMS['melt_f_max']
     if prcp_scaling_factor_min is None:
         prcp_scaling_factor_min = cfg.PARAMS['prcp_scaling_factor_min']
     if prcp_scaling_factor_max is None:
         prcp_scaling_factor_max = cfg.PARAMS['prcp_scaling_factor_max']
-    if monthly_melt_f_default is None:
-        monthly_melt_f_default = cfg.PARAMS['monthly_melt_f_default']
+    if melt_f_default is None:
+        melt_f_default = cfg.PARAMS['melt_f_default']
     if temp_bias_min is None:
         temp_bias_min = cfg.PARAMS['temp_bias_min']
     if temp_bias_max is None:
@@ -1538,7 +1542,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                                   'you posted!')
 
     # Ok, regardless on how we want to calibrate, we start with defaults
-    melt_f = monthly_melt_f_default
+    melt_f = melt_f_default
     if prcp_scaling_factor is None:
         if cfg.PARAMS['use_winter_prcp_factor']:
             # Some sanity check
@@ -1569,7 +1573,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                              f'[{mb_mod.ys}, {mb_mod.ye}]')
 
     if calibrate_param1 == 'melt_f':
-        min_range, max_range = monthly_melt_f_min, monthly_melt_f_max
+        min_range, max_range = melt_f_min, melt_f_max
     elif calibrate_param1 == 'prcp_fac':
         min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
     elif calibrate_param1 == 'temp_bias':
@@ -1602,7 +1606,7 @@ def mb_calibration_from_geodetic_mb(gdir,
 
         # Second step
         if calibrate_param2 == 'melt_f':
-            min_range, max_range = monthly_melt_f_min, monthly_melt_f_max
+            min_range, max_range = melt_f_min, melt_f_max
         elif calibrate_param2 == 'prcp_fac':
             min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
         elif calibrate_param2 == 'temp_bias':
@@ -1629,7 +1633,7 @@ def mb_calibration_from_geodetic_mb(gdir,
 
             # Third step
             if calibrate_param3 == 'melt_f':
-                min_range, max_range = monthly_melt_f_min, monthly_melt_f_max
+                min_range, max_range = melt_f_min, melt_f_max
             elif calibrate_param3 == 'prcp_fac':
                 min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
             elif calibrate_param3 == 'temp_bias':

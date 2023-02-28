@@ -684,7 +684,7 @@ class TestMassBalanceModels:
         # ELA
         elah = cmb_mod.get_ela()
         t, tm, p, ps = cmb_mod.get_annual_climate([elah])
-        mb = ps - cmb_mod.mbmod.melt_f * tm
+        mb = ps - cmb_mod.mbmod.monthly_melt_f * tm
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.2)
 
@@ -3292,6 +3292,161 @@ class TestHEF:
         assert fmod.y0 == 2002
         assert fmod.last_yr == 2003
 
+    @pytest.mark.slow
+    def test_cesm(self, hef_gdir):
+
+        cfg.PARAMS['store_model_geometry'] = True
+
+        gdir = hef_gdir
+
+        # init
+        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
+        cfg.PATHS['cesm_temp_file'] = f
+        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
+        cfg.PATHS['cesm_precc_file'] = f
+        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
+        cfg.PATHS['cesm_precl_file'] = f
+        gcm_climate.process_cesm_data(gdir)
+
+        # Climate data
+        fh = gdir.get_filepath('climate_historical')
+        fcesm = gdir.get_filepath('gcm_data')
+        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
+            # Let's do some basic checks
+            shist = hist.sel(time=slice('1961', '1990'))
+            scesm = cesm.sel(time=slice('1961', '1990'))
+            # Climate during the chosen period should be the same
+            np.testing.assert_allclose(shist.temp.mean(),
+                                       scesm.temp.mean(),
+                                       rtol=1e-3)
+            np.testing.assert_allclose(shist.prcp.mean(),
+                                       scesm.prcp.mean(),
+                                       rtol=1e-3)
+            # And also the annual cycle
+            scru = shist.groupby('time.month').mean(dim='time')
+            scesm = scesm.groupby('time.month').mean(dim='time')
+            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
+            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
+        # Mass balance models
+        mb_cru = massbalance.MonthlyTIModel(gdir)
+        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data')
+
+        # Average over 1961-1990
+        h, w = gdir.get_inversion_flowline_hw()
+        yrs = np.arange(1961, 1991)
+        ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
+        ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
+        # due to nonlinear effects the MBs are not equivalent! See if they
+        # aren't too far:
+        assert np.abs(np.mean(ts1) - np.mean(ts2)) < 100
+
+        # For my own interest, some statistics
+        yrs = np.arange(1851, 2003)
+        ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
+        ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
+        if do_plot:
+            df = pd.DataFrame(index=yrs)
+            k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1),
+                                                               np.std(ts1))
+            k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2),
+                                                            np.std(ts2))
+            df[k1] = ts1
+            df[k2] = ts2
+
+            df.plot()
+            plt.plot(yrs,
+                     df[k1].rolling(31, center=True, min_periods=15).mean(),
+                     color='C0', linewidth=3)
+            plt.plot(yrs,
+                     df[k2].rolling(31, center=True, min_periods=15).mean(),
+                     color='C1', linewidth=3)
+            plt.title('SMB Hintereisferner Histalp VS CESM')
+            plt.show()
+
+        # See what that means for a run
+        init_present_time_glacier(gdir)
+        run_from_climate_data(gdir, ys=1961, ye=1990,
+                              output_filesuffix='_hist')
+        run_from_climate_data(gdir, ys=1961, ye=1990,
+                              climate_filename='gcm_data',
+                              output_filesuffix='_cesm')
+
+        ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
+        ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
+
+        assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
+                        ds2.volume.isel(rgi_id=0, time=-1),
+                        rtol=0.1)
+
+        # Do a spinup run
+        run_constant_climate(gdir, nyears=100, y0=1985,
+                             temperature_bias=-1,
+                             output_filesuffix='_spinup')
+        run_from_climate_data(gdir, ys=1961, ye=1990,
+                              init_model_filesuffix='_spinup',
+                              output_filesuffix='_afterspinup')
+        ds3 = utils.compile_run_output([gdir], path=False,
+                                       input_filesuffix='_afterspinup')
+        assert (ds1.volume.isel(rgi_id=0, time=-1).data <
+                0.85 * ds3.volume.isel(rgi_id=0, time=-1).data)
+        ds3.close()
+
+        # Try the compile optimisation
+        out = utils.compile_run_output([gdir, gdir, gdir],
+                                       tmp_file_size=2,
+                                       input_filesuffix='_hist',
+                                       output_filesuffix='_rehist')
+        assert out is None
+        path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
+        with xr.open_dataset(path) as ds:
+            assert len(ds.rgi_id) == 3
+
+    @pytest.mark.slow
+    def test_elevation_feedback(self, hef_gdir):
+
+        init_present_time_glacier(hef_gdir)
+
+        feedbacks = ['annual', 'monthly', 'always', 'never']
+        # Mutliproc
+        tasks = []
+        for feedback in feedbacks:
+            tasks.append((run_random_climate,
+                          dict(nyears=200, seed=5,
+                               y0=1985, temperature_bias=-0.5,
+                               mb_elev_feedback=feedback,
+                               output_filesuffix=feedback,
+                               store_monthly_step=True)))
+        with warnings.catch_warnings():
+            # Warning about MB model update
+            warnings.filterwarnings("ignore", category=UserWarning)
+            workflow.execute_parallel_tasks(hef_gdir, tasks)
+
+        out = []
+        for feedback in feedbacks:
+            out.append(utils.compile_run_output([hef_gdir], path=False,
+                                                input_filesuffix=feedback))
+
+        # Check that volume isn't so different
+        assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
+        assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
+        assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
+        # Except for "never", where things are different and less variable
+        assert out[3].volume.min() > out[2].volume.min()
+        assert out[3].volume.max() < out[2].volume.max()
+
+        if do_plot:
+            plt.figure()
+            for ds, lab in zip(out, feedbacks):
+                (ds.volume * 1e-9).plot(label=lab)
+            plt.xlabel('Vol (km3)')
+            plt.legend()
+            plt.show()
+
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestDynamicSpinup:
+
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
     def test_run_dynamic_spinup(self, hef_gdir, minimise_for):
@@ -3435,8 +3590,6 @@ class TestHEF:
 
         # change settings to match used prepro directory
         cfg.PARAMS['prcp_scaling_factor'] = 1.6
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
 
         # TODO: update prepro_base_url to new v1.6, and simplify code below,
         #  and could use different prepro_level
@@ -3742,27 +3895,18 @@ class TestHEF:
                 run_with_fixed_spinup.time.values[0])
         assert run_with_fixed_spinup.time.values[0] == yr_rgi - spinup_period
 
-        # change settings back to default
-        cfg.PARAMS['use_inversion_params_for_run'] = True
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
-
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
     def test_run_dynamic_melt_f_calibration_with_dynamic_spinup(self,
-                                                                 minimise_for,
-                                                                 do_inversion):
+                                                                minimise_for,
+                                                                do_inversion):
 
         # reset kcalving for this test and set it back to the previous value
         # after the test
         old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
         cfg.PARAMS['use_kcalving_for_run'] = False
         cfg.PARAMS['prcp_scaling_factor'] = 1.6
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
 
         # TODO: update to prepro v1.6
         # use a prepro dir as the hef_gdir climate data only goes to 2003 and
@@ -3815,12 +3959,13 @@ class TestHEF:
                 os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
 
         # conduct a run including a dynamic spinup and inversion
+        melt_f_max = 1000 * 12 / 365
         precision_percent = 10
         precision_absolute = 0.1
         ye = gdir.get_climate_info()['baseline_yr_1'] + 1
         yr_rgi = gdir.rgi_date
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent': precision_percent,
@@ -3874,7 +4019,7 @@ class TestHEF:
         if not (do_inversion and minimise_for == 'volume'):
             err_dmdtda_scaling_factor = 0.2
             run_dynamic_melt_f_calibration(
-                gdir, monthly_melt_f_max=1000.,
+                gdir, melt_f_max=melt_f_max,
                 err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
@@ -3934,7 +4079,7 @@ class TestHEF:
                                      'melt_f calibration including an '
                                      'inversion*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, monthly_melt_f_max=1000.,
+                    gdir, melt_f_max=melt_f_max,
                     run_function=dynamic_melt_f_run_with_dynamic_spinup,
                     kwargs_run_function={'minimise_for': minimise_for,
                                          'precision_percent': precision_percent,
@@ -3964,7 +4109,7 @@ class TestHEF:
         delta_ref_dmdtda = 100
         delta_err_ref_dmdtda = -50
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
@@ -4007,7 +4152,7 @@ class TestHEF:
         with pytest.raises(RuntimeError,
                            match='Dynamic melt_f calibration not successful.*'):
             run_dynamic_melt_f_calibration(
-                gdir, monthly_melt_f_max=1000.,
+                gdir, melt_f_max=melt_f_max,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
                                      'do_inversion': do_inversion},
@@ -4021,7 +4166,7 @@ class TestHEF:
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent': precision_percent,
@@ -4056,7 +4201,7 @@ class TestHEF:
         # test that fallback function works as expected if ignore_error=True and
         # if no successful run can be conducted
         model_fallback = run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
             kwargs_run_function={'minimise_for': minimise_for,
                                  'precision_percent': 0.1,
@@ -4103,7 +4248,7 @@ class TestHEF:
                                match='If you provide a reference geodetic '
                                      'mass balance .*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, monthly_melt_f_max=1000.,
+                    gdir, melt_f_max=melt_f_max,
                     ref_dmdtda=use_ref_dmdtda,
                     err_ref_dmdtda=use_err_ref_dmdtda)
 
@@ -4114,22 +4259,15 @@ class TestHEF:
                                match='The provided error for the geodetic '
                                      'mass-balance.*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, monthly_melt_f_max=1000.,
+                    gdir, melt_f_max=melt_f_max,
                     ref_dmdtda=ref_dmdtda,
                     err_ref_dmdtda=use_err_ref_dmdtda)
 
         # test if fallback function is resetting melt_f correctly
         mb_calib_params = gdir.read_json('mb_calib')
         original_melt_f = mb_calib_params['melt_f']
-        new_melt_f = original_melt_f - 10
-        df = dict()
-        df['rgi_id'] = gdir.rgi_id
-        df['bias'] = mb_calib_params['bias']
-        df['melt_f'] = new_melt_f
-        df['prcp_fac'] = mb_calib_params['prcp_fac']
-        df['temp_bias'] = mb_calib_params['temp_bias']
-        df['mb_global_params'] = mb_calib_params['mb_global_params']
-        gdir.write_json(df, 'mb_calib')
+        mb_calib_params['melt_f'] = original_melt_f - 10 * 12 / 365
+        gdir.write_json(mb_calib_params, 'mb_calib')
         assert original_melt_f != gdir.read_json('mb_calib')['melt_f']
         dynamic_melt_f_run_with_dynamic_spinup_fallback(
             gdir,
@@ -4138,7 +4276,7 @@ class TestHEF:
             ys=gdir.get_climate_info()['baseline_yr_0'],
             ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
             local_variables={'vol_m3_ref':
-                             gdir.read_pickle('model_flowlines')[0].volume_m3},
+                                 gdir.read_pickle('model_flowlines')[0].volume_m3},
             minimise_for=minimise_for
         )
         assert original_melt_f == gdir.read_json('mb_calib')['melt_f']
@@ -4183,7 +4321,7 @@ class TestHEF:
 
         # run without max limit
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
@@ -4202,7 +4340,7 @@ class TestHEF:
             ys=1979, ye=ye)
         # run with max limit
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             ignore_errors=True,
@@ -4224,15 +4362,15 @@ class TestHEF:
             ys=1979, ye=ye)
 
         with xr.open_dataset(
-            gdir.get_filepath(
-                'model_diagnostics',
-                filesuffix='_dyn_melt_f_calib_spinup_reduce_period_'
-                           'no_limit')) as ds:
+                gdir.get_filepath(
+                    'model_diagnostics',
+                    filesuffix='_dyn_melt_f_calib_spinup_reduce_period_'
+                               'no_limit')) as ds:
             run_no_limit = ds.load()
         with xr.open_dataset(
-            gdir.get_filepath(
-                'model_diagnostics',
-                filesuffix='_dyn_melt_f_calib_spinup_reduce_period')) as ds:
+                gdir.get_filepath(
+                    'model_diagnostics',
+                    filesuffix='_dyn_melt_f_calib_spinup_reduce_period')) as ds:
             run_with_limit = ds.load()
 
         assert run_no_limit.time.values[0] > run_with_limit.time.values[0]
@@ -4241,7 +4379,7 @@ class TestHEF:
         # test if add_fixed_geomtry_spinup of dynamic spinup works here as well
         # run with add_fixed_geometry_spinup
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             ignore_errors=True,
@@ -4260,9 +4398,9 @@ class TestHEF:
             output_filesuffix='_dyn_melt_f_calib_add_fixed_spinup',
             ys=1979, ye=ye)
         with xr.open_dataset(
-            gdir.get_filepath(
-                'model_diagnostics',
-                filesuffix='_dyn_melt_f_calib_add_fixed_spinup')) as ds:
+                gdir.get_filepath(
+                    'model_diagnostics',
+                    filesuffix='_dyn_melt_f_calib_add_fixed_spinup')) as ds:
             run_with_fixed_spinup = ds.load()
 
         assert (run_no_limit.time.values[0] >
@@ -4274,12 +4412,6 @@ class TestHEF:
                 run_with_fixed_spinup.time.values[0])
         assert (run_with_fixed_spinup.is_fixed_geometry_spinup.sum() <
                 run_with_limit.is_fixed_geometry_spinup.sum())
-
-        # change settings back to default
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
     @pytest.mark.slow
     def test_run_dynamic_melt_f_calibration_without_dynamic_spinup(self):
@@ -4322,10 +4454,11 @@ class TestHEF:
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
         # conduct the run
+        melt_f_max = 1000 * 12 / 365
         ye = gdir.get_climate_info()['baseline_yr_1'] + 1
         yr_rgi = gdir.rgi_date
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib',
@@ -4348,7 +4481,7 @@ class TestHEF:
         # test err_dmdtda_scaling_factor
         err_dmdtda_scaling_factor = 0.01
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback,
@@ -4393,7 +4526,7 @@ class TestHEF:
         delta_ref_dmdtda = 100
         delta_err_ref_dmdtda = -50
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
             err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
             run_function=dynamic_melt_f_run,
@@ -4428,7 +4561,7 @@ class TestHEF:
         with pytest.raises(RuntimeError,
                            match='Dynamic melt_f calibration not successful.*'):
             run_dynamic_melt_f_calibration(
-                gdir, monthly_melt_f_max=1000.,
+                gdir, melt_f_max=melt_f_max,
                 run_function=dynamic_melt_f_run,
                 fallback_function=dynamic_melt_f_run,
                 output_filesuffix='_dyn_melt_f_calib_error',
@@ -4438,7 +4571,7 @@ class TestHEF:
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
@@ -4452,7 +4585,7 @@ class TestHEF:
         # test that fallback function works as expected if ignore_error=True and
         # if no successful run can be conducted
         model_fallback = run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run,
             kwargs_run_function={'cfl_number': 1e-8},  # force an error
             fallback_function=dynamic_melt_f_run_fallback,
@@ -4471,7 +4604,7 @@ class TestHEF:
                                match='If you provide a reference geodetic '
                                      'mass balance .*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, monthly_melt_f_max=1000.,
+                    gdir, melt_f_max=melt_f_max,
                     run_function=dynamic_melt_f_run,
                     fallback_function=dynamic_melt_f_run_fallback,
                     ref_dmdtda=use_ref_dmdtda,
@@ -4482,7 +4615,7 @@ class TestHEF:
                            match='The provided ye is smaller than the end year'
                                  ' of the given *'):
             run_dynamic_melt_f_calibration(
-                gdir, monthly_melt_f_max=1000.,
+                gdir, melt_f_max=melt_f_max,
                 run_function=dynamic_melt_f_run,
                 fallback_function=dynamic_melt_f_run_fallback,
                 ye=yr1_ref_dmdtda - 1)
@@ -4491,7 +4624,7 @@ class TestHEF:
                            match='The provided ys is larger than the start year'
                                  ' of the given *'):
             run_dynamic_melt_f_calibration(
-                gdir, monthly_melt_f_max=1000.,
+                gdir, melt_f_max=melt_f_max,
                 run_function=dynamic_melt_f_run,
                 fallback_function=dynamic_melt_f_run_fallback,
                 ys=yr0_ref_dmdtda + 1)
@@ -4502,168 +4635,10 @@ class TestHEF:
                                      ys=yr_rgi, ye=yr_rgi + 1,
                                      output_filesuffix='_one_yr')
         run_dynamic_melt_f_calibration(
-            gdir, monthly_melt_f_max=1000.,
+            gdir, melt_f_max=melt_f_max,
             init_model_filesuffix='_one_yr',
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)
-
-        # change settings back to default
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
-
-    @pytest.mark.slow
-    def test_cesm(self, hef_gdir):
-
-        cfg.PARAMS['store_model_geometry'] = True
-
-        gdir = hef_gdir
-
-        # init
-        f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
-        cfg.PATHS['cesm_temp_file'] = f
-        f = get_demo_file('cesm.PRECC.160001-200512.selection.nc')
-        cfg.PATHS['cesm_precc_file'] = f
-        f = get_demo_file('cesm.PRECL.160001-200512.selection.nc')
-        cfg.PATHS['cesm_precl_file'] = f
-        gcm_climate.process_cesm_data(gdir)
-
-        # Climate data
-        fh = gdir.get_filepath('climate_historical')
-        fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
-            # Let's do some basic checks
-            shist = hist.sel(time=slice('1961', '1990'))
-            scesm = cesm.sel(time=slice('1961', '1990'))
-            # Climate during the chosen period should be the same
-            np.testing.assert_allclose(shist.temp.mean(),
-                                       scesm.temp.mean(),
-                                       rtol=1e-3)
-            np.testing.assert_allclose(shist.prcp.mean(),
-                                       scesm.prcp.mean(),
-                                       rtol=1e-3)
-            # And also the annual cycle
-            scru = shist.groupby('time.month').mean(dim='time')
-            scesm = scesm.groupby('time.month').mean(dim='time')
-            np.testing.assert_allclose(scru.temp, scesm.temp, rtol=5e-3)
-            np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
-
-        # Mass balance models
-        mb_cru = massbalance.MonthlyTIModel(gdir)
-        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data')
-
-        # Average over 1961-1990
-        h, w = gdir.get_inversion_flowline_hw()
-        yrs = np.arange(1961, 1991)
-        ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
-        ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
-        # due to non linear effects the MBs are not equivalent! See if they
-        # aren't too far:
-        assert np.abs(np.mean(ts1) - np.mean(ts2)) < 100
-
-        # For my own interest, some statistics
-        yrs = np.arange(1851, 2003)
-        ts1 = mb_cru.get_specific_mb(h, w, year=yrs)
-        ts2 = mb_cesm.get_specific_mb(h, w, year=yrs)
-        if do_plot:
-            df = pd.DataFrame(index=yrs)
-            k1 = 'Histalp (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts1),
-                                                               np.std(ts1))
-            k2 = 'CESM (mean={:.1f}, stddev={:.1f})'.format(np.mean(ts2),
-                                                            np.std(ts2))
-            df[k1] = ts1
-            df[k2] = ts2
-
-            df.plot()
-            plt.plot(yrs,
-                     df[k1].rolling(31, center=True, min_periods=15).mean(),
-                     color='C0', linewidth=3)
-            plt.plot(yrs,
-                     df[k2].rolling(31, center=True, min_periods=15).mean(),
-                     color='C1', linewidth=3)
-            plt.title('SMB Hintereisferner Histalp VS CESM')
-            plt.show()
-
-        # See what that means for a run
-        init_present_time_glacier(gdir)
-        run_from_climate_data(gdir, ys=1961, ye=1990,
-                              output_filesuffix='_hist')
-        run_from_climate_data(gdir, ys=1961, ye=1990,
-                              climate_filename='gcm_data',
-                              output_filesuffix='_cesm')
-
-        ds1 = utils.compile_run_output([gdir], input_filesuffix='_hist')
-        ds2 = utils.compile_run_output([gdir], input_filesuffix='_cesm')
-
-        assert_allclose(ds1.volume.isel(rgi_id=0, time=-1),
-                        ds2.volume.isel(rgi_id=0, time=-1),
-                        rtol=0.1)
-
-        # Do a spinup run
-        run_constant_climate(gdir, nyears=100, y0=1985,
-                             temperature_bias=-1,
-                             output_filesuffix='_spinup')
-        run_from_climate_data(gdir, ys=1961, ye=1990,
-                              init_model_filesuffix='_spinup',
-                              output_filesuffix='_afterspinup')
-        ds3 = utils.compile_run_output([gdir], path=False,
-                                       input_filesuffix='_afterspinup')
-        assert (ds1.volume.isel(rgi_id=0, time=-1).data <
-                0.85 * ds3.volume.isel(rgi_id=0, time=-1).data)
-        ds3.close()
-
-        # Try the compile optimisation
-        out = utils.compile_run_output([gdir, gdir, gdir],
-                                       tmp_file_size=2,
-                                       input_filesuffix='_hist',
-                                       output_filesuffix='_rehist')
-        assert out is None
-        path = os.path.join(cfg.PATHS['working_dir'], 'run_output_rehist.nc')
-        with xr.open_dataset(path) as ds:
-            assert len(ds.rgi_id) == 3
-
-    @pytest.mark.slow
-    def test_elevation_feedback(self, hef_gdir):
-
-        init_present_time_glacier(hef_gdir)
-
-        feedbacks = ['annual', 'monthly', 'always', 'never']
-        # Mutliproc
-        tasks = []
-        for feedback in feedbacks:
-            tasks.append((run_random_climate,
-                          dict(nyears=200, seed=5,
-                               y0=1985, temperature_bias=-0.5,
-                               mb_elev_feedback=feedback,
-                               output_filesuffix=feedback,
-                               store_monthly_step=True)))
-        with warnings.catch_warnings():
-            # Warning about MB model update
-            warnings.filterwarnings("ignore", category=UserWarning)
-            workflow.execute_parallel_tasks(hef_gdir, tasks)
-
-        out = []
-        for feedback in feedbacks:
-            out.append(utils.compile_run_output([hef_gdir], path=False,
-                                                input_filesuffix=feedback))
-
-        # Check that volume isn't so different
-        assert_allclose(out[0].volume, out[1].volume, rtol=0.05)
-        assert_allclose(out[0].volume, out[2].volume, rtol=0.05)
-        assert_allclose(out[1].volume, out[2].volume, rtol=0.05)
-        # Except for "never", where things are different and less variable
-        assert out[3].volume.min() > out[2].volume.min()
-        assert out[3].volume.max() < out[2].volume.max()
-
-        if do_plot:
-            plt.figure()
-            for ds, lab in zip(out, feedbacks):
-                (ds.volume * 1e-9).plot(label=lab)
-            plt.xlabel('Vol (km3)')
-            plt.legend()
-            plt.show()
-
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHydro:
@@ -5104,7 +5079,7 @@ class TestHydro:
         tasks.run_with_hydro(
             gdir, run_task=tasks.run_dynamic_melt_f_calibration,
             store_monthly_hydro=True, ref_area_from_y0=True,
-            output_filesuffix='_dyn_melt_f_calib', monthly_melt_f_max=1000.,
+            output_filesuffix='_dyn_melt_f_calib', melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
             kwargs_run_function={'do_inversion': do_inversion},
             fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
@@ -5186,10 +5161,11 @@ class TestHydro:
         # Needed for this to run
         cfg.PARAMS['store_model_geometry'] = True
 
+        melt_f_max = 1000 * 12 / 365
         tasks.run_with_hydro(
             gdir, run_task=tasks.run_dynamic_melt_f_calibration,
             store_monthly_hydro=True, ref_area_from_y0=True,
-            output_filesuffix='_dyn_melt_f_calib', monthly_melt_f_max=1000.,
+            output_filesuffix='_dyn_melt_f_calib', melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)
 
@@ -5432,7 +5408,7 @@ class TestMassRedis:
         tasks.process_custom_climate_data(gdir)
 
         mbdf = gdir.get_ref_mb_data()
-        cfg.PARAMS['monthly_melt_f_max'] = 600
+        cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
         tasks.mb_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
                                               ref_period='1953-01-01_2003-01-01')

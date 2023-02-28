@@ -216,7 +216,7 @@ class TestFullRun(unittest.TestCase):
         assert np.all(dfc.inv_volume_km3 > 0)
         assert np.all(dfc.bias == 0)
         assert np.all(dfc.temp_bias == 0)
-        assert np.all(dfc.melt_f > 80)
+        assert np.all(dfc.monthly_melt_f > 80)
         dfc = utils.compile_climate_statistics(gdirs)
         sel = ['flowline_mean_elev', '1980-2010_avg_temp_mean_elev']
         cc = dfc[sel].corr().values[0, 1]
