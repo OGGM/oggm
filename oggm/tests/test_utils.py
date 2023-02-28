@@ -1105,6 +1105,13 @@ class TestPreproCLI(unittest.TestCase):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
 
+        # Statistics
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert np.all(df['baseline_climate_source'] == 'GSWP3_W5E5')
+        assert np.all(df['reference_mb'] < 0)
+        assert np.all(df['reference_mb_err'] > 0)
+
         # Extended file
         fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
                           'historical_run_output_extended_11.nc')

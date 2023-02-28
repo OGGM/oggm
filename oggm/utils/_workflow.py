@@ -1640,6 +1640,14 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
             pass
 
         try:
+            # climate
+            info = gdir.get_climate_info()
+            for k, v in info.items():
+                d[k] = v
+        except BaseException:
+            pass
+
+        try:
             # MB calib
             mb_calib = gdir.read_json('mb_calib')
             for k, v in mb_calib.items():

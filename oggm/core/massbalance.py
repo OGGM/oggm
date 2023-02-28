@@ -441,6 +441,14 @@ class MonthlyTIModel(MassBalanceModel):
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
+            src = self.calib_params['baseline_climate_source']
+            src_calib = gdir.get_climate_info()['baseline_climate_source']
+            if src != src_calib:
+                msg = (f'You seem to have calibrated with the {src} '
+                       f"climate data while this gdir was calibrated with "
+                       f"{src_calib}. Set `check_calib_params=False` to "
+                       f"ignore this warning.")
+                raise InvalidWorkflowError(msg)
 
         self.melt_f = melt_f
         self.bias = bias
@@ -528,7 +536,6 @@ class MonthlyTIModel(MassBalanceModel):
                 nbform = '    - {}: {}'
                 summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
-
 
     # adds the possibility of changing prcp_fac
     # after instantiation with properly changing the prcp time series
@@ -1439,7 +1446,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                                     prcp_scaling_factor=None,
                                     prcp_scaling_factor_min=None,
                                     prcp_scaling_factor_max=None,
-                                    temp_bias = 0,
+                                    temp_bias=0,
                                     temp_bias_min=None,
                                     temp_bias_max=None,
                                     ):
@@ -1497,10 +1504,10 @@ def mb_calibration_from_geodetic_mb(gdir,
     if ref_mb_years:
         if len(ref_mb_years) > 2:
             years = np.asarray(ref_mb_years)
+            ref_period = 'custom'
         else:
             years = np.arange(*ref_mb_years)
-            # In case they meant us to use the data file
-            ref_period = ''
+            ref_period = f'{ref_mb_years[0]}-01-01_{ref_mb_years[1]}-01-01'
     else:
         if not ref_period:
             ref_period = cfg.PARAMS['geodetic_mb_period']
@@ -1510,12 +1517,14 @@ def mb_calibration_from_geodetic_mb(gdir,
         years = np.arange(y0, y1)
 
     # Get the reference data
+    ref_mb_err = np.NaN
     if ref_mb is None:
         try:
-            ref_mb = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-            ref_mb = float(ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda'])
-            # dmdtda: in meters water-equivalent per year -> we convert
-            ref_mb *= 1000  # kg m-2 yr-1
+            ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+            ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
+            # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
+            ref_mb = float(ref_mb_df['dmdtda']) * 1000
+            ref_mb_err = float(ref_mb_df['err_dmdtda']) * 1000
         except KeyError:
             if override_missing is None:
                 raise
@@ -1666,10 +1675,15 @@ def mb_calibration_from_geodetic_mb(gdir,
     df['melt_f'] = melt_f
     df['prcp_fac'] = prcp_fac
     df['temp_bias'] = temp_bias
+    # What did we try to match?
+    df['reference_mb'] = ref_mb
+    df['reference_mb_err'] = ref_mb_err
+    df['reference_period'] = ref_period
+
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    # add baseline climate source?
     df['mb_global_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
+    df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
     # Write
     if write_to_gdir:
         if gdir.has_file('mb_calib') and not overwrite_gdir:
