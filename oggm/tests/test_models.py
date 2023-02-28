@@ -2794,6 +2794,126 @@ def inversion_params(hef_gdir):
 
 
 @pytest.mark.usefixtures('with_class_wd')
+class TestHEFNonPolluted:
+    """The tests are so convoluted that this does not work when all class
+    tests are run"""
+
+    @pytest.mark.slow
+    def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
+
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+
+        mb_mod = massbalance.ScalarMassBalance()
+        fls = hef_gdir.read_pickle('model_flowlines')
+        for fl in fls:
+            fl.thick = fl.thick * 0
+        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
+                               flux_gate=0.03, flux_gate_build_up=50)
+        model.run_until(500)
+        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
+        beds = np.unique(model.fls[-1].shape_str[model.fls[-1].thick > 0])
+        assert len(beds) == 3
+        if do_plot:
+            from oggm import graphics
+            graphics.plot_modeloutput_section_withtrib(model)
+            plt.show()
+
+    @pytest.mark.slow
+    def test_output_management(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+        gdir.rgi_date = 1990
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_fl_diagnostics'] = True
+
+        # Try minimal output and see if it works
+        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
+                                                    'terminus_thick_0',
+                                                    'terminus_thick_1',
+                                                    'terminus_thick_2',
+                                                    ]
+        cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
+        # using relative large min ice thick due to overdeepening of inversion
+        # -> sometimes small thicknesses after overdeepening (important for
+        # terminus thickness check)
+        cfg.PARAMS['min_ice_thick_for_length'] = 0.1
+
+        init_present_time_glacier(gdir)
+        tasks.run_from_climate_data(gdir, min_ys=1980,
+                                    output_filesuffix='_hist')
+        tasks.run_from_climate_data(gdir, fixed_geometry_spinup_yr=1980,
+                                    output_filesuffix='_spin')
+
+        # Check fl diagnostics
+        fl_diag_path = gdir.get_filepath('fl_diagnostics', filesuffix='_hist')
+        with xr.open_dataset(fl_diag_path, group='fl_0') as ds_fl:
+            assert 'area_m2' in ds_fl
+            assert 'volume_m3' in ds_fl
+            assert 'volume_bsl_m3' not in ds_fl
+
+        past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
+        mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
+        stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
+        out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
+
+        # Check stats
+        df = utils.compile_glacier_statistics([gdir], path=stats_file)
+        assert df.loc[gdir.rgi_id, 'error_task'] is None
+        assert not df.loc[gdir.rgi_id, 'is_tidewater']
+
+        # Compile stuff
+        utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
+        utils.compile_run_output([gdir], path=past_run_file,
+                                 input_filesuffix='_hist')
+
+        # Extend
+        utils.extend_past_climate_run(past_run_file=past_run_file,
+                                      fixed_geometry_mb_file=mb_file,
+                                      glacier_statistics_file=stats_file,
+                                      path=out_path)
+
+        with xr.open_dataset(out_path) as ods, \
+                xr.open_dataset(past_run_file) as ds:
+
+            ref = ds.volume
+            new = ods.volume
+            for y in [1992, 2000, 2003]:
+                assert new.sel(time=y).data == ref.sel(time=y).data
+
+            new = ods.volume_fixed_geom
+            np.testing.assert_allclose(new.sel(time=2000), ref.sel(time=2000),
+                                       rtol=0.01)
+
+            del ods['volume_fixed_geom']
+            all_vars = list(ds.data_vars)
+            no_term = [vn for vn in all_vars if 'terminus_thick_' not in vn]
+            assert sorted(no_term) == sorted(list(ods.data_vars))
+
+            assert np.all(ds.terminus_thick_0 > 0.1)
+            assert np.all(ds.terminus_thick_1 >= ds.terminus_thick_0)
+            # exclude first two time steps because of bed geometry
+            assert np.all(ds.terminus_thick_2[2:] > ds.terminus_thick_1[2:])
+
+            for vn in ['area']:
+                ref = ds[vn]
+                new = ods[vn]
+                for y in [1992, 2000, 2003]:
+                    assert new.sel(time=y).data == ref.sel(time=y).data
+                assert new.sel(time=1950).data == new.sel(time=1980).data
+
+            # We pick symmetry around rgi date so show that somehow it works
+            for vn in ['volume']:
+                rtol = 0.5
+                np.testing.assert_allclose(ods[vn].sel(time=2000) -
+                                           ods[vn].sel(time=1990),
+                                           ods[vn].sel(time=1990) -
+                                           ods[vn].sel(time=1980),
+                                           rtol=rtol)
+
+
+@pytest.mark.usefixtures('with_class_wd')
 class TestHEF:
 
     @pytest.mark.slow
@@ -2938,29 +3058,6 @@ class TestHEF:
         np.testing.assert_allclose(ref_vol, after_vol, rtol=0.08)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
         np.testing.assert_allclose(ref_len, after_len, atol=200.01)
-
-    @pytest.mark.slow
-    def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
-
-        # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        init_present_time_glacier(hef_gdir)
-
-        mb_mod = massbalance.ScalarMassBalance()
-        fls = hef_gdir.read_pickle('model_flowlines')
-        for fl in fls:
-            fl.thick = fl.thick * 0
-        model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
-                               flux_gate=0.03, flux_gate_build_up=50)
-        model.run_until(500)
-        assert_allclose(model.volume_m3, model.flux_gate_m3_since_y0)
-        # Make sure that we cover the types of beds
-        beds = np.unique(model.fls[-1].shape_str[model.fls[-1].thick > 0])
-        assert len(beds) == 3
-        if do_plot:
-            from oggm import graphics
-            graphics.plot_modeloutput_section_withtrib(model)
-            plt.show()
 
     @pytest.mark.slow
     def test_commitment(self, hef_gdir, inversion_params):
@@ -4567,98 +4664,6 @@ class TestHEF:
             plt.legend()
             plt.show()
 
-    @pytest.mark.slow
-    def test_output_management(self, hef_gdir, inversion_params):
-
-        gdir = hef_gdir
-        gdir.rgi_date = 1990
-        cfg.PARAMS['store_model_geometry'] = True
-        cfg.PARAMS['store_fl_diagnostics'] = True
-
-        # Try minimal output and see if it works
-        cfg.PARAMS['store_diagnostic_variables'] = ['volume', 'area', 'length',
-                                                    'terminus_thick_0',
-                                                    'terminus_thick_1',
-                                                    'terminus_thick_2',
-                                                    ]
-        cfg.PARAMS['store_fl_diagnostic_variables'] = ['area', 'volume']
-        # using relative large min ice thick due to overdeepening of inversion
-        # -> sometimes small thicknesses after overdeepening (important for
-        # terminus thickness check)
-        cfg.PARAMS['min_ice_thick_for_length'] = 0.1
-
-        init_present_time_glacier(gdir)
-        tasks.run_from_climate_data(gdir, min_ys=1980,
-                                    output_filesuffix='_hist')
-        tasks.run_from_climate_data(gdir, fixed_geometry_spinup_yr=1980,
-                                    output_filesuffix='_spin')
-
-        # Check fl diagnostics
-        fl_diag_path = gdir.get_filepath('fl_diagnostics', filesuffix='_hist')
-        with xr.open_dataset(fl_diag_path, group='fl_0') as ds_fl:
-            assert 'area_m2' in ds_fl
-            assert 'volume_m3' in ds_fl
-            assert 'volume_bsl_m3' not in ds_fl
-
-        past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
-        mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
-        stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
-        out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
-
-        # Check stats
-        df = utils.compile_glacier_statistics([gdir], path=stats_file)
-        assert df.loc[gdir.rgi_id, 'error_task'] is None
-        assert not df.loc[gdir.rgi_id, 'is_tidewater']
-
-        # Compile stuff
-        utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
-        utils.compile_run_output([gdir], path=past_run_file,
-                                 input_filesuffix='_hist')
-
-        # Extend
-        utils.extend_past_climate_run(past_run_file=past_run_file,
-                                      fixed_geometry_mb_file=mb_file,
-                                      glacier_statistics_file=stats_file,
-                                      path=out_path)
-
-        with xr.open_dataset(out_path) as ods, \
-                xr.open_dataset(past_run_file) as ds:
-
-            ref = ds.volume
-            new = ods.volume
-            for y in [1992, 2000, 2003]:
-                assert new.sel(time=y).data == ref.sel(time=y).data
-
-            new = ods.volume_fixed_geom
-            np.testing.assert_allclose(new.sel(time=2000), ref.sel(time=2000),
-                                       rtol=0.01)
-
-            del ods['volume_fixed_geom']
-            all_vars = list(ds.data_vars)
-            no_term = [vn for vn in all_vars if 'terminus_thick_' not in vn]
-            assert sorted(no_term) == sorted(list(ods.data_vars))
-
-            assert np.all(ds.terminus_thick_0 > 0.1)
-            assert np.all(ds.terminus_thick_1 > ds.terminus_thick_0)
-            # exclude first two time steps because of bed geometry
-            assert np.all(ds.terminus_thick_2[2:] > ds.terminus_thick_1[2:])
-
-            for vn in ['area']:
-                ref = ds[vn]
-                new = ods[vn]
-                for y in [1992, 2000, 2003]:
-                    assert new.sel(time=y).data == ref.sel(time=y).data
-                assert new.sel(time=1950).data == new.sel(time=1980).data
-
-            # We pick symmetry around rgi date so show that somehow it works
-            for vn in ['volume']:
-                rtol = 0.5
-                np.testing.assert_allclose(ods[vn].sel(time=2000) -
-                                           ods[vn].sel(time=1990),
-                                           ods[vn].sel(time=1990) -
-                                           ods[vn].sel(time=1980),
-                                           rtol=rtol)
-
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHydro:
@@ -5501,14 +5506,12 @@ def merged_hef_cfg(class_case_dir):
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.PARAMS['correct_for_neg_flux'] = True
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     # should this be resetting working_dir at teardown?
     cfg.PATHS['working_dir'] = class_case_dir
     cfg.PARAMS['border'] = 100
     cfg.PARAMS['prcp_scaling_factor'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
-    cfg.PARAMS['run_mb_calibration'] = True
     cfg.PARAMS['use_winter_prcp_factor'] = False
 
 
@@ -5852,9 +5855,10 @@ class TestSemiImplicitModel:
 
         # test if a large fixed_dt results in an instability
         run_constant_climate(hef_elev_gdir, nyears=100,
+                             y0=1985, temperature_bias=-1,
                              fs=inversion_params['inversion_fs'],
                              glen_a=inversion_params['inversion_glen_a'],
-                             bias=0, output_filesuffix='_cfl_criterion',
+                             output_filesuffix='_cfl_criterion',
                              evolution_model=SemiImplicitModel)
         f = hef_elev_gdir.get_filepath('fl_diagnostics',
                                        filesuffix='_cfl_criterion')
