@@ -1439,6 +1439,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                                     prcp_scaling_factor=None,
                                     prcp_scaling_factor_min=None,
                                     prcp_scaling_factor_max=None,
+                                    temp_bias = 0,
                                     temp_bias_min=None,
                                     temp_bias_max=None,
                                     ):
@@ -1522,7 +1523,6 @@ def mb_calibration_from_geodetic_mb(gdir,
                                   'you posted!')
 
     # Ok, regardless on how we want to calibrate, we start with defaults
-    temp_bias = 0
     melt_f = monthly_melt_f_default
     if prcp_scaling_factor is None:
         if cfg.PARAMS['use_winter_prcp_factor']:
@@ -1536,6 +1536,9 @@ def mb_calibration_from_geodetic_mb(gdir,
             if prcp_fac is None:
                 raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_factor'] "
                                            "or PARAMS['winter_prcp_factor'].")
+    else:
+        # if a prcp_scaling_factor is set, we will use it instead of the default option
+        prcp_fac = prcp_scaling_factor    
 
     # Create the MB model we will calibrate
     mb_mod = MonthlyTIModel(gdir,
