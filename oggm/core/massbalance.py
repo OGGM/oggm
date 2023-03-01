@@ -2,12 +2,12 @@
 
 # Built ins
 import logging
+import os
 # External libs
 import cftime
 import numpy as np
 import xarray as xr
 import pandas as pd
-import netCDF4
 from scipy.interpolate import interp1d
 from scipy import optimize
 # Locals
@@ -517,6 +517,7 @@ class MonthlyTIModel(MassBalanceModel):
                 grad = self.prcp * 0 + default_grad
             self.grad = grad
             self.ref_hgt = nc.ref_hgt
+            self.climate_source = nc.climate_source
             self.ys = self.years[0]
             self.ye = self.years[-1]
 
@@ -527,10 +528,15 @@ class MonthlyTIModel(MassBalanceModel):
         summary += ['  Attributes:']
         # Add all scalar attributes
         done = []
-        for k in ['hemisphere', 'melt_f', 'prcp_fac', 'temp_bias', 'bias']:
+        for k in ['hemisphere', 'climate_source', 'melt_f', 'prcp_fac', 'temp_bias', 'bias']:
             done.append(k)
-            nbform = '    - {}: {}' if k == 'hemisphere' else '    - {}: {:.02f}'
-            summary += [nbform.format(k, self.__getattribute__(k))]
+            v = self.__getattribute__(k)
+            if k == 'climate_source':
+                if v.endswith('.nc'):
+                    v = os.path.basename(v)
+            nofloat = ['hemisphere', 'climate_source']
+            nbform = '    - {}: {}' if k in nofloat else '    - {}: {:.02f}'
+            summary += [nbform.format(k, v)]
         for k, v in self.__dict__.items():
             if np.isscalar(v) and not k.startswith('_') and k not in done:
                 nbform = '    - {}: {}'

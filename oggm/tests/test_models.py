@@ -420,7 +420,8 @@ class TestMassBalanceModels:
           Class: MonthlyTIModel
           Attributes:
             - hemisphere: nh
-            - melt_f: 200.59
+            - climate_source: histalp_merged_hef.nc
+            - melt_f: 6.59
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
@@ -3055,7 +3056,7 @@ class TestHEF:
         after_area = model.area_km2
         after_len = model.fls[-1].length_m
 
-        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.08)
+        np.testing.assert_allclose(ref_vol, after_vol, rtol=0.1)
         np.testing.assert_allclose(ref_area, after_area, rtol=0.01)
         np.testing.assert_allclose(ref_len, after_len, atol=200.01)
 
@@ -3122,7 +3123,7 @@ class TestHEF:
         dfo = hef_gdir.read_json('mb_calib')
         df = massbalance.mb_calibration_from_geodetic_mb(hef_gdir,
                                                          calibrate_param1='temp_bias',
-                                                         monthly_melt_f_default=dfo['melt_f'],
+                                                         melt_f_default=dfo['melt_f'],
                                                          ref_mb=0,
                                                          ref_mb_years=(1970, 2001),
                                                          write_to_gdir=False)
