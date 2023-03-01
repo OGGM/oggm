@@ -80,6 +80,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       elev_bands=False, centerlines=False,
                       evolution_model='fl_sia', override_params=None,
                       downstream_line_shape='parabola',
+                      mb_calibration_strategy='melt_temp',
                       add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
@@ -132,6 +133,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     downstream_line_shape : str
         which downstream line bed shape to use: `parabola` (default), or
         `trapezoidal` (required for semi implicit model).
+    mb_calibration_strategy : str
+        how to calibrate the massbalance. Currently one of 'melt_temp' (default)
+        or 'temp_melt'.
     add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -543,8 +547,20 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
         utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                                     calibrate_param2='temp_bias')
+        if mb_calibration_strategy == 'melt_temp':
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs,
+                                         calibrate_param1='melt_f',
+                                         calibrate_param2='temp_bias')
+        elif mb_calibration_strategy == 'temp_melt':
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs,
+                                         calibrate_param1='temp_bias',
+                                         calibrate_param2='melt_f')
+        else:
+            raise InvalidParamsError('mb_calibration_strategy should be one of '
+                                     'melt_temp or temp_melt')
+
         workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
         # Inversion: we match the consensus
@@ -791,6 +807,9 @@ def parse_args(args):
                              '`fl_sia` (default), `massredis` (mass '
                              'redistribution curve), or `implicit` (semi '
                              'implicit model).')
+    parser.add_argument('--mb-calibration-strategy', type=str, default='melt_temp',
+                        help='how to calibrate the massbalance. Currently one of '
+                             'melt_temp (default) or temp_melt.')
     parser.add_argument('--downstream-line-shape', type=str, default='parabola',
                         help='which downstream line bed shape to use: '
                              '`parabola` (default), or `trapezoidal` '
@@ -913,6 +932,7 @@ def parse_args(args):
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
+                mb_calibration_strategy=args.mb_calibration_strategy,
                 )
 
 

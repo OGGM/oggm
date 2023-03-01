@@ -806,11 +806,13 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
+        assert kwargs['mb_calibration_strategy'] == 'melt_temp'
         assert not kwargs['add_consensus_thickness']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--start-level', '2',
+                                           '--mb-calibration-strategy', 'temp_melt',
                                            '--start-base-url', 'http://foo',
                                            ])
 
@@ -822,6 +824,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert kwargs['start_level'] == 2
         assert kwargs['start_base_url'] == 'http://foo'
+        assert kwargs['mb_calibration_strategy'] == 'temp_melt'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
