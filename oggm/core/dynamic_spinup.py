@@ -1597,7 +1597,7 @@ def dynamic_melt_f_run_fallback(
 def run_dynamic_melt_f_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
         ref_period='', melt_f_min=None,
-        melt_f_max=None, melt_f_max_step_length=5, maxiter=20,
+        melt_f_max=None, melt_f_max_step_length_minimum=0.1, maxiter=20,
         ignore_errors=False, output_filesuffix='_dynamic_melt_f',
         ys=None, ye=None,
         run_function=dynamic_melt_f_run_with_dynamic_spinup,
@@ -1659,10 +1659,11 @@ def run_dynamic_melt_f_calibration(
     melt_f_max : float or None
         Upper absolute limit for melt_f.
         Default is None (-> cfg.PARAMS['melt_f_max'])
-    melt_f_max_step_length : float
-        Defines the maximum allowed change of melt_f between two iterations.
-        Is needed to avoid to large changes.
-        Default is 5
+    melt_f_max_step_length_minimum : float
+        Defines a minimum maximal change of melt_f between two iterations. The
+        maximum step length is needed to avoid too large steps, which likely
+        lead to an error.
+        Default is 0.1
     maxiter : int
         Maximum number of minimisation iterations of minimising mismatch to
         dmdtda by changing melt_f. Each of this iterations conduct a complete
@@ -1820,6 +1821,14 @@ def run_dynamic_melt_f_calibration(
     # save original melt_f for later to be able to recreate original gdir
     # (using the fallback function) if an error occurs
     melt_f_initial = gdir.read_json('mb_calib')['melt_f']
+
+    # define maximum allowed change of melt_f between two iterations. Is needed
+    # to avoid to large changes (=likely lead to an error). It is defined in a
+    # way that in maxiter steps the further away limit can be reached
+    melt_f_max_step_length = np.max(
+        [np.max(np.abs(np.array([melt_f_min, melt_f_min]) - melt_f_initial)) /
+         maxiter,
+         melt_f_max_step_length_minimum])
 
     # only used to check performance of minimisation
     dynamic_melt_f_calibration_runs = [0]
@@ -2103,12 +2112,12 @@ def run_dynamic_melt_f_calibration(
         # mismatch = 2 * err_ref_dmdtda this corresponds to 100%; for 100% or
         # 150% the next step is (-1) * melt_f_max_step_length; if mismatch
         # -40%, next step is 0.4 * melt_f_max_step_length; but always at least
-        # an absolute change of 0.5 is imposed to prevent too close guesses).
+        # an absolute change of 0.02 is imposed to prevent too close guesses).
         # (-1) as if mismatch is negative we need a larger melt_f to get closer
         # to 0.
         step = (-1) * np.sign(mismatch[-1]) * \
             max((np.abs(mismatch[-1]) - err_ref_dmdtda) / err_ref_dmdtda *
-                melt_f_max_step_length, 0.5)
+                melt_f_max_step_length, 0.02)
         new_mismatch, new_melt_f = get_mismatch(melt_f_guess[0] + step)
         melt_f_guess.append(new_melt_f)
         mismatch.append(new_mismatch)

@@ -5050,7 +5050,7 @@ class TestHydro:
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.slow
     def test_hydro_dynamic_melt_f_with_dynamic_spinup(self, inversion_params,
-                                                       do_inversion):
+                                                      do_inversion):
 
         # reset kcalving for this test and set it back to the previous value
         # after the test
@@ -5077,6 +5077,7 @@ class TestHydro:
         # Needed for this to run
         cfg.PARAMS['store_model_geometry'] = True
 
+        melt_f_max = 1000 * 12 / 365
         tasks.run_with_hydro(
             gdir, run_task=tasks.run_dynamic_melt_f_calibration,
             store_monthly_hydro=True, ref_area_from_y0=True,
