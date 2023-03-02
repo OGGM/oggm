@@ -188,7 +188,7 @@ def test_multiple_inversion():
     gdirs = workflow.init_glacier_directories(hef_rgi)
     workflow.gis_prepro_tasks(gdirs)
     workflow.execute_entity_task(climate.process_climate_data, gdirs)
-    workflow.execute_entity_task(massbalance.mb_calibration_from_geodetic_mb,
+    workflow.execute_entity_task(massbalance.mb_calibration_from_scalar_mb,
                                  gdirs, ref_mb_years=(1980, 2000), ref_mb=0)
     workflow.execute_entity_task(massbalance.apparent_mb_from_any_mb,
                                  gdirs, mb_years=(1980, 2000))
@@ -273,7 +273,7 @@ def test_multiple_models():
     gdirs = workflow.init_glacier_directories(hef_rgi)
     workflow.gis_prepro_tasks(gdirs)
     workflow.execute_entity_task(climate.process_climate_data, gdirs)
-    workflow.execute_entity_task(massbalance.mb_calibration_from_geodetic_mb,
+    workflow.execute_entity_task(massbalance.mb_calibration_from_scalar_mb,
                                  gdirs, ref_mb_years=(1980, 2000), ref_mb=0)
     workflow.execute_entity_task(massbalance.apparent_mb_from_any_mb,
                                  gdirs, mb_years=(1980, 2000))

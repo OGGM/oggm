@@ -889,7 +889,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         centerlines.elevation_band_flowline(gdir)
         centerlines.fixed_dx_elevation_band_flowline(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
         inversion.prepare_for_inversion(gdir)
@@ -908,7 +908,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
         v2 = inversion.mass_conservation_inversion(gdir)
@@ -939,7 +939,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         centerlines.compute_downstream_bedshape(gdir)
 
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
@@ -1351,9 +1351,9 @@ class TestClimate(unittest.TestCase):
 
     def test_geodetic_mb_calibration(self):
 
-        from oggm.core.massbalance import mb_calibration_from_geodetic_mb
+        from oggm.core.massbalance import mb_calibration_from_scalar_mb
         from functools import partial
-        mb_calibration_from_geodetic_mb = partial(mb_calibration_from_geodetic_mb,
+        mb_calibration_from_geodetic_mb = partial(mb_calibration_from_scalar_mb,
                                                   overwrite_gdir=True)
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1632,9 +1632,9 @@ class TestClimate(unittest.TestCase):
     @pytest.mark.slow
     def test_geodetic_mb_calibration_multiple_fl(self):
 
-        from oggm.core.massbalance import mb_calibration_from_geodetic_mb
+        from oggm.core.massbalance import mb_calibration_from_scalar_mb
         from functools import partial
-        mb_calibration_from_geodetic_mb = partial(mb_calibration_from_geodetic_mb,
+        mb_calibration_from_geodetic_mb = partial(mb_calibration_from_scalar_mb,
                                                   overwrite_gdir=True)
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1783,7 +1783,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
         # OK. Values from Fischer and Kuhn 2013
@@ -1894,7 +1894,7 @@ class TestInversion(unittest.TestCase):
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
         df = workflow.calibrate_inversion_from_consensus(gdir)
@@ -1933,7 +1933,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
         cfg.PARAMS['inversion_fs'] = 5.7e-20
@@ -1973,7 +1973,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir, water_level=10000)
@@ -2117,7 +2117,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
         # OK. Values from Fischer and Kuhn 2013
@@ -2175,7 +2175,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
         # OK. Values from Fischer and Kuhn 2013
@@ -2226,7 +2226,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir, overwrite_gdir=True)
+        massbalance.mb_calibration_from_wgms_mb(gdir, overwrite_gdir=True)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir, fs=fs,
@@ -2271,7 +2271,7 @@ class TestInversion(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         climate.process_custom_climate_data(gdir)
-        massbalance.mb_calibration_from_insitu_mb(gdir)
+        massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
         rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
@@ -2332,7 +2332,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.mb_calibration_from_scalar_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -2389,7 +2389,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.mb_calibration_from_scalar_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
         inversion.find_inversion_calving_from_any_mb(gdir)
 

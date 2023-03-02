@@ -1409,52 +1409,53 @@ def calving_mb(gdir):
 
 
 @entity_task(log, writes=['mb_calib'], fallback=_fallback_mb_calibration)
-def mb_calibration_from_insitu_mb(gdir, **kwargs):
+def mb_calibration_from_wgms_mb(gdir, **kwargs):
     """Calibrate for in-situ, annual MB.
 
-    For now this just calls mb_calibration_from_geodetic_mb internally,
+    This only works for glaciers which have WGMS data!
+
+    For now this just calls mb_calibration_from_scalar_mb internally,
     but could be cleverer than that if someone wishes to implement it.
 
     Parameters
     ----------
-    **kwargs : any kwarg accepted by mb_calibration_from_geodetic_mb
+    **kwargs : any kwarg accepted by mb_calibration_from_scalar_mb
     """
 
     # Note that this currently does not work for hydro years (WGMS uses hydro)
     # A way to go would be to teach the mb models to use calendar years
     # internally but still output annual MB in hydro convention.
     mbdf = gdir.get_ref_mb_data()
-    ref_mb = mbdf.ANNUAL_BALANCE.mean()
-    ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-    # TODO: this could be wrong if not all years are there!
-    mb_calibration_from_geodetic_mb(gdir,
-                                    ref_mb=ref_mb,
-                                    ref_period=ref_period,
-                                    **kwargs)
+    # Keep only valid values
+    mbdf = mbdf.loc[~mbdf['ANNUAL_BALANCE'].isnull()]
+    mb_calibration_from_scalar_mb(gdir,
+                                  ref_mb=mbdf['ANNUAL_BALANCE'].mean(),
+                                  ref_mb_years=mbdf.index.values,
+                                  **kwargs)
 
 
 @entity_task(log, writes=['mb_calib'], fallback=_fallback_mb_calibration)
-def mb_calibration_from_geodetic_mb(gdir,
-                                    ref_mb=None,
-                                    ref_period='',
-                                    ref_mb_years=None,
-                                    write_to_gdir=True,
-                                    overwrite_gdir=False,
-                                    override_missing=None,
-                                    calibrate_param1='melt_f',
-                                    calibrate_param2=None,
-                                    calibrate_param3=None,
-                                    melt_f_default=None,
-                                    melt_f_min=None,
-                                    melt_f_max=None,
-                                    prcp_scaling_factor=None,
-                                    prcp_scaling_factor_min=None,
-                                    prcp_scaling_factor_max=None,
-                                    temp_bias=0,
-                                    temp_bias_min=None,
-                                    temp_bias_max=None,
-                                    mb_model_class=MonthlyTIModel,
-                                    ):
+def mb_calibration_from_scalar_mb(gdir,
+                                  ref_mb=None,
+                                  ref_period=None,
+                                  ref_mb_years=None,
+                                  write_to_gdir=True,
+                                  overwrite_gdir=False,
+                                  override_missing=None,
+                                  calibrate_param1='melt_f',
+                                  calibrate_param2=None,
+                                  calibrate_param3=None,
+                                  melt_f_default=None,
+                                  melt_f_min=None,
+                                  melt_f_max=None,
+                                  prcp_scaling_factor=None,
+                                  prcp_scaling_factor_min=None,
+                                  prcp_scaling_factor_max=None,
+                                  temp_bias=0,
+                                  temp_bias_min=None,
+                                  temp_bias_max=None,
+                                  mb_model_class=MonthlyTIModel,
+                                  ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
     This calibrates the mass balance parameters using a reference average
@@ -1481,6 +1482,29 @@ def mb_calibration_from_geodetic_mb(gdir,
         given, all years between this range (excluding the last one) are used.
         If a list  of years is given, all these will be used (useful for
         data with gaps)
+    write_to_gdir : bool
+        whether to write the results of the calibration to the glacier
+        directory. If True (the default), this will be saved as `mb_calib.json`
+        and be used by the MassBalanceModel class as parameters in subsequent
+        tasks.
+    overwrite_gdir : bool
+        if a `mb_calib.json` exists, this task won't overwrite it per default.
+        Set this to True to enforce overwriting (i.e. with consequences for the
+        future workflow).
+    override_missing : scalar
+        if the reference geodetic data is not available
+    calibrate_param1='melt_f',
+    calibrate_param2=None,
+    calibrate_param3=None,
+    melt_f_default=None,
+    melt_f_min=None,
+    melt_f_max=None,
+    prcp_scaling_factor=None,
+    prcp_scaling_factor_min=None,
+    prcp_scaling_factor_max=None,
+    temp_bias=0,
+    temp_bias_min=None,
+    temp_bias_max=None,
     mb_model_class : MassBalanceModel class
             the MassBalanceModel to use for the calibration
             default is MonthlyTIModel
@@ -1501,7 +1525,7 @@ def mb_calibration_from_geodetic_mb(gdir,
         temp_bias_min = cfg.PARAMS['temp_bias_min']
     if temp_bias_max is None:
         temp_bias_max = cfg.PARAMS['temp_bias_max']
-    if ref_mb_years and ref_period:
+    if ref_mb_years is not None and ref_period is not None:
         raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_period` '
                                  'at the same time.')
 
@@ -1509,7 +1533,7 @@ def mb_calibration_from_geodetic_mb(gdir,
 
     # Let's go
     # Climate period
-    if ref_mb_years:
+    if ref_mb_years is not None:
         if len(ref_mb_years) > 2:
             years = np.asarray(ref_mb_years)
             ref_period = 'custom'

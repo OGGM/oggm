@@ -267,9 +267,9 @@ class TestInitFlowlineOtherGlacier:
         climate.process_custom_climate_data(gdir)
         ref_period = '1980-01-01_2000-01-01'
         ref_mb = -500
-        massbalance.mb_calibration_from_geodetic_mb(gdir,
-                                                    ref_mb=ref_mb,
-                                                    ref_period=ref_period)
+        massbalance.mb_calibration_from_scalar_mb(gdir,
+                                                  ref_mb=ref_mb,
+                                                  ref_period=ref_period)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1980, 2000))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir)
@@ -585,11 +585,11 @@ class TestMassBalanceModels:
         h, w = gdir.get_inversion_flowline_hw()
 
         # We calibrate to zero
-        df = massbalance.mb_calibration_from_geodetic_mb(gdir,
-                                                         calibrate_param1='temp_bias',
-                                                         ref_mb=0,
-                                                         ref_mb_years=(1970, 2001),
-                                                         write_to_gdir=False)
+        df = massbalance.mb_calibration_from_scalar_mb(gdir,
+                                                       calibrate_param1='temp_bias',
+                                                       ref_mb=0,
+                                                       ref_mb_years=(1970, 2001),
+                                                       write_to_gdir=False)
 
         cmb_mod = massbalance.ConstantMassBalance(gdir,
                                                   melt_f=df['melt_f'],
@@ -3013,11 +3013,11 @@ class TestHEF:
         cfg.PARAMS['min_ice_thick_for_length'] = 1
 
         # We calibrate to zero
-        df = massbalance.mb_calibration_from_geodetic_mb(hef_gdir,
-                                                         calibrate_param1='temp_bias',
-                                                         ref_mb=0,
-                                                         ref_mb_years=(1970, 2001),
-                                                         write_to_gdir=False)
+        df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
+                                                       calibrate_param1='temp_bias',
+                                                       ref_mb=0,
+                                                       ref_mb_years=(1970, 2001),
+                                                       write_to_gdir=False)
 
         cl = massbalance.ConstantMassBalance
         mb_mod = massbalance.MultipleFlowlineMassBalance(hef_gdir,
@@ -3121,12 +3121,12 @@ class TestHEF:
 
         # Try something else here - find out the bias needed for 0 mb
         dfo = hef_gdir.read_json('mb_calib')
-        df = massbalance.mb_calibration_from_geodetic_mb(hef_gdir,
-                                                         calibrate_param1='temp_bias',
-                                                         melt_f_default=dfo['melt_f'],
-                                                         ref_mb=0,
-                                                         ref_mb_years=(1970, 2001),
-                                                         write_to_gdir=False)
+        df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
+                                                       calibrate_param1='temp_bias',
+                                                       melt_f_default=dfo['melt_f'],
+                                                       ref_mb=0,
+                                                       ref_mb_years=(1970, 2001),
+                                                       write_to_gdir=False)
 
         assert dfo['temp_bias'] == 0
         assert dfo['melt_f'] == df['melt_f']
@@ -3601,7 +3601,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      gdirs, calibrate_param2='temp_bias')
 
         # Test that the correct error is raised
@@ -3708,7 +3708,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         yr_rgi = gdir.rgi_date + 1  # convert to hydro year
@@ -3833,7 +3833,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         yr_rgi = gdir.rgi_date + 1  # + 1 for hydro year
@@ -3920,7 +3920,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # value we want to match after dynamic melt_f calibration with dynamic
@@ -4104,7 +4104,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         delta_ref_dmdtda = 100
@@ -4147,7 +4147,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         with pytest.raises(RuntimeError,
@@ -4306,7 +4306,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
@@ -4436,7 +4436,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # value we want to match after dynamic melt_f calibration
@@ -4521,7 +4521,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         delta_ref_dmdtda = 100
@@ -4556,7 +4556,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         with pytest.raises(RuntimeError,
@@ -5069,7 +5069,7 @@ class TestHydro:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # Add debug vars
@@ -5155,7 +5155,7 @@ class TestHydro:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # Add debug vars
@@ -5412,8 +5412,8 @@ class TestMassRedis:
         mbdf = gdir.get_ref_mb_data()
         cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
-        tasks.mb_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
-                                              ref_period='1953-01-01_2003-01-01')
+        tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
+                                            ref_period='1953-01-01_2003-01-01')
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
         workflow.calibrate_inversion_from_consensus([gdir])
         tasks.init_present_time_glacier(gdir)
