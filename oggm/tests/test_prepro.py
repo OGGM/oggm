@@ -1349,12 +1349,12 @@ class TestClimate(unittest.TestCase):
                 np.testing.assert_allclose(nc_h.ref_pix_dis,
                                            nc_c.ref_pix_dis)
 
-    def test_geodetic_mb_calibration(self):
+    def test_mb_calibration_from_scalar_mb(self):
 
         from oggm.core.massbalance import mb_calibration_from_scalar_mb
         from functools import partial
-        mb_calibration_from_geodetic_mb = partial(mb_calibration_from_scalar_mb,
-                                                  overwrite_gdir=True)
+        mb_calibration_from_scalar_mb = partial(mb_calibration_from_scalar_mb,
+                                                overwrite_gdir=True)
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -1372,9 +1372,9 @@ class TestClimate(unittest.TestCase):
         ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # Default is to calibrate melt_f
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period)
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period)
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1388,14 +1388,14 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == 0
-        assert pdf['melt_f'] != cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Let's calibrate on temp_bias
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param1='temp_bias')
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param1='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['temp_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1408,14 +1408,14 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] != 0
-        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Let's calibrate on precip
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param1='prcp_fac')
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param1='prcp_fac')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['prcp_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1428,7 +1428,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == 0
-        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] != cfg.PARAMS['prcp_scaling_factor']
 
         # mbdf[['ref_mb', 'melt_mb', 'temp_mb', 'prcp_mb']].plot()
@@ -1438,13 +1438,13 @@ class TestClimate(unittest.TestCase):
         # Very positive
         ref_mb = 2000
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period)
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param2='temp_bias')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period)
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1457,20 +1457,20 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] < 0
-        assert pdf['melt_f'] != cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['melt_f'] == cfg.PARAMS['melt_f_min']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
         # Very negative
         ref_mb = -10000
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period)
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param2='temp_bias')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period)
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1483,7 +1483,7 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] > 0
-        assert pdf['melt_f'] != cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['melt_f'] == cfg.PARAMS['melt_f_max']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
 
@@ -1491,15 +1491,15 @@ class TestClimate(unittest.TestCase):
         # Very positive
         ref_mb = 3000
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac')
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param1='prcp_fac',
-                                        calibrate_param2='temp_bias')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac')
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param1='prcp_fac',
+                                      calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1512,21 +1512,21 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] < 0
-        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] > cfg.PARAMS['prcp_scaling_factor']
 
         # Very negative
         ref_mb = -10000
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac')
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param1='prcp_fac',
-                                        calibrate_param2='temp_bias')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac')
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param1='prcp_fac',
+                                      calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1539,30 +1539,30 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] > 0
-        assert pdf['melt_f'] == cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] < cfg.PARAMS['prcp_scaling_factor']
 
         # Extremely negative
         ref_mb = -20000
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac')
 
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac',
-                                            calibrate_param2='temp_bias')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac',
+                                          calibrate_param2='temp_bias')
 
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param1='prcp_fac',
-                                        calibrate_param2='temp_bias',
-                                        calibrate_param3='melt_f')
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param1='prcp_fac',
+                                      calibrate_param2='temp_bias',
+                                      calibrate_param3='melt_f')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb3'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1575,18 +1575,18 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_max']
-        assert pdf['melt_f'] > cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] > cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_min']
 
         # Unmatchable positive
         ref_mb = 10000
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac',
-                                            calibrate_param2='temp_bias',
-                                            calibrate_param3='melt_f')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac',
+                                          calibrate_param2='temp_bias',
+                                          calibrate_param3='melt_f')
 
         # Matchable positive with less range
         ref_mb = 1000
@@ -1595,24 +1595,24 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['prcp_scaling_factor_min'] = 2
         cfg.PARAMS['prcp_scaling_factor_max'] = 3
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac')
 
         with pytest.raises(RuntimeError):
-            mb_calibration_from_geodetic_mb(gdir,
-                                            ref_mb=ref_mb,
-                                            ref_period=ref_period,
-                                            calibrate_param1='prcp_fac',
-                                            calibrate_param2='temp_bias')
+            mb_calibration_from_scalar_mb(gdir,
+                                          ref_mb=ref_mb,
+                                          ref_period=ref_period,
+                                          calibrate_param1='prcp_fac',
+                                          calibrate_param2='temp_bias')
 
-        mb_calibration_from_geodetic_mb(gdir,
-                                        ref_mb=ref_mb,
-                                        ref_period=ref_period,
-                                        calibrate_param1='prcp_fac',
-                                        calibrate_param2='temp_bias',
-                                        calibrate_param3='melt_f')
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      calibrate_param1='prcp_fac',
+                                      calibrate_param2='temp_bias',
+                                      calibrate_param3='melt_f')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['melt_mb3'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
@@ -1625,17 +1625,17 @@ class TestClimate(unittest.TestCase):
 
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
-        assert pdf['melt_f'] < cfg.PARAMS['melt_f_default']
+        assert pdf['melt_f'] < cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_max']
 
 
     @pytest.mark.slow
-    def test_geodetic_mb_calibration_multiple_fl(self):
+    def test_mb_calibration_from_scalar_mb_multiple_fl(self):
 
         from oggm.core.massbalance import mb_calibration_from_scalar_mb
         from functools import partial
-        mb_calibration_from_geodetic_mb = partial(mb_calibration_from_scalar_mb,
-                                                  overwrite_gdir=True)
+        mb_calibration_from_scalar_mb = partial(mb_calibration_from_scalar_mb,
+                                                overwrite_gdir=True)
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -1654,7 +1654,7 @@ class TestClimate(unittest.TestCase):
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ref_mb.mean()
         ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-        mb_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
+        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                         ref_period=ref_period)
         mb_new = massbalance.MonthlyTIModel(gdir)
 
@@ -1677,7 +1677,7 @@ class TestClimate(unittest.TestCase):
         fls[1].surface_h -= 700
         gdir.write_pickle(fls, 'inversion_flowlines')
 
-        mb_calibration_from_geodetic_mb(gdir, ref_mb=ref_mb,
+        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                         ref_period=ref_period)
         mb_new = massbalance.MultipleFlowlineMassBalance(gdir,
                                                          use_inversion_flowlines=True)

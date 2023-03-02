@@ -1445,7 +1445,7 @@ def mb_calibration_from_scalar_mb(gdir,
                                   calibrate_param1='melt_f',
                                   calibrate_param2=None,
                                   calibrate_param3=None,
-                                  melt_f_default=None,
+                                  melt_f=None,
                                   melt_f_min=None,
                                   melt_f_max=None,
                                   prcp_scaling_factor=None,
@@ -1458,9 +1458,27 @@ def mb_calibration_from_scalar_mb(gdir,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
+    If no reference value is given, we will use data from Hugonnet et al., 2021.
+    The data table can be obtained with utils.get_geodetic_mb_dataframe().
+    It is equivalent to the original data, but has some outlier values
+    filtered. See `this notebook <>`_ for more details.
+
     This calibrates the mass balance parameters using a reference average
     MB data over a given period (e.g. average in-situ SMB or geodetic MB).
-    This flexible calibration allows to calibrate three parameters.
+    This flexible calibration allows to calibrate three parameters one after
+    another. The first parameter is varied between two chosen values (a range)
+    until the ref MB value is matched. If this fails, the second parameter
+    can be changed, etc.
+
+    This is similar to the "three-step calibration" introduced by
+    Huss & Hock 2015, but with some differences:
+    - this method is flexible, i.e. you can choose any order of calibration
+    - we use different defaults for the temperature bias and the
+      precipitation factor (see documentation)
+
+    As a result, the current default in OGGM is to chose certain defaults
+    for prcp_fac and temp_bias, and calibrate melt_f. If this fails,
+    calibrate temp_bias.
 
     Note that this does not compute the apparent mass balance at
     the same time - users need to run `apparent_mb_from_any_mb after`
@@ -1492,22 +1510,54 @@ def mb_calibration_from_scalar_mb(gdir,
         Set this to True to enforce overwriting (i.e. with consequences for the
         future workflow).
     override_missing : scalar
-        if the reference geodetic data is not available
-    calibrate_param1='melt_f',
-    calibrate_param2=None,
-    calibrate_param3=None,
-    melt_f_default=None,
-    melt_f_min=None,
-    melt_f_max=None,
-    prcp_scaling_factor=None,
-    prcp_scaling_factor_min=None,
-    prcp_scaling_factor_max=None,
-    temp_bias=0,
-    temp_bias_min=None,
-    temp_bias_max=None,
+        if the reference geodetic data is not available, use this value instead
+        (mostly for testing with exotic datasets, but could be used to open
+        the door to using other datasets).
     mb_model_class : MassBalanceModel class
-            the MassBalanceModel to use for the calibration
-            default is MonthlyTIModel
+        the MassBalanceModel to use for the calibration. Needs to use the
+        same parameters as MonthlyTIModel (the default): melt_f,
+        temp_bias, prcp_fac.
+    calibrate_param1='melt_f' : str
+        in the three-step calibration, the name of the first parameter
+        to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac').
+    calibrate_param2 : str
+        in the three-step calibration, the name of the second parameter
+        to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac'). If not
+        set and the algorithm cannot match observations, it will raise an
+        error.
+    calibrate_param3 : str
+        in the three-step calibration, the name of the third parameter
+        to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac'). If not
+        set and the algorithm cannot match observations, it will raise an
+        error.
+    melt_f: float
+        the default value to use as melt factor (or the starting value when
+        optimizing MB). Defaults to cfg.PARAMS['melt_f'].
+    melt_f_min: float
+        the minimum accepted value for the melt factor during optimisation.
+        Defaults to cfg.PARAMS['melt_f_min'].
+    melt_f_max: float
+        the maximum accepted value for the melt factor during optimisation.
+        Defaults to cfg.PARAMS['melt_f_max'].
+    prcp_scaling_factor: float
+        the default value to use as precipitation scaling factor
+        (or the starting value when optimizing MB). Defaults to the method
+        chosen in `params.cfg` (winter prcp or global factor).
+    prcp_scaling_factor_min: float
+        the minimum accepted value for the precipitation scaling factor during
+        optimisation. Defaults to cfg.PARAMS['prcp_scaling_factor_min'].
+    prcp_scaling_factor_max: float
+        the maximum accepted value for the precipitation scaling factor during
+        optimisation. Defaults to cfg.PARAMS['prcp_scaling_factor_max'].
+    temp_bias: float
+        the default value to use as temperature bias (or the starting value when
+        optimizing MB). Defaults to 0.
+    temp_bias_min: float
+        the minimum accepted value for the temperature bias during optimisation.
+        Defaults to cfg.PARAMS['temp_bias_min'].
+    temp_bias_max: float
+        the maximum accepted value for the temperature bias during optimisation.
+        Defaults to cfg.PARAMS['temp_bias_max'].
     """
 
     # Param constraints
@@ -1519,8 +1569,8 @@ def mb_calibration_from_scalar_mb(gdir,
         prcp_scaling_factor_min = cfg.PARAMS['prcp_scaling_factor_min']
     if prcp_scaling_factor_max is None:
         prcp_scaling_factor_max = cfg.PARAMS['prcp_scaling_factor_max']
-    if melt_f_default is None:
-        melt_f_default = cfg.PARAMS['melt_f_default']
+    if melt_f is None:
+        melt_f = cfg.PARAMS['melt_f']
     if temp_bias_min is None:
         temp_bias_min = cfg.PARAMS['temp_bias_min']
     if temp_bias_max is None:
@@ -1570,7 +1620,6 @@ def mb_calibration_from_scalar_mb(gdir,
                                   'you posted!')
 
     # Ok, regardless on how we want to calibrate, we start with defaults
-    melt_f = melt_f_default
     if prcp_scaling_factor is None:
         if cfg.PARAMS['use_winter_prcp_factor']:
             # Some sanity check

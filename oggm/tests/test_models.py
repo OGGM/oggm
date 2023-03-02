@@ -3123,7 +3123,7 @@ class TestHEF:
         dfo = hef_gdir.read_json('mb_calib')
         df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
                                                        calibrate_param1='temp_bias',
-                                                       melt_f_default=dfo['melt_f'],
+                                                       melt_f=dfo['melt_f'],
                                                        ref_mb=0,
                                                        ref_mb_years=(1970, 2001),
                                                        write_to_gdir=False)
