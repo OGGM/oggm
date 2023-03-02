@@ -530,15 +530,12 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
-    PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
     PARAMS['use_winter_prcp_factor'] = cp.as_bool('use_winter_prcp_factor')
 
     k = 'winter_prcp_factor_ab'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'winter_prcp_factor_range'
-    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'temp_local_gradient_bounds'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
@@ -572,7 +569,6 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'compress_climate_netcdf',
            'mp_processes', 'use_multiprocessing',
-           'temp_use_local_gradient', 'temp_local_gradient_bounds',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'border',
            'mpi_recv_buf_size', 'map_proj',

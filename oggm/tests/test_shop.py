@@ -286,15 +286,6 @@ class Test_w5e5:
         assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
         assert np.all(annual_prcp_sum > 500)  # kg /m2/year
         assert np.all(annual_prcp_sum < 1500)
-        # gradient
-        assert ds_clim.gradient.mean()
-        assert np.all(ds_clim.gradient > -0.01)  # >-10K/km
-        assert np.all(ds_clim.gradient < -0.001)  # <-0.1 K/km
-        # by construction, lapse rates from 2019 should be the avg. of 1979-2018!
-        # (because of lacking ERA5dr data after 2019-05)
-        m_grads = ds_clim.sel(time=slice('1979', '2018')).gradient.groupby('time.month').mean()
-        m_grads_2019 = ds_clim.sel(time=slice('2019', '2019')).gradient
-        np.testing.assert_allclose(m_grads, m_grads_2019)
 
     def test_process_gswp3_w5e5_data(self, class_case_dir):
 
@@ -604,7 +595,6 @@ class Test_climate_datasets:
             np.testing.assert_allclose(d1.temp, d2.temp)
             np.testing.assert_allclose(d1.prcp, d2.prcp)
             # Fake tests, the plots look plausible
-            np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
             np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
 
 

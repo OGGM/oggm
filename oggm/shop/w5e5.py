@@ -218,7 +218,6 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
     # OK, ready to write
     gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=gradient,
                                     temp_std=temp_std,
                                     source=dataset)
 
