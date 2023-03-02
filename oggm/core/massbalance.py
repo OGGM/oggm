@@ -65,10 +65,10 @@ def decide_winter_precip_factor(gdir):
 
     # from MB sandbox calibration to winter MB
     # using t_melt=-1, cte lapse rate, monthly resolution
-    a, b = cfg.PARAMS['winter_prcp_factor_ab']
+    a, b = cfg.PARAMS['winter_prcp_fac_ab']
     prcp_fac = a * np.log(w_prcp) + b
     # don't allow extremely low/high prcp. factors!!!
-    r0, r1 = cfg.PARAMS['winter_prcp_factor_range']
+    r0, r1 = cfg.PARAMS['winter_prcp_fac_range']
     return clip_scalar(prcp_fac, r0, r1)
 
 
@@ -545,7 +545,7 @@ class MonthlyTIModel(MassBalanceModel):
     # after instantiation with properly changing the prcp time series
     @property
     def prcp_fac(self):
-        """Precipitation factor (default: cfg.PARAMS['prcp_scaling_factor'])
+        """Precipitation factor (default: cfg.PARAMS['prcp_fac'])
 
         Called factor to make clear that it is a multiplicative factor in
         contrast to the additive temperature bias
@@ -1448,9 +1448,9 @@ def mb_calibration_from_scalar_mb(gdir,
                                   melt_f=None,
                                   melt_f_min=None,
                                   melt_f_max=None,
-                                  prcp_scaling_factor=None,
-                                  prcp_scaling_factor_min=None,
-                                  prcp_scaling_factor_max=None,
+                                  prcp_fac=None,
+                                  prcp_fac_min=None,
+                                  prcp_fac_max=None,
                                   temp_bias=0,
                                   temp_bias_min=None,
                                   temp_bias_max=None,
@@ -1539,16 +1539,16 @@ def mb_calibration_from_scalar_mb(gdir,
     melt_f_max: float
         the maximum accepted value for the melt factor during optimisation.
         Defaults to cfg.PARAMS['melt_f_max'].
-    prcp_scaling_factor: float
+    prcp_fac: float
         the default value to use as precipitation scaling factor
         (or the starting value when optimizing MB). Defaults to the method
         chosen in `params.cfg` (winter prcp or global factor).
-    prcp_scaling_factor_min: float
+    prcp_fac_min: float
         the minimum accepted value for the precipitation scaling factor during
-        optimisation. Defaults to cfg.PARAMS['prcp_scaling_factor_min'].
-    prcp_scaling_factor_max: float
+        optimisation. Defaults to cfg.PARAMS['prcp_fac_min'].
+    prcp_fac_max: float
         the maximum accepted value for the precipitation scaling factor during
-        optimisation. Defaults to cfg.PARAMS['prcp_scaling_factor_max'].
+        optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
     temp_bias: float
         the default value to use as temperature bias (or the starting value when
         optimizing MB). Defaults to 0.
@@ -1565,10 +1565,10 @@ def mb_calibration_from_scalar_mb(gdir,
         melt_f_min = cfg.PARAMS['melt_f_min']
     if melt_f_max is None:
         melt_f_max = cfg.PARAMS['melt_f_max']
-    if prcp_scaling_factor_min is None:
-        prcp_scaling_factor_min = cfg.PARAMS['prcp_scaling_factor_min']
-    if prcp_scaling_factor_max is None:
-        prcp_scaling_factor_max = cfg.PARAMS['prcp_scaling_factor_max']
+    if prcp_fac_min is None:
+        prcp_fac_min = cfg.PARAMS['prcp_fac_min']
+    if prcp_fac_max is None:
+        prcp_fac_max = cfg.PARAMS['prcp_fac_max']
     if melt_f is None:
         melt_f = cfg.PARAMS['melt_f']
     if temp_bias_min is None:
@@ -1620,21 +1620,21 @@ def mb_calibration_from_scalar_mb(gdir,
                                   'you posted!')
 
     # Ok, regardless on how we want to calibrate, we start with defaults
-    if prcp_scaling_factor is None:
-        if cfg.PARAMS['use_winter_prcp_factor']:
+    if prcp_fac is None:
+        if cfg.PARAMS['use_winter_prcp_fac']:
             # Some sanity check
-            if cfg.PARAMS['prcp_scaling_factor'] is not None:
-                raise InvalidWorkflowError("Set PARAMS['prcp_scaling_factor'] "
+            if cfg.PARAMS['prcp_fac'] is not None:
+                raise InvalidWorkflowError("Set PARAMS['prcp_fac'] "
                                            "to None if using winter_prcp_factor")
             prcp_fac = decide_winter_precip_factor(gdir)
         else:
-            prcp_fac = cfg.PARAMS['prcp_scaling_factor']
+            prcp_fac = cfg.PARAMS['prcp_fac']
             if prcp_fac is None:
-                raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_factor'] "
+                raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
                                            "or PARAMS['winter_prcp_factor'].")
     else:
-        # if a prcp_scaling_factor is set, we will use it instead of the default option
-        prcp_fac = prcp_scaling_factor    
+        # if a prcp_fac is set, we will use it instead of the default option
+        prcp_fac = prcp_fac
 
     # Create the MB model we will calibrate
     mb_mod = mb_model_class(gdir,
@@ -1652,7 +1652,7 @@ def mb_calibration_from_scalar_mb(gdir,
     if calibrate_param1 == 'melt_f':
         min_range, max_range = melt_f_min, melt_f_max
     elif calibrate_param1 == 'prcp_fac':
-        min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
+        min_range, max_range = prcp_fac_min, prcp_fac_max
     elif calibrate_param1 == 'temp_bias':
         min_range, max_range = temp_bias_min, temp_bias_max
     else:
@@ -1685,7 +1685,7 @@ def mb_calibration_from_scalar_mb(gdir,
         if calibrate_param2 == 'melt_f':
             min_range, max_range = melt_f_min, melt_f_max
         elif calibrate_param2 == 'prcp_fac':
-            min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
+            min_range, max_range = prcp_fac_min, prcp_fac_max
         elif calibrate_param2 == 'temp_bias':
             min_range, max_range = temp_bias_min, temp_bias_max
         else:
@@ -1712,7 +1712,7 @@ def mb_calibration_from_scalar_mb(gdir,
             if calibrate_param3 == 'melt_f':
                 min_range, max_range = melt_f_min, melt_f_max
             elif calibrate_param3 == 'prcp_fac':
-                min_range, max_range = prcp_scaling_factor_min, prcp_scaling_factor_max
+                min_range, max_range = prcp_fac_min, prcp_fac_max
             elif calibrate_param3 == 'temp_bias':
                 min_range, max_range = temp_bias_min, temp_bias_max
             else:
@@ -1964,7 +1964,7 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     precipitation_factor: float
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        calibration is applied which is cfg.PARAMS['prcp_fac']
     mb_model_class : MassBalanceModel class
         the MassBalanceModel class to use, default is MonthlyTIModel
     """
@@ -2021,7 +2021,7 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
     precipitation_factor: float
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        calibration is applied which is cfg.PARAMS['prcp_fac']
     mb_model_class : MassBalanceModel class
         the MassBalanceModel class to use, default is MonthlyTIModel
     """

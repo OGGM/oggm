@@ -329,7 +329,7 @@ class Test_w5e5:
         # no gradient for GSWP3-W5E5!
 
         # test climate statistics with winter_daily_mean_prcp
-        # they should be computed even if cfg.PARAMS['use_winter_prcp_factor'] is False!
+        # they should be computed even if cfg.PARAMS['use_winter_prcp_fac'] is False!
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=[1999, 2010],
                                               add_raw_climate_statistics=True,

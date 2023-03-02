@@ -370,7 +370,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                                      "parameters: {}".format(url))
         if ('oggm_v1.4' in url and
                 from_prepro_level >= 3 and
-                not cfg.PARAMS['prcp_scaling_factor']):
+                not cfg.PARAMS['prcp_fac']):
             log.warning('You seem to be using v1.4 directories with a more '
                         'recent version of OGGM. While this is possible, be '
                         'aware that some defaults parameters have changed. '

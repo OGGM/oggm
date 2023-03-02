@@ -232,8 +232,8 @@ def other_glacier_cfg():
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
 
@@ -446,7 +446,7 @@ class TestMassBalanceModels:
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
-        prcp_fac_old = cfg.PARAMS['prcp_scaling_factor']
+        prcp_fac_old = cfg.PARAMS['prcp_fac']
         temp_bias_old = 0
         # basic checks
         assert mb_mod.prcp_fac == prcp_fac_old
@@ -3590,7 +3590,7 @@ class TestDynamicSpinup:
         }
 
         # change settings to match used prepro directory
-        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['prcp_fac'] = 1.6
 
         # TODO: update prepro_base_url to new v1.6, and simplify code below,
         #  and could use different prepro_level
@@ -3907,7 +3907,7 @@ class TestDynamicSpinup:
         # after the test
         old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['prcp_fac'] = 1.6
 
         # TODO: update to prepro v1.6
         # use a prepro dir as the hef_gdir climate data only goes to 2003 and
@@ -4421,7 +4421,7 @@ class TestDynamicSpinup:
         # after the test
         old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['prcp_fac'] = 1.6
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
 
@@ -5056,7 +5056,7 @@ class TestHydro:
         # after the test
         old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['prcp_fac'] = 1.6
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
 
@@ -5130,7 +5130,7 @@ class TestHydro:
         assert_allclose(frac, 0, atol=0.05)
 
         # set back to previous values
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
@@ -5142,7 +5142,7 @@ class TestHydro:
         # after the test
         old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 1.6
+        cfg.PARAMS['prcp_fac'] = 1.6
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
 
@@ -5214,7 +5214,7 @@ class TestHydro:
         assert_allclose(frac, 0, atol=0.05)
 
         # set back to previous values
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['hydro_month_nh'] = 10
         cfg.PARAMS['hydro_month_sh'] = 4
         cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
@@ -5394,8 +5394,8 @@ class TestMassRedis:
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['min_ice_thick_for_length'] = 5
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -5488,9 +5488,9 @@ def merged_hef_cfg(class_case_dir):
     # should this be resetting working_dir at teardown?
     cfg.PATHS['working_dir'] = class_case_dir
     cfg.PARAMS['border'] = 100
-    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['prcp_fac'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
-    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['use_winter_prcp_fac'] = False
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')

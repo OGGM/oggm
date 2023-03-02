@@ -36,8 +36,8 @@ tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
 cfg.PARAMS['use_tstar_calibration'] = True
-cfg.PARAMS['use_winter_prcp_factor'] = False
-cfg.PARAMS['prcp_scaling_factor'] = 2.5
+cfg.PARAMS['use_winter_prcp_fac'] = False
+cfg.PARAMS['prcp_fac'] = 2.5
 tasks.process_histalp_data(gdir)
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=FutureWarning)

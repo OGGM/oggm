@@ -92,13 +92,13 @@ def up_to_climate(reset=False, use_mp=None):
 
     # Params
     cfg.PARAMS['border'] = 70
-    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['prcp_fac'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['geodetic_mb_period'] = '2000-01-01_2010-01-01'
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['store_model_geometry'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
+    cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
     # Go
@@ -164,7 +164,7 @@ def up_to_distrib(reset=False):
 
     if reset:
         # Use CRU
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
         with warnings.catch_warnings():
             # There is a warning from salem

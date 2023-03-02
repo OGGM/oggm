@@ -531,11 +531,11 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
-    PARAMS['use_winter_prcp_factor'] = cp.as_bool('use_winter_prcp_factor')
+    PARAMS['use_winter_prcp_fac'] = cp.as_bool('use_winter_prcp_fac')
 
-    k = 'winter_prcp_factor_ab'
+    k = 'winter_prcp_fac_ab'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'winter_prcp_factor_range'
+    k = 'winter_prcp_fac_range'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
@@ -561,9 +561,9 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
 
     # Precip factor can be none
     try:
-        PARAMS['prcp_scaling_factor'] = cp.as_float('prcp_scaling_factor')
+        PARAMS['prcp_fac'] = cp.as_float('prcp_fac')
     except ValueError:
-        PARAMS['prcp_scaling_factor'] = None
+        PARAMS['prcp_fac'] = None
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
@@ -582,11 +582,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run',
-           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_factor',
+           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_fac',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_factor_ab',
-           'winter_prcp_factor_range', 'prcp_scaling_factor',
-           'downstream_line_shape']
+           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_fac_ab',
+           'winter_prcp_fac_range', 'prcp_fac', 'downstream_line_shape']
     for k in ltr:
         cp.pop(k, None)
 

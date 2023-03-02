@@ -791,8 +791,8 @@ class TestElevationBandFlowlines(unittest.TestCase):
         cfg.PARAMS['border'] = 10
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
         self.rm_dir()
@@ -1158,8 +1158,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['baseline_climate'] = ''
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
         self.rm_dir()
@@ -1389,7 +1389,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == 0
         assert pdf['melt_f'] != cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
 
         # Let's calibrate on temp_bias
         mb_calibration_from_scalar_mb(gdir,
@@ -1409,7 +1409,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] != 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
 
         # Let's calibrate on precip
         mb_calibration_from_scalar_mb(gdir,
@@ -1429,7 +1429,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] != cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] != cfg.PARAMS['prcp_fac']
 
         # mbdf[['ref_mb', 'melt_mb', 'temp_mb', 'prcp_mb']].plot()
         # plt.show()
@@ -1459,7 +1459,7 @@ class TestClimate(unittest.TestCase):
         assert pdf['temp_bias'] < 0
         assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['melt_f'] == cfg.PARAMS['melt_f_min']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
 
         # Very negative
         ref_mb = -10000
@@ -1485,7 +1485,7 @@ class TestClimate(unittest.TestCase):
         assert pdf['temp_bias'] > 0
         assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['melt_f'] == cfg.PARAMS['melt_f_max']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
 
         # Try with prcp_fac as variable 1
         # Very positive
@@ -1513,7 +1513,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] < 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] > cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] > cfg.PARAMS['prcp_fac']
 
         # Very negative
         ref_mb = -10000
@@ -1540,7 +1540,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] > 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] < cfg.PARAMS['prcp_scaling_factor']
+        assert pdf['prcp_fac'] < cfg.PARAMS['prcp_fac']
 
         # Extremely negative
         ref_mb = -20000
@@ -1576,7 +1576,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_max']
         assert pdf['melt_f'] > cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_min']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_min']
 
         # Unmatchable positive
         ref_mb = 10000
@@ -1592,8 +1592,8 @@ class TestClimate(unittest.TestCase):
         ref_mb = 1000
         cfg.PARAMS['temp_bias_min'] = -0.5
         cfg.PARAMS['temp_bias_max'] = 0.5
-        cfg.PARAMS['prcp_scaling_factor_min'] = 2
-        cfg.PARAMS['prcp_scaling_factor_max'] = 3
+        cfg.PARAMS['prcp_fac_min'] = 2
+        cfg.PARAMS['prcp_fac_max'] = 3
         with pytest.raises(RuntimeError):
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
@@ -1626,7 +1626,7 @@ class TestClimate(unittest.TestCase):
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_scaling_factor_max']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
 
 
     @pytest.mark.slow
@@ -1756,8 +1756,8 @@ class TestInversion(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
         self.rm_dir()
@@ -2301,8 +2301,8 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
         self.rm_dir()
@@ -2417,8 +2417,8 @@ class TestGrindelInvert(unittest.TestCase):
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiple_flowlines'] = False
         cfg.PARAMS['use_tar_shapefiles'] = False
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
         self.rm_dir()
@@ -2548,8 +2548,8 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['border'] = 10
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
     def tearDown(self):

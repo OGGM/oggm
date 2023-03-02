@@ -1753,7 +1753,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     precipitation_factor: float
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        calibration is applied which is cfg.PARAMS['prcp_fac']
     """
 
     from oggm.workflow import execute_entity_task
@@ -1828,7 +1828,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
     precipitation_factor: float
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        calibration is applied which is cfg.PARAMS['prcp_fac']
     """
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import compute_ela

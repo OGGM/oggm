@@ -731,8 +731,8 @@ class TestStartFromV14(unittest.TestCase):
                                                   prepro_rgi_version='62',
                                                   prepro_border=40)
 
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['use_winter_prcp_factor'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
 
         n_intersects = 0
         for gdir in gdirs:
@@ -1150,8 +1150,8 @@ class TestPreproCLI(unittest.TestCase):
                           centerlines=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
-                                           'use_winter_prcp_factor': False,
-                                           'prcp_scaling_factor': 2.5,
+                                           'use_winter_prcp_fac': False,
+                                           'prcp_fac': 2.5,
                                            }
                           )
 
@@ -1315,8 +1315,8 @@ class TestPreproCLI(unittest.TestCase):
                               test_topofile=topof, elev_bands=True,
                               override_params={'geodetic_mb_period':ref_period,
                                                'baseline_climate': 'CRU',
-                                               'use_winter_prcp_factor': False,
-                                               'prcp_scaling_factor': 2.5,
+                                               'use_winter_prcp_fac': False,
+                                               'prcp_fac': 2.5,
                                                })
 
             df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
@@ -1449,8 +1449,8 @@ class TestPreproCLI(unittest.TestCase):
 
         params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'baseline_climate': 'CRU',
-                  'use_winter_prcp_factor': False,
-                  'prcp_scaling_factor': 2.5,
+                  'use_winter_prcp_fac': False,
+                  'prcp_fac': 2.5,
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1555,8 +1555,8 @@ class TestPreproCLI(unittest.TestCase):
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
-                                           'use_winter_prcp_factor': False,
-                                           'prcp_scaling_factor': 2.5,
+                                           'use_winter_prcp_fac': False,
+                                           'prcp_fac': 2.5,
                                            }
                           )
 
@@ -1756,8 +1756,8 @@ class TestBenchmarkCLI(unittest.TestCase):
                                        'use_multiprocessing': False,
                                        'geodetic_mb_period': '2000-01-01_2010-01-01',
                                        'baseline_climate': 'CRU',
-                                       'use_winter_prcp_factor': False,
-                                       'prcp_scaling_factor': 2.5,
+                                       'use_winter_prcp_fac': False,
+                                       'prcp_fac': 2.5,
                                        })
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
