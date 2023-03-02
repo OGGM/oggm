@@ -183,19 +183,13 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             ds = ds.isel(points=np.argmin(c.data))
         hgt = ds['z'].data / cfg.G
 
-    gradient = None
     temp_std = None
 
-    # Should we compute the gradient?
-    if cfg.PARAMS['temp_use_local_gradient']:
-        raise NotImplementedError('`temp_use_local_gradient` not '
-                                  'implemented yet')
     if dataset == 'ERA5dr':
         with xr.open_dataset(get_ecmwf_file(dataset, 'lapserates')) as ds:
             _check_ds_validity(ds)
             ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-            gradient = ds['lapserate'].data
 
         with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
             _check_ds_validity(ds)
@@ -206,6 +200,5 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     # OK, ready to write
     gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=gradient,
                                     temp_std=temp_std,
                                     source=dataset)

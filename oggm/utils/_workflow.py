@@ -1305,7 +1305,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     with xr.open_dataset(ppath) as ds_clim:
         cyrs = ds_clim['time.year']
         cmonths = ds_clim['time.month']
-        has_grad = 'gradient' in ds_clim.variables
         sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
         hyrs, hmonths = calendardate_to_hydrodate(cyrs, cmonths, start_month=sm)
         time = date_to_floatyear(cyrs, cmonths)
@@ -1336,8 +1335,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     shape = (len(time), len(rgi_ids))
     temp = np.zeros(shape) * np.NaN
     prcp = np.zeros(shape) * np.NaN
-    if has_grad:
-        grad = np.zeros(shape) * np.NaN
+
     ref_hgt = np.zeros(len(rgi_ids)) * np.NaN
     ref_pix_lon = np.zeros(len(rgi_ids)) * np.NaN
     ref_pix_lat = np.zeros(len(rgi_ids)) * np.NaN
@@ -1349,8 +1347,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             with xr.open_dataset(ppath) as ds_clim:
                 prcp[:, i] = ds_clim.prcp.values
                 temp[:, i] = ds_clim.temp.values
-                if has_grad:
-                    grad[:, i] = ds_clim.gradient
                 ref_hgt[i] = ds_clim.ref_hgt
                 ref_pix_lon[i] = ds_clim.ref_pix_lon
                 ref_pix_lat[i] = ds_clim.ref_pix_lat
@@ -1363,10 +1359,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     ds['prcp'] = (('time', 'rgi_id'), prcp)
     ds['prcp'].attrs['units'] = 'kg m-2'
     ds['prcp'].attrs['description'] = 'total monthly precipitation amount'
-    if has_grad:
-        ds['grad'] = (('time', 'rgi_id'), grad)
-        ds['grad'].attrs['units'] = 'degC m-1'
-        ds['grad'].attrs['description'] = 'temperature gradient'
     ds['ref_hgt'] = ('rgi_id', ref_hgt)
     ds['ref_hgt'].attrs['units'] = 'm'
     ds['ref_hgt'].attrs['description'] = 'reference height'
@@ -1381,8 +1373,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
         vars = ['temp', 'prcp']
-        if has_grad:
-            vars += ['grad']
         encoding = {v: enc_var for v in vars}
         ds.to_netcdf(path, encoding=encoding)
     return ds
@@ -3174,7 +3164,6 @@ class GlacierDirectory(object):
 
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
-                                   gradient=None,
                                    temp_std=None,
                                    time_unit=None,
                                    calendar=None,
@@ -3199,8 +3188,6 @@ class GlacierDirectory(object):
             the location of the gridded data's grid point
         ref_pix_lat : float
             the location of the gridded data's grid point
-        gradient : ndarray, optional
-            whether to use a time varying gradient
         temp_std : ndarray, optional
             the daily standard deviation of temperature (useful for PyGEM)
         time_unit : str
@@ -3290,13 +3277,6 @@ class GlacierDirectory(object):
             v.units = 'degC'
             v.long_name = '2m temperature at height ref_hgt'
             v[:] = temp
-
-            if gradient is not None:
-                v = nc.createVariable('gradient', 'f4', ('time',), zlib=zlib)
-                v.units = 'degC m-1'
-                v.long_name = ('temperature gradient from local regression or'
-                               'lapserates')
-                v[:] = gradient
 
             if temp_std is not None:
                 v = nc.createVariable('temp_std', 'f4', ('time',), zlib=zlib)

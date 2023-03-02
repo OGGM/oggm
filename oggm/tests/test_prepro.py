@@ -1199,29 +1199,6 @@ class TestClimate(unittest.TestCase):
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
-    @pytest.mark.slow
-    def test_distribute_climate_grad(self):
-
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        cfg.PARAMS['temp_use_local_gradient'] = True
-        entity = gpd.read_file(hef_file).iloc[0]
-
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
-        gis.define_glacier_region(gdir)
-        climate.process_custom_climate_data(gdir)
-
-        ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1802)
-        self.assertEqual(ci['baseline_yr_1'], 2002)
-
-        with xr.open_dataset(gdir.get_filepath('climate_historical')) as ds:
-            grad = ds['gradient'].data
-            try:
-                assert np.std(grad) > 0.0001
-            except TypeError:
-                pass
-        cfg.PARAMS['temp_use_local_gradient'] = False
-
     def test_distribute_climate_parallel(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')

@@ -129,20 +129,9 @@ def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
     iprcp = prcp[:, ilat, ilon]
     nc_ts.close()
 
-    # Should we compute the gradient?
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    igrad = None
-    if use_grad:
-        igrad = np.zeros(len(time)) * np.NaN
-        for t, loct in enumerate(ttemp):
-            slope, _, _, p_val, _ = stats.linregress(thgt,
-                                                     loct.flatten())
-            igrad[t] = slope if (p_val < 0.01) else np.NaN
-
     gdir.write_monthly_climate_file(time, iprcp, itemp, ihgt,
                                     ref_pix_lon, ref_pix_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=igrad,
                                     source=fpath)
 
 

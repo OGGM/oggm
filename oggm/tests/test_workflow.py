@@ -134,7 +134,6 @@ def up_to_inversion(reset=False):
 
     if reset:
         # Use histalp for the actual inversion test
-        cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
         workflow.climate_tasks(gdirs, overwrite_gdir=True,
                                override_missing=-500)
@@ -166,7 +165,6 @@ def up_to_distrib(reset=False):
     if reset:
         # Use CRU
         cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['temp_use_local_gradient'] = False
         cfg.PARAMS['baseline_climate'] = 'CRU'
         with warnings.catch_warnings():
             # There is a warning from salem

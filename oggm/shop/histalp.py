@@ -154,18 +154,7 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
 
-    # Should we compute the gradient?
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    igrad = None
-    if use_grad:
-        igrad = np.zeros(len(time)) * np.NaN
-        for t, loct in enumerate(temp):
-            slope, _, _, p_val, _ = stats.linregress(hgt.flatten(),
-                                                     loct.flatten())
-            igrad[t] = slope if (p_val < 0.01) else np.NaN
-
     gdir.write_monthly_climate_file(time, prcp[:, 1, 1], temp[:, 1, 1],
                                     hgt[1, 1], ref_lon[1], ref_lat[1],
-                                    gradient=igrad,
                                     filesuffix=output_filesuffix,
                                     source=source)

@@ -175,18 +175,6 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     hgt_f = loc_hgt[isok].flatten()
     assert len(hgt_f) > 0.
 
-    # Should we compute the gradient?
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    ts_grad = None
-    if use_grad and len(hgt_f) >= 5:
-        ts_grad = np.zeros(12) * np.NaN
-        for i in range(12):
-            loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
-            slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
-            ts_grad[i] = slope if (p_val < 0.01) else np.NaN
-        # convert to a timeseries
-        ts_grad = np.asarray(ts_grad.tolist() * ny)
-
     # maybe this will throw out of bounds warnings
     nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
     nc_ts_pre.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
@@ -276,7 +264,6 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=ts_grad,
                                     source=nc_ts_tmp._nc.title[:10])
 
     ncclim._nc.close()
@@ -376,17 +363,6 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     hgt_f = loc_hgt[isok].flatten()
     assert len(hgt_f) > 0.
 
-    # Should we compute the gradient?
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    ts_grad = None
-    if use_grad and len(hgt_f) >= 5:
-        ts_grad = np.zeros(12) * np.NaN
-        for i in range(12):
-            loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
-            slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
-            ts_grad[i] = slope if (p_val < 0.01) else np.NaN
-        # convert to a timeseries
-        ts_grad = np.asarray(ts_grad.tolist() * ny)
 
     # Make DataArrays
     rng = np.random.RandomState(seed)
@@ -414,7 +390,6 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
 
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
-                                    gradient=ts_grad,
                                     filesuffix=output_filesuffix,
                                     source='CRU CL2 and some randomness')
     ncclim._nc.close()

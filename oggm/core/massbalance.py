@@ -356,7 +356,6 @@ class LinearMassBalance(MassBalanceModel):
 
 class MonthlyTIModel(MassBalanceModel):
     """Monthly temperature index model.
-
     """
     def __init__(self, gdir,
                  filename='climate_historical',
@@ -386,7 +385,8 @@ class MonthlyTIModel(MassBalanceModel):
             if this flowline has been calibrated alone and has specific
             model parameters.
         melt_f : float, optional
-            set to the value of the melt factor you want to use
+            set to the value of the melt factor you want to use,
+            here the unit is kg m-2 day-1 K-1
             (the default is to use the calibrated value).
         temp_bias : float, optional
             set to the value of the temperature bias you want to use
@@ -507,14 +507,8 @@ class MonthlyTIModel(MassBalanceModel):
             # Read timeseries and correct it
             self.temp = nc.variables['temp'][pok].astype(np.float64) + self._temp_bias
             self.prcp = nc.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
-            if 'gradient' in nc.variables:
-                grad = nc.variables['gradient'][pok].astype(np.float64)
-                # Security for stuff that can happen with local gradients
-                g_minmax = cfg.PARAMS['temp_local_gradient_bounds']
-                grad = np.where(~np.isfinite(grad), default_grad, grad)
-                grad = clip_array(grad, g_minmax[0], g_minmax[1])
-            else:
-                grad = self.prcp * 0 + default_grad
+
+            grad = self.prcp * 0 + default_grad
             self.grad = grad
             self.ref_hgt = nc.ref_hgt
             self.climate_source = nc.climate_source
@@ -725,7 +719,7 @@ class ConstantMassBalance(MassBalanceModel):
         the years of the period
     """
 
-    def __init__(self, gdir, massbalance_model_class=MonthlyTIModel,
+    def __init__(self, gdir, mb_model_class=MonthlyTIModel,
                  y0=None, halfsize=15,
                  **kwargs):
         """Initialize
@@ -734,19 +728,19 @@ class ConstantMassBalance(MassBalanceModel):
         ----------
         gdir : GlacierDirectory
             the glacier directory
-        massbalance_model_class : MassBalanceModel class
+        mb_model_class : MassBalanceModel class
             the MassBalanceModel to use for the constant climate
         y0 : int, required
             the year at the center of the period of interest.
         halfsize : int, optional
             the half-size of the time window (window size = 2 * halfsize + 1)
         **kwargs:
-            keyword arguments to pass to the massbalance_model_class
+            keyword arguments to pass to the mb_model_class
         """
 
         super().__init__()
-        self.mbmod = massbalance_model_class(gdir,
-                                             **kwargs)
+        self.mbmod = mb_model_class(gdir,
+                                    **kwargs)
 
         if y0 is None:
             raise InvalidParamsError('Please set `y0` explicitly')
@@ -920,7 +914,7 @@ class RandomMassBalance(MassBalanceModel):
     approaches based on gaussian assumptions.
     """
 
-    def __init__(self, gdir, massbalance_model_class=MonthlyTIModel,
+    def __init__(self, gdir, mb_model_class=MonthlyTIModel,
                  y0=None, halfsize=15, seed=None,
                  all_years=False, unique_samples=False, prescribe_years=None,
                  **kwargs):
@@ -930,7 +924,7 @@ class RandomMassBalance(MassBalanceModel):
         ----------
         gdir : GlacierDirectory
             the glacier directory
-        massbalance_model_class : MassBalanceModel class
+        mb_model_class : MassBalanceModel class
             the MassBalanceModel to use for the random shuffle
         y0 : int, required
             the year at the center of the period of interest.
@@ -952,12 +946,12 @@ class RandomMassBalance(MassBalanceModel):
             original timeseries. Overrides `y0`, `halfsize`, `all_years`,
             `unique_samples` and `seed`.
         **kwargs:
-            keyword arguments to pass to the massbalance_model_class
+            keyword arguments to pass to the mb_model_class
         """
 
         super().__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
-        self.mbmod = massbalance_model_class(gdir, **kwargs)
+        self.mbmod = mb_model_class(gdir, **kwargs)
 
         # Climate period
         self.prescribe_years = prescribe_years
@@ -1204,9 +1198,9 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             the glacier directory
         fls : list, optional
             list of flowline objects to use (defaults to 'model_flowlines')
-        mb_model_class : class, optional
-            the mass balance model to use (e.g. MonthlyTIModel,
-            ConstantMassBalance...)
+        mb_model_class : MassBalanceModel class
+            the MassBalanceModel to use (default is MonthlyTIModel,
+            alternatives are e.g. ConstantMassBalance...)
         use_inversion_flowlines: bool, optional
             use 'inversion_flowlines' instead of 'model_flowlines'
         kwargs : kwargs to pass to mb_model_class
@@ -1459,6 +1453,7 @@ def mb_calibration_from_geodetic_mb(gdir,
                                     temp_bias=0,
                                     temp_bias_min=None,
                                     temp_bias_max=None,
+                                    mb_model_class=MonthlyTIModel,
                                     ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
@@ -1486,6 +1481,9 @@ def mb_calibration_from_geodetic_mb(gdir,
         given, all years between this range (excluding the last one) are used.
         If a list  of years is given, all these will be used (useful for
         data with gaps)
+    mb_model_class : MassBalanceModel class
+            the MassBalanceModel to use for the calibration
+            default is MonthlyTIModel
     """
 
     # Param constraints
@@ -1566,7 +1564,7 @@ def mb_calibration_from_geodetic_mb(gdir,
         prcp_fac = prcp_scaling_factor    
 
     # Create the MB model we will calibrate
-    mb_mod = MonthlyTIModel(gdir,
+    mb_mod = mb_model_class(gdir,
                             melt_f=melt_f,
                             temp_bias=temp_bias,
                             prcp_fac=prcp_fac,
@@ -1775,7 +1773,9 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
+def apparent_mb_from_any_mb(gdir, mb_model=None,
+                            mb_model_class=MonthlyTIModel,
+                            mb_years=None):
     """Compute apparent mb from an arbitrary mass balance profile.
 
     This searches for a mass balance residual to add to the mass balance
@@ -1786,8 +1786,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
-        the mass balance model to use - if None, will use the default OGGM
-        one.
+        the mass balance model to use - if None, will use the
+        one given by mb_model_class
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel class to use, default is MonthlyTIModel
     mb_years : array, or tuple of length 2 (range)
         the array of years from which you want to average the MB for (for
         mb_model only). If an array of length 2 is given, all years
@@ -1806,7 +1808,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None, mb_years=None):
     fls = gdir.read_pickle('inversion_flowlines')
 
     if mb_model is None:
-        mb_model = MonthlyTIModel(gdir)
+        mb_model = mb_model_class(gdir)
 
     if mb_years is None:
         mb_years = cfg.PARAMS['geodetic_mb_period']
@@ -1859,7 +1861,8 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
                                 climate_filename='climate_historical',
                                 climate_input_filesuffix='',
                                 temperature_bias=None,
-                                precipitation_factor=None):
+                                precipitation_factor=None,
+                                mb_model_class=MonthlyTIModel):
     """Computes the mass balance with climate input from e.g. CRU or a GCM.
 
     Parameters
@@ -1889,12 +1892,14 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel class to use, default is MonthlyTIModel
     """
 
     if monthly_step:
         raise NotImplementedError('monthly_step not implemented yet')
 
-    mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=MonthlyTIModel,
+    mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model_class,
                                         filename=climate_filename,
                                         use_inversion_flowlines=use_inversion_flowlines,
                                         input_filesuffix=climate_input_filesuffix)
@@ -1918,7 +1923,8 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
 
 @entity_task(log)
 def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_historical',
-                temperature_bias=None, precipitation_factor=None, climate_input_filesuffix=''):
+                temperature_bias=None, precipitation_factor=None, climate_input_filesuffix='',
+                mb_model_class=MonthlyTIModel):
 
     """Computes the ELA of a glacier for a for given years and climate.
 
@@ -1943,9 +1949,11 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel class to use, default is MonthlyTIModel
     """
 
-    mbmod = MonthlyTIModel(gdir, filename=climate_filename,
+    mbmod = mb_model_class(gdir, filename=climate_filename,
                            input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:

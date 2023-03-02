@@ -3562,6 +3562,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           store_fl_diagnostics=None,
                           climate_filename='climate_historical',
                           mb_model=None,
+                          mb_model_class=MonthlyTIModel,
                           climate_input_filesuffix='', output_filesuffix='',
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
@@ -3604,8 +3605,11 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         'gcm_data'
     mb_model : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance. Default is to use a
-        MonthlyTIModel together with the provided parameters climate_filename,
+        mb_model_class instance (default MonthlyTIModel)
+        together with the provided parameters climate_filename,
         bias and climate_input_filesuffix.
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel class to use, default is MonthlyTIModel
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3678,7 +3682,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 
     if mb_model is None:
         mb_model = MultipleFlowlineMassBalance(gdir,
-                                               mb_model_class=MonthlyTIModel,
+                                               mb_model_class=mb_model_class,
                                                filename=climate_filename,
                                                bias=bias,
                                                input_filesuffix=climate_input_filesuffix)
