@@ -1353,6 +1353,47 @@ def get_geodetic_mb_dataframe(file_path=None):
     return df
 
 
+def get_temp_bias_dataframe(dataset='w5e5'):
+    """Fetches the reference geodetic dataframe for calibration.
+
+    Currently that's the data from Hughonnet et al 2021, corrected for
+    outliers and with void filled. The data preparation script is
+    available at
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
+
+    Parameters
+    ----------
+    file_path : str
+        in case you have your own file to parse (check the format first!)
+
+    Returns
+    -------
+    a DataFrame with the data.
+    """
+
+    if dataset != 'w5e5':
+        raise NotImplementedError(f'No such dataset available yet: {dataset}')
+
+    # fetch the file online
+    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
+                'w5e5_temp_bias_v2023.1.csv')
+    file_path = file_downloader(base_url)
+
+    # Did we open it yet?
+    if file_path in cfg.DATA:
+        return cfg.DATA[file_path]
+
+    # If not let's go
+    extension = os.path.splitext(file_path)[1]
+    if extension == '.csv':
+        df = pd.read_csv(file_path, index_col=0)
+    elif extension == '.hdf':
+        df = pd.read_hdf(file_path)
+
+    cfg.DATA[file_path] = df
+    return df
+
+
 def srtm_zone(lon_ex, lat_ex):
     """Returns a list of SRTM zones covering the desired extent.
     """

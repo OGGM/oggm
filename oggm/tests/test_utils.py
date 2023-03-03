@@ -733,6 +733,7 @@ class TestStartFromV14(unittest.TestCase):
 
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
 
         n_intersects = 0
         for gdir in gdirs:

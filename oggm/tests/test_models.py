@@ -233,6 +233,7 @@ def other_glacier_cfg():
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
@@ -5395,6 +5396,7 @@ class TestMassRedis:
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['min_ice_thick_for_length'] = 5
         cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -5491,6 +5493,7 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['prcp_fac'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')

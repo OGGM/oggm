@@ -51,6 +51,7 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
@@ -475,6 +476,7 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PARAMS['use_kcalving_for_inversion'] = True
         cfg.PARAMS['use_kcalving_for_run'] = True
         cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
 

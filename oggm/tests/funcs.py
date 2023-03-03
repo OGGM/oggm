@@ -400,6 +400,7 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['border'] = border
     cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -504,6 +505,7 @@ def init_columbia(reset=False):
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
@@ -543,6 +545,7 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
