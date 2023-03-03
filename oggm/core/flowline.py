@@ -3238,6 +3238,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        store_monthly_step=False,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
+                       mb_model_class=MonthlyTIModel,
                        climate_filename='climate_historical',
                        climate_input_filesuffix='',
                        output_filesuffix='', init_model_fls=None,
@@ -3285,6 +3286,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     store_fl_diagnostics : bool
         whether to store the model flowline diagnostics to disk or not.
         (default is to follow cfg.PARAMS['store_fl_diagnostics'])
+    mb_model_class : MassBalanceModel class
+        The MassBalanceModel class to use inside the RandomMassBalance (default
+        MonthlyTIModel)
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
@@ -3314,7 +3318,9 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     """
 
     mb_model = MultipleFlowlineMassBalance(gdir,
-                                           mb_model_class=RandomMassBalance,
+                                           mb_model_class=partial(
+                                               RandomMassBalance,
+                                               mb_model_class=mb_model_class),
                                            y0=y0, halfsize=halfsize,
                                            bias=bias, seed=seed,
                                            filename=climate_filename,
@@ -3349,7 +3355,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          init_model_yr=None,
                          output_filesuffix='',
                          climate_filename='climate_historical',
-                         mb_model=None,
+                         mb_model_class=MonthlyTIModel,
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
@@ -3400,10 +3406,9 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     climate_filename : str
         name of the climate file, e.g. 'climate_historical' (default) or
         'gcm_data'
-    mb_model : :py:class:`core.MassBalanceModel`
-        User-povided MassBalanceModel instance. Default is to use a
-        ConstantMassBalance together with the provided parameters y0, halfsize,
-        climate_filename, climate_input_filesuffix, etc.
+    mb_model_class : MassBalanceModel class
+        The MassBalanceModel class to use inside the ConstantMassBalance
+        (default MonthlyTIModel)
     climate_input_filesuffix: str
         filesuffix for the input climate file
     output_filesuffix : str
@@ -3418,15 +3423,14 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         kwargs to pass to the FluxBasedModel instance
     """
 
-    mb_model_class = ConstantMassBalance
-
-    if mb_model is None:
-        mb_model = MultipleFlowlineMassBalance(gdir,
-                                               mb_model_class=mb_model_class,
-                                               y0=y0, halfsize=halfsize,
-                                               bias=bias,
-                                               filename=climate_filename,
-                                               input_filesuffix=climate_input_filesuffix)
+    mb_model = MultipleFlowlineMassBalance(gdir,
+                                           mb_model_class=partial(
+                                               ConstantMassBalance,
+                                               mb_model_class=mb_model_class),
+                                           y0=y0, halfsize=halfsize,
+                                           bias=bias,
+                                           filename=climate_filename,
+                                           input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:
         mb_model.temp_bias += temperature_bias
