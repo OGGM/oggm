@@ -550,6 +550,8 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     # Flowline model
     k = 'glacier_length_method'
     PARAMS[k] = cp[k]
+    k = 'evolution_model'
+    PARAMS[k] = cp[k]
 
     # Others
     PARAMS['tidewater_type'] = cp.as_int('tidewater_type')
@@ -566,7 +568,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'mp_processes', 'use_multiprocessing',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'border', 'use_temp_bias_from_file',
-           'mpi_recv_buf_size', 'map_proj',
+           'mpi_recv_buf_size', 'map_proj', 'evolution_model',
            'hydro_month_sh', 'hydro_month_nh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task','ref_mb_valid_window',

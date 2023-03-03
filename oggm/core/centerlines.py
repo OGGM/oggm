@@ -1248,7 +1248,8 @@ def _trapezoidal_bottom_width_from_terrain_cross_section_area(
 def compute_downstream_bedshape(gdir):
     """The bedshape obtained by fitting a parabola to the line's normals.
     Further a trapezoidal shape is fitted to match the cross section area of
-    the valley. Which downstream shape (parabola or trapezoidal) is used can be
+    the valley. Which downstream shape (parabola or trapezoidal) is used
+    by the later call to init_present_day_glacier can be
     selected with cfg.PARAMS['downstream_line_shape'].
 
     Also computes the downstream's altitude.

@@ -78,8 +78,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
-                      evolution_model='fl_sia', override_params=None,
-                      downstream_line_shape='parabola',
+                      override_params=None,
                       mb_calibration_strategy='melt_temp',
                       add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
@@ -126,13 +125,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         compute all flowlines based on the Huss & Farinotti 2012 method.
     centerlines : bool
         compute all flowlines based on the OGGM centerline(s) method.
-    evolution_model : str
-        which geometry evolution model to use: `fl_sia` (default),
-        `massredis` (mass redistribution curve), or 'implicit' (semi implicit
-        model).
-    downstream_line_shape : str
-        which downstream line bed shape to use: `parabola` (default), or
-        `trapezoidal` (required for semi implicit model).
     mb_calibration_strategy : str
         how to calibrate the massbalance. Currently one of 'melt_temp' (default)
         or 'temp_melt'.
@@ -187,26 +179,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     else:
         start_level = 0
 
-    if evolution_model not in ['fl_sia', 'massredis', 'implicit']:
-        raise InvalidParamsError('evolution_model should be one of '
-                                 "['fl_sia', 'massredis', 'implicit'].")
-
-    if downstream_line_shape not in ['parabola', 'trapezoidal']:
-        raise InvalidParamsError('downstream_line_shape should be one of '
-                                 "['parabola', 'trapezoidal']")
-
-    if evolution_model == 'implicit' and downstream_line_shape != 'trapezoidal':
-        raise InvalidParamsError('SemiImplicitModel needs trapezoidal'
-                                 'downstream line!')
-
     if dynamic_spinup:
         if dynamic_spinup not in ['area/dmdtda', 'volume/dmdtda']:
             raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
                                      "not supported")
-
-        if evolution_model == 'massredis':
-            raise InvalidParamsError("Dynamic spinup is not working/tested"
-                                     "with massredis!")
 
     # Time
     start = time.time()
@@ -250,9 +226,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Other things that make sense
     cfg.PARAMS['store_model_geometry'] = True
-
-    # define the used downstream line bed shape
-    cfg.PARAMS['downstream_line_shape'] = downstream_line_shape
 
     # Log the parameters
     msg = '# OGGM Run parameters:'
@@ -634,22 +607,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             except BaseException:
                 i += 1
 
-        # Which model?
-        if evolution_model == 'massredis':
-            from oggm.core.flowline import MassRedistributionCurveModel
-            evolution_model = MassRedistributionCurveModel
-        elif evolution_model == 'implicit':
-            from oggm.core.flowline import SemiImplicitModel
-            evolution_model = SemiImplicitModel
-        else:
-            from oggm.core.flowline import FluxBasedModel
-            evolution_model = FluxBasedModel
-
         # conduct historical run before dynamic melt_f calibration
         # (for comparison to old default behavior)
         workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                      min_ys=y0, ye=ye,
-                                     evolution_model=evolution_model,
                                      output_filesuffix='_historical')
         # Now compile the output
         opath = os.path.join(sum_dir, f'historical_run_output_{rgi_reg}.nc')
@@ -668,11 +629,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
                 melt_f_max=melt_f_max,
-                kwargs_run_function={'evolution_model': evolution_model,
-                                     'minimise_for': minimise_for},
+                kwargs_run_function={'minimise_for': minimise_for},
                 ignore_errors=True,
-                kwargs_fallback_function={'evolution_model': evolution_model,
-                                          'minimise_for': minimise_for},
+                kwargs_fallback_function={'minimise_for': minimise_for},
                 output_filesuffix='_spinup_historical',)
             # Now compile the output
             opath = os.path.join(sum_dir, f'spinup_historical_run_output_{rgi_reg}.nc')
@@ -802,18 +761,9 @@ def parse_args(args):
     parser.add_argument('--centerlines', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the OGGM '
                              'centerline(s) method.')
-    parser.add_argument('--evolution-model', type=str, default='fl_sia',
-                        help='which geometry evolution model to use: '
-                             '`fl_sia` (default), `massredis` (mass '
-                             'redistribution curve), or `implicit` (semi '
-                             'implicit model).')
     parser.add_argument('--mb-calibration-strategy', type=str, default='melt_temp',
                         help='how to calibrate the massbalance. Currently one of '
                              'melt_temp (default) or temp_melt.')
-    parser.add_argument('--downstream-line-shape', type=str, default='parabola',
-                        help='which downstream line bed shape to use: '
-                             '`parabola` (default), or `trapezoidal` '
-                             '(required for semi implicit model).')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -927,8 +877,6 @@ def parse_args(args):
                 add_millan_velocity=args.add_millan_velocity,
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 disable_dl_verify=args.disable_dl_verify,
-                evolution_model=args.evolution_model,
-                downstream_line_shape=args.downstream_line_shape,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,

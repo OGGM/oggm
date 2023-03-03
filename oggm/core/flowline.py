@@ -2103,7 +2103,7 @@ class SemiImplicitModel(FlowlineModel):
         fs : float
             Oerlemans sliding parameter
         inplace : bool
-            whether or not to make a copy of the flowline objects for the run
+            wether to make a copy of the flowline objects for the run
             setting to True implies that your objects will be modified at run
             time by the model (can help to spare memory)
         fixed_dt : float
@@ -2157,7 +2157,7 @@ class SemiImplicitModel(FlowlineModel):
             raise NotImplementedError("Calving is not implemented in the"
                                       "SemiImplicitModel! Set "
                                       "cfg.PARAMS['use_kcalving_for_run'] = "
-                                      "False.")
+                                      "False or use a FluxBasedModel.")
 
         self.fixed_dt = fixed_dt
         if min_dt is None:
@@ -3041,6 +3041,29 @@ def init_present_time_glacier(gdir, filesuffix=''):
     gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
+def decide_evolution_model(evolution_model=None):
+    """Simple utility to check and apply user choices in cfg.PARAMS"""
+
+    if evolution_model is not None:
+        if not issubclass(evolution_model, FlowlineModel):
+            raise InvalidParamsError('evolution_model does not seem to '
+                                     f'be of the right type: '
+                                     f'{evolution_model}')
+        return evolution_model
+
+    from_cfg = cfg.PARAMS['evolution_model'].lower()
+    if from_cfg == 'SemiImplicit'.lower():
+        evolution_model = SemiImplicitModel
+    elif from_cfg == 'FluxBased'.lower():
+        evolution_model = FluxBasedModel
+    elif from_cfg == 'MassRedistributionCurve'.lower():
+        evolution_model = MassRedistributionCurveModel
+    else:
+        raise InvalidParamsError("PARAMS['evolution_model'] not recognized"
+                                 f": {from_cfg}.")
+    return evolution_model
+
+
 @entity_task(log)
 def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
@@ -3059,7 +3082,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     output_filesuffix : str
-        this add a suffix to the output file (useful to avoid overwriting
+        this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
     mb_model : :py:class:`core.MassBalanceModel`
         a MassBalanceModel instance
@@ -3089,7 +3112,8 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         whether to store the model flowline diagnostics to disk or not.
         (default is to follow cfg.PARAMS['store_fl_diagnostics'])
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: FluxBasedModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     water_level : float
         the water level. It should be zero m a.s.l, but:
         - sometimes the frontal elevation is unrealistically high (or low).
@@ -3172,8 +3196,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         for fl in fls:
             fl.thick = fl.thick * 0.
 
-    if evolution_model is None:
-        evolution_model = FluxBasedModel
+    evolution_model = decide_evolution_model(evolution_model)
 
     if (cfg.PARAMS['use_kcalving_for_run'] and gdir.is_tidewater and
             water_level is None):

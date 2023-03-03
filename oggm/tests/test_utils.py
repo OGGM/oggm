@@ -934,23 +934,18 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
         assert kwargs['centerlines']
-        assert kwargs['evolution_model'] == 'fl_sia'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
-                                           '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
                                            '--err-dmdtda-scaling-factor', '0.5',
-                                           '--downstream-line-shape', 'trapezoidal',
                                            ])
 
-        assert kwargs['evolution_model'] == 'massredis'
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
         assert kwargs['err_dmdtda_scaling_factor'] == 0.5
-        assert kwargs['downstream_line_shape'] == 'trapezoidal'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1154,6 +1149,8 @@ class TestPreproCLI(unittest.TestCase):
                           test_topofile=topof,
                           centerlines=True,
                           override_params={'geodetic_mb_period': ref_period,
+                                           'downstream_line_shape': 'parabola',
+                                           'evolution_model': 'FluxBased',
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
                                            'use_temp_bias_from_file': False,
@@ -1294,8 +1291,8 @@ class TestPreproCLI(unittest.TestCase):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        for evolution_model, downstream_line_shape in [('fl_sia', 'parabola'),
-                                                       ('implicit', 'trapezoidal')]:
+        for evolution_model, downstream_line_shape in [('FluxBased', 'parabola'),
+                                                       ('SemiImplicit', 'trapezoidal')]:
 
             # Read in the RGI file
             inter, rgidf = _read_shp()
@@ -1315,12 +1312,12 @@ class TestPreproCLI(unittest.TestCase):
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
                               dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
-                              evolution_model=evolution_model,
-                              downstream_line_shape=downstream_line_shape,
                               test_intersects_file=inter,
                               test_topofile=topof, elev_bands=True,
-                              override_params={'geodetic_mb_period':ref_period,
+                              override_params={'geodetic_mb_period': ref_period,
                                                'baseline_climate': 'CRU',
+                                               'evolution_model': evolution_model,
+                                               'downstream_line_shape': downstream_line_shape,
                                                'use_winter_prcp_fac': False,
                                                'use_temp_bias_from_file': False,
                                                'prcp_fac': 2.5,
@@ -1427,7 +1424,7 @@ class TestPreproCLI(unittest.TestCase):
                             dse.area,
                             rtol=0.1)
 
-            if evolution_model == 'fl_sia':
+            if evolution_model == 'FluxBased':
                 dss_flux = dss
             else:
                 dss_implicit = dss
@@ -1459,6 +1456,8 @@ class TestPreproCLI(unittest.TestCase):
                   'use_winter_prcp_fac': False,
                   'use_temp_bias_from_file': False,
                   'prcp_fac': 2.5,
+                  'evolution_model': 'MassRedistributionCurve',
+                  'downstream_line_shape':'parabola',
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1466,7 +1465,6 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          evolution_model='massredis',
                           override_params=params,
                           test_topofile=topof, elev_bands=True)
 

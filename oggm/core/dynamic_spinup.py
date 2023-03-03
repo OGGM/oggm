@@ -18,7 +18,7 @@ from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    MonthlyTIModel,
                                    apparent_mb_from_any_mb)
-from oggm.core.flowline import (FluxBasedModel, FileModel,
+from oggm.core.flowline import (decide_evolution_model, FileModel,
                                 init_present_time_glacier,
                                 run_from_climate_data)
 
@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
-                       evolution_model=FluxBasedModel,
+                       evolution_model=None,
                        mb_model_historical=None, mb_model_spinup=None,
                        spinup_period=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
@@ -68,7 +68,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     climate_input_filesuffix : str
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: FluxBasedModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -201,8 +202,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     -------
     :py:class:`oggm.core.flowline.evolution_model`
         The final dynamically spined-up model. Type depends on the selected
-        evolution_model, by default a FluxBasedModel.
+        evolution_model.
     """
+
+    evolution_model = decide_evolution_model(evolution_model)
 
     if yr_rgi is None:
         # Even in calendar dates, we prefer to set rgi_year in the next year
@@ -907,7 +910,7 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f):
 
 def dynamic_melt_f_run_with_dynamic_spinup(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
-        output_filesuffix='', evolution_model=FluxBasedModel,
+        output_filesuffix='', evolution_model=None,
         mb_model_historical=None, mb_model_spinup=None,
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
         min_spinup_period=10, yr_rgi=None, precision_percent=1,
@@ -949,9 +952,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -1062,6 +1065,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     :py:class:`oggm.core.flowline.evolution_model`, float
         The final model after the run and the calculated geodetic mass balance
     """
+
+    evolution_model = decide_evolution_model(evolution_model)
+
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
 
@@ -1196,7 +1202,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
 
 def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir, melt_f, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=FluxBasedModel, minimise_for='area',
+        evolution_model=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
         yr_rgi=None, precision_percent=1,
@@ -1232,9 +1238,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -1333,6 +1339,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         The final model after the run.
     """
     from oggm.workflow import calibrate_inversion_from_consensus
+
+    evolution_model = decide_evolution_model(evolution_model)
 
     if local_variables is None:
         raise RuntimeError('Need the volume to do'
@@ -1443,7 +1451,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
 
 def dynamic_melt_f_run(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
-        output_filesuffix='', evolution_model=FluxBasedModel,
+        output_filesuffix='', evolution_model=None,
         local_variables=None, set_local_variables=False, yr_rgi=None,
         **kwargs):
     """
@@ -1473,9 +1481,9 @@ def dynamic_melt_f_run(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     local_variables : None
         Not needed in this function, just here to match with the function
         call in run_dynamic_melt_f_calibration.
@@ -1493,6 +1501,8 @@ def dynamic_melt_f_run(
     :py:class:`oggm.core.flowline.evolution_model`, float
         The final model after the run and the calculated geodetic mass balance
     """
+
+    evolution_model = decide_evolution_model(evolution_model)
 
     if set_local_variables:
         # No local variables needed in this function
@@ -1531,7 +1541,7 @@ def dynamic_melt_f_run(
 
 def dynamic_melt_f_run_fallback(
         gdir, melt_f, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=FluxBasedModel, yr_rgi=None, **kwargs):
+        evolution_model=None, yr_rgi=None, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run', which are provided to
@@ -1557,9 +1567,9 @@ def dynamic_melt_f_run_fallback(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     yr_rgi : int or None
         The rgi year of the gdir.
         Default is None
@@ -1571,6 +1581,8 @@ def dynamic_melt_f_run_fallback(
     :py:class:`oggm.core.flowline.evolution_model`
         The final model after the run.
     """
+
+    evolution_model = decide_evolution_model(evolution_model)
 
     define_new_melt_f_in_gdir(gdir, melt_f)
 
@@ -1728,7 +1740,7 @@ def run_dynamic_melt_f_calibration(
     -------
     :py:class:`oggm.core.flowline.evolution_model`
         The final dynamically spined-up model. Type depends on the selected
-        evolution_model, by default a FluxBasedModel.
+        evolution_model.
     """
     # melt_f constraints
     if melt_f_min is None:
