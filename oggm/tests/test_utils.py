@@ -1156,6 +1156,7 @@ class TestPreproCLI(unittest.TestCase):
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
+                                           'use_temp_bias_from_file': False,
                                            'prcp_fac': 2.5,
                                            }
                           )
@@ -1321,6 +1322,7 @@ class TestPreproCLI(unittest.TestCase):
                               override_params={'geodetic_mb_period':ref_period,
                                                'baseline_climate': 'CRU',
                                                'use_winter_prcp_fac': False,
+                                               'use_temp_bias_from_file': False,
                                                'prcp_fac': 2.5,
                                                })
 
@@ -1455,6 +1457,7 @@ class TestPreproCLI(unittest.TestCase):
         params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'baseline_climate': 'CRU',
                   'use_winter_prcp_fac': False,
+                  'use_temp_bias_from_file': False,
                   'prcp_fac': 2.5,
                   }
         # Remove bad actors
@@ -1561,6 +1564,7 @@ class TestPreproCLI(unittest.TestCase):
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
+                                           'use_temp_bias_from_file': False,
                                            'prcp_fac': 2.5,
                                            }
                           )
@@ -1762,6 +1766,7 @@ class TestBenchmarkCLI(unittest.TestCase):
                                        'geodetic_mb_period': '2000-01-01_2010-01-01',
                                        'baseline_climate': 'CRU',
                                        'use_winter_prcp_fac': False,
+                                       'use_temp_bias_from_file': False,
                                        'prcp_fac': 2.5,
                                        })
 
