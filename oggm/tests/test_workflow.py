@@ -146,39 +146,6 @@ def up_to_inversion(reset=False):
     return gdirs
 
 
-def up_to_distrib(reset=False):
-    # for cross val basically
-
-    gdirs = up_to_climate(reset=reset)
-
-    with open(CLI_LOGF, 'rb') as f:
-        clilog = pickle.load(f)
-
-    if clilog != 'cru':
-        reset = True
-    else:
-        try:
-            tasks.compute_ref_t_stars(gdirs)
-        except Exception:
-            reset = True
-
-    if reset:
-        # Use CRU
-        cfg.PARAMS['prcp_fac'] = 2.5
-        cfg.PARAMS['baseline_climate'] = 'CRU'
-        with warnings.catch_warnings():
-            # There is a warning from salem
-            warnings.simplefilter("ignore")
-            workflow.execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.compute_ref_t_stars(gdirs)
-        workflow.execute_entity_task(tasks.local_t_star, gdirs)
-        workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
-        with open(CLI_LOGF, 'wb') as f:
-            pickle.dump('cru', f)
-
-    return gdirs
-
-
 def random_for_plot():
 
     # Fake Reset (all these tests are horribly coded)
