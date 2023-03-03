@@ -645,7 +645,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.core.flowline import FluxBasedModel
             evolution_model = FluxBasedModel
 
-        # conduct historical run before dynamic mu calibration
+        # conduct historical run before dynamic melt_f calibration
         # (for comparison to old default behavior)
         workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                      min_ys=y0, ye=ye,

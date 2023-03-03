@@ -4071,7 +4071,7 @@ class TestDynamicSpinup:
                    err_dmdtda_scaling_factor
 
         # test that error is raised if user provides flowlines but want to
-        # include inversion during dynamic mu calibration
+        # include inversion during dynamic melt_f calibration
         if do_inversion:
             # artificial change of flowlines to force error
             fls[0].thick = np.zeros(fls[0].nx)

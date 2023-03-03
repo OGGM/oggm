@@ -489,7 +489,7 @@ class MonthlyTIModel(MassBalanceModel):
                 raise InvalidWorkflowError('We now work exclusively with '
                                            'calendar years.')
 
-            # Quick trick because we now the size of our array
+            # Quick trick because we know the size of our array
             years = np.repeat(np.arange(time[-1].year - ny + 1,
                                         time[-1].year + 1), 12)
             pok = slice(None)  # take all is default (optim)
@@ -1371,7 +1371,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
 
 def _fallback_mb_calibration(gdir):
-    """A Fallback function if climate.mu_star_calibration raises an Error.
+    """A Fallback function if massbalance.mb_calibration_from_scalar_mb raises an Error.
 
     If calibration fails, this function will still read, expand and write a
     `mb_calib.json` filled with NANs.

@@ -1939,7 +1939,7 @@ def run_dynamic_melt_f_calibration(
 
     # Here start with own spline minimisation algorithm
     def minimise_with_spline_fit(fct_to_minimise, melt_f_guess, mismatch):
-        # defines limits of mu in accordance to maximal allowed change
+        # defines limits of melt_f in accordance to maximal allowed change
         # between iterations
         melt_f_limits = [melt_f_initial - melt_f_max_step_length,
                          melt_f_initial + melt_f_max_step_length]
