@@ -3085,7 +3085,10 @@ class GlacierDirectory(object):
                 except AttributeError:
                     # needed for back-compatibility before v1.6
                     out['baseline_yr_1'] = nc.hydro_yr_1
-        except (AttributeError, FileNotFoundError):
+                out['baseline_climate_ref_hgt'] = nc.ref_hgt
+                out['baseline_climate_ref_pix_lon'] = nc.ref_pix_lon
+                out['baseline_climate_ref_pix_lat'] = nc.ref_pix_lat
+        except FileNotFoundError:
             pass
 
         return out

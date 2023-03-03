@@ -15,7 +15,7 @@ import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear,
-                        monthly_timeseries, ncDataset,
+                        monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
                         weighted_average_1d, lazy_property)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
@@ -1451,7 +1451,7 @@ def mb_calibration_from_scalar_mb(gdir,
                                   prcp_fac=None,
                                   prcp_fac_min=None,
                                   prcp_fac_max=None,
-                                  temp_bias=0,
+                                  temp_bias=None,
                                   temp_bias_min=None,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
@@ -1474,11 +1474,19 @@ def mb_calibration_from_scalar_mb(gdir,
     Huss & Hock 2015, but with some differences:
     - this method is flexible, i.e. you can choose any order of calibration
     - we use different defaults for the temperature bias and the
-      precipitation factor (see documentation)
+      precipitation factor
 
     As a result, the current default in OGGM is to chose certain defaults
     for prcp_fac and temp_bias, and calibrate melt_f. If this fails,
     calibrate temp_bias.
+
+    Here are the new defaults for the W5E5 dataset:
+    - for precipitation: if PARAMS['use_winter_prcp_fac'] is True (the default)
+      and the baseline dataset is W5E5 (the default), then we use a precipitation
+      factor obtained by deriving a relation between the winter precipitation
+      and at a glacier and the necessary correction to match WGMS observations
+      (see Schuster et al., 2023 for details)
+    - for temperature: use_temp_bias_from_file
 
     Note that this does not compute the apparent mass balance at
     the same time - users need to run `apparent_mb_from_any_mb after`
@@ -1551,7 +1559,9 @@ def mb_calibration_from_scalar_mb(gdir,
         optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
     temp_bias: float
         the default value to use as temperature bias (or the starting value when
-        optimizing MB). Defaults to 0.
+        optimizing MB). Defaults to 0, unless the dataset source is w5e5,
+        in which case we will use the pre-computed bias following the method
+        described above.
     temp_bias_min: float
         the minimum accepted value for the temperature bias during optimisation.
         Defaults to cfg.PARAMS['temp_bias_min'].
@@ -1635,6 +1645,24 @@ def mb_calibration_from_scalar_mb(gdir,
     else:
         # if a prcp_fac is set, we will use it instead of the default option
         prcp_fac = prcp_fac
+
+    if temp_bias is None:
+        temp_bias = 0
+        if cfg.PARAMS['use_temp_bias_from_file']:
+            climinfo = gdir.get_climate_info()
+            if 'w5e5' not in climinfo['baseline_climate_source'].lower():
+                raise InvalidWorkflowError('use_temp_bias_from_file currently '
+                                           'only available for W5E5 data.')
+            bias_df = get_temp_bias_dataframe()
+            ref_lon = climinfo['baseline_climate_ref_pix_lon']
+            ref_lat = climinfo['baseline_climate_ref_pix_lat']
+            sel_df = bias_df.loc[np.isclose(bias_df.lon_val, ref_lon) &
+                                 np.isclose(bias_df.lat_val, ref_lat)]
+            if len(sel_df) == 0:
+                log.warning('No reference temp bias found for this glacier: '
+                            f'{gdir.rgi_id}. Continuing with default')
+            else:
+                temp_bias = sel_df.median_temp_bias_w_area.iloc[0]
 
     # Create the MB model we will calibrate
     mb_mod = mb_model_class(gdir,

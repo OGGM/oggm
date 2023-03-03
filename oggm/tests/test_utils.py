@@ -993,7 +993,7 @@ class TestPreproCLI(unittest.TestCase):
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf,
+                          test_rgidf=rgidf, disable_mp=False,
                           test_intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
@@ -1114,6 +1114,11 @@ class TestPreproCLI(unittest.TestCase):
         assert np.all(df['baseline_climate_source'] == 'GSWP3_W5E5')
         assert np.all(df['reference_mb'] < 0)
         assert np.all(df['reference_mb_err'] > 0)
+        # this is from ref file
+        assert np.all(df['temp_bias'] > 0)
+        np.testing.assert_allclose(df['temp_bias'], df['temp_bias'].iloc[0])
+        # Not far from default
+        np.testing.assert_allclose(df['melt_f'], 5, atol=2)
 
         # Extended file
         fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
@@ -1127,7 +1132,6 @@ class TestPreproCLI(unittest.TestCase):
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
-
 
     @pytest.mark.slow
     def test_full_run_cru_centerlines(self):

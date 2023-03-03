@@ -532,6 +532,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
     PARAMS['use_winter_prcp_fac'] = cp.as_bool('use_winter_prcp_fac')
+    PARAMS['use_temp_bias_from_file'] = cp.as_bool('use_temp_bias_from_file')
 
     k = 'winter_prcp_fac_ab'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
@@ -570,7 +571,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'grid_dx_method', 'compress_climate_netcdf',
            'mp_processes', 'use_multiprocessing',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines', 'border',
+           'use_multiple_flowlines', 'border', 'use_temp_bias_from_file',
            'mpi_recv_buf_size', 'map_proj',
            'hydro_month_sh', 'hydro_month_nh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
