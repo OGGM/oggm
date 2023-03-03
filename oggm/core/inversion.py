@@ -156,7 +156,7 @@ def _inversion_simple(a3, a0):
     return (-a0)**(1./5.)
 
 
-def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
+def _compute_thick(a0s, a3, flux_a0, _inv_function):
     """Content of the original inner loop of the mass-conservation inversion.
 
     Put here to avoid code duplication.
@@ -166,15 +166,12 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
     a0s
     a3
     flux_a0
-    shape_factor
     _inv_function
 
     Returns
     -------
     the thickness
     """
-
-    a0s = a0s / (shape_factor ** 3)
 
     if np.any(~np.isfinite(a0s)):
         raise RuntimeError('non-finite coefficients in the polynomial.')
@@ -315,36 +312,7 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     a0 = - flux_a0 / ((rho * cfg.G * slope) ** 3 * fd)
     a3 = fs / fd
 
-    # Inversion with shape factors?
-    sf_func = None
-    if shape_factor == 'Adhikari' or shape_factor == 'Nye':
-        sf_func = utils.shape_factor_adhikari
-    elif shape_factor == 'Huss':
-        sf_func = utils.shape_factor_huss
-
-    sf = np.ones(slope.shape)  # Default shape factor is 1
-    if sf_func is not None:
-
-        # Start iteration for shape factor with first guess of 1
-        i = 0
-        sf_diff = np.ones(slope.shape)
-
-        # Some hard-coded factors here
-        sf_tol = 1e-2
-        max_sf_iter = 20
-
-        while i < max_sf_iter and np.any(sf_diff > sf_tol):
-            out_thick = _compute_thick(a0, a3, flux_a0, sf, _inv_function)
-            is_rectangular = np.repeat(shape == 'rectangular', len(width))
-            sf_diff[:] = sf[:]
-            sf = sf_func(width, out_thick, is_rectangular)
-            sf_diff = sf_diff - sf
-            i += 1
-
-        log.info('Shape factor {:s} used, took {:d} iterations for '
-                 'convergence.'.format(shape_factor, i))
-
-    return _compute_thick(a0, a3, flux_a0, sf, _inv_function)
+    return _compute_thick(a0, a3, flux_a0, _inv_function)
 
 
 def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
@@ -433,14 +401,6 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     a3 = fs / fd
     rho = cfg.PARAMS['ice_density']
 
-    # Inversion with shape factors?
-    sf_func = None
-    use_sf = cfg.PARAMS.get('use_shape_factor_for_inversion', None)
-    if use_sf == 'Adhikari' or use_sf == 'Nye':
-        sf_func = utils.shape_factor_adhikari
-    elif use_sf == 'Huss':
-        sf_func = utils.shape_factor_huss
-
     # Clip the slope, in rad
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
     min_slope = np.deg2rad(cfg.PARAMS[min_slope])
@@ -458,34 +418,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
         a0s = - cl['flux_a0'] / ((rho*cfg.G*slope)**3*fd)
 
-        sf = np.ones(slope.shape)  # Default shape factor is 1
-        if sf_func is not None:
-
-            # Start iteration for shape factor with first guess of 1
-            i = 0
-            sf_diff = np.ones(slope.shape)
-
-            # Some hard-coded factors here
-            sf_tol = 1e-2
-            max_sf_iter = 20
-
-            while i < max_sf_iter and np.any(sf_diff > sf_tol):
-                out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf,
-                                           _inv_function)
-
-                sf_diff[:] = sf[:]
-                sf = sf_func(w, out_thick, cl['is_rectangular'])
-                sf_diff = sf_diff - sf
-                i += 1
-
-            log.info('Shape factor {:s} used, took {:d} iterations for '
-                     'convergence.'.format(use_sf, i))
-
-            # TODO: possible shape factor optimisations
-            # thick update could be used as iteration end criterion instead
-            # we iterate for all grid points, even if some already converged
-
-        out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf, _inv_function)
+        out_thick = _compute_thick(a0s, a3, cl['flux_a0'], _inv_function)
 
         # volume
         is_rect = cl['is_rectangular']

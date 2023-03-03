@@ -547,13 +547,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     k = 'store_fl_diagnostic_variables'
     PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
 
-    # Inversion
-    k = 'use_shape_factor_for_inversion'
-    PARAMS[k] = cp[k]
-
     # Flowline model
-    k = 'use_shape_factor_for_fluxbasedmodel'
-    PARAMS[k] = cp[k]
     k = 'glacier_length_method'
     PARAMS[k] = cp[k]
 
@@ -577,8 +571,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task','ref_mb_valid_window',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
-           'use_shape_factor_for_inversion', 'use_rgi_area',
-           'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
+           'use_rgi_area', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',

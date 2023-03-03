@@ -1601,14 +1601,6 @@ class FluxBasedModel(FlowlineModel):
         self.min_dt = min_dt
         self.cfl_number = cfl_number
 
-        # Do we want to use shape factors?
-        self.sf_func = None
-        use_sf = cfg.PARAMS.get('use_shape_factor_for_fluxbasedmodel')
-        if use_sf == 'Adhikari' or use_sf == 'Nye':
-            self.sf_func = utils.shape_factor_adhikari
-        elif use_sf == 'Huss':
-            self.sf_func = utils.shape_factor_huss
-
         # Calving params
         if do_kcalving is None:
             do_kcalving = cfg.PARAMS['use_kcalving_for_run']
@@ -1747,15 +1739,6 @@ class FluxBasedModel(FlowlineModel):
             # Staggered thick
             thick_stag[1:-1] = (thick[0:-1] + thick[1:]) / 2.
             thick_stag[[0, -1]] = thick[[0, -1]]
-
-            if self.sf_func is not None:
-                # TODO: maybe compute new shape factors only every year?
-                sf = self.sf_func(fl.widths_m, fl.thick, fl.is_rectangular)
-                if is_trib:
-                    # for inflowing tributary, the sf makes no sense
-                    sf = np.append(sf, 1.)
-                sf_stag[1:-1] = (sf[0:-1] + sf[1:]) / 2.
-                sf_stag[[0, -1]] = sf[[0, -1]]
 
             # Staggered velocity (Deformation + Sliding)
             # _fd = 2/(N+2) * self.glen_a
@@ -3066,7 +3049,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
                        water_level=None,
-                       evolution_model=FluxBasedModel, stop_criterion=None,
+                       evolution_model=None, stop_criterion=None,
                        init_model_filesuffix=None, init_model_yr=None,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
@@ -3188,6 +3171,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     if zero_initial_glacier:
         for fl in fls:
             fl.thick = fl.thick * 0.
+
+    if evolution_model is None:
+        evolution_model = FluxBasedModel
 
     if (cfg.PARAMS['use_kcalving_for_run'] and gdir.is_tidewater and
             water_level is None):
