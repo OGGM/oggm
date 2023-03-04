@@ -1660,9 +1660,10 @@ def mb_calibration_from_scalar_mb(gdir,
                                  np.isclose(bias_df.lat_val, ref_lat)]
             if len(sel_df) == 0:
                 log.warning('No reference temp bias found for this glacier: '
-                            f'{gdir.rgi_id}. Continuing with default')
+                            f'{gdir.rgi_id}. Continuing with default.')
             else:
-                temp_bias = sel_df.median_temp_bias_w_area.iloc[0]
+                temp_bias = sel_df.median_temp_bias_grouped.iloc[0]
+                assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
     # Create the MB model we will calibrate
     mb_mod = mb_model_class(gdir,

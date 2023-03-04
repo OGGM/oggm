@@ -1356,7 +1356,7 @@ def get_geodetic_mb_dataframe(file_path=None):
 def get_temp_bias_dataframe(dataset='w5e5'):
     """Fetches the reference geodetic dataframe for calibration.
 
-    Currently that's the data from Hughonnet et al 2021, corrected for
+    Currently, that's the data from Hughonnet et al. (2021), corrected for
     outliers and with void filled. The data preparation script is
     available at
     https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
@@ -1376,7 +1376,7 @@ def get_temp_bias_dataframe(dataset='w5e5'):
 
     # fetch the file online
     base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
-                'w5e5_temp_bias_v2023.1.csv')
+                'w5e5_temp_bias_v2023.2.csv')
     file_path = file_downloader(base_url)
 
     # Did we open it yet?
