@@ -341,7 +341,9 @@ def test_model_section_calving():
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0,
                                     inplace=True,
                                     is_tidewater=True)
-    graphics.plot_modeloutput_section(model)
+    fig = plt.figure(figsize=(12, 6))
+    ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
+    graphics.plot_modeloutput_section(model=model, ax=ax)
     fig.tight_layout()
     return fig
 
