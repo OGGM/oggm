@@ -79,7 +79,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
                       override_params=None,
-                      mb_calibration_strategy='melt_temp',
+                      mb_calibration_strategy='melt_temp_w_bias_file',
                       add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
@@ -126,8 +126,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     centerlines : bool
         compute all flowlines based on the OGGM centerline(s) method.
     mb_calibration_strategy : str
-        how to calibrate the massbalance. Currently one of 'melt_temp' (default)
-        or 'temp_melt'.
+        how to calibrate the massbalance. Currently one of:
+        - 'melt_temp_w_bias_file' (default)
+        - 'melt_temp'
+        - 'temp_melt'
     add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -198,6 +200,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if override_params is None:
         override_params = {}
 
+    # Use multiprocessing?
+    override_params['use_multiprocessing'] = not disable_mp
+
+    # How many grid points around the glacier?
+    # Make it large if you expect your glaciers to grow large
+    override_params['border'] = border
+
+    # Set to True for operational runs
+    override_params['continue_on_error'] = continue_on_error
+
+    # Check for the integrity of the files OGGM downloads at run time
+    # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
+    # takes a long time, so deactivating this can make sense
+    override_params['dl_verify'] = not disable_dl_verify
+
+    # Do not use bias file if user wants melt_temp only
+    if mb_calibration_strategy in ['melt_temp', 'temp_melt']:
+        override_params['use_temp_bias_from_file'] = False
+
+    # Other things that make sense
+    override_params['store_model_geometry'] = True
+
     utils.mkdir(working_dir)
     override_params['working_dir'] = working_dir
 
@@ -206,26 +230,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                    logging_level=logging_level,
                    future=True)
 
-    # Use multiprocessing?
-    cfg.PARAMS['use_multiprocessing'] = not disable_mp
-
-    # How many grid points around the glacier?
-    # Make it large if you expect your glaciers to grow large
-    cfg.PARAMS['border'] = border
-
-    # Set to True for operational runs
-    cfg.PARAMS['continue_on_error'] = continue_on_error
-
-    # Check for the integrity of the files OGGM downloads at run time
-    # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
-    # takes a long time, so deactivating this can make sense
-    cfg.PARAMS['dl_verify'] = not disable_dl_verify
-
     # Prepare the download of climate file to be shared across processes
     # TODO
-
-    # Other things that make sense
-    cfg.PARAMS['store_model_geometry'] = True
 
     # Log the parameters
     msg = '# OGGM Run parameters:'
@@ -519,8 +525,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Climate
         workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
-        if mb_calibration_strategy == 'melt_temp':
+        # Small optim to avoid concurrency
+        utils.get_geodetic_mb_dataframe()
+        utils.get_temp_bias_dataframe()
+        if mb_calibration_strategy in ['melt_temp_w_bias_file', 'melt_temp']:
             workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
@@ -531,8 +539,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f')
         else:
-            raise InvalidParamsError('mb_calibration_strategy should be one of '
-                                     'melt_temp or temp_melt')
+            raise InvalidParamsError('mb_calibration_strategy not understood: '
+                                     f'{mb_calibration_strategy}')
 
         workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
@@ -761,9 +769,11 @@ def parse_args(args):
     parser.add_argument('--centerlines', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the OGGM '
                              'centerline(s) method.')
-    parser.add_argument('--mb-calibration-strategy', type=str, default='melt_temp',
+    parser.add_argument('--mb-calibration-strategy', type=str,
+                        default='melt_temp_w_bias_file',
                         help='how to calibrate the massbalance. Currently one of '
-                             'melt_temp (default) or temp_melt.')
+                             'melt_temp_w_bias_file (default) , melt_temp'
+                             'or temp_melt.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '

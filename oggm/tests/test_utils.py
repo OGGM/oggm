@@ -807,7 +807,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
-        assert kwargs['mb_calibration_strategy'] == 'melt_temp'
+        assert kwargs['mb_calibration_strategy'] == 'melt_temp_w_bias_file'
         assert not kwargs['add_consensus_thickness']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
