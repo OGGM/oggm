@@ -3,7 +3,6 @@ import shutil
 import unittest
 import pickle
 import pytest
-import warnings
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
@@ -101,6 +100,8 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['downstream_line_shape'] = 'parabola'
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)

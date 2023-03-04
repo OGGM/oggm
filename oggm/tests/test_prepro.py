@@ -2380,6 +2380,8 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.PARAMS['use_kcalving_for_run'] = True
         cfg.PARAMS['inversion_calving_k'] = 1
         cfg.PARAMS['calving_k'] = 1
+        cfg.PARAMS['evolution_model'] = 'FluxBased'
+        cfg.PARAMS['calving_k'] = 1
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)

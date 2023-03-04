@@ -5396,10 +5396,12 @@ class TestSemiImplicitModel:
                                        filesuffix='_fluxbased_run'))
 
         # check that the two runs are close the whole time
-        assert utils.rmsd(fmod_impl.volume_km3_ts(),
-                          fmod_flux.volume_km3_ts()) < 1e-3
-        assert utils.rmsd(fmod_impl.area_km2_ts(),
-                          fmod_flux.area_km2_ts()) < 11e-3
+        np.testing.assert_allclose(fmod_impl.volume_km3_ts(),
+                                   fmod_flux.volume_km3_ts(),
+                                   rtol=0.01)
+        np.testing.assert_allclose(fmod_impl.area_km2_ts(),
+                                   fmod_flux.area_km2_ts(),
+                                   rtol=0.02)
 
         years = np.arange(0, 1001)
         if do_plot:

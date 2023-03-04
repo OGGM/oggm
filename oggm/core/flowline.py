@@ -3045,10 +3045,6 @@ def decide_evolution_model(evolution_model=None):
     """Simple utility to check and apply user choices in cfg.PARAMS"""
 
     if evolution_model is not None:
-        if not issubclass(evolution_model, FlowlineModel):
-            raise InvalidParamsError('evolution_model does not seem to '
-                                     f'be of the right type: '
-                                     f'{evolution_model}')
         return evolution_model
 
     from_cfg = cfg.PARAMS['evolution_model'].lower()

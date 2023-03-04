@@ -479,6 +479,7 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
+        cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     def tearDown(self):
         self.rm_dir()

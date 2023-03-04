@@ -401,6 +401,8 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     cfg.PARAMS['border'] = border
     cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['downstream_line_shape'] = 'parabola'
     cfg.PARAMS['prcp_fac'] = 2.5
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -508,6 +510,7 @@ def init_columbia(reset=False):
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -548,6 +551,7 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity)
