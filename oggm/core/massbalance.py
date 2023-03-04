@@ -1672,7 +1672,7 @@ def mb_calibration_from_scalar_mb(gdir,
                             check_calib_params=False)
 
     # Check that the years are available
-    for y in years[[0, -1]]:
+    for y in years:
         if not mb_mod.is_year_valid(y):
             raise ValueError(f'year {y} out of the valid time bounds: '
                              f'[{mb_mod.ys}, {mb_mod.ye}]')
@@ -1828,8 +1828,10 @@ def _check_terminus_mass_flux(gdir, fls):
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
 def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     """Compute apparent mb from a linear mass balance assumption (for testing).
+
     This is for testing currently, but could be used as alternative method
     for the inversion quite easily.
+
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`

@@ -15,6 +15,7 @@ References::
         doi:10.5194/tc-8-503-2014
 """
 # Built ins
+import warnings
 import logging
 import copy
 from itertools import groupby
@@ -1889,7 +1890,10 @@ def catchment_width_geom(gdir):
         # intersect with our buffered catchment/glacier intersections
         is_rectangular = []
         for wg in wlines:
-            is_rectangular.append(np.any(gdfi.intersects(wg)))
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', category=RuntimeWarning)
+                inter = gdfi.intersects(wg)
+            is_rectangular.append(np.any(inter))
         is_rectangular = _filter_grouplen(is_rectangular, minsize=5)
 
         # we filter the lines which have a large altitude range

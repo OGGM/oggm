@@ -121,6 +121,7 @@ extensions = [
     'numpydoc',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
+    'sphinx_reredirects',
     'sphinx_togglebutton',
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
@@ -129,6 +130,12 @@ extensions = [
 extlinks = {'issue': ('https://github.com/OGGM/oggm/issues/%s', 'GH'),
             'pull': ('https://github.com/OGGM/oggm/pull/%s', 'PR'),
             }
+
+redirects = {
+    "input-data": "shop.html",
+    "mass-balance-2012-pergla": "mass-balance-monthly.html",
+    "mass-balance-2012": "mass-balance-16guide.html",
+}
 
 autosummary_generate = True
 

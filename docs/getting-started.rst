@@ -139,25 +139,9 @@ Some explanations:
 .. _Least Recently Used (LRU): https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used_(LRU)
 
 
-OGGM workflow
--------------
-
-For a step by step tutorial of the entire OGGM workflow, download
-the
-:download:`getting started <https://raw.githubusercontent.com/OGGM/tutorials/master/notebooks/getting_started.ipynb>`
-jupyter notebook (right-click -> "Save link as")  and run it using the following command
-(from the directory where you downloaded the tutorial)::
-
-    $ jupyter-notebook getting_started.ipynb
-
-
-Alternatively, you can try OGGM directly in your browser without having
-to install anything! Visit our tutorials for more info.
-
-
 OGGM tutorials
 --------------
 
-Refer to our `tutorials`_ for real-world applications.
+Refer to our `tutorials`_ for real-world applications!
 
 .. _tutorials: https://oggm.org/tutorials

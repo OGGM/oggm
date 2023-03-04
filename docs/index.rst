@@ -1,29 +1,30 @@
 
-A modular open source glacier model in Python
----------------------------------------------
+A modular and open source glacier model
+---------------------------------------
 
-**OGGM is an open source modelling framework** able to simulate past and
-future mass balance, volume and geometry of (almost) any glacier in the world,
-in a fully automated and extensible workflow.
+**OGGM is a cutting-edge open source modelling framework** designed to simulate
+the past and future mass balance, volume, and geometry of glaciers worldwide.
 
-The model can account for glacier geometry (including contributory branches) and
-ships with several glacier evolution models, including
-an explicit ice dynamics module. We rely exclusively on publicly
-available data for calibration and validation. **OGGM is modular and
-supports novel modelling workflows**: it LOVES to be remixed and reused!
+The model features several glacier evolution models, including an explicit ice
+dynamics module accounting for glacier geometry and frontal ablation.
+With an unwavering commitment to using publicly available data for calibration
+and validation, OGGM is a reliable and readily applicable tool for studying glaciers.
 
+OGGM is also a modular platform that supports novel modelling workflows,
+encouraging researchers to create unique models and analyses for their research.
+Our framework is designed to be flexible and adaptable, making it an
+ideal tool for a wide range of applications in glaciology and related fields.
 
 **This webpage is for the software documentation: for general information about the
 OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 
 .. include:: _generated/version_text.txt
 
+Video presentation
+^^^^^^^^^^^^^^^^^^
 
-IARPC presentation (April 2020)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you are new to OGGM would like a short introduction, here is a recent
-15' presentation about the project:
+If you are new to OGGM would like a short introduction, here is a 15'
+presentation from April 2020:
 
 .. raw:: html
 
@@ -67,10 +68,10 @@ How to use the model, with concrete code examples and links to the tutorials.
 * :doc:`cloud`
 * :doc:`installing-oggm`
 * :doc:`getting-started`
-* :doc:`input-data`
-* :doc:`run`
-* :doc:`practicalities`
+* :doc:`shop`
+* `Tutorials <https://oggm.org/tutorials/stable>`_
 * :doc:`api`
+* :doc:`practicalities`
 * :doc:`faq`
 * :doc:`pitfalls`
 * :doc:`assets`
@@ -85,8 +86,8 @@ How to use the model, with concrete code examples and links to the tutorials.
     cloud.rst
     installing-oggm.rst
     getting-started.rst
-    input-data.rst
-    run.rst
+    shop.rst
+    Tutorials <https://oggm.org/tutorials/stable>
     api.rst
     practicalities.rst
     faq.rst
@@ -98,7 +99,7 @@ How to use the model, with concrete code examples and links to the tutorials.
 Contributing
 ^^^^^^^^^^^^
 
-Do you want to contribute to the model? You are more than welcome to do so and this is the right place to start.
+Do you want to contribute to the model? This is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`

@@ -84,7 +84,7 @@ save space on our servers, level 4 data might be unavailable for some
 experiments (but easily recovered if needed).
 
 .. admonition:: **Changes to the version 1.4 directories**
-    :class: note, dropdown
+   :class: note, dropdown
 
    In previous versions, level 4 files were the "reduced" directories with intermediate
    files removed. Level 5 was very similar, but without the dynamic spinup files.
@@ -221,7 +221,7 @@ for an example.
     - baseline climate quality checked and corrected if needed with :py:func:`tasks.historical_climate_qc` with ``N=3``.
       If the condition of at least 3 months of melt per year at the terminus and 3 months of accumulation
       at the glacier top is not reached, temperatures are shifted (path index: *qc3*).
-    - mass balance parameters calibrated with the standard OGGM procedure (:doc:`mass-balance-2012`, path index: *no_match*).
+    - mass balance parameters calibrated with the standard OGGM procedure (path index: *no_match*).
       No calibration against geodetic MB (see options below for regional calibration).
     - ice volume inversion calibrated to match the ice volume from [Farinotti_etal_2019]_
       **at the RGI region level**, i.e. glacier estimates might differ. If not specified otherwise,
@@ -281,12 +281,10 @@ for an example.
     There are different mass balance calibration options available in the preprocessed directories:
 
     -   **no_match**: This is the default calibration option. For calibration, the direct glaciological WGMS data is used
-        and the `Marzeion et al., 2012`_ *tstar* method is applied to interpolate to glaciers without measurements
-        (see also :doc:`mass-balance-2012`). With this method, the geodetic estimates are not matched.
+        and the `Marzeion et al., 2012`_ *tstar* method is applied to interpolate to glaciers without measurements. With this method, the geodetic estimates are not matched.
     -   **match_geod**: The default calibration with direct glaciological WGMS data is still applied on the glacier per
         glacier level, but on the regional level the epsilon (residual) is corrected to match the geodetic estimates
-        from `Hugonnet et al., 2021`_ (using :py:func:`oggm.workflow.match_regional_geodetic_mb`, see also
-        :ref:`regional-match-calib`). For example:
+        from `Hugonnet et al., 2021`_. For example:
 
         - `L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/match_geod/>`_ for CRU + elevation bands flowlines + matched on regional geodetic mass balances
         - `L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod/>`_ for ERA5 + elevation bands flowlines + matched on regional geodetic mass balances
@@ -295,7 +293,7 @@ for an example.
         (mean mass balance change between 2000 and 2020) are used for calibration. The mass balance model parameter
         :math:`\mu ^{*}` of each glacier is calibrated to match individually the geodetic estimates (using
         :py:func:`oggm.core.climate.mustar_calibration_from_geodetic_mb`). For the preprocessed glacier directories, the
-        allowed :math:`\mu ^{*}` range is set to 20--600 (more in :doc:`mass-balance-2012-pergla`).
+        allowed :math:`\mu ^{*}` range is set to 20--600 (more in :doc:`mass-balance-monthly`).
         This option only works for elevation band flowlines at the moment. match_geod_pergla makes only sense without
         "external" climate quality check and correction (i.e. qc0) as this is already done internally. For example:
 
@@ -385,6 +383,12 @@ scaled (fractional) anomalies for precipitation.
 
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
+.. [Harris_et_al_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
+   D. H. (2014). Updated high-resolution grids of monthly climatic observations
+   - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
+   623–642. https://doi.org/10.1002/joc.3711
+
+
 ERA5 and CERA-20C
 ~~~~~~~~~~~~~~~~~
 
@@ -409,10 +413,14 @@ recommend to use data from 1850 onwards.
 
 .. _HISTALP: http://www.zamg.ac.at/histalp/
 
+.. [Chimani_et_al_2012] Chimani, B., Matulla, C., Böhm, R., Hofstätter, M.:
+   A new high resolution absolute Temperature Grid for the Greater Alpine Region
+   back to 1780, Int. J. Climatol., 33(9), 2129–2141, DOI 10.1002/joc.3574, 2012.
+
 .. ipython:: python
    :suppress:
 
-    fpath = "_code/prepare_climate.py"
+    fpath = "_code/prepare_hef.py"
     with open(fpath) as f:
         code = compile(f.read(), fpath, 'exec')
         exec(code)
@@ -466,7 +474,7 @@ Traditional in-situ MB data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In-situ mass balance data are used by OGGM to calibrate and validate the
-first generation mass balance model (:doc:`mass-balance-2012`).
+first generation mass balance model.
 We rely on mass balance observations provided by the
 World Glacier Monitoring Service (`WGMS`_).
 The `Fluctuations of Glaciers (FoG)`_ database contains annual mass balance
@@ -491,11 +499,11 @@ have access to the timeseries through the glacier directory:
 
 .. ipython:: python
 
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/elev_bands/w5e5/qc0/pcpwin/match_geod_pergla/'
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/exps/L3-L5_files/W5E5_melt_calib/'
     gdir = workflow.init_glacier_directories('RGI60-11.00897',
                                              from_prepro_level=3,
                                              prepro_base_url=base_url,
-                                             prepro_border=10)[0]
+                                             prepro_border=80)[0]
     mb = gdir.get_ref_mb_data()
     @savefig plot_ref_mbdata.png width=100%
     mb[['ANNUAL_BALANCE']].plot(title='WGMS data: Hintereisferner');
@@ -591,6 +599,15 @@ ice thickness products can be downloaded and reprojected to the glacier director
     :align: left
 
     Example of the reprojected ice thickness products at Malaspina glacier
+
+
+Millan et al. (2022) ice velocity and thickness products
+--------------------------------------------------------
+
+Similarly, we provide data from the recent
+`Millan et al. (2022) <https://www.nature.com/articles/s41561-021-00885-z>`_
+global study (visit our `tutorials`_ if you are interested!).
+
 
 Raw data sources
 ----------------

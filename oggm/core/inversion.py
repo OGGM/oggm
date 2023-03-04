@@ -549,7 +549,12 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     cl_is_trap = cl['is_trapezoid'][n_smoothing:]
     cl_is_rect = cl['is_rectangular'][n_smoothing:]
     cl_bed_h = cl_sfc_h - cl_thick
-    downstream_sfc_h = dic_ds['surface_h'][:5]
+    try:
+        downstream_sfc_h = dic_ds['surface_h'][:5]
+    except KeyError:
+        raise InvalidWorkflowError('Please run compute_downstream_line and '
+                                   'compute_downstream_bedshape for the '
+                                   'filter.')
 
     # we smooth if the depression is larger than max_depression
     if downstream_sfc_h[0] - cl_bed_h[-1] > max_depression:
