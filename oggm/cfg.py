@@ -516,7 +516,6 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
-    PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
     PARAMS['use_kcalving_for_inversion'] = cp.as_bool('use_kcalving_for_inversion')
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
@@ -561,6 +560,12 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
         PARAMS['prcp_fac'] = cp.as_float('prcp_fac')
     except ValueError:
         PARAMS['prcp_fac'] = None
+
+    # This also
+    try:
+        PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
+    except ValueError:
+        PARAMS['calving_line_extension'] = None
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',

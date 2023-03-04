@@ -566,6 +566,7 @@ def init_columbia_eb(dir_name, reset=False):
     tasks.process_dummy_cru_file(gdir, seed=0)
     tasks.mb_calibration_from_scalar_mb(gdir)
     tasks.apparent_mb_from_any_mb(gdir)
+    tasks.find_inversion_calving_from_any_mb(gdir)
     return gdir
 
 

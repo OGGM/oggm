@@ -503,6 +503,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
                             max_depression=5.):
     """Filters the last few grid points after the physically-based inversion.
+
     For various reasons (but mostly: the equilibrium assumption), the last few
     grid points on a glacier flowline are often noisy and create unphysical
     depressions. Here we try to correct for that. It is not volume conserving,
@@ -510,6 +511,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     the minimum defined one (cfg.PARAMS['mixed_min_shape']) the grid point is
     changed to a trapezoid, similar to what is done during the actual
     physically-based inversion.
+
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
@@ -1005,7 +1007,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
                                        glen_a=None, fs=None):
     """Optimized search for a calving flux compatible with the bed inversion.
 
-    See Recinos et al 2019 for details. This task is an update to
+    See Recinos et al. (2019) for details. This task is an update to
     `find_inversion_calving` but acting upon the MB residual (i.e. a shift)
     instead of the model temperature sensitivity.
 

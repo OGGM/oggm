@@ -207,6 +207,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Make it large if you expect your glaciers to grow large
     override_params['border'] = border
 
+    # Some arbitrary heuristics on the length of tidewater extension
+    extension = int(utils.clip_min(border / 2, 30))
+    override_params['calving_line_extension'] = extension
+
     # Set to True for operational runs
     override_params['continue_on_error'] = continue_on_error
 
