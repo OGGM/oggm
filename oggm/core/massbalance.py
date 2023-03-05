@@ -1370,29 +1370,6 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return weighted_average_1d(elas, areas)
 
 
-def _fallback_mb_calibration(gdir):
-    """A Fallback function if massbalance.mb_calibration_from_scalar_mb raises an Error.
-
-    If calibration fails, this function will still read, expand and write a
-    `mb_calib.json` filled with NANs.
-
-    Parameters
-    ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-
-    """
-    # read json
-    df = gdir.read_json('mb_calib', allow_empty=True)
-    df['rgi_id'] = gdir.rgi_id
-    df['bias'] = 0
-    df['temp_bias'] = np.nan
-    df['melt_f'] = np.nan
-    df['prcp_fac'] = np.nan
-    # write
-    gdir.write_json(df, 'mb_calib')
-
-
 def calving_mb(gdir):
     """Calving mass-loss in specific MB equivalent.
 
@@ -1408,7 +1385,7 @@ def calving_mb(gdir):
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
-@entity_task(log, writes=['mb_calib'], fallback=_fallback_mb_calibration)
+@entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_wgms_mb(gdir, **kwargs):
     """Calibrate for in-situ, annual MB.
 
@@ -1428,57 +1405,32 @@ def mb_calibration_from_wgms_mb(gdir, **kwargs):
     mbdf = gdir.get_ref_mb_data()
     # Keep only valid values
     mbdf = mbdf.loc[~mbdf['ANNUAL_BALANCE'].isnull()]
-    mb_calibration_from_scalar_mb(gdir,
-                                  ref_mb=mbdf['ANNUAL_BALANCE'].mean(),
-                                  ref_mb_years=mbdf.index.values,
-                                  **kwargs)
+    return mb_calibration_from_scalar_mb(gdir,
+                                         ref_mb=mbdf['ANNUAL_BALANCE'].mean(),
+                                         ref_mb_years=mbdf.index.values,
+                                         **kwargs)
 
 
-@entity_task(log, writes=['mb_calib'], fallback=_fallback_mb_calibration)
-def mb_calibration_from_scalar_mb(gdir,
-                                  ref_mb=None,
-                                  ref_period=None,
-                                  ref_mb_years=None,
-                                  write_to_gdir=True,
-                                  overwrite_gdir=False,
-                                  override_missing=None,
-                                  calibrate_param1='melt_f',
-                                  calibrate_param2=None,
-                                  calibrate_param3=None,
-                                  melt_f=None,
-                                  melt_f_min=None,
-                                  melt_f_max=None,
-                                  prcp_fac=None,
-                                  prcp_fac_min=None,
-                                  prcp_fac_max=None,
-                                  temp_bias=None,
-                                  temp_bias_min=None,
-                                  temp_bias_max=None,
-                                  mb_model_class=MonthlyTIModel,
-                                  ):
-    """Determine the mass balance parameters from a scalar mass-balance value.
+@entity_task(log, writes=['mb_calib'])
+def mb_calibration_from_geodetic_mb(gdir, *,
+                                    ref_period=None,
+                                    write_to_gdir=True,
+                                    overwrite_gdir=False,
+                                    override_missing=None,
+                                    calibrate_param1='melt_f',
+                                    calibrate_param2=None,
+                                    calibrate_param3=None,
+                                    mb_model_class=MonthlyTIModel,
+                                    ):
+    """Calibrate for geodetic MB data from Hugonnet et al., 2021.
 
-    If no reference value is given, we will use data from Hugonnet et al., 2021.
     The data table can be obtained with utils.get_geodetic_mb_dataframe().
-    It is equivalent to the original data, but has some outlier values
-    filtered. See `this notebook <>`_ for more details.
+    It is equivalent to the original data from Hugonnet, but has some outlier
+    values filtered. See `this notebook <>`_ for more details.
 
-    This calibrates the mass balance parameters using a reference average
-    MB data over a given period (e.g. average in-situ SMB or geodetic MB).
-    This flexible calibration allows to calibrate three parameters one after
-    another. The first parameter is varied between two chosen values (a range)
-    until the ref MB value is matched. If this fails, the second parameter
-    can be changed, etc.
-
-    This is similar to the "three-step calibration" introduced by
-    Huss & Hock 2015, but with some differences:
-    - this method is flexible, i.e. you can choose any order of calibration
-    - we use different defaults for the temperature bias and the
-      precipitation factor
-
-    As a result, the current default in OGGM is to chose certain defaults
-    for prcp_fac and temp_bias, and calibrate melt_f. If this fails,
-    calibrate temp_bias.
+    The problem of calibrating many unknown parameters on geodetic data is
+    currently unsolved. This is OGGM's current take, based on trial and
+    error and based on ideas from the litterature.
 
     Here are the new defaults for the W5E5 dataset:
     - for precipitation: if PARAMS['use_winter_prcp_fac'] is True (the default)
@@ -1488,26 +1440,15 @@ def mb_calibration_from_scalar_mb(gdir,
       (see Schuster et al., 2023 for details)
     - for temperature: use_temp_bias_from_file
 
-    Note that this does not compute the apparent mass balance at
-    the same time - users need to run `apparent_mb_from_any_mb after`
-    calibration.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to calibrate
-    ref_mb : float
-        the reference mass balance to match (units: kg m-2 yr-1)
-        If None, use the default Hugonnet file.
     ref_period : str, default: PARAMS['geodetic_mb_period']
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
         the same format but can be any date.
-    ref_mb_years : tuple of length 2 (range) or list of years.
-        convenience kwarg to override ref_period. If a tuple of length 2 is
-        given, all years between this range (excluding the last one) are used.
-        If a list  of years is given, all these will be used (useful for
-        data with gaps)
     write_to_gdir : bool
         whether to write the results of the calibration to the glacier
         directory. If True (the default), this will be saved as `mb_calib.json`
@@ -1525,7 +1466,135 @@ def mb_calibration_from_scalar_mb(gdir,
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
-    calibrate_param1='melt_f' : str
+
+    Returns
+    -------
+    the calibrated parameters as dict
+    """
+    if not ref_period:
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+
+    # Get the reference data
+    ref_mb_err = np.NaN
+    try:
+        ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
+        # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
+        ref_mb = float(ref_mb_df['dmdtda']) * 1000
+        ref_mb_err = float(ref_mb_df['err_dmdtda']) * 1000
+    except KeyError:
+        if override_missing is None:
+            raise
+        ref_mb = override_missing
+
+    temp_bias = 0
+    if cfg.PARAMS['use_temp_bias_from_file']:
+        climinfo = gdir.get_climate_info()
+        if 'w5e5' not in climinfo['baseline_climate_source'].lower():
+            raise InvalidWorkflowError('use_temp_bias_from_file currently '
+                                       'only available for W5E5 data.')
+        bias_df = get_temp_bias_dataframe()
+        ref_lon = climinfo['baseline_climate_ref_pix_lon']
+        ref_lat = climinfo['baseline_climate_ref_pix_lat']
+        sel_df = bias_df.loc[np.isclose(bias_df.lon_val, ref_lon) &
+                             np.isclose(bias_df.lat_val, ref_lat)]
+        if len(sel_df) == 0:
+            log.warning('No reference temp bias found for this glacier: '
+                        f'{gdir.rgi_id}. Continuing with default.')
+        else:
+            temp_bias = sel_df['median_temp_bias_w_area_grouped'].iloc[0]
+            assert np.isfinite(temp_bias), 'Temp bias not finite?'
+
+    return mb_calibration_from_scalar_mb(gdir,
+                                         ref_mb=ref_mb,
+                                         ref_mb_err=ref_mb_err,
+                                         ref_period=ref_period,
+                                         write_to_gdir=write_to_gdir,
+                                         overwrite_gdir=overwrite_gdir,
+                                         calibrate_param1=calibrate_param1,
+                                         calibrate_param2=calibrate_param2,
+                                         calibrate_param3=calibrate_param3,
+                                         temp_bias=temp_bias,
+                                         mb_model_class=mb_model_class,
+                                         )
+
+
+@entity_task(log, writes=['mb_calib'])
+def mb_calibration_from_scalar_mb(gdir, *,
+                                  ref_mb=None,
+                                  ref_mb_err=None,
+                                  ref_period=None,
+                                  ref_mb_years=None,
+                                  write_to_gdir=True,
+                                  overwrite_gdir=False,
+                                  calibrate_param1='melt_f',
+                                  calibrate_param2=None,
+                                  calibrate_param3=None,
+                                  melt_f=None,
+                                  melt_f_min=None,
+                                  melt_f_max=None,
+                                  prcp_fac=None,
+                                  prcp_fac_min=None,
+                                  prcp_fac_max=None,
+                                  temp_bias=None,
+                                  temp_bias_min=None,
+                                  temp_bias_max=None,
+                                  mb_model_class=MonthlyTIModel,
+                                  ):
+    """Determine the mass balance parameters from a scalar mass-balance value.
+
+    This calibrates the mass balance parameters using a reference average
+    MB data over a given period (e.g. average in-situ SMB or geodetic MB).
+    This flexible calibration allows to calibrate three parameters one after
+    another. The first parameter is varied between two chosen values (a range)
+    until the ref MB value is matched. If this fails, the second parameter
+    can be changed, etc.
+
+    This can be used for example to apply the "three-step calibration"
+    introduced by Huss & Hock 2015, but you can choose any order of
+    calibration.
+
+    This task can be called by other, "higher level" tasks, for example
+    :py:func:`oggm.core.massbalance.mb_calibration_from_geodetic_mb` or
+    :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
+
+    Note that this does not compute the apparent mass balance at
+    the same time - users need to run `apparent_mb_from_any_mb after`
+    calibration.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to calibrate
+    ref_mb : float, required
+        the reference mass balance to match (units: kg m-2 yr-1)
+        It is required here - if you want to use available observations,
+        use :py:func:`oggm.core.massbalance.mb_calibration_from_geodetic_mb`
+        or :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
+    ref_mb_err : float, optional
+        currently only used for logging - it is not used in the calibration.
+    ref_period : str, optional
+        date format - for example '2000-01-01_2010-01-01'. If this is not
+        set, ref_mb_years needs to be set.
+    ref_mb_years : tuple of length 2 (range) or list of years.
+        convenience kwarg to override ref_period. If a tuple of length 2 is
+        given, all years between this range (excluding the last one) are used.
+        If a list  of years is given, all these will be used (useful for
+        data with gaps)
+    write_to_gdir : bool
+        whether to write the results of the calibration to the glacier
+        directory. If True (the default), this will be saved as `mb_calib.json`
+        and be used by the MassBalanceModel class as parameters in subsequent
+        tasks.
+    overwrite_gdir : bool
+        if a `mb_calib.json` exists, this task won't overwrite it per default.
+        Set this to True to enforce overwriting (i.e. with consequences for the
+        future workflow).
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel to use for the calibration. Needs to use the
+        same parameters as MonthlyTIModel (the default): melt_f,
+        temp_bias, prcp_fac.
+    calibrate_param1 : str
         in the three-step calibration, the name of the first parameter
         to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac').
     calibrate_param2 : str
@@ -1559,9 +1628,7 @@ def mb_calibration_from_scalar_mb(gdir,
         optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
     temp_bias: float
         the default value to use as temperature bias (or the starting value when
-        optimizing MB). Defaults to 0, unless the dataset source is w5e5,
-        in which case we will use the pre-computed bias following the method
-        described above.
+        optimizing MB). Defaults to 0.
     temp_bias_min: float
         the minimum accepted value for the temperature bias during optimisation.
         Defaults to cfg.PARAMS['temp_bias_min'].
@@ -1600,27 +1667,14 @@ def mb_calibration_from_scalar_mb(gdir,
         else:
             years = np.arange(*ref_mb_years)
             ref_period = f'{ref_mb_years[0]}-01-01_{ref_mb_years[1]}-01-01'
-    else:
-        if not ref_period:
-            ref_period = cfg.PARAMS['geodetic_mb_period']
+    elif ref_period is not None:
         y0, y1 = ref_period.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
         years = np.arange(y0, y1)
-
-    # Get the reference data
-    ref_mb_err = np.NaN
-    if ref_mb is None:
-        try:
-            ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-            ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
-            # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
-            ref_mb = float(ref_mb_df['dmdtda']) * 1000
-            ref_mb_err = float(ref_mb_df['err_dmdtda']) * 1000
-        except KeyError:
-            if override_missing is None:
-                raise
-            ref_mb = override_missing
+    else:
+        raise InvalidParamsError('One of `ref_mb_years` or `ref_period` '
+                                 'is required for calibration.')
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
@@ -1634,8 +1688,8 @@ def mb_calibration_from_scalar_mb(gdir,
         if cfg.PARAMS['use_winter_prcp_fac']:
             # Some sanity check
             if cfg.PARAMS['prcp_fac'] is not None:
-                raise InvalidWorkflowError("Set PARAMS['prcp_fac'] "
-                                           "to None if using winter_prcp_factor")
+                raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
+                                           "if using PARAMS['winter_prcp_factor'].")
             prcp_fac = decide_winter_precip_factor(gdir)
         else:
             prcp_fac = cfg.PARAMS['prcp_fac']
@@ -1648,22 +1702,6 @@ def mb_calibration_from_scalar_mb(gdir,
 
     if temp_bias is None:
         temp_bias = 0
-        if cfg.PARAMS['use_temp_bias_from_file']:
-            climinfo = gdir.get_climate_info()
-            if 'w5e5' not in climinfo['baseline_climate_source'].lower():
-                raise InvalidWorkflowError('use_temp_bias_from_file currently '
-                                           'only available for W5E5 data.')
-            bias_df = get_temp_bias_dataframe()
-            ref_lon = climinfo['baseline_climate_ref_pix_lon']
-            ref_lat = climinfo['baseline_climate_ref_pix_lat']
-            sel_df = bias_df.loc[np.isclose(bias_df.lon_val, ref_lon) &
-                                 np.isclose(bias_df.lat_val, ref_lat)]
-            if len(sel_df) == 0:
-                log.warning('No reference temp bias found for this glacier: '
-                            f'{gdir.rgi_id}. Continuing with default.')
-            else:
-                temp_bias = sel_df['median_temp_bias_w_area_grouped'].iloc[0]
-                assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
     # Create the MB model we will calibrate
     mb_mod = mb_model_class(gdir,

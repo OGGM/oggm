@@ -131,6 +131,9 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.fixed_dx_elevation_band_flowline
     tasks.process_climate_data
     tasks.process_custom_climate_data
+    tasks.mb_calibration_from_scalar_mb
+    tasks.mb_calibration_from_geodetic_mb
+    tasks.mb_calibration_from_wgms_mb
     tasks.apparent_mb_from_linear_mb
     tasks.apparent_mb_from_any_mb
     tasks.fixed_geometry_mass_balance

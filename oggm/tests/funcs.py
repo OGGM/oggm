@@ -564,7 +564,7 @@ def init_columbia_eb(dir_name, reset=False):
     centerlines.fixed_dx_elevation_band_flowline(gdir)
     centerlines.compute_downstream_line(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
-    tasks.mb_calibration_from_scalar_mb(gdir)
+    tasks.mb_calibration_from_geodetic_mb(gdir)
     tasks.apparent_mb_from_any_mb(gdir)
     tasks.find_inversion_calving_from_any_mb(gdir)
     return gdir

@@ -331,7 +331,6 @@ def test_thick_elev_bands():
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
 def test_model_section_calving():
-    fig, ax = plt.subplots()
     gdir = init_columbia_eb(dir_name='test_thick_eb')
     workflow.inversion_tasks(utils.tolist(gdir))
     flowline.init_present_time_glacier(gdir)

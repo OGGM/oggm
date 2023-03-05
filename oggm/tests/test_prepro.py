@@ -1159,8 +1159,9 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['baseline_climate'] = ''
+        cfg.PARAMS['temp_bias_min'] = -10
+        cfg.PARAMS['temp_bias_max'] = 10
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
@@ -1357,6 +1358,8 @@ class TestClimate(unittest.TestCase):
         from functools import partial
         mb_calibration_from_scalar_mb = partial(mb_calibration_from_scalar_mb,
                                                 overwrite_gdir=True)
+
+
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -2336,7 +2339,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_scalar_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -2395,7 +2398,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_scalar_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
         inversion.find_inversion_calving_from_any_mb(gdir)
 

@@ -3356,7 +3356,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         yr_rgi = gdir.rgi_date + 1  # convert to hydro year
@@ -3568,7 +3568,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # value we want to match after dynamic melt_f calibration with dynamic
@@ -3752,7 +3752,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         delta_ref_dmdtda = 100
@@ -3795,7 +3795,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         with pytest.raises(RuntimeError,
@@ -3954,7 +3954,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
@@ -4084,7 +4084,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # value we want to match after dynamic melt_f calibration
@@ -4169,7 +4169,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         delta_ref_dmdtda = 100
@@ -4204,7 +4204,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         with pytest.raises(RuntimeError,
@@ -4717,7 +4717,7 @@ class TestHydro:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # Add debug vars
@@ -4803,7 +4803,7 @@ class TestHydro:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         # Add debug vars

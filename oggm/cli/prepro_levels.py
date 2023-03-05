@@ -533,12 +533,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.get_geodetic_mb_dataframe()
         utils.get_temp_bias_dataframe()
         if mb_calibration_strategy in ['melt_temp_w_bias_file', 'melt_temp']:
-            workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias')
         elif mb_calibration_strategy == 'temp_melt':
-            workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f')

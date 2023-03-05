@@ -496,7 +496,7 @@ def climate_tasks(gdirs, ref_mb_years=None, overwrite_gdir=False,
     # Process climate data
     execute_entity_task(tasks.process_climate_data, gdirs)
     # mass balance and the apparent mass balance
-    execute_entity_task(tasks.mb_calibration_from_scalar_mb, gdirs,
+    execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir,
                         ref_mb_years=ref_mb_years)
