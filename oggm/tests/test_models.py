@@ -3102,7 +3102,6 @@ class TestDynamicSpinup:
 
         # reset kcalving for this test and set it back to the previous value
         # after the test
-        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
         cfg.PARAMS['use_kcalving_for_run'] = False
 
         # value we want to match after dynamic spinup
@@ -3249,7 +3248,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      gdirs, calibrate_param2='temp_bias')
 
         # Test that the correct error is raised
@@ -3481,7 +3480,7 @@ class TestDynamicSpinup:
                             'match_geod_pergla/')[0]
 
         # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_scalar_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      [gdir], calibrate_param2='temp_bias')
 
         yr_rgi = gdir.rgi_date + 1  # + 1 for hydro year

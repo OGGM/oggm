@@ -404,7 +404,8 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     cfg.PARAMS['evolution_model'] = 'FluxBased'
     cfg.PARAMS['downstream_line_shape'] = 'parabola'
     cfg.PARAMS['prcp_fac'] = 2.5
-
+    cfg.PARAMS['temp_bias_min'] = -10
+    cfg.PARAMS['temp_bias_max'] = 10
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 

@@ -1514,17 +1514,11 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         bias_df = get_temp_bias_dataframe()
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
-        sel_df = bias_df.loc[np.isclose(bias_df.lon_val, ref_lon, atol=1e-3) &
-                             np.isclose(bias_df.lat_val, ref_lat, atol=1e-3)]
-        if len(sel_df) == 0:
-            log.warning('No reference temp bias found for this glacier: '
-                        f'{gdir.rgi_id}. Continuing with default.')
-        elif len(sel_df) > 1:
-            raise RuntimeError('I picked more than one grid point for the temp'
-                               ' bias - this should not happen.')
-        else:
-            temp_bias = sel_df['median_temp_bias_w_area_grouped'].iloc[0]
-            assert np.isfinite(temp_bias), 'Temp bias not finite?'
+        # Take nearest
+        dis = ((bias_df.lon_val - ref_lon)**2 + (bias_df.lat_val - ref_lat)**2)**0.5
+        sel_df = bias_df.iloc[np.argmin(dis)]
+        temp_bias = sel_df['median_temp_bias_w_area_grouped']
+        assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
     if informed_threestep:
         if not cfg.PARAMS['use_temp_bias_from_file']:
