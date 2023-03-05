@@ -1145,6 +1145,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf,
+                          mb_calibration_strategy='melt_temp',
                           test_intersects_file=inter,
                           test_topofile=topof,
                           centerlines=True,
@@ -1313,6 +1314,7 @@ class TestPreproCLI(unittest.TestCase):
                               test_ids=['RGI60-11.00929'],
                               dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
                               test_intersects_file=inter,
+                              mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
                               override_params={'geodetic_mb_period': ref_period,
                                                'baseline_climate': 'CRU',
@@ -1466,6 +1468,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           override_params=params,
+                          mb_calibration_strategy='melt_temp',
                           test_topofile=topof, elev_bands=True)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
@@ -1558,6 +1561,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
+                          mb_calibration_strategy='melt_temp',
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
