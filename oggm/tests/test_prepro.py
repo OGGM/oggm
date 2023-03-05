@@ -1159,8 +1159,11 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['baseline_climate'] = ''
+        # Ranges a bis smaller for simplicity
         cfg.PARAMS['temp_bias_min'] = -10
         cfg.PARAMS['temp_bias_max'] = 10
+        cfg.PARAMS['prcp_fac_min'] = 0.1
+        cfg.PARAMS['prcp_fac_max'] = 5
         cfg.PARAMS['use_winter_prcp_fac'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 

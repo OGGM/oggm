@@ -32,46 +32,6 @@ MB_GLOBAL_PARAMS = ['temp_default_gradient',
                     'temp_melt']
 
 
-def decide_winter_precip_factor(gdir):
-    """Utility function to decide on a precip factor based on winter precip."""
-
-    # We have to decide on a precip factor
-    if 'W5E5' not in cfg.PARAMS['baseline_climate']:
-        raise InvalidWorkflowError('prcp_fac from_winter_prcp is only '
-                                   'compatible with the W5E5 climate '
-                                   'dataset!')
-
-    # get non-corrected winter daily mean prcp (kg m-2 day-1)
-    # it is easier to get this directly from the raw climate files
-    fp = gdir.get_filepath('climate_historical')
-    with xr.open_dataset(fp).prcp as ds_pr:
-        # just select winter months
-        if gdir.hemisphere == 'nh':
-            m_winter = [10, 11, 12, 1, 2, 3, 4]
-        else:
-            m_winter = [4, 5, 6, 7, 8, 9, 10]
-
-        ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
-
-        # select the correct 41 year time period
-        ds_pr_winter = ds_pr_winter.sel(time=slice('1979-01-01', '2019-12-01'))
-
-        # check if we have the full time period: 41 years * 7 months
-        text = ('the climate period has to go from 1979-01 to 2019-12,',
-                'use W5E5 or GSWP3_W5E5 as baseline climate and',
-                'repeat the climate processing')
-        assert len(ds_pr_winter.time) == 41 * 7, text
-        w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
-
-    # from MB sandbox calibration to winter MB
-    # using t_melt=-1, cte lapse rate, monthly resolution
-    a, b = cfg.PARAMS['winter_prcp_fac_ab']
-    prcp_fac = a * np.log(w_prcp) + b
-    # don't allow extremely low/high prcp. factors!!!
-    r0, r1 = cfg.PARAMS['winter_prcp_fac_range']
-    return clip_scalar(prcp_fac, r0, r1)
-
-
 class MassBalanceModel(object, metaclass=SuperclassMeta):
     """Interface and common logic for all mass balance models used in OGGM.
 
@@ -1385,6 +1345,47 @@ def calving_mb(gdir):
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
+def decide_winter_precip_factor(gdir):
+    """Utility function to decide on a precip factor based on winter precip."""
+
+    # We have to decide on a precip factor
+    if 'W5E5' not in cfg.PARAMS['baseline_climate']:
+        raise InvalidWorkflowError('prcp_fac from_winter_prcp is only '
+                                   'compatible with the W5E5 climate '
+                                   'dataset!')
+
+    # get non-corrected winter daily mean prcp (kg m-2 day-1)
+    # it is easier to get this directly from the raw climate files
+    fp = gdir.get_filepath('climate_historical')
+    with xr.open_dataset(fp).prcp as ds_pr:
+        # just select winter months
+        if gdir.hemisphere == 'nh':
+            m_winter = [10, 11, 12, 1, 2, 3, 4]
+        else:
+            m_winter = [4, 5, 6, 7, 8, 9, 10]
+
+        ds_pr_winter = ds_pr.where(ds_pr['time.month'].isin(m_winter), drop=True)
+
+        # select the correct 41 year time period
+        ds_pr_winter = ds_pr_winter.sel(time=slice('1979-01-01', '2019-12-01'))
+
+        # check if we have the full time period: 41 years * 7 months
+        text = ('the climate period has to go from 1979-01 to 2019-12,',
+                'use W5E5 or GSWP3_W5E5 as baseline climate and',
+                'repeat the climate processing')
+        assert len(ds_pr_winter.time) == 41 * 7, text
+        w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
+
+    # from MB sandbox calibration to winter MB
+    # using t_melt=-1, cte lapse rate, monthly resolution
+    a, b = cfg.PARAMS['winter_prcp_fac_ab']
+    prcp_fac = a * np.log(w_prcp) + b
+    # don't allow extremely low/high prcp. factors!!!
+    return clip_scalar(prcp_fac,
+                       cfg.PARAMS['prcp_fac_min'],
+                       cfg.PARAMS['prcp_fac_max'])
+
+
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_wgms_mb(gdir, **kwargs):
     """Calibrate for in-situ, annual MB.
@@ -1417,6 +1418,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
                                     override_missing=None,
+                                    informed_threestep=False,
                                     calibrate_param1='melt_f',
                                     calibrate_param2=None,
                                     calibrate_param3=None,
@@ -1462,6 +1464,22 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         if the reference geodetic data is not available, use this value instead
         (mostly for testing with exotic datasets, but could be used to open
         the door to using other datasets).
+    informed_threestep : bool
+        the magic method Fabi found out one day before release.
+        Overrides the calibrate_param order below.
+    calibrate_param1 : str
+        in the three-step calibration, the name of the first parameter
+        to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac').
+    calibrate_param2 : str
+        in the three-step calibration, the name of the second parameter
+        to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac'). If not
+        set and the algorithm cannot match observations, it will raise an
+        error.
+    calibrate_param3 : str
+        in the three-step calibration, the name of the third parameter
+        to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac'). If not
+        set and the algorithm cannot match observations, it will raise an
+        error.
     mb_model_class : MassBalanceModel class
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
@@ -1496,27 +1514,68 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         bias_df = get_temp_bias_dataframe()
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
-        sel_df = bias_df.loc[np.isclose(bias_df.lon_val, ref_lon) &
-                             np.isclose(bias_df.lat_val, ref_lat)]
+        sel_df = bias_df.loc[np.isclose(bias_df.lon_val, ref_lon, atol=1e-3) &
+                             np.isclose(bias_df.lat_val, ref_lat, atol=1e-3)]
         if len(sel_df) == 0:
             log.warning('No reference temp bias found for this glacier: '
                         f'{gdir.rgi_id}. Continuing with default.')
+        elif len(sel_df) > 1:
+            raise RuntimeError('I picked more than one grid point for the temp'
+                               ' bias - this should not happen.')
         else:
             temp_bias = sel_df['median_temp_bias_w_area_grouped'].iloc[0]
             assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
-    return mb_calibration_from_scalar_mb(gdir,
-                                         ref_mb=ref_mb,
-                                         ref_mb_err=ref_mb_err,
-                                         ref_period=ref_period,
-                                         write_to_gdir=write_to_gdir,
-                                         overwrite_gdir=overwrite_gdir,
-                                         calibrate_param1=calibrate_param1,
-                                         calibrate_param2=calibrate_param2,
-                                         calibrate_param3=calibrate_param3,
-                                         temp_bias=temp_bias,
-                                         mb_model_class=mb_model_class,
-                                         )
+    if informed_threestep:
+        if not cfg.PARAMS['use_temp_bias_from_file']:
+            raise InvalidParamsError('With `informed_threestep` you need to '
+                                     'set `use_temp_bias_from_file`.')
+        if not cfg.PARAMS['use_winter_prcp_fac']:
+            raise InvalidParamsError('With `informed_threestep` you need to '
+                                     'set `use_winter_prcp_fac`.')
+
+        # Some magic heuristics - we just decide to calibrate
+        # precip -> melt_f -> temp but informed by previous data.
+
+        # Temp bias was decided anyway, we keep as previous value and
+        # allow it to vary as last resort
+
+        # We use the precip factor but allow it to vary between 0.8, 1.2 of
+        # the previous value (uncertainty).
+        prcp_fac = decide_winter_precip_factor(gdir)
+        mi, ma = cfg.PARAMS['prcp_fac_min'], cfg.PARAMS['prcp_fac_max']
+        prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
+        prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
+
+        return mb_calibration_from_scalar_mb(gdir,
+                                             ref_mb=ref_mb,
+                                             ref_mb_err=ref_mb_err,
+                                             ref_period=ref_period,
+                                             write_to_gdir=write_to_gdir,
+                                             overwrite_gdir=overwrite_gdir,
+                                             calibrate_param1='prcp_fac',
+                                             calibrate_param2='melt_f',
+                                             calibrate_param3='temp_bias',
+                                             prcp_fac=prcp_fac,
+                                             prcp_fac_min=prcp_fac_min,
+                                             prcp_fac_max=prcp_fac_max,
+                                             temp_bias=temp_bias,
+                                             mb_model_class=mb_model_class,
+                                             )
+
+    else:
+        return mb_calibration_from_scalar_mb(gdir,
+                                             ref_mb=ref_mb,
+                                             ref_mb_err=ref_mb_err,
+                                             ref_period=ref_period,
+                                             write_to_gdir=write_to_gdir,
+                                             overwrite_gdir=overwrite_gdir,
+                                             calibrate_param1=calibrate_param1,
+                                             calibrate_param2=calibrate_param2,
+                                             calibrate_param3=calibrate_param3,
+                                             temp_bias=temp_bias,
+                                             mb_model_class=mb_model_class,
+                                             )
 
 
 @entity_task(log, writes=['mb_calib'])
@@ -1646,8 +1705,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
         prcp_fac_min = cfg.PARAMS['prcp_fac_min']
     if prcp_fac_max is None:
         prcp_fac_max = cfg.PARAMS['prcp_fac_max']
-    if melt_f is None:
-        melt_f = cfg.PARAMS['melt_f']
     if temp_bias_min is None:
         temp_bias_min = cfg.PARAMS['temp_bias_min']
     if temp_bias_max is None:
@@ -1684,6 +1741,9 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   'you posted!')
 
     # Ok, regardless on how we want to calibrate, we start with defaults
+    if melt_f is None:
+        melt_f = cfg.PARAMS['melt_f']
+
     if prcp_fac is None:
         if cfg.PARAMS['use_winter_prcp_fac']:
             # Some sanity check
@@ -1696,9 +1756,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
             if prcp_fac is None:
                 raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
                                            "or PARAMS['winter_prcp_factor'].")
-    else:
-        # if a prcp_fac is set, we will use it instead of the default option
-        prcp_fac = prcp_fac
 
     if temp_bias is None:
         temp_bias = 0

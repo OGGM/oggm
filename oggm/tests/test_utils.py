@@ -807,7 +807,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
-        assert kwargs['mb_calibration_strategy'] == 'melt_temp_w_bias_file'
+        assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -989,7 +989,7 @@ class TestPreproCLI(unittest.TestCase):
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, disable_mp=False,
+                          test_rgidf=rgidf, disable_mp=True,  # increase cov for now
                           test_intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,

@@ -535,8 +535,6 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
 
     k = 'winter_prcp_fac_ab'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'winter_prcp_fac_range'
-    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     k = 'free_board_marine_terminating'
@@ -586,7 +584,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'tidewater_type', 'store_model_geometry', 'use_winter_prcp_fac',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
            'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_fac_ab',
-           'winter_prcp_fac_range', 'prcp_fac', 'downstream_line_shape']
+           'prcp_fac', 'downstream_line_shape']
     for k in ltr:
         cp.pop(k, None)
 

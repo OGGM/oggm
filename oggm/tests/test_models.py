@@ -5164,8 +5164,15 @@ class TestMergedHEF:
 
         gdirs = workflow.init_glacier_directories(glcdf)
         workflow.gis_prepro_tasks(gdirs)
-        workflow.climate_tasks(gdirs, override_missing=-200,
-                               ref_mb_years=(1980, 2000))
+        # # Process climate data
+        # execute_entity_task(tasks.process_climate_data, gdirs)
+        # # mass balance and the apparent mass balance
+        # execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+        #                     override_missing=override_missing,
+        #                     overwrite_gdir=overwrite_gdir)
+        # execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+        # workflow.climate_tasks(gdirs, override_missing=-200,
+        #                        ref_mb_years=(1980, 2000))
         workflow.inversion_tasks(gdirs)
         workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
 

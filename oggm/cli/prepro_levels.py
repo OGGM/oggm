@@ -79,7 +79,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
                       override_params=None,
-                      mb_calibration_strategy='melt_temp_w_bias_file',
+                      mb_calibration_strategy='informed_threestep',
                       add_consensus_thickness=False, add_millan_thickness=False,
                       add_millan_velocity=False, add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
@@ -127,7 +127,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         compute all flowlines based on the OGGM centerline(s) method.
     mb_calibration_strategy : str
         how to calibrate the massbalance. Currently one of:
-        - 'melt_temp_w_bias_file' (default)
+        - 'informed_threestep' (default)
         - 'melt_temp'
         - 'temp_melt'
     add_consensus_thickness : bool
@@ -532,7 +532,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
         utils.get_temp_bias_dataframe()
-        if mb_calibration_strategy in ['melt_temp_w_bias_file', 'melt_temp']:
+        if mb_calibration_strategy == 'informed_threestep':
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs, informed_threestep=True)
+        elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
@@ -774,9 +777,9 @@ def parse_args(args):
                         help='compute the flowlines based on the OGGM '
                              'centerline(s) method.')
     parser.add_argument('--mb-calibration-strategy', type=str,
-                        default='melt_temp_w_bias_file',
+                        default='informed_threestep',
                         help='how to calibrate the massbalance. Currently one of '
-                             'melt_temp_w_bias_file (default) , melt_temp'
+                             'informed_threestep (default) , melt_temp'
                              'or temp_melt.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
