@@ -1517,7 +1517,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         # Take nearest
         dis = ((bias_df.lon_val - ref_lon)**2 + (bias_df.lat_val - ref_lat)**2)**0.5
         sel_df = bias_df.iloc[np.argmin(dis)]
-        temp_bias = sel_df['median_temp_bias_w_err_grouped']
+        temp_bias = sel_df['median_temp_bias_w_area_grouped']
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
     if informed_threestep:
