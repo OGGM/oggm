@@ -174,7 +174,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
 
 @entity_task(log, writes=['gcm_data'])
 def process_monthly_isimip_data(gdir, output_filesuffix='',
-                                ensemble='mri-esm2-0_r1i1p1f1',
+                                member='mri-esm2-0_r1i1p1f1',
                                 ssp='ssp126',
                                 year_range=('1979', '2014'),
                                 apply_bias_correction=False,
@@ -193,8 +193,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     output_filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
         If it is not set, we create a filesuffix with applied ensemble and ssp
-    ensemble : str
-        ensemble gcm that you want to process
+    member : str
+        ensemble member gcm that you want to process
     ssp : str
         ssp scenario to process (only 'ssp126' or 'ssp585' are available)
     year_range : tuple of str
@@ -213,7 +213,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
 
     if output_filesuffix == '':
         # recognize the gcm climate file for later
-        output_filesuffix = '_monthly_ISIMIP3b_{}_{}'.format(ensemble, ssp)
+        output_filesuffix = '_monthly_ISIMIP3b_{}_{}'.format(member, ssp)
 
     # Glacier location
     glon = gdir.cenlon
@@ -226,7 +226,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     path = f'{gcm_server}/cmip6/isimip3b/flat/monthly/'
     add = '_global_monthly_flat_glaciers.nc'
 
-    fpath_spec = path + '{}_w5e5_'.format(ensemble) + '{ssp}_{var}' + add
+    fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
     fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
     fpath_temp_h = fpath_spec.format(var='tasAdjust', ssp='historical')
 
@@ -281,12 +281,10 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         precip['lat'] = precip_a.latitude
 
         # Back to [-180, 180] for OGGM
-        precip.lon.values = precip.lon if precip.lon <= 180 \
-            else precip.lon - 360
+        precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
 
         # Convert kg m-2 s-1 to mm mth-1 => 1 kg m-2 = 1 mm !!!
-        assert 'kg m-2 s-1' in precip.units, \
-            'Precip units not understood'
+        assert 'kg m-2 s-1' in precip.units, 'Precip units not understood'
         ny, r = divmod(len(temp), 12)
         assert r == 0
         dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
