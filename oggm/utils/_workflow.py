@@ -2131,8 +2131,11 @@ def extend_past_climate_run(past_run_file=None,
         if y1_clim != y1_run - 1:
             raise InvalidWorkflowError('Dates do not match.')
         if len(past_ds.rgi_id) != len(fixed_geometry_mb_df.columns):
-            raise InvalidWorkflowError('Nb of glaciers do not match.')
+            # This might happen if we are testing on new directories
+            # Not a big deal
+            fixed_geometry_mb_df = fixed_geometry_mb_df[past_ds.rgi_id]
         if len(past_ds.rgi_id) != len(stats_df.index):
+            stats_df = stats_df.loc[past_ds.rgi_id]
             raise InvalidWorkflowError('Nb of glaciers do not match.')
 
         # Make sure we agree on order

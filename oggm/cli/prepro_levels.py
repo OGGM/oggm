@@ -664,16 +664,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Add the extended files
         pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+        # We have copied the files above
         mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
-        # This is crucial - extending calving only possible with L3 data!!!
-        if start_level < 3:
-            sf = os.path.join(sum_dir_L3, 'glacier_statistics_{}.csv'.format(rgi_reg))
-        else:
-            sf = file_downloader(os.path.join(
-                get_prepro_base_url(base_url=start_base_url,
-                                    rgi_version=rgi_version, border=border,
-                                    prepro_level=start_level), 'summary',
-                'glacier_statistics_{}.csv'.format(rgi_reg)))
+        sf = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
         utils.extend_past_climate_run(past_run_file=pf,
                                       fixed_geometry_mb_file=mf,

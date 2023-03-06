@@ -1089,10 +1089,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
     if min_spinup_period > yr_rgi - ys:
-        log.workflow('The RGI year is closer to ys as the minimum spinup '
-                     'period -> therefore the minimum spinup period is '
-                     'adapted and it is the only period which is tried by the '
-                     'dynamic spinup function!')
+        log.info('The RGI year is closer to ys as the minimum spinup '
+                 'period -> therefore the minimum spinup period is '
+                 'adapted and it is the only period which is tried by the '
+                 'dynamic spinup function!')
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
@@ -1101,9 +1101,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         spinup_start_yr_max = yr0_ref_mb
 
     if spinup_start_yr_max > yr0_ref_mb:
-        log.workflow('The provided maximum start year is larger then the '
-                     'start year of the geodetic period, therefore it will be '
-                     'set to the start year of the geodetic period!')
+        log.info('The provided maximum start year is larger then the '
+                 'start year of the geodetic period, therefore it will be '
+                 'set to the start year of the geodetic period!')
         spinup_start_yr_max = yr0_ref_mb
 
     # check that inversion is only possible without providing own fls
@@ -1367,10 +1367,10 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
     if min_spinup_period > yr_rgi - ys:
-        log.workflow('The RGI year is closer to ys as the minimum spinup '
-                     'period -> therefore the minimum spinup period is '
-                     'adapted and it is the only period which is tried by the '
-                     'dynamic spinup function!')
+        log.info('The RGI year is closer to ys as the minimum spinup '
+                 'period -> therefore the minimum spinup period is '
+                 'adapted and it is the only period which is tried by the '
+                 'dynamic spinup function!')
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
@@ -1806,8 +1806,8 @@ def run_dynamic_melt_f_calibration(
     yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
     if yr_rgi < ys:
         if ignore_errors:
-            log.workflow('The rgi year is smaller than the provided start year '
-                         'ys -> setting the rgi year to ys to continue!')
+            log.info('The rgi year is smaller than the provided start year '
+                     'ys -> setting the rgi year to ys to continue!')
             yr_rgi = ys
         else:
             raise RuntimeError('The rgi year is smaller than the provided '
@@ -2201,8 +2201,8 @@ def run_dynamic_melt_f_calibration(
         if len(mismatch_dmdtda) == 0:
             # we conducted no successful run, so run without dynamic spinup
             if ignore_errors:
-                log.workflow('Dynamic melt_f calibration not successful. '
-                             f'Error message: {e}')
+                log.info('Dynamic melt_f calibration not successful. '
+                         f'Error message: {e}')
                 model_return = fallback_run(melt_f=melt_f_initial,
                                             reset=True)
                 return model_return
@@ -2211,8 +2211,8 @@ def run_dynamic_melt_f_calibration(
                                    f'successful! Error Message: {e}')
         else:
             if ignore_errors:
-                log.workflow('Dynamic melt_f calibration not successful. Error '
-                             f'message: {e}')
+                log.info('Dynamic melt_f calibration not successful. Error '
+                         f'message: {e}')
 
                 # there where some successful runs so we return the one with the
                 # smallest mismatch of dmdtda
@@ -2257,6 +2257,6 @@ def run_dynamic_melt_f_calibration(
     gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
                             int(dynamic_melt_f_calibration_runs[-1]))
 
-    log.workflow(f'Dynamic melt_f calibration worked for {gdir.rgi_id}!')
+    log.info(f'Dynamic melt_f calibration worked for {gdir.rgi_id}!')
 
     return models_dynamic_spinup_end[-1]
