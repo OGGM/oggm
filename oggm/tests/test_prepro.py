@@ -2583,16 +2583,16 @@ class TestGCMClimate(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         ssp = 'ssp126'
-        ensemble = 'mri-esm2-0_r1i1p1f1'
+        member = 'mri-esm2-0_r1i1p1f1'
 
         tasks.process_w5e5_data(gdir)
 
         # testing = True to only download the HEF gridpoint and 3 other gridppoints around
-        tasks.process_monthly_isimip_data(gdir, ensemble=ensemble, ssp=ssp,
+        tasks.process_monthly_isimip_data(gdir, member=member, ssp=ssp,
                                           output_filesuffix='_no_OGGM_bc',
                                           apply_bias_correction=False,
                                           testing=True)
-        tasks.process_monthly_isimip_data(gdir, ensemble=ensemble, ssp=ssp,
+        tasks.process_monthly_isimip_data(gdir, member=member, ssp=ssp,
                                           apply_bias_correction=True,
                                           output_filesuffix='_with_OGGM_bc',
                                           testing=True)
