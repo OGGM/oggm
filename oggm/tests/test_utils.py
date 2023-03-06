@@ -1150,8 +1150,6 @@ class TestPreproCLI(unittest.TestCase):
                           test_topofile=topof,
                           centerlines=True,
                           override_params={'geodetic_mb_period': ref_period,
-                                           'downstream_line_shape': 'parabola',
-                                           'evolution_model': 'FluxBased',
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
                                            'use_temp_bias_from_file': False,

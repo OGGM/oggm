@@ -223,6 +223,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if mb_calibration_strategy in ['melt_temp', 'temp_melt']:
         override_params['use_temp_bias_from_file'] = False
 
+    # For centerlines we have to change the default evolution model and bed
+    if centerlines:
+        override_params['downstream_line_shape'] = 'parabola'
+        override_params['evolution_model'] = 'FluxBased'
+
     # Other things that make sense
     override_params['store_model_geometry'] = True
 
