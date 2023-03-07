@@ -64,6 +64,13 @@ ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length',
              'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
              'residual_mb', 'snow_bucket']
 
+has_shapely2 = False
+try:
+    import shapely.io
+    has_shapely2 = True
+except ImportError:
+    pass
+
 
 class TestInitPresentDayFlowline:
 
@@ -3098,6 +3105,7 @@ class TestDynamicSpinup:
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_spinup(self, hef_gdir, minimise_for):
 
         # reset kcalving for this test and set it back to the previous value
@@ -3475,6 +3483,7 @@ class TestDynamicSpinup:
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_melt_f_calibration_with_dynamic_spinup(self,
                                                                 minimise_for,
                                                                 do_inversion):
@@ -3969,6 +3978,7 @@ class TestDynamicSpinup:
                 run_with_limit.is_fixed_geometry_spinup.sum())
 
     @pytest.mark.slow
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_melt_f_calibration_without_dynamic_spinup(self):
 
         # reset kcalving for this test
@@ -4578,13 +4588,9 @@ class TestHydro:
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.slow
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_hydro_dynamic_melt_f_with_dynamic_spinup(self, inversion_params,
                                                       do_inversion):
-
-        # reset kcalving for this test
-        cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
 
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
@@ -4650,6 +4656,7 @@ class TestHydro:
         assert_allclose(frac, 0, atol=0.05)
 
     @pytest.mark.slow
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_hydro_dynamic_melt_f_without_dynamic_spinup(self, inversion_params):
 
         # reset kcalving for this test
