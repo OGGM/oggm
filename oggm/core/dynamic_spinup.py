@@ -345,7 +345,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 return model_dynamic_spinup_end
         else:
             raise RuntimeError('The difference between the rgi_date and the '
-                               'start year of the climate data is to small to '
+                               'start year of the climate data is too small to '
                                'run a dynamic spinup!')
 
     # here we define the flowline we want to match, it is assumed that during

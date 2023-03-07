@@ -3213,106 +3213,110 @@ class TestDynamicSpinup:
         # Here start with test if errors are handled correctly by the dynamic
         # spinup function and if 'ignore_errors' works
 
-        # TODO: need to find new example of the commented glacier, wait for
-        #  prepro v1.6, and probably more need to be updated with v1.6
-        # define test glaciers and indicate which error is expected
-        rgi_ids = {
-            'RGI60-04.00044': 'Not able to minimise without ice '
-                              'free glacier',
-            'RGI60-02.09397': 'Not able to minimise without '
-                              'exceeding the domain!',
-            'RGI60-04.05259': 'The difference between the rgi_date '
-                              'and the start year of the climate data is to '
-                              'small to run a dynamic spinup!',
-            'RGI60-04.00381': 'The given reference value is Zero, no dynamic '
-                              'spinup possible!',
-            # 'RGI60-04.00331': 'Not able to conduct one error free run. '
-            #                   'Error is "out_of_domain"',
-            'RGI60-04.07198': 'Not able to minimise! Problem is unknown, '
-                              'need to check by hand!',
-            'RGI60-04.05361': 'Could not find mismatch smaller'
-                              f' {precision_percent}%',
-            'RGI60-04.03244': 'Not able to conduct one error free run. '
-                              'Error is "ice_free"'
+        # create a flowline with zero ice
+        fls_zero_ice = hef_gdir.read_pickle('model_flowlines')
+        for i in range(len(fls_zero_ice)):
+            fls_zero_ice[i].section = np.zeros(len(fls_zero_ice[i].section))
+
+        # first we artificially produce some errors in hef_gdir using extreme kwargs
+        error_settings = {
+            'Not able to conduct one error free run. Error is "ice_free"':
+                {'first_guess_t_bias': 100},
+            'The difference between the rgi_date and the start year of the '
+            'climate data is too small to run a dynamic spinup!':
+                {'min_spinup_period': 300},
+            'The given reference value is Zero, no dynamic spinup possible!':
+                {'init_model_fls': fls_zero_ice},
+            'Not able to conduct one error free run. Error is "out_of_domain"':
+                {'first_guess_t_bias': -100},
+            'Could not find mismatch smaller 0.1%':
+                {'precision_percent': 0.1}
         }
 
-        # change settings to match used prepro directory
-        cfg.PARAMS['prcp_fac'] = 1.6
+        for err_msg, kwarg_dyn_spn in error_settings.items():
+            # test that error is thrown
+            ignore_errors=False
+            with pytest.raises(RuntimeError,
+                               match=err_msg):
+                run_dynamic_spinup(
+                    hef_gdir,
+                    minimise_for=minimise_for,
+                    yr_rgi=2002,
+                    ye=2002,
+                    ignore_errors=ignore_errors,
+                    maxiter=2,
+                    output_filesuffix='_dynamic_spinup',
+                    **kwarg_dyn_spn)
+            for filename in ['model_geometry', 'fl_diagnostics',
+                             'model_diagnostics']:
+                assert not os.path.exists(
+                    hef_gdir.get_filepath(filename,
+                                          filesuffix='_dynamic_spinup', ))
 
-        # TODO: update prepro_base_url to new v1.6, and simplify code below,
-        #  and could use different prepro_level
+            # check that it passes with ignore_errors=True
+            ignore_errors=True
+
+            model = run_dynamic_spinup(
+                hef_gdir,
+                minimise_for=minimise_for,
+                yr_rgi=2002,
+                ye=2002,
+                ignore_errors=ignore_errors,
+                maxiter=2,
+                output_filesuffix='_dynamic_spinup',
+                **kwarg_dyn_spn)
+
+            fmod = FileModel(fp)
+            fmod.run_until(fmod.last_yr)
+            assert np.isclose(getattr(model, var_name),
+                              getattr(fmod, var_name))
+            yr_min = hef_gdir.get_climate_info()['baseline_yr_0']
+            yr_rgi = 2002
+            assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
+            assert len(model.fls) == len(fmod.fls)
+
+        # for some errors we need to use other glaciers
+        rgi_ids = {
+            'RGI60-04.03249': 'Not able to minimise without ice '
+                              'free glacier',
+            'RGI60-04.03109': 'Not able to minimise! Problem is unknown, '
+                              'need to check by hand!',
+            'RGI60-04.02180': 'Not able to minimise without '
+                              'exceeding the domain!',
+        }
         gdirs = workflow.init_glacier_directories(
             rgi_ids.keys(), from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     gdirs, calibrate_param2='temp_bias')
-
-        # Test that the correct error is raised
-        ignore_errors = False
         for gdir in gdirs:
-            # need different min spinup periods to force error
-            if gdir.rgi_id in ['RGI60-04.05361', 'RGI60-04.05361',
-                               'RGI60-04.03244']:
-                min_spinup_period = 20
-            else:
-                min_spinup_period = 10
-
-            # not all combinations raise an error, but still test special cases
-            if (((minimise_for == 'area') &
-                 (gdir.rgi_id == 'RGI60-04.07198')) |
-                    ((minimise_for == 'volume') &
-                     (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
-                                      'RGI60-04.05361']))):
+            # Test that the correct error is raised
+            ignore_errors = False
+            with pytest.raises(RuntimeError,
+                               match=rgi_ids[gdir.rgi_id]):
                 run_dynamic_spinup(gdir,
                                    minimise_for=minimise_for,
-                                   precision_percent=precision_percent,
-                                   min_ice_thickness=0,
                                    output_filesuffix='_dynamic_spinup',
                                    maxiter=10,
                                    ignore_errors=ignore_errors,
-                                   min_spinup_period=min_spinup_period,
                                    )
-            else:
-                with pytest.raises(RuntimeError,
-                                   match=rgi_ids[gdir.rgi_id]):
-                    run_dynamic_spinup(gdir,
-                                       minimise_for=minimise_for,
-                                       precision_percent=precision_percent,
-                                       min_ice_thickness=0,
-                                       output_filesuffix='_dynamic_spinup',
-                                       maxiter=10,
-                                       ignore_errors=ignore_errors,
-                                       min_spinup_period=min_spinup_period,
-                                       )
-                # check that all _dynamic_spinup files are deleted if error occurred
-                for filename in ['model_geometry', 'fl_diagnostics',
-                                 'model_diagnostics']:
-                    assert not os.path.exists(
-                        gdir.get_filepath(filename,
-                                          filesuffix='_dynamic_spinup', ))
+            # check that all _dynamic_spinup files are deleted if error occurred
+            for filename in ['model_geometry', 'fl_diagnostics',
+                             'model_diagnostics']:
+                assert not os.path.exists(
+                    gdir.get_filepath(filename,
+                                      filesuffix='_dynamic_spinup', ))
 
-        # check that ignore_error is working correctly
-        ignore_errors = True
-        for gdir in gdirs:
-            if gdir.rgi_id in ['RGI60-04.05361', 'RGI60-04.05361',
-                               'RGI60-04.03244']:
-                min_spinup_period = 20
-            else:
-                min_spinup_period = 10
+            # check that ignore_error is working correctly
+            ignore_errors = True
 
-            model_dynamic_spinup_error = run_dynamic_spinup(
+            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
                 gdir,
                 minimise_for=minimise_for,
-                precision_percent=precision_percent,
                 output_filesuffix='_dynamic_spinup',
-                min_ice_thickness=0,
                 maxiter=10,
-                min_spinup_period=min_spinup_period,
-                ignore_errors=ignore_errors)
+                ignore_errors=ignore_errors,
+                return_t_bias_best=True)
 
             # check if model geometry is correctly saved in gdir
             fp = gdir.get_filepath('model_geometry',
@@ -3325,44 +3329,15 @@ class TestDynamicSpinup:
             yr_rgi = gdir.rgi_date + 1  # convert to hydro year
             assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
             assert len(model_dynamic_spinup_error.fls) == len(fmod.fls)
+            assert np.isnan(t_bias_best)
 
-            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
-                gdir,
-                minimise_for=minimise_for,
-                precision_percent=precision_percent,
-                output_filesuffix='_dynamic_spinup',
-                min_ice_thickness=0,
-                maxiter=10,
-                min_spinup_period=min_spinup_period,
-                ignore_errors=ignore_errors,
-                return_t_bias_best=True)
-            if (((minimise_for == 'area') &
-                 (gdir.rgi_id == 'RGI60-04.07198')) |
-                    ((minimise_for == 'volume') &
-                     (gdir.rgi_id in ['RGI60-04.00044', 'RGI60-02.09397',
-                                      'RGI60-04.05361']))):
-                assert not np.isnan(t_bias_best)
-            else:
-                assert np.isnan(t_bias_best)
-
-        # TODO: update to prepro v1.6, could use different prepro_level
-        # test for parameters ye and return_t_bias
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
-
-        yr_rgi = gdir.rgi_date + 1  # convert to hydro year
-        yr_min = gdir.get_climate_info()['baseline_yr_0']
-        ye = gdir.get_climate_info()['baseline_yr_1'] + 1
+        yr_rgi = 2000
+        yr_min = hef_gdir.get_climate_info()['baseline_yr_0']
+        ye = hef_gdir.get_climate_info()['baseline_yr_1'] + 1
+        precision_percent = 1
+        precision_absolute = 1
         model_dynamic_spinup_ye, t_bias = run_dynamic_spinup(
-            gdir,
+            hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
             yr_rgi=yr_rgi,
@@ -3371,14 +3346,12 @@ class TestDynamicSpinup:
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
-            min_ice_thickness=min_ice_thickness,
             output_filesuffix='_dynamic_spinup_historical', )
 
         assert isinstance(t_bias, float)
         assert model_dynamic_spinup_ye.yr == ye
-        # check that spinup is the same as without ye (with the given precision)
         ds = utils.compile_run_output(
-            gdir, input_filesuffix='_dynamic_spinup_historical', path=False)
+            hef_gdir, input_filesuffix='_dynamic_spinup_historical', path=False)
         if minimise_for == 'volume':
             assert np.isclose(ds.loc[{'time': yr_rgi}].volume.values,
                               model_dynamic_spinup.volume_m3,
@@ -3396,7 +3369,7 @@ class TestDynamicSpinup:
         # test parameter and spinup_start_yr_max, should override spinup_period
         # to start at spinup_start_yr_max
         model_dynamic_spinup_max_start_yr = run_dynamic_spinup(
-            gdir,
+            hef_gdir,
             spinup_period=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
@@ -3406,15 +3379,15 @@ class TestDynamicSpinup:
             precision_absolute=precision_absolute,
             min_ice_thickness=min_ice_thickness,
             output_filesuffix='_dynamic_spinup_max_start', )
-        ds = utils.compile_run_output(gdir, input_filesuffix='_dynamic_spinup_max_start',
-                                      path=False)
+        ds = utils.compile_run_output(
+            hef_gdir, input_filesuffix='_dynamic_spinup_max_start', path=False)
         assert ds.time.min().values == 1990
 
         # test that provided start_yr_max is inside climate data
         with pytest.raises(RuntimeError,
                            match='The provided maximum start year *'):
             run_dynamic_spinup(
-                gdir,
+                hef_gdir,
                 minimise_for=minimise_for,
                 spinup_start_yr_max=yr_min - 1)
 
@@ -3422,7 +3395,7 @@ class TestDynamicSpinup:
         with pytest.raises(RuntimeError,
                            match='The provided start year *'):
             run_dynamic_spinup(
-                gdir,
+                hef_gdir,
                 minimise_for=minimise_for,
                 spinup_start_yr_max=yr_rgi - 10,
                 spinup_start_yr=yr_rgi - 5)
@@ -3431,7 +3404,7 @@ class TestDynamicSpinup:
         with pytest.raises(RuntimeError,
                            match='The provided end year *'):
             run_dynamic_spinup(
-                gdir,
+                hef_gdir,
                 minimise_for=minimise_for,
                 yr_rgi=yr_rgi,
                 ye=yr_rgi - 1)
@@ -3441,14 +3414,15 @@ class TestDynamicSpinup:
         # store_model_geometry)
         cfg.PARAMS['use_inversion_params_for_run'] = False
         cfg.PARAMS['store_model_geometry'] = True
-        workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
-                                     ys=yr_rgi, ye=yr_rgi + 1,
+        workflow.execute_entity_task(tasks.run_from_climate_data, [hef_gdir],
+                                     ys=yr_rgi - 1, ye=yr_rgi,
                                      output_filesuffix='_one_yr')
         run_dynamic_spinup(
-            gdir,
+            hef_gdir,
             minimise_for=minimise_for,
             init_model_filesuffix='_one_yr',
-            init_model_yr=yr_rgi,
+            init_model_yr=yr_rgi - 1,
+            yr_rgi=yr_rgi,
             store_model_geometry=False)
 
         # test that error is raised if mb_elev_feedback not annual
@@ -3456,7 +3430,7 @@ class TestDynamicSpinup:
                            match='Only use annual mb_elev_feedback with the '
                                  'dynamic spinup function!'):
             run_dynamic_spinup(
-                gdir,
+                hef_gdir,
                 minimise_for=minimise_for,
                 mb_elev_feedback='monthly')
 
@@ -3465,83 +3439,38 @@ class TestDynamicSpinup:
         with pytest.raises(InvalidParamsError,
                            match='Dynamic spinup not tested with *'):
             run_dynamic_spinup(
-                gdir,
+                hef_gdir,
                 minimise_for=minimise_for)
         cfg.PARAMS['use_kcalving_for_run'] = False
 
-        # TODO: update to prepro v1.6 once available
         # test that fixed_geometry_spinup is added correctly if spinup period
-        # is shorten, with fixed year (spinup_start_yr)
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00033'],
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
+        # is shorten due to too large precision
+        if minimise_for == 'area':
+            run_dynamic_spinup(
+                hef_gdir,
+                spinup_start_yr=1979,
+                precision_percent=0.00012,
+                minimise_for=minimise_for,
+                output_filesuffix='_without_fixed_spinup',
+                yr_rgi=yr_rgi,
+                add_fixed_geometry_spinup=False)
+            run_without_fixed_spinup = utils.compile_run_output(
+                hef_gdir, input_filesuffix='_without_fixed_spinup', path=False)
 
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
-
-        yr_rgi = gdir.rgi_date + 1  # + 1 for hydro year
-        run_dynamic_spinup(
-            gdir,
-            spinup_start_yr=1979,
-            precision_percent=2,
-            minimise_for=minimise_for,
-            output_filesuffix='_without_fixed_spinup',
-            init_model_yr=yr_rgi,
-            add_fixed_geometry_spinup=False)
-        fp = gdir.get_filepath('model_diagnostics',
-                               filesuffix='_without_fixed_spinup')
-        with xr.open_dataset(fp) as ds:
-            run_without_fixed_spinup = ds.load()
-        run_dynamic_spinup(
-            gdir,
-            spinup_start_yr=1979,
-            precision_percent=2,
-            minimise_for=minimise_for,
-            output_filesuffix='_with_fixed_spinup',
-            init_model_yr=yr_rgi,
-            add_fixed_geometry_spinup=True)
-        fp = gdir.get_filepath('model_diagnostics',
-                               filesuffix='_with_fixed_spinup')
-        with xr.open_dataset(fp) as ds:
-            run_with_fixed_spinup = ds.load()
-        assert (run_without_fixed_spinup.time.values[0] >
-                run_with_fixed_spinup.time.values[0])
-        assert run_with_fixed_spinup.time.values[0] == 1979
-
-        # test that fixed_geometry_spinup is added correctly if spinup period
-        # is shorten, with spinup period
-        spinup_period = yr_rgi - 1979
-        run_dynamic_spinup(
-            gdir,
-            spinup_period=spinup_period,
-            precision_percent=2,
-            minimise_for=minimise_for,
-            output_filesuffix='_without_fixed_spinup',
-            init_model_yr=yr_rgi,
-            add_fixed_geometry_spinup=False)
-        fp = gdir.get_filepath('model_diagnostics',
-                               filesuffix='_without_fixed_spinup')
-        with xr.open_dataset(fp) as ds:
-            run_without_fixed_spinup = ds.load()
-        run_dynamic_spinup(
-            gdir,
-            spinup_period=spinup_period,
-            precision_percent=2,
-            minimise_for=minimise_for,
-            output_filesuffix='_with_fixed_spinup',
-            init_model_yr=yr_rgi,
-            add_fixed_geometry_spinup=True)
-        fp = gdir.get_filepath('model_diagnostics',
-                               filesuffix='_with_fixed_spinup')
-        with xr.open_dataset(fp) as ds:
-            run_with_fixed_spinup = ds.load()
-        assert (run_without_fixed_spinup.time.values[0] >
-                run_with_fixed_spinup.time.values[0])
-        assert run_with_fixed_spinup.time.values[0] == yr_rgi - spinup_period
+            # now add fixed spinup to the whole period
+            run_dynamic_spinup(
+                hef_gdir,
+                spinup_start_yr=1979,
+                precision_percent=0.00012,
+                minimise_for=minimise_for,
+                output_filesuffix='_with_fixed_spinup',
+                yr_rgi=yr_rgi,
+                add_fixed_geometry_spinup=True)
+            run_with_fixed_spinup = utils.compile_run_output(
+                hef_gdir, input_filesuffix='_with_fixed_spinup', path=False)
+            assert (run_without_fixed_spinup.time.values[0] >
+                    run_with_fixed_spinup.time.values[0])
+            assert run_with_fixed_spinup.time.values[0] == 1979
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -3550,25 +3479,24 @@ class TestDynamicSpinup:
                                                                 minimise_for,
                                                                 do_inversion):
 
-        # reset kcalving for this test and set it back to the previous value
-        # after the test
-        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        # reset kcalving for this test
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_fac'] = 1.6
 
-        # TODO: update to prepro v1.6
         # use a prepro dir as the hef_gdir climate data only goes to 2003 and
         # for the geodetic data we need climate data up to 2020
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+        # save original melt_f to be able to reset back to default for testing
+        melt_f_orig = gdir.read_json('mb_calib')['melt_f']
+
+        def reset_melt_f():
+            mb_calib = gdir.read_json('mb_calib')
+            mb_calib['melt_f'] = melt_f_orig
+            gdir.write_json(mb_calib, 'mb_calib')
 
         # value we want to match after dynamic melt_f calibration with dynamic
         # spinup
@@ -3741,61 +3669,44 @@ class TestDynamicSpinup:
                     output_filesuffix='_dyn_melt_f_calib_spinup_inversion',
                     ys=1979, ye=ye, init_model_fls=fls)
 
-        # TODO: update to prepro v1.6
-        # tests for user provided dmdtda (always reset gdir before each test)
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
+        # only testing for area, because for volume we need to search for other
+        # parameters for the test
+        if minimise_for == 'area':
+            # tests for user provided dmdtda
+            reset_melt_f()
 
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+            delta_ref_dmdtda = 100
+            delta_err_ref_dmdtda = -50
+            run_dynamic_melt_f_calibration(
+                gdir, melt_f_max=melt_f_max,
+                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
+                ys=1979, ye=ye)
+            ds = utils.compile_run_output(
+                gdir, input_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
+                path=False)
+            dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                           ds.volume.loc[yr0_ref_dmdtda].values) /
+                          gdir.rgi_area_m2 /
+                          (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                          cfg.PARAMS['ice_density'])
+            assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
+                              rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
+                                          (ref_dmdtda + delta_ref_dmdtda)))
 
-        delta_ref_dmdtda = 100
-        delta_err_ref_dmdtda = -50
-        run_dynamic_melt_f_calibration(
-            gdir, melt_f_max=melt_f_max,
-            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
-            run_function=dynamic_melt_f_run_with_dynamic_spinup,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent': precision_percent,
-                                 'precision_absolute': precision_absolute,
-                                 'do_inversion': do_inversion},
-            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent': precision_percent,
-                                      'precision_absolute': precision_absolute,
-                                      'do_inversion': do_inversion},
-            output_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
-            ys=1979, ye=ye)
-        ds = utils.compile_run_output(
-            gdir, input_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
-            path=False)
-        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
-                       ds.volume.loc[yr0_ref_dmdtda].values) /
-                      gdir.rgi_area_m2 /
-                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
-                      cfg.PARAMS['ice_density'])
-        assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
-                          rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
-                                      (ref_dmdtda + delta_ref_dmdtda)))
-
-        # TODO: update to prepro v1.6
         # test that error is raised if ignore_error=False
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+        reset_melt_f()
 
         with pytest.raises(RuntimeError,
                            match='Dynamic melt_f calibration not successful.*'):
@@ -3942,19 +3853,13 @@ class TestDynamicSpinup:
                 minimise_for=minimise_for
             )
 
-        # TODO: update to prepro v1.6
         # check if spinup_start_year_max works as expected, for this use a
         # glacier where the period is shorten
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00033'],
             from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
         ref_dmdtda = float(
@@ -3963,11 +3868,13 @@ class TestDynamicSpinup:
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
-        precision_percent = 10
+        delta_ref_dmdtda = 100
+        delta_err_ref_dmdtda = -50
+        precision_percent = 1
         precision_absolute = 0.1
         ye = gdir.get_climate_info()['baseline_yr_1'] + 1
 
-        # run without max limit
+        # run without max spinup_start_yr_max
         run_dynamic_melt_f_calibration(
             gdir, melt_f_max=melt_f_max,
             ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
@@ -4064,27 +3971,26 @@ class TestDynamicSpinup:
     @pytest.mark.slow
     def test_run_dynamic_melt_f_calibration_without_dynamic_spinup(self):
 
-        # reset kcalving for this test and set it back to the previous value
-        # after the test
-        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        # reset kcalving for this test
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_fac'] = 1.6
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
 
-        # TODO: Update to prepro v1.6
         # use a prepro dir as the hef_gdir climate data only goes to 2003 and
         # for the geodetic data we need climate data up to 2020
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+        # save original melt_f to be able to reset back to default for testing
+        melt_f_orig = gdir.read_json('mb_calib')['melt_f']
+
+        def reset_melt_f():
+            mb_calib = gdir.read_json('mb_calib')
+            mb_calib['melt_f'] = melt_f_orig
+            gdir.write_json(mb_calib, 'mb_calib')
 
         # value we want to match after dynamic melt_f calibration
         ref_period = cfg.PARAMS['geodetic_mb_period']
@@ -4158,18 +4064,8 @@ class TestDynamicSpinup:
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic melt_f calibration (full success)'
 
-        # TODO: update to prepro v1.6
-        # tests for user provided dmdtda (always reset gdir before each test)
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+        # tests for user provided dmdtda
+        reset_melt_f()
 
         delta_ref_dmdtda = 100
         delta_err_ref_dmdtda = -50
@@ -4193,18 +4089,8 @@ class TestDynamicSpinup:
                           rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
                                       (ref_dmdtda + delta_ref_dmdtda)))
 
-        # TODO: update to prepro v1.6
         # test that error is raised if ignore_error=False
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00897'],  # Hintereisferner
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+        reset_melt_f()
 
         with pytest.raises(RuntimeError,
                            match='Dynamic melt_f calibration not successful.*'):
@@ -4287,6 +4173,7 @@ class TestDynamicSpinup:
             init_model_filesuffix='_one_yr',
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)
+
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestHydro:
@@ -4619,9 +4506,7 @@ class TestHydro:
     @pytest.mark.slow
     def test_hydro_dynamical_spinup(self, hef_gdir, inversion_params):
 
-        # reset kcalving for this test and set it back to the previous value
-        # after the test
-        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        # reset kcalving for this test
         cfg.PARAMS['use_kcalving_for_run'] = False
 
         gdir = hef_gdir
@@ -4691,33 +4576,21 @@ class TestHydro:
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
 
-        # set back to previous value
-        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
-
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.slow
     def test_hydro_dynamic_melt_f_with_dynamic_spinup(self, inversion_params,
                                                       do_inversion):
 
-        # reset kcalving for this test and set it back to the previous value
-        # after the test
-        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        # reset kcalving for this test
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_fac'] = 1.6
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
 
-        # TODO: update to prepro v1.6
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
@@ -4776,34 +4649,19 @@ class TestHydro:
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
 
-        # set back to previous values
-        cfg.PARAMS['prcp_fac'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
-
     @pytest.mark.slow
     def test_hydro_dynamic_melt_f_without_dynamic_spinup(self, inversion_params):
 
-        # reset kcalving for this test and set it back to the previous value
-        # after the test
-        old_use_kcalving_for_run = cfg.PARAMS['use_kcalving_for_run']
+        # reset kcalving for this test
         cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['prcp_fac'] = 1.6
         cfg.PARAMS['hydro_month_nh'] = 1
         cfg.PARAMS['hydro_month_sh'] = 1
 
-        # TODO: update to prepro v1.6
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.4/L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/'
-                            'match_geod_pergla/')[0]
-
-        # TODO: conduct calibration which is new for v1.6
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                     [gdir], calibrate_param2='temp_bias')
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
         cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
@@ -4859,12 +4717,6 @@ class TestHydro:
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
-
-        # set back to previous values
-        cfg.PARAMS['prcp_fac'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['use_kcalving_for_run'] = old_use_kcalving_for_run
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
