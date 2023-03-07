@@ -3108,10 +3108,6 @@ class TestDynamicSpinup:
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_spinup(self, hef_gdir, minimise_for):
 
-        # reset kcalving for this test and set it back to the previous value
-        # after the test
-        cfg.PARAMS['use_kcalving_for_run'] = False
-
         # value we want to match after dynamic spinup
         fls = hef_gdir.read_pickle('model_flowlines')
         ref_value = 0
@@ -3252,6 +3248,7 @@ class TestDynamicSpinup:
                     yr_rgi=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
+                    spinup_period=10,
                     maxiter=2,
                     output_filesuffix='_dynamic_spinup',
                     **kwarg_dyn_spn)
@@ -3282,62 +3279,6 @@ class TestDynamicSpinup:
             yr_rgi = 2002
             assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
             assert len(model.fls) == len(fmod.fls)
-
-        # for some errors we need to use other glaciers
-        rgi_ids = {
-            'RGI60-04.03249': 'Not able to minimise without ice '
-                              'free glacier',
-            'RGI60-04.03109': 'Not able to minimise! Problem is unknown, '
-                              'need to check by hand!',
-            'RGI60-04.02180': 'Not able to minimise without '
-                              'exceeding the domain!',
-        }
-        gdirs = workflow.init_glacier_directories(
-            rgi_ids.keys(), from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
-
-        for gdir in gdirs:
-            # Test that the correct error is raised
-            ignore_errors = False
-            with pytest.raises(RuntimeError,
-                               match=rgi_ids[gdir.rgi_id]):
-                run_dynamic_spinup(gdir,
-                                   minimise_for=minimise_for,
-                                   output_filesuffix='_dynamic_spinup',
-                                   maxiter=10,
-                                   ignore_errors=ignore_errors,
-                                   )
-            # check that all _dynamic_spinup files are deleted if error occurred
-            for filename in ['model_geometry', 'fl_diagnostics',
-                             'model_diagnostics']:
-                assert not os.path.exists(
-                    gdir.get_filepath(filename,
-                                      filesuffix='_dynamic_spinup', ))
-
-            # check that ignore_error is working correctly
-            ignore_errors = True
-
-            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
-                gdir,
-                minimise_for=minimise_for,
-                output_filesuffix='_dynamic_spinup',
-                maxiter=10,
-                ignore_errors=ignore_errors,
-                return_t_bias_best=True)
-
-            # check if model geometry is correctly saved in gdir
-            fp = gdir.get_filepath('model_geometry',
-                                   filesuffix='_dynamic_spinup')
-            fmod = FileModel(fp)
-            fmod.run_until(fmod.last_yr)
-            assert np.isclose(getattr(model_dynamic_spinup_error, var_name),
-                              getattr(fmod, var_name))
-            yr_min = gdir.get_climate_info()['baseline_yr_0']
-            yr_rgi = gdir.rgi_date + 1  # convert to hydro year
-            assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
-            assert len(model_dynamic_spinup_error.fls) == len(fmod.fls)
-            assert np.isnan(t_bias_best)
 
         yr_rgi = 2000
         yr_min = hef_gdir.get_climate_info()['baseline_yr_0']
@@ -3480,6 +3421,76 @@ class TestDynamicSpinup:
                     run_with_fixed_spinup.time.values[0])
             assert run_with_fixed_spinup.time.values[0] == 1979
 
+    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.slow
+    @pytest.mark.skip
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
+    def test_run_dynamic_spinup_special_cases(self, hef_gdir, minimise_for):
+
+        if minimise_for == 'area':
+            unit = 'km2'
+        elif minimise_for == 'volume':
+            unit = 'km3'
+        else:
+            raise ValueError('Unknown variable to minimise for!')
+        var_name = f'{minimise_for}_{unit}'
+
+        # for some errors we need to use other glaciers
+        rgi_ids = {
+            'RGI60-04.03249': 'Not able to minimise without ice '
+                              'free glacier',
+            'RGI60-04.03109': 'Not able to minimise! Problem is unknown, '
+                              'need to check by hand!',
+            'RGI60-04.02180': 'Not able to minimise without '
+                              'exceeding the domain!',
+        }
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids.keys(), from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+
+        for gdir in gdirs:
+            # Test that the correct error is raised
+            ignore_errors = False
+            with pytest.raises(RuntimeError,
+                               match=rgi_ids[gdir.rgi_id]):
+                run_dynamic_spinup(gdir,
+                                   minimise_for=minimise_for,
+                                   output_filesuffix='_dynamic_spinup',
+                                   maxiter=10,
+                                   ignore_errors=ignore_errors,
+                                   )
+            # check that all _dynamic_spinup files are deleted if error occurred
+            for filename in ['model_geometry', 'fl_diagnostics',
+                             'model_diagnostics']:
+                assert not os.path.exists(
+                    gdir.get_filepath(filename,
+                                      filesuffix='_dynamic_spinup', ))
+
+            # check that ignore_error is working correctly
+            ignore_errors = True
+
+            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
+                gdir,
+                minimise_for=minimise_for,
+                output_filesuffix='_dynamic_spinup',
+                maxiter=10,
+                ignore_errors=ignore_errors,
+                return_t_bias_best=True)
+
+            # check if model geometry is correctly saved in gdir
+            fp = gdir.get_filepath('model_geometry',
+                                   filesuffix='_dynamic_spinup')
+            fmod = FileModel(fp)
+            fmod.run_until(fmod.last_yr)
+            assert np.isclose(getattr(model_dynamic_spinup_error, var_name),
+                              getattr(fmod, var_name))
+            yr_min = gdir.get_climate_info()['baseline_yr_0']
+            yr_rgi = gdir.rgi_date + 1  # convert to hydro year
+            assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
+            assert len(model_dynamic_spinup_error.fls) == len(fmod.fls)
+            assert np.isnan(t_bias_best)
+
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
@@ -3487,9 +3498,6 @@ class TestDynamicSpinup:
     def test_run_dynamic_melt_f_calibration_with_dynamic_spinup(self,
                                                                 minimise_for,
                                                                 do_inversion):
-
-        # reset kcalving for this test
-        cfg.PARAMS['use_kcalving_for_run'] = False
 
         # use a prepro dir as the hef_gdir climate data only goes to 2003 and
         # for the geodetic data we need climate data up to 2020
@@ -3600,6 +3608,162 @@ class TestDynamicSpinup:
                            for fl_prev, fl_now in
                            zip(fls, gdir.read_pickle('model_flowlines'))])
 
+        # test that error is raised if ignore_error=False
+        reset_melt_f()
+
+        with pytest.raises(RuntimeError,
+                           match='Dynamic melt_f calibration not successful.*'):
+            run_dynamic_melt_f_calibration(
+                gdir, melt_f_max=melt_f_max,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'do_inversion': do_inversion,
+                                     'precision_percent': 6,
+                                     'maxiter': 2},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'do_inversion': do_inversion,
+                                          'precision_percent': 6,
+                                          'maxiter': 2},
+                output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
+                ignore_errors=False,
+                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+                maxiter=2)
+
+        # test that error is raised if no dict is provided for local_variables
+        # in dynamic_melt_f_run_with_dynamic_spinup
+        for local_variables in [None, []]:
+            with pytest.raises(ValueError,
+                               match='You must provide a dict for '
+                                     'local_variables.*'):
+                dynamic_melt_f_run_with_dynamic_spinup(
+                    gdir,
+                    melt_f=gdir.read_json('mb_calib')['melt_f'],
+                    yr0_ref_mb=yr0_ref_dmdtda,
+                    yr1_ref_mb=yr1_ref_dmdtda,
+                    fls_init=fls, ys=1980, ye=2020, do_inversion=do_inversion,
+                    local_variables=local_variables)
+
+        # test that error is raised if user provided dmdtda is given without an
+        # error and vice versa
+        for use_ref_dmdtda, use_err_ref_dmdtda in zip([ref_dmdtda, None],
+                                                      [None, err_ref_dmdtda]):
+            with pytest.raises(RuntimeError,
+                               match='If you provide a reference geodetic '
+                                     'mass balance .*'):
+                run_dynamic_melt_f_calibration(
+                    gdir, melt_f_max=melt_f_max,
+                    ref_dmdtda=use_ref_dmdtda,
+                    err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test that error is raised if user provided dmdtda error is 0 or
+        # negative
+        for use_err_ref_dmdtda in [0., -0.1]:
+            with pytest.raises(RuntimeError,
+                               match='The provided error for the geodetic '
+                                     'mass-balance.*'):
+                run_dynamic_melt_f_calibration(
+                    gdir, melt_f_max=melt_f_max,
+                    ref_dmdtda=ref_dmdtda,
+                    err_ref_dmdtda=use_err_ref_dmdtda)
+
+        # test if fallback raise error if no local variable provided
+        with pytest.raises(RuntimeError,
+                           match='Need the volume to do *'):
+            dynamic_melt_f_run_with_dynamic_spinup_fallback(
+                gdir,
+                melt_f=gdir.read_json('mb_calib')['melt_f'],
+                fls_init=gdir.read_pickle('model_flowlines'),
+                ys=gdir.get_climate_info()['baseline_yr_0'],
+                ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
+                local_variables=None,
+                minimise_for=minimise_for
+            )
+
+    @pytest.mark.parametrize('do_inversion', [True, False])
+    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.slow
+    @pytest.mark.skip
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
+    def test_run_dynamic_melt_f_calibration_with_dynamic_spinup_special_cases(
+            self, minimise_for, do_inversion):
+
+        # use a prepro dir as the hef_gdir climate data only goes to 2003 and
+        # for the geodetic data we need climate data up to 2020
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
+
+        # save original melt_f to be able to reset back to default for testing
+        melt_f_orig = gdir.read_json('mb_calib')['melt_f']
+
+        def reset_melt_f():
+            mb_calib = gdir.read_json('mb_calib')
+            mb_calib['melt_f'] = melt_f_orig
+            gdir.write_json(mb_calib, 'mb_calib')
+
+        # value we want to match after dynamic melt_f calibration with dynamic
+        # spinup
+        fls = gdir.read_pickle('model_flowlines')
+        ref_value_dynamic_spinup = 0
+        if minimise_for == 'area':
+            unit = 'km2'
+        elif minimise_for == 'volume':
+            unit = 'km3'
+        else:
+            raise ValueError('Unknown variable to minimise for!')
+        var_name = f'{minimise_for}_{unit}'
+        for fl in fls:
+            ref_value_dynamic_spinup += getattr(fl, var_name)
+
+        ref_period = cfg.PARAMS['geodetic_mb_period']
+
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
+        yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
+
+        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        ref_dmdtda = float(
+            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        ref_dmdtda *= 1000  # kg m-2 yr-1
+        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
+                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+
+        melt_f_max = 1000 * 12 / 365
+        precision_percent = 10
+        precision_absolute = 0.1
+        ye = gdir.get_climate_info()['baseline_yr_1'] + 1
+        yr_rgi = gdir.rgi_date
+
+        # succesful run to compare to
+        run_dynamic_melt_f_calibration(
+            gdir, melt_f_max=melt_f_max,
+            run_function=dynamic_melt_f_run_with_dynamic_spinup,
+            kwargs_run_function={'minimise_for': minimise_for,
+                                 'precision_percent': precision_percent,
+                                 'precision_absolute': precision_absolute,
+                                 'do_inversion': do_inversion},
+            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+            kwargs_fallback_function={'minimise_for': minimise_for,
+                                      'precision_percent': precision_percent,
+                                      'precision_absolute': precision_absolute,
+                                      'do_inversion': do_inversion},
+            output_filesuffix='_dyn_melt_f_calib_spinup_inversion',
+            ys=1979, ye=ye)
+
+        # check that we are matching all desired ref values
+        ds = utils.compile_run_output(
+            gdir, input_filesuffix='_dyn_melt_f_calib_spinup_inversion',
+            path=False)
+        dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                       ds.volume.loc[yr0_ref_dmdtda].values) /
+                      gdir.rgi_area_m2 /
+                      (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                      cfg.PARAMS['ice_density'])
+
         # test err_dmdtda_scaling_factor (not working for volume with inversion)
         if not (do_inversion and minimise_for == 'volume'):
             err_dmdtda_scaling_factor = 0.2
@@ -3678,59 +3842,6 @@ class TestDynamicSpinup:
                     output_filesuffix='_dyn_melt_f_calib_spinup_inversion',
                     ys=1979, ye=ye, init_model_fls=fls)
 
-        # only testing for area, because for volume we need to search for other
-        # parameters for the test
-        if minimise_for == 'area':
-            # tests for user provided dmdtda
-            reset_melt_f()
-
-            delta_ref_dmdtda = 100
-            delta_err_ref_dmdtda = -50
-            run_dynamic_melt_f_calibration(
-                gdir, melt_f_max=melt_f_max,
-                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
-                run_function=dynamic_melt_f_run_with_dynamic_spinup,
-                kwargs_run_function={'minimise_for': minimise_for,
-                                     'precision_percent': precision_percent,
-                                     'precision_absolute': precision_absolute,
-                                     'do_inversion': do_inversion},
-                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-                kwargs_fallback_function={'minimise_for': minimise_for,
-                                          'precision_percent': precision_percent,
-                                          'precision_absolute': precision_absolute,
-                                          'do_inversion': do_inversion},
-                output_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
-                ys=1979, ye=ye)
-            ds = utils.compile_run_output(
-                gdir, input_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
-                path=False)
-            dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
-                           ds.volume.loc[yr0_ref_dmdtda].values) /
-                          gdir.rgi_area_m2 /
-                          (yr1_ref_dmdtda - yr0_ref_dmdtda) *
-                          cfg.PARAMS['ice_density'])
-            assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
-                              rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
-                                          (ref_dmdtda + delta_ref_dmdtda)))
-
-        # test that error is raised if ignore_error=False
-        reset_melt_f()
-
-        with pytest.raises(RuntimeError,
-                           match='Dynamic melt_f calibration not successful.*'):
-            run_dynamic_melt_f_calibration(
-                gdir, melt_f_max=melt_f_max,
-                run_function=dynamic_melt_f_run_with_dynamic_spinup,
-                kwargs_run_function={'minimise_for': minimise_for,
-                                     'do_inversion': do_inversion},
-                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-                kwargs_fallback_function={'minimise_for': minimise_for,
-                                          'do_inversion': do_inversion},
-                output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
-                ignore_errors=False,
-                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
-                maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
         model_fallback = run_dynamic_melt_f_calibration(
@@ -3794,43 +3905,6 @@ class TestDynamicSpinup:
             assert not os.path.isfile(
                 os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
 
-        # test that error is raised if no dict is provided for local_variables
-        # in dynamic_melt_f_run_with_dynamic_spinup
-        for local_variables in [None, []]:
-            with pytest.raises(ValueError,
-                               match='You must provide a dict for '
-                                     'local_variables.*'):
-                dynamic_melt_f_run_with_dynamic_spinup(
-                    gdir,
-                    melt_f=gdir.read_json('mb_calib')['melt_f'],
-                    yr0_ref_mb=yr0_ref_dmdtda,
-                    yr1_ref_mb=yr1_ref_dmdtda,
-                    fls_init=fls, ys=1980, ye=2020, do_inversion=do_inversion,
-                    local_variables=local_variables)
-
-        # test that error is raised if user provided dmdtda is given without an
-        # error and vice versa
-        for use_ref_dmdtda, use_err_ref_dmdtda in zip([ref_dmdtda, None],
-                                                      [None, err_ref_dmdtda]):
-            with pytest.raises(RuntimeError,
-                               match='If you provide a reference geodetic '
-                                     'mass balance .*'):
-                run_dynamic_melt_f_calibration(
-                    gdir, melt_f_max=melt_f_max,
-                    ref_dmdtda=use_ref_dmdtda,
-                    err_ref_dmdtda=use_err_ref_dmdtda)
-
-        # test that error is raised if user provided dmdtda error is 0 or
-        # negative
-        for use_err_ref_dmdtda in [0., -0.1]:
-            with pytest.raises(RuntimeError,
-                               match='The provided error for the geodetic '
-                                     'mass-balance.*'):
-                run_dynamic_melt_f_calibration(
-                    gdir, melt_f_max=melt_f_max,
-                    ref_dmdtda=ref_dmdtda,
-                    err_ref_dmdtda=use_err_ref_dmdtda)
-
         # test if fallback function is resetting melt_f correctly
         mb_calib_params = gdir.read_json('mb_calib')
         original_melt_f = mb_calib_params['melt_f']
@@ -3849,142 +3923,160 @@ class TestDynamicSpinup:
         )
         assert original_melt_f == gdir.read_json('mb_calib')['melt_f']
 
-        # test if fallback raise error if no local variable provided
-        with pytest.raises(RuntimeError,
-                           match='Need the volume to do *'):
-            dynamic_melt_f_run_with_dynamic_spinup_fallback(
-                gdir,
-                melt_f=original_melt_f,
-                fls_init=gdir.read_pickle('model_flowlines'),
-                ys=gdir.get_climate_info()['baseline_yr_0'],
-                ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
-                local_variables=None,
-                minimise_for=minimise_for
-            )
+        # only testing for area, because for volume we need to search for other
+        # parameters for the test
+        if minimise_for == 'area':
+            # tests for user provided dmdtda
+            reset_melt_f()
 
-        # check if spinup_start_year_max works as expected, for this use a
-        # glacier where the period is shorten
-        gdir = workflow.init_glacier_directories(
-            ['RGI60-11.00033'],
-            from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
+            delta_ref_dmdtda = 100
+            delta_err_ref_dmdtda = -50
+            run_dynamic_melt_f_calibration(
+                gdir, melt_f_max=melt_f_max,
+                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
+                ys=1979, ye=ye)
+            ds = utils.compile_run_output(
+                gdir, input_filesuffix='_dyn_melt_f_calib_spinup_inversion_user_dmdtda',
+                path=False)
+            dmdtda_mdl = ((ds.volume.loc[yr1_ref_dmdtda].values -
+                           ds.volume.loc[yr0_ref_dmdtda].values) /
+                          gdir.rgi_area_m2 /
+                          (yr1_ref_dmdtda - yr0_ref_dmdtda) *
+                          cfg.PARAMS['ice_density'])
+            assert np.isclose(dmdtda_mdl, ref_dmdtda + delta_ref_dmdtda,
+                              rtol=np.abs((err_ref_dmdtda + delta_err_ref_dmdtda) /
+                                          (ref_dmdtda + delta_ref_dmdtda)))
 
-        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        ref_dmdtda = float(
-            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
-        ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
-                                                 ref_period]['err_dmdtda'])
-        err_ref_dmdtda *= 1000  # kg m-2 yr-1
-        delta_ref_dmdtda = 100
-        delta_err_ref_dmdtda = -50
-        precision_percent = 1
-        precision_absolute = 0.1
-        ye = gdir.get_climate_info()['baseline_yr_1'] + 1
+            # check if spinup_start_year_max works as expected, for this use a
+            # glacier where the period is shorten
+            gdir = workflow.init_glacier_directories(
+                ['RGI60-11.00033'],
+                from_prepro_level=3, prepro_border=160,
+                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                                'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
-        # run without max spinup_start_yr_max
-        run_dynamic_melt_f_calibration(
-            gdir, melt_f_max=melt_f_max,
-            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
-            run_function=dynamic_melt_f_run_with_dynamic_spinup,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent': precision_percent,
-                                 'precision_absolute': precision_absolute,
-                                 'do_inversion': do_inversion,
-                                 'add_fixed_geometry_spinup': False},
-            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent': precision_percent,
-                                      'precision_absolute': precision_absolute,
-                                      'do_inversion': do_inversion,
-                                      'add_fixed_geometry_spinup': False},
-            output_filesuffix='_dyn_melt_f_calib_spinup_reduce_period_no_limit',
-            ys=1979, ye=ye)
-        # run with max limit
-        run_dynamic_melt_f_calibration(
-            gdir, melt_f_max=melt_f_max,
-            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
-            ignore_errors=True,
-            run_function=dynamic_melt_f_run_with_dynamic_spinup,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'spinup_start_yr_max': 1979,
-                                 'add_fixed_geometry_spinup': False,
-                                 'precision_percent': precision_percent,
-                                 'precision_absolute': precision_absolute,
-                                 'do_inversion': do_inversion},
-            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'spinup_start_yr_max': 1979,
-                                      'add_fixed_geometry_spinup': False,
-                                      'precision_percent': precision_percent,
-                                      'precision_absolute': precision_absolute,
-                                      'do_inversion': do_inversion},
-            output_filesuffix='_dyn_melt_f_calib_spinup_reduce_period',
-            ys=1979, ye=ye)
+            df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+            ref_dmdtda = float(
+                df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+            ref_dmdtda *= 1000  # kg m-2 yr-1
+            err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
+                                                     ref_period]['err_dmdtda'])
+            err_ref_dmdtda *= 1000  # kg m-2 yr-1
+            delta_ref_dmdtda = 100
+            delta_err_ref_dmdtda = -50
+            precision_percent = 1
+            precision_absolute = 0.1
+            ye = gdir.get_climate_info()['baseline_yr_1'] + 1
 
-        with xr.open_dataset(
-                gdir.get_filepath(
-                    'model_diagnostics',
-                    filesuffix='_dyn_melt_f_calib_spinup_reduce_period_'
-                               'no_limit')) as ds:
-            run_no_limit = ds.load()
-        with xr.open_dataset(
-                gdir.get_filepath(
-                    'model_diagnostics',
-                    filesuffix='_dyn_melt_f_calib_spinup_reduce_period')) as ds:
-            run_with_limit = ds.load()
+            # run without max spinup_start_yr_max
+            run_dynamic_melt_f_calibration(
+                gdir, melt_f_max=melt_f_max,
+                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion,
+                                     'add_fixed_geometry_spinup': False},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion,
+                                          'add_fixed_geometry_spinup': False},
+                output_filesuffix='_dyn_melt_f_calib_spinup_reduce_period_no_limit',
+                ys=1979, ye=ye)
+            # run with max limit
+            run_dynamic_melt_f_calibration(
+                gdir, melt_f_max=melt_f_max,
+                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                ignore_errors=True,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'spinup_start_yr_max': 1979,
+                                     'add_fixed_geometry_spinup': False,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'spinup_start_yr_max': 1979,
+                                          'add_fixed_geometry_spinup': False,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_calib_spinup_reduce_period',
+                ys=1979, ye=ye)
 
-        assert run_no_limit.time.values[0] > run_with_limit.time.values[0]
-        assert run_with_limit.time.values[0] == 1979
+            with xr.open_dataset(
+                    gdir.get_filepath(
+                        'model_diagnostics',
+                        filesuffix='_dyn_melt_f_calib_spinup_reduce_period_'
+                                   'no_limit')) as ds:
+                run_no_limit = ds.load()
+            with xr.open_dataset(
+                    gdir.get_filepath(
+                        'model_diagnostics',
+                        filesuffix='_dyn_melt_f_calib_spinup_reduce_period')) as ds:
+                run_with_limit = ds.load()
 
-        # test if add_fixed_geomtry_spinup of dynamic spinup works here as well
-        # run with add_fixed_geometry_spinup
-        run_dynamic_melt_f_calibration(
-            gdir, melt_f_max=melt_f_max,
-            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
-            ignore_errors=True,
-            run_function=dynamic_melt_f_run_with_dynamic_spinup,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'add_fixed_geometry_spinup': True,
-                                 'precision_percent': precision_percent,
-                                 'precision_absolute': precision_absolute,
-                                 'do_inversion': do_inversion},
-            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'add_fixed_geometry_spinup': True,
-                                      'precision_percent': precision_percent,
-                                      'precision_absolute': precision_absolute,
-                                      'do_inversion': do_inversion},
-            output_filesuffix='_dyn_melt_f_calib_add_fixed_spinup',
-            ys=1979, ye=ye)
-        with xr.open_dataset(
-                gdir.get_filepath(
-                    'model_diagnostics',
-                    filesuffix='_dyn_melt_f_calib_add_fixed_spinup')) as ds:
-            run_with_fixed_spinup = ds.load()
+            assert run_no_limit.time.values[0] > run_with_limit.time.values[0]
+            assert run_with_limit.time.values[0] == 1979
 
-        assert (run_no_limit.time.values[0] >
-                run_with_fixed_spinup.time.values[0])
-        assert run_with_fixed_spinup.time.values[0] == 1979
-        # also compare the difference of spinup_start_yr_max and
-        # add_fixed_geometry_spinup
-        assert (run_with_limit.time.values[0] ==
-                run_with_fixed_spinup.time.values[0])
-        assert (run_with_fixed_spinup.is_fixed_geometry_spinup.sum() <
-                run_with_limit.is_fixed_geometry_spinup.sum())
+            # test if add_fixed_geomtry_spinup of dynamic spinup works here as well
+            # run with add_fixed_geometry_spinup
+            run_dynamic_melt_f_calibration(
+                gdir, melt_f_max=melt_f_max,
+                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
+                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                ignore_errors=True,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'add_fixed_geometry_spinup': True,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'add_fixed_geometry_spinup': True,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_calib_add_fixed_spinup',
+                ys=1979, ye=ye)
+            with xr.open_dataset(
+                    gdir.get_filepath(
+                        'model_diagnostics',
+                        filesuffix='_dyn_melt_f_calib_add_fixed_spinup')) as ds:
+                run_with_fixed_spinup = ds.load()
+
+            assert (run_no_limit.time.values[0] >
+                    run_with_fixed_spinup.time.values[0])
+            assert run_with_fixed_spinup.time.values[0] == 1979
+            # also compare the difference of spinup_start_yr_max and
+            # add_fixed_geometry_spinup
+            assert (run_with_limit.time.values[0] ==
+                    run_with_fixed_spinup.time.values[0])
+            assert (run_with_fixed_spinup.is_fixed_geometry_spinup.sum() <
+                    run_with_limit.is_fixed_geometry_spinup.sum())
 
     @pytest.mark.slow
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_melt_f_calibration_without_dynamic_spinup(self):
-
-        # reset kcalving for this test
-        cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
 
         # use a prepro dir as the hef_gdir climate data only goes to 2003 and
         # for the geodetic data we need climate data up to 2020
@@ -4516,9 +4608,6 @@ class TestHydro:
     @pytest.mark.slow
     def test_hydro_dynamical_spinup(self, hef_gdir, inversion_params):
 
-        # reset kcalving for this test
-        cfg.PARAMS['use_kcalving_for_run'] = False
-
         gdir = hef_gdir
         gdir.rgi_date = 1990
 
@@ -4658,11 +4747,6 @@ class TestHydro:
     @pytest.mark.slow
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_hydro_dynamic_melt_f_without_dynamic_spinup(self, inversion_params):
-
-        # reset kcalving for this test
-        cfg.PARAMS['use_kcalving_for_run'] = False
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
 
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
