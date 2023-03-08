@@ -12,9 +12,9 @@ from scipy import optimize as optimization
 import oggm
 import oggm.cfg as cfg
 from oggm.utils import (get_demo_file, mkdir, get_git_ident, get_sys_info,
-                        get_env_info, apply_test_ref_tstars)
+                        get_env_info)
 from oggm.workflow import execute_entity_task
-from oggm.core import flowline
+from oggm.core import flowline, massbalance
 from oggm import tasks
 from oggm.core.flowline import RectangularBedFlowline
 
@@ -399,14 +399,13 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['border'] = border
-
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
-
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['downstream_line_shape'] = 'parabola'
+    cfg.PARAMS['prcp_fac'] = 2.5
+    cfg.PARAMS['temp_bias_min'] = -10
+    cfg.PARAMS['temp_bias_max'] = 10
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
@@ -447,10 +446,13 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
         gdir.rgi_id = rgi_id
     else:
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-    res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
-    climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
-    climate.mu_star_calibration(gdir)
 
+    ref_mb = mbdf.mean()
+    ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+    massbalance.mb_calibration_from_scalar_mb(gdir,
+                                              ref_mb=ref_mb,
+                                              ref_period=ref_period)
+    massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
     inversion.prepare_for_inversion(gdir)
 
     ref_v = 0.573 * 1e9
@@ -505,14 +507,11 @@ def init_columbia(reset=False):
     cfg.PARAMS['border'] = 10
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['min_mu_star'] = 25
-    cfg.PARAMS['max_mu_star'] = 10000
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -529,7 +528,6 @@ def init_columbia(reset=False):
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
-    apply_test_ref_tstars()
     return gdir
 
 
@@ -550,15 +548,11 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['border'] = 10
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['min_mu_star'] = 5
-    cfg.PARAMS['max_mu_star'] = 10000
-    cfg.PARAMS['climate_qc_months'] = 3
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity)
@@ -571,7 +565,9 @@ def init_columbia_eb(dir_name, reset=False):
     centerlines.fixed_dx_elevation_band_flowline(gdir)
     centerlines.compute_downstream_line(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
-    apply_test_ref_tstars()
+    tasks.mb_calibration_from_geodetic_mb(gdir)
+    tasks.apparent_mb_from_any_mb(gdir)
+    tasks.find_inversion_calving_from_any_mb(gdir)
     return gdir
 
 

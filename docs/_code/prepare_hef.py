@@ -8,10 +8,8 @@ import xarray as xr
 
 import oggm
 from oggm import cfg, tasks, graphics
-from oggm.core.climate import (mb_yearly_climate_on_glacier,
-                               t_star_from_refmb,
-                               local_t_star, mu_star_calibration)
-from oggm.core.massbalance import (ConstantMassBalance)
+from oggm.core import massbalance
+from oggm import workflow
 from oggm.utils import get_demo_file, gettempdir
 from oggm.shop import histalp
 
@@ -34,55 +32,30 @@ tasks.compute_downstream_line(gdir)
 tasks.catchment_area(gdir)
 tasks.catchment_width_geom(gdir)
 tasks.catchment_width_correction(gdir)
+tasks.compute_downstream_line(gdir)
+tasks.compute_downstream_bedshape(gdir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
-cfg.PARAMS['use_tstar_calibration'] = True
-cfg.PARAMS['use_winter_prcp_factor'] = False
-cfg.PARAMS['hydro_month_nh'] = 10
-cfg.PARAMS['hydro_month_sh'] = 4
-cfg.PARAMS['prcp_scaling_factor'] = 2.5
+cfg.PARAMS['use_winter_prcp_fac'] = False
+cfg.PARAMS['use_temp_bias_from_file'] = False
+cfg.PARAMS['prcp_fac'] = 2.5
 tasks.process_histalp_data(gdir)
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    mu_yr_clim = tasks.glacier_mu_candidates(gdir)
-
-mbdf = gdir.get_ref_mb_data()
-res = t_star_from_refmb(gdir, mbdf=mbdf.ANNUAL_BALANCE)
-local_t_star(gdir, tstar=res['t_star'], bias=res['bias'], reset=True)
-mu_star_calibration(gdir, reset=True)
+tasks.mb_calibration_from_wgms_mb(gdir)
 
 # For flux plot
+tasks.apparent_mb_from_any_mb(gdir, mb_years=(1970, 2000))
 tasks.prepare_for_inversion(gdir)
+refv = 577852773  # From ITMIX
+df = workflow.calibrate_inversion_from_consensus(gdir, volume_m3_reference=refv)
+np.testing.assert_allclose(refv, df.vol_oggm_m3, rtol=0.01)
 
-# For plots
-years, temp_yr, prcp_yr = mb_yearly_climate_on_glacier(gdir)
-
-# which years to look at
-selind = np.searchsorted(years, mbdf.index)
-temp_yr = np.mean(temp_yr[selind])
-prcp_yr = np.mean(prcp_yr[selind])
-
-# Average observed mass balance
-ref_mb = mbdf.ANNUAL_BALANCE.mean()
-mb_per_mu = prcp_yr - mu_yr_clim * temp_yr
-
-# Diff to reference
-diff = mb_per_mu - ref_mb
-pdf = pd.DataFrame()
-pdf[r'$\mu (t)$'] = mu_yr_clim
-pdf['bias'] = diff
-res = t_star_from_refmb(gdir, mbdf=mbdf.ANNUAL_BALANCE)
-
-# For the mass flux
 cl = gdir.read_pickle('inversion_input')[-1]
-mbmod = ConstantMassBalance(gdir)
-mbx = (mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR *
-       cfg.PARAMS['ice_density'])
+mbmod = massbalance.ConstantMassBalance(gdir, y0=1985)
+mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
 fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])
 fdf['Flux'] = cl['flux']
 fdf['Mass balance'] = mbx
 
-# For the distributed thickness
-tasks.mass_conservation_inversion(gdir, glen_a=2.4e-24 * 3, fs=0)
+# For thickness plot
 tasks.distribute_thickness_per_altitude(gdir)
 
 
@@ -101,29 +74,6 @@ def example_plot_temp_ts():
     plt.legend(loc='best')
     plt.title('HISTALP annual temperature, Hintereisferner')
     plt.ylabel(r'degC')
-    plt.tight_layout()
-    plt.show()
-
-
-def example_plot_mu_ts():
-    mu_yr_clim.plot(figsize=(8, 4), label=r'$\mu (t)$')
-    plt.legend(loc='best')
-    plt.title(r'$\mu$ candidates Hintereisferner')
-    plt.ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
-    plt.tight_layout()
-    plt.show()
-
-
-def example_plot_bias_ts():
-    ax = pdf.plot(figsize=(8, 4), secondary_y='bias')
-    plt.hlines(0, 1800, 2015, linestyles='-')
-    ax.set_ylabel(r'$\mu$ (mm yr$^{-1}$ K$^{-1}$)')
-    ax.set_title(r'$\mu$ candidates HEF')
-    plt.ylabel(r'bias (mm yr$^{-1}$)')
-    yl = plt.gca().get_ylim()
-    plt.plot((res['t_star'], res['t_star']), (yl[0], 0),
-             linestyle=':', color='grey')
-    plt.ylim(yl)
     plt.tight_layout()
     plt.show()
 

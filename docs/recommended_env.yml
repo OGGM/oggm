@@ -33,6 +33,7 @@ dependencies:
   - numpydoc
   - seaborn
   - sphinx-intl
+  - sphinx-reredirects
   - pip
   - pip:
     - joblib

@@ -15,7 +15,7 @@ gpd = pytest.importorskip('geopandas')
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
-from oggm.tests.funcs import get_test_dir, apply_test_ref_tstars
+from oggm.tests.funcs import get_test_dir
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
@@ -50,14 +50,10 @@ class TestSouthGlacier(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('dem_SouthGlacier.tif')
         cfg.PARAMS['border'] = 10
-        cfg.PARAMS['use_tstar_calibration'] = True
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['climate_qc_months'] = 3
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        apply_test_ref_tstars()
 
         self.tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
         self.pf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.pre.dat.nc')
@@ -119,8 +115,9 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.local_t_star, gdirs)
-        execute_entity_task(tasks.mu_star_calibration, gdirs)
+
+        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                            ref_period='2000-01-01_2010-01-01')
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -132,9 +129,9 @@ class TestSouthGlacier(unittest.TestCase):
 
         # compute the bias to make it 0 SMB on the 2D DEM
         rho = cfg.PARAMS['ice_density']
-        mbmod = ConstantMassBalance(gdirs[0], bias=0)
+        mbmod = ConstantMassBalance(gdirs[0], bias=0, y0=1995)
         mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
-        mbmod = ConstantMassBalance(gdirs[0], bias=np.average(mymb))
+        mbmod = ConstantMassBalance(gdirs[0], y0=1995, bias=np.average(mymb))
         mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
         np.testing.assert_allclose(np.average(mymb), 0., atol=1e-3)
 
@@ -152,7 +149,7 @@ class TestSouthGlacier(unittest.TestCase):
             import matplotlib.pyplot as plt
             plt.scatter(mbref, demref, s=5,
                         label='Obs (2007-2012), shifted to Avg(SMB) = 0')
-            plt.scatter(mymb, demref, s=5, label='OGGM MB at t*')
+            plt.scatter(mymb, demref, s=5, label='OGGM MB')
             plt.scatter(myfit, demref, s=5, label='Polyfit', c='C3')
             plt.xlabel('MB (mm w.e yr-1)')
             plt.ylabel('Altidude (m)')
@@ -185,8 +182,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.local_t_star, gdirs)
-        execute_entity_task(tasks.mu_star_calibration, gdirs)
+        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                            ref_period='2000-01-01_2010-01-01')
 
         # Tested tasks
         task_list = [
@@ -267,8 +264,10 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.local_t_star, gdirs)
-        execute_entity_task(tasks.mu_star_calibration, gdirs)
+        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                            mb_years=[2000, 2009])
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -342,8 +341,10 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.local_t_star, gdirs)
-        execute_entity_task(tasks.mu_star_calibration, gdirs)
+        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                            mb_years=[2000, 2009])
 
         # Reference data
         gdir = gdirs[0]
@@ -426,8 +427,10 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.local_t_star, gdirs)
-        execute_entity_task(tasks.mu_star_calibration, gdirs)
+        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                            mb_years=[2000, 2009])
 
         # Inversion tasks
         execute_entity_task(tasks.prepare_for_inversion, gdirs)
@@ -472,15 +475,11 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['use_kcalving_for_inversion'] = True
         cfg.PARAMS['use_kcalving_for_run'] = True
-        cfg.PARAMS['use_tstar_calibration'] = True
-        cfg.PARAMS['use_winter_prcp_factor'] = False
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        cfg.PARAMS['climate_qc_months'] = 3
-        cfg.PARAMS['min_mu_star'] = 25
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
-        apply_test_ref_tstars()
+        cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     def tearDown(self):
         self.rm_dir()
@@ -551,7 +550,7 @@ class TestCoxeGlacier(unittest.TestCase):
     def test_run(self):
 
         entity = gpd.read_file(self.rgi_file).iloc[0]
-
+        entity.RGIId = 'RGI60-01.10299'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
@@ -564,19 +563,19 @@ class TestCoxeGlacier(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
 
-        # Climate tasks -- only data IO and tstar interpolation!
+        # Climate tasks
         tasks.process_dummy_cru_file(gdir, seed=0)
-        tasks.local_t_star(gdir)
-        tasks.mu_star_calibration(gdir)
+        tasks.mb_calibration_from_geodetic_mb(gdir)
+        tasks.apparent_mb_from_any_mb(gdir)
 
         # Inversion tasks
-        tasks.find_inversion_calving(gdir)
+        tasks.find_inversion_calving_from_any_mb(gdir)
 
         # Final preparation for the run
         tasks.init_present_time_glacier(gdir)
 
         # check that calving happens in the real context as well
-        tasks.run_constant_climate(gdir, bias=0, nyears=200,
+        tasks.run_constant_climate(gdir, bias=0, y0=1985, nyears=200,
                                    temperature_bias=-0.5)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3[-1] > 10

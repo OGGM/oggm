@@ -1,7 +1,7 @@
 Mass redistribution curve model
 ===============================
 
-Since v1.5.3, OGGM ships with a parameterized version of the standard ice dynamics
+Since v1.5.3, OGGM comes with a parameterized version of the standard ice dynamics
 model. Instead of solving for the shallow-ice approximation along the flowline, the
 :py:class:`core.flowline.MassRedistributionCurveModel` uses empirically derived
 mass-redistribution curves as described in

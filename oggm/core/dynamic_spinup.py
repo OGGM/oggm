@@ -16,9 +16,9 @@ from oggm import entity_task
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
-                                   PastMassBalance)
-from oggm.core.climate import apparent_mb_from_any_mb
-from oggm.core.flowline import (FluxBasedModel, FileModel,
+                                   MonthlyTIModel,
+                                   apparent_mb_from_any_mb)
+from oggm.core.flowline import (decide_evolution_model, FileModel,
                                 init_present_time_glacier,
                                 run_from_climate_data)
 
@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
-                       evolution_model=FluxBasedModel,
+                       evolution_model=None,
                        mb_model_historical=None, mb_model_spinup=None,
                        spinup_period=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
@@ -68,10 +68,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     climate_input_filesuffix : str
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: FluxBasedModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
-        is to use a PastMassBalance model  together with the provided
+        is to use a MonthlyTIModel model  together with the provided
         parameter climate_input_filesuffix.
     mb_model_spinup : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
@@ -201,11 +202,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     -------
     :py:class:`oggm.core.flowline.evolution_model`
         The final dynamically spined-up model. Type depends on the selected
-        evolution_model, by default a FluxBasedModel.
+        evolution_model.
     """
 
+    evolution_model = decide_evolution_model(evolution_model)
+
     if yr_rgi is None:
-        yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
+        # Even in calendar dates, we prefer to set rgi_year in the next year
+        # as the rgi is often from snow free images the year before (e.g. Aug)
+        yr_rgi = gdir.rgi_date + 1
 
     if ye is None:
         ye = yr_rgi
@@ -214,7 +219,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         raise RuntimeError(f'The provided end year (ye = {ye}) must be larger'
                            f'than the rgi date (yr_rgi = {yr_rgi}!')
 
-    yr_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+    yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
         min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
@@ -253,7 +258,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     # MassBalance for actual run from yr_spinup to yr_rgi
     if mb_model_historical is None:
         mb_model_historical = MultipleFlowlineMassBalance(
-            gdir, mb_model_class=PastMassBalance,
+            gdir, mb_model_class=MonthlyTIModel,
             filename='climate_historical',
             input_filesuffix=climate_input_filesuffix)
 
@@ -340,7 +345,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 return model_dynamic_spinup_end
         else:
             raise RuntimeError('The difference between the rgi_date and the '
-                               'start year of the climate data is to small to '
+                               'start year of the climate data is too small to '
                                'run a dynamic spinup!')
 
     # here we define the flowline we want to match, it is assumed that during
@@ -876,37 +881,36 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         return model_dynamic_spinup_end[-1]
 
 
-def define_new_mu_star_in_gdir(gdir, new_mu_star, bias=0):
+def define_new_melt_f_in_gdir(gdir, new_melt_f):
     """
-    Helper function to define a new mu star in an gdir. Is used inside the run
-    functions of the dynamic mu star calibration.
+    Helper function to define a new melt_f in a gdir. Is used inside the run
+    functions of the dynamic melt_f calibration.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to change the mu star
-    new_mu_star : float
-        the new mu_star to save in the gdir
-    bias : float
-        an additional bias to add to the mass balance at the end (was
-        originally used for the static mu star calibration)
+        the glacier directory to change the melt_f
+    new_melt_f : float
+        the new melt_f to save in the gdir
 
     Returns
     -------
 
     """
-    df = gdir.read_json('local_mustar')
-    df['bias'] = bias
-    df['mu_star_per_flowline'] = [new_mu_star] * len(df['mu_star_per_flowline'])
-    df['mu_star_glacierwide'] = new_mu_star
-    df['mu_star_flowline_avg'] = new_mu_star
-    df['mu_star_allsame'] = True
-    gdir.write_json(df, 'local_mustar')
+    try:
+        df = gdir.read_json('mb_calib')
+    except FileNotFoundError:
+        raise InvalidWorkflowError('`mb_calib.json` does not exist in gdir. '
+                                   'You first need to calibrate the whole '
+                                   'MassBalanceModel before changing melt_f '
+                                   'alone!')
+    df['melt_f'] = new_melt_f
+    gdir.write_json(df, 'mb_calib')
 
 
-def dynamic_mu_star_run_with_dynamic_spinup(
-        gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
-        output_filesuffix='', evolution_model=FluxBasedModel,
+def dynamic_melt_f_run_with_dynamic_spinup(
+        gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
+        output_filesuffix='', evolution_model=None,
         mb_model_historical=None, mb_model_spinup=None,
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
         min_spinup_period=10, yr_rgi=None, precision_percent=1,
@@ -918,11 +922,11 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         **kwargs):
     """
     This function is one option for a 'run_function' for the
-    'run_dynamic_mu_star_calibration' function (the corresponding
+    'run_dynamic_melt_f_calibration' function (the corresponding
     'fallback_function' is
-    'dynamic_mu_star_run_with_dynamic_spinup_fallback'). This
-    function defines a new mu_star in the glacier directory and conducts an
-    inversion calibrating A to match '_vol_m3_ref' with this new mu_star
+    'dynamic_melt_f_run_with_dynamic_spinup_fallback'). This
+    function defines a new melt_f in the glacier directory and conducts an
+    inversion calibrating A to match '_vol_m3_ref' with this new melt_f
     ('calibrate_inversion_from_consensus'). Afterwards a dynamic spinup is
     conducted to match 'minimise_for' (for more info look at docstring of
     'run_dynamic_spinup'). And in the end the geodetic mass balance of the
@@ -933,8 +937,8 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
-    mu_star : float
-        the mu_star used for this run
+    melt_f : float
+        the melt_f used for this run
     yr0_ref_mb : int
         the start year of the geodetic mass balance
     yr1_ref_mb : int
@@ -948,12 +952,12 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
-        is to use a PastMassBalance model  together with the provided
+        is to use a MonthlyTIModel model  together with the provided
         parameter climate_input_filesuffix.
     mb_model_spinup : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
@@ -1038,7 +1042,7 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         calibration during inversion.
         Default is False
     do_inversion : bool
-        If True a complete inversion is conducted using the provided mu_star
+        If True a complete inversion is conducted using the provided melt_f
         before the actual calibration run.
         Default is False
     spinup_start_yr_max : int or None
@@ -1061,6 +1065,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     :py:class:`oggm.core.flowline.evolution_model`, float
         The final model after the run and the calculated geodetic mass balance
     """
+
+    evolution_model = decide_evolution_model(evolution_model)
+
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
 
@@ -1082,10 +1089,10 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
     if min_spinup_period > yr_rgi - ys:
-        log.workflow('The RGI year is closer to ys as the minimum spinup '
-                     'period -> therefore the minimum spinup period is '
-                     'adapted and it is the only period which is tried by the '
-                     'dynamic spinup function!')
+        log.info('The RGI year is closer to ys as the minimum spinup '
+                 'period -> therefore the minimum spinup period is '
+                 'adapted and it is the only period which is tried by the '
+                 'dynamic spinup function!')
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
@@ -1094,9 +1101,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
         spinup_start_yr_max = yr0_ref_mb
 
     if spinup_start_yr_max > yr0_ref_mb:
-        log.workflow('The provided maximum start year is larger then the '
-                     'start year of the geodetic period, therefore it will be '
-                     'set to the start year of the geodetic period!')
+        log.info('The provided maximum start year is larger then the '
+                 'start year of the geodetic period, therefore it will be '
+                 'set to the start year of the geodetic period!')
         spinup_start_yr_max = yr0_ref_mb
 
     # check that inversion is only possible without providing own fls
@@ -1108,18 +1115,18 @@ def dynamic_mu_star_run_with_dynamic_spinup(
                        for fl_prov, fl_orig in
                        zip(fls_init, gdir.read_pickle('model_flowlines'))]):
             raise InvalidWorkflowError('If you want to perform a dynamic '
-                                       'mu_star calibration including an '
+                                       'melt_f calibration including an '
                                        'inversion, it is not possible to '
                                        'provide your own flowlines! (fls_init '
                                        'should be None or '
                                        'the original model_flowlines)')
 
     # Here we start with the actual model run
-    if mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']:
-        # we do not need to define a new mu_star or do an inversion
+    if melt_f == gdir.read_json('mb_calib')['melt_f']:
+        # we do not need to define a new melt_f or do an inversion
         do_inversion = False
     else:
-        define_new_mu_star_in_gdir(gdir, mu_star)
+        define_new_melt_f_in_gdir(gdir, melt_f)
 
     if do_inversion:
         with utils.DisableLogger():
@@ -1135,13 +1142,13 @@ def dynamic_mu_star_run_with_dynamic_spinup(
 
     # this is used to keep the original model_flowline unchanged (-> to be able
     # to conduct different dynamic calibration runs in the same gdir)
-    model_flowline_filesuffix = '_dyn_mu_calib'
+    model_flowline_filesuffix = '_dyn_melt_f_calib'
     init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix,
                               add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
-    # do not ignore errors in dynamic spinup, so all 'bad' files are
-    # deleted in run_dynamic_spinup function
+    # do not ignore errors in dynamic spinup, so all 'bad'/intermediate files
+    # are deleted in run_dynamic_spinup function
     try:
         model, last_best_t_bias = run_dynamic_spinup(
             gdir,
@@ -1193,9 +1200,9 @@ def dynamic_mu_star_run_with_dynamic_spinup(
     return model, dmdtda_mdl
 
 
-def dynamic_mu_star_run_with_dynamic_spinup_fallback(
-        gdir, mu_star, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=FluxBasedModel, minimise_for='area',
+def dynamic_melt_f_run_with_dynamic_spinup_fallback(
+        gdir, melt_f, fls_init, ys, ye, local_variables, output_filesuffix='',
+        evolution_model=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
         yr_rgi=None, precision_percent=1,
@@ -1206,18 +1213,19 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         add_fixed_geometry_spinup=True, **kwargs):
     """
     This is the fallback function corresponding to the function
-    'dynamic_mu_star_run_with_dynamic_spinup', which are provided
-    to 'run_dynamic_mu_star_calibration'. It is used if the run_function fails and
-    if 'ignore_error == True' in 'run_dynamic_mu_star_calibration'. First it resets
-    mu_star of gdir. Afterwards it tries to conduct a dynamic spinup. If this
-    also fails the last thing is to just do a run without a dynamic spinup.
+    'dynamic_melt_f_run_with_dynamic_spinup', which are provided
+    to 'run_dynamic_melt_f_calibration'. It is used if the run_function fails and
+    if 'ignore_error == True' in 'run_dynamic_melt_f_calibration'. First it resets
+    melt_f of gdir. Afterwards it tries to conduct a dynamic spinup. If this
+    also fails the last thing is to just do a run without a dynamic spinup
+    (only a fixed geometry spinup).
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
-    mu_star : float
-        the mu_star used for this run
+    melt_f : float
+        the melt_f used for this run
     fls_init : []
         List of flowlines to use to initialise the model
     ys : int
@@ -1230,12 +1238,12 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
-        is to use a PastMassBalance model  together with the provided
+        is to use a MonthlyTIModel model  together with the provided
         parameter climate_input_filesuffix.
     mb_model_spinup : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the spinup before the
@@ -1308,7 +1316,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
         Whether to store the model flowline diagnostics to disk or not.
         Default is None (-> cfg.PARAMS['store_fl_diagnostics'])
     do_inversion : bool
-        If True a complete inversion is conducted using the provided mu_star
+        If True a complete inversion is conducted using the provided melt_f
         before the actual fallback run.
         Default is False
     spinup_start_yr_max : int or None
@@ -1332,14 +1340,16 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     """
     from oggm.workflow import calibrate_inversion_from_consensus
 
+    evolution_model = decide_evolution_model(evolution_model)
+
     if local_variables is None:
         raise RuntimeError('Need the volume to do'
                            'calibrate_inversion_from_consensus provided in '
                            'local_variables!')
 
     # revert gdir to original state if necessary
-    if mu_star != gdir.read_json('local_mustar')['mu_star_glacierwide']:
-        define_new_mu_star_in_gdir(gdir, mu_star)
+    if melt_f != gdir.read_json('mb_calib')['melt_f']:
+        define_new_melt_f_in_gdir(gdir, melt_f)
         if do_inversion:
             with utils.DisableLogger():
                 apparent_mb_from_any_mb(gdir,
@@ -1350,22 +1360,22 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
                     volume_m3_reference=local_variables['vol_m3_ref'],
                     add_to_log_file=False)
     if os.path.isfile(os.path.join(gdir.dir,
-                                   'model_flowlines_dyn_mu_calib.pkl')):
+                                   'model_flowlines_dyn_melt_f_calib.pkl')):
         os.remove(os.path.join(gdir.dir,
-                               'model_flowlines_dyn_mu_calib.pkl'))
+                               'model_flowlines_dyn_melt_f_calib.pkl'))
 
     if yr_rgi is None:
         yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
     if min_spinup_period > yr_rgi - ys:
-        log.workflow('The RGI year is closer to ys as the minimum spinup '
-                     'period -> therefore the minimum spinup period is '
-                     'adapted and it is the only period which is tried by the '
-                     'dynamic spinup function!')
+        log.info('The RGI year is closer to ys as the minimum spinup '
+                 'period -> therefore the minimum spinup period is '
+                 'adapted and it is the only period which is tried by the '
+                 'dynamic spinup function!')
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
         min_ice_thickness = 0
 
-    yr_clim_min = gdir.get_climate_info()['baseline_hydro_yr_0']
+    yr_clim_min = gdir.get_climate_info()['baseline_yr_0']
     try:
         model_end = run_dynamic_spinup(
             gdir,
@@ -1401,7 +1411,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
 
     except RuntimeError:
         log.warning('No dynamic spinup could be conducted by using the '
-                    f'original mu* ({mu_star}). Therefore the last '
+                    f'original melt factor ({melt_f}). Therefore the last '
                     'try is to conduct a run until ye without a dynamic '
                     'spinup.')
         model_end = run_from_climate_data(
@@ -1439,16 +1449,16 @@ def dynamic_mu_star_run_with_dynamic_spinup_fallback(
     return model_end
 
 
-def dynamic_mu_star_run(
-        gdir, mu_star, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
-        output_filesuffix='', evolution_model=FluxBasedModel,
+def dynamic_melt_f_run(
+        gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
+        output_filesuffix='', evolution_model=None,
         local_variables=None, set_local_variables=False, yr_rgi=None,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
-    'run_dynamic_mu_star_calibration' function (the corresponding
-    'fallback_function' is 'dynamic_mu_star_run_fallback'). It is meant to
-    define a new mu_star in the given gdir and conduct a
+    'run_dynamic_melt_f_calibration' function (the corresponding
+    'fallback_function' is 'dynamic_melt_f_run_fallback'). It is meant to
+    define a new melt_f in the given gdir and conduct a
     'run_from_climate_data' run between ys and ye and return the geodetic mass
     balance (units: kg m-2 yr-1) of the period yr0_ref_mb and yr1_ref_mb.
 
@@ -1456,8 +1466,8 @@ def dynamic_mu_star_run(
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
-    mu_star : float
-        the mu_star used for this run
+    melt_f : float
+        the melt_f used for this run
     yr0_ref_mb : int
         the start year of the geodetic mass balance
     yr1_ref_mb : int
@@ -1471,15 +1481,15 @@ def dynamic_mu_star_run(
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     local_variables : None
         Not needed in this function, just here to match with the function
-        call in run_dynamic_mu_star_calibration.
+        call in run_dynamic_melt_f_calibration.
     set_local_variables : bool
         Not needed in this function. Only here to be confirm with the use of
-        this function in 'run_dynamic_mu_star_calibration'.
+        this function in 'run_dynamic_melt_f_calibration'.
     yr_rgi : int or None
         The rgi year of the gdir.
         Default is None
@@ -1492,12 +1502,14 @@ def dynamic_mu_star_run(
         The final model after the run and the calculated geodetic mass balance
     """
 
+    evolution_model = decide_evolution_model(evolution_model)
+
     if set_local_variables:
         # No local variables needed in this function
         return None
 
     # Here we start with the actual model run
-    define_new_mu_star_in_gdir(gdir, mu_star)
+    define_new_melt_f_in_gdir(gdir, melt_f)
 
     # conduct model run
     try:
@@ -1527,22 +1539,22 @@ def dynamic_mu_star_run(
     return model, dmdtda_mdl
 
 
-def dynamic_mu_star_run_fallback(
-        gdir, mu_star, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=FluxBasedModel, yr_rgi=None, **kwargs):
+def dynamic_melt_f_run_fallback(
+        gdir, melt_f, fls_init, ys, ye, local_variables, output_filesuffix='',
+        evolution_model=None, yr_rgi=None, **kwargs):
     """
     This is the fallback function corresponding to the function
-    'dynamic_mu_star_run', which are provided to
-    'run_dynamic_mu_star_calibration'. It is used if the run_function fails and
-    if 'ignore_error=True' in 'run_dynamic_mu_star_calibration'. It sets
-    mu_star and conduct a run_from_climate_data run from ys to ye.
+    'dynamic_melt_f_run', which are provided to
+    'run_dynamic_melt_f_calibration'. It is used if the run_function fails and
+    if 'ignore_error=True' in 'run_dynamic_melt_f_calibration'. It sets
+    melt_f and conduct a run_from_climate_data run from ys to ye.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
-    mu_star : float
-        the mu_star used for this run
+    melt_f : float
+        the melt_f used for this run
     fls_init : []
         List of flowlines to use to initialise the model
     ys : int
@@ -1551,13 +1563,13 @@ def dynamic_mu_star_run_fallback(
         end year of the run
     local_variables : dict
         Not needed in this function, just here to match with the function
-        call in run_dynamic_mu_star_calibration.
+        call in run_dynamic_melt_f_calibration.
     output_filesuffix : str
         For the output file.
         Default is ''
-    evolution_model : class:oggm.core.FlowlineModel
-        Evolution model to use.
-        Default is FluxBasedModel
+    evolution_model : :class:oggm.core.FlowlineModel
+        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        Not all models work in all circumstances!
     yr_rgi : int or None
         The rgi year of the gdir.
         Default is None
@@ -1570,7 +1582,9 @@ def dynamic_mu_star_run_fallback(
         The final model after the run.
     """
 
-    define_new_mu_star_in_gdir(gdir, mu_star)
+    evolution_model = decide_evolution_model(evolution_model)
+
+    define_new_melt_f_in_gdir(gdir, melt_f)
 
     # conduct model run
     try:
@@ -1592,24 +1606,24 @@ def dynamic_mu_star_run_fallback(
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def run_dynamic_mu_star_calibration(
+def run_dynamic_melt_f_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
-        ref_period='', ignore_hydro_months=False, min_mu_star=None,
-        max_mu_star=None, mu_star_max_step_length=5, maxiter=20,
-        ignore_errors=False, output_filesuffix='_dynamic_mu_star',
+        ref_period='', melt_f_min=None,
+        melt_f_max=None, melt_f_max_step_length_minimum=0.1, maxiter=20,
+        ignore_errors=False, output_filesuffix='_dynamic_melt_f',
         ys=None, ye=None,
-        run_function=dynamic_mu_star_run_with_dynamic_spinup,
+        run_function=dynamic_melt_f_run_with_dynamic_spinup,
         kwargs_run_function=None,
-        fallback_function=dynamic_mu_star_run_with_dynamic_spinup_fallback,
+        fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
         kwargs_fallback_function=None, init_model_filesuffix=None,
         init_model_yr=None, init_model_fls=None,
         first_guess_diagnostic_msg='dynamic spinup only'):
-    """Calibrate mu_star to match a geodetic mass balance incorporating a
+    """Calibrate melt_f to match a geodetic mass balance incorporating a
     dynamic model run.
 
-    This task iteratively search for a mu_star to match a provided geodetic
+    This task iteratively search for a melt_f to match a provided geodetic
     mass balance. How one model run looks like is defined in the 'run_function'.
-    This function should take a new mu_star guess, conducts a dynamic run and
+    This function should take a new melt_f guess, conducts a dynamic run and
     calculate the geodetic mass balance. The goal is to match the geodetic mass
     blanance 'ref_dmdtda' inside the provided error 'err_ref_dmdtda'. If the
     minimisation of the mismatch between the provided and modeled geodetic mass
@@ -1651,36 +1665,35 @@ def run_dynamic_mu_star_calibration(
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
         set, this should still match the same format but can be any date.
         Default is '' (-> PARAMS['geodetic_mb_period'])
-    ignore_hydro_months : bool
-        Do not raise an  error if we are working on calendar years.
-        Default is False
-    min_mu_star : float or None
-        Lower absolute limit for mu*.
-        Default is None (-> cfg.PARAMS['min_mu_star'])
-    max_mu_star : float or None
-        Upper absolute limit for mu*
-        Default is None (-> cfg.PARAMS['max_mu_star'])
-    mu_star_max_step_length : float
-        Defines the maximum allowed change of mu_star between two iterations.
-        Is needed to avoid to large changes.
-        Default is 5
+    melt_f_min : float or None
+        Lower absolute limit for melt_f.
+        Default is None (-> cfg.PARAMS['melt_f_min'])
+    melt_f_max : float or None
+        Upper absolute limit for melt_f.
+        Default is None (-> cfg.PARAMS['melt_f_max'])
+    melt_f_max_step_length_minimum : float
+        Defines a minimum maximal change of melt_f between two iterations. The
+        maximum step length is needed to avoid too large steps, which likely
+        lead to an error.
+        Default is 0.1
     maxiter : int
         Maximum number of minimisation iterations of minimising mismatch to
-        dmdtda by changing mu_star. Each of this iterations conduct a complete
-        run defined in the 'run_function'. If maxiter_mu_star reached and
+        dmdtda by changing melt_f. Each of this iterations conduct a complete
+        run defined in the 'run_function'. If maxiter reached and
         'ignore_errors=False' an error is raised.
         Default is 20
     ignore_errors : bool
-        If True and the 'run_function' with mu* star calibration is not working
-        to match dmdtda inside the provided uncertainty first, if their where
-        some successful runs with the 'run_function' they are saved as part
-        success, and if not a single run was successful the 'fallback_function'
-        is called. If False and the 'run_function' with mu* star calibration is
-        not working an Error is raised.
+        If True and the 'run_function' with melt_f calibration is not working
+        to match dmdtda inside the provided uncertainty fully, but their where
+        some successful runs which improved the first guess, they are saved as
+        part success, and if not a single run was successful the
+        'fallback_function' is called.
+        If False and the 'run_function' with melt_f calibration is not working
+        fully an error is raised.
         Default is True
     output_filesuffix : str
         For the output file.
-        Default is '_historical_dynamic_mu_star'
+        Default is '_dynamic_melt_f'
     ys : int or None
         The start year of the conducted run. If None the first year of the
         provided climate file.
@@ -1690,9 +1703,9 @@ def run_dynamic_mu_star_calibration(
         provided climate file.
         Default is None
     run_function : function
-        This function defines how a new defined mu_star is used to conduct the
+        This function defines how a new defined melt_f is used to conduct the
         next model run. This function must contain the arguments 'gdir',
-        'mu_star', 'yr0_ref_mb', 'yr1_ref_mb', 'fls_init', 'ys', 'ye' and
+        'melt_f', 'yr0_ref_mb', 'yr1_ref_mb', 'fls_init', 'ys', 'ye' and
         'output_filesuffix'. Further this function must return the final model
         and the calculated geodetic mass balance dmdtda in kg m-2 yr-1.
     kwargs_run_function : None or dict
@@ -1701,7 +1714,7 @@ def run_dynamic_mu_star_calibration(
     fallback_function : function
         This is a fallback function if the calibration is not working using
         'run_function' it is called. This function must contain the arguments
-        'gdir', 'mu_star', 'fls_init', 'ys', 'ye', 'local_variables' and
+        'gdir', 'melt_f', 'fls_init', 'ys', 'ye', 'local_variables' and
         'output_filesuffix'. Further this function should return the final
         model.
     kwargs_fallback_function : None or dict
@@ -1720,43 +1733,25 @@ def run_dynamic_mu_star_calibration(
         Ignored if `init_model_filesuffix` is set.
     first_guess_diagnostic_msg : str
         This message will be added to the glacier diagnostics if only the
-        default mu* resulted in a successful 'run_function' run.
+        default melt_f resulted in a successful 'run_function' run.
         Default is 'dynamic spinup only'
 
     Returns
     -------
     :py:class:`oggm.core.flowline.evolution_model`
         The final dynamically spined-up model. Type depends on the selected
-        evolution_model, by default a FluxBasedModel.
+        evolution_model.
     """
-    # mu* constraints
-    if min_mu_star is None:
-        min_mu_star = cfg.PARAMS['min_mu_star']
-    if max_mu_star is None:
-        max_mu_star = cfg.PARAMS['max_mu_star']
+    # melt_f constraints
+    if melt_f_min is None:
+        melt_f_min = cfg.PARAMS['melt_f_min']
+    if melt_f_max is None:
+        melt_f_max = cfg.PARAMS['melt_f_max']
 
     if kwargs_run_function is None:
         kwargs_run_function = {}
     if kwargs_fallback_function is None:
         kwargs_fallback_function = {}
-
-    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    if sm != 1 and not ignore_hydro_months:
-        raise InvalidParamsError('run_dynamic_mu_star_calibration makes '
-                                 'more sense when applied on calendar years '
-                                 "(PARAMS['hydro_month_nh']=1 and "
-                                 "`PARAMS['hydro_month_sh']=1). If you want "
-                                 "to ignore this error, set "
-                                 "ignore_hydro_months to True")
-
-    if max_mu_star > 1000:
-        raise InvalidParamsError('You seem to have set a very high '
-                                 'max_mu_star for this run. This is not '
-                                 'how this task is supposed to work, and '
-                                 'we recommend a value lower than 1000 '
-                                 '(or even 600). You can directly provide a '
-                                 'value for max_mu_star or set '
-                                 "cfg.PARAMS['max_mu_star'] to a smaller value!")
 
     # geodetic mb stuff
     if not ref_period:
@@ -1791,16 +1786,18 @@ def run_dynamic_mu_star_calibration(
     yr0_ref_mb = int(yr0_ref_mb.split('-')[0])
     yr1_ref_mb = int(yr1_ref_mb.split('-')[0])
 
+    clim_info = gdir.get_climate_info()
+
     if ye is None:
         # One adds 1 because the run ends at the end of the year
-        ye = gdir.get_climate_info()['baseline_hydro_yr_1'] + 1
+        ye = clim_info['baseline_yr_1'] + 1
 
     if ye < yr1_ref_mb:
         raise RuntimeError('The provided ye is smaller than the end year of '
                            'the given geodetic_mb_period!')
 
     if ys is None:
-        ys = gdir.get_climate_info()['baseline_hydro_yr_0']
+        ys = clim_info['baseline_yr_0']
 
     if ys > yr0_ref_mb:
         raise RuntimeError('The provided ys is larger than the start year of '
@@ -1809,8 +1806,8 @@ def run_dynamic_mu_star_calibration(
     yr_rgi = gdir.rgi_date + 1  # + 1 converted to hydro years
     if yr_rgi < ys:
         if ignore_errors:
-            log.workflow('The rgi year is smaller than the provided start year '
-                         'ys -> setting the rgi year to ys to continue!')
+            log.info('The rgi year is smaller than the provided start year '
+                     'ys -> setting the rgi year to ys to continue!')
             yr_rgi = ys
         else:
             raise RuntimeError('The rgi year is smaller than the provided '
@@ -1833,15 +1830,23 @@ def run_dynamic_mu_star_calibration(
     else:
         fls_init = copy.deepcopy(init_model_fls)
 
-    # save original mu star for later to be able to recreate original gdir
+    # save original melt_f for later to be able to recreate original gdir
     # (using the fallback function) if an error occurs
-    mu_star_initial = gdir.read_json('local_mustar')['mu_star_glacierwide']
+    melt_f_initial = gdir.read_json('mb_calib')['melt_f']
+
+    # define maximum allowed change of melt_f between two iterations. Is needed
+    # to avoid to large changes (=likely lead to an error). It is defined in a
+    # way that in maxiter steps the further away limit can be reached
+    melt_f_max_step_length = np.max(
+        [np.max(np.abs(np.array([melt_f_min, melt_f_min]) - melt_f_initial)) /
+         maxiter,
+         melt_f_max_step_length_minimum])
 
     # only used to check performance of minimisation
-    dynamic_mu_star_calibration_runs = [0]
+    dynamic_melt_f_calibration_runs = [0]
 
-    # this function is called if the actual dynamic mu star calibration fails
-    def fallback_run(mu_star, reset, best_mismatch=None, initial_mismatch=None,
+    # this function is called if the actual dynamic melt_f calibration fails
+    def fallback_run(melt_f, reset, best_mismatch=None, initial_mismatch=None,
                      only_first_guess=None):
         if reset:
             # unfortunately we could not conduct an error free run using the
@@ -1850,7 +1855,7 @@ def run_dynamic_mu_star_calibration(
             # this diagnostics should be overwritten inside the fallback_function
             gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
 
-            model = fallback_function(gdir=gdir, mu_star=mu_star,
+            model = fallback_function(gdir=gdir, melt_f=melt_f,
                                       fls_init=fls_init, ys=ys, ye=ye,
                                       local_variables=local_variables_run_function,
                                       output_filesuffix=output_filesuffix,
@@ -1865,9 +1870,9 @@ def run_dynamic_mu_star_calibration(
                                         first_guess_diagnostic_msg)
             else:
                 gdir.add_to_diagnostics('used_spinup_option',
-                                        'dynamic mu_star calibration (part '
+                                        'dynamic melt_f calibration (part '
                                         'success)')
-            model, dmdtda_mdl = run_function(gdir=gdir, mu_star=mu_star,
+            model, dmdtda_mdl = run_function(gdir=gdir, melt_f=melt_f,
                                              yr0_ref_mb=yr0_ref_mb,
                                              yr1_ref_mb=yr1_ref_mb,
                                              fls_init=fls_init, ys=ys, ye=ye,
@@ -1881,18 +1886,20 @@ def run_dynamic_mu_star_calibration(
             gdir.add_to_diagnostics(
                 'dmdtda_dynamic_calibration_given_error',
                 float(err_ref_dmdtda))
+            gdir.add_to_diagnostics('dmdtda_dynamic_calibration_error_scaling_factor',
+                                    float(err_dmdtda_scaling_factor))
             gdir.add_to_diagnostics(
                 'dmdtda_mismatch_dynamic_calibration',
                 float(best_mismatch))
             gdir.add_to_diagnostics(
-                'dmdtda_mismatch_with_initial_mu_star',
+                'dmdtda_mismatch_with_initial_melt_f',
                 float(initial_mismatch))
-            gdir.add_to_diagnostics('mu_star_dynamic_calibration',
-                                    float(mu_star))
-            gdir.add_to_diagnostics('mu_star_before_dynamic_calibration',
-                                    float(mu_star_initial))
-            gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_iterations',
-                                    int(dynamic_mu_star_calibration_runs[-1]))
+            gdir.add_to_diagnostics('melt_f_dynamic_calibration',
+                                    float(melt_f))
+            gdir.add_to_diagnostics('melt_f_before_dynamic_calibration',
+                                    float(melt_f_initial))
+            gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
+                                    int(dynamic_melt_f_calibration_runs[-1]))
 
         return model
 
@@ -1900,19 +1907,19 @@ def run_dynamic_mu_star_calibration(
     # for some run_functions this is useful to save parameters from a previous
     # run to be faster in the upcoming runs
     local_variables_run_function = {}
-    run_function(gdir=gdir, mu_star=None, yr0_ref_mb=None, yr1_ref_mb=None,
+    run_function(gdir=gdir, melt_f=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
                  local_variables=local_variables_run_function,
                  set_local_variables=True, **kwargs_run_function)
 
     # this is the actual model run which is executed each iteration in order to
     # minimise the mismatch of dmdtda of model and observation
-    def model_run(mu_star):
+    def model_run(melt_f):
         # to check performance of minimisation
-        dynamic_mu_star_calibration_runs.append(
-            dynamic_mu_star_calibration_runs[-1] + 1)
+        dynamic_melt_f_calibration_runs.append(
+            dynamic_melt_f_calibration_runs[-1] + 1)
 
-        model, dmdtda_mdl = run_function(gdir=gdir, mu_star=mu_star,
+        model, dmdtda_mdl = run_function(gdir=gdir, melt_f=melt_f,
                                          yr0_ref_mb=yr0_ref_mb,
                                          yr1_ref_mb=yr1_ref_mb,
                                          fls_init=fls_init, ys=ys, ye=ye,
@@ -1921,10 +1928,10 @@ def run_dynamic_mu_star_calibration(
                                          **kwargs_run_function)
         return model, dmdtda_mdl
 
-    def cost_fct(mu_star, model_dynamic_spinup_end):
+    def cost_fct(melt_f, model_dynamic_spinup_end):
 
         # actual model run
-        model_dynamic_spinup, dmdtda_mdl = model_run(mu_star)
+        model_dynamic_spinup, dmdtda_mdl = model_run(melt_f)
 
         # save final model for later
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
@@ -1937,17 +1944,17 @@ def run_dynamic_mu_star_calibration(
     def init_cost_fun():
         model_dynamic_spinup_end = []
 
-        def c_fun(mu_star):
-            return cost_fct(mu_star, model_dynamic_spinup_end)
+        def c_fun(melt_f):
+            return cost_fct(melt_f, model_dynamic_spinup_end)
 
         return c_fun, model_dynamic_spinup_end
 
     # Here start with own spline minimisation algorithm
-    def minimise_with_spline_fit(fct_to_minimise, mu_star_guess, mismatch):
-        # defines limits of mu in accordance to maximal allowed change
+    def minimise_with_spline_fit(fct_to_minimise, melt_f_guess, mismatch):
+        # defines limits of melt_f in accordance to maximal allowed change
         # between iterations
-        mu_star_limits = [mu_star_initial - mu_star_max_step_length,
-                          mu_star_initial + mu_star_max_step_length]
+        melt_f_limits = [melt_f_initial - melt_f_max_step_length,
+                         melt_f_initial + melt_f_max_step_length]
 
         # this two variables indicate that the limits were already adapted to
         # avoid an error
@@ -1955,65 +1962,65 @@ def run_dynamic_mu_star_calibration(
         was_max_error = False
         was_errors = [was_min_error, was_max_error]
 
-        def get_mismatch(mu_star):
-            mu_star = copy.deepcopy(mu_star)
-            # first check if the mu_star is inside limits
-            if mu_star < mu_star_limits[0]:
+        def get_mismatch(melt_f):
+            melt_f = copy.deepcopy(melt_f)
+            # first check if the melt_f is inside limits
+            if melt_f < melt_f_limits[0]:
                 # was the smaller limit already executed, if not first do this
-                if mu_star_limits[0] not in mu_star_guess:
-                    mu_star = copy.deepcopy(mu_star_limits[0])
+                if melt_f_limits[0] not in melt_f_guess:
+                    melt_f = copy.deepcopy(melt_f_limits[0])
                 else:
                     # smaller limit was already used, check if it was
                     # already newly defined with error
                     if was_errors[0]:
                         raise RuntimeError('Not able to minimise without '
                                            'raising an error at lower limit of '
-                                           'mu star!')
+                                           'melt_f!')
                     else:
                         # ok we set a new lower limit, consider also minimum
                         # limit
-                        mu_star_limits[0] = max(min_mu_star,
-                                                mu_star_limits[0] -
-                                                mu_star_max_step_length)
-            elif mu_star > mu_star_limits[1]:
+                        melt_f_limits[0] = max(melt_f_min,
+                                               melt_f_limits[0] -
+                                               melt_f_max_step_length)
+            elif melt_f > melt_f_limits[1]:
                 # was the larger limit already executed, if not first do this
-                if mu_star_limits[1] not in mu_star_guess:
-                    mu_star = copy.deepcopy(mu_star_limits[1])
+                if melt_f_limits[1] not in melt_f_guess:
+                    melt_f = copy.deepcopy(melt_f_limits[1])
                 else:
                     # larger limit was already used, check if it was
                     # already newly defined with ice free glacier
                     if was_errors[1]:
                         raise RuntimeError('Not able to minimise without '
                                            'raising an error at upper limit of '
-                                           'mu star!')
+                                           'melt_f!')
                     else:
                         # ok we set a new upper limit, consider also maximum
                         # limit
-                        mu_star_limits[1] = min(max_mu_star,
-                                                mu_star_limits[1] +
-                                                mu_star_max_step_length)
+                        melt_f_limits[1] = min(melt_f_max,
+                                               melt_f_limits[1] +
+                                               melt_f_max_step_length)
 
-            # now clip mu_star with limits (to be sure)
-            mu_star = np.clip(mu_star, mu_star_limits[0], mu_star_limits[1])
-            if mu_star in mu_star_guess:
-                raise RuntimeError('This mu star was already tried. Probably '
+            # now clip melt_f with limits (to be sure)
+            melt_f = np.clip(melt_f, melt_f_limits[0], melt_f_limits[1])
+            if melt_f in melt_f_guess:
+                raise RuntimeError('This melt_f was already tried. Probably '
                                    'we are at one of the max or min limit and '
                                    'still have no satisfactory mismatch '
                                    'found!')
 
             # if error during dynamic calibration this defines how much
-            # mu_star is changed in the upcoming iteratoins to look for an
+            # melt_f is changed in the upcoming iterations to look for an
             # error free run
-            mu_star_search_change = mu_star_max_step_length / 10
+            melt_f_search_change = melt_f_max_step_length / 10
             # maximum number of changes to look for an error free run
-            max_iterations = int(mu_star_max_step_length /
-                                 mu_star_search_change)
+            max_iterations = int(melt_f_max_step_length /
+                                 melt_f_search_change)
 
             current_min_error = False
             current_max_error = False
             doing_first_guess = (len(mismatch) == 0)
             iteration = 0
-            current_mu_star = copy.deepcopy(mu_star)
+            current_melt_f = copy.deepcopy(melt_f)
 
             # in this loop if an error at the limits is raised we go step by
             # step away from the limits until we are at the initial guess or we
@@ -2022,14 +2029,14 @@ def run_dynamic_mu_star_calibration(
             while ((current_min_error | current_max_error | iteration == 0) &
                    (iteration < max_iterations)):
                 try:
-                    tmp_mismatch = fct_to_minimise(mu_star)
+                    tmp_mismatch = fct_to_minimise(melt_f)
                 except RuntimeError as e:
                     # check if we are at the lower limit
-                    if mu_star == mu_star_limits[0]:
+                    if melt_f == melt_f_limits[0]:
                         # check if there was already an error at the lower limit
                         if was_errors[0]:
                             raise RuntimeError('Second time with error at '
-                                               'lower limit of mu star! '
+                                               'lower limit of melt_f! '
                                                'Error message of model run: '
                                                f'{e}')
                         else:
@@ -2037,11 +2044,11 @@ def run_dynamic_mu_star_calibration(
                             current_min_error = True
 
                     # check if we are at the upperlimit
-                    elif mu_star == mu_star_limits[1]:
+                    elif melt_f == melt_f_limits[1]:
                         # check if there was already an error at the lower limit
                         if was_errors[1]:
                             raise RuntimeError('Second time with error at '
-                                               'upper limit of mu star! '
+                                               'upper limit of melt_f! '
                                                'Error message of model run: '
                                                f'{e}')
                         else:
@@ -2051,17 +2058,17 @@ def run_dynamic_mu_star_calibration(
                     if current_min_error:
                         # currently we searching for a new lower limit with no
                         # error
-                        mu_star = np.round(mu_star + mu_star_search_change,
-                                           decimals=1)
+                        melt_f = np.round(melt_f + melt_f_search_change,
+                                          decimals=1)
                     elif current_max_error:
                         # currently we searching for a new upper limit with no
                         # error
-                        mu_star = np.round(mu_star - mu_star_search_change,
-                                           decimals=1)
+                        melt_f = np.round(melt_f - melt_f_search_change,
+                                          decimals=1)
 
                     # if we end close to an already executed guess while
                     # searching for a new limit we quite
-                    if np.isclose(mu_star, mu_star_guess).any():
+                    if np.isclose(melt_f, melt_f_guess).any():
                         raise RuntimeError('Not able to further minimise, '
                                            'return the best we have so far!'
                                            f'Error message: {e}')
@@ -2072,10 +2079,10 @@ def run_dynamic_mu_star_calibration(
                                            'with first guess! Error '
                                            f'message: {e}')
 
-                    if np.isclose(mu_star, current_mu_star):
+                    if np.isclose(melt_f, current_melt_f):
                         # something unexpected happen so we end here
                         raise RuntimeError('Unexpected error not at the limits'
-                                           f' of mu star. Error Message: {e}')
+                                           f' of melt_f. Error Message: {e}')
 
                 iteration += 1
 
@@ -2083,81 +2090,82 @@ def run_dynamic_mu_star_calibration(
                 # ok we were not able to find an mismatch without error
                 if current_min_error:
                     raise RuntimeError('Not able to find new lower limit for '
-                                       'mu star!')
+                                       'melt_f!')
                 elif current_max_error:
                     raise RuntimeError('Not able to find new upper limit for '
-                                       'mu star!')
+                                       'melt_f!')
                 else:
                     raise RuntimeError('Something unexpected happened during '
-                                       'definition of new mu star limits!')
+                                       'definition of new melt_f limits!')
             else:
                 # if we found a new limit set it
                 if current_min_error:
-                    mu_star_limits[0] = copy.deepcopy(mu_star)
+                    melt_f_limits[0] = copy.deepcopy(melt_f)
                 elif current_max_error:
-                    mu_star_limits[1] = copy.deepcopy(mu_star)
+                    melt_f_limits[1] = copy.deepcopy(melt_f)
 
             if tmp_mismatch is None:
                 raise RuntimeError('Not able to find a new mismatch for '
                                    'dmdtda!')
 
-            return float(tmp_mismatch), float(mu_star)
+            return float(tmp_mismatch), float(melt_f)
 
         # first guess
-        new_mismatch, new_mu_star = get_mismatch(mu_star_initial)
-        mu_star_guess.append(new_mu_star)
+        new_mismatch, new_melt_f = get_mismatch(melt_f_initial)
+        melt_f_guess.append(new_melt_f)
         mismatch.append(new_mismatch)
 
         if abs(mismatch[-1]) < err_ref_dmdtda:
-            return mismatch[-1], new_mu_star
+            return mismatch[-1], new_melt_f
 
         # second (arbitrary) guess is given depending on the outcome of first
-        # guess, mu_star is changed for percent of mismatch relative to
-        # err_ref_dmdtda times mu_star_max_step_length (if
+        # guess, melt_f is changed for percent of mismatch relative to
+        # err_ref_dmdtda times melt_f_max_step_length (if
         # mismatch = 2 * err_ref_dmdtda this corresponds to 100%; for 100% or
-        # 150% the next step is (-1) * mu_star_max_step_length; if mismatch
-        # -40%, next step is 0.4 * mu_star_max_step_length; but always at least
-        # a change of 0.5 is imposed to prevent too close guesses). (-1) as if
-        # mismatch is negative we need a larger mu_star to get closer to 0
+        # 150% the next step is (-1) * melt_f_max_step_length; if mismatch
+        # -40%, next step is 0.4 * melt_f_max_step_length; but always at least
+        # an absolute change of 0.02 is imposed to prevent too close guesses).
+        # (-1) as if mismatch is negative we need a larger melt_f to get closer
+        # to 0.
         step = (-1) * np.sign(mismatch[-1]) * \
             max((np.abs(mismatch[-1]) - err_ref_dmdtda) / err_ref_dmdtda *
-                mu_star_max_step_length, 0.5)
-        new_mismatch, new_mu_star = get_mismatch(mu_star_guess[0] + step)
-        mu_star_guess.append(new_mu_star)
+                melt_f_max_step_length, 0.02)
+        new_mismatch, new_melt_f = get_mismatch(melt_f_guess[0] + step)
+        melt_f_guess.append(new_melt_f)
         mismatch.append(new_mismatch)
 
         if abs(mismatch[-1]) < err_ref_dmdtda:
-            return mismatch[-1], new_mu_star
+            return mismatch[-1], new_melt_f
 
         # Now start with splin fit for guessing
-        while len(mu_star_guess) < maxiter:
+        while len(melt_f_guess) < maxiter:
             # get next guess from splin (fit partial linear function to
-            # previously calculated (mismatch, mu_star) pairs and get mu_star
+            # previously calculated (mismatch, melt_f) pairs and get melt_f
             # value where mismatch=0 from this fitted curve)
             sort_index = np.argsort(np.array(mismatch))
             tck = interpolate.splrep(np.array(mismatch)[sort_index],
-                                     np.array(mu_star_guess)[sort_index],
+                                     np.array(melt_f_guess)[sort_index],
                                      k=1)
-            # here we catch interpolation errors (two different mu_star with
-            # same mismatch), could happen if one mu_star was close to a newly
+            # here we catch interpolation errors (two different melt_f with
+            # same mismatch), could happen if one melt_f was close to a newly
             # defined limit
             if np.isnan(tck[1]).any():
                 if was_errors[0]:
                     raise RuntimeError('Second time with error at lower '
-                                       'limit of mu star! (nan in splin fit)')
+                                       'limit of melt_f! (nan in splin fit)')
                 elif was_errors[1]:
                     raise RuntimeError('Second time with error at upper '
-                                       'limit of mu star! (nan in splin fit)')
+                                       'limit of melt_f! (nan in splin fit)')
                 else:
                     raise RuntimeError('Not able to minimise! Problem is '
                                        'unknown. (nan in splin fit)')
-            new_mismatch, new_mu_star = get_mismatch(
+            new_mismatch, new_melt_f = get_mismatch(
                 float(interpolate.splev(0, tck)))
-            mu_star_guess.append(new_mu_star)
+            melt_f_guess.append(new_melt_f)
             mismatch.append(new_mismatch)
 
             if abs(mismatch[-1]) < err_ref_dmdtda:
-                return mismatch[-1], new_mu_star
+                return mismatch[-1], new_melt_f
 
         # Ok when we end here the spinup could not find satisfying match after
         # maxiter(ations)
@@ -2166,26 +2174,26 @@ def run_dynamic_mu_star_calibration(
                            f'{np.min(np.abs(mismatch))} kg m-2 yr-1) in '
                            f'{maxiter} Iterations!')
 
-    # wrapper to get values for intermediate (mismatch, mu_star) guesses if an
+    # wrapper to get values for intermediate (mismatch, melt_f) guesses if an
     # error is raised
     def init_minimiser():
-        mu_star_guess = []
+        melt_f_guess = []
         mismatch = []
 
         def minimiser(fct_to_minimise):
-            return minimise_with_spline_fit(fct_to_minimise, mu_star_guess,
+            return minimise_with_spline_fit(fct_to_minimise, melt_f_guess,
                                             mismatch)
 
-        return minimiser, mu_star_guess, mismatch
+        return minimiser, melt_f_guess, mismatch
 
     # define function for the actual minimisation
     c_fun, models_dynamic_spinup_end = init_cost_fun()
 
     # define minimiser
-    minimise_given_fct, mu_star_guesses, mismatch_dmdtda = init_minimiser()
+    minimise_given_fct, melt_f_guesses, mismatch_dmdtda = init_minimiser()
 
     try:
-        final_mismatch, final_mu_star = minimise_given_fct(c_fun)
+        final_mismatch, final_melt_f = minimise_given_fct(c_fun)
     except RuntimeError as e:
         # something happened during minimisation, if there where some
         # successful runs we return the one with the best mismatch, otherwise
@@ -2193,23 +2201,23 @@ def run_dynamic_mu_star_calibration(
         if len(mismatch_dmdtda) == 0:
             # we conducted no successful run, so run without dynamic spinup
             if ignore_errors:
-                log.workflow('Dynamic mu star calibration not successful. '
-                             f'Error message: {e}')
-                model_return = fallback_run(mu_star=mu_star_initial,
+                log.info('Dynamic melt_f calibration not successful. '
+                         f'Error message: {e}')
+                model_return = fallback_run(melt_f=melt_f_initial,
                                             reset=True)
                 return model_return
             else:
-                raise RuntimeError('Dynamic mu star calibration was not '
+                raise RuntimeError('Dynamic melt_f calibration was not '
                                    f'successful! Error Message: {e}')
         else:
             if ignore_errors:
-                log.workflow('Dynamic mu star calibration not successful. Error '
-                             f'message: {e}')
+                log.info('Dynamic melt_f calibration not successful. Error '
+                         f'message: {e}')
 
                 # there where some successful runs so we return the one with the
                 # smallest mismatch of dmdtda
                 min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
-                mu_star_best = np.array(mu_star_guesses)[min_mismatch_index]
+                melt_f_best = np.array(melt_f_guesses)[min_mismatch_index]
 
                 # check if the first guess was the best guess
                 only_first_guess = False
@@ -2217,36 +2225,38 @@ def run_dynamic_mu_star_calibration(
                     only_first_guess = True
 
                 model_return = fallback_run(
-                    mu_star=mu_star_best, reset=False,
+                    melt_f=melt_f_best, reset=False,
                     best_mismatch=np.array(mismatch_dmdtda)[min_mismatch_index],
                     initial_mismatch=mismatch_dmdtda[0],
                     only_first_guess=only_first_guess)
 
                 return model_return
             else:
-                raise RuntimeError('Dynamic mu star calibration not successful. '
+                raise RuntimeError('Dynamic melt_f calibration not successful. '
                                    f'Error message: {e}')
 
-    # check that new mu star is correctly saved in gdir
-    assert final_mu_star == gdir.read_json('local_mustar')['mu_star_glacierwide']
+    # check that new melt_f is correctly saved in gdir
+    assert final_melt_f == gdir.read_json('mb_calib')['melt_f']
 
-    # hurray, dynamic mu star calibration successful
+    # hurray, dynamic melt_f calibration successful
     gdir.add_to_diagnostics('used_spinup_option',
-                            'dynamic mu_star calibration (full success)')
+                            'dynamic melt_f calibration (full success)')
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_reference',
                             float(ref_dmdtda))
     gdir.add_to_diagnostics('dmdtda_dynamic_calibration_given_error',
                             float(err_ref_dmdtda))
+    gdir.add_to_diagnostics('dmdtda_dynamic_calibration_error_scaling_factor',
+                            float(err_dmdtda_scaling_factor))
     gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration',
                             float(final_mismatch))
-    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_mu_star',
+    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_melt_f',
                             float(mismatch_dmdtda[0]))
-    gdir.add_to_diagnostics('mu_star_dynamic_calibration', float(final_mu_star))
-    gdir.add_to_diagnostics('mu_star_before_dynamic_calibration',
-                            float(mu_star_initial))
-    gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_iterations',
-                            int(dynamic_mu_star_calibration_runs[-1]))
+    gdir.add_to_diagnostics('melt_f_dynamic_calibration', float(final_melt_f))
+    gdir.add_to_diagnostics('melt_f_before_dynamic_calibration',
+                            float(melt_f_initial))
+    gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
+                            int(dynamic_melt_f_calibration_runs[-1]))
 
-    log.workflow(f'Dynamic mu star calibration worked for {gdir.rgi_id}!')
+    log.info(f'Dynamic melt_f calibration worked for {gdir.rgi_id}!')
 
     return models_dynamic_spinup_end[-1]

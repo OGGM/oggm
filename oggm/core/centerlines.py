@@ -15,6 +15,7 @@ References::
         doi:10.5194/tc-8-503-2014
 """
 # Built ins
+import warnings
 import logging
 import copy
 from itertools import groupby
@@ -123,11 +124,9 @@ class Centerline(object, metaclass=SuperclassMeta):
         self.orig_head = orig_head  # Useful for debugging and for filtering
         self.geometrical_widths = None  # these are kept for plotting and such
         self.apparent_mb = None  # Apparent MB, NOT weighted by width.
-        self.mu_star = None  # the mu* associated with the apparent mb
-        self.mu_star_is_valid = False  # if mu* leeds to good flux, keep it
+        self.rgi_id = rgi_id  # Useful if line is used with another glacier
         self.flux = None  # Flux (kg m-2)
         self.flux_needs_correction = False  # whether this branch was baaad
-        self.rgi_id = rgi_id  # Useful if line is used with another glacier
         self.flux_out = None  # Flux (kg m-2) flowing out of the centerline
 
     def set_flows_to(self, other, check_tail=True, to_head=False):
@@ -261,7 +260,13 @@ class Centerline(object, metaclass=SuperclassMeta):
     def surface_h(self, value):
         self._surface_h = value
 
-    def set_apparent_mb(self, mb, mu_star=None, is_calving=False):
+    def reset_flux(self):
+        self.flux = np.zeros(len(self.surface_h))  # Flux (kg m-2)
+        self.flux_needs_correction = False  # whether this branch was baaad
+        self.flux_out = None  # Flux (kg m-2) flowing out of the centerline
+        self.apparent_mb = None
+
+    def set_apparent_mb(self, mb, is_calving=None):
         """Set the apparent mb and flux for the flowline.
 
         MB is expected in kg m-2 yr-1 (= mm w.e. yr-1)
@@ -270,8 +275,6 @@ class Centerline(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        mu_star : float
-            if appropriate, the mu_star associated with this apparent mb
         is_calving : bool
             if calving line the last grid cell is seen as a pure calving cell
             (the ice flux through the last cell is equal the calving flux),
@@ -279,9 +282,10 @@ class Centerline(object, metaclass=SuperclassMeta):
             the last grid cell (the ice flux through the last cell is equal to
             the smb)
         """
+        if is_calving is None:
+            raise InvalidParamsError('is_calving needs to be True or False')
 
         self.apparent_mb = mb
-        self.mu_star = mu_star
 
         # Add MB to current flux and sum
         # no more changes should happen after that
@@ -1245,7 +1249,8 @@ def _trapezoidal_bottom_width_from_terrain_cross_section_area(
 def compute_downstream_bedshape(gdir):
     """The bedshape obtained by fitting a parabola to the line's normals.
     Further a trapezoidal shape is fitted to match the cross section area of
-    the valley. Which downstream shape (parabola or trapezoidal) is used can be
+    the valley. Which downstream shape (parabola or trapezoidal) is used
+    by the later call to init_present_day_glacier can be
     selected with cfg.PARAMS['downstream_line_shape'].
 
     Also computes the downstream's altitude.
@@ -1885,7 +1890,10 @@ def catchment_width_geom(gdir):
         # intersect with our buffered catchment/glacier intersections
         is_rectangular = []
         for wg in wlines:
-            is_rectangular.append(np.any(gdfi.intersects(wg)))
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', category=RuntimeWarning)
+                inter = gdfi.intersects(wg)
+            is_rectangular.append(np.any(inter))
         is_rectangular = _filter_grouplen(is_rectangular, minsize=5)
 
         # we filter the lines which have a large altitude range

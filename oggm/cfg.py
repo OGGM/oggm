@@ -114,8 +114,9 @@ class ParamsLoggingDict(ResettingOrderedDict):
 
     def __setitem__(self, key, value):
         # Overrides the original dic to log the change
-        self._check_input(key, value)
         if self.do_log:
+            if key not in self:
+                raise InvalidParamsError(f'Parameter `{key}` not in PARAMS')
             self._log_param_change(key, value)
         ResettingOrderedDict.__setitem__(self, key, value)
 
@@ -160,16 +161,6 @@ class ParamsLoggingDict(ResettingOrderedDict):
                                                                       prev,
                                                                       value))
 
-    def _check_input(self, key, value):
-
-        if key == 'hydro_month_sh' and value == 1:
-            nh = self.get('hydro_month_nh')
-            if nh is not None and nh != 1:
-                msg = ("When setting PARAMS['hydro_month_sh'] to 1, please set "
-                       "PARAMS['hydro_month_nh'] to 1 first.")
-                raise InvalidWorkflowError(msg)
-
-
 # Globals
 IS_INITIALIZED = False
 PARAMS = ParamsLoggingDict()
@@ -201,27 +192,27 @@ _doc = ('A glacier mask geotiff file with the same extend and projection as '
         ' value 0 at unglaciated points.')
 BASENAMES['glacier_mask'] = ('glacier_mask.tif', _doc)
 
-_doc = ('The glacier outlines in the local map projection (Transverse '
-        'Mercator).')
+_doc = ('The glacier outlines in the local map projection '
+        '(Transverse Mercator or UTM).')
 BASENAMES['outlines'] = ('outlines.shp', _doc)
 
-_doc = ('The glacier intersects in the local map projection (Transverse '
-        'Mercator).')
+_doc = 'The glacier intersects in the local map projection.'
 BASENAMES['intersects'] = ('intersects.shp', _doc)
 
 _doc = ('Each flowline has a catchment area computed from flow routing '
         'algorithms: this shapefile stores the catchment outlines (in the '
-        'local map projection (Transverse Mercator).')
+        'local map projection).')
 BASENAMES['flowline_catchments'] = ('flowline_catchments.shp', _doc)
 
 _doc = ('The intersections between catchments (shapefile) in the local map '
-        'projection (Transverse Mercator).')
+        'projection.')
 BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
-_doc = 'A dictionary containing runtime diagnostics useful for debugging.'
+_doc = ('A dictionary containing runtime diagnostics useful for debugging or ' 
+        'logging of run parameters.')
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
 _doc = ('A netcdf file containing several gridded data variables such as '
@@ -254,7 +245,7 @@ BASENAMES['hypsometry'] = ('hypsometry.csv', _doc)
 _doc = 'A list of :py:class:`oggm.Centerline` instances, sorted by flow order.'
 BASENAMES['centerlines'] = ('centerlines.pkl', _doc)
 
-_doc = ('A "better" version of the Centerlines, now on a regular spacing '
+_doc = ('A "better" version of the centerlines, now on a regular spacing '
         'i.e., not on the gridded (i, j) indices. The tails of the '
         'tributaries are cut out to make more realistic junctions. '
         'They are now "1.5D" i.e., with a width.')
@@ -263,25 +254,18 @@ BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 _doc = 'The historical monthly climate timeseries stored in a netCDF file.'
 BASENAMES['climate_historical'] = ('climate_historical.nc', _doc)
 
-# so far, this is only ERA5_daily and does not work with the default OGGM
-# mass balance module
+# so far, this is only ERA5 or E5E5 daily and does not work with the default
+# OGGM mass balance module, only with sandbox
 _doc = ('The historical daily climate timeseries stored in a netCDF file.'
         '(only temperature is really changing on daily basis,'
         'precipitation is just assumed constant for every day')
 BASENAMES['climate_historical_daily'] = ('climate_historical_daily.nc', _doc)
 
-_doc = 'Deprecated: old name for `climate_historical`.'
-BASENAMES['climate_monthly'] = ('climate_monthly.nc', _doc)
-
-_doc = ('Some information (dictionary) about the mass '
-        'balance parameters for this glacier.')
-BASENAMES['climate_info'] = ('climate_info.json', _doc)
+_doc = "A dict containing the glacier's mass balance calibration parameters."
+BASENAMES['mb_calib'] = ('mb_calib.json', _doc)
 
 _doc = 'The monthly GCM climate timeseries stored in a netCDF file.'
 BASENAMES['gcm_data'] = ('gcm_data.nc', _doc)
-
-_doc = "A dict containing the glacier's t*, bias, and the flowlines' mu*"
-BASENAMES['local_mustar'] = ('local_mustar.json', _doc)
 
 _doc = 'List of dicts containing the data needed for the inversion.'
 BASENAMES['inversion_input'] = ('inversion_input.pkl', _doc)
@@ -296,11 +280,8 @@ _doc = ('When using a linear mass balance for the inversion, this dict stores '
         'the optimal ela_h and grad.')
 BASENAMES['linear_mb_params'] = ('linear_mb_params.pkl', _doc)
 
-_doc = 'Deprecated: renamed to `model_geometry`.'
-BASENAMES['model_run'] = ('model_run.nc', _doc)
-
 _doc = ('A netcdf file containing enough information to reconstruct the '
-        'entire flowline glacier geometry along the run (can be expensive'
+        'entire flowline glacier geometry along the run (can be expensive '
         'in disk space).')
 BASENAMES['model_geometry'] = ('model_geometry.nc', _doc)
 
@@ -529,17 +510,12 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['filter_min_slope'] = cp.as_bool('filter_min_slope')
     PARAMS['downstream_line_shape'] = cp['downstream_line_shape']
     PARAMS['auto_skip_task'] = cp.as_bool('auto_skip_task')
-    PARAMS['correct_for_neg_flux'] = cp.as_bool('correct_for_neg_flux')
-    PARAMS['filter_for_neg_flux'] = cp.as_bool('filter_for_neg_flux')
-    PARAMS['run_mb_calibration'] = cp.as_bool('run_mb_calibration')
     PARAMS['rgi_version'] = cp['rgi_version']
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
-    PARAMS['clip_mu_star'] = cp.as_bool('clip_mu_star')
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
-    PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
     PARAMS['use_kcalving_for_inversion'] = cp.as_bool('use_kcalving_for_inversion')
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
@@ -550,27 +526,17 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
-    PARAMS['use_tstar_calibration'] = cp.as_bool('use_tstar_calibration')
     PARAMS['baseline_climate'] = cp['baseline_climate'].strip().upper()
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
-    PARAMS['climate_qc_months'] = cp.as_int('climate_qc_months')
-    PARAMS['temp_use_local_gradient'] = cp.as_bool('temp_use_local_gradient')
-    PARAMS['tstar_search_glacierwide'] = cp.as_bool('tstar_search_glacierwide')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
-    PARAMS['use_winter_prcp_factor'] = cp.as_bool('use_winter_prcp_factor')
+    PARAMS['use_winter_prcp_fac'] = cp.as_bool('use_winter_prcp_fac')
+    PARAMS['use_temp_bias_from_file'] = cp.as_bool('use_temp_bias_from_file')
 
-    k = 'winter_prcp_factor_ab'
+    k = 'winter_prcp_fac_ab'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'winter_prcp_factor_range'
-    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'temp_local_gradient_bounds'
-    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
-    k = 'tstar_search_window'
-    PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
-    PARAMS['use_bias_for_run'] = cp.as_bool('use_bias_for_run')
     k = 'free_board_marine_terminating'
     PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'store_diagnostic_variables'
@@ -578,14 +544,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     k = 'store_fl_diagnostic_variables'
     PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
 
-    # Inversion
-    k = 'use_shape_factor_for_inversion'
-    PARAMS[k] = cp[k]
-
     # Flowline model
-    k = 'use_shape_factor_for_fluxbasedmodel'
-    PARAMS[k] = cp[k]
     k = 'glacier_length_method'
+    PARAMS[k] = cp[k]
+    k = 'evolution_model'
     PARAMS[k] = cp[k]
 
     # Others
@@ -593,33 +555,36 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
 
     # Precip factor can be none
     try:
-        PARAMS['prcp_scaling_factor'] = cp.as_float('prcp_scaling_factor')
+        PARAMS['prcp_fac'] = cp.as_float('prcp_fac')
     except ValueError:
-        PARAMS['prcp_scaling_factor'] = None
+        PARAMS['prcp_fac'] = None
+
+    # This also
+    try:
+        PARAMS['calving_line_extension'] = cp.as_int('calving_line_extension')
+    except ValueError:
+        PARAMS['calving_line_extension'] = None
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
-           'grid_dx_method', 'run_mb_calibration', 'compress_climate_netcdf',
-           'mp_processes', 'use_multiprocessing', 'climate_qc_months',
-           'temp_use_local_gradient', 'temp_local_gradient_bounds',
+           'grid_dx_method', 'compress_climate_netcdf',
+           'mp_processes', 'use_multiprocessing',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines', 'tstar_search_glacierwide', 'border',
-           'mpi_recv_buf_size', 'hydro_month_nh', 'clip_mu_star', 'map_proj',
-           'tstar_search_window', 'use_bias_for_run', 'hydro_month_sh',
+           'use_multiple_flowlines', 'border', 'use_temp_bias_from_file',
+           'mpi_recv_buf_size', 'map_proj', 'evolution_model',
+           'hydro_month_sh', 'hydro_month_nh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
-           'auto_skip_task', 'correct_for_neg_flux', 'filter_for_neg_flux',
+           'auto_skip_task','ref_mb_valid_window',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
-           'use_shape_factor_for_inversion', 'use_rgi_area', 'use_tstar_calibration',
-           'use_shape_factor_for_fluxbasedmodel', 'baseline_climate',
+           'use_rgi_area', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
-           'use_inversion_params_for_run', 'ref_mb_valid_window',
-           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_factor',
+           'use_inversion_params_for_run',
+           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_fac',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_factor_ab',
-           'winter_prcp_factor_range', 'prcp_scaling_factor',
-           'downstream_line_shape']
+           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_fac_ab',
+           'prcp_fac', 'downstream_line_shape']
     for k in ltr:
         cp.pop(k, None)
 

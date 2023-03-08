@@ -10,7 +10,7 @@ area OR volume at the RGI-date.
 Further, this dynamic spinup can be combined
 with a dynamic :math:`\mu ^{*}` calibration. This calibration also tries to
 calibrate :math:`\mu ^{*}` to match geodetic MB data as described in
-:doc:`mass-balance-2012-pergla`, but further takes a dynamically changing glacier
+:doc:`mass-balance-monthly`, but further takes a dynamically changing glacier
 geometry into account.
 
 Visit our `tutorials <https://oggm.org/tutorials>`_

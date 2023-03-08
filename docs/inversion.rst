@@ -30,7 +30,7 @@ Ice flux
 .. ipython:: python
    :suppress:
 
-    fpath = "_code/prepare_climate.py"
+    fpath = "_code/prepare_hef.py"
     with open(fpath) as f:
         code = compile(f.read(), fpath, 'exec')
         exec(code)
@@ -55,8 +55,9 @@ To do this, we create an artificial mass balance profile based on the mass balan
 as computed by the mass balance model. We add a residual (bias) to the 2000-2020
 profile so that the specific mass balance is zero, hence following the equilibrium
 assumption but still being physically consistent with the original profile and
-mass turnover. Tests show that this method might create a slight initial shock (mostly in
-glacier lenght) during the first years of simulation, but much less than if the inversion was
+mass turnover. Tests show that this method might create a slight initial shock
+(mostly in glacier length) during the first years of simulation,
+but much less than if the inversion was
 realized with another mass balance model or if the simulation was run from prescribed
 bed geometry. **Therefore, each re-calibration of the mass balance model requires
 the inversion to be run again** (more on this below).

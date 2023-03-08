@@ -164,6 +164,11 @@ A combination of rectangular, trapezoidal and parabolic shapes.
 Numerics
 --------
 
+Semi-implicit model (new default in v1.6)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+TODO: Patrick
+
 "Flux-based" model
 ~~~~~~~~~~~~~~~~~~
 
@@ -198,7 +203,7 @@ MUSCLSuperBeeModel
 
 A shallow ice model with improved numerics ensuring mass-conservation in
 very steep walls [Jarosch_etal_2013]_. The model is currently used only as
-reference benchmark for the "Flux-Based" model.
+reference benchmark for the other models.
 
 
 Glacier tributaries

@@ -948,33 +948,6 @@ class compile_to_netcdf(object):
                 output_filesuffix = input_filesuffix
 
             gdirs = tolist(gdirs)
-
-            if cfg.PARAMS['hydro_month_nh'] != cfg.PARAMS['hydro_month_sh']:
-                # Check some stuff
-                hemisphere = [gd.hemisphere for gd in gdirs]
-                if len(np.unique(hemisphere)) == 2:
-                    if path is not True:
-                        raise InvalidParamsError('With glaciers from both '
-                                                 'hemispheres, set `path=True`.')
-                    self.log.workflow('compile_*: you gave me a list of gdirs from '
-                                      'both hemispheres. I am going to write two '
-                                      'files out of it with _sh and _nh suffixes.')
-                    _gdirs = [gd for gd in gdirs if gd.hemisphere == 'sh']
-                    _compile_to_netcdf(_gdirs,
-                                       input_filesuffix=input_filesuffix,
-                                       output_filesuffix=output_filesuffix + '_sh',
-                                       path=True,
-                                       tmp_file_size=tmp_file_size,
-                                       **kwargs)
-                    _gdirs = [gd for gd in gdirs if gd.hemisphere == 'nh']
-                    _compile_to_netcdf(_gdirs,
-                                       input_filesuffix=input_filesuffix,
-                                       output_filesuffix=output_filesuffix + '_nh',
-                                       path=True,
-                                       tmp_file_size=tmp_file_size,
-                                       **kwargs)
-                    return
-
             task_name = task_func.__name__
             output_base = task_name.replace('compile_', '')
 
@@ -1182,7 +1155,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         # Copy coordinates
         time = time_info['time']
         ds.coords['time'] = ('time', time)
-        ds['time'].attrs['description'] = 'Floating hydrological year'
+        ds['time'].attrs['description'] = 'Floating year'
         # New coord
         ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
         ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
@@ -1332,11 +1305,9 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     with xr.open_dataset(ppath) as ds_clim:
         cyrs = ds_clim['time.year']
         cmonths = ds_clim['time.month']
-        has_grad = 'gradient' in ds_clim.variables
         sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
-        yrs, months = calendardate_to_hydrodate(cyrs, cmonths, start_month=sm)
-        assert months[0] == 1, 'Expected the first hydro month to be 1'
-        time = date_to_floatyear(yrs, months)
+        hyrs, hmonths = calendardate_to_hydrodate(cyrs, cmonths, start_month=sm)
+        time = date_to_floatyear(cyrs, cmonths)
 
     # Prepare output
     ds = xr.Dataset()
@@ -1350,11 +1321,11 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     # Coordinates
     ds.coords['time'] = ('time', time)
     ds.coords['rgi_id'] = ('rgi_id', rgi_ids)
-    ds.coords['hydro_year'] = ('time', yrs)
-    ds.coords['hydro_month'] = ('time', months)
     ds.coords['calendar_year'] = ('time', cyrs.data)
     ds.coords['calendar_month'] = ('time', cmonths.data)
-    ds['time'].attrs['description'] = 'Floating hydrological year'
+    ds.coords['hydro_year'] = ('time', hyrs)
+    ds.coords['hydro_month'] = ('time', hmonths)
+    ds['time'].attrs['description'] = 'Floating year'
     ds['rgi_id'].attrs['description'] = 'RGI glacier identifier'
     ds['hydro_year'].attrs['description'] = 'Hydrological year'
     ds['hydro_month'].attrs['description'] = 'Hydrological month'
@@ -1364,8 +1335,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     shape = (len(time), len(rgi_ids))
     temp = np.zeros(shape) * np.NaN
     prcp = np.zeros(shape) * np.NaN
-    if has_grad:
-        grad = np.zeros(shape) * np.NaN
+
     ref_hgt = np.zeros(len(rgi_ids)) * np.NaN
     ref_pix_lon = np.zeros(len(rgi_ids)) * np.NaN
     ref_pix_lat = np.zeros(len(rgi_ids)) * np.NaN
@@ -1377,8 +1347,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             with xr.open_dataset(ppath) as ds_clim:
                 prcp[:, i] = ds_clim.prcp.values
                 temp[:, i] = ds_clim.temp.values
-                if has_grad:
-                    grad[:, i] = ds_clim.gradient
                 ref_hgt[i] = ds_clim.ref_hgt
                 ref_pix_lon[i] = ds_clim.ref_pix_lon
                 ref_pix_lat[i] = ds_clim.ref_pix_lat
@@ -1391,10 +1359,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     ds['prcp'] = (('time', 'rgi_id'), prcp)
     ds['prcp'].attrs['units'] = 'kg m-2'
     ds['prcp'].attrs['description'] = 'total monthly precipitation amount'
-    if has_grad:
-        ds['grad'] = (('time', 'rgi_id'), grad)
-        ds['grad'].attrs['units'] = 'degC m-1'
-        ds['grad'].attrs['description'] = 'temperature gradient'
     ds['ref_hgt'] = ('rgi_id', ref_hgt)
     ds['ref_hgt'].attrs['units'] = 'm'
     ds['ref_hgt'].attrs['description'] = 'reference height'
@@ -1409,8 +1373,6 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
         vars = ['temp', 'prcp']
-        if has_grad:
-            vars += ['grad']
         encoding = {v: enc_var for v in vars}
         ds.to_netcdf(path, encoding=encoding)
     return ds
@@ -1668,18 +1630,22 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
             pass
 
         try:
+            # climate
+            info = gdir.get_climate_info()
+            for k, v in info.items():
+                d[k] = v
+        except BaseException:
+            pass
+
+        try:
             # MB calib
-            df = gdir.read_json('local_mustar')
-            d['t_star'] = df['t_star']
-            d['mu_star_glacierwide'] = df['mu_star_glacierwide']
-            d['mu_star_flowline_avg'] = df['mu_star_flowline_avg']
-            d['mu_star_allsame'] = df['mu_star_allsame']
-            d['mb_bias'] = df['bias']
-            try:
-                # is only saved if we use prcp-fac that depend on glacier
-                d['glacier_prcp_scaling_factor'] = df['glacier_prcp_scaling_factor']
-            except KeyError:
-                pass
+            mb_calib = gdir.read_json('mb_calib')
+            for k, v in mb_calib.items():
+                if np.isscalar(v):
+                    d[k] = v
+                else:
+                    for k2, v2 in v.items():
+                        d[k2] = v2
         except BaseException:
             pass
 
@@ -1787,7 +1753,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     precipitation_factor: float
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        calibration is applied which is cfg.PARAMS['prcp_fac']
     """
 
     from oggm.workflow import execute_entity_task
@@ -1862,7 +1828,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
     precipitation_factor: float
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_scaling_factor']
+        calibration is applied which is cfg.PARAMS['prcp_fac']
     """
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import compute_ela
@@ -1953,40 +1919,6 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             d['flowline_mean_elev'] = np.average(h, weights=widths)
             d['flowline_max_elev'] = np.max(h)
             d['flowline_min_elev'] = np.min(h)
-        except BaseException:
-            pass
-
-        try:
-            # Climate and MB at t*
-            mbcl = ConstantMassBalance
-            mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                bias=0, halfsize=halfsize,
-                                                use_inversion_flowlines=True)
-            h, w, mbh = mbmod.get_annual_mb_on_flowlines()
-            mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
-            pacc = np.where(mbh >= 0)
-            pab = np.where(mbh < 0)
-            d['tstar_aar'] = np.sum(w[pacc]) / np.sum(w)
-            try:
-                # Try to get the slope
-                mb_slope, _, _, _, _ = stats.linregress(h[pab], mbh[pab])
-                d['tstar_mb_grad'] = mb_slope
-            except BaseException:
-                # we don't mind if something goes wrong
-                d['tstar_mb_grad'] = np.NaN
-            d['tstar_ela_h'] = mbmod.get_ela()
-            # Climate
-            t, tm, p, ps = mbmod.flowline_mb_models[0].get_annual_climate(
-                [d['tstar_ela_h'],
-                 d['flowline_mean_elev'],
-                 d['flowline_max_elev'],
-                 d['flowline_min_elev']])
-            for n, v in zip(['temp', 'tempmelt', 'prcpsol'], [t, tm, ps]):
-                d['tstar_avg_' + n + '_ela_h'] = v[0]
-                d['tstar_avg_' + n + '_mean_elev'] = v[1]
-                d['tstar_avg_' + n + '_max_elev'] = v[2]
-                d['tstar_avg_' + n + '_min_elev'] = v[3]
-            d['tstar_avg_prcp'] = p[0]
         except BaseException:
             pass
 
@@ -2199,9 +2131,10 @@ def extend_past_climate_run(past_run_file=None,
         if y1_clim != y1_run - 1:
             raise InvalidWorkflowError('Dates do not match.')
         if len(past_ds.rgi_id) != len(fixed_geometry_mb_df.columns):
-            raise InvalidWorkflowError('Nb of glaciers do not match.')
+            # This might happen if we are testing on new directories
+            fixed_geometry_mb_df = fixed_geometry_mb_df[past_ds.rgi_id]
         if len(past_ds.rgi_id) != len(stats_df.index):
-            raise InvalidWorkflowError('Nb of glaciers do not match.')
+            stats_df = stats_df.loc[past_ds.rgi_id]
 
         # Make sure we agree on order
         df = fixed_geometry_mb_df[past_ds.rgi_id]
@@ -2213,19 +2146,14 @@ def extend_past_climate_run(past_run_file=None,
         # Time
         ods['hydro_year'].data[:] = years
         ods['hydro_month'].data[:] = ods['hydro_month'][-1]
-        if ods['hydro_month'][-1] == 1:
-            ods['calendar_year'].data[:] = years
-        else:
-            ods['calendar_year'].data[:] = years - 1
+        ods['calendar_year'].data[:] = years
         ods['calendar_month'].data[:] = ods['calendar_month'][-1]
-        for vn in ['hydro_year', 'hydro_month',
-                   'calendar_year', 'calendar_month']:
+        for vn in ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']:
             ods[vn] = ods[vn].astype(int)
 
         # New vars
         for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_m2_min_h', 'length', 'calving',
-                   'calving_rate']:
+                   'area', 'area_m2_min_h', 'length', 'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
@@ -2957,18 +2885,6 @@ class GlacierDirectory(object):
         if filename not in cfg.BASENAMES:
             raise ValueError(filename + ' not in cfg.BASENAMES.')
 
-        deprecated = {'climate_monthly': 'climate_historical',
-                      'model_run': 'model_geometry',
-                      }
-        if _deprecation_check:
-            for old, new in deprecated.items():
-                if filename == old:
-                    warnings.warn('Basename `{}` is deprecated and replaced by'
-                                  ' `{}`. Please update your code soon.'
-                                  ''.format(old, new), FutureWarning)
-                    return self.get_filepath(new, delete=delete,
-                                             filesuffix=filesuffix)
-
         fname = cfg.BASENAMES[filename]
         if filesuffix:
             fname = fname.split('.')
@@ -2976,17 +2892,6 @@ class GlacierDirectory(object):
             fname = fname[0] + filesuffix + '.' + fname[1]
 
         out = os.path.join(self.dir, fname)
-
-        # Deprecation cycle:
-        for old, new in deprecated.items():
-            if filename == new and not os.path.exists(out):
-                # For backwards compatibility, in these cases try old
-                if self.has_file(old, filesuffix=filesuffix,
-                                 _deprecation_check=False):
-                    return self.get_filepath(old, delete=delete,
-                                             filesuffix=filesuffix,
-                                             _deprecation_check=False)
-
         if delete and os.path.isfile(out):
             os.remove(out)
         return out
@@ -3008,29 +2913,7 @@ class GlacierDirectory(object):
             fp = fp.replace('.shp', '.tar')
             if cfg.PARAMS['use_compression']:
                 fp += '.gz'
-
-        out = os.path.exists(fp)
-
-        # Deprecation cycle
-        if not out and (filename == 'climate_info'):
-            # Try pickle
-            out = os.path.exists(fp.replace('.json', '.pkl'))
-        return out
-
-    def _read_deprecated_climate_info(self):
-        """Temporary fix for climate_info file type change."""
-        fp = self.get_filepath('climate_info')
-        if not os.path.exists(fp):
-            fp = fp.replace('.json', '.pkl')
-            if not os.path.exists(fp):
-                raise FileNotFoundError('No climate info file available!')
-            _open = gzip.open if cfg.PARAMS['use_compression'] else open
-            with _open(fp, 'rb') as f:
-                out = pickle.load(f)
-            return out
-        with open(fp, 'r') as f:
-            out = json.load(f)
-        return out
+        return os.path.exists(fp)
 
     def add_to_diagnostics(self, key, value):
         """Write a key, value pair to the gdir's runtime diagnostics.
@@ -3082,10 +2965,6 @@ class GlacierDirectory(object):
         -------
         An object read from the pickle
         """
-
-        # Some deprecations
-        if filename == 'climate_info':
-            return self._read_deprecated_climate_info()
 
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
@@ -3149,10 +3028,6 @@ class GlacierDirectory(object):
         A dictionary read from the JSON file
         """
 
-        # Some deprecations
-        if filename == 'climate_info':
-            return self._read_deprecated_climate_info()
-
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         if allow_empty:
             try:
@@ -3188,28 +3063,33 @@ class GlacierDirectory(object):
             json.dump(var, f, default=np_convert)
 
     def get_climate_info(self, input_filesuffix=''):
-        """Convenience function handling some backwards compat aspects
+        """Convenience function to read attributes of the historical climate.
 
         Parameters
         ----------
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used.
-            Default is to take the climate_historical without input_filesuffix
         """
-
-        try:
-            out = self.read_json('climate_info')
-        except FileNotFoundError:
-            out = {}
-
+        out = {}
         try:
             f = self.get_filepath('climate_historical',
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
-                out['baseline_hydro_yr_0'] = nc.hydro_yr_0
-                out['baseline_hydro_yr_1'] = nc.hydro_yr_1
-        except (AttributeError, FileNotFoundError):
+                try:
+                    out['baseline_yr_0'] = nc.yr_0
+                except AttributeError:
+                    # needed for back-compatibility before v1.6
+                    out['baseline_yr_0'] = nc.hydro_yr_0
+                try:
+                    out['baseline_yr_1'] = nc.yr_1
+                except AttributeError:
+                    # needed for back-compatibility before v1.6
+                    out['baseline_yr_1'] = nc.hydro_yr_1
+                out['baseline_climate_ref_hgt'] = nc.ref_hgt
+                out['baseline_climate_ref_pix_lon'] = nc.ref_pix_lon
+                out['baseline_climate_ref_pix_lat'] = nc.ref_pix_lat
+        except FileNotFoundError:
             pass
 
         return out
@@ -3288,7 +3168,6 @@ class GlacierDirectory(object):
 
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
-                                   gradient=None,
                                    temp_std=None,
                                    time_unit=None,
                                    calendar=None,
@@ -3307,14 +3186,12 @@ class GlacierDirectory(object):
             the temperature array (unit: 'degC')
         ref_pix_hgt : float
             the elevation of the dataset's reference altitude
-            (for correction). In practice it is the same altitude as the
+            (for correction). In practice, it is the same altitude as the
             baseline climate.
         ref_pix_lon : float
             the location of the gridded data's grid point
         ref_pix_lat : float
             the location of the gridded data's grid point
-        gradient : ndarray, optional
-            whether to use a time varying gradient
         temp_std : ndarray, optional
             the daily standard deviation of temperature (useful for PyGEM)
         time_unit : str
@@ -3368,14 +3245,8 @@ class GlacierDirectory(object):
                                        ref_pix_lon, ref_pix_lat)
             nc.climate_source = source
 
-            # hydro_year corresponds to the last month of the data
-            if time[0].month == 1:
-                # if first_month = 1, last_month = 12, so y0 is hydro_yr_0
-                nc.hydro_yr_0 = y0
-            else:
-                # if first_month>1, then the last_month is in the next year,
-                nc.hydro_yr_0 = y0 + 1
-            nc.hydro_yr_1 = y1
+            nc.yr_0 = y0
+            nc.yr_1 = y1
 
             nc.createDimension('time', None)
 
@@ -3410,13 +3281,6 @@ class GlacierDirectory(object):
             v.units = 'degC'
             v.long_name = '2m temperature at height ref_hgt'
             v[:] = temp
-
-            if gradient is not None:
-                v = nc.createVariable('gradient', 'f4', ('time',), zlib=zlib)
-                v.units = 'degC m-1'
-                v.long_name = ('temperature gradient from local regression or'
-                               'lapserates')
-                v[:] = gradient
 
             if temp_std is not None:
                 v = nc.createVariable('temp_std', 'f4', ('time',), zlib=zlib)
@@ -3511,11 +3375,11 @@ class GlacierDirectory(object):
 
         if y0 is None or y1 is None:
             ci = self.get_climate_info(input_filesuffix=input_filesuffix)
-            if 'baseline_hydro_yr_0' not in ci:
+            if 'baseline_yr_0' not in ci:
                 raise InvalidWorkflowError('Please process some climate data '
                                            'before call')
-            y0 = ci['baseline_hydro_yr_0'] if y0 is None else y0
-            y1 = ci['baseline_hydro_yr_1'] if y1 is None else y1
+            y0 = ci['baseline_yr_0'] if y0 is None else y0
+            y1 = ci['baseline_yr_1'] if y1 is None else y1
 
         if len(self._mbdf) > 1:
             out = self._mbdf.loc[y0:y1]
@@ -3594,10 +3458,10 @@ class GlacierDirectory(object):
             self._mbprofdf_cte_dh = pd.read_csv(reff, index_col=0)
 
         ci = self.get_climate_info(input_filesuffix=input_filesuffix)
-        if 'baseline_hydro_yr_0' not in ci:
+        if 'baseline_yr_0' not in ci:
             raise RuntimeError('Please process some climate data before call')
-        y0 = ci['baseline_hydro_yr_0']
-        y1 = ci['baseline_hydro_yr_1']
+        y0 = ci['baseline_yr_0']
+        y1 = ci['baseline_yr_1']
         if not constant_dh:
             if len(self._mbprofdf) > 1:
                 out = self._mbprofdf.loc[y0:y1]
@@ -3789,8 +3653,8 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to copy
     base_dir : str
-        path to the new base directory (should end with "per_glacier" most
-        of the times)
+        path to the new base directory (should end with "per_glacier"
+        most of the time)
     setup : str
         set up you want the copied directory to be useful for. Currently
         supported are 'all' (copy the entire directory), 'inversion'
@@ -3808,23 +3672,23 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'local_mustar', 'climate_historical', 'glacier_grid',
-                 'gcm_data', 'climate_info', 'diagnostics', 'log']
+                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'gcm_data', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
-                 'local_mustar', 'climate_historical', 'gridded_data',
-                 'gcm_data', 'climate_info', 'log']
+                 'mb_calib', 'climate_historical', 'gridded_data',
+                 'gcm_data', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'local_mustar', 'climate_historical', 'glacier_grid',
-                 'gcm_data', 'climate_info', 'diagnostics', 'log', 'model_run',
+                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -3932,18 +3796,15 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     cfg.PARAMS['grid_dx_method'] = dx_method
     cfg.PARAMS['fixed_dx'] = dx_spacing
 
-    # copy main climate file, climate info and local_mustar to new gdir
+    # copy main climate file, climate info and calib to new gdir
     climfilename = filename + '_' + main.rgi_id + input_filesuffix + '.nc'
     climfile = os.path.join(merged.dir, climfilename)
     shutil.copyfile(main.get_filepath(filename, filesuffix=input_filesuffix),
                     climfile)
-    _mufile = os.path.basename(merged.get_filepath('local_mustar')).split('.')
+    _mufile = os.path.basename(merged.get_filepath('mb_calib')).split('.')
     mufile = _mufile[0] + '_' + main.rgi_id + '.' + _mufile[1]
-    shutil.copyfile(main.get_filepath('local_mustar'),
+    shutil.copyfile(main.get_filepath('mb_calib'),
                     os.path.join(merged.dir, mufile))
-    # I think I need the climate_info only for the main glacier
-    climateinfo = main.read_json('climate_info')
-    merged.write_json(climateinfo, 'climate_info')
 
     # reproject the flowlines to the new grid
     for nr, fl in reversed(list(enumerate(mfls))):

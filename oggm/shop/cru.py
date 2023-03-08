@@ -118,16 +118,12 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     nc_ts_pre = salem.GeoNetcdf(pre_file, monthbegin=True)
 
     # set temporal subset for the ts data (hydro years)
-    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    em = sm - 1 if (sm > 1) else 12
     yrs = nc_ts_pre.time.year
     y0 = yrs[0] if y0 is None else y0
     y1 = yrs[-1] if y1 is None else y1
 
-    nc_ts_tmp.set_period(t0='{}-{:02d}-01'.format(y0, sm),
-                         t1='{}-{:02d}-01'.format(y1, em))
-    nc_ts_pre.set_period(t0='{}-{:02d}-01'.format(y0, sm),
-                         t1='{}-{:02d}-01'.format(y1, em))
+    nc_ts_tmp.set_period(t0=f'{y0}-01-01', t1=f'{y1}-12-01')
+    nc_ts_pre.set_period(t0=f'{y0}-01-01', t1=f'{y1}-12-01')
     time = nc_ts_pre.time
     ny, r = divmod(len(time), 12)
     assert r == 0
@@ -178,20 +174,6 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     isok = np.isfinite(loc_hgt)
     hgt_f = loc_hgt[isok].flatten()
     assert len(hgt_f) > 0.
-
-    # Should we compute the gradient?
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    ts_grad = None
-    if use_grad and len(hgt_f) >= 5:
-        ts_grad = np.zeros(12) * np.NaN
-        for i in range(12):
-            loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
-            slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
-            ts_grad[i] = slope if (p_val < 0.01) else np.NaN
-        # convert to a timeseries and hydrological years
-        ts_grad = ts_grad.tolist()
-        ts_grad = ts_grad[em:] + ts_grad[0:em]
-        ts_grad = np.asarray(ts_grad * ny)
 
     # maybe this will throw out of bounds warnings
     nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
@@ -282,7 +264,6 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=ts_grad,
                                     source=nc_ts_tmp._nc.title[:10])
 
     ncclim._nc.close()
@@ -328,16 +309,10 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     clfile = get_cru_cl_file()
     ncclim = salem.GeoNetcdf(clfile)
 
-    # set temporal subset for the ts data (hydro years)
-    sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-    em = sm - 1 if (sm > 1) else 12
-
     y0 = 1901 if y0 is None else y0
-    y1 = 2018 if y1 is None else y1
+    y1 = 2021 if y1 is None else y1
 
-    time = pd.date_range(start='{}-{:02d}-01'.format(y0, sm),
-                         end='{}-{:02d}-01'.format(y1, em),
-                         freq='MS')
+    time = pd.date_range(start=f'{y0}-01-01', end=f'{y1}-12-01', freq='MS')
     ny, r = divmod(len(time), 12)
     assert r == 0
 
@@ -388,19 +363,6 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     hgt_f = loc_hgt[isok].flatten()
     assert len(hgt_f) > 0.
 
-    # Should we compute the gradient?
-    use_grad = cfg.PARAMS['temp_use_local_gradient']
-    ts_grad = None
-    if use_grad and len(hgt_f) >= 5:
-        ts_grad = np.zeros(12) * np.NaN
-        for i in range(12):
-            loc_tmp_mth = loc_tmp[i, ...][isok].flatten()
-            slope, _, _, p_val, _ = stats.linregress(hgt_f, loc_tmp_mth)
-            ts_grad[i] = slope if (p_val < 0.01) else np.NaN
-        # convert to a timeseries and hydrological years
-        ts_grad = ts_grad.tolist()
-        ts_grad = ts_grad[em:] + ts_grad[0:em]
-        ts_grad = np.asarray(ts_grad * ny)
 
     # Make DataArrays
     rng = np.random.RandomState(seed)
@@ -428,7 +390,6 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
 
     gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
                                     loc_hgt, loc_lon, loc_lat,
-                                    gradient=ts_grad,
                                     filesuffix=output_filesuffix,
                                     source='CRU CL2 and some randomness')
     ncclim._nc.close()

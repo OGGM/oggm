@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '0117d838716e14cc37e25d9cca0fdf731d264f96'
+SAMPLE_DATA_COMMIT = '398729eef5f8baeb01d466a2d3038ee7ccd2724d'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -1349,6 +1349,47 @@ def get_geodetic_mb_dataframe(file_path=None):
                                  'data and is probably outdated (sorry for '
                                  'that). Delete the file at '
                                  f'{file_path} and start again.')
+    cfg.DATA[file_path] = df
+    return df
+
+
+def get_temp_bias_dataframe(dataset='w5e5'):
+    """Fetches the reference geodetic dataframe for calibration.
+
+    Currently, that's the data from Hughonnet et al. (2021), corrected for
+    outliers and with void filled. The data preparation script is
+    available at
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
+
+    Parameters
+    ----------
+    file_path : str
+        in case you have your own file to parse (check the format first!)
+
+    Returns
+    -------
+    a DataFrame with the data.
+    """
+
+    if dataset != 'w5e5':
+        raise NotImplementedError(f'No such dataset available yet: {dataset}')
+
+    # fetch the file online
+    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
+                'w5e5_temp_bias_v2023.3.csv')
+    file_path = file_downloader(base_url)
+
+    # Did we open it yet?
+    if file_path in cfg.DATA:
+        return cfg.DATA[file_path]
+
+    # If not let's go
+    extension = os.path.splitext(file_path)[1]
+    if extension == '.csv':
+        df = pd.read_csv(file_path, index_col=0)
+    elif extension == '.hdf':
+        df = pd.read_hdf(file_path)
+
     cfg.DATA[file_path] = df
     return df
 

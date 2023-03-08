@@ -244,7 +244,7 @@ Data storage
 
 **‣ Input**
 
-OGGM needs a certain amount of data to run (see :doc:`input-data`). Regardless
+OGGM needs a certain amount of data to run (see :doc:`shop`). Regardless
 if you are using pre-processed directories or raw data, you will need to have
 access to them from your environment. The default in OGGM is to download
 the data and store it in a folder, specified in the ``$HOME/.oggm_config``

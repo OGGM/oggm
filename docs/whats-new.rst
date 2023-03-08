@@ -30,7 +30,7 @@ Enhancements
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - added support for a precipitation factor varying per glacier (:pull:`1435`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
-- Added a new entity task ``run_dynamic_mu_star_calibration``. This task
+- Added a new entity task ``run_dynamic_melt_f_calibration``. This task
   dynamically calibrates the temperature sensitivity mu star to a geodetic
   mass-balance observation. There are different options available how this is
   done, the default incorporates an inversion and a dynamic spinup in each
@@ -44,7 +44,7 @@ Enhancements
   able to globally define the used minimum ice thickness for the dynamic spinup
   (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Rearanged the entity tasks ``run_dynamic_mu_star_calibration`` and
+- Rearanged the entity tasks ``run_dynamic_melt_f_calibration`` and
   ``run_dynamic_spinup`` with all help functions in new modul
   ``oggm.core.dynamic_spinup`` (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_

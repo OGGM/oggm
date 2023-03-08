@@ -15,6 +15,5 @@ other mass balance models in OGGM, they follow the
     core.massbalance.ScalarMassBalance
     core.massbalance.LinearMassBalance
     core.massbalance.ConstantMassBalance
-    core.massbalance.AvgClimateMassBalance
     core.massbalance.RandomMassBalance
     core.massbalance.UncertainMassBalance

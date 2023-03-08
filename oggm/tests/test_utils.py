@@ -17,7 +17,6 @@ salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
 import oggm
-from oggm.core.massbalance import PastMassBalance, compute_ela
 from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
@@ -32,9 +31,15 @@ from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
 
 pytestmark = pytest.mark.test_env("utils")
 
-TEST_GDIR_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
-                 'test_gdirs/oggm_v1.1/')
+TEST_GDIR_URL_v11 = ('https://cluster.klima.uni-bremen.de/~oggm/'
+                     'test_gdirs/oggm_v1.1/')
 
+TEST_GDIR_URL_v14_L12 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                         'oggm_v1.4/L1-L2_files/elev_bands/')
+
+TEST_GDIR_URL_v14_L35 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                         'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
+                         'no_match/')
 
 def clean_dir(testdir):
     shutil.rmtree(testdir)
@@ -394,14 +399,6 @@ class TestInitialize(unittest.TestCase):
         else:
             self.assertFalse(cfg.PATHS['working_dir'])
 
-    def test_params_warn(self):
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
-        with pytest.raises(InvalidWorkflowError):
-            cfg.PARAMS['hydro_month_sh'] = 1
-        cfg.PARAMS['hydro_month_nh'] = 1
-        cfg.PARAMS['hydro_month_sh'] = 1
-
     def test_pathsetter(self):
         cfg.PATHS['working_dir'] = os.path.join('~', 'my_OGGM_wd')
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
@@ -433,7 +430,7 @@ class TestWorkflowTools(unittest.TestCase):
         assert df.name == 'Hintereis'
         assert len(df) == 105
 
-    def test_glacier_characs(self):
+    def test_glacier_statistics_and_climate(self):
 
         gdir = init_hef()
 
@@ -451,10 +448,6 @@ class TestWorkflowTools(unittest.TestCase):
 
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=1985)
-        np.testing.assert_allclose(df['tstar_avg_prcp'],
-                                   2853, atol=5)
-        np.testing.assert_allclose(df['tstar_avg_prcpsol_max_elev'],
-                                   2811, atol=5)
         np.testing.assert_allclose(df['1970-2000_avg_prcpsol_max_elev'],
                                    2811, atol=200)
 
@@ -467,18 +460,6 @@ class TestWorkflowTools(unittest.TestCase):
         assert utils.demo_glacier_id('Mer de Glace') == 'RGI60-11.03643'
         assert utils.demo_glacier_id('RGI60-11.03643') == 'RGI60-11.03643'
         assert utils.demo_glacier_id('Mer Glace') is None
-
-    def test_download_ref_tstars(self):
-
-        cfg.initialize()
-        cfg.PATHS['working_dir'] = self.testdir
-        url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
-               'oggm_v1.4/RGIV62/CRU/centerlines/qc3/pcp2.5/')
-        workflow.download_ref_tstars(url)
-        assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
-                                           'ref_tstars.csv'))
-        assert os.path.exists(os.path.join(cfg.PATHS['working_dir'],
-                                           'ref_tstars_params.json'))
 
     def test_ref_data_manager(self):
 
@@ -621,7 +602,7 @@ class TestStartFromTar(unittest.TestCase):
             assert new_base_dir in new_gdir.base_dir
 
 
-class TestStartFromOnlinePrepro(unittest.TestCase):
+class TestDLVerify(unittest.TestCase):
 
     def setUp(self):
         # test directory
@@ -651,145 +632,17 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         utils.mkdir(self.testdir, reset=True)
         utils.mkdir(self.dldir, reset=True)
 
-    def test_start_from_level_1(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=1,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-    def test_start_from_level_1_str(self):
-
-        # Go - initialize working directories
-        entities = self.rgidf.iloc[:2].RGIId
-        cfg.PARAMS['border'] = 20
-        gdirs = workflow.init_glacier_directories(entities,
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  prepro_rgi_version='61',
-                                                  from_prepro_level=1)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-        # One string
-        cfg.PARAMS['border'] = 20
-
-        # Test error
-        with pytest.raises(InvalidParamsError):
-            workflow.init_glacier_directories('RGI60-11.00897',
-                                              prepro_rgi_version='61',
-                                              from_prepro_level=1)
-
-        gdirs = workflow.init_glacier_directories('RGI60-11.00897',
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  prepro_rgi_version='61',
-                                                  from_prepro_level=1)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-    def test_start_from_level_2(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=2,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            assert gdir.has_file('climate_historical')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
-
-    def test_start_from_level_3(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=3,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-
-        n_intersects = 0
-        for gdir in gdirs:
-            assert gdir.has_file('dem')
-            assert gdir.has_file('gridded_data')
-            assert gdir.has_file('climate_historical')
-            assert gdir.has_file('climate_info')
-            n_intersects += gdir.has_file('intersects')
-        assert n_intersects > 0
-
-        assert gdir.get_climate_info()
-        assert gdir.read_pickle('climate_info')
-        fls = gdir.read_pickle('inversion_flowlines')
-        with pytest.raises(AttributeError):
-            # This is going to raise as long as we keep the "old" prepro gdirs
-            # remove this test after update.
-            # At least we can read the old pickles
-            fls[0].widths_m
-
-        df = utils.compile_glacier_statistics(gdirs)
-        assert 'dem_med_elev' in df
-
-        df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
-                                                                         1960,
-                                                                         2000],
-                                              add_raw_climate_statistics=True)
-        assert 'tstar_avg_temp_mean_elev' in df
-        assert '1905-1935_avg_temp_mean_elev' in df
-        assert '1905-1935_uncorrected_winter_daily_mean_prcp' in df
-
-        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
-
-    def test_start_from_level_4(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf.iloc[:2],
-                                                  prepro_base_url=TEST_GDIR_URL,
-                                                  from_prepro_level=4,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-
-        # Check that flowlines have lon lat info
-        # Ah no this doesn't work on these old dirs unfortunately
-        fls = gdirs[0].read_pickle('model_flowlines')
-        with pytest.raises(AttributeError):
-            fls[-1].point_lons[0]
-
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
-                                     nyears=10)
-
     def test_corrupted_file(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                  prepro_base_url=TEST_GDIR_URL,
+                                                  prepro_base_url=TEST_GDIR_URL_v11,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
 
         cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 20, 4,
-                                      base_url=TEST_GDIR_URL)
+                                      base_url=TEST_GDIR_URL_v11)
         assert 'cluster.klima.uni-bremen.de/~oggm/' in cfile
 
         # Replace with a dummy file
@@ -800,7 +653,7 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # Since we already verified this will error
         with pytest.raises(tarfile.ReadError):
             workflow.init_glacier_directories(['RGI60-11.00787'],
-                                              prepro_base_url=TEST_GDIR_URL,
+                                              prepro_base_url=TEST_GDIR_URL_v11,
                                               from_prepro_level=4,
                                               prepro_rgi_version='61',
                                               prepro_border=20)
@@ -808,13 +661,120 @@ class TestStartFromOnlinePrepro(unittest.TestCase):
         # This should retrigger a download and just work
         cfg.DL_VERIFIED.clear()
         gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                  prepro_base_url=TEST_GDIR_URL,
+                                                  prepro_base_url=TEST_GDIR_URL_v11,
                                                   from_prepro_level=4,
                                                   prepro_rgi_version='61',
                                                   prepro_border=20)
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        workflow.execute_entity_task(tasks.run_random_climate, gdirs,
-                                     nyears=10)
+        assert gdirs[0].has_file('model_flowlines')
+
+class TestStartFromV14(unittest.TestCase):
+
+    def setUp(self):
+        # test directory
+        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_tools')
+        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['dl_cache_dir'] = self.dldir
+        cfg.PATHS['working_dir'] = self.testdir
+        self.clean_dir()
+
+    def tearDown(self):
+        self.rm_dir()
+
+    def rm_dir(self):
+        shutil.rmtree(self.testdir)
+        shutil.rmtree(self.dldir)
+
+    def clean_dir(self):
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.dldir, reset=True)
+
+    def test_start_from_level_1(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(['RGI60-15.13005'],
+                                                  prepro_base_url=TEST_GDIR_URL_v14_L12,
+                                                  from_prepro_level=1,
+                                                  prepro_rgi_version='62',
+                                                  prepro_border=40)
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    def test_start_from_level_2(self):
+
+        cfg.PARAMS['border'] = 40
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(['RGI60-15.13005'],
+                                                  prepro_base_url=TEST_GDIR_URL_v14_L12,
+                                                  from_prepro_level=2,
+                                                  prepro_rgi_version='62')
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+        workflow.execute_entity_task(tasks.glacier_masks, gdirs)
+
+    def test_start_from_level_3(self):
+
+        # Go - initialize working directories
+        gdirs = workflow.init_glacier_directories(['RGI60-15.13005'],
+                                                  prepro_base_url=TEST_GDIR_URL_v14_L35,
+                                                  from_prepro_level=3,
+                                                  prepro_rgi_version='62',
+                                                  prepro_border=40)
+
+        cfg.PARAMS['prcp_fac'] = 2.5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
+
+        n_intersects = 0
+        for gdir in gdirs:
+            assert gdir.has_file('dem')
+            assert gdir.has_file('gridded_data')
+            n_intersects += gdir.has_file('intersects')
+        assert n_intersects > 0
+
+        assert gdir.get_climate_info()
+        # This we can read
+        gdir.read_pickle('inversion_flowlines')
+
+        df = utils.compile_glacier_statistics(gdirs)
+        assert 'dem_med_elev' in df
+
+        df = utils.compile_climate_statistics(gdirs, add_climate_period=[1920,
+                                                                         1960,
+                                                                         2000],
+                                              add_raw_climate_statistics=True)
+        # This doesnt work cause not calibrated
+        assert '1905-1935_avg_temp_mean_elev' not in df
+        # This should work
+        assert '1905-1935_uncorrected_winter_daily_mean_prcp' in df
+
+
+def _read_shp():
+    # Read in the RGI file
+    inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+    rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
+
+    # Some changes for changes in OGGM
+    inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
+                        for rid in inter.RGIId_1]
+    inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
+                        for rid in inter.RGIId_2]
+
+    # Here as well - we don't do the custom RGI IDs anymore
+    rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
+    rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+
+    return inter, rgidf
 
 
 class TestPreproCLI(unittest.TestCase):
@@ -832,23 +792,6 @@ class TestPreproCLI(unittest.TestCase):
     def reset_dir(self):
         utils.mkdir(self.testdir, reset=True)
 
-    def _read_shp(self):
-        # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        # Some changes for changes in OGGM
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
-
-        # Here as well - we don't do the custom RGI IDs anymore
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
-
-        return inter, rgidf
-
     def test_parse_args(self):
 
         from oggm.cli import prepro_levels
@@ -864,13 +807,14 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
+        assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--start-level', '2',
+                                           '--mb-calibration-strategy', 'temp_melt',
                                            '--start-base-url', 'http://foo',
-                                           '--ref-tstars-base-url', 'http://bar',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -881,7 +825,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert kwargs['start_level'] == 2
         assert kwargs['start_base_url'] == 'http://foo'
-        assert kwargs['ref_tstars_base_url'] == 'http://bar'
+        assert kwargs['mb_calibration_strategy'] == 'temp_melt'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
@@ -948,8 +892,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
-        assert not kwargs['match_regional_geodetic_mb']
-        assert not kwargs['centerlines_only']
+        assert not kwargs['centerlines']
         assert kwargs['add_consensus_thickness']
         assert kwargs['add_millan_thickness']
         assert kwargs['add_millan_velocity']
@@ -978,8 +921,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
-                                           '--centerlines-only',
-                                           '--match-regional-geodetic-mb', 'zemp',
+                                           '--centerlines',
                                            '--working-dir', '/local/work',
                                            ])
 
@@ -991,28 +933,19 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['elev_bands']
-        assert kwargs['match_regional_geodetic_mb'] == 'zemp'
-        assert kwargs['centerlines_only']
-        assert kwargs['evolution_model'] == 'fl_sia'
+        assert kwargs['centerlines']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', '/local/out',
                                            '--elev-bands',
-                                           '--centerlines-only',
-                                           '--match-geodetic-mb-per-glacier', 'hugonnet',
-                                           '--evolution-model', 'massredis',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
                                            '--err-dmdtda-scaling-factor', '0.5',
-                                           '--downstream-line-shape', 'trapezoidal',
                                            ])
 
-        assert kwargs['match_geodetic_mb_per_glacier'] == 'hugonnet'
-        assert kwargs['evolution_model'] == 'massredis'
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
         assert kwargs['err_dmdtda_scaling_factor'] == 0.5
-        assert kwargs['downstream_line_shape'] == 'trapezoidal'
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1043,11 +976,11 @@ class TestPreproCLI(unittest.TestCase):
             assert kwargs['border'] == 120
 
     @pytest.mark.slow
-    def test_full_run(self):
+    def test_full_run_defaults(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -1056,16 +989,11 @@ class TestPreproCLI(unittest.TestCase):
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter,
-                          test_topofile=topof, match_regional_geodetic_mb='hugonnet',
-                          override_params={'hydro_month_nh': 1,
-                                           'geodetic_mb_period':
-                                               '2000-01-01_2010-01-01',
-                                           'baseline_climate': 'CRU',
-                                           'use_tstar_calibration': True,
-                                           'use_winter_prcp_factor': False,
-                                           'prcp_scaling_factor': 2.5,
-                                           }
+                          test_rgidf=rgidf, disable_mp=True,  # increase cov for now
+                          test_intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          override_params={}
                           )
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
@@ -1082,17 +1010,13 @@ class TestPreproCLI(unittest.TestCase):
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'main_flowline_length' in df
-        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
-                                           'summary', 'centerlines_11.tar.gz'))
-        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
-                                           'summary', 'centerlines_smoothed_11.tar.gz'))
-        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
-                                           'summary', 'widths_11.tar.gz'))
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'glacier_statistics_11.csv'), index_col=0)
         assert 'inv_volume_km3' in df
-        assert 'mb_bias_before_geodetic_corr' in df
+        assert 'melt_f' in df
+        assert 'flowline_min_elev' in df
+        assert df['inv_volume_km3'].sum() > 0
 
         dfm = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                        'fixed_geometry_mass_balance_11.csv'),
@@ -1107,7 +1031,13 @@ class TestPreproCLI(unittest.TestCase):
         dfh = pd.read_csv(utils.get_demo_file(dfh))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda']
-        np.testing.assert_allclose(smb_oggm, smb_ref)
+        np.testing.assert_allclose(smb_oggm, smb_ref, atol=200)  # Whole Alps
+
+        odf = pd.DataFrame(dfm.loc[2000:2019].mean(), columns=['SMB'])
+        ref_mb = utils.get_geodetic_mb_dataframe().loc[odf.index]
+        ref_mb = ref_mb.loc[ref_mb['period'] == '2000-01-01_2020-01-01']['dmdtda']
+        odf['ref'] = ref_mb * 1000  # kg m-2 yr-1
+        np.testing.assert_allclose(odf['SMB'], odf['ref'])
 
         assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
                                            'package_versions.txt'))
@@ -1147,7 +1077,7 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = tasks.run_random_climate(gdir, nyears=10)
+        model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
 
         # L4
@@ -1155,7 +1085,175 @@ class TestPreproCLI(unittest.TestCase):
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-        model = tasks.run_random_climate(gdir, nyears=10)
+        model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
+        assert isinstance(model, FlowlineModel)
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
+            # cannot be the same after tuning
+            assert ds.glen_a != cfg.PARAMS['glen_a']
+
+        # L5
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = FileModel(gdir.get_filepath('model_geometry',
+                                            filesuffix='_historical'))
+        assert model.y0 == 2004
+        assert model.last_yr == 2020
+        with pytest.raises(FileNotFoundError):
+            # We can't create this because the glacier dir is mini
+            tasks.init_present_time_glacier(gdir)
+
+        # Statistics
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert np.all(df['baseline_climate_source'] == 'GSWP3_W5E5')
+        assert np.all(df['reference_mb'] < 0)
+        assert np.all(df['reference_mb_err'] > 0)
+        # this is from ref file
+        assert np.all(df['temp_bias'] > 0)
+        np.testing.assert_allclose(df['temp_bias'], df['temp_bias'].iloc[0])
+        # Not far from default
+        np.testing.assert_allclose(df['melt_f'], 5, atol=2)
+
+        # Extended file
+        fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
+                          'historical_run_output_extended_11.nc')
+        with xr.open_dataset(fp) as ods:
+            ref = ods.volume
+            new = ods.volume_fixed_geom
+            np.testing.assert_allclose(new.isel(time=-1),
+                                       ref.isel(time=-1),
+                                       rtol=0.05)
+
+            for vn in ['calving', 'volume_bsl', 'volume_bwl']:
+                np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
+
+    @pytest.mark.slow
+    def test_full_run_cru_centerlines(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
+        ref_period = '2000-01-01_2010-01-01'
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf,
+                          mb_calibration_strategy='melt_temp',
+                          test_intersects_file=inter,
+                          test_topofile=topof,
+                          centerlines=True,
+                          override_params={'geodetic_mb_period': ref_period,
+                                           'baseline_climate': 'CRU',
+                                           'use_winter_prcp_fac': False,
+                                           'use_temp_bias_from_file': False,
+                                           'prcp_fac': 2.5,
+                                           }
+                          )
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'climate_statistics_11.csv'))
+        assert '1980-2010_avg_prcp' in df
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'glacier_type' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'dem_source' in df
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+                                      'glacier_statistics_11.csv'))
+        assert 'main_flowline_length' in df
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', 'centerlines_11.tar.gz'))
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', 'centerlines_smoothed_11.tar.gz'))
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                                           'summary', 'widths_11.tar.gz'))
+
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'glacier_statistics_11.csv'), index_col=0)
+        assert 'inv_volume_km3' in df
+        assert 'melt_f' in df
+        assert 'flowline_min_elev' in df
+        assert 'n_centerlines' in df
+        assert df['inv_volume_km3'].sum() > 0
+
+        dfm = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                       'fixed_geometry_mass_balance_11.csv'),
+                          index_col=0)
+        dfm = dfm.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        odf = pd.DataFrame(dfm.loc[2000:2019].mean(), columns=['SMB'])
+        odf['AREA'] = df.rgi_area_km2
+        smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
+
+        dfh = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        dfh = pd.read_csv(utils.get_demo_file(dfh))
+        dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
+        smb_ref = dfh.loc[11, 'dmdtda']
+        np.testing.assert_allclose(smb_oggm, smb_ref, atol=150)  # Whole Alps
+
+        odf = pd.DataFrame(dfm.loc[2000:2009].mean(), columns=['SMB'])
+        ref_mb = utils.get_geodetic_mb_dataframe().loc[odf.index]
+        ref_mb = ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda']
+        odf['ref'] = ref_mb * 1000  # kg m-2 yr-1
+        np.testing.assert_allclose(odf['SMB'], odf['ref'])
+
+        assert os.path.isfile(os.path.join(odir, 'RGI61', 'b_020',
+                                           'package_versions.txt'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L1'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L2'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L3'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+        assert os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L5'))
+
+        # See if we can start from all levs
+        from oggm import tasks
+        from oggm.core.flowline import FlowlineModel, FileModel
+        cfg.PARAMS['continue_on_error'] = False
+        rid = df.index[0]
+        entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
+
+        # L1
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        tasks.glacier_masks(gdir)
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
+
+        # L2
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L2',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        assert gdir.has_file('inversion_flowlines')
+        with pytest.raises(FileNotFoundError):
+            tasks.init_present_time_glacier(gdir)
+
+        # L3
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
+        assert isinstance(model, FlowlineModel)
+
+        # L4
+        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
+                            rid[:8], rid[:11], rid + '.tar.gz')
+        assert not os.path.isfile(tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             # cannot be the same after tuning
@@ -1178,7 +1276,6 @@ class TestPreproCLI(unittest.TestCase):
         fp = os.path.join(odir, 'RGI61', 'b_020', 'L5', 'summary',
                           'historical_run_output_extended_11.nc')
         with xr.open_dataset(fp) as ods:
-
             ref = ods.volume
             new = ods.volume_fixed_geom
             np.testing.assert_allclose(new.isel(time=-1),
@@ -1193,11 +1290,11 @@ class TestPreproCLI(unittest.TestCase):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        for evolution_model, downstream_line_shape in [('fl_sia', 'parabola'),
-                                                       ('implicit', 'trapezoidal')]:
+        for evolution_model, downstream_line_shape in [('FluxBased', 'parabola'),
+                                                       ('SemiImplicit', 'trapezoidal')]:
 
             # Read in the RGI file
-            inter, rgidf = self._read_shp()
+            inter, rgidf = _read_shp()
 
             wdir = os.path.join(self.testdir, 'wd')
             utils.mkdir(wdir, reset=True)
@@ -1209,21 +1306,21 @@ class TestPreproCLI(unittest.TestCase):
 
             # change the reference geodetic mb period, because the climate data of
             # the test glaciers only go up to 2015
+            ref_period = '2000-01-01_2010-01-01'
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
                               dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
-                              evolution_model=evolution_model,
-                              downstream_line_shape=downstream_line_shape,
                               test_intersects_file=inter,
+                              mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
-                              override_params={'hydro_month_nh': 1,
-                                               'geodetic_mb_period':
-                                               '2000-01-01_2010-01-01',
+                              override_params={'geodetic_mb_period': ref_period,
                                                'baseline_climate': 'CRU',
-                                               'use_tstar_calibration': True,
-                                               'use_winter_prcp_factor': False,
-                                               'prcp_scaling_factor': 2.5,
+                                               'evolution_model': evolution_model,
+                                               'downstream_line_shape': downstream_line_shape,
+                                               'use_winter_prcp_fac': False,
+                                               'use_temp_bias_from_file': False,
+                                               'prcp_fac': 2.5,
                                                })
 
             df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
@@ -1265,7 +1362,7 @@ class TestPreproCLI(unittest.TestCase):
                                 rid[:8], rid[:11], rid + '.tar.gz')
             assert not os.path.isfile(tarf)
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-            model = tasks.run_random_climate(gdir, nyears=10)
+            model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
             assert isinstance(model, FlowlineModel)
 
             # L4
@@ -1273,7 +1370,7 @@ class TestPreproCLI(unittest.TestCase):
                                 rid[:8], rid[:11], rid + '.tar.gz')
             assert not os.path.isfile(tarf)
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
-            model = tasks.run_random_climate(gdir, nyears=10)
+            model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
             assert isinstance(model, FlowlineModel)
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_historical'))
@@ -1322,12 +1419,12 @@ class TestPreproCLI(unittest.TestCase):
             # Over the period they are... close enough
             assert_allclose(dss.volume,
                             dse.volume,
-                            rtol=0.24)
+                            rtol=0.25)
             assert_allclose(dss.area,
                             dse.area,
                             rtol=0.1)
 
-            if evolution_model == 'fl_sia':
+            if evolution_model == 'FluxBased':
                 dss_flux = dss
             else:
                 dss_implicit = dss
@@ -1346,7 +1443,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
 
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
@@ -1354,14 +1451,13 @@ class TestPreproCLI(unittest.TestCase):
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
 
-        params = {'max_mu_star': 600,
-                  'geodetic_mb_period': '2000-01-01_2010-01-01',
-                  'hydro_month_nh': 1,
-                  'hydro_month_sh': 1,
+        params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'baseline_climate': 'CRU',
-                  'use_tstar_calibration': True,
-                  'use_winter_prcp_factor': False,
-                  'prcp_scaling_factor': 2.5,
+                  'use_winter_prcp_fac': False,
+                  'use_temp_bias_from_file': False,
+                  'prcp_fac': 2.5,
+                  'evolution_model': 'MassRedistributionCurve',
+                  'downstream_line_shape':'parabola',
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1369,9 +1465,8 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
-                          match_geodetic_mb_per_glacier='hugonnet',
-                          evolution_model='massredis',
                           override_params=params,
+                          mb_calibration_strategy='melt_temp',
                           test_topofile=topof, elev_bands=True)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
@@ -1443,7 +1538,8 @@ class TestPreproCLI(unittest.TestCase):
 
         # Some time stuff
         np.testing.assert_allclose(ds.hydro_year, ds.calendar_year)
-        np.testing.assert_allclose(ds.hydro_month, ds.calendar_month)
+        np.testing.assert_allclose(ds.hydro_month, 4)
+        np.testing.assert_allclose(ds.calendar_month, 1)
 
     def test_start_from_prepro(self):
 
@@ -1453,23 +1549,23 @@ class TestPreproCLI(unittest.TestCase):
                     'oggm_v1.1/')
 
         # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
+        ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
-                          logging_level='INFO', max_level=5,
-                          override_params={'hydro_month_nh': 1,
-                                           'geodetic_mb_period':
-                                               '2000-01-01_2010-01-01',
+                          mb_calibration_strategy='melt_temp',
+                          logging_level='INFO', max_level=5, elev_bands=True,
+                          override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
-                                           'use_tstar_calibration': True,
-                                           'use_winter_prcp_factor': False,
-                                           'prcp_scaling_factor': 2.5,
+                                           'use_winter_prcp_fac': False,
+                                           'use_temp_bias_from_file': False,
+                                           'prcp_fac': 2.5,
                                            }
                           )
 
@@ -1500,7 +1596,7 @@ class TestPreproCLI(unittest.TestCase):
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
-        inter, rgidf = self._read_shp()
+        inter, rgidf = _read_shp()
         rgidf = rgidf.iloc[:4]
 
         wdir = os.path.join(self.testdir, 'wd')
@@ -1654,17 +1750,8 @@ class TestBenchmarkCLI(unittest.TestCase):
         from oggm.cli.benchmark import run_benchmark
 
         # Read in the RGI file
-        inter = gpd.read_file(utils.get_demo_file('rgi_intersect_oetztal.shp'))
-        rgidf = gpd.read_file(utils.get_demo_file('rgi_oetztal.shp'))
-
-        rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60') for rid in rgidf.RGIId]
-        inter['RGIId_1'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_1]
-        inter['RGIId_2'] = [rid.replace('RGI50', 'RGI60')
-                            for rid in inter.RGIId_2]
-
+        inter, rgidf = _read_shp()
         cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
-
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
@@ -1673,11 +1760,14 @@ class TestBenchmarkCLI(unittest.TestCase):
         run_benchmark(rgi_version=None, rgi_reg='11', border=80,
                       output_folder=odir, working_dir=wdir, is_test=True,
                       test_rgidf=rgidf, test_intersects_file=inter,
-                      test_topofile=topof,
-                      override_params={'baseline_climate': 'CRU',
-                                       'use_tstar_calibration': True,
-                                       'use_winter_prcp_factor': False,
-                                       'prcp_scaling_factor': 2.5,
+                      test_topofile=topof, logging_level='INFO',
+                      override_params={'continue_on_error': False,
+                                       'use_multiprocessing': False,
+                                       'geodetic_mb_period': '2000-01-01_2010-01-01',
+                                       'baseline_climate': 'CRU',
+                                       'use_winter_prcp_fac': False,
+                                       'use_temp_bias_from_file': False,
+                                       'prcp_fac': 2.5,
                                        })
 
         df = pd.read_csv(os.path.join(odir, 'benchmarks_b080.csv'),
@@ -2957,6 +3047,8 @@ class TestSkyIsFalling(unittest.TestCase):
 
 class TestELAComputation(unittest.TestCase):
     def test_computing_ela(self):
+        from oggm.core.massbalance import MonthlyTIModel, compute_ela
+
         gdir = init_hef()
 
         ys = 1990
@@ -2964,15 +3056,15 @@ class TestELAComputation(unittest.TestCase):
         ELA1 = compute_ela(gdir, ys=ys, ye=ye)
         ELA2 = compute_ela(gdir, ys=ys, ye=ye, temperature_bias=0.5)
 
-        mbmod = PastMassBalance(gdir)
+        mbmod = MonthlyTIModel(gdir)
 
         mb = []
         for yr in np.arange(ys, ye):
             height = ELA1[yr]
             mb = np.append(mb, mbmod.get_annual_mb([height], year=yr))
 
-        assert(np.all(np.isfinite(ELA1)))
-        assert([ELA1 < ELA2])
+        assert (np.all(np.isfinite(ELA1)))
+        assert ([ELA1 < ELA2])
         assert_allclose(np.mean(mb * SEC_IN_YEAR), 0, atol=1e-3)
 
     def test_compile(self):
