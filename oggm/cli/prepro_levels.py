@@ -487,6 +487,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
 
+        if add_itslive_velocity:
+            from oggm.shop.its_live import compile_itslive_statistics
+            opath = os.path.join(sum_dir, 'itslive_statistics_{}.csv'.format(rgi_reg))
+            compile_itslive_statistics(gdirs, path=opath)
         if add_millan_thickness or add_millan_velocity:
             from oggm.shop.millan22 import compile_millan_statistics
             opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))

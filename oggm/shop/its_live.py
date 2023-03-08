@@ -1,6 +1,9 @@
 import logging
+import os
 
 import numpy as np
+import pandas as pd
+import xarray as xr
 
 try:
     import salem
@@ -11,7 +14,7 @@ try:
 except ImportError:
     pass
 
-from oggm import utils
+from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
 
 # Module logger
@@ -231,3 +234,62 @@ def velocity_to_gdir(gdir, add_error=False):
     _reproject_and_scale(gdir, do_error=False)
     if add_error:
         _reproject_and_scale(gdir, do_error=True)
+
+
+@utils.entity_task(log)
+def itslive_statistics(gdir):
+    """Gather statistics about the itslive data interpolated to this glacier.
+    """
+
+    d = dict()
+
+    # Easy stats - this should always be possible
+    d['rgi_id'] = gdir.rgi_id
+    d['rgi_region'] = gdir.rgi_region
+    d['rgi_subregion'] = gdir.rgi_subregion
+    d['rgi_area_km2'] = gdir.rgi_area_km2
+
+    try:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            v = ds['itslive_v'].where(ds['glacier_mask'], np.NaN).load()
+            d['itslive_avg_vel'] = np.nanmean(v)
+            d['itslive_max_vel'] = np.nanmax(v)
+    except (FileNotFoundError, AttributeError, KeyError):
+        pass
+
+    return d
+
+
+@utils.global_task(log)
+def compile_itslive_statistics(gdirs, filesuffix='', path=True):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(itslive_statistics, gdirs)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('millan_statistics' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+
+    return out

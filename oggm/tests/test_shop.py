@@ -79,6 +79,10 @@ class Test_its_live:
         np.testing.assert_allclose(utils.md(vel[mask], _vel[mask]), 0,
                                    atol=8)
 
+        df = its_live.compile_itslive_statistics([gdir]).iloc[0]
+        assert df['itslive_avg_vel'] > 180
+        assert df['itslive_max_vel'] > 2000
+
         if DO_PLOT:
             import matplotlib.pyplot as plt
 
