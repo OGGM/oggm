@@ -80,8 +80,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       elev_bands=False, centerlines=False,
                       override_params=None,
                       mb_calibration_strategy='informed_threestep',
-                      add_consensus_thickness=False, add_millan_thickness=False,
-                      add_millan_velocity=False, add_hugonnet_dhdt=False,
+                      add_consensus_thickness=False, add_itslive_velocity=False,
+                      add_millan_thickness=False, add_millan_velocity=False,
+                      add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW', disable_dl_verify=False,
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
@@ -132,6 +133,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'temp_melt'
     add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_itslive_velocity : bool
+        adds (reprojects) the ITS_LIVE velocity to the glacier
         directories. With elev_bands=True, the data will also be binned.
     add_millan_thickness : bool
         adds (reprojects) the millan thickness to the glacier
@@ -420,6 +424,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.shop.bedtopo import add_consensus_thickness
             workflow.execute_entity_task(add_consensus_thickness, gdirs)
             bin_variables.append('consensus_ice_thickness')
+        if add_itslive_velocity:
+            from oggm.shop.its_live import velocity_to_gdir
+            workflow.execute_entity_task(velocity_to_gdir, gdirs)
+            bin_variables.append('itslive_v')
         if add_millan_thickness:
             from oggm.shop.millan22 import thickness_to_gdir
             workflow.execute_entity_task(thickness_to_gdir, gdirs)
@@ -793,6 +801,11 @@ def parse_args(args):
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
+    parser.add_argument('--add-itslive-velocity', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the ITS_LIVE velocity '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
     parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
                         help='adds (reprojects) the millan thickness '
                              'estimates to the glacier directories. '
@@ -889,6 +902,7 @@ def parse_args(args):
                 centerlines=args.centerlines,
                 add_consensus_thickness=args.add_consensus_thickness,
                 add_millan_thickness=args.add_millan_thickness,
+                add_itslive_velocity=args.add_itslive_velocity,
                 add_millan_velocity=args.add_millan_velocity,
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 disable_dl_verify=args.disable_dl_verify,

@@ -151,9 +151,9 @@ def _reproject_and_scale(gdir, do_error=False):
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
-        vn = 'obs_icevel_x'
+        vn = 'itslive_vx'
         if do_error:
-            vn = vn.replace('obs', 'err')
+            vn += '_err'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -165,9 +165,9 @@ def _reproject_and_scale(gdir, do_error=False):
         v.long_name = ln
         v[:] = vx.filled(np.nan)
 
-        vn = 'obs_icevel_y'
+        vn = 'itslive_vy'
         if do_error:
-            vn = vn.replace('obs', 'err')
+            vn += '_err'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -178,6 +178,18 @@ def _reproject_and_scale(gdir, do_error=False):
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
         v[:] = vy.filled(np.nan)
+
+        if not do_error:
+            vel = np.sqrt(vx ** 2 + vy ** 2)
+            vn = 'itslive_v'
+            if vn in nc.variables:
+                v = nc.variables[vn]
+            else:
+                v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v.units = 'm yr-1'
+            ln = 'ITS LIVE velocity data'
+            v.long_name = ln
+            v[:] = vel.filled(np.nan)
 
 
 @utils.entity_task(log, writes=['gridded_data'])

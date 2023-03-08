@@ -454,9 +454,12 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                     volume[i] = out_thick[i] * w[i] * cl['dx']
 
         # Sanity check
-        if np.any(out_thick <= 0):
-            log.warning("Found zero or negative thickness: "
-                        "this should not happen.")
+        if np.any(out_thick <= -1e-2):
+            log.warning(f"{gdir.rgi_id} Found negative thickness: "
+                        f"n={(out_thick <= -1e-2).sum()}, "
+                        f"v={np.min(out_thick)}.")
+
+        out_thick = utils.clip_min(out_thick, 0)
 
         if write:
             cl['is_trapezoid'] = is_trap
