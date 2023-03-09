@@ -1428,20 +1428,11 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
     The data table can be obtained with utils.get_geodetic_mb_dataframe().
     It is equivalent to the original data from Hugonnet, but has some outlier
-    values filtered. See `this notebook <>`_ for more details.
+    values filtered. See `this notebook` for more details.
 
     The problem of calibrating many unknown parameters on geodetic data is
     currently unsolved. This is OGGM's current take, based on trial and
-    error and based on ideas from the litterature.
-
-    Here are the new defaults for the W5E5 dataset:
-    - for precipitation: if PARAMS['use_winter_prcp_fac'] is True (the default)
-      and the baseline dataset is W5E5 (the default), then we use a precipitation
-      factor obtained by deriving a relation between the winter precipitation
-      and at a glacier and the necessary correction to match WGMS observations
-      (see Schuster et al., 2023 for details)
-    - for temperature: use_temp_bias_from_file
-
+    error and based on ideas from the literature.
 
     Parameters
     ----------

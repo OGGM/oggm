@@ -499,7 +499,7 @@ have access to the timeseries through the glacier directory:
 
 .. ipython:: python
 
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/exps/L3-L5_files/W5E5_melt_calib/'
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
     gdir = workflow.init_glacier_directories('RGI60-11.00897',
                                              from_prepro_level=3,
                                              prepro_base_url=base_url,

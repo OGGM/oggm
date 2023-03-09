@@ -53,24 +53,24 @@ class Test_its_live:
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             mask = ds.glacier_mask.data.astype(bool)
-            vx = ds.obs_icevel_x.where(mask).data
-            vy = ds.obs_icevel_y.where(mask).data
+            vx = ds.itslive_vx.where(mask).data
+            vy = ds.itslive_vy.where(mask).data
 
-        vel = np.sqrt(vx**2 + vy**2)
+        vel = ds.itslive_v.where(mask).data
         assert np.nanmax(vel) > 2900
         assert np.nanmin(vel) < 2
 
         # We reproject with rasterio and check no big diff
-        cfg.BASENAMES['its_live_vx'] = ('its_live_vx.tif', '')
-        cfg.BASENAMES['its_live_vy'] = ('its_live_vy.tif', '')
-        gis.rasterio_to_gdir(gdir, region_files['ALA']['vx'], 'its_live_vx',
+        cfg.BASENAMES['itslive_vx'] = ('itslive_vx.tif', '')
+        cfg.BASENAMES['itslive_vy'] = ('itslive_vy.tif', '')
+        gis.rasterio_to_gdir(gdir, region_files['ALA']['vx'], 'itslive_vx',
                              resampling='bilinear')
-        gis.rasterio_to_gdir(gdir, region_files['ALA']['vy'], 'its_live_vy',
+        gis.rasterio_to_gdir(gdir, region_files['ALA']['vy'], 'itslive_vy',
                              resampling='bilinear')
 
-        with rioxr.open_rasterio(gdir.get_filepath('its_live_vx')) as da:
+        with rioxr.open_rasterio(gdir.get_filepath('itslive_vx')) as da:
             _vx = da.where(mask).data.squeeze()
-        with rioxr.open_rasterio(gdir.get_filepath('its_live_vy')) as da:
+        with rioxr.open_rasterio(gdir.get_filepath('itslive_vy')) as da:
             _vy = da.where(mask).data.squeeze()
 
         _vel = np.sqrt(_vx**2 + _vy**2)
@@ -78,6 +78,10 @@ class Test_its_live:
                                    atol=40)
         np.testing.assert_allclose(utils.md(vel[mask], _vel[mask]), 0,
                                    atol=8)
+
+        df = its_live.compile_itslive_statistics([gdir]).iloc[0]
+        assert df['itslive_avg_vel'] > 180
+        assert df['itslive_max_vel'] > 2000
 
         if DO_PLOT:
             import matplotlib.pyplot as plt
@@ -89,7 +93,6 @@ class Test_its_live:
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 smap.set_topography(gdir.get_filepath('dem'))
 
-            vel = np.sqrt(vx ** 2 + vy ** 2)
             smap.set_data(vel)
             smap.set_plot_params(cmap='Blues', vmin=None, vmax=None)
 

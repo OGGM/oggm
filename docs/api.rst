@@ -150,7 +150,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
     tasks.get_inversion_volume
-    tasks.compute_velocities
+    tasks.compute_inversion_velocities
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp
     tasks.find_inversion_calving_from_any_mb
@@ -444,7 +444,7 @@ including the model flowlines. This is achieved by choosing preprocessing level
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir2')
     # The base url is where to find the pre-processed directories
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/exps/L3-L5_files/W5E5_melt_calib'
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
     gdirs = workflow.init_glacier_directories('RGI60-11.00897',
                                               from_prepro_level=5,
                                               prepro_base_url=base_url,

@@ -528,7 +528,7 @@ Enhancements
 - New function ``cfg.add_to_basenames`` now allows users to define their own
   entries in glacier directories (:issue:`731`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- New function ``inversion.compute_velocities`` writes the section and
+- New function ``inversion.compute_inversion_velocities`` writes the section and
   surface veloicites in the inversion output (:issue:`876`).
   By `Beatriz Recinos <https://github.com/bearecinos>`_.
 - Added ASTER v3 as optional DEM. Requires credentials to
