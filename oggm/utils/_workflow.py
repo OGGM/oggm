@@ -1791,10 +1791,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 
 
 @global_task(log)
-def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None,
-                climate_filename='climate_historical', temperature_bias=None,
+def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
+                years=None, climate_filename='climate_historical', temperature_bias=None,
                 precipitation_factor=None, climate_input_filesuffix='',
-                mb_model_class='MonthlyTIModel'):
+                mb_model_class=None):
     """Compiles a table of ELA timeseries for all glaciers for a given years,
     using the mb_model_class (default MonthlyTIModel).
 
@@ -1834,7 +1834,10 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
         the MassBalanceModel class to use, default is MonthlyTIModel
     """
     from oggm.workflow import execute_entity_task
-    from oggm.core.massbalance import compute_ela
+    from oggm.core.massbalance import compute_ela, MonthlyTIModel
+
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
 
     out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years,
                                  climate_filename=climate_filename,
