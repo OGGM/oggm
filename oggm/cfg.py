@@ -115,8 +115,6 @@ class ParamsLoggingDict(ResettingOrderedDict):
     def __setitem__(self, key, value):
         # Overrides the original dic to log the change
         if self.do_log:
-            if key not in self:
-                raise InvalidParamsError(f'Parameter `{key}` not in PARAMS')
             self._log_param_change(key, value)
         ResettingOrderedDict.__setitem__(self, key, value)
 
@@ -124,15 +122,9 @@ class ParamsLoggingDict(ResettingOrderedDict):
 
         prev = self.get(key)
         if prev is None:
-            if key in ['baseline_y0', 'baseline_y1']:
-                raise InvalidParamsError('The `baseline_y0` and `baseline_y1` '
-                                         'parameters have been removed. '
-                                         'You now have to set them explicitly '
-                                         'in your call to '
-                                         '`process_climate_data`.')
-
-            log.workflow('WARNING: adding an unknown parameter '
-                         '`{}`:`{}` to PARAMS.'.format(key, value))
+            if key not in ['prcp_fac']:
+                log.workflow('WARNING: adding an unknown parameter '
+                             '`{}`:`{}` to PARAMS.'.format(key, value))
             return
 
         if prev == value:
