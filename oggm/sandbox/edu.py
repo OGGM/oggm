@@ -44,9 +44,8 @@ class BiasedConstantMassBalance(MassBalanceModel):
         bias : float, optional
             set to the alternative value of the annual bias [mm we yr-1]
             you want to use (the default is to use the calibrated value)
-        y0 : int, optional, default: tstar
-            the year at the center of the period of interest. The default
-            is to use tstar as center.
+        y0 : int
+            the year at the center of the period of interest. Has to be set!
         halfsize : int, optional
             the half-size of the time window (window size = 2 * halfsize + 1)
         filename : str, optional
@@ -176,8 +175,7 @@ def run_constant_climate_with_bias(
         is to take the last year available
     bias : float
         bias of the mb model. Default is to use the calibrated one, which
-        is often a better idea. For t* experiments it can be useful to set it
-        to zero
+        is zero usually anyways.
     kwargs : dict
         kwargs to pass to the FluxBasedModel instance
     """

@@ -1793,9 +1793,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 @global_task(log)
 def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, years=None,
                 climate_filename='climate_historical', temperature_bias=None,
-                precipitation_factor=None, climate_input_filesuffix=''):
+                precipitation_factor=None, climate_input_filesuffix='',
+                mb_model_class='MonthlyTIModel'):
     """Compiles a table of ELA timeseries for all glaciers for a given years,
-    using the PastMassBalance model.
+    using the mb_model_class (default MonthlyTIModel).
 
     The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
     to open it.
@@ -1829,6 +1830,8 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_fac']
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel class to use, default is MonthlyTIModel
     """
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import compute_ela
@@ -1837,7 +1840,8 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None, ye
                                  climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
-                                 precipitation_factor=precipitation_factor)
+                                 precipitation_factor=precipitation_factor,
+                                 mb_model_class=mb_model_class)
 
     for idx, s in enumerate(out_df):
         if s is None:

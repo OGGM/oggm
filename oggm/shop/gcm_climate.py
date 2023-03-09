@@ -196,7 +196,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     member : str
         ensemble member gcm that you want to process
     ssp : str
-        ssp scenario to process (only 'ssp126' or 'ssp585' are available)
+        ssp scenario to process (only 'ssp126', 'ssp370' or 'ssp585' are available)
     year_range : tuple of str
         the year range for which the anomalies are computed
         (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')
@@ -218,6 +218,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     # Glacier location
     glon = gdir.cenlon
     glat = gdir.cenlat
+
     if testing:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
     else:
@@ -229,14 +230,13 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
     fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
     fpath_temp_h = fpath_spec.format(var='tasAdjust', ssp='historical')
-
     fpath_precip = fpath_spec.format(var='prAdjust', ssp=ssp)
     fpath_precip_h = fpath_spec.format(var='prAdjust', ssp='historical')
-    fpath_temp = utils.file_downloader(fpath_temp)
-    fpath_temp_h = utils.file_downloader(fpath_temp_h)
-
-    fpath_precip = utils.file_downloader(fpath_precip)
-    fpath_precip_h = utils.file_downloader(fpath_precip_h)
+    with utils.get_lock():
+        fpath_temp = utils.file_downloader(fpath_temp)
+        fpath_temp_h = utils.file_downloader(fpath_temp_h)
+        fpath_precip = utils.file_downloader(fpath_precip)
+        fpath_precip_h = utils.file_downloader(fpath_precip_h)
 
     # Read the GCM files
     with xr.open_dataset(fpath_temp_h, use_cftime=True) as tempds_hist, \

@@ -3254,9 +3254,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         the glacier directory to process
     nyears : int
         length of the simulation
-    y0 : int, optional
-        central year of the random climate period. The default is to be
-        centred on t*.
+    y0 : int
+        central year of the random climate period. Has to be set!
     halfsize : int, optional
         the half-size of the time window (window size = 2 * halfsize + 1)
     bias : float
@@ -3370,8 +3369,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         length of the simulation (default: as long as needed for reaching
         equilibrium)
     y0 : int
-        central year of the requested climate period. The default is to be
-        centred on t*.
+        central year of the random climate period. Has to be set!
     halfsize : int, optional
         the half-size of the time window (window size = 2 * halfsize + 1)
     bias : float
