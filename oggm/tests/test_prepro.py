@@ -1882,7 +1882,7 @@ class TestInversion(unittest.TestCase):
 
         # Some reference value I just computed - see if other computers agree
         np.testing.assert_allclose(np.mean(velocity[:-1]), 42, atol=5)
-        inversion.compute_velocities(gdir, fs=fs, glen_a=glen_a)
+        inversion.compute_inversion_velocities(gdir, fs=fs, glen_a=glen_a)
         inv = gdir.read_pickle('inversion_output')[-1]
         np.testing.assert_allclose(velocity, inv['u_integrated'])
 
@@ -2251,7 +2251,7 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        inversion.compute_velocities(gdir, fs=0, glen_a=glen_a)
+        inversion.compute_inversion_velocities(gdir, fs=0, glen_a=glen_a)
 
         inv = gdir.read_pickle('inversion_output')[-1]
 

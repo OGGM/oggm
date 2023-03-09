@@ -150,7 +150,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
     tasks.get_inversion_volume
-    tasks.compute_velocities
+    tasks.compute_inversion_velocities
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp
     tasks.find_inversion_calving_from_any_mb

@@ -51,7 +51,7 @@ MIN_WIDTH_FOR_INV = 10
 
 
 @entity_task(log, writes=['inversion_input'])
-def prepare_for_inversion(gdir, add_debug_var=False,
+def prepare_for_inversion(gdir,
                           invert_with_rectangular=True,
                           invert_all_rectangular=False,
                           invert_with_trapezoid=True,
@@ -618,8 +618,17 @@ def get_inversion_volume(gdir):
 
 
 @entity_task(log, writes=['inversion_output'])
-def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
-                       with_sliding=False):
+def compute_velocities(*args, **kwargs):
+    """Deprecated. Use compute_inversion_velocities instead."""
+    warnings.warn("`compute_velocities` has been renamed to "
+                  "`compute_inversion_velocities`. Prefer to use the new"
+                  "name from now on.")
+    return compute_inversion_velocities(*args, **kwargs)
+
+
+@entity_task(log, writes=['inversion_output'])
+def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
+                                 with_sliding=None):
     """Surface velocities along the flowlines from inverted ice thickness.
 
     Computed following the methods described in Cuffey and Paterson (2010)
@@ -634,19 +643,20 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 
     The output is written in 'inversion_output.pkl' in m yr-1
 
-    You'll need to call prepare_for_inversion with the `add_debug_var=True`
-    kwarg for this to work!
-
     Parameters
     ----------
-    gdir : Glacier directory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     with_sliding : bool
-        default is False, if set to True we will compute using
-        the sliding component.
-    glen_a : Glen A, defaults to PARAMS
-    fs : sliding, defaults to PARAMS
+        if set to True, we will compute velocities the sliding component.
+        the default is to check if sliding was used for the inversion
+        (fs != 0)
+    glen_a : float
+        Glen's deformation parameter A. Defaults to PARAMS['inversion_glen_a']
+    fs : float
+        sliding paramter, defaults to PARAMS['inversion_fs']
     filesuffix : str
-        add a suffix to the output file
+        add a suffix to the output file (optional)
     """
 
     # Defaults
@@ -657,6 +667,9 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 
     rho = cfg.PARAMS['ice_density']
     glen_n = cfg.PARAMS['glen_n']
+
+    if with_sliding is None:
+        with_sliding = fs != 0
 
     # Getting the data for the main flowline
     cls = gdir.read_pickle('inversion_output')
