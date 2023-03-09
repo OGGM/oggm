@@ -80,7 +80,7 @@ downloading and extracting these data locally:
 
     # Where to fetch the pre-processed directories - this can be changed
     server_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-    experiment_url = 'oggm_v1.6/exps/L3-L5_files/W5E5_melt_calib'
+    experiment_url = 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
     base_url = server_url + experiment_url
 
 .. ipython:: python
