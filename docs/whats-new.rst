@@ -3,12 +3,12 @@
 Version history
 ===============
 
-v1.6.0 (unreleased)
--------------------
+v1.6.0 (March 10, 2023)
+-----------------------
 
 A new major release of the OGGM with several important changes. We recommend
 all users to switch to this version only if they are ready for a new study,
-or rerun their simulations.
+or are prepared to rerun their simulations with changed results.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -17,10 +17,18 @@ Breaking changes
   a few OGGM versions. Similarly, other old functions
   (e.g. ``process_cmip5_data``) were also removed.
 - several default parameters were updated to new values. See "migrating guide"
-  below to navigate through these changes.
+  (in construction) to navigate through these changes.
 - the calibration of the mass balance models with the :math:`t^*` ("T star")
-  method is no longer supported. The code is here and can be used, but we
-  don't use it ourselves anymore.
+  method is no longer supported. The new calibration scheme is considerably
+  more flexible, but relies on new parameter names.
+- as a result, old workflows and old glacier directories cannot be used (after
+  Level 3) in OGGM v1.6 anymore.
+
+.. warning::
+
+    Because of the many changes, the list below is not exhaustive at all. We
+    preferred to focus on what is new in the tutorials, and recommend all returning
+    users to go over the new tutorials to familiarize themselves with the changes.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -98,10 +106,6 @@ Bug fixes
   list of DEM sources. (:pull:`1506`).
   By `Daniel Otto <https://github.com/d-otto>`_
 
-Migrating guide
-~~~~~~~~~~~~~~~
-
-Some text here.
 
 v1.5.3 (02.04.2022)
 -------------------

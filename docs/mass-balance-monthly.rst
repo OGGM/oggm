@@ -40,7 +40,8 @@ Calibration
    spend some time in getting familiar with the calibration procedure in
    order to adapt it for their own purposes.
 
-TODO
+Visit the new `mass balance calibration tutorial <https://oggm.org/tutorials/master/notebooks/advanced/massbalance_calibration.html>`_
+for an overview.
 
 Notes
 -----

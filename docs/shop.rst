@@ -166,9 +166,9 @@ Level   B  10  B  80  B 160  B 240
 **L0**  979M   979M   979M   979M
 **L1**  3.3G   17G    47G    95G
 **L2**  8.3G   49G    142G   285G
-**L3**  14G    55G    148G
-**L4**         58G    152G
-**L5**         11G    11G
+**L3**  14G    55G    148G   292G
+**L4**         58G    152G   296G
+**L5**         11G    11G    12G
 ======  =====  =====  =====  =====
 
 *L4 and L5 data are not available for border 10 (the domain is too small for
@@ -200,8 +200,8 @@ To choose from a specific model configuration, use the ``prepro_base_url``
 argument in your call to :py:func:`workflow.init_glacier_directories`,
 and set it to one of the urls listed below.
 
-See `this tutorial <https://oggm.org/tutorials/stable/notebooks/elevation_bands_vs_centerlines.html>`_
-for an example.
+As of March 10, 2023, we offer several urls. Explore
+`https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_ and our `tutorials <https://oggm.org/tutorials>`_ for examples of applications.
 
 .. admonition:: **Version 1.4 and 1.5 directories (before v1.6)**
     :class: note, dropdown
