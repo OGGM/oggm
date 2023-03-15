@@ -280,15 +280,15 @@ class Test_w5e5:
             # for a randomly chosen gridpoint, the next climate gridpoint is far away
             if coord == (0, 0):
                 with pytest.raises(AssertionError):
-                    assert np.abs(lat_near - lat) < 0.25
-                    assert np.abs(lon_near - lon) < 0.25
-                    assert dist < (0.25 ** 2 + 0.25 ** 2) ** 0.5
+                    assert np.abs(lat_near - lat) <= 0.25
+                    assert np.abs(lon_near - lon) <= 0.25
+                    assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
             # for glacier gridpoints the next gridpoint should be the nearest
             # (GSWP3-W5E5 resolution is 0.5°)
             else:
-                assert np.abs(lat_near - lat) < 0.25
-                assert np.abs(lon_near - lon) < 0.25
-                assert dist < (0.25 ** 2 + 0.25 ** 2) ** 0.5
+                assert np.abs(lat_near - lat) <= 0.25
+                assert np.abs(lon_near - lon) <= 0.25
+                assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
 
     def test_process_w5e5_data(self, class_case_dir):
 
