@@ -290,6 +290,15 @@ class Test_w5e5:
                 assert np.abs(lon_near - lon) <= 0.25
                 assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
 
+        # this only contains data for two glaciers, let's still check some basics
+        # both glaciers are not at latitude or longitude 0
+        dtemp_std = xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std'))
+        assert np.all(dtemp_std.latitude!=0)
+        assert np.all(dtemp_std.longitude!=0)
+        assert dtemp_std.isel(time=0).temp_std.std() > 0
+        assert dtemp_std.longitude.std() > 0
+        assert dtemp_std.latitude.std() > 0
+
     def test_process_w5e5_data(self, class_case_dir):
 
         # Init
