@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 GSWP3_W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
 
-_base = 'gswp3-w5e5/flattened/monthly/'
+_base = 'gswp3-w5e5/flattened/2023.2/monthly/'
 
 BASENAMES = {
     'GSWP3_W5E5': {
