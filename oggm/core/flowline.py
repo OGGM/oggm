@@ -3139,10 +3139,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         fmod.run_until(init_model_yr)
         init_model_fls = fmod.fls
 
-        if ys != init_model_yr:
-            raise InvalidWorkflowError(f"You are starting a run with ys={ys} "
-                                       f"and init_model_yr={init_model_yr}. "
-                                       f"Make sure this is what you want.")
+        if ys != init_model_yr and ys != 0:
+            log.warning(f"You are starting a run with ys={ys} "
+                          f"and init_model_yr={init_model_yr}.")
 
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):
