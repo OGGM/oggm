@@ -194,7 +194,7 @@ def _polygon_to_pix(polygon):
                                    'OGGM.')
 
     # sometimes the glacier gets cut out in parts
-    if tmp.type == 'MultiPolygon':
+    if tmp.geom_type == 'MultiPolygon':
         # If only small arms are cut out, remove them
         area = np.array([_tmp.area for _tmp in tmp.geoms])
         _tokeep = np.argmax(area).item()
@@ -211,7 +211,7 @@ def _polygon_to_pix(polygon):
                 for b in np.arange(0., 1., 0.01):
                     tmp = shapely.ops.transform(project, polygon.buffer(b))
                     tmp = tmp.buffer(0)
-                    if tmp.type == 'MultiPolygon':
+                    if tmp.geom_type == 'MultiPolygon':
                         continue
                     if tmp.is_valid:
                         break
@@ -286,18 +286,17 @@ def glacier_grid_params(gdir):
 def define_glacier_region(gdir, entity=None, source=None):
     """Very first task after initialization: define the glacier's local grid.
 
-    Defines the local projection (Transverse Mercator), centered on the
-    glacier. There is some options to set the resolution of the local grid.
-    It can be adapted depending on the size of the glacier with::
+    Defines the local projection (Transverse Mercator or UTM depending on
+    user choice), centered on the glacier.
+    There is some options to set the resolution of the local grid.
+    It can be adapted depending on the size of the glacier.
+    See ``params.cfg`` for setting these options.
 
-        dx (m) = d1 * AREA (km) + d2 ; clipped to dmax
-
-    or be set to a fixed value. See ``params.cfg`` for setting these options.
     Default values of the adapted mode lead to a resolution of 50 m for
     Hintereisferner, which is approx. 8 km2 large.
+
     After defining the grid, the topography and the outlines of the glacier
-    are transformed into the local projection. The default interpolation for
-    the topography is `cubic`.
+    are transformed into the local projection.
 
     Parameters
     ----------
@@ -1207,15 +1206,6 @@ def gridded_mb_attributes(gdir):
         glacier_mask_2d = glacier_mask_2d == 1
         catchment_mask_2d = glacier_mask_2d * np.NaN
 
-    cls = gdir.read_pickle('centerlines')
-
-    # Catchment areas
-    cis = gdir.read_pickle('geometries')['catchment_indices']
-    for j, ci in enumerate(cis):
-        catchment_mask_2d[tuple(ci.T)] = j
-
-    # Make everything we need flat
-    catchment_mask = catchment_mask_2d[glacier_mask_2d].astype(int)
     topo = topo_2d[glacier_mask_2d]
 
     # Prepare the distributed mass balance data
@@ -1235,18 +1225,14 @@ def gridded_mb_attributes(gdir):
                            .format(np.sum(lin_mb_on_z)))
 
     # Normal OGGM (a bit tweaked)
-    df = gdir.read_json('local_mustar')
-
-    def to_minimize(mu_star):
-        mbmod = ConstantMassBalance(gdir, mu_star=mu_star, bias=0,
-                                    check_calib_params=False,
-                                    y0=df['t_star'])
+    def to_minimize(temp_bias):
+        mbmod = ConstantMassBalance(gdir, temp_bias=temp_bias, y0=1995,
+                                    check_calib_params=False)
         smb = mbmod.get_annual_mb(heights=topo)
         return np.sum(smb)**2
-    mu_star = optimization.minimize(to_minimize, [0.], method='Powell')
-    mbmod = ConstantMassBalance(gdir, mu_star=float(mu_star['x']), bias=0,
-                                check_calib_params=False,
-                                y0=df['t_star'])
+    opt = optimization.minimize(to_minimize, [0.], method='Powell')
+    mbmod = ConstantMassBalance(gdir, temp_bias=float(opt['x']), y0=1995,
+                                check_calib_params=False)
     oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
     if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=10):
         raise RuntimeError('Spec mass balance should be zero but is: {}'
@@ -1261,7 +1247,72 @@ def gridded_mb_attributes(gdir):
         lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h]) * dx2
         oggm_mb_above_z[i] = np.sum(oggm_mb_on_z[topo >= h]) * dx2
 
+    # Make 2D again
+    def _fill_2d_like(data):
+        out = topo_2d * np.NaN
+        out[glacier_mask_2d] = data
+        return out
+
+    catch_area_above_z = _fill_2d_like(catch_area_above_z)
+    lin_mb_above_z = _fill_2d_like(lin_mb_above_z)
+    oggm_mb_above_z = _fill_2d_like(oggm_mb_above_z)
+
+    # Save to file
+    with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+
+        vn = 'catchment_area'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+        v.units = 'm^2'
+        v.long_name = 'Catchment area above point'
+        v.description = ('This is a very crude method: just the area above '
+                         'the points elevation on glacier.')
+        v[:] = catch_area_above_z
+
+        vn = 'lin_mb_above_z'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+        v.units = 'kg/year'
+        v.long_name = 'MB above point from linear MB model, without catchments'
+        v.description = ('Mass balance cumulated above the altitude of the'
+                         'point, hence in unit of flux. Note that it is '
+                         'a coarse approximation of the real flux. '
+                         'The mass balance model is a simple linear function'
+                         'of altitude.')
+        v[:] = lin_mb_above_z
+
+        vn = 'oggm_mb_above_z'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+        v.units = 'kg/year'
+        v.long_name = 'MB above point from OGGM MB model, without catchments'
+        v.description = ('Mass balance cumulated above the altitude of the'
+                         'point, hence in unit of flux. Note that it is '
+                         'a coarse approximation of the real flux. '
+                         'The mass balance model is a calibrated temperature '
+                         'index model like OGGM.')
+        v[:] = oggm_mb_above_z
+
     # Hardest part - MB per catchment
+    try:
+        cls = gdir.read_pickle('centerlines')
+    except FileNotFoundError:
+        return
+
+    # Make everything we need flat
+    # Catchment areas
+    cis = gdir.read_pickle('geometries')['catchment_indices']
+    for j, ci in enumerate(cis):
+        catchment_mask_2d[tuple(ci.T)] = j
+
+    catchment_mask = catchment_mask_2d[glacier_mask_2d].astype(int)
+
     catchment_area = topo * np.NaN
     lin_mb_above_z_on_catch = topo * np.NaN
     oggm_mb_above_z_on_catch = topo * np.NaN
@@ -1304,33 +1355,12 @@ def gridded_mb_attributes(gdir):
         oggm_mb_above_z_on_catch[i] = np.sum(oggm_mb_on_z[sel_points]) * dx2
         catchment_area[i] = np.sum(sel_points) * dx2
 
-    # Make 2D again
-    def _fill_2d_like(data):
-        out = topo_2d * np.NaN
-        out[glacier_mask_2d] = data
-        return out
-
     catchment_area = _fill_2d_like(catchment_area)
-    catch_area_above_z = _fill_2d_like(catch_area_above_z)
-    lin_mb_above_z = _fill_2d_like(lin_mb_above_z)
-    oggm_mb_above_z = _fill_2d_like(oggm_mb_above_z)
     lin_mb_above_z_on_catch = _fill_2d_like(lin_mb_above_z_on_catch)
     oggm_mb_above_z_on_catch = _fill_2d_like(oggm_mb_above_z_on_catch)
 
     # Save to file
     with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
-
-        vn = 'catchment_area'
-        if vn in nc.variables:
-            v = nc.variables[vn]
-        else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'm^2'
-        v.long_name = 'Catchment area above point'
-        v.description = ('This is a very crude method: just the area above '
-                         'the points elevation on glacier.')
-        v[:] = catch_area_above_z
-
         vn = 'catchment_area_on_catch'
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -1342,20 +1372,6 @@ def gridded_mb_attributes(gdir):
                          'compute the area above the altitude of the given '
                          'point.')
         v[:] = catchment_area
-
-        vn = 'lin_mb_above_z'
-        if vn in nc.variables:
-            v = nc.variables[vn]
-        else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'kg/year'
-        v.long_name = 'MB above point from linear MB model, without catchments'
-        v.description = ('Mass balance cumulated above the altitude of the'
-                         'point, hence in unit of flux. Note that it is '
-                         'a coarse approximation of the real flux. '
-                         'The mass balance model is a simple linear function'
-                         'of altitude.')
-        v[:] = lin_mb_above_z
 
         vn = 'lin_mb_above_z_on_catch'
         if vn in nc.variables:
@@ -1370,20 +1386,6 @@ def gridded_mb_attributes(gdir):
                          'real flux. The mass balance model is a simple '
                          'linear function of altitude.')
         v[:] = lin_mb_above_z_on_catch
-
-        vn = 'oggm_mb_above_z'
-        if vn in nc.variables:
-            v = nc.variables[vn]
-        else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
-        v.units = 'kg/year'
-        v.long_name = 'MB above point from OGGM MB model, without catchments'
-        v.description = ('Mass balance cumulated above the altitude of the'
-                         'point, hence in unit of flux. Note that it is '
-                         'a coarse approximation of the real flux. '
-                         'The mass balance model is a calibrated temperature '
-                         'index model like OGGM.')
-        v[:] = oggm_mb_above_z
 
         vn = 'oggm_mb_above_z_on_catch'
         if vn in nc.variables:

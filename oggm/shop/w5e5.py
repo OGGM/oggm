@@ -105,9 +105,6 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
     # first temperature dataset
     with xr.open_dataset(path_tmp) as ds:
         assert ds.longitude.min() >= 0
-        # set temporal subset for the ts data (hydro years)
-        sm = cfg.PARAMS['hydro_month_' + gdir.hemisphere]
-        em = sm - 1 if (sm > 1) else 12
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1
@@ -115,8 +112,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         if y1 > 2019 or y0 < 1901:
             text = 'The climate files only go from 1901--2019'
             raise InvalidParamsError(text)
-        ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                               '{}-{:02d}-01'.format(y1, em)))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         try:
             # computing all the distances and choose the nearest gridpoint
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
@@ -144,8 +140,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
         # here we take the same y0 and y1 as given from the
         # tmp dataset
-        ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                               '{}-{:02d}-01'.format(y1, em)))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         try:
             # ... prcp is also flattened
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
@@ -189,21 +184,17 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
             yrs = ds['time.year'].data
             y0 = yrs[0] if y0 is None else y0
             y1 = yrs[-1] if y1 is None else y1
-            ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                                   '{}-{:02d}-01'.format(y1, em)))
+            ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
 
             # no flattening done for the ERA5dr gradient dataset
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             if y1 == 2019:
                 # missing some months of ERA5dr (which only goes till middle of 2019)
                 # otherwise it will fill it with large numbers ...
-                ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                                       '2018-12-01'))
+                ds = ds.sel(time=slice(f'{y0}-01-01', '2018-12-01'))
                 # take for hydrological year 2019 just the avg. lapse rates
                 # this gives in month order Jan-Dec the mean laperates,
                 mean_grad = ds.groupby('time.month').mean().lapserate
-                # just add those that are needed to fill the hydrological year!!!
-                mean_grad = mean_grad.where(mean_grad.month <= em).dropna(dim='month').values
                 # fill the last year with mean gradients
                 gradient = np.concatenate((ds['lapserate'].data, mean_grad),
                                           axis=None)
@@ -213,8 +204,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
     path_temp_std = get_gswp3_w5e5_file(dataset, 'temp_std')
     with xr.open_dataset(path_temp_std) as ds:
-        ds = ds.sel(time=slice('{}-{:02d}-01'.format(y0, sm),
-                               '{}-{:02d}-01'.format(y1, em)))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         try:
             # ... prcp is also flattened
             c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
@@ -228,7 +218,6 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
     # OK, ready to write
     gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
                                     filesuffix=output_filesuffix,
-                                    gradient=gradient,
                                     temp_std=temp_std,
                                     source=dataset)
 

@@ -76,13 +76,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
-                      disable_mp=False, params_file=None, elev_bands=False,
-                      match_regional_geodetic_mb=False,
-                      match_geodetic_mb_per_glacier=False,
-                      evolution_model='fl_sia',
-                      centerlines_only=False, override_params=None,
-                      add_consensus=False, start_level=None,
-                      start_base_url=None, max_level=5, ref_tstars_base_url='',
+                      disable_mp=False, params_file=None,
+                      elev_bands=False, centerlines=False,
+                      override_params=None,
+                      mb_calibration_strategy='informed_threestep',
+                      add_consensus_thickness=False, add_itslive_velocity=False,
+                      add_millan_thickness=False, add_millan_velocity=False,
+                      add_hugonnet_dhdt=False,
+                      start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW', disable_dl_verify=False,
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
                       dynamic_spinup_start_year=1979,
@@ -103,9 +104,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         which DEM source to use: default, SOURCE_NAME or ALL
     working_dir : str
         path to the OGGM working directory
-    ref_tstars_base_url : str
-        url where to find the pre-calibrated reference tstar list.
-        Required as of v1.4.
     params_file : str
         path to the OGGM parameter file (to override defaults)
     is_test : bool
@@ -125,22 +123,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     disable_mp : bool
         disable multiprocessing
     elev_bands : bool
-        compute all flowlines based on the Huss&Hock 2015 method instead
-        of the OGGM default, which is a mix of elev_bands and centerlines.
-    centerlines_only : bool
-        compute all flowlines based on the OGGM centerline(s) method instead
-        of the OGGM default, which is a mix of elev_bands and centerlines.
-    match_regional_geodetic_mb : str
-        match the regional mass balance estimates at the regional level
-        ('hugonnet': Hugonnet et al., 2020 or 'zemp': Zemp et al., 2019).
-    match_geodetic_mb_per_glacier : str
-        match the mass balance estimates at the glacier level
-        (currently only 'hugonnet': Hugonnet et al., 2020).
-    evolution_model : str
-        which geometry evolution model to use: `fl_sia` (default),
-        or `massredis` (mass redistribution curve).
-    add_consensus : bool
+        compute all flowlines based on the Huss & Farinotti 2012 method.
+    centerlines : bool
+        compute all flowlines based on the OGGM centerline(s) method.
+    mb_calibration_strategy : str
+        how to calibrate the massbalance. Currently one of:
+        - 'informed_threestep' (default)
+        - 'melt_temp'
+        - 'temp_melt'
+    add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_itslive_velocity : bool
+        adds (reprojects) the ITS_LIVE velocity to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_millan_thickness : bool
+        adds (reprojects) the millan thickness to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_millan_velocity : bool
+        adds (reprojects) the millan velocity to the glacier
+        directories. With elev_bands=True, the data will also be binned.
+    add_hugonnet_dhdt : bool
+        adds (reprojects) the hugonnet dhdt maps to the glacier
         directories. With elev_bands=True, the data will also be binned.
     start_level : int
         the pre-processed level to start from (default is to start from
@@ -181,26 +185,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     else:
         start_level = 0
 
-    if match_regional_geodetic_mb and match_geodetic_mb_per_glacier:
-        raise InvalidParamsError('match_regional_geodetic_mb incompatible with '
-                                 'match_geodetic_mb_per_glacier!')
-
-    if match_geodetic_mb_per_glacier and match_geodetic_mb_per_glacier != 'hugonnet':
-        raise InvalidParamsError('Currently only `hugonnet` is available for '
-                                 'match_geodetic_mb_per_glacier.')
-
-    if evolution_model not in ['fl_sia', 'massredis']:
-        raise InvalidParamsError('evolution_model should be one of '
-                                 "['fl_sia', 'massredis'].")
-
     if dynamic_spinup:
         if dynamic_spinup not in ['area/dmdtda', 'volume/dmdtda']:
             raise InvalidParamsError(f"Dynamic spinup option '{dynamic_spinup}' "
                                      "not supported")
-
-        if evolution_model == 'massredis':
-            raise InvalidParamsError("Dynamic spinup is not working/tested"
-                                     "with massredis!")
 
     # Time
     start = time.time()
@@ -216,6 +204,37 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if override_params is None:
         override_params = {}
 
+    # Use multiprocessing?
+    override_params['use_multiprocessing'] = not disable_mp
+
+    # How many grid points around the glacier?
+    # Make it large if you expect your glaciers to grow large
+    override_params['border'] = border
+
+    # Some arbitrary heuristics on the length of tidewater extension
+    extension = int(utils.clip_min(border / 2, 30))
+    override_params['calving_line_extension'] = extension
+
+    # Set to True for operational runs
+    override_params['continue_on_error'] = continue_on_error
+
+    # Check for the integrity of the files OGGM downloads at run time
+    # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
+    # takes a long time, so deactivating this can make sense
+    override_params['dl_verify'] = not disable_dl_verify
+
+    # Do not use bias file if user wants melt_temp only
+    if mb_calibration_strategy in ['melt_temp', 'temp_melt']:
+        override_params['use_temp_bias_from_file'] = False
+
+    # For centerlines we have to change the default evolution model and bed
+    if centerlines:
+        override_params['downstream_line_shape'] = 'parabola'
+        override_params['evolution_model'] = 'FluxBased'
+
+    # Other things that make sense
+    override_params['store_model_geometry'] = True
+
     utils.mkdir(working_dir)
     override_params['working_dir'] = working_dir
 
@@ -225,32 +244,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                    future=True)
     cfg.PARAMS['use_intersects'] = False
 
-    if match_geodetic_mb_per_glacier and (cfg.PARAMS['hydro_month_nh'] != 1 or
-                                          cfg.PARAMS['hydro_month_sh'] != 1):
-        raise InvalidParamsError('We recommend to set hydro_month_nh and sh '
-                                 'to 1 for the geodetic MB calibration per '
-                                 'glacier.')
-
-    # Use multiprocessing?
-    cfg.PARAMS['use_multiprocessing'] = not disable_mp
-
-    # How many grid points around the glacier?
-    # Make it large if you expect your glaciers to grow large
-    cfg.PARAMS['border'] = border
-
-    # Set to True for operational runs
-    cfg.PARAMS['continue_on_error'] = continue_on_error
-
-    # Check for the integrity of the files OGGM downloads at run time
-    # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
-    # takes a long time, so deactivating this can make sense
-    cfg.PARAMS['dl_verify'] = not disable_dl_verify
-
     # Prepare the download of climate file to be shared across processes
     # TODO
-
-    # Other things that make sense
-    cfg.PARAMS['store_model_geometry'] = True
 
     # Log the parameters
     msg = '# OGGM Run parameters:'
@@ -318,16 +313,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if is_test:
         if test_ids is not None:
-            rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+            try:
+                rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+            except AttributeError:
+                #RGI7
+                rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)
-
-        if max_level > 2:
-            # Also use ref tstars
-            utils.apply_test_ref_tstars()
-
-    if max_level > 2 and ref_tstars_base_url:
-        workflow.download_ref_tstars(base_url=ref_tstars_base_url)
 
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
@@ -420,15 +412,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if elev_bands:
             gdirs_band = gdirs
             gdirs_cent = []
-        elif centerlines_only:
+        elif centerlines:
             gdirs_band = []
             gdirs_cent = gdirs
         else:
-            # Default is to centerlines_only, but it used to be a mix
-            # (e.g. bands for ice caps, etc)
-            # I still keep this logic here in case we want to mix again
-            gdirs_band = []
-            gdirs_cent = gdirs
+            raise InvalidParamsError('Need to specify if `elev_bands` or '
+                                     '`centerlines` type.')
 
         log.workflow('Start flowline processing with: '
                      'N centerline type: {}, '
@@ -441,17 +430,35 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
-        if add_consensus:
+        bin_variables = []
+        if add_consensus_thickness:
             from oggm.shop.bedtopo import add_consensus_thickness
-            workflow.execute_entity_task(add_consensus_thickness, gdirs_band)
-            workflow.execute_entity_task(add_consensus_thickness, gdirs_cent)
+            workflow.execute_entity_task(add_consensus_thickness, gdirs)
+            bin_variables.append('consensus_ice_thickness')
+        if add_itslive_velocity:
+            from oggm.shop.its_live import velocity_to_gdir
+            workflow.execute_entity_task(velocity_to_gdir, gdirs)
+            bin_variables.append('itslive_v')
+        if add_millan_thickness:
+            from oggm.shop.millan22 import thickness_to_gdir
+            workflow.execute_entity_task(thickness_to_gdir, gdirs)
+            bin_variables.append('millan_ice_thickness')
+        if add_millan_velocity:
+            from oggm.shop.millan22 import velocity_to_gdir
+            workflow.execute_entity_task(velocity_to_gdir, gdirs)
+            bin_variables.append('millan_v')
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import hugonnet_to_gdir
+            workflow.execute_entity_task(hugonnet_to_gdir, gdirs)
+            bin_variables.append('hugonnet_dhdt')
 
-            # Elev bands with var data
-            vn = 'consensus_ice_thickness'
+        if bin_variables and gdirs_band:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
-                                         gdirs_band, bin_variables=vn)
+                                         gdirs_band,
+                                         bin_variables=bin_variables)
             workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
-                                         gdirs_band, bin_variables=vn)
+                                         gdirs_band,
+                                         bin_variables=bin_variables)
         else:
             # HH2015 method without it
             task_list = [
@@ -490,6 +497,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
+
+        if add_itslive_velocity:
+            from oggm.shop.its_live import compile_itslive_statistics
+            opath = os.path.join(sum_dir, 'itslive_statistics_{}.csv'.format(rgi_reg))
+            compile_itslive_statistics(gdirs, path=opath)
+        if add_millan_thickness or add_millan_velocity:
+            from oggm.shop.millan22 import compile_millan_statistics
+            opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))
+            compile_millan_statistics(gdirs, path=opath)
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
+            opath = os.path.join(sum_dir, 'hugonnet_statistics_{}.csv'.format(rgi_reg))
+            compile_hugonnet_statistics(gdirs, path=opath)
+        if add_consensus_thickness:
+            from oggm.shop.bedtopo import compile_consensus_statistics
+            opath = os.path.join(sum_dir, 'consensus_statistics_{}.csv'.format(rgi_reg))
+            compile_consensus_statistics(gdirs, path=opath)
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
@@ -533,16 +557,27 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Climate
         workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        if cfg.PARAMS['climate_qc_months'] > 0:
-            workflow.execute_entity_task(tasks.historical_climate_qc, gdirs)
-
-        if match_geodetic_mb_per_glacier:
-            utils.get_geodetic_mb_dataframe()  # Small optim to avoid concurrency
-            workflow.execute_entity_task(tasks.mu_star_calibration_from_geodetic_mb, gdirs)
-            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+        # Small optim to avoid concurrency
+        utils.get_geodetic_mb_dataframe()
+        utils.get_temp_bias_dataframe()
+        if mb_calibration_strategy == 'informed_threestep':
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs, informed_threestep=True)
+        elif mb_calibration_strategy == 'melt_temp':
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs,
+                                         calibrate_param1='melt_f',
+                                         calibrate_param2='temp_bias')
+        elif mb_calibration_strategy == 'temp_melt':
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs,
+                                         calibrate_param1='temp_bias',
+                                         calibrate_param2='melt_f')
         else:
-            workflow.execute_entity_task(tasks.local_t_star, gdirs)
-            workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
+            raise InvalidParamsError('mb_calibration_strategy not understood: '
+                                     f'{mb_calibration_strategy}')
+
+        workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
         # Inversion: we match the consensus
         filter = border >= 20
@@ -550,16 +585,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                     apply_fs_on_mismatch=True,
                                                     error_on_mismatch=False,
                                                     filter_inversion_output=filter)
-
-        # Do we want to match geodetic estimates?
-        # This affects only the bias so we can actually do this *after*
-        # the inversion, but we really want to take calving into account here
-        if match_regional_geodetic_mb:
-            opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_'
-                                          'before_match_{}.csv'.format(rgi_reg))
-            utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
-            workflow.match_regional_geodetic_mb(gdirs, rgi_reg=rgi_reg,
-                                                dataset=match_regional_geodetic_mb)
 
         # We get ready for modelling
         if border >= 20:
@@ -618,26 +643,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             if i >= len(gdirs):
                 raise RuntimeError('Found no valid glaciers!')
             try:
-                y0 = gdirs[i].get_climate_info()['baseline_hydro_yr_0']
+                y0 = gdirs[i].get_climate_info()['baseline_yr_0']
                 # One adds 1 because the run ends at the end of the year
-                ye = gdirs[i].get_climate_info()['baseline_hydro_yr_1'] + 1
+                ye = gdirs[i].get_climate_info()['baseline_yr_1'] + 1
                 break
             except BaseException:
                 i += 1
 
-        # Which model?
-        if evolution_model == 'massredis':
-            from oggm.core.flowline import MassRedistributionCurveModel
-            evolution_model = MassRedistributionCurveModel
-        else:
-            from oggm.core.flowline import FluxBasedModel
-            evolution_model = FluxBasedModel
-
-        # conduct historical run before dynamic mu calibration (for comparisons
-        # to old default behavior)
+        # conduct historical run before dynamic melt_f calibration
+        # (for comparison to old default behavior)
         workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
                                      min_ys=y0, ye=ye,
-                                     evolution_model=evolution_model,
                                      output_filesuffix='_historical')
         # Now compile the output
         opath = os.path.join(sum_dir, f'historical_run_output_{rgi_reg}.nc')
@@ -650,24 +666,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             minimise_for = dynamic_spinup.split('/')[0]
 
-            used_max_mu_star = cfg.PARAMS['max_mu_star']
-            if cfg.PARAMS['max_mu_star'] > 1000.:
-                log.warning("For the dynamic calibration of mu_star the upper "
-                            "limit is set to 1000! Current "
-                            "cfg.PARAMS['max_mu_star'] = "
-                            f"{cfg.PARAMS['max_mu_star']}.")
-                used_max_mu_star = 1000.
-
+            melt_f_max = cfg.PARAMS['melt_f_max']
             workflow.execute_entity_task(
-                tasks.run_dynamic_mu_star_calibration, gdirs,
+                tasks.run_dynamic_melt_f_calibration, gdirs,
                 err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
-                max_mu_star=used_max_mu_star,
-                kwargs_run_function={'evolution_model': evolution_model,
-                                     'minimise_for': minimise_for},
+                melt_f_max=melt_f_max,
+                kwargs_run_function={'minimise_for': minimise_for},
                 ignore_errors=True,
-                kwargs_fallback_function={'evolution_model': evolution_model,
-                                          'minimise_for': minimise_for},
+                kwargs_fallback_function={'minimise_for': minimise_for},
                 output_filesuffix='_spinup_historical',)
             # Now compile the output
             opath = os.path.join(sum_dir, f'spinup_historical_run_output_{rgi_reg}.nc')
@@ -680,16 +687,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Add the extended files
         pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+        # We have copied the files above
         mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
-        # This is crucial - extending calving only possible with L3 data!!!
-        if start_level < 3:
-            sf = os.path.join(sum_dir_L3, 'glacier_statistics_{}.csv'.format(rgi_reg))
-        else:
-            sf = file_downloader(os.path.join(
-                get_prepro_base_url(base_url=start_base_url,
-                                    rgi_version=rgi_version, border=border,
-                                    prepro_level=start_level), 'summary',
-                'glacier_statistics_{}.csv'.format(rgi_reg)))
+        sf = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
         utils.extend_past_climate_run(past_run_file=pf,
                                       fixed_geometry_mb_file=mf,
@@ -784,9 +784,6 @@ def parse_args(args):
     parser.add_argument('--params-file', type=str,
                         help='path to the OGGM parameter file to use in place '
                              'of the default one.')
-    parser.add_argument('--ref-tstars-base-url', type=str,
-                        help='the url where to find the pre-calibrated '
-                             'reference tstar list. Required as of v1.4.')
     parser.add_argument('--output', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -795,27 +792,16 @@ def parse_args(args):
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
     parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
-                        help='compute the flowlines based on the Huss&Hock '
-                             '2015 method instead of the OGGM default, which is '
-                             'a mix of elev_bands and centerlines.')
-    parser.add_argument('--centerlines-only', nargs='?', const=True, default=False,
+                        help='compute the flowlines based on the Huss & Farinotti '
+                             '2012 method.')
+    parser.add_argument('--centerlines', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the OGGM '
-                             'centerline(s) method instead of the OGGM '
-                             'default, which is a mix of elev_bands and '
-                             'centerlines.')
-    parser.add_argument('--match-regional-geodetic-mb', type=str, default='',
-                        help='match regional SMB values to geodetic estimates '
-                             '(currently hugonnet: Hugonnet et al., 2020, or '
-                             'zemp: Zemp et al, 2019) '
-                             'by shifting the SMB residual.')
-    parser.add_argument('--match-geodetic-mb-per-glacier', type=str, default='',
-                        help='match SMB values to geodetic estimates '
-                             '(currently hugonnet: Hugonnet et al., '
-                             '2020 only.')
-    parser.add_argument('--evolution-model', type=str, default='fl_sia',
-                        help='which geometry evolution model to use: '
-                             '`fl_sia` (default), or `massredis` (mass '
-                             'redistribution curve).')
+                             'centerline(s) method.')
+    parser.add_argument('--mb-calibration-strategy', type=str,
+                        default='informed_threestep',
+                        help='how to calibrate the massbalance. Currently one of '
+                             'informed_threestep (default) , melt_temp'
+                             'or temp_melt.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -825,9 +811,29 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
-    parser.add_argument('--add-consensus', nargs='?', const=True, default=False,
-                        help='adds (reprojects) the consensus estimates '
-                             'thickness to the glacier directories. '
+    parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the consensus thickness '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-itslive-velocity', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the ITS_LIVE velocity '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan thickness '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-millan-velocity', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan velocity '
+                             'estimates to the glacier directories. '
+                             'With --elev-bands, the data will also be '
+                             'binned.')
+    parser.add_argument('--add-hugonnet-dhdt', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the millan dhdt '
+                             'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
@@ -849,7 +855,7 @@ def parse_args(args):
                         help="include a dynamic spinup for matching glacier area "
                              "('area/dmdtda') OR volume ('volume/dmdtda') at "
                              "the RGI-date, AND mass-change from Hugonnet "
-                             "in the period 2000-2019 (dynamic mu* "
+                             "in the period 2000-2020 (dynamic mu* "
                              "calibration).")
     parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=1,
                         help="scaling factor to account for correlated "
@@ -906,17 +912,19 @@ def parse_args(args):
                 demo=args.demo, dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 max_level=args.max_level, disable_mp=args.disable_mp,
-                logging_level=args.logging_level, elev_bands=args.elev_bands,
-                centerlines_only=args.centerlines_only,
-                match_regional_geodetic_mb=args.match_regional_geodetic_mb,
-                match_geodetic_mb_per_glacier=args.match_geodetic_mb_per_glacier,
-                add_consensus=args.add_consensus,
+                logging_level=args.logging_level,
+                elev_bands=args.elev_bands,
+                centerlines=args.centerlines,
+                add_consensus_thickness=args.add_consensus_thickness,
+                add_millan_thickness=args.add_millan_thickness,
+                add_itslive_velocity=args.add_itslive_velocity,
+                add_millan_velocity=args.add_millan_velocity,
+                add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 disable_dl_verify=args.disable_dl_verify,
-                ref_tstars_base_url=args.ref_tstars_base_url,
-                evolution_model=args.evolution_model,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
+                mb_calibration_strategy=args.mb_calibration_strategy,
                 )
 
 

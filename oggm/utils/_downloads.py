@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'dbd57434df8fade8d8df9206839b9bf26a1ef8e6'
+SAMPLE_DATA_COMMIT = '398729eef5f8baeb01d466a2d3038ee7ccd2724d'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -951,7 +951,7 @@ def _download_tandem_file_unlocked(zone):
     tmpdir = cfg.PATHS['tmp_dir']
     mkdir(tmpdir)
     bname = zone.split('/')[-1] + '_DEM.tif'
-    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/'
+    wwwfile = ('https://download.geoservice.dlr.de/TDM90/files/DEM/'
                '{}.zip'.format(zone))
     outpath = os.path.join(tmpdir, bname)
 
@@ -1174,7 +1174,7 @@ def _download_copdem_file_unlocked(cppfile, tilename, source):
 
     # Did we download it yet?
     ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-{}-DGED/2021_1/'.format(source[-2:]) +
+               'datasets/COP-DEM_GLO-{}-DGED/2022_1/'.format(source[-2:]) +
                cppfile)
 
     dest_file = download_with_authentication(ftpfile,
@@ -1353,6 +1353,47 @@ def get_geodetic_mb_dataframe(file_path=None):
     return df
 
 
+def get_temp_bias_dataframe(dataset='w5e5'):
+    """Fetches the reference geodetic dataframe for calibration.
+
+    Currently, that's the data from Hughonnet et al. (2021), corrected for
+    outliers and with void filled. The data preparation script is
+    available at
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
+
+    Parameters
+    ----------
+    file_path : str
+        in case you have your own file to parse (check the format first!)
+
+    Returns
+    -------
+    a DataFrame with the data.
+    """
+
+    if dataset != 'w5e5':
+        raise NotImplementedError(f'No such dataset available yet: {dataset}')
+
+    # fetch the file online
+    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
+                'w5e5_temp_bias_v2023.3.csv')
+    file_path = file_downloader(base_url)
+
+    # Did we open it yet?
+    if file_path in cfg.DATA:
+        return cfg.DATA[file_path]
+
+    # If not let's go
+    extension = os.path.splitext(file_path)[1]
+    if extension == '.csv':
+        df = pd.read_csv(file_path, index_col=0)
+    elif extension == '.hdf':
+        df = pd.read_hdf(file_path)
+
+    cfg.DATA[file_path] = df
+    return df
+
+
 def srtm_zone(lon_ex, lat_ex):
     """Returns a list of SRTM zones covering the desired extent.
     """
@@ -1387,6 +1428,7 @@ def srtm_zone(lon_ex, lat_ex):
 def _tandem_path(lon_tile, lat_tile):
 
     # OK we have a proper tile now
+    # This changed in December 2022
 
     # First folder level is sorted from S to N
     level_0 = 'S' if lat_tile < 0 else 'N'
@@ -1540,7 +1582,7 @@ def copdem_zone(lon_ex, lat_ex, source):
     if source in cfg.DATA:
         df = cfg.DATA[source]
     else:
-        df = pd.read_csv(get_demo_file('{}_2021_1.csv'.format(source.lower())))
+        df = pd.read_csv(get_demo_file('{}_2022_1.csv'.format(source.lower())))
         cfg.DATA[source] = df
 
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0

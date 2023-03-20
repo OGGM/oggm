@@ -3,12 +3,12 @@
 Version history
 ===============
 
-v1.6.0 (unreleased)
--------------------
+v1.6.0 (March 10, 2023)
+-----------------------
 
 A new major release of the OGGM with several important changes. We recommend
 all users to switch to this version only if they are ready for a new study,
-or rerun their simulations.
+or are prepared to rerun their simulations with changed results.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -17,10 +17,18 @@ Breaking changes
   a few OGGM versions. Similarly, other old functions
   (e.g. ``process_cmip5_data``) were also removed.
 - several default parameters were updated to new values. See "migrating guide"
-  below to navigate through these changes.
+  (in construction) to navigate through these changes.
 - the calibration of the mass balance models with the :math:`t^*` ("T star")
-  method is no longer supported. The code is here and can be used, but we
-  don't use it ourselves anymore.
+  method is no longer supported. The new calibration scheme is considerably
+  more flexible, but relies on new parameter names.
+- as a result, old workflows and old glacier directories cannot be used (after
+  Level 3) in OGGM v1.6 anymore.
+
+.. warning::
+
+    Because of the many changes, the list below is not exhaustive at all. We
+    preferred to focus on what is new in the tutorials, and recommend all returning
+    users to go over the new tutorials to familiarize themselves with the changes.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -30,7 +38,7 @@ Enhancements
   By `Lilian Schuster <https://github.com/lilianschuster>`_
 - added support for a precipitation factor varying per glacier (:pull:`1435`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
-- Added a new entity task ``run_dynamic_mu_star_calibration``. This task
+- Added a new entity task ``run_dynamic_melt_f_calibration``. This task
   dynamically calibrates the temperature sensitivity mu star to a geodetic
   mass-balance observation. There are different options available how this is
   done, the default incorporates an inversion and a dynamic spinup in each
@@ -44,7 +52,7 @@ Enhancements
   able to globally define the used minimum ice thickness for the dynamic spinup
   (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Rearanged the entity tasks ``run_dynamic_mu_star_calibration`` and
+- Rearanged the entity tasks ``run_dynamic_melt_f_calibration`` and
   ``run_dynamic_spinup`` with all help functions in new modul
   ``oggm.core.dynamic_spinup`` (:pull:`1425`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
@@ -55,13 +63,38 @@ Enhancements
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added support for Millan et al 2022 velocity and thickness in the shop (:pull:`1443`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added support for Hugonnet et al 2021 dhdt in the shop (:pull:`1529`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added trapezoidal downstream line (:pull:`1491`). Can be selected with
   ``cfg.PARAMS['downstream_line_shape']``, with the options ``'parabol'`` (default)
   or ``'trapezoidal'`` before calling ``init_present_time_glacier(gdir)``.
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added option to plot flowline velocities in ``graphics.plot_modeloutput_map()``
-  (:pull:`1496`)
+  (:pull:`1496`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added option to extend the plot limits when plotting multiple gdirs. Could be
+  used with ``extend_plot_limits=True``, e.g.
+  ``graphics.plot_modeloutput_map(gdirs, extend_plot_limits=True)``
+  (:pull:`1508`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added new argument ``add_fixed_geometry_spinup`` to extend the model run of
+  ``run_dynamic_spinup`` with a fixed-geometry-spinup if the spinup period is
+  shortened(:pull:`1514`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added SemiImplicitModel for a single trapezoid or rectangular flowline developed
+  by `Dan Goldberg <https://github.com/dngoldberg>`_ (:pull:`1507`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Adapted ``filter_inversion_output`` to conserve the bed shape during
+  filtering (:pull:`1502`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Adapted calculation of inversion flux to avoid zero thickness at last grid
+  point (:pull:`1502`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added the possibility to use the UTM map proj instead of the local TM used
+  by OGGM usually (:pull:`1526`). Leads to qualitative and quantitative
+  differences when used.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~
@@ -73,10 +106,6 @@ Bug fixes
   list of DEM sources. (:pull:`1506`).
   By `Daniel Otto <https://github.com/d-otto>`_
 
-Migrating guide
-~~~~~~~~~~~~~~~
-
-Some text here.
 
 v1.5.3 (02.04.2022)
 -------------------
@@ -503,7 +532,7 @@ Enhancements
 - New function ``cfg.add_to_basenames`` now allows users to define their own
   entries in glacier directories (:issue:`731`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- New function ``inversion.compute_velocities`` writes the section and
+- New function ``inversion.compute_inversion_velocities`` writes the section and
   surface veloicites in the inversion output (:issue:`876`).
   By `Beatriz Recinos <https://github.com/bearecinos>`_.
 - Added ASTER v3 as optional DEM. Requires credentials to

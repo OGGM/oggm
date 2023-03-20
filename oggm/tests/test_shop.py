@@ -1,6 +1,7 @@
 import os
 import warnings
 
+import matplotlib.pyplot as plt
 import pytest
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
@@ -12,7 +13,7 @@ import numpy as np
 import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo, bedtopo, millan22
+from oggm.shop import its_live, rgitopo, bedtopo, millan22, hugonnet_maps
 from oggm.core import gis, centerlines, massbalance
 from oggm import cfg, tasks, workflow
 
@@ -52,24 +53,24 @@ class Test_its_live:
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             mask = ds.glacier_mask.data.astype(bool)
-            vx = ds.obs_icevel_x.where(mask).data
-            vy = ds.obs_icevel_y.where(mask).data
+            vx = ds.itslive_vx.where(mask).data
+            vy = ds.itslive_vy.where(mask).data
 
-        vel = np.sqrt(vx**2 + vy**2)
+        vel = ds.itslive_v.where(mask).data
         assert np.nanmax(vel) > 2900
         assert np.nanmin(vel) < 2
 
         # We reproject with rasterio and check no big diff
-        cfg.BASENAMES['its_live_vx'] = ('its_live_vx.tif', '')
-        cfg.BASENAMES['its_live_vy'] = ('its_live_vy.tif', '')
-        gis.rasterio_to_gdir(gdir, region_files['ALA']['vx'], 'its_live_vx',
+        cfg.BASENAMES['itslive_vx'] = ('itslive_vx.tif', '')
+        cfg.BASENAMES['itslive_vy'] = ('itslive_vy.tif', '')
+        gis.rasterio_to_gdir(gdir, region_files['ALA']['vx'], 'itslive_vx',
                              resampling='bilinear')
-        gis.rasterio_to_gdir(gdir, region_files['ALA']['vy'], 'its_live_vy',
+        gis.rasterio_to_gdir(gdir, region_files['ALA']['vy'], 'itslive_vy',
                              resampling='bilinear')
 
-        with rioxr.open_rasterio(gdir.get_filepath('its_live_vx')) as da:
+        with rioxr.open_rasterio(gdir.get_filepath('itslive_vx')) as da:
             _vx = da.where(mask).data.squeeze()
-        with rioxr.open_rasterio(gdir.get_filepath('its_live_vy')) as da:
+        with rioxr.open_rasterio(gdir.get_filepath('itslive_vy')) as da:
             _vy = da.where(mask).data.squeeze()
 
         _vel = np.sqrt(_vx**2 + _vy**2)
@@ -77,6 +78,10 @@ class Test_its_live:
                                    atol=40)
         np.testing.assert_allclose(utils.md(vel[mask], _vel[mask]), 0,
                                    atol=8)
+
+        df = its_live.compile_itslive_statistics([gdir]).iloc[0]
+        assert df['itslive_avg_vel'] > 180
+        assert df['itslive_max_vel'] > 2000
 
         if DO_PLOT:
             import matplotlib.pyplot as plt
@@ -88,7 +93,6 @@ class Test_its_live:
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 smap.set_topography(gdir.get_filepath('dem'))
 
-            vel = np.sqrt(vx ** 2 + vy ** 2)
             smap.set_data(vel)
             smap.set_plot_params(cmap='Blues', vmin=None, vmax=None)
 
@@ -158,6 +162,43 @@ class Test_millan22:
         assert df['millan_max_vel'] > 2000
         assert df['millan_perc_cov'] > 0.95
         assert df['millan_vol_km3'] > 174
+
+
+class Test_HugonnetMaps:
+
+    @pytest.mark.slow
+    def test_dhdt_to_glacier(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        # use our files
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/geodetic_ref_mb_maps/'
+        monkeypatch.setattr(hugonnet_maps, 'default_base_url', base_url)
+
+        hugonnet_maps.hugonnet_to_gdir(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            dhdt = ds.hugonnet_dhdt.where(mask)
+
+        # Simply some coverage and sanity checks
+        assert np.isfinite(dhdt).sum() / mask.sum() > 0.97
+        assert np.nanmax(dhdt) > 0
+        assert np.nanmean(dhdt) < -3
+
+        df = hugonnet_maps.compile_hugonnet_statistics([gdir]).iloc[0]
+        assert df['hugonnet_perc_cov'] > 0.97
+        assert df['hugonnet_avg_dhdt'] < -3
 
 
 class Test_rgitopo:
@@ -248,15 +289,6 @@ class Test_w5e5:
         assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
         assert np.all(annual_prcp_sum > 500)  # kg /m2/year
         assert np.all(annual_prcp_sum < 1500)
-        # gradient
-        assert ds_clim.gradient.mean()
-        assert np.all(ds_clim.gradient > -0.01)  # >-10K/km
-        assert np.all(ds_clim.gradient < -0.001)  # <-0.1 K/km
-        # by construction, lapse rates from 2019 should be the avg. of 1979-2018!
-        # (because of lacking ERA5dr data after 2019-05)
-        m_grads = ds_clim.sel(time=slice('1979', '2018')).gradient.groupby('time.month').mean()
-        m_grads_2019 = ds_clim.sel(time=slice('2019', '2019')).gradient
-        np.testing.assert_allclose(m_grads, m_grads_2019)
 
     def test_process_gswp3_w5e5_data(self, class_case_dir):
 
@@ -300,7 +332,7 @@ class Test_w5e5:
         # no gradient for GSWP3-W5E5!
 
         # test climate statistics with winter_daily_mean_prcp
-        # they should be computed even if cfg.PARAMS['use_winter_prcp_factor'] is False!
+        # they should be computed even if cfg.PARAMS['use_winter_prcp_fac'] is False!
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=[1999, 2010],
                                               add_raw_climate_statistics=True,
@@ -361,13 +393,13 @@ class Test_ecmwf:
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
             ci = gdir.get_climate_info('CERA_alone')
             assert ci['baseline_climate_source'] == 'CERA|ERA5'
-            assert ci['baseline_hydro_yr_0'] == 1902
-            assert ci['baseline_hydro_yr_1'] == 2010
+            assert ci['baseline_yr_0'] == 1901
+            assert ci['baseline_yr_1'] == 2010
 
             # Climate on common period
             # (minus one year because of the automated stuff in code
-            sref = ref.sel(time=slice(ref.time[12], his.time[-1]))
-            shis = his.sel(time=slice(ref.time[12], his.time[-1]))
+            sref = ref.sel(time=slice(ref.time[0], his.time[-1]))
+            shis = his.sel(time=slice(ref.time[0], his.time[-1]))
 
             # Climate during the chosen period should be the same
             np.testing.assert_allclose(sref.temp.mean(),
@@ -409,8 +441,8 @@ class Test_ecmwf:
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
             ci = gdir.get_climate_info('CERA_repl')
             assert ci['baseline_climate_source'] == 'CERA+ERA5'
-            assert ci['baseline_hydro_yr_0'] == 1902
-            assert ci['baseline_hydro_yr_1'] == 2018
+            assert ci['baseline_yr_0'] == 1901
+            assert ci['baseline_yr_1'] == 2018
 
             # Climate on common period
             sref = ref.sel(time=slice(ref.time[0], his.time[-1]))
@@ -456,8 +488,6 @@ class Test_ecmwf:
         cfg.PARAMS['use_intersects'] = False
         cfg.PATHS['working_dir'] = class_case_dir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PARAMS['hydro_month_nh'] = 10
-        cfg.PARAMS['hydro_month_sh'] = 4
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
@@ -469,8 +499,8 @@ class Test_ecmwf:
             # Let's do some basic checks
             ci = gdir.get_climate_info()
             assert ci['baseline_climate_source'] == 'CERA+ERA5L'
-            assert ci['baseline_hydro_yr_0'] == 1902
-            assert ci['baseline_hydro_yr_1'] == 2018
+            assert ci['baseline_yr_0'] == 1901
+            assert ci['baseline_yr_1'] == 2018
 
         cfg.PARAMS['baseline_climate'] = 'CERA|ERA5'
         tasks.process_climate_data(gdir)
@@ -479,8 +509,8 @@ class Test_ecmwf:
             # Let's do some basic checks
             ci = gdir.get_climate_info()
             assert ci['baseline_climate_source'] == 'CERA|ERA5'
-            assert ci['baseline_hydro_yr_0'] == 1902
-            assert ci['baseline_hydro_yr_1'] == 2010
+            assert ci['baseline_yr_0'] == 1901
+            assert ci['baseline_yr_1'] == 2010
 
 
 class Test_climate_datasets:
@@ -568,134 +598,7 @@ class Test_climate_datasets:
             np.testing.assert_allclose(d1.temp, d2.temp)
             np.testing.assert_allclose(d1.prcp, d2.prcp)
             # Fake tests, the plots look plausible
-            np.testing.assert_allclose(d2.gradient.mean(), -0.0058, atol=.001)
             np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
-
-    @pytest.mark.slow
-    def test_hydro_month_changes(self, hef_gdir):
-        # test for HEF if applying different hydro_months does the right thing
-        # check if mb of neighbouring hydro_months correlate
-        # do this for different climate scenarios
-
-        # maybe there is already somewhere an overview or a better way to get
-        # these dates, but I did not find it
-        base_data_time = {'W5E5': {'start_year': 1979, 'end_year': 2019},
-                          'GSWP3_W5E5': {'start_year': 1901, 'end_year': 2019},
-                          'CRU': {'start_year': 1901, 'end_year': 2014},
-                          'ERA5': {'start_year': 1979, 'end_year': 2018},
-                          'ERA5dr': {'start_year': 1979, 'end_year': 2019},
-                          'HISTALP': {'start_year': 1850, 'end_year': 2014},
-                          'CERA': {'start_year': 1901, 'end_year': 2010},
-                          'ERA5L': {'start_year': 1981, 'end_year': 2018}
-                          }
-
-        gdir = hef_gdir
-        oggm.core.flowline.init_present_time_glacier(gdir)
-        h, w = gdir.get_inversion_flowline_hw()
-
-        exps = ['W5E5', 'GSWP3_W5E5', 'ERA5dr',
-                'CRU', 'HISTALP', 'ERA5', 'ERA5L', 'CERA']
-        for base in exps:
-            # this does not need to be the best one,
-            # just for comparison between different hydro months
-            mu_opt = 213.54
-
-            files = []
-            ref_hgts = []
-            dft = []
-            dfp = []
-            tot_mbs = []
-            cfg.PARAMS['baseline_climate'] = base
-
-            for m in np.arange(1, 13):
-                cfg.PARAMS['hydro_month_nh'] = m
-                fsuff = '_{}_{}'.format(base, m)
-                tasks.process_climate_data(gdir, output_filesuffix=fsuff)
-                files.append(gdir.get_filepath('climate_historical',
-                                               filesuffix=fsuff))
-
-                with xr.open_dataset(files[-1]) as ds:
-                    ref_hgts.append(ds.ref_hgt)
-                    dft.append(ds.temp.to_series())
-                    dfp.append(ds.prcp.to_series())
-
-                    ci = gdir.get_climate_info(input_filesuffix=fsuff)
-
-                    # check if the right climate source is used
-                    assert base in ci['baseline_climate_source']
-                    mm = str(m) if m > 9 else str(0)+str(m)
-                    mm_e = str(m-1) if (m-1) > 9 else str(0)+str(m-1)
-                    b_s_y = base_data_time[base]['start_year']
-                    b_e_y = base_data_time[base]['end_year']
-
-                    stime = '{}-{}-01'.format(b_s_y, mm)
-                    assert ds.time[0] == np.datetime64(stime)
-                    if m == 1:
-                        assert ci['baseline_hydro_yr_0'] == b_s_y
-                        if base == 'ERA5dr':
-                            # do not have full 2019
-                            assert ci['baseline_hydro_yr_1'] == b_e_y - 1
-                        else:
-                            assert ci['baseline_hydro_yr_1'] == b_e_y
-
-                    elif m < 7 and base == 'ERA5dr':
-                        # have data till 2019-05 for ERA5dr
-                        stime = '{}-{}-01'.format(b_e_y, mm_e)
-                        assert ds.time[-1] == np.datetime64(stime)
-                        assert ci['baseline_hydro_yr_0'] == b_s_y + 1
-                        assert ci['baseline_hydro_yr_1'] == b_e_y
-
-                    else:
-                        assert ci['baseline_hydro_yr_0'] == b_s_y + 1
-                        if base == 'ERA5dr':
-                            # do not have full 2019
-                            stime = '{}-{}-01'.format(b_e_y-1, mm_e)
-                            assert ds.time[-1] == np.datetime64(stime)
-                            assert ci['baseline_hydro_yr_1'] == b_e_y - 1
-                        else:
-                            assert ci['baseline_hydro_yr_1'] == b_e_y
-                            stime = '{}-{}-01'.format(b_e_y, mm_e)
-                            assert ds.time[-1] == np.datetime64(stime)
-
-                    mb_mod = massbalance.PastMassBalance(gdir,
-                                                         mu_star=mu_opt,
-                                                         input_filesuffix=fsuff,
-                                                         bias=0,
-                                                         check_calib_params=False)
-
-                    years = np.arange(ds.hydro_yr_0, ds.hydro_yr_1 + 1)
-                    mb_ts = mb_mod.get_specific_mb(heights=h, widths=w,
-                                                   year=years)
-                    tot_mbs.append(pd.Series(mb_ts))
-
-            # check if all ref_hgts are equal
-            # means that we likely compare same glacier and climate dataset
-            assert len(np.unique(ref_hgts)) == 1
-            # concatenate temperature and prcp from different hydromonths
-            dft = pd.concat(dft, axis=1, keys=np.arange(1, 13))
-            dfp = pd.concat(dfp, axis=1, keys=np.arange(1, 13))
-            # Common period
-            dft_na = dft.dropna().iloc[1:]
-            dfp_na = dfp.dropna().iloc[1:]
-
-            # check if the common period of temperature prcp
-            # series is equal for all starting hydromonth dates
-            assert np.all(dft_na.eq(dft_na.iloc[:, 0], axis=0).all(1))
-            assert np.all(dfp_na.eq(dfp_na.iloc[:, 0], axis=0).all(1))
-
-            # mass balance of different years
-            pd_tot_mbs = pd.concat(tot_mbs, axis=1, keys=np.arange(1, 13))
-            pd_tot_mbs = pd_tot_mbs.dropna()
-
-            # compute correlations
-            corrs = []
-            for m in np.arange(1, 12):
-                # check if correlation between time series of hydro_month =1,
-                # is high to hydro_month = 2 and so on
-                corrs.append(pd_tot_mbs.corr().loc[m, m+1])
-                # would be better if for hydro_month=12,
-                # correlation is tested to next year
-            assert np.mean(corrs) > 0.9
 
 
 class Test_bedtopo:
@@ -768,3 +671,7 @@ class Test_bedtopo:
         # Check vol
         my_vol = (fdf[vn] * fdf['area_m2']).sum()
         np.testing.assert_allclose(my_vol, ref_vol)
+
+        df = bedtopo.compile_consensus_statistics([gdir]).iloc[0]
+        np.testing.assert_allclose(my_vol*1e-9, df['consensus_vol_km3'], rtol=1e-2)
+        np.testing.assert_allclose(1, df['consensus_perc_cov'], rtol=0.05)

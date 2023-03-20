@@ -3,7 +3,6 @@ import shutil
 import unittest
 import pickle
 import pytest
-import warnings
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
@@ -52,6 +51,7 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.initialize()
 
     # Use multiprocessing
+    use_mp = True
     if use_mp is None:
         cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
     else:
@@ -83,7 +83,6 @@ def up_to_climate(reset=False, use_mp=None):
         new_ids.append(s)
     rgidf['RGIId'] = new_ids
 
-
     # Here as well - we don't do the custom RGI IDs anymore
     rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
@@ -92,19 +91,17 @@ def up_to_climate(reset=False, use_mp=None):
 
     # Params
     cfg.PARAMS['border'] = 70
-    cfg.PARAMS['tstar_search_window'] = [1902, 0]
-    cfg.PARAMS['prcp_scaling_factor'] = 1.75
+    cfg.PARAMS['prcp_fac'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
     cfg.PARAMS['use_kcalving_for_inversion'] = True
+    cfg.PARAMS['geodetic_mb_period'] = '2000-01-01_2010-01-01'
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['store_model_geometry'] = True
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
-    cfg.PARAMS['min_mu_star'] = 10
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['downstream_line_shape'] = 'parabola'
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
@@ -139,49 +136,14 @@ def up_to_inversion(reset=False):
 
     if reset:
         # Use histalp for the actual inversion test
-        cfg.PARAMS['temp_use_local_gradient'] = True
         cfg.PARAMS['baseline_climate'] = 'HISTALP'
-        utils.apply_test_ref_tstars('histalp')
-        workflow.climate_tasks(gdirs)
+        workflow.climate_tasks(gdirs, overwrite_gdir=True,
+                               override_missing=-500)
         with open(CLI_LOGF, 'wb') as f:
             pickle.dump('histalp', f)
 
         # Inversion
         workflow.inversion_tasks(gdirs)
-
-    return gdirs
-
-
-def up_to_distrib(reset=False):
-    # for cross val basically
-
-    gdirs = up_to_climate(reset=reset)
-
-    with open(CLI_LOGF, 'rb') as f:
-        clilog = pickle.load(f)
-
-    if clilog != 'cru':
-        reset = True
-    else:
-        try:
-            tasks.compute_ref_t_stars(gdirs)
-        except Exception:
-            reset = True
-
-    if reset:
-        # Use CRU
-        cfg.PARAMS['prcp_scaling_factor'] = 2.5
-        cfg.PARAMS['temp_use_local_gradient'] = False
-        cfg.PARAMS['baseline_climate'] = 'CRU'
-        with warnings.catch_warnings():
-            # There is a warning from salem
-            warnings.simplefilter("ignore")
-            workflow.execute_entity_task(tasks.process_cru_data, gdirs)
-        tasks.compute_ref_t_stars(gdirs)
-        workflow.execute_entity_task(tasks.local_t_star, gdirs)
-        workflow.execute_entity_task(tasks.mu_star_calibration, gdirs)
-        with open(CLI_LOGF, 'wb') as f:
-            pickle.dump('cru', f)
 
     return gdirs
 
@@ -197,7 +159,7 @@ def random_for_plot():
     gdirs = up_to_inversion()
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-    workflow.execute_entity_task(flowline.run_random_climate, gdirs,
+    workflow.execute_entity_task(flowline.run_random_climate, gdirs, y0=1985,
                                  nyears=10, seed=0, output_filesuffix='_plot')
     return gdirs
 
@@ -217,12 +179,18 @@ class TestFullRun(unittest.TestCase):
         assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
 
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
-        assert np.all(dfc.t_star > 1850)
+        assert np.all(dfc.iloc[:2].calving_rate_myr > 100)
+        assert np.all(dfc.inv_volume_km3 > 0)
+        assert np.all(dfc.bias == 0)
+        assert np.all(dfc.temp_bias == 0)
+        assert np.all(dfc.melt_f > cfg.PARAMS['melt_f_min'])
+        assert np.all(dfc.melt_f < cfg.PARAMS['melt_f_max'])
         dfc = utils.compile_climate_statistics(gdirs)
-        cc = dfc[['flowline_mean_elev',
-                  'tstar_avg_temp_mean_elev']].corr().values[0, 1]
+        sel = ['flowline_mean_elev', '1980-2010_avg_temp_mean_elev']
+        cc = dfc[sel].corr().values[0, 1]
         assert cc < -0.8
-        assert np.all(dfc.tstar_aar.mean() > 0.5)
+        assert np.all(0 < dfc['1980-2010_aar'])
+        assert np.all(0.6 > dfc['1980-2010_aar'])
 
     @pytest.mark.slow
     def test_calibrate_inversion_from_consensus(self):
@@ -234,7 +202,7 @@ class TestFullRun(unittest.TestCase):
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.01)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.36)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
@@ -346,7 +314,7 @@ class TestFullRun(unittest.TestCase):
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
             df.loc[gd.rgi_id, 'start_length'] = model.length_m
-        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], rtol=0.01)
+        assert_allclose(df['rgi_area_km2'], df['start_area_km2'], rtol=0.02)
         assert_allclose(df['rgi_area_km2'].sum(), df['start_area_km2'].sum(),
                         rtol=0.005)
         assert_allclose(df['inv_volume_km3'], df['start_volume_km3'])
@@ -355,7 +323,7 @@ class TestFullRun(unittest.TestCase):
         assert_allclose(df['main_flowline_length'], df['start_length'])
 
         workflow.execute_entity_task(flowline.run_random_climate, gdirs,
-                                     nyears=100, seed=0,
+                                     nyears=100, seed=0, y0=1985,
                                      store_monthly_step=True,
                                      mb_elev_feedback='monthly',
                                      output_filesuffix='_test')
@@ -400,11 +368,11 @@ class TestFullRun(unittest.TestCase):
 
         # Calving stuff
         assert ds.isel(rgi_id=0).calving[-1] > 0
-        assert ds.isel(rgi_id=0).calving_rate[-1] > 0
-        assert ds.isel(rgi_id=0).volume_bsl[-1] == 0
-        assert ds.isel(rgi_id=0).volume_bwl[-1] > 0
+        assert ds.isel(rgi_id=0).calving_rate[1] > 0
+        assert ds.isel(rgi_id=0).volume_bsl[0] == 0
+        assert ds.isel(rgi_id=0).volume_bwl[0] > 0
         assert ds.isel(rgi_id=1).calving[-1] > 0
-        assert ds.isel(rgi_id=1).calving_rate[-1] > 0
+        assert ds.isel(rgi_id=1).calving_rate[1] > 0
         assert ds.isel(rgi_id=1).volume_bsl[-1] == 0
 
 
@@ -424,8 +392,12 @@ def test_plot_region_inversion():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, ax = plt.subplots()
-    graphics.plot_inversion(gdirs, smap=sm, ax=ax, linewidth=1.5, vmax=250)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5, vmax=250)
+
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_inversion(gdirs, ax=ax2, linewidth=1.5, vmax=250,
+                            extend_plot_limit=True)
 
     fig.tight_layout()
     return fig
@@ -451,10 +423,33 @@ def test_plot_region_model():
     sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
     # Give this to the plot function
-    fig, ax = plt.subplots()
-    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax,
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
                                   filesuffix='_plot', vmax=250,
                                   modelyr=10, linewidth=1.5)
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_modeloutput_map(gdirs, ax=ax2,
+                                  filesuffix='_plot', vmax=250,
+                                  modelyr=10, linewidth=1.5,
+                                  extend_plot_limit=True)
 
     fig.tight_layout()
     return fig
+
+
+def test_rgi7_glacier_dirs():
+    # create test dir
+    if not os.path.exists(_TEST_DIR):
+        os.makedirs(_TEST_DIR)
+    # initialize
+    cfg.initialize()
+    # no intersects for RGI7 available
+    cfg.PARAMS['use_intersects'] = False
+    cfg.PATHS['working_dir'] = _TEST_DIR
+    # load and read test data
+    hef_rgi7_df = gpd.read_file(get_demo_file('Hintereisferner_RGI7.shp'))
+    # create GDIR
+    gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
+    assert gdir
+    assert gdir.rgi_region == '11'
+    assert gdir.rgi_area_km2 > 8

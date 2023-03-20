@@ -161,12 +161,17 @@ def secure_url_retrieve(url, *args, **kwargs):
 
     # We added a few extra glaciers recently - this really needs to be
     # handled better
-    base_extra_L4 = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                     'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
-                     'RGI62/b_160/L4/')
-    base_extra_L3 = ('cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/'
-                     'L3-L5_files/ERA5/elev_bands/qc3/pcp1.6/match_geod_pergla/'
-                     'RGI62/b_160/L3/')
+    base_extra_l3 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                     'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/RGI62/'
+                     'b_160/L3/')
+
+    base_extra_v14 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                      'oggm_v1.4/L1-L2_files/elev_bands/RGI62/b_040/{}/'
+                      'RGI60-15/RGI60-15.13.tar')
+
+    base_extra_v14l3 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                        'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
+                        'no_match/RGI62/b_040/{}/RGI60-15/RGI60-15.13.tar')
 
     assert ('github' in url or
             'cluster.klima.uni-bremen.de/~oggm/ref_mb_params' in url or
@@ -176,8 +181,12 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
-            base_extra_L4 in url or
-            base_extra_L3 in url
+            # this URL might be removed again after the final integration of RGI7 OGGM
+            'https://cluster.klima.uni-bremen.de/~fmaussion/misc/rgi7_data/00_rgi70_regions/' in url or
+            base_extra_v14.format('L1') in url or
+            base_extra_v14.format('L2') in url or
+            base_extra_v14l3.format('L3') in url or
+            base_extra_l3 in url
             )
     return oggm_urlretrieve(url, *args, **kwargs)
 
@@ -286,6 +295,23 @@ def hef_copy_gdir_base(request, test_dir):
         return init_hef(rgi_id='RGI50-11.99999')
 
 
+@pytest.fixture(scope='module')
+def hef_elev_gdir_base(request, test_dir):
+    """ Same as hef_gdir, but with elevation bands instead of centerlines.
+        Further, also a different RGI ID so that a unique directory is created
+        (as the RGI ID defines the final folder name) and to have no
+        collisions with hef_gdir
+    """
+    try:
+        module = request.module
+        border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
+        return init_hef(border=border, flowline_type='elevation_bands',
+                        rgi_id='RGI50-11.99998')
+    except AttributeError:
+        return init_hef(flowline_type='elevation_bands',
+                        rgi_id='RGI50-11.99998')
+
+
 @pytest.fixture(scope='class')
 def hef_gdir(hef_gdir_base, class_case_dir):
     """ Provides a copy of the base Hintereisenferner glacier directory in
@@ -301,4 +327,12 @@ def hef_copy_gdir(hef_copy_gdir_base, class_case_dir):
     """Same as hef_gdir but with another RGI ID (for testing)
     """
     return tasks.copy_to_basedir(hef_copy_gdir_base, base_dir=class_case_dir,
+                                 setup='all')
+
+
+@pytest.fixture(scope='class')
+def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
+    """ Same as hef_gdir but with elevation bands instead of centerlines.
+    """
+    return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')

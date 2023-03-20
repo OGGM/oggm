@@ -51,7 +51,7 @@ MIN_WIDTH_FOR_INV = 10
 
 
 @entity_task(log, writes=['inversion_input'])
-def prepare_for_inversion(gdir, add_debug_var=False,
+def prepare_for_inversion(gdir,
                           invert_with_rectangular=True,
                           invert_all_rectangular=False,
                           invert_with_trapezoid=True,
@@ -86,7 +86,14 @@ def prepare_for_inversion(gdir, add_debug_var=False,
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
         rho = cfg.PARAMS['ice_density']
-        flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
+        
+        # This might error if usuer didnt compute apparent MB
+        try:
+            flux = fl.flux * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
+        except TypeError:
+            raise InvalidWorkflowError('Flux through flowline unknown. '
+                                       'Did you compute the apparent MB?')
+        flux_out = fl.flux_out * (gdir.grid.dx**2) / cfg.SEC_IN_YEAR / rho
 
         # Clip flux to 0
         if np.any(flux < -0.1):
@@ -98,26 +105,11 @@ def prepare_for_inversion(gdir, add_debug_var=False,
                         "negative flux: this should not happen.")
 
         if fl.flows_to is None and gdir.inversion_calving_rate == 0:
-            if not np.allclose(flux[-1], 0., atol=0.1):
+            if not np.allclose(flux_out, 0., atol=0.1):
                 # TODO: this test doesn't seem meaningful here
                 msg = ('({}) flux at terminus should be zero, but is: '
-                       '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux[-1]))
+                       '{.4f} m3 ice s-1'.format(gdir.rgi_id, flux_out))
                 raise RuntimeError(msg)
-
-            # This contradicts the statement above which has been around for
-            # quite some time, for the reason that it is a quality check: per
-            # construction, the flux at the last grid point should be zero
-            # HOWEVER, it is also meaningful to have a non-zero ice thickness
-            # at the last grid point. Therefore, we add some artificial
-            # flux here (an alternative would be to pmute the flux on a
-            # staggered grid but I actually like the QC and its easier)
-            # note that this value will be ignored if one uses the filter
-            # task afterwards
-            flux[-1] = flux[-2] / 3  # this is totally arbitrary
-
-        if fl.flows_to is not None and flux[-1] <= 0:
-            # Same for tributaries
-            flux[-1] = flux[-2] / 3  # this is totally arbitrary
 
         # Shape
         is_rectangular = fl.is_rectangular
@@ -164,7 +156,7 @@ def _inversion_simple(a3, a0):
     return (-a0)**(1./5.)
 
 
-def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
+def _compute_thick(a0s, a3, flux_a0, _inv_function):
     """Content of the original inner loop of the mass-conservation inversion.
 
     Put here to avoid code duplication.
@@ -174,15 +166,12 @@ def _compute_thick(a0s, a3, flux_a0, shape_factor, _inv_function):
     a0s
     a3
     flux_a0
-    shape_factor
     _inv_function
 
     Returns
     -------
     the thickness
     """
-
-    a0s = a0s / (shape_factor ** 3)
 
     if np.any(~np.isfinite(a0s)):
         raise RuntimeError('non-finite coefficients in the polynomial.')
@@ -323,36 +312,7 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     a0 = - flux_a0 / ((rho * cfg.G * slope) ** 3 * fd)
     a3 = fs / fd
 
-    # Inversion with shape factors?
-    sf_func = None
-    if shape_factor == 'Adhikari' or shape_factor == 'Nye':
-        sf_func = utils.shape_factor_adhikari
-    elif shape_factor == 'Huss':
-        sf_func = utils.shape_factor_huss
-
-    sf = np.ones(slope.shape)  # Default shape factor is 1
-    if sf_func is not None:
-
-        # Start iteration for shape factor with first guess of 1
-        i = 0
-        sf_diff = np.ones(slope.shape)
-
-        # Some hard-coded factors here
-        sf_tol = 1e-2
-        max_sf_iter = 20
-
-        while i < max_sf_iter and np.any(sf_diff > sf_tol):
-            out_thick = _compute_thick(a0, a3, flux_a0, sf, _inv_function)
-            is_rectangular = np.repeat(shape == 'rectangular', len(width))
-            sf_diff[:] = sf[:]
-            sf = sf_func(width, out_thick, is_rectangular)
-            sf_diff = sf_diff - sf
-            i += 1
-
-        log.info('Shape factor {:s} used, took {:d} iterations for '
-                 'convergence.'.format(shape_factor, i))
-
-    return _compute_thick(a0, a3, flux_a0, sf, _inv_function)
+    return _compute_thick(a0, a3, flux_a0, _inv_function)
 
 
 def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
@@ -441,14 +401,6 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     a3 = fs / fd
     rho = cfg.PARAMS['ice_density']
 
-    # Inversion with shape factors?
-    sf_func = None
-    use_sf = cfg.PARAMS.get('use_shape_factor_for_inversion', None)
-    if use_sf == 'Adhikari' or use_sf == 'Nye':
-        sf_func = utils.shape_factor_adhikari
-    elif use_sf == 'Huss':
-        sf_func = utils.shape_factor_huss
-
     # Clip the slope, in rad
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
     min_slope = np.deg2rad(cfg.PARAMS[min_slope])
@@ -466,34 +418,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
         a0s = - cl['flux_a0'] / ((rho*cfg.G*slope)**3*fd)
 
-        sf = np.ones(slope.shape)  # Default shape factor is 1
-        if sf_func is not None:
-
-            # Start iteration for shape factor with first guess of 1
-            i = 0
-            sf_diff = np.ones(slope.shape)
-
-            # Some hard-coded factors here
-            sf_tol = 1e-2
-            max_sf_iter = 20
-
-            while i < max_sf_iter and np.any(sf_diff > sf_tol):
-                out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf,
-                                           _inv_function)
-
-                sf_diff[:] = sf[:]
-                sf = sf_func(w, out_thick, cl['is_rectangular'])
-                sf_diff = sf_diff - sf
-                i += 1
-
-            log.info('Shape factor {:s} used, took {:d} iterations for '
-                     'convergence.'.format(use_sf, i))
-
-            # TODO: possible shape factor optimisations
-            # thick update could be used as iteration end criterion instead
-            # we iterate for all grid points, even if some already converged
-
-        out_thick = _compute_thick(a0s, a3, cl['flux_a0'], sf, _inv_function)
+        out_thick = _compute_thick(a0s, a3, cl['flux_a0'], _inv_function)
 
         # volume
         is_rect = cl['is_rectangular']
@@ -529,9 +454,12 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                     volume[i] = out_thick[i] * w[i] * cl['dx']
 
         # Sanity check
-        if np.any(out_thick <= 0):
-            log.warning("Found zero or negative thickness: "
-                        "this should not happen.")
+        if np.any(out_thick <= -1e-2):
+            log.warning(f"{gdir.rgi_id} Found negative thickness: "
+                        f"n={(out_thick <= -1e-2).sum()}, "
+                        f"v={np.min(out_thick)}.")
+
+        out_thick = utils.clip_min(out_thick, 0)
 
         if write:
             cl['is_trapezoid'] = is_trap
@@ -575,18 +503,28 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
 
 @entity_task(log, writes=['inversion_output'])
-def filter_inversion_output(gdir):
+def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
+                            max_depression=5.):
     """Filters the last few grid points after the physically-based inversion.
 
     For various reasons (but mostly: the equilibrium assumption), the last few
     grid points on a glacier flowline are often noisy and create unphysical
     depressions. Here we try to correct for that. It is not volume conserving,
-    but area conserving.
+    but area conserving. If a parabolic shape factor is getting smaller than
+    the minimum defined one (cfg.PARAMS['mixed_min_shape']) the grid point is
+    changed to a trapezoid, similar to what is done during the actual
+    physically-based inversion.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    n_smoothing : int
+        number of grid points which should be smoothed. Default is 5
+    min_ice_thick : float
+        the minimum ice thickness after the smoothing. Default is 1 m
+    max_depression : float
+        the limit allowed bed depression without smoothing. Default is 5 m
     """
 
     if gdir.is_tidewater:
@@ -602,41 +540,69 @@ def filter_inversion_output(gdir):
                                    'compute_downstream_bedshape tasks')
 
     dic_ds = gdir.read_pickle('downstream_line')
-    bs = np.average(dic_ds['bedshapes'][:3])
-
-    n = -5
-
     cls = gdir.read_pickle('inversion_output')
     cl = cls[-1]
 
-    # First guess thickness based on width
-    w = cl['width'][n:]
-    old_h = cl['thick'][n:]
-    s = w**3 * bs / 6
-    new_h = 3/2 * s / w
-    # Change only if it actually does what we want
-    new_h[old_h < new_h] = old_h[old_h < new_h]
+    # convert to negative number for indexing
+    n_smoothing = -abs(n_smoothing)
 
-    # Smoothing things out a bit
-    hts = np.append(np.append(cl['thick'][n-3:n], new_h), 0)
-    h = utils.smooth1d(hts, 3)[n-1:-1]
+    cl_sfc_h = cl['hgt'][n_smoothing:]
+    cl_thick = cl['thick'][n_smoothing:]
+    cl_width = cl['width'][n_smoothing:]
+    cl_is_trap = cl['is_trapezoid'][n_smoothing:]
+    cl_is_rect = cl['is_rectangular'][n_smoothing:]
+    cl_bed_h = cl_sfc_h - cl_thick
+    try:
+        downstream_sfc_h = dic_ds['surface_h'][:5]
+    except KeyError:
+        raise InvalidWorkflowError('Please run compute_downstream_line and '
+                                   'compute_downstream_bedshape for the '
+                                   'filter.')
 
-    # Recompute bedshape based on that
-    bs = utils.clip_min(4*h / w**2, cfg.PARAMS['mixed_min_shape'])
+    # we smooth if the depression is larger than max_depression
+    if downstream_sfc_h[0] - cl_bed_h[-1] > max_depression:
+        # force the last grid point height to continue the downstream slope
+        down_slope_avg = np.average(np.abs(np.diff(downstream_sfc_h)))
+        new_last_bed_h = downstream_sfc_h[0] + down_slope_avg
 
-    # OK, done
-    s = w**3 * bs / 6
+        # now smoothly add the change of the bed height over all smoothing grid
+        # points
+        all_bed_h_changes = np.linspace(0, new_last_bed_h - cl_bed_h[-1],
+                                        -n_smoothing)
+        cl_bed_h = cl_bed_h + all_bed_h_changes
 
-    # Change only if it actually does what we want
-    new_h = 3/2 * s / w
-    if np.any(new_h > old_h):
-        # No change in volume
-        return np.sum([np.sum(cl['volume']) for cl in cls])
+    # define new thick and clip, maximum value needed to avoid geometrical
+    # inconsistencies with trapezoidal bed shape
+    new_thick = cl_sfc_h - cl_bed_h
+    # max
+    max_h = np.where(cl_is_trap,
+                     # -1. to get w0 > 0 at the end and not w0 = 0
+                     cl_width / cfg.PARAMS['trapezoid_lambdas'] - 1.,
+                     1e4)
+    new_thick = np.where(new_thick > max_h, max_h, new_thick)
+    # min
+    new_thick = np.where(new_thick < min_ice_thick, min_ice_thick, new_thick)
 
-    cl['thick'][n:] = new_h
-    cl['volume'][n:] = s * cl['dx']
-    cl['is_trapezoid'][n:] = False
-    cl['is_rectangular'][n:] = False
+    # new trap = (is trap or shape factor small) and not rectangular, we
+    # conserve all bed shapes
+    # if new bed shape is smaller than defined minimum it is converted to a
+    # trapezoidal (as it is done during inversion)
+    new_bed_shape = 4 * new_thick / cl_width ** 2
+    new_is_trapezoid = ((cl_is_trap |
+                         (new_bed_shape < cfg.PARAMS['mixed_min_shape'])) &
+                        ~cl_is_rect)
+
+    # and calculate new volumes depending on shape
+    new_volume = np.where(
+        new_is_trapezoid,
+        cl_width * new_thick - cfg.PARAMS['trapezoid_lambdas'] / 2 *
+        new_thick ** 2,
+        np.where(cl_is_rect, 1, 2 / 3) * cl_width * new_thick) * cl['dx']
+
+    # define new values
+    cl['thick'][n_smoothing:] = new_thick
+    cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
+    cl['volume'][n_smoothing:] = new_volume
 
     gdir.write_pickle(cls, 'inversion_output')
 
@@ -652,8 +618,17 @@ def get_inversion_volume(gdir):
 
 
 @entity_task(log, writes=['inversion_output'])
-def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
-                       with_sliding=False):
+def compute_velocities(*args, **kwargs):
+    """Deprecated. Use compute_inversion_velocities instead."""
+    warnings.warn("`compute_velocities` has been renamed to "
+                  "`compute_inversion_velocities`. Prefer to use the new"
+                  "name from now on.")
+    return compute_inversion_velocities(*args, **kwargs)
+
+
+@entity_task(log, writes=['inversion_output'])
+def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
+                                 with_sliding=None):
     """Surface velocities along the flowlines from inverted ice thickness.
 
     Computed following the methods described in Cuffey and Paterson (2010)
@@ -668,19 +643,20 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 
     The output is written in 'inversion_output.pkl' in m yr-1
 
-    You'll need to call prepare_for_inversion with the `add_debug_var=True`
-    kwarg for this to work!
-
     Parameters
     ----------
-    gdir : Glacier directory
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
     with_sliding : bool
-        default is False, if set to True we will compute using
-        the sliding component.
-    glen_a : Glen A, defaults to PARAMS
-    fs : sliding, defaults to PARAMS
+        if set to True, we will compute velocities the sliding component.
+        the default is to check if sliding was used for the inversion
+        (fs != 0)
+    glen_a : float
+        Glen's deformation parameter A. Defaults to PARAMS['inversion_glen_a']
+    fs : float
+        sliding paramter, defaults to PARAMS['inversion_fs']
     filesuffix : str
-        add a suffix to the output file
+        add a suffix to the output file (optional)
     """
 
     # Defaults
@@ -691,6 +667,9 @@ def compute_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 
     rho = cfg.PARAMS['ice_density']
     glen_n = cfg.PARAMS['glen_n']
+
+    if with_sliding is None:
+        with_sliding = fs != 0
 
     # Getting the data for the main flowline
     cls = gdir.read_pickle('inversion_output')
@@ -1044,210 +1023,13 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
 
 @entity_task(log, writes=['diagnostics'])
-def find_inversion_calving(gdir, water_level=None, fixed_water_depth=None,
-                           glen_a=None, fs=None, min_mu_star_frac=None):
-    """Optimized search for a calving flux compatible with the bed inversion.
-
-    See Recinos et al 2019 for details.
-
-    Parameters
-    ----------
-    water_level : float
-        the water level. It should be zero m a.s.l, but:
-        - sometimes the frontal elevation is unrealistically high (or low).
-        - lake terminating glaciers
-        - other uncertainties
-        With this parameter, you can produce more realistic values. The default
-        is to infer the water level from PARAMS['free_board_lake_terminating']
-        and PARAMS['free_board_marine_terminating']
-    fixed_water_depth : float
-        fix the water depth to an observed value and let the free board vary
-        instead.
-    glen_a : float, optional
-    fs : float, optional
-    min_mu_star_frac : float, optional
-        fraction of the original (non-calving) mu* you are ready to allow
-        for. Defaults cfg.PARAMS['calving_min_mu_star_frac'].
-    """
-    from oggm.core import climate
-    from oggm.exceptions import MassBalanceCalibrationError
-
-    if not gdir.is_tidewater or not cfg.PARAMS['use_kcalving_for_inversion']:
-        # Do nothing
-        return
-
-    if min_mu_star_frac is None:
-        min_mu_star_frac = cfg.PARAMS['calving_min_mu_star_frac']
-
-    # Let's start from a fresh state
-    gdir.inversion_calving_rate = 0
-
-    with utils.DisableLogger():
-        climate.local_t_star(gdir)
-        climate.mu_star_calibration(gdir)
-        prepare_for_inversion(gdir)
-        v_ref = mass_conservation_inversion(gdir, water_level=water_level,
-                                            glen_a=glen_a, fs=fs)
-
-    # We have a stop condition on mu*
-    prev_params = gdir.read_json('local_mustar')
-    mu_star_orig = np.min(prev_params['mu_star_per_flowline'])
-
-    # Store for statistics
-    gdir.add_to_diagnostics('volume_before_calving', v_ref)
-    gdir.add_to_diagnostics('mu_star_before_calving', mu_star_orig)
-
-    # Get the relevant variables
-    cls = gdir.read_pickle('inversion_input')[-1]
-    slope = cls['slope_angle'][-1]
-    width = cls['width'][-1]
-
-    # Stupidly enough the slope is clipped in the OGGM inversion, not
-    # in prepro - clip here
-    min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
-    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
-    slope = utils.clip_array(slope, min_slope, np.pi / 2.)
-
-    # Check that water level is within given bounds
-    if water_level is None:
-        th = cls['hgt'][-1]
-        if gdir.is_lake_terminating:
-            water_level = th - cfg.PARAMS['free_board_lake_terminating']
-        else:
-            vmin, vmax = cfg.PARAMS['free_board_marine_terminating']
-            water_level = utils.clip_scalar(0, th - vmax, th - vmin)
-
-    # The functions all have the same shape: they decrease, then increase
-    # We seek the absolute minimum first
-    def to_minimize(h):
-        if fixed_water_depth is not None:
-            fl = calving_flux_from_depth(gdir, thick=h,
-                                         water_level=water_level,
-                                         water_depth=fixed_water_depth,
-                                         fixed_water_depth=True)
-        else:
-            fl = calving_flux_from_depth(gdir, water_level=water_level,
-                                         water_depth=h)
-
-        flux = fl['flux'] * 1e9 / cfg.SEC_IN_YEAR
-        sia_thick = sia_thickness(slope, width, flux, glen_a=glen_a, fs=fs)
-        return fl['thick'] - sia_thick
-
-    abs_min = optimize.minimize(to_minimize, [1], bounds=((1e-4, 1e4), ),
-                                tol=1e-1)
-    if not abs_min['success']:
-        raise RuntimeError('Could not find the absolute minimum in calving '
-                           'flux optimization: {}'.format(abs_min))
-    if abs_min['fun'] > 0:
-        # This happens, and means that this glacier simply can't calve
-        # This is an indicator for physics not matching, often a unrealistic
-        # slope of free-board
-        df = gdir.read_json('local_mustar')
-        out = calving_flux_from_depth(gdir, water_level=water_level)
-
-        log.warning('({}) find_inversion_calving: could not find '
-                    'calving flux.'.format(gdir.rgi_id))
-
-        odf = dict()
-        odf['calving_flux'] = 0
-        odf['calving_rate_myr'] = 0
-        odf['calving_mu_star'] = df['mu_star_glacierwide']
-        odf['calving_law_flux'] = out['flux']
-        odf['calving_water_level'] = out['water_level']
-        odf['calving_inversion_k'] = out['inversion_calving_k']
-        odf['calving_front_slope'] = slope
-        odf['calving_front_water_depth'] = out['water_depth']
-        odf['calving_front_free_board'] = out['free_board']
-        odf['calving_front_thick'] = out['thick']
-        odf['calving_front_width'] = out['width']
-        for k, v in odf.items():
-            gdir.add_to_diagnostics(k, v)
-        return
-
-    # OK, we now find the zero between abs min and an arbitrary high front
-    abs_min = abs_min['x'][0]
-    opt = optimize.brentq(to_minimize, abs_min, 1e4)
-
-    # This is the thick guaranteeing OGGM Flux = Calving Law Flux
-    # Let's see if it results in a meaningful mu_star
-
-    # Give the flux to the inversion and recompute
-    if fixed_water_depth is not None:
-        out = calving_flux_from_depth(gdir, water_level=water_level, thick=opt,
-                                      water_depth=fixed_water_depth,
-                                      fixed_water_depth=True)
-        f_calving = out['flux']
-    else:
-        out = calving_flux_from_depth(gdir, water_level=water_level,
-                                      water_depth=opt)
-        f_calving = out['flux']
-
-    gdir.inversion_calving_rate = f_calving
-
-    with utils.DisableLogger():
-        # We accept values down to zero before stopping
-        min_mu_star = mu_star_orig * min_mu_star_frac
-
-        # At this step we might raise a MassBalanceCalibrationError
-        try:
-            climate.local_t_star(gdir, clip_mu_star=False,
-                                 min_mu_star=min_mu_star,
-                                 continue_on_error=False,
-                                 add_to_log_file=False)
-            df = gdir.read_json('local_mustar')
-        except MassBalanceCalibrationError as e:
-            assert 'mu* out of specified bounds' in str(e)
-            # When this happens we clip mu*
-            climate.local_t_star(gdir, clip_mu_star=True,
-                                 min_mu_star=min_mu_star)
-            df = gdir.read_json('local_mustar')
-
-        climate.mu_star_calibration(gdir, min_mu_star=min_mu_star)
-        prepare_for_inversion(gdir)
-        mass_conservation_inversion(gdir, water_level=water_level,
-                                    glen_a=glen_a, fs=fs)
-
-    if fixed_water_depth is not None:
-        out = calving_flux_from_depth(gdir, water_level=water_level,
-                                      water_depth=fixed_water_depth,
-                                      fixed_water_depth=True)
-    else:
-        out = calving_flux_from_depth(gdir, water_level=water_level)
-
-    fl = gdir.read_pickle('inversion_flowlines')[-1]
-    f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
-                 cfg.PARAMS['ice_density'])
-
-    log.info('({}) find_inversion_calving_from_any_mb: found calving flux of '
-             '{:.03f} km3 yr-1'.format(gdir.rgi_id, f_calving))
-
-    # Store results
-    odf = dict()
-    odf['calving_flux'] = f_calving
-    odf['calving_rate_myr'] = f_calving * 1e9 / (out['thick'] * out['width'])
-    odf['calving_mu_star'] = df['mu_star_glacierwide']
-    odf['calving_law_flux'] = out['flux']
-    odf['calving_water_level'] = out['water_level']
-    odf['calving_inversion_k'] = out['inversion_calving_k']
-    odf['calving_front_slope'] = slope
-    odf['calving_front_water_depth'] = out['water_depth']
-    odf['calving_front_free_board'] = out['free_board']
-    odf['calving_front_thick'] = out['thick']
-    odf['calving_front_width'] = out['width']
-    for k, v in odf.items():
-        gdir.add_to_diagnostics(k, v)
-
-    return odf
-
-
-@entity_task(log, writes=['diagnostics'])
 def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
                                        water_level=None,
                                        glen_a=None, fs=None):
     """Optimized search for a calving flux compatible with the bed inversion.
 
-    See Recinos et al 2019 for details. This task is an update to
-    `find_inversion_calving` but acting upon a MB residual (i.e. a shift)
+    See Recinos et al. (2019) for details. This task is an update to
+    `find_inversion_calving` but acting upon the MB residual (i.e. a shift)
     instead of the model temperature sensitivity.
 
     Parameters
@@ -1268,7 +1050,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     glen_a : float, optional
     fs : float, optional
     """
-    from oggm.core import climate
+    from oggm.core import massbalance
 
     if not gdir.is_tidewater or not cfg.PARAMS['use_kcalving_for_inversion']:
         # Do nothing
@@ -1277,8 +1059,8 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
     with utils.DisableLogger():
-        climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
-                                        mb_years=mb_years)
+        massbalance.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+                                            mb_years=mb_years)
         prepare_for_inversion(gdir)
         v_ref = mass_conservation_inversion(gdir, water_level=water_level,
                                             glen_a=glen_a, fs=fs)
@@ -1323,7 +1105,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
                            'flux optimization: {}'.format(abs_min))
     if abs_min['fun'] > 0:
         # This happens, and means that this glacier simply can't calve
-        # This is an indicator for physics not matching, often a unrealistic
+        # This is an indicator for physics not matching, often an unrealistic
         # slope of free-board
         out = calving_flux_from_depth(gdir, water_level=water_level)
 
@@ -1343,7 +1125,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
         odf['calving_front_width'] = out['width']
         for k, v in odf.items():
             gdir.add_to_diagnostics(k, v)
-        return
+        return odf
 
     # OK, we now find the zero between abs min and an arbitrary high front
     abs_min = abs_min['x'][0]
@@ -1360,8 +1142,8 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     gdir.inversion_calving_rate = f_calving
 
     with utils.DisableLogger():
-        climate.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
-                                        mb_years=mb_years)
+        massbalance.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+                                            mb_years=mb_years)
         prepare_for_inversion(gdir)
         mass_conservation_inversion(gdir, water_level=water_level,
                                     glen_a=glen_a, fs=fs)

@@ -19,7 +19,7 @@ dependencies:
   - pyproj
   - cartopy
   - geopandas
-  - rasterio<1.2.10
+  - rasterio
   - rioxarray
   - seaborn
   - pytables
@@ -32,6 +32,7 @@ dependencies:
   - numpydoc
   - seaborn
   - sphinx-intl
+  - sphinx-reredirects
   - pip:
     - joblib
     - progressbar2

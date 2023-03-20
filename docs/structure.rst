@@ -80,7 +80,7 @@ downloading and extracting these data locally:
 
     # Where to fetch the pre-processed directories - this can be changed
     server_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-    experiment_url = 'oggm_v1.6/L3-L5_files/elev_bands/w5e5/qc0/pcpwin/match_geod_pergla'
+    experiment_url = 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
     base_url = server_url + experiment_url
 
 .. ipython:: python
@@ -90,13 +90,13 @@ downloading and extracting these data locally:
     rgi_ids = ['RGI60-11.00897']
     gdirs = workflow.init_glacier_directories(rgi_ids,  # glaciers to download
                                               from_prepro_level=3,  # pre-processing level
-                                              prepro_border=10,  # pre-processing map size
+                                              prepro_border=80,  # pre-processing map size
                                               prepro_base_url=base_url)  # online repository
     workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs);
     @savefig plot_example_inversion.png width=100%
     graphics.plot_distributed_thickness(gdirs[0])
 
-See also the documentation page for :doc:`input-data` for more examples of
+See also the documentation page for :doc:`shop` for more examples of
 the kind of data that can be added to glacier directories.
 
 .. admonition:: More details: pros and cons of glacier directories
@@ -209,5 +209,5 @@ OGGM is designed for large-scale applications, i.e. we have pre-downloaded and
 pre-processed a large number of datasets that are ready to use from within the
 OGGM framework.
 
-Visit :doc:`input-data` to learn all you need to know about the data we have
+Visit :doc:`shop` to learn all you need to know about the data we have
 prepared for you!

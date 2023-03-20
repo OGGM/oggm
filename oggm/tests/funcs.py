@@ -12,9 +12,9 @@ from scipy import optimize as optimization
 import oggm
 import oggm.cfg as cfg
 from oggm.utils import (get_demo_file, mkdir, get_git_ident, get_sys_info,
-                        get_env_info, apply_test_ref_tstars)
+                        get_env_info)
 from oggm.workflow import execute_entity_task
-from oggm.core import flowline
+from oggm.core import flowline, massbalance
 from oggm import tasks
 from oggm.core.flowline import RectangularBedFlowline
 
@@ -145,6 +145,39 @@ def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
     lambdas[is_trapezoid] = deflambdas
 
     widths_m = bed_h * 0. + 10
+    section = bed_h * 0.
+
+    coords = np.arange(0, nx - 0.5, 1)
+    line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+    fls = flowline.MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                                    surface_h=surface_h, bed_h=bed_h,
+                                    section=section, bed_shape=shape,
+                                    is_trapezoid=is_trapezoid,
+                                    lambdas=lambdas, widths_m=widths_m)
+
+    return [fls]
+
+
+def dummy_mixed_trap_rect_bed(deflambdas=2., map_dx=100., mixslice=None):
+    dx = 1.
+    nx = 200
+
+    surface_h = np.linspace(3000, 1000, nx)
+    bed_h = surface_h
+    shape = np.ones(nx) * np.NaN
+    is_trapezoid = ~np.isfinite(shape)
+    lambdas = shape * 0.
+    lambdas[is_trapezoid] = deflambdas
+    # use a second value for lambda in between
+    lambdas[15:20] = deflambdas / 2
+    widths_m = bed_h * 0. + 10
+    if mixslice:
+        lambdas[mixslice] = 0
+        widths_m[mixslice] = 25
+    else:
+        lambdas[0:10] = 0
+        widths_m[0:10] = 25
     section = bed_h * 0.
 
     coords = np.arange(0, nx - 0.5, 1)
@@ -326,7 +359,24 @@ def get_test_dir():
     return _TEST_DIR
 
 
-def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
+def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
+             flowline_type='centerlines'):
+    """
+
+    Parameters
+    ----------
+    reset
+    border
+    logging_level
+    rgi_id
+    flowline_type : str
+        Select which flowline type should be used.
+        Options: 'centerlines' (default), 'elevation_bands'
+
+    Returns
+    -------
+
+    """
 
     from oggm.core import gis, inversion, climate, centerlines, flowline
     import geopandas as gpd
@@ -349,14 +399,13 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['border'] = border
-
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['climate_qc_months'] = 3
-
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['downstream_line_shape'] = 'parabola'
+    cfg.PARAMS['prcp_fac'] = 2.5
+    cfg.PARAMS['temp_bias_min'] = -10
+    cfg.PARAMS['temp_bias_max'] = 10
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
@@ -373,15 +422,23 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
         return gdir
 
     gis.define_glacier_region(gdir)
-    execute_entity_task(gis.glacier_masks, [gdir])
-    execute_entity_task(centerlines.compute_centerlines, [gdir])
-    centerlines.initialize_flowlines(gdir)
+    if flowline_type == 'centerlines':
+        execute_entity_task(gis.glacier_masks, [gdir])
+        execute_entity_task(centerlines.compute_centerlines, [gdir])
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+    elif flowline_type == 'elevation_bands':
+        execute_entity_task(tasks.simple_glacier_masks, [gdir])
+        execute_entity_task(tasks.elevation_band_flowline, [gdir])
+        execute_entity_task(tasks.fixed_dx_elevation_band_flowline, [gdir])
+    else:
+        raise NotImplementedError(f'flowline_type {flowline_type} not'
+                                  f'implemented!')
     centerlines.compute_downstream_line(gdir)
     centerlines.compute_downstream_bedshape(gdir)
-    centerlines.catchment_area(gdir)
-    centerlines.catchment_intersections(gdir)
-    centerlines.catchment_width_geom(gdir)
-    centerlines.catchment_width_correction(gdir)
     climate.process_custom_climate_data(gdir)
     if rgi_id is not None:
         gdir.rgi_id = 'RGI50-11.00897'
@@ -389,10 +446,13 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
         gdir.rgi_id = rgi_id
     else:
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-    res = climate.t_star_from_refmb(gdir, mbdf=mbdf)
-    climate.local_t_star(gdir, tstar=res['t_star'], bias=res['bias'])
-    climate.mu_star_calibration(gdir)
 
+    ref_mb = mbdf.mean()
+    ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+    massbalance.mb_calibration_from_scalar_mb(gdir,
+                                              ref_mb=ref_mb,
+                                              ref_period=ref_period)
+    massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
     inversion.prepare_for_inversion(gdir)
 
     ref_v = 0.573 * 1e9
@@ -419,7 +479,8 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None):
                                               write=True)
     inversion.filter_inversion_output(gdir)
 
-    inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
+    if flowline_type == 'centerlines':
+        inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
     inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
 
     flowline.init_present_time_glacier(gdir)
@@ -446,14 +507,11 @@ def init_columbia(reset=False):
     cfg.PARAMS['border'] = 10
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['min_mu_star'] = 25
-    cfg.PARAMS['max_mu_star'] = 10000
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -470,7 +528,6 @@ def init_columbia(reset=False):
     centerlines.catchment_width_geom(gdir)
     centerlines.catchment_width_correction(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
-    apply_test_ref_tstars()
     return gdir
 
 
@@ -491,15 +548,11 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['border'] = 10
     cfg.PARAMS['use_kcalving_for_inversion'] = True
     cfg.PARAMS['use_kcalving_for_run'] = True
-    cfg.PARAMS['use_tstar_calibration'] = True
-    cfg.PARAMS['use_winter_prcp_factor'] = False
-    cfg.PARAMS['prcp_scaling_factor'] = 2.5
-    cfg.PARAMS['hydro_month_nh'] = 10
-    cfg.PARAMS['hydro_month_sh'] = 4
-    cfg.PARAMS['min_mu_star'] = 5
-    cfg.PARAMS['max_mu_star'] = 10000
-    cfg.PARAMS['climate_qc_months'] = 3
+    cfg.PARAMS['use_winter_prcp_fac'] = False
+    cfg.PARAMS['use_temp_bias_from_file'] = False
+    cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
+    cfg.PARAMS['evolution_model'] = 'FluxBased'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity)
@@ -512,7 +565,9 @@ def init_columbia_eb(dir_name, reset=False):
     centerlines.fixed_dx_elevation_band_flowline(gdir)
     centerlines.compute_downstream_line(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
-    apply_test_ref_tstars()
+    tasks.mb_calibration_from_geodetic_mb(gdir)
+    tasks.apparent_mb_from_any_mb(gdir)
+    tasks.find_inversion_calving_from_any_mb(gdir)
     return gdir
 
 
