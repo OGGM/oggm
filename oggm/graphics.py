@@ -636,7 +636,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
-    dl = salem.DataLevels(cmap=matplotlib.colormaps['color_map'],
+    dl = salem.DataLevels(cmap=matplotlib.colormaps[color_map],
                           data=toplot_var, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
