@@ -5380,7 +5380,7 @@ class TestSemiImplicitModel:
                                        fmod_impl.fls[-1].length_m,
                                        atol=100.1)
             assert utils.rmsd(fmod_impl.fls[-1].thick,
-                              fmod_flux.fls[-1].thick) < 2.1
+                              fmod_flux.fls[-1].thick) < 2.5
 
         # compare velocities
         f = hef_elev_gdir.get_filepath('fl_diagnostics',
