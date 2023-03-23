@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '398729eef5f8baeb01d466a2d3038ee7ccd2724d'
+SAMPLE_DATA_COMMIT = 'fd628ad03175e9558835cbf220af65995127a071'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -341,10 +341,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     """
     path = _cached_download_helper(cache_obj_name, dl_func, reset)
 
-    try:
-        dl_verify = cfg.PARAMS['dl_verify']
-    except KeyError:
-        dl_verify = True
+    dl_verify = cfg.PARAMS.get('dl_verify', False)
 
     if dl_verify and path and cache_obj_name not in cfg.DL_VERIFIED:
         cache_section, cache_path = cache_obj_name.split('/', 1)

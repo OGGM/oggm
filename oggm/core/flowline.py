@@ -3083,9 +3083,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     mb_model : :py:class:`core.MassBalanceModel`
         a MassBalanceModel instance
     ys : int
-        start year of the model run (default: from the config file)
+        start year of the model run (needs to be set)
     ye : int
-        end year of the model run (default: from the config file)
+        end year of the model run (need to be set)
     zero_initial_glacier : bool
         if true, the ice thickness is set to zero before the simulation
     init_model_filesuffix : str
@@ -3138,6 +3138,10 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
             init_model_yr = fmod.last_yr
         fmod.run_until(init_model_yr)
         init_model_fls = fmod.fls
+
+        if ys != init_model_yr and ys != 0:
+            log.warning(f"You are starting a run with ys={ys} "
+                          f"and init_model_yr={init_model_yr}.")
 
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if store_monthly_step and (mb_elev_feedback == 'annual'):

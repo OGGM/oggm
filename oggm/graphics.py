@@ -7,11 +7,11 @@ import itertools
 import textwrap
 import xarray as xr
 
-import matplotlib.colors as colors
+import matplotlib
+from matplotlib import colors
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely.geometry as shpg
-from matplotlib import cm as colormap
 
 try:
     import salem
@@ -31,10 +31,10 @@ log = logging.getLogger(__name__)
 def set_oggm_cmaps():
     # Set global colormaps
     global OGGM_CMAPS
-    OGGM_CMAPS['terrain'] = colormap.terrain
-    OGGM_CMAPS['section_thickness'] = plt.cm.get_cmap('YlGnBu')
-    OGGM_CMAPS['glacier_thickness'] = plt.get_cmap('viridis')
-    OGGM_CMAPS['ice_velocity'] = plt.cm.get_cmap('Reds')
+    OGGM_CMAPS['terrain'] = matplotlib.colormaps['terrain']
+    OGGM_CMAPS['section_thickness'] = matplotlib.colormaps['YlGnBu']
+    OGGM_CMAPS['glacier_thickness'] = matplotlib.colormaps['viridis']
+    OGGM_CMAPS['ice_velocity'] = matplotlib.colormaps['Reds']
 
 
 set_oggm_cmaps()
@@ -52,7 +52,7 @@ def gencolor_generator(n, cmap='Set1'):
     """ Color generator intended to work with qualitative color scales."""
     # don't use more than 9 discrete colors
     n_colors = min(n, 9)
-    cmap = colormap.get_cmap(cmap, n_colors)
+    cmap = matplotlib.colormaps[cmap]
     colors = cmap(range(n_colors))
     for i in range(n):
         yield colors[i % n_colors]
@@ -636,7 +636,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
                 toplot_crs.append(crs)
             vol.extend(c['volume'])
 
-    dl = salem.DataLevels(cmap=plt.get_cmap(color_map),
+    dl = salem.DataLevels(cmap=matplotlib.colormaps[color_map],
                           data=toplot_var, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):

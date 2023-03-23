@@ -674,6 +674,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                                       apply_fs_on_mismatch=False,
                                                       error_on_mismatch=error_on_mismatch,
                                                       volume_m3_reference=volume_m3_reference,
+                                                      filter_inversion_output=filter_inversion_output,
                                                       add_to_log_file=add_to_log_file)
         if error_on_mismatch:
             raise ValueError(msg)

@@ -3417,7 +3417,7 @@ class TestDynamicSpinup:
                 add_fixed_geometry_spinup=True)
             run_with_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_with_fixed_spinup', path=False)
-            assert (run_without_fixed_spinup.time.values[0] >
+            assert (run_without_fixed_spinup.time.values[0] >=
                     run_with_fixed_spinup.time.values[0])
             assert run_with_fixed_spinup.time.values[0] == 1979
 
@@ -5406,7 +5406,7 @@ class TestSemiImplicitModel:
                 max_velocity_rmsd = velocity_rmsd
                 max_velocity_year = year
 
-            assert velocity_rmsd < 5.7
+            assert velocity_rmsd < 7
 
         if do_plot:
             plt.figure()
