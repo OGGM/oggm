@@ -341,10 +341,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
     """
     path = _cached_download_helper(cache_obj_name, dl_func, reset)
 
-    try:
-        dl_verify = cfg.PARAMS['dl_verify']
-    except KeyError:
-        dl_verify = True
+    dl_verify = cfg.PARAMS.get('dl_verify', False)
 
     if dl_verify and path and cache_obj_name not in cfg.DL_VERIFIED:
         cache_section, cache_path = cache_obj_name.split('/', 1)

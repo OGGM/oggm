@@ -84,7 +84,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
-                      logging_level='WORKFLOW', disable_dl_verify=False,
+                      logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=1,
                       dynamic_spinup_start_year=1979,
                       continue_on_error=True):
@@ -157,8 +157,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
     override_params : dict
         a dict of parameters to override.
-    disable_dl_verify : bool
-        disable the hash verification of OGGM downloads
     dynamic_spinup : str
         include a dynamic spinup matching 'area/dmdtda' OR 'volume/dmdtda' at
         the RGI-date
@@ -217,11 +215,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Set to True for operational runs
     override_params['continue_on_error'] = continue_on_error
-
-    # Check for the integrity of the files OGGM downloads at run time
-    # For large files (e.g. using a 1 tif DEM like ALASKA) calculating the hash
-    # takes a long time, so deactivating this can make sense
-    override_params['dl_verify'] = not disable_dl_verify
 
     # Do not use bias file if user wants melt_temp only
     if mb_calibration_strategy in ['melt_temp', 'temp_melt']:
@@ -834,10 +827,6 @@ def parse_args(args):
     parser.add_argument('--test-ids', nargs='+',
                         help='if --test, specify the RGI ids to run separated '
                              'by a space (default: 4 randomly selected).')
-    parser.add_argument('--disable-dl-verify', nargs='?', const=True,
-                        default=False,
-                        help='if used OGGM downloads will not be verified '
-                             'against a hash sum.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic-spinup', type=str, default='',
@@ -909,7 +898,6 @@ def parse_args(args):
                 add_itslive_velocity=args.add_itslive_velocity,
                 add_millan_velocity=args.add_millan_velocity,
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
-                disable_dl_verify=args.disable_dl_verify,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,

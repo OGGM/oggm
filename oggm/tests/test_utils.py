@@ -612,6 +612,7 @@ class TestDLVerify(unittest.TestCase):
         # Init
         cfg.initialize()
         cfg.PATHS['dl_cache_dir'] = self.dldir
+        cfg.PARAMS['dl_verify'] = True
 
         # Read in the RGI file
         rgi_file = utils.get_demo_file('rgi_oetztal.shp')
@@ -1873,6 +1874,9 @@ class TestFakeDownloads(unittest.TestCase):
         return 'https://test.com/test.txt'
 
     def test_dl_verify(self):
+
+        cfg.PARAMS['dl_verify'] = True
+
         def fake_down(dl_func, cache_path):
             assert False
 
