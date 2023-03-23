@@ -695,6 +695,8 @@ def oggm_static_paths():
         edir = os.path.abspath(os.environ.get('OGGM_EXTRACT_DIR'))
         config['tmp_dir'] = os.path.join(edir, 'tmp')
         config['rgi_dir'] = os.path.join(edir, 'rgi')
+    if os.environ.get('OGGM_RGI_DIR') is not None:
+        config['rgi_dir'] = os.path.abspath(os.environ.get('OGGM_RGI_DIR'))
 
     # Fill the PATH dict
     for k, v in config.iteritems():
