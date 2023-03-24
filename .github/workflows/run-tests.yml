@@ -24,7 +24,7 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - ghcr.io/oggm/untested_base:20230319
+          - ghcr.io/oggm/untested_base:20230323
           - ghcr.io/oggm/untested_base:py3.11
           - ghcr.io/oggm/untested_base:py3.9
         include:
