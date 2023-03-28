@@ -21,7 +21,7 @@ class Model2D(object):
 
     def __init__(self, bed_topo, init_ice_thick=None, dx=None, dy=None,
                  mb_model=None, y0=0., glen_a=None, mb_elev_feedback='annual',
-                 ice_thick_filter=filter_ice_border):
+                 ice_thick_filter=filter_ice_border, mb_filter=None):
         """Create a new 2D model from gridded data.
 
         Parameters
@@ -45,12 +45,16 @@ class Model2D(object):
             'always')
         ice_thick_filter : func
             function to apply to the ice thickness *after* each time step.
-            See filter_ice_border for an example. Set to None for doing nothing
+            See filter_ice_border for an example. Set to None for doing nothing.
+        mb_filter : ndarray
+            2d array indicating the mask where positive mb is allowed
+            (useful to allow only specific glaciers to grow)
         """
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback
         self.mb_model = mb_model
+        self.mb_filter = mb_filter
 
         # Defaults
         if glen_a is None:
@@ -143,7 +147,11 @@ class Model2D(object):
 
         # Do we have to optimise?
         if self.mb_elev_feedback == 'always':
-            return self._mb_call(self.bed_topo + self.ice_thick, year)
+            _mb = self._mb_call(self.surface_h.flatten(), year=year)
+            _mb = _mb.reshape((self.ny, self.nx))
+            if self.mb_filter is not None:
+                _mb[~ self.mb_filter & (_mb > 0)] = 0
+            return _mb
 
         date = utils.floatyear_to_date(year)
         if self.mb_elev_feedback == 'annual':
@@ -154,7 +162,10 @@ class Model2D(object):
             # We need to reset all
             self._mb_current_date = date
             _mb = self._mb_call(self.surface_h.flatten(), year=year)
-            self._mb_current_out = _mb.reshape((self.ny, self.nx))
+            _mb = _mb.reshape((self.ny, self.nx))
+            if self.mb_filter is not None:
+                _mb[~ self.mb_filter & (_mb > 0)] = 0
+            self._mb_current_out = _mb
 
         return self._mb_current_out
 
@@ -208,10 +219,11 @@ class Model2D(object):
         for i, yr in enumerate(yrs):
             if print_stdout and (yr / 10) == int(yr / 10):
                 print('{}: year {} of {}, '
-                      'max thick {:.1f}m\r'.format(print_stdout,
-                                                   int(yr),
-                                                   int(ye),
-                                                   self.ice_thick.max()))
+                      'max thick {:.1f}m'.format(print_stdout,
+                                                 int(yr),
+                                                 int(ye),
+                                                 self.ice_thick.max()),
+                      end='\r', flush=True)
             self.run_until(yr, stop_if_border=stop_if_border)
             out_thick[i, :, :] = self.ice_thick
 
@@ -238,7 +250,7 @@ class Upstream2D(Model2D):
     def __init__(self, bed_topo, init_ice_thick=None, dx=None,
                  mb_model=None, y0=0., glen_a=None, mb_elev_feedback='annual',
                  cfl=0.124, max_dt=31*SEC_IN_DAY,
-                 ice_thick_filter=filter_ice_border):
+                 ice_thick_filter=filter_ice_border, mb_filter=None):
         """Create a new 2D model from gridded data.
 
         Parameters
@@ -269,13 +281,17 @@ class Upstream2D(Model2D):
         ice_thick_filter : func
             function to apply to the ice thickness *after* each time step.
             See filter_ice_border for an example. Set to None for doing nothing
+        mb_filter : ndarray
+            2d array indicating the mask where positive mb is allowed
+            (useful to allow only specific glaciers to grow)
         """
         super(Upstream2D, self).__init__(bed_topo,
                                          init_ice_thick=init_ice_thick,
                                          dx=dx, mb_model=mb_model, y0=y0,
                                          glen_a=glen_a,
                                          mb_elev_feedback=mb_elev_feedback,
-                                         ice_thick_filter=ice_thick_filter)
+                                         ice_thick_filter=ice_thick_filter,
+                                         mb_filter=mb_filter)
 
         # We introduce Gamma to shorten the equations
         self.rho = cfg.PARAMS['ice_density']
