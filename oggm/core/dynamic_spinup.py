@@ -412,6 +412,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                            y0=yr_spinup,
                                            **kwargs)
         if store_model_evolution:
+            # check if we need to add the min_h variable (done inplace)
+            delete_area_min_h = False
+            ovars = cfg.PARAMS['store_diagnostic_variables']
+            if 'area_min_h' not in ovars:
+                ovars += ['area_min_h']
+                delete_area_min_h = True
+
             ds = model_historical.run_until_and_store(
                 ye,
                 geom_path=geom_path,
@@ -420,10 +427,16 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 dynamic_spinup_min_ice_thick=min_ice_thickness,
                 fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 make_compatible=make_compatible)
+
+            # now we delete the min_h variable again if it was not
+            # included before (inplace)
+            if delete_area_min_h:
+                ovars.remove('area_min_h')
+
             if type(ds) == tuple:
                 ds = ds[0]
             model_area_km2 = ds.area_m2_min_h.loc[yr_rgi].values * 1e-6
-            model_volume_km3 = ds.volume_m3_min_h.loc[yr_rgi].values * 1e-9
+            model_volume_km3 = ds.volume_m3.loc[yr_rgi].values * 1e-9
         else:
             # only run to rgi date and extract values
             model_historical.run_until(yr_rgi)
@@ -431,9 +444,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
             model_area_km2 = np.sum(
                 [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
                  for fl in fls]) * 1e-6
-            model_volume_km3 = np.sum(
-                [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
-                 for fl in fls]) * 1e-9
+            model_volume_km3 = model_historical.volume_km3
             # afterwards finish the complete run
             model_historical.run_until(ye)
 
@@ -1095,7 +1106,6 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                  'dynamic spinup function!')
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
-        min_ice_thickness = 0
 
     if spinup_start_yr_max is None:
         spinup_start_yr_max = yr0_ref_mb
@@ -1373,7 +1383,6 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                  'dynamic spinup function!')
         min_spinup_period = yr_rgi - ys
         spinup_period = yr_rgi - ys
-        min_ice_thickness = 0
 
     yr_clim_min = gdir.get_climate_info()['baseline_yr_0']
     try:

@@ -4616,6 +4616,10 @@ class TestHydro:
         # Needed for this to run
         cfg.PARAMS['store_model_geometry'] = True
 
+        # need to add area min h if I want to merge two runs for compatibility
+        ovars = cfg.PARAMS['store_diagnostic_variables']
+        ovars += ['area_min_h']
+
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_dynamic_spinup,
                              store_monthly_hydro=True,

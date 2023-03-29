@@ -1020,10 +1020,6 @@ class FlowlineModel(object):
                                      'mass balance model with an unambiguous '
                                      'hemisphere.')
 
-        # This is only needed for consistency to be able to merge two runs
-        if dynamic_spinup_min_ice_thick is None:
-            dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
-
         # Do we have a spinup?
         do_fixed_spinup = fixed_geometry_spinup_yr is not None
         y0 = fixed_geometry_spinup_yr if do_fixed_spinup else self.yr
@@ -1104,13 +1100,6 @@ class FlowlineModel(object):
             diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
             diag_ds['volume_m3'].attrs['unit'] = 'm 3'
-            # created here but only filled with a value if
-            # dynamic_spinup_min_ice_thick is not None
-            diag_ds['volume_m3_min_h'] = ('time', np.zeros(nm) * np.NaN)
-            diag_ds['volume_m3_min_h'].attrs['description'] = \
-                f'Total glacier volume of gridpoints with a minimum ice' \
-                f'thickness of {dynamic_spinup_min_ice_thick} m'
-            diag_ds['volume_m3_min_h'].attrs['unit'] = 'm 3'
 
         if 'volume_bsl' in ovars:
             diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
@@ -1130,8 +1119,12 @@ class FlowlineModel(object):
             diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
             diag_ds['area_m2'].attrs['unit'] = 'm 2'
-            # created here but only filled with a value if
-            # dynamic_spinup_min_ice_thick is not None
+
+        if dynamic_spinup_min_ice_thick is None:
+            dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+
+        if 'area_min_h' in ovars:
+            # filled with a value if dynamic_spinup_min_ice_thick is not None
             diag_ds['area_m2_min_h'] = ('time', np.zeros(nm) * np.NaN)
             diag_ds['area_m2_min_h'].attrs['description'] = \
                 f'Total glacier area of gridpoints with a minimum ice' \
@@ -1307,16 +1300,8 @@ class FlowlineModel(object):
             # Diagnostics
             if 'volume' in ovars:
                 diag_ds['volume_m3'].data[i] = self.volume_m3
-                if dynamic_spinup_min_ice_thick is not None:
-                    diag_ds['volume_m3_min_h'].data[i] = np.sum([np.sum(
-                        (fl.section * fl.dx_meter)[fl.thick > dynamic_spinup_min_ice_thick])
-                        for fl in self.fls])
             if 'area' in ovars:
                 diag_ds['area_m2'].data[i] = self.area_m2
-                if dynamic_spinup_min_ice_thick is not None:
-                    diag_ds['area_m2_min_h'].data[i] = np.sum([np.sum(
-                        fl.bin_area_m2[fl.thick > dynamic_spinup_min_ice_thick])
-                        for fl in self.fls])
             if 'length' in ovars:
                 diag_ds['length_m'].data[i] = self.length_m
             if 'calving' in ovars:
@@ -1327,6 +1312,10 @@ class FlowlineModel(object):
                 diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
                 diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+            if 'area_min_h' in ovars:
+                diag_ds['area_m2_min_h'].data[i] = np.sum([np.sum(
+                    fl.bin_area_m2[fl.thick > dynamic_spinup_min_ice_thick])
+                    for fl in self.fls])
             # Terminus thick is a bit more logic
             ti = None
             for gi in range(10):
