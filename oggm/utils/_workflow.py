@@ -2978,7 +2978,11 @@ class GlacierDirectory(object):
         _open = gzip.open if use_comp else open
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with _open(fp, 'rb') as f:
-            out = pickle.load(f)
+            try:
+                out = pickle.load(f)
+            except ModuleNotFoundError as err:
+                if str(err) == "No module named 'shapely.io'":
+                    raise ModuleNotFoundError("You need shapely to version 2.0 or higher for this to work.")
 
         # Some new attrs to add to old pre-processed directories
         if filename == 'model_flowlines':
