@@ -2982,10 +2982,9 @@ class GlacierDirectory(object):
                 out = pickle.load(f)
             except ModuleNotFoundError as err:
                 if err.name == "shapely.io":
-                    raise ModuleNotFoundError("You need shapely version 2.0 or higher for this to work.")
-                else:
-                    raise err
-
+                    err.msg = "You need shapely version 2.0 or higher for this to work."
+                raise
+                
         # Some new attrs to add to old pre-processed directories
         if filename == 'model_flowlines':
             if getattr(out[0], 'map_trafo', None) is None:
