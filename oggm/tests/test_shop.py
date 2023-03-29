@@ -253,8 +253,53 @@ class Test_w5e5:
         with pytest.raises(ValueError):
             w5e5.get_gswp3_w5e5_file(d, 'zoup')
 
-        # check if W5E5 and GSWP3_W5E5 are equal over common time period
-        # this is done in the flattening notebook
+    def test_glacier_gridpoint_selection(self):
+
+        from oggm.shop import w5e5
+        d = 'GSWP3_W5E5'
+        # test is only done for the `inv` file, as the other files are only
+        # downloaded for the HEF gridpoints as they would be too large otherwise.
+        # However, the same test and other tests are done for all files
+        # (also ISIMIP3b) and all glaciers in this notebook:
+        # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/
+        # ~lschuster/example_ipynb/flatten_glacier_gridpoint_tests.ipynb
+        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
+            dinv = dinv.load()
+
+        # select three glaciers where two failed in the
+        # previous gswp3_w5e5 version
+        for coord in [(10.7584, 46.8003),  # HEF
+                      (-70.8931 + 360, -72.4474),  # RGI60-19.00124
+                      (51.495, 30.9010),  # RGI60-12.01691
+                      (0, 0)  # random gridpoint not near to a glacier
+                      ]:
+            lon, lat = coord
+            # get the distances to the glacier coordinate
+            c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
+            c = c.to_dataframe('distance').sort_values('distance')
+            # select the nearest climate point from the flattened glacier gridpoint
+            lat_near, lon_near, dist = c.iloc[0]
+            # for a randomly chosen gridpoint, the next climate gridpoint is far away
+            if coord == (0, 0):
+                with pytest.raises(AssertionError):
+                    assert np.abs(lat_near - lat) <= 0.25
+                    assert np.abs(lon_near - lon) <= 0.25
+                    assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
+            # for glaciers the next gridpoint should be the nearest
+            # (GSWP3-W5E5 resolution is 0.5°)
+            else:
+                assert np.abs(lat_near - lat) <= 0.25
+                assert np.abs(lon_near - lon) <= 0.25
+                assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
+
+        # this only contains data for two glaciers, let's still check some basics
+        # both glaciers are not at latitude or longitude 0
+        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
+            assert np.all(dtemp_std.latitude != 0)
+            assert np.all(dtemp_std.longitude != 0)
+            assert dtemp_std.isel(time=0).temp_std.std() > 0
+            assert dtemp_std.longitude.std() > 0
+            assert dtemp_std.latitude.std() > 0
 
     def test_process_w5e5_data(self, class_case_dir):
 
