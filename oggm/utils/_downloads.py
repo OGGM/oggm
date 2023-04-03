@@ -1372,8 +1372,10 @@ def get_temp_bias_dataframe(dataset='w5e5'):
         raise NotImplementedError(f'No such dataset available yet: {dataset}')
 
     # fetch the file online
-    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
-                'w5e5_temp_bias_v2023.3.csv')
+    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
+                'w5e5_temp_bias_v2023.4.csv')
+
+
     file_path = file_downloader(base_url)
 
     # Did we open it yet?

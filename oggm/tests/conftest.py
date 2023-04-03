@@ -174,6 +174,7 @@ def secure_url_retrieve(url, *args, **kwargs):
                         'no_match/RGI62/b_040/{}/RGI60-15/RGI60-15.13.tar')
 
     assert ('github' in url or
+            'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
             'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
