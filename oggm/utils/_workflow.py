@@ -1156,7 +1156,8 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                             data_vars[vn]['dims'] = ds.variables[vn].dimensions
                             data_vars[vn]['attrs'] = dict()
                             for attr in ds.variables[vn].ncattrs():
-                                if attr not in ['_FillValue', 'coordinates']:
+                                if attr not in ['_FillValue', 'coordinates',
+                                                'dtype']:
                                     data_vars[vn]['attrs'][attr] = getattr(
                                         ds.variables[vn], attr)
 
