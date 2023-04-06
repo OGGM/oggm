@@ -1101,9 +1101,15 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     # Get the dimensions of all this
     rgi_ids = [gd.rgi_id for gd in gdirs]
 
-    # To find the longest time, we have to open all files unfortunately
+    # To find the longest time, we have to open all files unfortunately, we
+    # also create a list of all data variables (in case not all files contain
+    # the same data variables), and finally we decide on the name of "3d"
+    # variables in case we have daily
     time_info = {}
     time_keys = ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']
+    data_vars = {}
+    name_2d_dim = 'month_2d'
+    contains_3d_data = False
     for gd in gdirs:
         fp = gd.get_filepath('model_diagnostics', filesuffix=input_filesuffix)
         try:
@@ -1131,6 +1137,28 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                         for cn in time_keys:
                             time_info[cn] = np.append(ds.variables[cn][:p],
                                                       time_info[cn])
+
+                # check if their are new data variables and add them
+                for vn in ds.variables:
+                    # exclude time variables
+                    if vn in ['month_2d', 'calender_month_2d',
+                              'hydro_month_2d']:
+                        name_2d_dim = 'month_2d'
+                        contains_3d_data = True
+                    elif vn in ['day_2d', 'calender_day_2d', 'hydro_day_2d']:
+                        name_2d_dim = 'day_2d'
+                        contains_3d_data = True
+                    elif vn not in ['time', 'hydro_year', 'hydro_month',
+                                    'calendar_year', 'calendar_month']:
+                        # check if data variable is new
+                        if vn not in data_vars.keys():
+                            data_vars[vn] = dict()
+                            data_vars[vn]['dims'] = ds.variables[vn].dimensions
+                            data_vars[vn]['attrs'] = dict()
+                            for attr in ds.variables[vn].ncattrs():
+                                if attr not in ['_FillValue', 'coordinates']:
+                                    data_vars[vn]['attrs'][attr] = getattr(
+                                        ds.variables[vn], attr)
 
             # If this worked, keep it as template
             ppath = fp
@@ -1165,19 +1193,15 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             ds.coords[cn] = ('time', time_info[cn])
             ds[cn].attrs['description'] = ds_diag[cn].attrs['description']
 
-        # We decide on the name of "3d" variables in case we have daily
-        # output
-        name_2d_dim = 'day_2d' if 'day_2d' in ds_diag.dims else 'month_2d'
-
         # Prepare the 2D variables
         shape = (len(time), len(rgi_ids))
         out_2d = dict()
-        for vn in ds_diag.data_vars:
-            if name_2d_dim in ds_diag[vn].dims:
+        for vn in data_vars:
+            if name_2d_dim in data_vars[vn]['dims']:
                 continue
             var = dict()
             var['data'] = np.full(shape, np.nan)
-            var['attrs'] = ds_diag[vn].attrs
+            var['attrs'] = data_vars[vn]['attrs']
             out_2d[vn] = var
 
         # 1D Variables
@@ -1196,7 +1220,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
 
         # Maybe 3D?
         out_3d = dict()
-        if name_2d_dim in ds_diag.dims:
+        if contains_3d_data:
             # We have some 3d vars
             month_2d = ds_diag[name_2d_dim]
             ds.coords[name_2d_dim] = (name_2d_dim, month_2d.data)
@@ -1204,12 +1228,12 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
             ds.coords[cn] = (name_2d_dim, ds_diag[cn].values)
 
             shape = (len(time), len(month_2d), len(rgi_ids))
-            for vn in ds_diag.data_vars:
-                if name_2d_dim not in ds_diag[vn].dims:
+            for vn in data_vars:
+                if name_2d_dim not in data_vars[vn]['dims']:
                     continue
                 var = dict()
                 var['data'] = np.full(shape, np.nan)
-                var['attrs'] = ds_diag[vn].attrs
+                var['attrs'] = data_vars[vn]['attrs']
                 out_3d[vn] = var
 
     # Read out
@@ -1222,9 +1246,17 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                 a = np.nonzero(time == it[0])[0][0]
                 b = np.nonzero(time == it[-1])[0][0] + 1
                 for vn, var in out_2d.items():
-                    var['data'][a:b, i] = ds_diag.variables[vn][:]
+                    # try statement if some data variables not in all files
+                    try:
+                        var['data'][a:b, i] = ds_diag.variables[vn][:]
+                    except KeyError:
+                        pass
                 for vn, var in out_3d.items():
-                    var['data'][a:b, :, i] = ds_diag.variables[vn][:]
+                    # try statement if some data variables not in all files
+                    try:
+                        var['data'][a:b, :, i] = ds_diag.variables[vn][:]
+                    except KeyError:
+                        pass
                 for vn, var in out_1d.items():
                     var['data'][i] = ds_diag.getncattr(vn)
         except FileNotFoundError:
