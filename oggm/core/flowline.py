@@ -933,7 +933,6 @@ class FlowlineModel(object):
                             stop_criterion=None,
                             fixed_geometry_spinup_yr=None,
                             dynamic_spinup_min_ice_thick=None,
-                            make_compatible=False
                             ):
         """Runs the model and returns intermediate steps in xarray datasets.
 
@@ -992,13 +991,6 @@ class FlowlineModel(object):
             area or the total volume. This is useful to smooth out yearly
             fluctuations when matching to observations. The names of this new
             variables include the suffix _min_h (e.g. 'area_m2_min_h')
-        make_compatible : bool
-            if set to true this will add all variables to the resulting dataset
-            so it could be combined with any other one. This is necessary if
-            different spinup methods are used. For example if using the dynamic
-            spinup and setting fixed geometry spinup as fallback, the variable
-            'is_fixed_geometry_spinup' must be added to the dynamic spinup so
-            it is possible to compile both glaciers together.
         Returns
         -------
         geom_ds : xarray.Dataset or None
@@ -1157,12 +1149,6 @@ class FlowlineModel(object):
 
         if do_fixed_spinup:
             is_spinup_time = monthly_time < self.yr
-            diag_ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
-            desc = 'Part of the series which are spinup'
-            diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc
-            diag_ds['is_fixed_geometry_spinup'].attrs['unit'] = '-'
-        elif make_compatible:
-            is_spinup_time = np.full(len(monthly_time), False, dtype=bool)
             diag_ds['is_fixed_geometry_spinup'] = ('time', is_spinup_time)
             desc = 'Part of the series which are spinup'
             diag_ds['is_fixed_geometry_spinup'].attrs['description'] = desc
