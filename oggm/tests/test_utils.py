@@ -486,7 +486,20 @@ class TestWorkflowUtils:
         filesuffix = '_compile_run_output_test'
         cfg.PARAMS['store_model_geometry'] = True
 
-        # we run the first gdir without the variables 'area_min_h' (2d) and
+        # all allowed data variables, for testing in compile_run_output
+        allowed_data_vars = ['volume', 'volume_bsl', 'volume_bwl', 'area',
+                             'area_min_h', 'length', 'calving', 'calving_rate',
+                             'off_area', 'on_area',
+                             'melt_off_glacier', 'melt_on_glacier',
+                             'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
+                             'snowfall_off_glacier', 'snowfall_on_glacier',
+                             'melt_residual_off_glacier',
+                             'melt_residual_on_glacier', 'model_mb',
+                             'residual_mb', 'snow_bucket']
+        for gi in range(10):
+            allowed_data_vars += [f'terminus_thick_{gi}']
+
+        # we run the first gdir excluding the variables 'area_min_h' (2d) and
         # 'melt_on_glacier' (3d, with store_monthly_hydro=True)
         def remove_diag_var(variable):
             try:
@@ -504,10 +517,8 @@ class TestWorkflowUtils:
                                 y0=1980, halfsize=1, nyears=2,
                                 output_filesuffix=filesuffix)
 
-        # the second gdir run includes the variables 'area_min_h' (2d) and
-        # 'melt_on_glacier' (3d, with store_monthly_hydro=True)
-        cfg.PARAMS['store_diagnostic_variables'].append('area_min_h')
-        cfg.PARAMS['store_diagnostic_variables'].append('melt_on_glacier')
+        # the second gdir run includes all allowed data variables
+        cfg.PARAMS['store_diagnostic_variables'] = allowed_data_vars
         flowline.run_with_hydro(gdirs[1],
                                 run_task=flowline.run_constant_climate,
                                 store_monthly_hydro=True,

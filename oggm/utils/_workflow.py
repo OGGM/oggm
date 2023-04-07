@@ -1107,6 +1107,22 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     # variables in case we have daily
     time_info = {}
     time_keys = ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']
+    allowed_data_vars = ['volume_m3', 'volume_bsl_m3', 'volume_bwl_m3',
+                         'area_m2', 'area_m2_min_h', 'length_m', 'calving_m3',
+                         'calving_rate_myr', 'off_area',
+                         'on_area', 'model_mb', 'is_fixed_geometry_spinup']
+    for gi in range(10):
+        allowed_data_vars += [f'terminus_thick_{gi}']
+    # this hydro variables can be _monthly or _daily
+    hydro_vars = ['melt_off_glacier', 'melt_on_glacier',
+                  'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
+                  'snowfall_off_glacier', 'snowfall_on_glacier',
+                  'melt_residual_off_glacier', 'melt_residual_on_glacier',
+                  'snow_bucket', 'residual_mb']
+    for v in hydro_vars:
+        allowed_data_vars += [v]
+        allowed_data_vars += [v + '_monthly']
+        allowed_data_vars += [v + '_daily']
     data_vars = {}
     name_2d_dim = 'month_2d'
     contains_3d_data = False
@@ -1141,15 +1157,14 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                 # check if their are new data variables and add them
                 for vn in ds.variables:
                     # exclude time variables
-                    if vn in ['month_2d', 'calender_month_2d',
+                    if vn in ['month_2d', 'calendar_month_2d',
                               'hydro_month_2d']:
                         name_2d_dim = 'month_2d'
                         contains_3d_data = True
-                    elif vn in ['day_2d', 'calender_day_2d', 'hydro_day_2d']:
+                    elif vn in ['day_2d', 'calendar_day_2d', 'hydro_day_2d']:
                         name_2d_dim = 'day_2d'
                         contains_3d_data = True
-                    elif vn not in ['time', 'hydro_year', 'hydro_month',
-                                    'calendar_year', 'calendar_month']:
+                    elif vn in allowed_data_vars:
                         # check if data variable is new
                         if vn not in data_vars.keys():
                             data_vars[vn] = dict()
@@ -1160,6 +1175,19 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                                                 'dtype']:
                                     data_vars[vn]['attrs'][attr] = getattr(
                                         ds.variables[vn], attr)
+                    elif vn not in ['time'] + time_keys:
+                        # This check has future developments in mind.
+                        # If you end here it means the current data variable is
+                        # not under the allowed_data_vars OR not under the
+                        # defined time dimensions. If it is a new data variable
+                        # add it to allowed_data_vars above (also add it to
+                        # test_compile_run_output). If it is a new dimension
+                        # handle it in the if/elif statements.
+                        raise InvalidParamsError(f'The data variable "{vn}" '
+                                                 'is not known. Is it new or '
+                                                 'is it a new dimension? '
+                                                 'Check comment above this '
+                                                 'raise for more info!')
 
             # If this worked, keep it as template
             ppath = fp
