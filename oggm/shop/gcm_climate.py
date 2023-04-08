@@ -394,6 +394,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                      time_unit=time_unit, calendar=calendar, **kwargs)
 
 
+# normally from oggm.shop.gcm_climate import process_cmip_data
+
 @entity_task(log, writes=['gcm_data'])
 def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
                       fpath_precip=None, **kwargs):
@@ -430,8 +432,27 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
 
         # Take the closest to the glacier
         # Should we consider GCM interpolation?
-        temp = tempds.tas.sel(lat=glat, lon=glon, method='nearest')
-        precip = precipds.pr.sel(lat=glat, lon=glon, method='nearest')
+        try:
+            # if gcms are not flattened, do:
+            # this is the default, so try this first
+            temp = tempds.tas.sel(lat=glat, lon=glon, method='nearest')
+            precip = precipds.pr.sel(lat=glat, lon=glon, method='nearest')
+        except:
+            # are the gcms flattened? if yes,
+            # compute all the distances and choose the
+            # nearest gridpoint
+            c_tempds = ((tempds.lon - glon) ** 2 +
+                 (tempds.lat - glat) ** 2)
+            c_precipds = ((precipds.lon - glon) ** 2 +
+                        (precipds.lat - glat) ** 2)
+            temp_0 = tempds.isel(points=np.argmin(c_tempds.data))
+            precip_0 = precipds.isel(points=np.argmin(c_precipds.data))
+            temp = temp_0.tas
+            temp['lon'] = temp_0.lon
+            temp['lat'] = temp_0.lat
+            precip = precip_0.pr
+            precip['lon'] = precip_0.lon
+            precip['lat'] = precip_0.lat
 
         # Back to [-180, 180] for OGGM
         temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
