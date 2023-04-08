@@ -394,8 +394,6 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
                      time_unit=time_unit, calendar=calendar, **kwargs)
 
 
-# normally from oggm.shop.gcm_climate import process_cmip_data
-
 @entity_task(log, writes=['gcm_data'])
 def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
                       fpath_precip=None, **kwargs):
