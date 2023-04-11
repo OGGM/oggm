@@ -41,7 +41,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_bias_best=False, ye=None,
-                       model_flowline_filesuffix='', make_compatible=False,
+                       model_flowline_filesuffix='',
                        add_fixed_geometry_spinup=False, **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
@@ -180,14 +180,6 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         suffix to the model_flowlines filename to use (if no other flowlines
         are provided with init_model_filesuffix or init_model_fls).
         Default is ''
-    make_compatible : bool
-        if set to true this will add all variables to the resulting dataset
-        so it could be combined with any other one. This is necessary if
-        different spinup methods are used. For example if using the dynamic
-        spinup and setting fixed geometry spinup as fallback, the variable
-        'is_fixed_geometry_spinup' must be added to the dynamic spinup so
-        it is possible to compile both glaciers together.
-        Default is False
     add_fixed_geometry_spinup : bool
         If True and the original spinup_period must be shortened (due to
         ice-free or out-of-boundary error) a fixed geometry spinup is added at
@@ -326,8 +318,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 yr_run,
                 geom_path=geom_path,
                 diag_path=diag_path,
-                fl_diag_path=fl_diag_path,
-                make_compatible=make_compatible)
+                fl_diag_path=fl_diag_path)
 
         return model_dynamic_spinup_end
 
@@ -425,8 +416,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
                 dynamic_spinup_min_ice_thick=min_ice_thickness,
-                fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
-                make_compatible=make_compatible)
+                fixed_geometry_spinup_yr=fixed_geometry_spinup_yr)
 
             # now we delete the min_h variable again if it was not
             # included before (inplace)
@@ -1186,7 +1176,6 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             model_flowline_filesuffix=model_flowline_filesuffix,
-            make_compatible=True,
             add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
         # save the temperature bias which was successful in the last iteration
@@ -1412,7 +1401,6 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             store_fl_diagnostics=store_fl_diagnostics,
             ignore_errors=False,
             ye=ye,
-            make_compatible=True,
             add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
 

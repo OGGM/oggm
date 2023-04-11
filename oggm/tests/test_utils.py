@@ -27,6 +27,7 @@ from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              InvalidWorkflowError,
                              DownloadVerificationFailedException)
+from oggm.core import flowline
 
 
 pytestmark = pytest.mark.test_env("utils")
@@ -475,6 +476,79 @@ class TestWorkflowTools(unittest.TestCase):
         assert file_path in cfg.DATA
         import multiprocessing
         assert type(cfg.DATA) is multiprocessing.managers.DictProxy
+
+
+class TestWorkflowUtils:
+    def test_compile_run_output(self, hef_gdir, hef_copy_gdir):
+
+        # Here I test if compile_run_output works with different data variables
+        gdirs = [hef_gdir, hef_copy_gdir]
+        filesuffix = '_compile_run_output_test'
+        cfg.PARAMS['store_model_geometry'] = True
+
+        # all allowed data variables, for testing in compile_run_output
+        allowed_data_vars = ['volume', 'volume_bsl', 'volume_bwl', 'area',
+                             'area_min_h', 'length', 'calving', 'calving_rate',
+                             'off_area', 'on_area',
+                             'melt_off_glacier', 'melt_on_glacier',
+                             'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
+                             'snowfall_off_glacier', 'snowfall_on_glacier',
+                             'melt_residual_off_glacier',
+                             'melt_residual_on_glacier', 'model_mb',
+                             'residual_mb', 'snow_bucket']
+        for gi in range(10):
+            allowed_data_vars += [f'terminus_thick_{gi}']
+
+        # we run the first gdir excluding the variables 'area_min_h' (2d) and
+        # 'melt_on_glacier' (3d, with store_monthly_hydro=True)
+        def remove_diag_var(variable):
+            try:
+                cfg.PARAMS['store_diagnostic_variables'].remove(variable)
+            except ValueError as err:
+                if str(err) == 'list.remove(x): x not in list':
+                    pass
+                else:
+                    raise
+        remove_diag_var('area_min_h')
+        remove_diag_var('melt_on_glacier')
+        flowline.run_with_hydro(gdirs[0],
+                                run_task=flowline.run_constant_climate,
+                                store_monthly_hydro=True,
+                                y0=1980, halfsize=1, nyears=2,
+                                output_filesuffix=filesuffix)
+
+        # the second gdir run includes all allowed data variables
+        cfg.PARAMS['store_diagnostic_variables'] = allowed_data_vars
+        flowline.run_with_hydro(gdirs[1],
+                                run_task=flowline.run_constant_climate,
+                                store_monthly_hydro=True,
+                                y0=1980, halfsize=1, nyears=2,
+                                output_filesuffix=filesuffix)
+
+        # We need to test two things:
+        # First: If their is a variable in the first diagnostics file which is
+        # not present in the second one no KeyError should be raised.
+        ds_1 = utils.compile_run_output([gdirs[0], gdirs[1]],
+                                        input_filesuffix=filesuffix)
+
+        def check_result(ds):
+            assert 'area_m2_min_h' in ds.data_vars
+            assert 'melt_on_glacier' in ds.data_vars
+            assert 'melt_on_glacier_monthly' in ds.data_vars
+            assert np.all(np.isnan(
+                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_m2_min_h'].values))
+            assert np.all(np.isnan(
+                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier'].values))
+            assert np.all(np.isnan(
+                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier_monthly'].values))
+
+        check_result(ds_1)
+
+        # Second: If a variable in the second diagnostics file which is not
+        # present in the first one it should still be included in the result.
+        ds_2 = utils.compile_run_output([gdirs[1], gdirs[0]],
+                                        input_filesuffix=filesuffix)
+        check_result(ds_2)
 
 
 class TestStartFromTar(unittest.TestCase):
