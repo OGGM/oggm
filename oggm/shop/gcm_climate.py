@@ -396,7 +396,8 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
 
 @entity_task(log, writes=['gcm_data'])
 def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
-                      fpath_precip=None, **kwargs):
+                      fpath_precip=None, y0=None, y1=None,
+                      **kwargs):
     """Read, process and store the CMIP5 and CMIP6 climate data for this glacier.
 
     It stores the data in a format that can be used by the OGGM mass balance
@@ -413,6 +414,14 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
         path to the temp file
     fpath_precip : str
         path to the precip file
+    y0 : int
+        start year of the CMIP data processing.
+        Default is None which processes the entire timeseries.
+        Set this to the beginning of your bias correction/
+        projection period to make process_cmip_data faster.
+    y1 : int
+        end year of the CMIP data processing.
+        Default is None, same as y0.
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
@@ -420,10 +429,18 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
     glon = gdir.cenlon
     glat = gdir.cenlat
 
+    if y0 is not None:
+        y0 = str(y0)
+    if y1 is not None:
+        y1 = str(y1)
     # Read the GCM files
     with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
             xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
 
+        # only process and save the gcm data selected --> saves some time!
+        if (y0 is not None) or (y1 is not None):
+            tempds = tempds.sel(time=slice(y0, y1))
+            precipds = precipds.sel(time=slice(y0, y1))
         # Check longitude conventions
         if tempds.lon.min() >= 0 and glon <= 0:
             glon += 360

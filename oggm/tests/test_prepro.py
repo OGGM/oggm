@@ -2791,10 +2791,18 @@ class TestGCMClimate(unittest.TestCase):
                                       fpath_temp=fpath_temp,
                                       fpath_precip=fpath_precip,
                                       filesuffix='_CCSM4')
+        gcm_climate.process_cmip_data(gdir,
+                                      fpath_temp=fpath_temp,
+                                      fpath_precip=fpath_precip,
+                                      filesuffix='_CCSM4_y0_y1', y0=1960,
+                                      y1=2095)
 
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        fcmip_y0_y1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_y0_y1')
+        with xr.open_dataset(fh) as cru,\
+              xr.open_dataset(fcmip) as cmip,\
+              xr.open_dataset(fcmip_y0_y1) as cmip_y0_y1:
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -2807,6 +2815,10 @@ class TestGCMClimate(unittest.TestCase):
             np.testing.assert_allclose(scru.prcp.mean(),
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
+            # just check if the right time period is chosen
+            scesm_y0_y1 = cmip_y0_y1.load()
+            assert scesm_y0_y1['time.year'].min() == 1960
+            assert scesm_y0_y1['time.year'].max() == 2095
 
             # Here also std dev! But its not perfect because std_dev
             # is preserved over 31 years
