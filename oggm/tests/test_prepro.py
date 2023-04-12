@@ -2586,12 +2586,15 @@ class TestGCMClimate(unittest.TestCase):
         member = 'mri-esm2-0_r1i1p1f1'
 
         tasks.process_w5e5_data(gdir)
-
         # testing = True to only download the HEF gridpoint and 3 other gridppoints around
         tasks.process_monthly_isimip_data(gdir, member=member, ssp=ssp,
                                           output_filesuffix='_no_OGGM_bc',
                                           apply_bias_correction=False,
                                           testing=True)
+        tasks.process_monthly_isimip_data(gdir, member=member, ssp=ssp,
+                                          output_filesuffix='_with_OGGM_bc_y0_y1',
+                                          apply_bias_correction=True,
+                                          testing=True, y0=1979-18, y1=2095)
         tasks.process_monthly_isimip_data(gdir, member=member, ssp=ssp,
                                           apply_bias_correction=True,
                                           output_filesuffix='_with_OGGM_bc',
@@ -2600,14 +2603,17 @@ class TestGCMClimate(unittest.TestCase):
         # with additional bias correction of OGGM
         fgcm = gdir.get_filepath('gcm_data',
                                  filesuffix='_with_OGGM_bc')
-
         # without any bias correction of OGGM (as ISIMIP3b is already
         # externally bias-corrected to W5E5)
         fgcm_nc = gdir.get_filepath('gcm_data',
                                     filesuffix='_no_OGGM_bc')
+        # with additional bias correction and with selected time series
+        fgcm_y0_y1 = gdir.get_filepath('gcm_data',
+                                       filesuffix='_with_OGGM_bc_y0_y1')
 
         with xr.open_dataset(fh) as clim, xr.open_dataset(fgcm) as gcm, \
-                xr.open_dataset(fgcm_nc) as gcm_nc:
+                xr.open_dataset(fgcm_nc) as gcm_nc, \
+                xr.open_dataset(fgcm_y0_y1) as gcm_y0_y1:
             # Let's do some basic checks
             sclim = clim.sel(time=slice('1979', '2014'))
             sgcm = gcm.load().isel(time=((gcm['time.year'] >= 1979) &
@@ -2615,6 +2621,26 @@ class TestGCMClimate(unittest.TestCase):
 
             sgcm_nc = gcm_nc.load().isel(time=((gcm_nc['time.year'] >= 1979) &
                                                (gcm_nc['time.year'] <= 2014)))
+
+            # # just check if the right time period is chosen and that it is equal to
+            # not choosing a time period over common period
+            sgcm_y0_y1 = gcm_y0_y1.load()
+            assert sgcm_y0_y1['time.year'].min() == 1979-18
+            assert sgcm_y0_y1['time.year'].max() == 2095
+            sgcm_sel = gcm.load().sel(time=slice('1961', '2095'))
+            assert np.all(sgcm_sel.time.values == sgcm_y0_y1.time.values)
+            assert np.all(sgcm_sel.ref_hgt == sgcm_y0_y1.ref_hgt)
+            assert np.all(sgcm_sel.ref_pix_lon == sgcm_y0_y1.ref_pix_lon)
+            assert np.all(sgcm_sel.ref_pix_lat == sgcm_y0_y1.ref_pix_lat)
+            np.testing.assert_allclose(sgcm_sel.prcp, sgcm_y0_y1.prcp)
+            # because of standard deviation rolling function, the temperature
+            # timeseries are slightly different at the starts/ends of the timeseries
+            # -> only similar for +/- half of rolling window years
+            # (i.e., here +/- 36/2 years)
+            np.testing.assert_allclose(sgcm_sel.temp.sel(time=slice('1979', '2077')),
+                                       sgcm_y0_y1.temp.sel(time=slice('1979', '2077')))
+            # the entire timeseries should still be similar
+            np.testing.assert_allclose(sgcm_sel.temp, sgcm_y0_y1.temp, atol=0.2)
 
             # first check if the same grid point was chosen and the same ref_hgt:
             np.testing.assert_allclose(sgcm.ref_hgt, sgcm_nc.ref_hgt)
@@ -2794,8 +2820,8 @@ class TestGCMClimate(unittest.TestCase):
         gcm_climate.process_cmip_data(gdir,
                                       fpath_temp=fpath_temp,
                                       fpath_precip=fpath_precip,
-                                      filesuffix='_CCSM4_y0_y1', y0=1960,
-                                      y1=2095)
+                                      filesuffix='_CCSM4_y0_y1', y0=1960-15,
+                                      y1=2080+15)
 
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
@@ -2815,10 +2841,26 @@ class TestGCMClimate(unittest.TestCase):
             np.testing.assert_allclose(scru.prcp.mean(),
                                        scesm.prcp.mean(),
                                        rtol=1e-3)
-            # just check if the right time period is chosen
+            # just check if the right time period is chosen, and
+            # that it is equal over common period with not choosing
+            # y0 and y1
             scesm_y0_y1 = cmip_y0_y1.load()
-            assert scesm_y0_y1['time.year'].min() == 1960
-            assert scesm_y0_y1['time.year'].max() == 2095
+            assert scesm_y0_y1['time.year'].min() == 1960-15
+            assert scesm_y0_y1['time.year'].max() == 2080+15
+            scmip_sel = cmip.load().sel(time=slice('1945', '2095'))
+            assert np.all(scmip_sel.time.values == scesm_y0_y1.time.values)
+            assert np.all(scmip_sel.ref_hgt == scesm_y0_y1.ref_hgt)
+            assert np.all(scmip_sel.ref_pix_lon == scesm_y0_y1.ref_pix_lon)
+            assert np.all(scmip_sel.ref_pix_lat == scesm_y0_y1.ref_pix_lat)
+            np.testing.assert_allclose(scmip_sel.prcp, scesm_y0_y1.prcp)
+            # because of standard deviation rolling function, the temperature
+            # timeseries are slightly different at the starts/ends of the timeseries
+            # -> only similar for +/- half of rolling window years
+            # (i.e., here +/- 30/2 years)
+            np.testing.assert_allclose(scmip_sel.temp.sel(time=slice('1960', '2080')),
+                                       scesm_y0_y1.temp.sel(time=slice('1960', '2080')))
+            # the entire timeseries should still be similar
+            np.testing.assert_allclose(scmip_sel.temp, scesm_y0_y1.temp, atol=0.2)
 
             # Here also std dev! But its not perfect because std_dev
             # is preserved over 31 years

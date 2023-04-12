@@ -179,6 +179,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
                                 year_range=('1979', '2014'),
                                 apply_bias_correction=False,
                                 testing=False,
+                                y0=None, y1=None,
                                 **kwargs):
     """Read, process and store the isimip3b gcm data for this glacier.
 
@@ -200,7 +201,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     year_range : tuple of str
         the year range for which the anomalies are computed
         (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')
-    correct : bool
+    apply_bias_correction : bool
         whether the bias correction is applied (default is False) or not. As
         we use already internally bias-corrected GCMs, it is default set
         to False!
@@ -208,6 +209,17 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         Default is False. If testing is set to True,
         the smaller test ISIMIP3b gcm files are downloaded
         instead (only useful for pytest)
+    y0 : int
+        start year of the ISIMIP3b data processing.
+        Default is None which processes the entire timeseries.
+        Set this to the beginning of your bias correction/
+        projection period minus half of bc period
+        to make processing faster.
+    y1 : int
+        end year of the CMIP data processing.
+        Set this to the end of your projection period
+        plus half of bc period. Default is None to process
+        the entire time series, same as y0.
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
@@ -218,6 +230,11 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     # Glacier location
     glon = gdir.cenlon
     glat = gdir.cenlat
+
+    if y0 is not None:
+        assert y0 < 2014, 'y0 has to be below 2014'
+    if y1 is not None:
+        assert y1 > 2014, 'y0 has to be above 2014 at the moment'
 
     if testing:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
@@ -241,7 +258,11 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     # Read the GCM files
     with xr.open_dataset(fpath_temp_h, use_cftime=True) as tempds_hist, \
             xr.open_dataset(fpath_temp, use_cftime=True) as tempds_gcm:
-
+        # make processing faster
+        if y0 is not None:
+            tempds_hist = tempds_hist.sel(time=slice(str(y0), None))
+        if y1 is not None:
+            tempds_gcm = tempds_gcm.sel(time=slice(None, str(y1)))
         # Check longitude conventions
         if tempds_gcm.longitude.min() >= 0 and glon <= 0:
             glon += 360
@@ -268,7 +289,11 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
 
     with xr.open_dataset(fpath_precip_h, use_cftime=True) as precipds_hist, \
             xr.open_dataset(fpath_precip, use_cftime=True) as precipds_gcm:
-
+        # make processing faster
+        if y0 is not None:
+            precipds_hist = precipds_hist.sel(time=slice(str(y0), None))
+        if y1 is not None:
+            precipds_gcm = precipds_gcm.sel(time=slice(None, str(y1)))
         c = ((precipds_gcm.longitude - glon) ** 2 +
              (precipds_gcm.latitude - glat) ** 2)
         precip_a_gcm = precipds_gcm.isel(points=np.argmin(c.data))
@@ -418,10 +443,13 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
         start year of the CMIP data processing.
         Default is None which processes the entire timeseries.
         Set this to the beginning of your bias correction/
-        projection period to make process_cmip_data faster.
+        projection period minus half of bc period
+        to make process_cmip_data faster.
     y1 : int
         end year of the CMIP data processing.
-        Default is None, same as y0.
+        Set this to the end of your projection period
+        plus half of bc period. Default is None to process
+        the entire time series, same as y0.
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
