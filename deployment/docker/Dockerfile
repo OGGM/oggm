@@ -9,4 +9,4 @@ ARG GITHUB_SHA=master
 ARG GITHUB_REPOSITORY=OGGM/oggm
 RUN $PIP install "git+https://github.com/${GITHUB_REPOSITORY}@${GITHUB_SHA}"
 
-ADD test.sh /root/test.sh
+COPY test.sh /root/test.sh
