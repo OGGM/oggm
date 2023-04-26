@@ -3976,7 +3976,8 @@ def base_dir_to_tar(base_dir=None, delete=True):
     for dirname, subdirlist, filelist in os.walk(base_dir):
         # RGI60-01.00
         bname = os.path.basename(dirname)
-        if not (len(bname) == 11 and bname[-3] == '.'):
+        # second argument for RGI7 naming convention
+        if not ((len(bname) == 11 and bname[-3] == '.') or (len(bname) == 20 and bname[-3] == '-')) :
             continue
         opath = dirname + '.tar'
         with tarfile.open(opath, 'w') as tar:
