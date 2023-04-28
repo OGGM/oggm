@@ -89,11 +89,11 @@ RGI region level, so that you don't have to worry about it.
 
 .. _pitfalls.numerics:
 
-The numerical model in OGGM is numerically unstable in some conditions
-======================================================================
+The "Flux-based" model in OGGM is numerically unstable in some conditions
+=========================================================================
 
 OGGM uses a CFL criterion to decide on the timestep to use during the
-ice dynamics model iteration. The numerical scheme of OGGM is fast and
+ice dynamics model iteration. The "Flux-based" scheme of OGGM is fast and
 flexible (e.g. it allows to compute the ice flow on multiple flowlines),
 but it is not following textbook recommendations on numerical stability.
 

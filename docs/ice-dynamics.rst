@@ -167,7 +167,26 @@ Numerics
 Semi-implicit model (new default in v1.6)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TODO: Patrick
+This model solves a diffusion equation for the ice thickness :math:`h`,
+assuming a trapezoidal bed (Equation 10 in [Oerlemans_1997]_). Numerically
+the equation is implemented using the present time-step diffusivity :math:`D`
+but the future time-step surface slope :math:`\partial (b + h) / \partial x`
+(with the glacier bed :math:`b`), hence the name semi-implicit.
+
+The solution of this equation involves a matrix inversion, which makes a
+single solving step around 1.5 times slower compared to the "Flux-based"
+model. However, the scheme is more stable hence each single solving step can
+use a three-time larger :math:`\Delta t`. Overall this halves the total
+runtime.
+
+With the increased stability, we did not see numerical instabilities like
+for the "Flux-based" model (see :ref:`pitfalls.numerics`). But as the
+underlying equation is the same, we see the same non-mass-conserving
+behaviour in very steep slopes [Jarosch_etal_2013]_.
+
+In summary, the Semi-implicit model is faster and more robust than the
+"Flux-based" model, but less flexible (currently only working with a single
+trapezoidal flowline).
 
 "Flux-based" model
 ~~~~~~~~~~~~~~~~~~
@@ -195,7 +214,7 @@ numerical equations on a forward staggered grid and we use an adaptive time
 stepping scheme.
 
 See :ref:`pitfalls.numerics` for an ongoing discussion about the limitations
-of OGGM's numerical scheme!
+of OGGM's "Flux-based" scheme!
 
 
 MUSCLSuperBeeModel
