@@ -6,6 +6,15 @@ Version history
 v1.6.x (unreleased)
 -------------------
 
+Bug fixes
+~~~~~~~~~
+
+- Added more flexibility to ``compile_run_output``. It is now possible to
+  compile runs with different data variables (the default is NaN). It is
+  needed to compile different spinup strategies together, as some include
+  special data variables (e.g. ``is_fixed_geometry_spinup``) (:pull:`1563`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+
 
 v1.6.0 (March 10, 2023)
 -----------------------
