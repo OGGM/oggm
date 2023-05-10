@@ -574,12 +574,13 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
             if add_touches:
                 pok = np.where(l.is_rectangular)
-                xi, yi = l.line.xy
-                xi, yi = ogrid.transform(np.asarray(xi)[pok],
-                                         np.asarray(yi)[pok], crs=crs)
-                xis.append(xi)
-                yis.append(yi)
-                cis.append(c)
+                if np.size(pok[0]) != 0:
+                    xi, yi = l.line.xy
+                    xi, yi = ogrid.transform(np.asarray(xi)[pok],
+                                             np.asarray(yi)[pok], crs=crs)
+                    xis.append(xi)
+                    yis.append(yi)
+                    cis.append(c)
 
     smap.plot(ax)
     for xi, yi, c in zip(xis, yis, cis):
