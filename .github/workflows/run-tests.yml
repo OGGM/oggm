@@ -24,7 +24,7 @@ jobs:
           - workflow-multi
           - graphics-mpl
         container:
-          - ghcr.io/oggm/untested_base:20230509
+          - ghcr.io/oggm/untested_base:20230323
           - ghcr.io/oggm/untested_base:py3.11
           - ghcr.io/oggm/untested_base:py3.9
         include:
@@ -55,7 +55,7 @@ jobs:
     name: Coveralls Finished
     needs: test
     runs-on: ubuntu-latest
-    container: python:3.11-slim
+    container: python:3.9-slim
     continue-on-error: true
     steps:
     - name: Coveralls Finished
