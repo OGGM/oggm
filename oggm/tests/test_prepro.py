@@ -1672,7 +1672,8 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['new_mb'].mean())
         # not perfect
-        np.testing.assert_allclose(1, mbdf.corr()['new_mb']['ref_mb'], atol=0.35)
+        np.testing.assert_allclose(1, mbdf[['new_mb', 'ref_mb']].corr(),
+                                   atol=0.35)
 
         # Check that inversion works
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2002])
