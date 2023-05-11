@@ -2828,7 +2828,7 @@ class GlacierDirectory(object):
         for k, s in entity.items():
             if type(s) in [np.int32, np.int64]:
                 entity[k] = int(s)
-        towrite = gpd.GeoDataFrame(entity).T
+        towrite = gpd.GeoDataFrame(entity).T.set_geometry('geometry')
         towrite.crs = proj4_str
 
         # Write shapefile

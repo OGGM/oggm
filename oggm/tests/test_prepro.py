@@ -1391,7 +1391,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb'].mean())
         # Yeah, it correlates but also not too crazy
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb']].corr(),
                                    atol=0.35)
 
         pdf = gdir.read_json('mb_calib')
@@ -1411,7 +1411,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['temp_mb'].mean())
         # Yeah, it correlates but also not too crazy
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['temp_mb'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'temp_mb']].corr(),
                                    atol=0.35)
 
         pdf = gdir.read_json('mb_calib')
@@ -1431,7 +1431,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['prcp_mb'].mean())
         # Yeah, it correlates but also not too crazy
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['prcp_mb'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'prcp_mb']].corr(),
                                    atol=0.35)
 
         pdf = gdir.read_json('mb_calib')
@@ -1460,7 +1460,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
         # It should correlate even less
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.55)
 
         pdf = gdir.read_json('mb_calib')
@@ -1486,7 +1486,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
         # It should correlate even less (maybe not)
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.5)
 
         pdf = gdir.read_json('mb_calib')
@@ -1515,7 +1515,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
         # It should correlate even less (maybe not)
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.45)
 
         pdf = gdir.read_json('mb_calib')
@@ -1542,7 +1542,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb2'].mean())
         # It should correlate even less (maybe not)
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb2'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.5)
 
         pdf = gdir.read_json('mb_calib')
@@ -1578,7 +1578,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb3'].mean())
         # It should correlate even less (maybe not)
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb3'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb3']].corr(),
                                    atol=0.5)
 
         pdf = gdir.read_json('mb_calib')
@@ -1628,7 +1628,7 @@ class TestClimate(unittest.TestCase):
         # Check that results are all the same
         np.testing.assert_allclose(ref_mb, mbdf['melt_mb3'].mean())
         # It should correlate even less (maybe not)
-        np.testing.assert_allclose(1, mbdf.corr()['ref_mb']['melt_mb3'],
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb3']].corr(),
                                    atol=0.5)
 
         pdf = gdir.read_json('mb_calib')
