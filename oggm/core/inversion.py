@@ -723,7 +723,7 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness_per_altitude(gdir, add_slope=True,
+def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed',
                                       smooth_radius=None,
                                       dis_from_border_exp=0.25,
                                       varname_suffix=''):
@@ -757,7 +757,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         gridded_attributes(gdir)
 
     with utils.ncDataset(grids_file) as nc:
-        topo_smoothed = nc.variables['topo_smoothed'][:]
+        topo_smoothed = nc.variables[topo][:]
         glacier_mask = nc.variables['glacier_mask'][:]
         dis_from_border = nc.variables['dis_from_border'][:]
         if add_slope:
