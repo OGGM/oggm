@@ -422,7 +422,7 @@ class TestWorkflowTools(unittest.TestCase):
 
     def test_leclercq_data(self):
 
-        hef_file = utils.get_demo_file('Hintereisferner_RGI5.shp')
+        hef_file = utils.get_demo_file('Hintereisferner_RGI6.shp')
         entity = gpd.read_file(hef_file).iloc[0]
         cfg.PARAMS['use_intersects'] = False
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)

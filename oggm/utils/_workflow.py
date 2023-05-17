@@ -3570,7 +3570,7 @@ class GlacierDirectory(object):
          For some glaciers only!
          """
 
-        df = pd.read_csv(get_demo_file('rgi_leclercq_links_2012_RGIV5.csv'))
+        df = pd.read_csv(get_demo_file('rgi_leclercq_links_2014_RGIV6.csv'))
         df = df.loc[df.RGI_ID == self.rgi_id]
         if len(df) == 0:
             raise RuntimeError('No length data found for this glacier!')
