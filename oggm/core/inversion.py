@@ -790,7 +790,6 @@ def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed'
     yglac, xglac = np.nonzero(glacier_mask == 1)
     for y, x in zip(yglac, xglac):
         phgt = topo_smoothed[y, x]
-        assert np.isfinite(phgt)
         # take the ones in a 100m range
         starth = 100.
         while True:

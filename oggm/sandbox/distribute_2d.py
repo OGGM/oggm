@@ -1,28 +1,11 @@
 import logging
 import oggm.cfg as cfg
-from oggm import tasks, graphics, utils, workflow
-from oggm.core import flowline
+from oggm import utils
 import numpy as np
-import geopandas as gpd
-import pandas as pd
 import xarray as xr
-import scipy
 from scipy import ndimage
 from scipy.stats import mstats
-import os
-import matplotlib.pyplot as plt
-import salem
-# This is needed to display graphics calculated outside of jupyter notebook
-from IPython.display import HTML, display
 from oggm.core.gis import gaussian_blur
-from oggm import global_tasks
-from oggm.core import massbalance
-from oggm import graphics
-import warnings
-
-
-import shapely.geometry as shpg
-from scipy.ndimage import binary_erosion,distance_transform_edt
 from oggm.utils import ncDataset, entity_task
 
 # Module logger

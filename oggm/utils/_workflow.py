@@ -2886,7 +2886,7 @@ class GlacierDirectory(object):
         except KeyError:
             # RGI V7
             _area = self.read_shapefile('outlines')['area_km2']
-        return np.round(float(_area), decimals=3)
+        return np.round(float(_area.iloc[0]), decimals=3)
 
     @lazy_property
     def intersects_ids(self):
@@ -3411,9 +3411,6 @@ class GlacierDirectory(object):
         if 'ANNUAL_BALANCE' not in mb_df:
             raise InvalidParamsError('Need an "ANNUAL_BALANCE" column in the '
                                      'dataframe.')
-        if not mb_df.index.is_integer():
-            raise InvalidParamsError('The index needs to be integer years')
-
         mb_df.index.name = 'YEAR'
         self._mbdf = mb_df
 

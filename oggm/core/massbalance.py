@@ -1490,8 +1490,8 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
         ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
         # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
-        ref_mb = float(ref_mb_df['dmdtda']) * 1000
-        ref_mb_err = float(ref_mb_df['err_dmdtda']) * 1000
+        ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
+        ref_mb_err = ref_mb_df['err_dmdtda'].iloc[0] * 1000
     except KeyError:
         if override_missing is None:
             raise
