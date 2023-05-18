@@ -876,7 +876,8 @@ class RandomMassBalance(MassBalanceModel):
 
     def __init__(self, gdir, mb_model_class=MonthlyTIModel,
                  y0=None, halfsize=15, seed=None,
-                 all_years=False, unique_samples=False, prescribe_years=None,
+                 all_years=False, unique_samples=False,
+                 prescribe_years=None,
                  **kwargs):
         """Initialize.
 

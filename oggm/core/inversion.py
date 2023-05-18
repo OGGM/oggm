@@ -786,25 +786,26 @@ def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed'
 
     # Assign a first order thickness to the points
     # very inefficient inverse distance stuff
-    thick = glacier_mask * np.NaN
-    for y in range(thick.shape[0]):
-        for x in range(thick.shape[1]):
-            phgt = topo_smoothed[y, x]
-            # take the ones in a 100m range
-            starth = 100.
-            while True:
-                starth += 10
-                pok = np.nonzero(np.abs(phgt - hs) <= starth)[0]
-                if len(pok) != 0:
-                    break
-            sqr = np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
-            pzero = np.where(sqr == 0)
-            if len(pzero[0]) == 0:
-                thick[y, x] = np.average(ts[pok], weights=1 / sqr)
-            elif len(pzero[0]) == 1:
-                thick[y, x] = ts[pzero]
-            else:
-                raise RuntimeError('We should not be there')
+    thick = glacier_mask * 0.
+    yglac, xglac = np.nonzero(glacier_mask == 1)
+    for y, x in zip(yglac, xglac):
+        phgt = topo_smoothed[y, x]
+        assert np.isfinite(phgt)
+        # take the ones in a 100m range
+        starth = 100.
+        while True:
+            starth += 10
+            pok = np.nonzero(np.abs(phgt - hs) <= starth)[0]
+            if len(pok) != 0:
+                break
+        sqr = np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
+        pzero = np.where(sqr == 0)
+        if len(pzero[0]) == 0:
+            thick[y, x] = np.average(ts[pok], weights=1 / sqr)
+        elif len(pzero[0]) == 1:
+            thick[y, x] = ts[pzero]
+        else:
+            raise RuntimeError('We should not be there')
 
     # Distance from border (normalized)
     dis_from_border = dis_from_border**dis_from_border_exp
