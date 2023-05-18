@@ -3950,7 +3950,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             else:
                 # We simply spread over the months
                 residual_mb /= 12
-                # if residual_mb larger than melt_on_glacier: add absolute difference to snowfall (mass conservation)
+                # residual_mb larger > melt_on_glacier: add absolute difference to snowfall (--=+, mass conservation)
                 out['snowfall_on_glacier']['data'][i, :] -= utils.clip_max(out['melt_on_glacier']['data'][i, :] -
                                                                            residual_mb, 0)
                 # assure that new melt_on_glacier is non-negative
