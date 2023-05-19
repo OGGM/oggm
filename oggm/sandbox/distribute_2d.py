@@ -40,18 +40,21 @@ def filter_nan_gaussian_conserving(arr, sigma=1):
 
 
 @entity_task(log, writes=['gridded_data'])
-def smooth_glacier_topo(gdir, outline_offset=-40):
+def add_smoothed_glacier_topo(gdir, outline_offset=-40,
+                              smooth_radius=1):
     """Smooth the glacier topography while ignoring surrounding slopes.
 
     It is different from the smoothing that occurs in the 'process_dem'
     function, that generates 'topo_smoothed' in the gridded_data.nc file.
 
-    This is of importance when extrapolation to the 2D grid, because the sides
-    of a glacier tongue can otherwise be higher than the tongue middle,
-    resulting in an odd shape once the glacier retreats (e.g. with the
-    middle of the tongue retreating faster that the edges).
+    This is of importance when redistributing thicknesses to the 2D grid,
+    because the sides of a glacier tongue can otherwise be higher than the
+    tongue middle, resulting in an odd shape once the glacier retreats
+    (e.g. with the middle of the tongue retreating faster that the edges).
 
     Write the `glacier_topo_smoothed` variable in `gridded_data.nc`.
+
+    Source: https://stackoverflow.com/a/61481246/4057931
 
     Parameters
     ----------
@@ -63,6 +66,9 @@ def smooth_glacier_topo(gdir, outline_offset=-40):
         outline is often affected by surrounding slopes, and artificially
         reducing its elevation before smoothing makes the border pixel melt
         earlier. -40 seems good, but it may depend on the glacier.
+    smooth_radius : int, optional
+        the gaussian radius. One comment on StackOverflow indicates that it
+        may not work well for other values than 1. To investigate.
     """
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
@@ -71,7 +77,7 @@ def smooth_glacier_topo(gdir, outline_offset=-40):
             raw_topo += ds.glacier_ext * outline_offset
         raw_topo = raw_topo.data
 
-    smooth_glacier = filter_nan_gaussian_conserving(raw_topo, 1)
+    smooth_glacier = filter_nan_gaussian_conserving(raw_topo, smooth_radius)
     with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
         vn = 'glacier_topo_smoothed'
         if vn in nc.variables:
@@ -86,13 +92,36 @@ def smooth_glacier_topo(gdir, outline_offset=-40):
 
 
 @entity_task(log, writes=['gridded_data'])
-def assign_points_to_band(gdir, fl_diagnostics_filesuffix='',
-                          topo_variable='glacier_topo_smoothed'):
-    """Assigns the points on the grid to the different elevation bands.
+def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
+                          elevation_weight=1.003):
+    """Assigns glacier grid points to flowline elevation bands and ranks them.
 
+    Creates two variables in gridded_data.nc:
 
+    `band_index`, which assigns one number per grid point (the index to
+    which band this grid point belongs). This ordering is done to preserve
+    area by elevation, i.e. point elevation does matter, but not strictly.
+    What is more important is the "rank" by elevation, i.e. each flowline band
+    has the correct gridded area.
+
+    `rank_per_band`, which assigns another index per grid point: the
+    "rank" withing a band, from thinner to thicker and from bottom to top.
+    This rank indicates which grid point will melt faster within a band.
+    There is one aibtrary parameter here, which is by how much to weight the
+    elevation factor (see Parameters)
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    topo_variable : str
+        the topography to read from `gridded_data.nc` (could be smoothed, or
+        smoothed differently).
+    elevation_weight : float
+        how much weight to give to the elevation of the grid point versus the
+        thickness. Arbitrary number, might be tuned differently.
     """
-
+    # We need quite a few data from the gridded dataset
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         topo_data = ds[topo_variable].data.copy()
         glacier_mask = ds.glacier_mask.data == 1
@@ -101,32 +130,35 @@ def assign_points_to_band(gdir, fl_diagnostics_filesuffix='',
         per_band_rank = topo_data * np.NaN  # container
         distrib_thick = ds.distributed_thickness.data
 
-    fp = gdir.get_filepath('fl_diagnostics', filesuffix=fl_diagnostics_filesuffix)
-    with xr.open_dataset(fp) as dg:
-        assert len(dg.flowlines.data) == 1, 'Only works with one flowline.'
-    with xr.open_dataset(fp, group=f'fl_0') as dg:
-        dg = dg.isel(time=0).load()
+    # For the flowline we need the model flowlines only
+    fls = gdir.read_pickle('model_flowlines')
+    assert len(fls) == 1, 'Only works with one flowline.'
+    fl = fls[0]
 
-    # number of pixels in section along flowline
-    npix_per_band = dg.area_m2 / (gdir.grid.dx ** 2)
-    nnpix_per_band_cumsum = np.around(npix_per_band.values[::-1].cumsum()[::-1])
-
-    if not np.allclose(nnpix_per_band_cumsum.max(), len(topo_data_flat), rtol=0.1):
-        raise RuntimeError('More than 10% difference in area - this wont work well')
+    # number of pixels per band along flowline
+    npix_per_band = fl.bin_area_m2 / (gdir.grid.dx ** 2)
+    nnpix_per_band_cumsum = np.around(npix_per_band[::-1].cumsum()[::-1])
 
     rank_elev = mstats.rankdata(topo_data_flat)
     bins = nnpix_per_band_cumsum[nnpix_per_band_cumsum > 0].copy()
     bins[0] = len(topo_data_flat) + 1
     band_index[glacier_mask] = np.digitize(rank_elev, bins, right=False) - 1
 
+    # Some sanity checks for now
+    # Area gridded and area flowline should be similar
+    assert np.allclose(nnpix_per_band_cumsum.max(), len(topo_data_flat), rtol=0.1)
+    # All bands should have pixels in them
     assert np.nanmax(band_index) == len(bins) - 1
     assert np.nanmin(band_index) == 0
     assert np.all(np.isfinite(band_index[glacier_mask]))
 
-    # Ok now assign within band using thickness weighted by elevation
+    # Ok now assign within band using ice thickness weighted by elevation
+    # We rank the pixels within one band by elevation, but also add
+    # a penaltly is added to higher elevation grid points
     min_alt = np.nanmin(topo_data)
     weighted_thick = ((topo_data - min_alt + 1) * 1.003) * distrib_thick
     for band_id in np.unique(np.sort(band_index[glacier_mask])):
+        # We work per band here
         is_band = band_index == band_id
         per_band_rank[is_band] = mstats.rankdata(weighted_thick[is_band])
 
@@ -138,7 +170,7 @@ def assign_points_to_band(gdir, fl_diagnostics_filesuffix='',
             v = nc.createVariable(vn, 'f4', ('y', 'x',))
         v.units = '-'
         v.long_name = 'Points grouped by band along the flowline'
-        v.description = ('Points grouped by section along the flowline, '
+        v.description = ('Points grouped by band along the flowline, '
                          'ordered from top to bottom.')
         v[:] = band_index
 
@@ -155,19 +187,44 @@ def assign_points_to_band(gdir, fl_diagnostics_filesuffix='',
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness_from_simulation(gdir, ys=None, ye=None,
-                                         fl_diagnostics_filesuffix='',
+def distribute_thickness_from_simulation(gdir, fl_diagnostics_filesuffix='',
+                                         ys=None, ye=None,
                                          smooth_radius=None):
-    """This function redistributes the simulated glacier area and volume along
-    the elevation band flowline back onto
-    a 2D grid. In order for this to work, the glacier can not advance beyond
-    its initial state, the glacier diagnostics
-    during the simulation have to be stored, the gridded_data file needs to
-    contain both the points_by_section and
-    points_ranked_within_section variables.
+    """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
-    ys:  the first year to be redistributed
-    ye:  the last year to be redistributed """
+    For this to work, the glacier cannot advance beyond its initial area!
+
+    We assume that add_smoothed_glacier_topo and assign_points_to_band have
+    been run before, and that the user stored the data from their simulation
+    in a flowline diagnostics file (turned off per default).
+
+    The algorithm simply melts each flowline band onto the
+    2D grid points, but adds some heuristics (see :py:func:`assign_points_to_band`)
+    as to which grid points melts faster. Currently it does not take elevation
+    into account for the melt *within* one band, a downside which is somehow
+    mitigated with smoothing (the default is quite some smoothing).
+
+    Writes a new variable to gridded_data.nc (simulation_distributed_thickness)
+    together with a new time dimension. If a variable already exists we
+    will try to concatenate.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    fl_diagnostics_filesuffix : str
+        the filesuffix of the flowline diagnostics file.
+    ys : int
+        pick another year to start the series (default: the first year
+        of the diagnostic file)
+    ye : int
+        pick another year to end the series (default: the first year
+        of the diagnostic file)
+    smooth_radius : int
+        pixel size of the gaussian smoothing. Default is to use
+        cfg.PARAMS['smooth_window'] (i.e. a size in meters). Set to zero to
+        suppress smoothing.
+    """
 
     fp = gdir.get_filepath('fl_diagnostics', filesuffix=fl_diagnostics_filesuffix)
     with xr.open_dataset(fp) as dg:
@@ -231,5 +288,7 @@ def distribute_thickness_from_simulation(gdir, ys=None, ye=None,
 
     ds['time'] = dg['time']
     vn = "simulation_distributed_thickness"
+    if vn in ds:
+        raise NotImplementedError('Not yet concatenating - definitely we should')
     ds[vn] = (('time', 'y', 'x',), out_thick)
     ds.to_netcdf(gdir.get_filepath('gridded_data'))
