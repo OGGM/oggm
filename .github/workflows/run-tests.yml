@@ -43,6 +43,12 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
         run: ./ci/run_tests.sh ${{ matrix.test-env }}
+      - name: Upload pytest-mpl artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: pytest-mpl-results-${{ matrix.container }}-${{ matrix.test-env }}
+          path: /tmp/oggm-mpl-results/
       - name: Upload Coverage
         if: ${{ !contains(matrix.container, 'py3') }}
         continue-on-error: true
