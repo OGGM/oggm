@@ -8,6 +8,8 @@ export OGGM_TEST_ENV="$1"
 export OGGM_TEST_MODE=unset
 export MPLBACKEND=agg
 
+MPL_OUTPUT_OGGM_SUBDIR="$2"
+
 if [[ $OGGM_TEST_ENV == *-* ]]; then
     export OGGM_TEST_MODE="${OGGM_TEST_ENV/*-/}"
     export OGGM_TEST_ENV="${OGGM_TEST_ENV/-*/}"
@@ -34,7 +36,7 @@ export COVERAGE_RCFILE="$PWD/.coveragerc"
 coverage erase
 
 coverage run --source=./oggm --parallel-mode --module \
-    pytest --verbose --mpl-results-path=/tmp/oggm-mpl-results $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
+    pytest --verbose --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
 
 coverage combine
 coverage xml

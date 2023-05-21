@@ -5465,7 +5465,7 @@ class TestSemiImplicitModel:
         with xr.open_dataset(f, group='fl_0') as ds_fixed_dt:
             ds_fixed_dt = ds_fixed_dt.load()
 
-        # check their are instabilities when using fixed_dt
+        # check there are instabilities when using fixed_dt
         max_velocity_rmsd = 0
         max_velocity_year = 0
 
@@ -5491,4 +5491,101 @@ class TestSemiImplicitModel:
             plt.ylabel('[m yr-1]')
             plt.legend(['CFL', 'Fixed dt'], loc=2)
 
+            plt.show()
+
+
+class TestDistribute2D:
+
+    @pytest.mark.slow
+    def test_distribute(self, hef_elev_gdir, inversion_params):
+        # As long as hef_gdir uses 1, we need to use 1 here as well
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        init_present_time_glacier(hef_elev_gdir)
+        cfg.PARAMS['min_ice_thick_for_length'] = 1
+
+        # This can be done without any run
+        from oggm.sandbox import distribute_2d
+        distribute_2d.add_smoothed_glacier_topo(hef_elev_gdir)
+        tasks.distribute_thickness_per_altitude(hef_elev_gdir);
+        distribute_2d.assign_points_to_band(hef_elev_gdir)
+
+        mb_mod = massbalance.RandomMassBalance(hef_elev_gdir, y0=1980,
+                                               seed=4)
+        mb_mod.temp_bias = 0.5
+
+        fls = hef_elev_gdir.read_pickle('model_flowlines')
+        model = SemiImplicitModel(fls, mb_model=mb_mod, y0=2000,
+                                  fs=inversion_params['inversion_fs'],
+                                  glen_a=inversion_params['inversion_glen_a'])
+
+        fl_diag_path = hef_elev_gdir.get_filepath('fl_diagnostics',
+                                                  filesuffix='_commit',
+                                                  delete=True)
+        ds_diag, fl_diag = model.run_until_and_store(2100, fl_diag_path=fl_diag_path)
+        fl_diag = fl_diag[0]
+
+        distribute_2d.distribute_thickness_from_simulation(hef_elev_gdir, fl_diagnostics_filesuffix='_commit')
+
+        with xr.open_dataset(hef_elev_gdir.get_filepath('gridded_data')) as ds:
+            ds = ds.load()
+        dx2 = hef_elev_gdir.grid.dx ** 2
+        area_dis = (ds.simulation_distributed_thickness > 0).sum(dim=('x', 'y')) * dx2
+        vol_dis = ds.simulation_distributed_thickness.sum(dim=('x', 'y')) * dx2
+
+        # We have a very close volume and area conservation
+        assert_allclose(area_dis, ds_diag.area_m2, rtol=0.01)
+        assert_allclose(vol_dis, ds_diag.volume_m3, rtol=0.01)
+
+        # The flowline views should be quite good as well
+        fl_diag['area_m2_dis'] = fl_diag['area_m2'] * 0
+        fl_diag['volume_m3_dis'] = fl_diag['volume_m3'] * 0
+
+        band_ids = np.unique(np.sort(ds.band_index.data[ds.glacier_mask == 1])).astype(int)
+        fl_diag = fl_diag.isel(dis_along_flowline=slice(0, band_ids.max()+1))
+        for bid in band_ids:
+            thick_band = ds['simulation_distributed_thickness'].where(ds.band_index == bid)
+            fl_diag['volume_m3_dis'].data[:, bid] = thick_band.sum(dim=['x', 'y']) * dx2
+            fl_diag['area_m2_dis'].data[:, bid] = (thick_band > 1).sum(dim=['x', 'y']) * dx2
+
+        for yr in [2003]:
+            # All the other years have larger errors but they somehow still look
+            # OK - just harder to test
+            sel = fl_diag.sel(time=yr)
+            assert_allclose(sel['volume_m3_dis'], sel['volume_m3'], rtol=0.01, atol=2e6)
+            assert_allclose(sel['area_m2_dis'], sel['area_m2'], rtol=0.01, atol=1e4)
+
+        if do_plot:
+            yr = 2030
+            plt.figure()
+            f, ax = plt.subplots()
+            fl_diag.sel(time=yr)['volume_m3'].plot(ax=ax);
+            fl_diag.sel(time=yr)['volume_m3_dis'].plot(ax=ax);
+            plt.show(); plt.figure();
+            f, ax = plt.subplots()
+            fl_diag.sel(time=yr)['area_m2'].plot(ax=ax);
+            fl_diag.sel(time=yr)['area_m2_dis'].plot(ax=ax);
+            plt.show(); plt.figure();
+            f, ax = plt.subplots()
+            ds_diag.area_m2.plot(ax=ax);
+            area_dis.plot(ax=ax);
+            plt.show(); plt.figure();
+            f, ax = plt.subplots()
+            ds_diag.volume_m3.plot(ax=ax);
+            vol_dis.plot(ax=ax);
+            plt.show();
+
+        if False:
+            from matplotlib import animation
+            import matplotlib; matplotlib.use("TkAgg");
+            # Get a handle on the figure and the axes
+            fig, ax = plt.subplots()
+            thk = ds['simulation_distributed_thickness']
+            # Plot the initial frame.
+            cax = thk.isel(time=0).plot(add_colorbar=True, cmap='viridis',
+                vmin=0, vmax=350, cbar_kwargs={'extend': 'neither'})
+            def animate(frame):
+                cax.set_array(thk.values[frame, :].flatten())
+            animation.FuncAnimation(fig, animate, frames=len(thk.time),
+                                    interval=200)
             plt.show()

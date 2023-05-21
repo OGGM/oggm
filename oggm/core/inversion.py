@@ -723,13 +723,15 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed',
+def distribute_thickness_per_altitude(gdir, add_slope=True,
+                                      topo_variable='topo_smoothed',
                                       smooth_radius=None,
                                       dis_from_border_exp=0.25,
                                       varname_suffix=''):
     """Compute a thickness map by redistributing mass along altitudinal bands.
 
-    This is a rather cosmetic task, not relevant for OGGM but for ITMIX.
+    This is a rather cosmetic task, not relevant for OGGM but for ITMIX or
+    for visualizations.
 
     Parameters
     ----------
@@ -737,6 +739,9 @@ def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed'
         the glacier directory to process
     add_slope : bool
         whether a corrective slope factor should be used or not
+    topo_variable : str
+        the topography to read from `gridded_data.nc` (could be smoothed, or
+        smoothed differently).
     smooth_radius : int
         pixel size of the gaussian smoothing. Default is to use
         cfg.PARAMS['smooth_window'] (i.e. a size in meters). Set to zero to
@@ -757,7 +762,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed'
         gridded_attributes(gdir)
 
     with utils.ncDataset(grids_file) as nc:
-        topo_smoothed = nc.variables[topo][:]
+        topo = nc.variables[topo_variable][:]
         glacier_mask = nc.variables['glacier_mask'][:]
         dis_from_border = nc.variables['dis_from_border'][:]
         if add_slope:
@@ -786,25 +791,25 @@ def distribute_thickness_per_altitude(gdir, add_slope=True, topo='topo_smoothed'
 
     # Assign a first order thickness to the points
     # very inefficient inverse distance stuff
-    thick = glacier_mask * np.NaN
-    for y in range(thick.shape[0]):
-        for x in range(thick.shape[1]):
-            phgt = topo_smoothed[y, x]
-            # take the ones in a 100m range
-            starth = 100.
-            while True:
-                starth += 10
-                pok = np.nonzero(np.abs(phgt - hs) <= starth)[0]
-                if len(pok) != 0:
-                    break
-            sqr = np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
-            pzero = np.where(sqr == 0)
-            if len(pzero[0]) == 0:
-                thick[y, x] = np.average(ts[pok], weights=1 / sqr)
-            elif len(pzero[0]) == 1:
-                thick[y, x] = ts[pzero]
-            else:
-                raise RuntimeError('We should not be there')
+    thick = glacier_mask * 0.
+    yglac, xglac = np.nonzero(glacier_mask == 1)
+    for y, x in zip(yglac, xglac):
+        phgt = topo[y, x]
+        # take the ones in a 100m range
+        starth = 100.
+        while True:
+            starth += 10
+            pok = np.nonzero(np.abs(phgt - hs) <= starth)[0]
+            if len(pok) != 0:
+                break
+        sqr = np.sqrt((xs[pok]-x)**2 + (ys[pok]-y)**2)
+        pzero = np.where(sqr == 0)
+        if len(pzero[0]) == 0:
+            thick[y, x] = np.average(ts[pok], weights=1 / sqr)
+        elif len(pzero[0]) == 1:
+            thick[y, x] = ts[pzero]
+        else:
+            raise RuntimeError('We should not be there')
 
     # Distance from border (normalized)
     dis_from_border = dis_from_border**dis_from_border_exp

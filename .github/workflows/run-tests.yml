@@ -42,12 +42,12 @@ jobs:
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
-        run: ./ci/run_tests.sh ${{ matrix.test-env }}
+        run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
       - name: Upload pytest-mpl artifacts
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: pytest-mpl-results-${{ matrix.container }}-${{ matrix.test-env }}
+          name: pytest-mpl-results
           path: /tmp/oggm-mpl-results/
       - name: Upload Coverage
         if: ${{ !contains(matrix.container, 'py3') }}

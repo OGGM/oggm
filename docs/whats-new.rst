@@ -15,6 +15,15 @@ Bug fixes
   special data variables (e.g. ``is_fixed_geometry_spinup``) (:pull:`1563`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
+Enhancements
+~~~~~~~~~~~~
+
+- There is now the possibility to compute distributed area and thickness
+  changes from the flowline projections (:pull:`1576`, :pull:`1585`). The
+  functionality is currently in the sandbox and needs to be documented.
+  By `Anouk Vlug <https://github.com/anoukvlug>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 v1.6.0 (March 10, 2023)
 -----------------------
