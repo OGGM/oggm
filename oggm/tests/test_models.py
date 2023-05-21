@@ -5525,13 +5525,15 @@ class TestDistribute2D:
         ds_diag, fl_diag = model.run_until_and_store(2100, fl_diag_path=fl_diag_path)
         fl_diag = fl_diag[0]
 
-        distribute_2d.distribute_thickness_from_simulation(hef_elev_gdir, fl_diagnostics_filesuffix='_commit')
+        distribute_2d.distribute_thickness_from_simulation(hef_elev_gdir, input_filesuffix='_commit')
 
         with xr.open_dataset(hef_elev_gdir.get_filepath('gridded_data')) as ds:
             ds = ds.load()
         dx2 = hef_elev_gdir.grid.dx ** 2
-        area_dis = (ds.simulation_distributed_thickness > 0).sum(dim=('x', 'y')) * dx2
-        vol_dis = ds.simulation_distributed_thickness.sum(dim=('x', 'y')) * dx2
+
+        thick = ds.simulation_distributed_thickness_commit
+        area_dis = (thick > 0).sum(dim=('x', 'y')) * dx2
+        vol_dis = thick.sum(dim=('x', 'y')) * dx2
 
         # We have a very close volume and area conservation
         assert_allclose(area_dis, ds_diag.area_m2, rtol=0.01)
@@ -5544,7 +5546,7 @@ class TestDistribute2D:
         band_ids = np.unique(np.sort(ds.band_index.data[ds.glacier_mask == 1])).astype(int)
         fl_diag = fl_diag.isel(dis_along_flowline=slice(0, band_ids.max()+1))
         for bid in band_ids:
-            thick_band = ds['simulation_distributed_thickness'].where(ds.band_index == bid)
+            thick_band = thick.where(ds.band_index == bid)
             fl_diag['volume_m3_dis'].data[:, bid] = thick_band.sum(dim=['x', 'y']) * dx2
             fl_diag['area_m2_dis'].data[:, bid] = (thick_band > 1).sum(dim=['x', 'y']) * dx2
 
@@ -5580,12 +5582,11 @@ class TestDistribute2D:
             import matplotlib; matplotlib.use("TkAgg");
             # Get a handle on the figure and the axes
             fig, ax = plt.subplots()
-            thk = ds['simulation_distributed_thickness']
             # Plot the initial frame.
-            cax = thk.isel(time=0).plot(add_colorbar=True, cmap='viridis',
+            cax = thick.isel(time=0).plot(add_colorbar=True, cmap='viridis',
                 vmin=0, vmax=350, cbar_kwargs={'extend': 'neither'})
             def animate(frame):
-                cax.set_array(thk.values[frame, :].flatten())
-            animation.FuncAnimation(fig, animate, frames=len(thk.time),
+                cax.set_array(thick.values[frame, :].flatten())
+            animation.FuncAnimation(fig, animate, frames=len(thick.time),
                                     interval=200)
             plt.show()
