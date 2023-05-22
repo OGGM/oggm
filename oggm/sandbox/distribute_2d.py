@@ -1,4 +1,6 @@
 import logging
+import warnings
+
 import oggm.cfg as cfg
 from oggm import utils
 import numpy as np
@@ -187,7 +189,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness_from_simulation(gdir, fl_diagnostics_filesuffix='',
+def distribute_thickness_from_simulation(gdir, input_filesuffix='',
                                          ys=None, ye=None,
                                          smooth_radius=None):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
@@ -212,7 +214,7 @@ def distribute_thickness_from_simulation(gdir, fl_diagnostics_filesuffix='',
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    fl_diagnostics_filesuffix : str
+    input_filesuffix : str
         the filesuffix of the flowline diagnostics file.
     ys : int
         pick another year to start the series (default: the first year
@@ -226,7 +228,7 @@ def distribute_thickness_from_simulation(gdir, fl_diagnostics_filesuffix='',
         suppress smoothing.
     """
 
-    fp = gdir.get_filepath('fl_diagnostics', filesuffix=fl_diagnostics_filesuffix)
+    fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
     with xr.open_dataset(fp) as dg:
         assert len(dg.flowlines.data) == 1, 'Only works with one flowline.'
     with xr.open_dataset(fp, group=f'fl_0') as dg:
@@ -287,8 +289,8 @@ def distribute_thickness_from_simulation(gdir, fl_diagnostics_filesuffix='',
         ds = ds.load()
 
     ds['time'] = dg['time']
-    vn = "simulation_distributed_thickness"
+    vn = "simulation_distributed_thickness" + input_filesuffix
     if vn in ds:
-        raise NotImplementedError('Not yet concatenating - definitely we should')
+        warnings.warn(f'Overwriting existing variable {vn}')
     ds[vn] = (('time', 'y', 'x',), out_thick)
     ds.to_netcdf(gdir.get_filepath('gridded_data'))
