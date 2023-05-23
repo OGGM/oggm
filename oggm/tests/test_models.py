@@ -4308,7 +4308,11 @@ class TestHydro:
                            odf['liq_prcp_on_glacier'] +
                            odf['snowfall_off_glacier'] +
                            odf['snowfall_on_glacier'])
-        assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
+        # assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
+        # this test fails because snowfall_on_glacier changes, as the
+        # formerly negative melt_on_glacier was added to snowfall_on_glacier
+        # let's check instead if the remainning years are close:
+        assert_allclose(odf['tot_prcp'].iloc[1:], odf['tot_prcp'].iloc[1])
 
         # So is domain area
         odf['dom_area'] = odf['on_area'] + odf['off_area']
@@ -4337,9 +4341,15 @@ class TestHydro:
         # At the very first timesep there is no glacier so the
         # melt_on_glacier var is negative - this is a numerical artifact
         # from the residual
-        assert_allclose(odf['melt_on_glacier'].iloc[0],
-                        - odf['residual_mb'].iloc[0])
-
+        # assert_allclose(odf['melt_on_glacier'].iloc[0],
+        #                - odf['residual_mb'].iloc[0])
+        # we changed that: if negative, the absolute value should go to snowfall_on_glacier
+        # let's check that (this happens also at other times than the first step,
+        # but only in the first step it always happens)
+        assert_allclose(odf['snowfall_on_glacier'].iloc[0],
+                        odf['residual_mb'].iloc[0])
+        # check if melt on glacier is always above or equal zero
+        assert np.all(odf['melt_on_glacier'] >= 0)
         # Now with zero ref area
         tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
                              store_monthly_hydro=store_monthly_hydro,
@@ -4388,8 +4398,16 @@ class TestHydro:
         # At the very first timesep there is no glacier so the
         # melt_on_glacier var is negative - this is a numerical artifact
         # from the residual
-        assert_allclose(odf['melt_on_glacier'].iloc[0],
-                        - odf['residual_mb'].iloc[0])
+        # assert_allclose(odf['melt_on_glacier'].iloc[0],
+        #                - odf['residual_mb'].iloc[0])
+        # we changed, that, if negative, the absolute value should go to snowfall_on_glacier
+        # let's check that (this happens also at other times than the first step,
+        # but only in the first step it always happens)
+        assert_allclose(odf['snowfall_on_glacier'].iloc[0],
+                        odf['residual_mb'].iloc[0])
+
+        # check if melt on glacier is always above or equal zero
+        assert np.all(odf['melt_on_glacier'] >= 0)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [False, True], ids=['annual', 'monthly'])
@@ -4419,7 +4437,10 @@ class TestHydro:
                            odf['liq_prcp_on_glacier'] +
                            odf['snowfall_off_glacier'] +
                            odf['snowfall_on_glacier'])
+        # this test failed in test above, maybe just a coincidence
+        # that it works here
         assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
+
 
         # Glacier area is the same (remove on_area?)
         assert_allclose(odf['on_area'], odf['area_m2'])
@@ -4453,6 +4474,9 @@ class TestHydro:
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.025)
+
+        # check if melt on glacier is always above or equal zero
+        assert np.all(odf['melt_on_glacier'] >= 0)
 
     @pytest.mark.slow
     @pytest.mark.parametrize('store_monthly_hydro', [True, False], ids=['monthly', 'annual'])
@@ -4557,6 +4581,9 @@ class TestHydro:
             odf_ma.columns = [c.replace('_monthly', '') for c in odf_ma.columns]
             # Runoff peak should follow a temperature curve
             assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 8)
+
+        # check if melt on glacier is always above or equal zero
+        assert np.all(odf['melt_on_glacier'] >= 0)
 
     @pytest.mark.slow
     def test_hydro_ref_area(self, hef_gdir, inversion_params):
@@ -4678,6 +4705,9 @@ class TestHydro:
         # Residual MB should not be crazy large
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.05)
+
+        # check if melt on glacier is always above or equal zero
+        assert np.all(odf['melt_on_glacier'] >= 0)
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.slow
@@ -4874,7 +4904,10 @@ class TestHydro:
         frac = odf['residual_mb'] / odf['melt_on_glacier']
         assert_allclose(frac, 0, atol=0.044)  # annual can be large (prob)
 
-    @pytest.mark.slow
+        # check if melt on glacier is always above or equal zero
+        assert np.all(odf['melt_on_glacier'] >= 0)
+
+    #@pytest.mark.slow
     @pytest.mark.parametrize('mb_type', ['random', 'const', 'hist'])
     @pytest.mark.parametrize('mb_bias', [500, -500, 0])
     def test_hydro_monhly_vs_annual(self, hef_gdir, inversion_params,
