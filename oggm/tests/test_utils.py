@@ -1387,6 +1387,7 @@ class TestPreproCLI(unittest.TestCase):
                               test_ids=['RGI60-11.00929'],
                               dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
                               test_intersects_file=inter,
+                              store_fl_diagnostics=True,
                               mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
                               override_params={'geodetic_mb_period': ref_period,
@@ -1445,6 +1446,12 @@ class TestPreproCLI(unittest.TestCase):
                                 rid[:8], rid[:11], rid + '.tar.gz')
             assert not os.path.isfile(tarf)
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+
+            fp = gdir.get_filepath('fl_diagnostics', filesuffix='_spinup_historical')
+            with xr.open_dataset(fp, group='fl_0') as ds:
+                assert ds.time[0] == 1979
+                assert ds.time[-1] == 2015
+
             model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
             assert isinstance(model, FlowlineModel)
             model = FileModel(gdir.get_filepath('model_geometry',

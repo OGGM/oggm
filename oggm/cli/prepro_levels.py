@@ -85,9 +85,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_hugonnet_dhdt=False,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
-                      dynamic_spinup=False, err_dmdtda_scaling_factor=1,
+                      dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
-                      continue_on_error=True):
+                      continue_on_error=True, store_fl_diagnostics=False):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -168,6 +168,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     continue_on_error : bool
         if True the workflow continues if a task raises an error. For operational
         runs it should be set to True (the default).
+    store_fl_diagnostics : bool
+        if True, also compute and store flowline diagnostics during preprocessing.
+        This can increase data usage quite a bit.
     """
 
     # Input check
@@ -227,6 +230,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Other things that make sense
     override_params['store_model_geometry'] = True
+    override_params['store_fl_diagnostics'] = store_fl_diagnostics
 
     utils.mkdir(working_dir)
     override_params['working_dir'] = working_dir
@@ -835,15 +839,19 @@ def parse_args(args):
                              "the RGI-date, AND mass-change from Hugonnet "
                              "in the period 2000-2020 (dynamic mu* "
                              "calibration).")
-    parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=1,
+    parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=0.2,
                         help="scaling factor to account for correlated "
                              "uncertainties of geodetic mass balance "
                              "observations when looking at regional scale. "
-                             "Should be smaller or equal 1.")
+                             "Should be smaller or equal to 1.")
     parser.add_argument('--dynamic-spinup-start-year', type=int, default=1979,
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
+    parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
+                        help="Also compute and store flowline diagnostics during "
+                             "preprocessing. This can increase data usage quite "
+                             "a bit.")
 
     args = parser.parse_args(args)
 
@@ -902,6 +910,7 @@ def parse_args(args):
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 mb_calibration_strategy=args.mb_calibration_strategy,
+                store_fl_diagnostics=args.store_fl_diagnostics,
                 )
 
 
