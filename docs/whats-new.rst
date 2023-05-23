@@ -14,6 +14,10 @@ Bug fixes
   needed to compile different spinup strategies together, as some include
   special data variables (e.g. ``is_fixed_geometry_spinup``) (:pull:`1563`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a problem in the hydro outputs where on some occasions ``melt_on_glacier``
+  would be negative. We changed this term to become a positive term for
+  snowfall on glacier instead (:pull:`1584`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
 
 
 v1.6.0 (March 10, 2023)

@@ -4343,7 +4343,7 @@ class TestHydro:
         # from the residual
         # assert_allclose(odf['melt_on_glacier'].iloc[0],
         #                - odf['residual_mb'].iloc[0])
-        # we changed, that, if negative, the absolute value should go to snowfall_on_glacier
+        # we changed that: if negative, the absolute value should go to snowfall_on_glacier
         # let's check that (this happens also at other times than the first step,
         # but only in the first step it always happens)
         assert_allclose(odf['snowfall_on_glacier'].iloc[0],

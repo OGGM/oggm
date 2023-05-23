@@ -3855,8 +3855,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                 melt_off_g = (prcpsol - mb) * off_area
 
                 if mb_mod.bias == 0:
-                    # melt_on_g and melt_off_g can be negative, but the absolute values are very small,
-                    # so we clip them to zero
+                    # melt_on_g and melt_off_g can be negative, but the absolute
+                    # values are very small. so we clip them to zero
                     melt_on_g = utils.clip_min(melt_on_g, 0)
                     melt_off_g = utils.clip_min(melt_off_g, 0)
 
@@ -3934,38 +3934,36 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             residual_mb = model_mb - reconstructed_mb
 
         # Now correct
+        g_melt = out['melt_on_glacier']['data'][i, :]
         if residual_mb == 0:
             pass
         elif store_monthly_hydro:
             # We try to correct the melt only where there is some
-            asum = out['melt_on_glacier']['data'][i, :].sum()
+            asum = g_melt.sum()
             if asum > 1e-7 and (residual_mb / asum < 1):
                 # try to find a fac
                 fac = 1 - residual_mb / asum
-                # fac should always be positive, otherwise melt_on_glacier gets negative,
-                # but this is always true, because we only do the correction if residual_mb / asum < 1
-                corr = out['melt_on_glacier']['data'][i, :] * fac
-                residual_mb = out['melt_on_glacier']['data'][i, :] - corr
+                # fac should always be positive, otherwise melt_on_glacier
+                # gets negative. This is always true, because we only do the
+                # correction if residual_mb / asum < 1
+                corr = g_melt * fac
+                residual_mb = g_melt - corr
                 out['melt_on_glacier']['data'][i, :] = corr
             else:
                 # We simply spread over the months
                 residual_mb /= 12
-                # residual_mb larger > melt_on_glacier: add absolute difference to snowfall (--=+, mass conservation)
-                out['snowfall_on_glacier']['data'][i, :] -= utils.clip_max(out['melt_on_glacier']['data'][i, :] -
-                                                                           residual_mb, 0)
+                # residual_mb larger > melt_on_glacier
+                # add absolute difference to snowfall (--=+, mass conservation)
+                out['snowfall_on_glacier']['data'][i, :] -= utils.clip_max(g_melt - residual_mb, 0)
                 # assure that new melt_on_glacier is non-negative
-                out['melt_on_glacier']['data'][i, :] = utils.clip_min(out['melt_on_glacier']['data'][i, :] -
-                                                                      residual_mb, 0)
-
+                out['melt_on_glacier']['data'][i, :] = utils.clip_min(g_melt - residual_mb, 0)
         else:
             # We simply apply the residual - no choice here
-            # residual_mb larger > melt_on_glacier: add absolute difference to snowfall (--=+, mass conservation)
-            out['snowfall_on_glacier']['data'][i, :] -= utils.clip_max(out['melt_on_glacier']['data'][i, :] -
-                                                                       residual_mb, 0)
+            # residual_mb larger > melt_on_glacier:
+            # add absolute difference to snowfall (--=+, mass conservation)
+            out['snowfall_on_glacier']['data'][i, :] -= utils.clip_max(g_melt - residual_mb, 0)
             # assure that new melt_on_glacier is non-negative
-            out['melt_on_glacier']['data'][i, :] = utils.clip_min(out['melt_on_glacier']['data'][i, :] -
-                                                                  residual_mb, 0)
-
+            out['melt_on_glacier']['data'][i, :] = utils.clip_min(g_melt - residual_mb, 0)
 
         out['model_mb']['data'][i] = model_mb
         out['residual_mb']['data'][i] = residual_mb
