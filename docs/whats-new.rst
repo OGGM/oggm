@@ -18,6 +18,10 @@ Bug fixes
   would be negative. We changed this term to become a positive term for
   snowfall on glacier instead (:pull:`1584`).
   By `Lilian Schuster <https://github.com/lilianschuster>`_
+- Fixed an issue with volume below water level computations with lake-terminating
+  glaciers (:pull:`1584`). This affected only diagnostic computations of the
+  ``volume_below_water`` variable and should be insignificant.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Enhancements
 ~~~~~~~~~~~~

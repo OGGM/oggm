@@ -618,20 +618,7 @@ class FlowlineModel(object):
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
         self.is_marine_terminating = is_tidewater and not is_lake_terminating
-
-        if water_level is None:
-            self.water_level = 0
-            if self.is_lake_terminating:
-                if not flowlines[-1].has_ice():
-                    raise InvalidParamsError('Set `water_level` for lake '
-                                             'terminating glaciers in '
-                                             'idealized runs')
-                # Arbitrary water level 1m below last grid points elevation
-                min_h = flowlines[-1].surface_h[flowlines[-1].thick > 0][-1]
-                self.water_level = (min_h -
-                                    cfg.PARAMS['free_board_lake_terminating'])
-        else:
-            self.water_level = water_level
+        self.water_level = 0 if water_level is None else water_level
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback.lower()

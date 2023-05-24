@@ -11,7 +11,7 @@ are not trivial to install. The instructions below provide all the required
 details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
-OGGM is fully `tested`_ with Python versions 3.8 to 3.10 on Linux.
+OGGM is fully `tested`_ with Python versions 3.9 to 3.11 on Linux.
 We do not test OGGM automatically on Mac OSX, but it should probably run
 fine there as well.
 
@@ -23,7 +23,8 @@ fine there as well.
     and install and run OGGM from there.
 
 For most users we recommend to
-install Python and the package dependencies with the :ref:`conda package manager <conda-install>`.
+install Python and the package dependencies with the :ref:`conda package manager <conda-install>`,
+in particular with the ``mamba`` and ``conda-forge`` infrastructure.
 Linux users with experience with `pip`_ can follow
 :ref:`these instructions <virtualenv-install>` to install OGGM in a pyenv environment with pip.
 
@@ -108,9 +109,12 @@ replacement for all conda commands. If you feel like it, install mamba in your c
 environment (``conda install -c conda-forge mamba``)
 and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
-*Note 2022*: soon, conda will use mamba per default. See
-`this post <https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community>`_
-for more info.
+.. warning::
+
+    Do not install mambaforge on top of an existing conda installation! See
+    `this issue <https://github.com/OGGM/oggm/issues/1571>`_ for context.
+    If you have conda installed and want to switch to mamba + conda-forge,
+    follow the instructions on the respective platforms.
 
 .. _miniconda: http://conda.pydata.org/miniconda.html
 .. _mambaforge: https://github.com/conda-forge/miniforge#mambaforge
