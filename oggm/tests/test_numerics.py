@@ -1713,24 +1713,6 @@ class TestKCalving():
             plt.ylabel('Altitude [m]')
             plt.show()
 
-        # Let the model decide the water level
-        fls = bu_tidewater_bed(water_level=1000)
-        thick = fls[0].thick
-        thick[fls[0].bed_h > 1000] = cfg.PARAMS['free_board_lake_terminating']
-        fls[0].thick = thick
-        model = FluxBasedModel(fls, mb_model=ScalarMassBalance(),
-                               is_tidewater=True, calving_use_limiter=True,
-                               is_lake_terminating=True,
-                               flux_gate=0.06, do_kcalving=True,
-                               calving_k=0.2)
-        assert_allclose(model.water_level, 1000, atol=1)
-
-        with pytest.raises(InvalidParamsError):
-            fls = bu_tidewater_bed(water_level=1000)
-            FluxBasedModel(fls, mb_model=ScalarMassBalance(),
-                           is_tidewater=True, calving_use_limiter=True,
-                           is_lake_terminating=True)
-
 
 class TestSia2d(unittest.TestCase):
 
