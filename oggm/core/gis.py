@@ -952,16 +952,26 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
     avg_slope = np.rad2deg(np.mean(slope[glacier_mask]))
 
+    sec_bins = -22.5 + 45 * np.arange(9)
+    aspect_for_bin = aspect
+    if aspect_for_bin >= sec_bins[-1]:
+        aspect_for_bin -= 360
+    aspect_sec = np.digitize(aspect_for_bin, sec_bins)
+    dx2 =gdir.grid.dx**2 * 1e-6
     # write
     df = pd.DataFrame()
-    df['RGIId'] = [gdir.rgi_id]
-    df['GLIMSId'] = [gdir.glims_id]
-    df['Zmin'] = [dem_on_ice.min()]
-    df['Zmax'] = [dem_on_ice.max()]
-    df['Zmed'] = [np.median(dem_on_ice)]
-    df['Area'] = [gdir.rgi_area_km2]
-    df['Slope'] = [avg_slope]
-    df['Aspect'] = [aspect]
+    df['rgi_id'] = [gdir.rgi_id]
+    df['area_km2'] = [gdir.rgi_area_km2]
+    df['area_grid_km2'] = [glacier_mask.sum() * dx2]
+    df['valid_dem_area_km2'] = [np.isfinite(dem_on_ice).sum() * dx2]
+    df['zmin_m'] = [np.nanmin(dem_on_ice)]
+    df['zmax_m'] = [np.nanmax(dem_on_ice)]
+    df['zmed_m'] = [np.nanmedian(dem_on_ice)]
+    df['zmean_m'] = [np.nanmean(dem_on_ice)]
+    df['slope_deg'] = [avg_slope]
+    df['aspect_deg'] = [aspect]
+    df['aspect_sec'] = [aspect_sec]
+    df['dem_source'] = [gdir.get_diagnostics()['dem_source']]
     for b, bs in zip(hi, (bins[1:] + bins[:-1])/2):
         df['{}'.format(np.round(bs).astype(int))] = [b]
     df.to_csv(gdir.get_filepath('hypsometry'), index=False)

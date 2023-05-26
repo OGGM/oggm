@@ -240,9 +240,13 @@ def gdir_from_prepro(entity, from_prepro_level=None,
         prepro_border = int(cfg.PARAMS['border'])
     if prepro_rgi_version is None:
         prepro_rgi_version = cfg.PARAMS['rgi_version']
-    try:
-        rid = entity.RGIId
-    except AttributeError:
+
+    if isinstance(entity, pd.Series):
+        try:
+            rid = entity.RGIId
+        except AttributeError:
+            rid = entity.rgi_id
+    else:
         rid = entity
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
@@ -275,13 +279,18 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
            'OGGM does not provide pre-processed directories for these.')
 
     # Check if dataframe or list of strs
-    try:
-        rgi_ids = rgidf.RGIId
-        # if dataframe we can also check for connectivity
-        if 'Connect' in rgidf and np.any(rgidf['Connect'] == 2):
-            if err_on_lvl2:
-                raise RuntimeError(msg)
-    except AttributeError:
+    is_dataframe = isinstance(rgidf, pd.DataFrame)
+    if is_dataframe:
+        try:
+            rgi_ids = rgidf.RGIId
+            # if dataframe we can also check for connectivity
+            if 'Connect' in rgidf and np.any(rgidf['Connect'] == 2):
+                if err_on_lvl2:
+                    raise RuntimeError(msg)
+        except AttributeError:
+            # RGI7
+            rgi_ids = rgidf.rgi_id
+    else:
         rgi_ids = utils.tolist(rgidf)
         # Check for Connectivity level 2 here as well
         not_good_ids = pd.read_csv(utils.get_demo_file('rgi6_ids_conn_lvl2.csv'),

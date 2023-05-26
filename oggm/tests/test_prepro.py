@@ -321,11 +321,11 @@ class TestGIS(unittest.TestCase):
 
         dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
 
-        np.testing.assert_allclose(dfh['Slope'], entity.Slope, atol=0.5)
-        np.testing.assert_allclose(dfh['Aspect'], entity.Aspect, atol=5)
-        np.testing.assert_allclose(dfh['Zmed'], entity.Zmed, atol=20)
-        np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
-        np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
+        np.testing.assert_allclose(dfh['slope_deg'], entity.Slope, atol=0.5)
+        np.testing.assert_allclose(dfh['aspect_deg'], entity.Aspect, atol=5)
+        np.testing.assert_allclose(dfh['zmed_m'], entity.Zmed, atol=20)
+        np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
+        np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
 
         bins = []
         for c in dfh.columns:
@@ -369,11 +369,11 @@ class TestGIS(unittest.TestCase):
                         os.path.join(self.testdir, 'simple_masks.nc'))
 
         dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
-        np.testing.assert_allclose(dfh['Slope'], entity.Slope, atol=1)
-        np.testing.assert_allclose(dfh['Aspect'], entity.Aspect, atol=10)
-        np.testing.assert_allclose(dfh['Zmed'], entity.Zmed, atol=20)
-        np.testing.assert_allclose(dfh['Zmax'], entity.Zmax, atol=20)
-        np.testing.assert_allclose(dfh['Zmin'], entity.Zmin, atol=20)
+        np.testing.assert_allclose(dfh['slope_deg'], entity.Slope, atol=1)
+        np.testing.assert_allclose(dfh['aspect_deg'], entity.Aspect, atol=10)
+        np.testing.assert_allclose(dfh['zmed_m'], entity.Zmed, atol=20)
+        np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
+        np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
 
     @pytest.mark.skipif((Version(rasterio.__version__) <
                          Version('1.0')),

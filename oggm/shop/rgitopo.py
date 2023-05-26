@@ -90,29 +90,25 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory
     dem_source : str
-        the source to pick from (default: NASADEM and COPDEM90)
+        the source to pick from
     keep_dem_folders : bool
         the default is to delete the other DEM directories to save space.
         Set this to True to prevent that (e.g. for sensitivity tests)
     """
 
     # Start by deleting noise
-    for fn in ['log.txt', 'diagnostics.json']:
-        fp = os.path.join(gdir.dir, fn)
-        if os.path.exists(fp):
-            os.remove(fp)
+    for fn in os.listdir(gdir.dir):
+        if fn in ['glacier_mask.tif', 'glacier_grid.json', 'outlines.tar.gz']:
+            continue
+        if os.path.isfile(fn):
+            os.remove(fn)
 
     sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()
                and not f.name.startswith('.')]
-
-    if dem_source is None:
-        for s in ['NASADEM', 'COPDEM90', 'GIMP', 'REMA', 'TANDEM', 'MAPZEN']:
-            if s in sources:
-                dem_source = s
-
     if dem_source not in sources:
         raise RuntimeError('source {} not in folder'.format(dem_source))
 
+    gdir.add_to_diagnostics('dem_source', dem_source)
     shutil.copyfile(os.path.join(gdir.dir, dem_source, 'dem.tif'),
                     gdir.get_filepath('dem'))
     shutil.copyfile(os.path.join(gdir.dir, dem_source, 'dem_source.txt'),

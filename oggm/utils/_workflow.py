@@ -1767,6 +1767,55 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
             out.to_csv(path)
     return out
 
+@entity_task(log)
+def read_glacier_hypsometry(gdir):
+    """Utility function to read the glacier hypsometry in the folder.
+
+    Parameters
+    ----------
+    gdir :  :py:class:`oggm.GlacierDirectory` object
+        the glacier directory to process
+
+    Returns
+    -------
+    the dataframe
+    """
+    return pd.read_csv(gdir.get_filepath('hypsometry')).iloc[0]
+
+
+@global_task(log)
+def compile_glacier_hypsometry(gdirs, filesuffix='', path=True):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(read_glacier_hypsometry, gdirs)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('glacier_hypsometry' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+    return out
+
 
 @global_task(log)
 def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
