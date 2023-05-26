@@ -1789,7 +1789,8 @@ def read_glacier_hypsometry(gdir):
 
 
 @global_task(log)
-def compile_glacier_hypsometry(gdirs, filesuffix='', path=True):
+def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
+                               add_column=None):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1805,13 +1806,16 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True):
     path : str, bool
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
+    add_column : tuple
+        if you feel like adding a key - value pair to the compiled dataframe
     """
     from oggm.workflow import execute_entity_task
 
     out_df = execute_entity_task(read_glacier_hypsometry, gdirs)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
-
+    if add_column is not None:
+        out[add_column[0]] = add_column[1]
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
