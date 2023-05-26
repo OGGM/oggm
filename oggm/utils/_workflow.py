@@ -1767,6 +1767,7 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
             out.to_csv(path)
     return out
 
+
 @entity_task(log)
 def read_glacier_hypsometry(gdir):
     """Utility function to read the glacier hypsometry in the folder.
@@ -1780,7 +1781,11 @@ def read_glacier_hypsometry(gdir):
     -------
     the dataframe
     """
-    return pd.read_csv(gdir.get_filepath('hypsometry')).iloc[0]
+    try:
+        out = pd.read_csv(gdir.get_filepath('hypsometry')).iloc[0]
+    except:
+        out = {'rgi_id':gdir.rgi_id}
+    return out
 
 
 @global_task(log)
