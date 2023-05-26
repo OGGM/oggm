@@ -119,8 +119,6 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
         for source in sources:
             shutil.rmtree(os.path.join(gdir.dir, source))
 
-    return True
-
 
 @utils.entity_task(log, writes=[])
 def dem_quality_check(gdir):
