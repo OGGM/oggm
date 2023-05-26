@@ -143,7 +143,7 @@ def dem_quality_check(gdir):
     sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()
                and not f.name.startswith('.')]
 
-    out = {}
+    out = dict(rgi_id=gdir.rgi_id)
     for s in sources:
         try:
             with rasterio.open(os.path.join(gdir.dir, s, 'dem.tif'), 'r',
@@ -162,7 +162,6 @@ def dem_quality_check(gdir):
                 continue
 
             out[s] = valid_mask.sum() / area
-
         except BaseException:
             pass
 
