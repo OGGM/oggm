@@ -1784,7 +1784,7 @@ def read_glacier_hypsometry(gdir):
     try:
         out = pd.read_csv(gdir.get_filepath('hypsometry')).iloc[0]
     except:
-        out = {'rgi_id':gdir.rgi_id}
+        out = pd.Series({'rgi_id': gdir.rgi_id})
     return out
 
 
