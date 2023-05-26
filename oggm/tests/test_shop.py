@@ -214,7 +214,8 @@ class Test_rgitopo:
                                                  'emen.de/~oggm/test_gdirs/dem'
                                                  's_v1/default/')
 
-        gd = rgitopo.init_glacier_directories_from_rgitopo(['RGI60-09.01004'])
+        gd = rgitopo.init_glacier_directories_from_rgitopo(['RGI60-09.01004'],
+                                                           dem_source='COPDEM')
         gd = gd[0]
 
         assert gd.has_file('dem')
@@ -237,6 +238,7 @@ class Test_rgitopo:
                                                  's_v1/default/')
 
         gd = rgitopo.init_glacier_directories_from_rgitopo(['RGI60-09.01004'],
+                                                           dem_source='COPDEM',
                                                            keep_dem_folders=True)
         out = rgitopo.dem_quality_check(gd[0])
         assert len(out) > 5

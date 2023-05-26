@@ -2935,7 +2935,7 @@ class GlacierDirectory(object):
         except KeyError:
             # RGI V7
             _area = self.read_shapefile('outlines')['area_km2']
-        return np.round(float(_area.iloc[0]), decimals=3)
+        return float(_area.iloc[0])
 
     @lazy_property
     def intersects_ids(self):
