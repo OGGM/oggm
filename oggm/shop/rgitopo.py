@@ -100,6 +100,7 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
     for fn in os.listdir(gdir.dir):
         if fn in ['glacier_mask.tif', 'glacier_grid.json', 'outlines.tar.gz']:
             continue
+        fn = os.path.join(gdir.dir, fn)
         if os.path.isfile(fn):
             os.remove(fn)
 
@@ -117,6 +118,8 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
     if not keep_dem_folders:
         for source in sources:
             shutil.rmtree(os.path.join(gdir.dir, source))
+
+    return True
 
 
 @utils.entity_task(log, writes=[])
