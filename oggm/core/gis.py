@@ -705,9 +705,10 @@ def glacier_masks(gdir):
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
     # fix-invalid-polygon-python-shapely
-    glacier_poly_hr = glacier_poly_hr.buffer(0)
     if not glacier_poly_hr.is_valid:
-        raise InvalidGeometryError('This glacier geometry is not valid.')
+        glacier_poly_hr = glacier_poly_hr.buffer(0)
+        if not glacier_poly_hr.is_valid:
+            raise InvalidGeometryError('This glacier geometry is not valid.')
 
     # Rounded nearest pix
     glacier_poly_pix = _polygon_to_pix(glacier_poly_hr)
@@ -836,9 +837,11 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
     # fix-invalid-polygon-python-shapely
-    geometry = geometry.buffer(0)
+    # Should be replaced by new recursive_correct
     if not geometry.is_valid:
-        raise InvalidDEMError('This glacier geometry is not valid.')
+        geometry = geometry.buffer(0)
+        if not geometry.is_valid:
+            raise InvalidDEMError('This glacier geometry is not valid.')
 
     # Compute the glacier mask using rasterio
     # Small detour as mask only accepts DataReader objects
@@ -1019,9 +1022,10 @@ def rasterio_glacier_mask(gdir, source=None):
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
     # fix-invalid-polygon-python-shapely
-    geometry = geometry.buffer(0)
     if not geometry.is_valid:
-        raise InvalidDEMError('This glacier geometry is not valid.')
+        geometry = geometry.buffer(0)
+        if not geometry.is_valid:
+            raise InvalidDEMError('This glacier geometry is not valid.')
 
     # Compute the glacier mask using rasterio
     # Small detour as mask only accepts DataReader objects
@@ -1460,9 +1464,10 @@ def merged_glacier_masks(gdir, geometry):
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
     # fix-invalid-polygon-python-shapely
-    glacier_poly_hr = glacier_poly_hr.buffer(0)
     if not glacier_poly_hr.is_valid:
-        raise RuntimeError('This glacier geometry is not valid.')
+        glacier_poly_hr = glacier_poly_hr.buffer(0)
+        if not glacier_poly_hr.is_valid:
+            raise RuntimeError('This glacier geometry is not valid.')
 
     # Rounded geometry to nearest nearest pix
     # I can not use _polyg

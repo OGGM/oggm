@@ -98,7 +98,8 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
 
     # Start by deleting noise
     for fn in os.listdir(gdir.dir):
-        if fn in ['glacier_mask.tif', 'glacier_grid.json', 'outlines.tar.gz']:
+        if fn in ['glacier_mask.tif', 'glacier_grid.json',
+                  'outlines.tar.gz', 'intersects.tar.gz']:
             continue
         fn = os.path.join(gdir.dir, fn)
         if os.path.isfile(fn):

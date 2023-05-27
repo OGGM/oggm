@@ -22,6 +22,7 @@ except AttributeError:
 from scipy.interpolate import interp1d
 import shapely.geometry as shpg
 from shapely.ops import linemerge
+from shapely.validation import make_valid
 
 # Optional libs
 try:
@@ -519,8 +520,28 @@ def polygon_intersections(gdf):
     return out
 
 
+def recursive_valid_polygons(geoms, crs):
+    """Given a list of shapely geometries, makes sure all geometries are valid
+
+    All will be valid polygons of area > 10000m2"""
+    new_geoms = []
+    for geom in geoms:
+        new_geom = make_valid(geom)
+        try:
+            new_geoms.extend(recursive_valid_polygons(list(new_geom.geoms), crs))
+        except AttributeError:
+            new_s = gpd.GeoSeries(new_geom)
+            new_s.crs = crs
+            if new_s.to_crs({'proj': 'cea'}).area.iloc[0] >= 10000:
+                new_geoms.append(new_geom)
+    assert np.all([type(geom) == shpg.Polygon for geom in new_geoms])
+    return new_geoms
+
+
 def multipolygon_to_polygon(geometry, gdir=None):
     """Sometimes an RGI geometry is a multipolygon: this should not happen.
+
+    It was vor vey old versions, pretty sure this is not needed anymore.
 
     Parameters
     ----------

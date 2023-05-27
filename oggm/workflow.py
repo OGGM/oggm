@@ -453,7 +453,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                         # List of str
                         pass
 
-
             if _isdir(from_tar):
                 gdirs = execute_entity_task(gdir_from_tar, entities,
                                             from_tar=from_tar)

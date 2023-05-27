@@ -242,7 +242,7 @@ class Test_rgitopo:
                                                            keep_dem_folders=True)
         out = rgitopo.dem_quality_check(gd[0])
         assert len(out) > 5
-        assert np.sum(list(out.values())) > 5
+        assert pd.Series(out).iloc[1:].sum() > 5
 
 
 class Test_w5e5:

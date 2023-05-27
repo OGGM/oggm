@@ -60,7 +60,8 @@ except ImportError:
 from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
-                               haversine, multipolygon_to_polygon, clip_scalar)
+                               haversine, multipolygon_to_polygon,
+                               recursive_valid_polygons)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
@@ -2840,21 +2841,23 @@ class GlacierDirectory(object):
         return '\n'.join(summary) + '\n'
 
     def _reproject_and_write_shapefile(self, entity):
-
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
-            from pyproj.aoi import AreaOfInterest
-            from pyproj.database import query_utm_crs_info
-            utm_crs_list = query_utm_crs_info(
-                datum_name="WGS 84",
-                area_of_interest=AreaOfInterest(
-                    west_lon_degree=self.cenlon,
-                    south_lat_degree=self.cenlat,
-                    east_lon_degree=self.cenlon,
-                    north_lat_degree=self.cenlat,
-                ),
-            )
-            proj4_str = utm_crs_list[0].code
+            if entity.get('utm_zone', False):
+                proj4_str = {'proj': 'utm', 'zone': entity['utm_zone']}
+            else:
+                from pyproj.aoi import AreaOfInterest
+                from pyproj.database import query_utm_crs_info
+                utm_crs_list = query_utm_crs_info(
+                    datum_name="WGS 84",
+                    area_of_interest=AreaOfInterest(
+                        west_lon_degree=self.cenlon,
+                        south_lat_degree=self.cenlat,
+                        east_lon_degree=self.cenlon,
+                        north_lat_degree=self.cenlat,
+                    ),
+                )
+                proj4_str = utm_crs_list[0].code
         elif cfg.PARAMS['map_proj'] == 'tmerc':
             params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
                           k=0.9996, x_0=0, y_0=0, datum='WGS84')
@@ -2870,6 +2873,11 @@ class GlacierDirectory(object):
         # transform geometry to map
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
+        if not geometry.is_valid:
+            correct = recursive_valid_polygons([geometry], crs=proj4_str)
+            if len(correct) != 1:
+                raise RuntimeError('Cant correct this geometry')
+            geometry = correct[0]
         geometry = multipolygon_to_polygon(geometry, gdir=self)
 
         # Save transformed geometry to disk
