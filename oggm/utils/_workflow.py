@@ -2873,11 +2873,11 @@ class GlacierDirectory(object):
         # transform geometry to map
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
-        if not geometry.is_valid:
-            correct = recursive_valid_polygons([geometry], crs=proj4_str)
-            if len(correct) != 1:
-                raise RuntimeError('Cant correct this geometry')
-            geometry = correct[0]
+        # if not geometry.is_valid:
+        #     correct = recursive_valid_polygons([geometry], crs=proj4_str)
+        #     if len(correct) != 1:
+        #         raise RuntimeError('Cant correct this geometry')
+        #     geometry = correct[0]
         geometry = multipolygon_to_polygon(geometry, gdir=self)
 
         # Save transformed geometry to disk
