@@ -2652,6 +2652,7 @@ class GlacierDirectory(object):
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
             try:
+                # RGIv7
                 self.cenlon = float(rgi_entity.cenlon)
                 self.cenlat = float(rgi_entity.cenlat)
             except AttributeError:
@@ -2873,7 +2874,9 @@ class GlacierDirectory(object):
         # transform geometry to map
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
-        if not geometry.is_valid:
+        if len(self.rgi_id) == 23 and not geometry.is_valid:
+            # In RGI7 we know that the geometries are valid in entry
+            # So we have to validate them after proj as well
             # Try buffer first
             geometry = geometry.buffer(0)
             if not geometry.is_valid:
