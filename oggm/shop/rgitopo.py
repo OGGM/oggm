@@ -120,7 +120,11 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
             shutil.rmtree(os.path.join(gdir.dir, source))
 
 
-@utils.entity_task(log, writes=[])
+def _fallback_dem_quality_check(gdir):
+    return dict(rgi_id=gdir.rgi_id)
+
+
+@utils.entity_task(log, writes=[], fallback=_fallback_dem_quality_check)
 def dem_quality_check(gdir):
     """Run a simple quality check on the rgitopo DEMs
 
@@ -151,18 +155,10 @@ def dem_quality_check(gdir):
                 topo = ds.read(1).astype(rasterio.float32)
                 topo[topo <= -999.] = np.NaN
                 topo[ds.read_masks(1) == 0] = np.NaN
-
             valid_mask = np.isfinite(topo) & mask
             if np.all(~valid_mask):
                 continue
-
-            z_on_glacier = topo[valid_mask]
-            zmax, zmin = np.nanmax(z_on_glacier), np.nanmin(z_on_glacier)
-            if zmin == zmax:
-                continue
-
             out[s] = valid_mask.sum() / area
         except BaseException:
             pass
-
     return out
