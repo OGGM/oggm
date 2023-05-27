@@ -837,7 +837,6 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     # simple trick to correct invalid polys:
     # http://stackoverflow.com/questions/20833344/
     # fix-invalid-polygon-python-shapely
-    # Should be replaced by new recursive_correct
     if not geometry.is_valid:
         geometry = geometry.buffer(0)
         if not geometry.is_valid:
