@@ -930,9 +930,6 @@ def compute_hypsometry_attributes(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    write_hypsometry : bool
-        whether to write out the hypsometry file or not - it is used by e.g,
-        rgitools
     """
     dem = read_geotiff_dem(gdir)
 
@@ -945,8 +942,10 @@ def compute_hypsometry_attributes(gdir):
     with rasterio.open(fp, 'r', driver='GTiff') as ds:
         glacier_exterior_mask = ds.read(1).astype(rasterio.int16) == 1
 
+    valid_mask = glacier_mask & np.isfinite(dem)
+
     bsize = 50.
-    dem_on_ice = dem[glacier_mask]
+    dem_on_ice = dem[valid_mask]
     bins = np.arange(nicenumber(dem_on_ice.min(), bsize, lower=True),
                      nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
 
@@ -989,7 +988,7 @@ def compute_hypsometry_attributes(gdir):
     df['rgi_id'] = [gdir.rgi_id]
     df['area_km2'] = [gdir.rgi_area_km2]
     df['area_grid_km2'] = [glacier_mask.sum() * dx2]
-    df['valid_dem_area_km2'] = [np.isfinite(dem_on_ice).sum() * dx2]
+    df['valid_dem_area_km2'] = [valid_mask.sum() * dx2]
     df['zmin_m'] = [np.nanmin(dem_on_ice)]
     df['zmax_m'] = [np.nanmax(dem_on_ice)]
     df['zmed_m'] = [np.nanmedian(dem_on_ice)]
