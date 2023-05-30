@@ -1,4 +1,5 @@
 import logging
+import warnings
 import os
 
 import numpy as np
@@ -103,8 +104,12 @@ def _reproject_and_scale(gdir, do_error=False):
     grid_gla = gdir.grid.center_grid
     proj_vel = dsx.grid.proj
     x0, x1, y0, y1 = grid_gla.extent_in_crs(proj_vel)
-    dsx.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
-    dsy.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
+    with warnings.catch_warnings():
+        # This can trigger an out of bounds warning
+        warnings.filterwarnings("ignore", category=RuntimeWarning,
+                                message='*out of bounds*')
+        dsx.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
+        dsy.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
     grid_vel = dsx.grid.center_grid
 
     # TODO: this should be taken care of by salem

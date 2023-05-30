@@ -1170,7 +1170,10 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
         roNx = roN - roHead
         # zN=zN-zHead#
 
-        p = _approx_parabola(roNx, zN, y0=zHead)
+        with warnings.catch_warnings():
+            # This can trigger a divide by zero Warning
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            p = _approx_parabola(roNx, zN, y0=zHead)
 
         # define terrain height as the maximum height difference of points used
         # for the parabolic fitting and the bottom height
@@ -2297,8 +2300,11 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         df.loc[bi, 'slope'] = utils.clip_scalar(avg_s, min_alpha, max_alpha)
 
         # Binned variables
-        for var, data in zip(bin_variables, out_vars):
-            df.loc[bi, var] = np.nanmean(data[bin_coords])
+        with warnings.catch_warnings():
+            # This can trigger an empty mean warning
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            for var, data in zip(bin_variables, out_vars):
+                df.loc[bi, var] = np.nanmean(data[bin_coords])
 
     # The grid point's grid spacing and widths
     df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
@@ -2405,7 +2411,10 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
                 in_total = np.nansum(df[var] * df['area'])
                 out_total = np.nansum(interp * widths_m * dx_meter)
                 if out_total > 0:
-                    interp *= in_total / out_total
+                    with warnings.catch_warnings():
+                        # This can trigger a double error
+                        warnings.filterwarnings("ignore", category=RuntimeWarning)
+                        interp *= in_total / out_total
             odf[var] = interp
         odf.to_csv(gdir.get_filepath('elevation_band_flowline',
                                      filesuffix='_fixed_dx'))
