@@ -159,6 +159,8 @@ def dem_quality_check(gdir):
             valid_mask = np.isfinite(topo) & mask
             if np.all(~valid_mask):
                 continue
+            if np.nanmax(topo[valid_mask]) == 0:
+                continue
             out[s] = valid_mask.sum() / area
         except BaseException:
             pass

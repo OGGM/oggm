@@ -297,7 +297,7 @@ class TestGIS(unittest.TestCase):
 
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        gis.simple_glacier_masks(gdir, write_hypsometry=True)
+        gis.simple_glacier_masks(gdir)
 
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
@@ -319,6 +319,21 @@ class TestGIS(unittest.TestCase):
 
         assert np.all(df['dem_max_elev'] > df['dem_max_elev_on_ext'])
 
+    @pytest.mark.skipif((Version(rasterio.__version__) <
+                         Version('1.0')),
+                        reason='requires rasterio >= 1.0')
+    def test_compute_hypsometry_attributes(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.rasterio_glacier_mask(gdir)
+        gis.rasterio_glacier_mask(gdir, no_nunataks=True)
+        gis.rasterio_glacier_exterior_mask(gdir)
+        gis.compute_hypsometry_attributes(gdir)
+
         dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
 
         np.testing.assert_allclose(dfh['slope_deg'], entity.Slope, atol=0.5)
@@ -326,6 +341,11 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_allclose(dfh['zmed_m'], entity.Zmed, atol=20)
         np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
         np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
+        np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
+        np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
+        # From google map checks
+        np.testing.assert_allclose(dfh['terminus_lon'], 10.80, atol=0.01)
+        np.testing.assert_allclose(dfh['terminus_lat'], 46.81, atol=0.01)
 
         bins = []
         for c in dfh.columns:
@@ -360,20 +380,13 @@ class TestGIS(unittest.TestCase):
         # The test below does NOT pass on OGGM
         shutil.copyfile(gdir.get_filepath('gridded_data'),
                         os.path.join(self.testdir, 'default_masks.nc'))
-        gis.simple_glacier_masks(gdir, write_hypsometry=True)
+        gis.simple_glacier_masks(gdir)
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
             area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
         shutil.copyfile(gdir.get_filepath('gridded_data'),
                         os.path.join(self.testdir, 'simple_masks.nc'))
-
-        dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
-        np.testing.assert_allclose(dfh['slope_deg'], entity.Slope, atol=1)
-        np.testing.assert_allclose(dfh['aspect_deg'], entity.Aspect, atol=10)
-        np.testing.assert_allclose(dfh['zmed_m'], entity.Zmed, atol=20)
-        np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
-        np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
 
     @pytest.mark.skipif((Version(rasterio.__version__) <
                          Version('1.0')),

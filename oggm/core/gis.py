@@ -800,12 +800,11 @@ def glacier_masks(gdir):
         nc.min_h_glacier = np.nanmin(dem_on_g)
 
 
-@entity_task(log, writes=['gridded_data', 'hypsometry'])
-def simple_glacier_masks(gdir, write_hypsometry=False):
+@entity_task(log, writes=['gridded_data'])
+def simple_glacier_masks(gdir):
     """Compute glacier masks based on much simpler rules than OGGM's default.
 
-    This is therefore more robust: we use this function to compute glacier
-    hypsometries.
+    This is therefore more robust: we use this task in a elev_bands workflow.
 
     Parameters
     ----------
@@ -920,9 +919,31 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
             raise InvalidDEMError('({}) min equal max in the masked DEM.'
                                   .format(gdir.rgi_id))
 
-    # hypsometry if asked for
-    if not write_hypsometry:
-        return
+
+@entity_task(log, writes=['hypsometry'])
+def compute_hypsometry_attributes(gdir):
+    """Adds some attributes to the glacier directory.
+
+    Mostly useful for RGI stuff.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    write_hypsometry : bool
+        whether to write out the hypsometry file or not - it is used by e.g,
+        rgitools
+    """
+    dem = read_geotiff_dem(gdir)
+
+    # This is the very robust way
+    fp = gdir.get_filepath('glacier_mask')
+    with rasterio.open(fp, 'r', driver='GTiff') as ds:
+        glacier_mask = ds.read(1).astype(rasterio.int16) == 1
+
+    fp = gdir.get_filepath('glacier_mask', filesuffix='_exterior')
+    with rasterio.open(fp, 'r', driver='GTiff') as ds:
+        glacier_exterior_mask = ds.read(1).astype(rasterio.int16) == 1
 
     bsize = 50.
     dem_on_ice = dem[glacier_mask]
@@ -945,12 +966,12 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
 
     # slope
     sy, sx = np.gradient(dem, gdir.grid.dx)
-    aspect = np.arctan2(np.mean(-sx[glacier_mask]), np.mean(sy[glacier_mask]))
+    aspect = np.arctan2(np.nanmean(-sx[glacier_mask]), np.nanmean(sy[glacier_mask]))
     aspect = np.rad2deg(aspect)
     if aspect < 0:
         aspect += 360
     slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
-    avg_slope = np.rad2deg(np.mean(slope[glacier_mask]))
+    avg_slope = np.rad2deg(np.nanmean(slope[glacier_mask]))
 
     sec_bins = -22.5 + 45 * np.arange(9)
     aspect_for_bin = aspect
@@ -958,6 +979,11 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
         aspect_for_bin -= 360
     aspect_sec = np.digitize(aspect_for_bin, sec_bins)
     dx2 =gdir.grid.dx**2 * 1e-6
+
+    # Terminus loc
+    j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
+    lon, lat = gdir.grid.ij_to_crs(i[0], j[0], crs=salem.wgs84)
+
     # write
     df = pd.DataFrame()
     df['rgi_id'] = [gdir.rgi_id]
@@ -968,6 +994,8 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
     df['zmax_m'] = [np.nanmax(dem_on_ice)]
     df['zmed_m'] = [np.nanmedian(dem_on_ice)]
     df['zmean_m'] = [np.nanmean(dem_on_ice)]
+    df['terminus_lon'] = lon
+    df['terminus_lat'] = lat
     df['slope_deg'] = [avg_slope]
     df['aspect_deg'] = [aspect]
     df['aspect_sec'] = [aspect_sec]
@@ -978,8 +1006,11 @@ def simple_glacier_masks(gdir, write_hypsometry=False):
 
 
 @entity_task(log, writes=['glacier_mask'])
-def rasterio_glacier_mask(gdir, source=None):
+def rasterio_glacier_mask(gdir, source=None, no_nunataks=False):
     """Writes a 1-0 glacier mask GeoTiff with the same dimensions as dem.tif
+
+    If no_nunataks, does the same but without nunataks. Writes a file
+    with the suffix "_no_nunataks" appended.
 
 
     Parameters
@@ -1009,9 +1040,8 @@ def rasterio_glacier_mask(gdir, source=None):
     # read dem profile
     with rasterio.open(dempath, 'r', driver='GTiff') as ds:
         profile = ds.profile
-
-    # don't even bother reading the actual DEM, just mimic it
-    data = np.zeros((ds.height, ds.width))
+        # don't even bother reading the actual DEM, just mimic it
+        data = np.zeros((ds.height, ds.width))
 
     # Read RGI outlines
     geometry = gdir.read_shapefile('outlines').geometry[0]
@@ -1023,14 +1053,18 @@ def rasterio_glacier_mask(gdir, source=None):
     if not geometry.is_valid:
         raise InvalidDEMError('This glacier geometry is not valid.')
 
+    if no_nunataks:
+        mapping = shpg.mapping(shpg.Polygon(geometry.exterior))
+    else:
+        mapping = shpg.mapping(geometry)
+
     # Compute the glacier mask using rasterio
     # Small detour as mask only accepts DataReader objects
     with rasterio.io.MemoryFile() as memfile:
         with memfile.open(**profile) as dataset:
             dataset.write(data.astype(profile['dtype'])[np.newaxis, ...])
         dem_data = rasterio.open(memfile.name)
-        masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
-                                filled=False)
+        masked_dem, _ = riomask(dem_data, [mapping], filled=False)
     glacier_mask = ~masked_dem[0, ...].mask
 
     # parameters to for the new tif
@@ -1051,8 +1085,41 @@ def rasterio_glacier_mask(gdir, source=None):
         'nodata': nodata,
     })
 
-    with rasterio.open(gdir.get_filepath('glacier_mask'), 'w', **profile) as r:
+    if no_nunataks:
+        fp = gdir.get_filepath('glacier_mask', filesuffix='_no_nunataks')
+    else:
+        fp = gdir.get_filepath('glacier_mask')
+
+    with rasterio.open(fp, 'w', **profile) as r:
         r.write(out.astype(dtype), 1)
+
+
+@entity_task(log, writes=['glacier_mask'])
+def rasterio_glacier_exterior_mask(gdir):
+    """Writes a 1-0 glacier exterior mask GeoTiff with the same dimensions as dem.tif
+
+    This is the "one" grid point on the glacier exterior (ignoring nunataks).
+    This is useful to know where the terminus is, for example.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier in question
+    """
+    fp = gdir.get_filepath('glacier_mask', filesuffix='_no_nunataks')
+    with rasterio.open(fp, 'r', driver='GTiff') as ds:
+        glacier_mask_nonuna = ds.read(1).astype(rasterio.int16) == 1
+        profile = ds.profile
+
+    # Glacier exterior excluding nunataks
+    erode = binary_erosion(glacier_mask_nonuna)
+    glacier_ext = glacier_mask_nonuna ^ erode
+    glacier_ext = np.where(glacier_mask_nonuna, glacier_ext, 0)
+
+    # parameters to for the new tif
+    fp = gdir.get_filepath('glacier_mask', filesuffix='_exterior')
+    with rasterio.open(fp, 'w', **profile) as r:
+        r.write(glacier_ext.astype(rasterio.int16), 1)
 
 
 @entity_task(log, writes=['gridded_data'])
