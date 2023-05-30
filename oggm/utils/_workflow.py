@@ -2674,7 +2674,7 @@ class GlacierDirectory(object):
                                   '{:02d}'.format(int(rgi_entity.O2Region)))
 
         try:
-            name = str(rgi_entity.name)
+            name = rgi_entity.glac_name
             rgi_datestr = rgi_entity.src_date
         except AttributeError:
             # RGI V6

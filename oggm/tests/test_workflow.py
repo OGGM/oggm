@@ -453,3 +453,4 @@ def test_rgi7_glacier_dirs():
     assert gdir
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 8
+    assert gdir.name == 'Hintereis Ferner'
