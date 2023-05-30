@@ -51,7 +51,7 @@ def add_consensus_thickness(gdir, base_url=None):
     with warnings.catch_warnings():
         # This can trigger an out of bounds warning
         warnings.filterwarnings("ignore", category=RuntimeWarning,
-                                message='*out of bounds*')
+                                message='.*out of bounds.*')
         thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear')
 
     # Correct for volume

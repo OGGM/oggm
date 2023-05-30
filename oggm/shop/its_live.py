@@ -105,9 +105,9 @@ def _reproject_and_scale(gdir, do_error=False):
     proj_vel = dsx.grid.proj
     x0, x1, y0, y1 = grid_gla.extent_in_crs(proj_vel)
     with warnings.catch_warnings():
-        # This can trigger an out of bounds warning
+        # This can trigger an out-of-bounds warning
         warnings.filterwarnings("ignore", category=RuntimeWarning,
-                                message='*out of bounds*')
+                                message='.*out of bounds.*')
         dsx.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
         dsy.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
     grid_vel = dsx.grid.center_grid

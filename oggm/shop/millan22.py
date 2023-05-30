@@ -82,7 +82,7 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
         with warnings.catch_warnings():
             # This can trigger an out of bounds warning
             warnings.filterwarnings("ignore", category=RuntimeWarning,
-                                    message='*out of bounds*')
+                                    message='.*out of bounds.*')
             dsb.set_subset(corners=((x0, y0), (x1, y1)),
                            crs=dsb.grid.proj,
                            margin=5)
@@ -100,7 +100,7 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
         with warnings.catch_warnings():
             # This can trigger an out of bounds warning
             warnings.filterwarnings("ignore", category=RuntimeWarning,
-                                    message='*out of bounds*')
+                                    message='.*out of bounds.*')
             r_data = gdir.grid.map_gridded_data(data, dsb.grid, interp='linear')
         total_data += r_data.filled(0)
         grids_used.append(dsb)
