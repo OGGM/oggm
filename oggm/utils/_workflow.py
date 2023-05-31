@@ -1580,6 +1580,15 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
 
         try:
+            # Geom stuff
+            outline = gdir.read_shapefile('outlines')
+            d['geometry_type'] = outline.type.iloc[0]
+            d['geometry_is_valid'] = outline.is_valid.iloc[0]
+            d['geometry_area_km2'] = outline.to_crs({'proj': 'cea'}).area.iloc[0] * 1e-6
+        except BaseException:
+            pass
+
+        try:
             # Inversion
             if gdir.has_file('inversion_output'):
                 vol = []
@@ -2874,7 +2883,8 @@ class GlacierDirectory(object):
         # transform geometry to map
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
-        if len(self.rgi_id) == 23 and not geometry.is_valid:
+        if len(self.rgi_id) == 23 and (not geometry.is_valid or
+                                       type(geometry) != shpg.Polygon):
             # In RGI7 we know that the geometries are valid in entry
             # So we have to validate them after proj as well
             # Try buffer first
@@ -2884,7 +2894,10 @@ class GlacierDirectory(object):
                 if len(correct) != 1:
                     raise RuntimeError('Cant correct this geometry')
                 geometry = correct[0]
-        geometry = multipolygon_to_polygon(geometry, gdir=self)
+            if type(geometry) != shpg.Polygon:
+                raise ValueError(f'{self.rgi_id}: geometry not valid')
+        else:
+            geometry = multipolygon_to_polygon(geometry, gdir=self)
 
         # Save transformed geometry to disk
         entity = entity.copy()
