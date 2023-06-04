@@ -810,9 +810,6 @@ def simple_glacier_masks(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    write_hypsometry : bool
-        whether to write out the hypsometry file or not - it is used by e.g,
-        rgitools
     """
 
     # In case nominal, just raise
@@ -998,7 +995,8 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     df['rgi_id'] = [gdir.rgi_id]
     df['area_km2'] = [gdir.rgi_area_km2]
     df['area_grid_km2'] = [glacier_mask.sum() * dx2]
-    df['valid_dem_area_km2'] = [valid_mask.sum() * dx2]
+    df['valid_dem_perc'] = [avail_perc]
+    df['grid_dx'] = [gdir.grid.dx]
     df['zmin_m'] = [np.nanmin(dem_on_ice)]
     df['zmax_m'] = [np.nanmax(dem_on_ice)]
     df['zmed_m'] = [np.nanmedian(dem_on_ice)]
