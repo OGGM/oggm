@@ -921,7 +921,7 @@ def simple_glacier_masks(gdir):
 
 
 @entity_task(log, writes=['hypsometry'])
-def compute_hypsometry_attributes(gdir):
+def compute_hypsometry_attributes(gdir, min_perc=0.2):
     """Adds some attributes to the glacier directory.
 
     Mostly useful for RGI stuff.
@@ -943,6 +943,11 @@ def compute_hypsometry_attributes(gdir):
         glacier_exterior_mask = ds.read(1).astype(rasterio.int16) == 1
 
     valid_mask = glacier_mask & np.isfinite(dem)
+    # we cant proceed if we have very little info
+    avail_perc = valid_mask.sum() / glacier_mask.sum()
+    if avail_perc < min_perc:
+        raise InvalidDEMError(f"Cant proceed with {avail_perc*100:.1f}%"
+                              f"available.")
 
     bsize = 50.
     dem_on_ice = dem[valid_mask]
@@ -981,6 +986,11 @@ def compute_hypsometry_attributes(gdir):
 
     # Terminus loc
     j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
+    if len(j) > 2:
+        # We have a situation - take the closest to the euclidian center
+        mi, mj = np.mean(i), np.mean(j)
+        c = np.argmin((mi - i)**2 + (mj - j)**2)
+        j, i = j[[c]], i[[c]]
     lon, lat = gdir.grid.ij_to_crs(i[0], j[0], crs=salem.wgs84)
 
     # write
