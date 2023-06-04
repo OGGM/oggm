@@ -1015,7 +1015,7 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
 
 
 @entity_task(log, writes=['glacier_mask'])
-def rasterio_glacier_mask(gdir, source=None, no_nunataks=False):
+def rasterio_glacier_mask(gdir, source=None, no_nunataks=False, overwrite=True):
     """Writes a 1-0 glacier mask GeoTiff with the same dimensions as dem.tif
 
     If no_nunataks, does the same but without nunataks. Writes a file
@@ -1031,7 +1031,13 @@ def rasterio_glacier_mask(gdir, source=None, no_nunataks=False):
         - None (default): the task reads `dem.tif` from the GDir root
         - 'ALL': try to open any folder from `utils.DEM_SOURCE` and use first
         - any of `utils.DEM_SOURCE`: try only that one
+    overwrite : bool
+        compute even if the file is already there
     """
+    # No need to if already there
+    filesuffix = '_no_nunataks' if no_nunataks else None
+    if not overwrite and gdir.has_file('glacier_mask', filesuffix=filesuffix):
+        return
 
     if source is None:
         dempath = gdir.get_filepath('dem')
@@ -1104,7 +1110,7 @@ def rasterio_glacier_mask(gdir, source=None, no_nunataks=False):
 
 
 @entity_task(log, writes=['glacier_mask'])
-def rasterio_glacier_exterior_mask(gdir):
+def rasterio_glacier_exterior_mask(gdir, overwrite=True):
     """Writes a 1-0 glacier exterior mask GeoTiff with the same dimensions as dem.tif
 
     This is the "one" grid point on the glacier exterior (ignoring nunataks).
@@ -1114,7 +1120,14 @@ def rasterio_glacier_exterior_mask(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier in question
+    overwrite : bool
+        compute even if the file is already there
     """
+
+    # No need to if already there
+    if not overwrite and gdir.has_file('glacier_mask', filesuffix='_exterior'):
+        return
+
     fp = gdir.get_filepath('glacier_mask', filesuffix='_no_nunataks')
     with rasterio.open(fp, 'r', driver='GTiff') as ds:
         glacier_mask_nonuna = ds.read(1).astype(rasterio.int16) == 1
