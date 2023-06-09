@@ -245,7 +245,7 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
     band_ids, counts = np.unique(np.sort(band_index_mask[glacier_mask]), return_counts=True)
 
     dx2 = gdir.grid.dx**2
-    out_thick = np.empty((len(dg.time), *glacier_mask.shape))
+    out_thick = np.zeros((len(dg.time), *glacier_mask.shape))
     for i, yr in enumerate(dg.time):
 
         dgy = dg.sel(time=yr)
