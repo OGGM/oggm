@@ -948,6 +948,9 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
 
     bsize = 50.
     dem_on_ice = dem[valid_mask]
+    if dem_on_ice.min() < -99:
+        raise InvalidDEMError(f"Cant proceed with {dem_on_ice.min()}m "
+                              f"minimum DEM elevation.")
     bins = np.arange(nicenumber(dem_on_ice.min(), bsize, lower=True),
                      nicenumber(dem_on_ice.max(), bsize) + 0.01, bsize)
 
