@@ -1612,6 +1612,11 @@ class TestIO():
         vol_ref = []
         a_ref = []
         l_ref = []
+        h_previous_timestep = model.fls[0].thick
+        dhdt_ref = []
+        surface_h_previous_timestep = model.fls[0].surface_h
+        climatic_mb_ref = []
+        flux_divergence_ref = []
         vol_diag = []
         a_diag = []
         l_diag = []
@@ -1626,6 +1631,29 @@ class TestIO():
                 vol_ref.append(model.volume_m3)
                 a_ref.append(model.area_m2)
                 l_ref.append(model.length_m)
+                if yr > 0:
+                    dhdt_ref.append(model.fls[0].thick -
+                                    h_previous_timestep)
+                    h_previous_timestep = model.fls[0].thick
+                    # for mb use previous surface height and previous year, only
+                    # save climatic mb where dhdt is non zero
+                    climatic_mb_ref.append(
+                        np.where(np.isclose(dhdt_ref[-1], 0.),
+                                 0.,
+                                 model.get_mb(surface_h_previous_timestep,
+                                              model.yr - 1,
+                                              fl_id=0) *
+                                 SEC_IN_YEAR)  # converted to m yr-1
+                    )
+                    surface_h_previous_timestep = model.fls[0].surface_h
+                    # smooth flux divergence where glacier is getting ice free
+                    has_become_ice_free = np.logical_and(
+                                np.isclose(model.fls[0].thick, 0.),
+                                dhdt_ref[-1] < 0.
+                            )
+                    flux_divergence_ref.append(
+                        (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                        np.where(has_become_ice_free, 0.1, 1.))
                 if int(yr) == 500:
                     secfortest = model.fls[0].section
                     hfortest = model.fls[0].thick
@@ -1647,6 +1675,13 @@ class TestIO():
                                    0)
         np.testing.assert_allclose(ds_fl.area_m2.sum(dim='dis_along_flowline'),
                                    a_ref)
+
+        np.testing.assert_allclose(dhdt_ref,
+                                   ds_fl.dhdt_myr[1:])  # first step is nan
+        np.testing.assert_allclose(climatic_mb_ref,
+                                   ds_fl.climatic_mb_myr[1:])
+        np.testing.assert_allclose(flux_divergence_ref,
+                                   ds_fl.flux_divergence_myr[1:])
 
         vel = ds_fl.ice_velocity_myr.isel(time=-1)
         assert 20 < vel.max() < 40
