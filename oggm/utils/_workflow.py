@@ -718,6 +718,11 @@ def get_centerline_lonlat(gdir,
             gs = dict()
             gs['RGIID'] = gdir.rgi_id
             gs['SEGMENT_ID'] = j
+            gs['STRAHLER'] = cl.order
+            if mm == 0:
+                gs['OUTFLOW_ID'] = cls.index(cl.flows_to)
+            else:
+                gs['OUTFLOW_ID'] = -1
             gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
             gs['MAIN'] = mm
             line = cl.line
@@ -874,7 +879,7 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     # filter for none
     olist = [o for o in olist if o is not None]
     odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
-    odf = odf.sort_values(by='RGIID')
+    odf = odf.sort_values(by=['RGIID', 'SEGMENT_ID'])
     odf.crs = to_crs
     # Sanity checks to avoid bad surprises
     gtype = np.array([g.geom_type for g in odf.geometry])
