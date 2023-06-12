@@ -631,7 +631,8 @@ def process_dem(gdir):
                               .format(gdir.rgi_id))
 
     # Clip topography to 0 m a.s.l.
-    utils.clip_min(dem, 0, out=dem)
+    if cfg.PARAMS['clip_dem_to_zero']:
+        utils.clip_min(dem, 0, out=dem)
 
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
@@ -641,7 +642,8 @@ def process_dem(gdir):
         smoothed_dem = dem.copy()
 
     # Clip topography to 0 m a.s.l.
-    utils.clip_min(smoothed_dem, 0, out=smoothed_dem)
+    if cfg.PARAMS['clip_dem_to_zero']:
+        utils.clip_min(smoothed_dem, 0, out=smoothed_dem)
 
     # Write to file
     with GriddedNcdfFile(gdir, reset=True) as nc:
@@ -784,7 +786,7 @@ def glacier_masks(gdir):
         # Last sanity check based on the masked dem
         tmp_max = np.max(dem[np.where(glacier_mask == 1)])
         tmp_min = np.min(dem[np.where(glacier_mask == 1)])
-        if tmp_max < (tmp_min + 1):
+        if tmp_max < (tmp_min + 0.1):
             raise InvalidDEMError('({}) min equal max in the masked DEM.'
                                   .format(gdir.rgi_id))
 
