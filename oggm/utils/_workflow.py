@@ -2723,6 +2723,12 @@ class GlacierDirectory(object):
                                    '{}'.format(self.rgi_version))
             else:
                 self.rgi_version = rgi_version
+
+        try:
+            self.rgi_dem_source = rgi_entity.dem_source
+        except AttributeError:
+            self.rgi_dem_source = ''
+
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 

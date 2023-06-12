@@ -90,7 +90,8 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory
     dem_source : str
-        the source to pick from
+        the source to pick from. If 'RGI', we assume that there is a
+        `dem_source` attribute in the RGI file.
     keep_dem_folders : bool
         the default is to delete the other DEM directories to save space.
         Set this to True to prevent that (e.g. for sensitivity tests)
@@ -104,6 +105,9 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
         fn = os.path.join(gdir.dir, fn)
         if os.path.isfile(fn):
             os.remove(fn)
+
+    if dem_source == 'RGI':
+        dem_source = gdir.rgi_dem_source
 
     sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()
                and not f.name.startswith('.')]
