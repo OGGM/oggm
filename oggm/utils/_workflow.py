@@ -1108,6 +1108,8 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     time_info = {}
     time_keys = ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']
     allowed_data_vars = ['volume_m3', 'volume_bsl_m3', 'volume_bwl_m3',
+                         'volume_m3_min_h',  # only here for back compatibility
+                         # as it is a variable in gdirs v1.6 2023.1
                          'area_m2', 'area_m2_min_h', 'length_m', 'calving_m3',
                          'calving_rate_myr', 'off_area',
                          'on_area', 'model_mb', 'is_fixed_geometry_spinup']
