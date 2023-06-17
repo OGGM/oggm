@@ -32,6 +32,15 @@ Enhancements
   By `Anouk Vlug <https://github.com/anoukvlug>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
 
+Enhancements
+~~~~~~~~~~~~
+
+- Added three new flowline diagnostic variables: thickness change in one year
+  (``dhdt``), forcing climatic mass balance (``climatic_mb``) and flux divergence
+  (``flux_divergence``). All variables are in units meter of ice per year
+  (:pull:`1595`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+
 
 v1.6.0 (March 10, 2023)
 -----------------------
