@@ -31,14 +31,14 @@ Enhancements
   functionality is currently in the sandbox and needs to be documented.
   By `Anouk Vlug <https://github.com/anoukvlug>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
-
-Enhancements
-~~~~~~~~~~~~
-
 - Added three new flowline diagnostic variables: thickness change in one year
   (``dhdt``), forcing climatic mass balance (``climatic_mb``) and flux divergence
   (``flux_divergence``). All variables are in units meter of ice per year
   (:pull:`1595`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added more flexibility to ``run_dynamic_spinup``. Users can now specify a target
+  year and a desired value to match. The default is still the same, matching area
+  or volume at the RGI date (:pull:`1600`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
