@@ -864,6 +864,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     # also save some other stuff
     gdir.add_to_diagnostics('temp_bias_dynamic_spinup',
                             float(final_t_bias_guess[-1]))
+    gdir.add_to_diagnostics('dynamic_spinup_target_year',
+                            int(yr_target))
     gdir.add_to_diagnostics('dynamic_spinup_period',
                             int(spinup_period))
     gdir.add_to_diagnostics('dynamic_spinup_forward_model_iterations',
