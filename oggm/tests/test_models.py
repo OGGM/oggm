@@ -3169,7 +3169,7 @@ class TestDynamicSpinup:
         for store_model_evolution in [True, False]:
             model_dynamic_spinup = run_dynamic_spinup(
                 hef_gdir,
-                yr_target=yr_rgi,
+                target_yr=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 precision_absolute=precision_absolute,
@@ -3230,14 +3230,14 @@ class TestDynamicSpinup:
             assert len(model_dynamic_spinup.fls) == len(fmod.fls)
 
         # test user provided target year and value
-        yr_target = 2000
+        target_yr = 2000
         if minimise_for == 'area':
             ref_value = 8.5
         elif minimise_for == 'volume':
             ref_value = 0.6
         model_dynamic_spinup_target_yr = run_dynamic_spinup(
             hef_gdir,
-            yr_target=yr_target,
+            target_yr=target_yr,
             target_value=ref_value,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
@@ -3261,7 +3261,7 @@ class TestDynamicSpinup:
                           rtol=precision_percent / 100, atol=0)
         assert np.isclose(model_value, ref_value,
                           rtol=0, atol=precision_absolute)
-        assert model_dynamic_spinup_target_yr.yr == yr_target
+        assert model_dynamic_spinup_target_yr.yr == target_yr
         assert len(model_dynamic_spinup_target_yr.fls) == len(fls)
 
         # test if spinup_start_yr is handled correctly and overrides the spinup_period
@@ -3270,7 +3270,7 @@ class TestDynamicSpinup:
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            yr_target=yr_rgi,
+            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -3315,7 +3315,7 @@ class TestDynamicSpinup:
                 run_dynamic_spinup(
                     hef_gdir,
                     minimise_for=minimise_for,
-                    yr_target=2002,
+                    target_yr=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
                     spinup_period=10,
@@ -3334,7 +3334,7 @@ class TestDynamicSpinup:
             model = run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
-                yr_target=2002,
+                target_yr=2002,
                 ye=2002,
                 ignore_errors=ignore_errors,
                 maxiter=2,
@@ -3359,7 +3359,7 @@ class TestDynamicSpinup:
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            yr_target=yr_rgi,
+            target_yr=yr_rgi,
             ye=ye,
             return_t_bias_best=True,
             minimise_for=minimise_for,
@@ -3392,7 +3392,7 @@ class TestDynamicSpinup:
             spinup_period=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
-            yr_target=yr_rgi,
+            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -3419,13 +3419,13 @@ class TestDynamicSpinup:
                 spinup_start_yr_max=yr_rgi - 10,
                 spinup_start_yr=yr_rgi - 5)
 
-        # test that provided ye is larger than yr_target
+        # test that provided ye is larger than target_yr
         with pytest.raises(RuntimeError,
                            match='The provided end year *'):
             run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
-                yr_target=yr_rgi,
+                target_yr=yr_rgi,
                 ye=yr_rgi - 1)
 
         # test if provided model geometry works and some other principle
@@ -3441,7 +3441,7 @@ class TestDynamicSpinup:
             minimise_for=minimise_for,
             init_model_filesuffix='_one_yr',
             init_model_yr=yr_rgi - 1,
-            yr_target=yr_rgi,
+            target_yr=yr_rgi,
             store_model_geometry=False)
 
         # test that error is raised if mb_elev_feedback not annual
@@ -3471,7 +3471,7 @@ class TestDynamicSpinup:
                 precision_percent=0.00012,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
-                yr_target=yr_rgi,
+                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=False)
             run_without_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_without_fixed_spinup', path=False)
@@ -3483,7 +3483,7 @@ class TestDynamicSpinup:
                 precision_percent=0.00012,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
-                yr_target=yr_rgi,
+                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=True)
             run_with_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_with_fixed_spinup', path=False)
