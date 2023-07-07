@@ -40,6 +40,11 @@ Enhancements
   year and a desired value to match. The default is still the same, matching area
   or volume at the RGI date (:pull:`1600`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added possibility to use MultiPolygon outlines together with elevation bands.
+  That can be useful when working with local glacier inventories with multiple
+  outlines (e.g. older outline single polygon but newer outline multi polygon for
+  the same glacier) (:pull:`1604`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
 v1.6.0 (March 10, 2023)

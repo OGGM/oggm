@@ -2814,7 +2814,8 @@ class GlacierDirectory(object):
         # transform geometry to map
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
-        geometry = multipolygon_to_polygon(geometry, gdir=self)
+        if not cfg.PARAMS['keep_multipolygon_outlines']:
+            geometry = multipolygon_to_polygon(geometry, gdir=self)
 
         # Save transformed geometry to disk
         entity = entity.copy()

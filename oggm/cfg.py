@@ -506,6 +506,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['use_rgi_area'] = cp.as_bool('use_rgi_area')
     PARAMS['compress_climate_netcdf'] = cp.as_bool('compress_climate_netcdf')
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
+    PARAMS['keep_multipolygon_outlines'] = cp.as_bool('keep_multipolygon_outlines')
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
     PARAMS['dl_verify'] = cp.as_bool('dl_verify')
     PARAMS['use_kcalving_for_inversion'] = cp.as_bool('use_kcalving_for_inversion')
@@ -576,7 +577,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'tidewater_type', 'store_model_geometry', 'use_winter_prcp_fac',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
            'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_fac_ab',
-           'prcp_fac', 'downstream_line_shape']
+           'prcp_fac', 'downstream_line_shape', 'keep_multipolygon_outlines']
     for k in ltr:
         cp.pop(k, None)
 
