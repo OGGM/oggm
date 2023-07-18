@@ -17,9 +17,9 @@ resources than MyBinder.
   :align: left
 
 In order to be able to log in, you will need to have a (free) user account.
-It is super easy, just :ref:`contact` if you want to try it out! Sending 
-an [info@oggm.org](mailto:info@oggm.org) in which you briefly introduce 
-yourself and state why you would like an account is all you need to do. 
+It is super easy, just :ref:`contact` if you want to try it out! Please briefly 
+introduce yourself and tell us why you would like an account, so that we can 
+guide you towards the next steps.
 
 If you are new to the Jupyter Notebooks and JupyterLab, you will probably
 find this  `introduction to interactive notebooks`_ quite useful.
