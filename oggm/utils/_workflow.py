@@ -652,8 +652,9 @@ def get_centerline_lonlat(gdir,
                           geometrical_widths_output=False,
                           corrected_widths_output=False,
                           to_crs='wgs84',
-                          simplify_line=0,
-                          corner_cutting=0):
+                          simplify_line_before=0,
+                          corner_cutting=0,
+                          simplify_line_after=0):
     """Helper task to convert the centerlines to a shapefile
 
     Parameters
@@ -742,10 +743,12 @@ def get_centerline_lonlat(gdir,
                         line = shpg.LineString([*line.coords[:-2], *ls.coords])
 
                 # Simplify and smooth?
-                if simplify_line:
-                    line = line.simplify(simplify_line)
+                if simplify_line_before:
+                    line = line.simplify(simplify_line_before)
                 if corner_cutting:
                     line = _chaikins_corner_cutting(line, corner_cutting)
+                if simplify_line_after:
+                    line = line.simplify(simplify_line_after)
 
                 # Intersect with exterior geom
                 line = line.intersection(exterior)
@@ -814,8 +817,9 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                geometrical_widths_output=False,
                                corrected_widths_output=False,
                                keep_main_only=False,
-                               simplify_line=0,
-                               corner_cutting=0):
+                               simplify_line_before=0,
+                               corner_cutting=0,
+                               simplify_line_after=0):
     """Write the centerlines to a shapefile.
 
     Parameters
@@ -844,9 +848,9 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         write the shape to another coordinate reference system (CRS)
     keep_main_only : bool
         write only the main flowlines to the output files
-    simplify_line : float
-        apply shapely's `simplify` method to the line before writing. It is
-        a purely cosmetic option, although glacier length will be affected.
+    simplify_line_before : float
+        apply shapely's `simplify` method to the line before corner cutting.
+        It is a purely cosmetic option, although glacier length will be affected.
         All points in the simplified object will be within the tolerance
         distance of the original geometry (units: grid points). A good
         value to test first is 0.5
@@ -854,6 +858,10 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         apply the Chaikin's corner cutting algorithm to the geometry before
         writing. The integer represents the number of refinements to apply.
         A good first value to test is 5.
+    simplify_line_after : float
+        apply shapely's `simplify` method to the line *after* corner cutting.
+        This is to reduce the size of the geometeries after they have been
+        smoothed. A value to test first is 0.1 or 0.05.
     """
     from oggm.workflow import execute_entity_task
 
@@ -873,8 +881,9 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                 geometrical_widths_output=geometrical_widths_output,
                                 corrected_widths_output=corrected_widths_output,
                                 keep_main_only=keep_main_only,
-                                simplify_line=simplify_line,
+                                simplify_line_before=simplify_line_before,
                                 corner_cutting=corner_cutting,
+                                simplify_line_after=simplify_line_after,
                                 to_crs=_to_crs)
     # filter for none
     olist = [o for o in olist if o is not None]

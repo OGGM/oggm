@@ -516,7 +516,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             opath = os.path.join(sum_dir, f'centerlines_smoothed_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              ensure_exterior_match=True,
-                                             simplify_line=0.5,
+                                             simplify_line_before=0.5,
                                              corner_cutting=5,
                                              path=opath)
             opath = os.path.join(sum_dir, f'flowlines_{rgi_reg}.shp')
