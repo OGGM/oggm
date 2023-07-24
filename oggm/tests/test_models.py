@@ -1612,6 +1612,11 @@ class TestIO():
         vol_ref = []
         a_ref = []
         l_ref = []
+        h_previous_timestep = model.fls[0].thick
+        dhdt_ref = []
+        surface_h_previous_timestep = model.fls[0].surface_h
+        climatic_mb_ref = []
+        flux_divergence_ref = []
         vol_diag = []
         a_diag = []
         l_diag = []
@@ -1626,6 +1631,29 @@ class TestIO():
                 vol_ref.append(model.volume_m3)
                 a_ref.append(model.area_m2)
                 l_ref.append(model.length_m)
+                if yr > 0:
+                    dhdt_ref.append(model.fls[0].thick -
+                                    h_previous_timestep)
+                    h_previous_timestep = model.fls[0].thick
+                    # for mb use previous surface height and previous year, only
+                    # save climatic mb where dhdt is non zero
+                    climatic_mb_ref.append(
+                        np.where(np.isclose(dhdt_ref[-1], 0.),
+                                 0.,
+                                 model.get_mb(surface_h_previous_timestep,
+                                              model.yr - 1,
+                                              fl_id=0) *
+                                 SEC_IN_YEAR)  # converted to m yr-1
+                    )
+                    surface_h_previous_timestep = model.fls[0].surface_h
+                    # smooth flux divergence where glacier is getting ice free
+                    has_become_ice_free = np.logical_and(
+                                np.isclose(model.fls[0].thick, 0.),
+                                dhdt_ref[-1] < 0.
+                            )
+                    flux_divergence_ref.append(
+                        (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                        np.where(has_become_ice_free, 0.1, 1.))
                 if int(yr) == 500:
                     secfortest = model.fls[0].section
                     hfortest = model.fls[0].thick
@@ -1647,6 +1675,13 @@ class TestIO():
                                    0)
         np.testing.assert_allclose(ds_fl.area_m2.sum(dim='dis_along_flowline'),
                                    a_ref)
+
+        np.testing.assert_allclose(dhdt_ref,
+                                   ds_fl.dhdt_myr[1:])  # first step is nan
+        np.testing.assert_allclose(climatic_mb_ref,
+                                   ds_fl.climatic_mb_myr[1:])
+        np.testing.assert_allclose(flux_divergence_ref,
+                                   ds_fl.flux_divergence_myr[1:])
 
         vel = ds_fl.ice_velocity_myr.isel(time=-1)
         assert 20 < vel.max() < 40
@@ -3134,7 +3169,7 @@ class TestDynamicSpinup:
         for store_model_evolution in [True, False]:
             model_dynamic_spinup = run_dynamic_spinup(
                 hef_gdir,
-                yr_rgi=yr_rgi,
+                target_yr=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 precision_absolute=precision_absolute,
@@ -3194,13 +3229,48 @@ class TestDynamicSpinup:
             assert fmod.last_yr == yr_rgi
             assert len(model_dynamic_spinup.fls) == len(fmod.fls)
 
+        # test user provided target year and value
+        target_yr = 2000
+        if minimise_for == 'area':
+            ref_value = 8.5
+        elif minimise_for == 'volume':
+            ref_value = 0.6
+        model_dynamic_spinup_target_yr = run_dynamic_spinup(
+            hef_gdir,
+            target_yr=target_yr,
+            target_value=ref_value,
+            minimise_for=minimise_for,
+            precision_percent=precision_percent,
+            precision_absolute=precision_absolute,
+            min_ice_thickness=min_ice_thickness,
+            output_filesuffix='_dynamic_spinup',
+            store_model_evolution=store_model_evolution)
+
+        # check if resulting model match wanted value with prescribed precision
+        if var_name == 'area_km2':
+            model_value = np.sum(
+                [np.sum(fl.bin_area_m2[fl.thick > min_ice_thickness])
+                 for fl in model_dynamic_spinup_target_yr.fls]) * 1e-6
+        elif var_name == 'volume_km3':
+            model_value = np.sum(
+                [np.sum((fl.section * fl.dx_meter)[fl.thick > min_ice_thickness])
+                 for fl in model_dynamic_spinup_target_yr.fls]) * 1e-9
+        else:
+            raise NotImplementedError(f'{var_name}')
+        assert np.isclose(model_value, ref_value,
+                          rtol=precision_percent / 100, atol=0)
+        assert np.isclose(model_value, ref_value,
+                          rtol=0, atol=precision_absolute)
+        assert model_dynamic_spinup_target_yr.yr == target_yr
+        assert len(model_dynamic_spinup_target_yr.fls) == len(fls)
+
         # test if spinup_start_yr is handled correctly and overrides the spinup_period
         spinup_start_yr = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            yr_rgi=yr_rgi,
+            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -3245,7 +3315,7 @@ class TestDynamicSpinup:
                 run_dynamic_spinup(
                     hef_gdir,
                     minimise_for=minimise_for,
-                    yr_rgi=2002,
+                    target_yr=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
                     spinup_period=10,
@@ -3264,7 +3334,7 @@ class TestDynamicSpinup:
             model = run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
-                yr_rgi=2002,
+                target_yr=2002,
                 ye=2002,
                 ignore_errors=ignore_errors,
                 maxiter=2,
@@ -3289,7 +3359,7 @@ class TestDynamicSpinup:
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            yr_rgi=yr_rgi,
+            target_yr=yr_rgi,
             ye=ye,
             return_t_bias_best=True,
             minimise_for=minimise_for,
@@ -3322,7 +3392,7 @@ class TestDynamicSpinup:
             spinup_period=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
-            yr_rgi=yr_rgi,
+            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -3349,13 +3419,13 @@ class TestDynamicSpinup:
                 spinup_start_yr_max=yr_rgi - 10,
                 spinup_start_yr=yr_rgi - 5)
 
-        # test that provided ye is larger than yr_rgi
+        # test that provided ye is larger than target_yr
         with pytest.raises(RuntimeError,
                            match='The provided end year *'):
             run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
-                yr_rgi=yr_rgi,
+                target_yr=yr_rgi,
                 ye=yr_rgi - 1)
 
         # test if provided model geometry works and some other principle
@@ -3371,7 +3441,7 @@ class TestDynamicSpinup:
             minimise_for=minimise_for,
             init_model_filesuffix='_one_yr',
             init_model_yr=yr_rgi - 1,
-            yr_rgi=yr_rgi,
+            target_yr=yr_rgi,
             store_model_geometry=False)
 
         # test that error is raised if mb_elev_feedback not annual
@@ -3401,7 +3471,7 @@ class TestDynamicSpinup:
                 precision_percent=0.00012,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
-                yr_rgi=yr_rgi,
+                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=False)
             run_without_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_without_fixed_spinup', path=False)
@@ -3413,7 +3483,7 @@ class TestDynamicSpinup:
                 precision_percent=0.00012,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
-                yr_rgi=yr_rgi,
+                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=True)
             run_with_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_with_fixed_spinup', path=False)

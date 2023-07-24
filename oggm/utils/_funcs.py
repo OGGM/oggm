@@ -559,7 +559,13 @@ def multipolygon_to_polygon(geometry, gdir=None):
     rid = gdir.rgi_id + ': ' if gdir is not None else ''
 
     if 'Multi' in geometry.geom_type:
-        parts = np.array(geometry)
+        # needed for shapely version > 0.2.0
+        # previous code was: parts = np.array(geometry)
+        parts = []
+        for p in geometry.geoms:
+            parts.append(p)
+        parts = np.array(parts)
+
         for p in parts:
             assert p.geom_type == 'Polygon'
         areas = np.array([p.area for p in parts])

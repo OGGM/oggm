@@ -236,7 +236,23 @@ def glacier_grid_params(gdir):
     utm_proj = salem.check_crs(gdf.crs)
 
     # Get glacier extent
-    xx, yy = gdf.iloc[0]['geometry'].exterior.xy
+    try:
+        xx, yy = gdf.iloc[0]['geometry'].exterior.xy
+    # special treatment for Multipolygons
+    except AttributeError:
+        if not cfg.PARAMS['keep_multipolygon_outlines']:
+            raise
+        parts = []
+        for p in gdf.iloc[0]['geometry'].geoms:
+            parts.append(p)
+        parts = np.array(parts)
+
+        xx = []
+        yy = []
+        for part in parts:
+            xx_tmp, yy_tmp = part.exterior.xy
+            xx = np.append(xx, xx_tmp)
+            yy = np.append(yy, yy_tmp)
 
     # Define glacier area to use
     area = gdir.rgi_area_km2
@@ -855,8 +871,22 @@ def simple_glacier_masks(gdir):
         with memfile.open(**profile) as dataset:
             dataset.write(data.astype(np.int16)[np.newaxis, ...])
         dem_data = rasterio.open(memfile.name)
-        poly = shpg.mapping(shpg.Polygon(geometry.exterior))
-        masked_dem, _ = riomask(dem_data, [poly],
+        try:
+            poly = [shpg.mapping(shpg.Polygon(geometry.exterior))]
+        except AttributeError:
+            if not cfg.PARAMS['keep_multipolygon_outlines']:
+                raise
+            # special treatment for MultiPolygons
+            parts = []
+            for p in geometry.geoms:
+                parts.append(p)
+            parts = np.array(parts)
+
+            poly = []
+            for part in parts:
+                poly.append(shpg.mapping(shpg.Polygon(part.exterior)))
+
+        masked_dem, _ = riomask(dem_data, poly,
                                 filled=False)
     glacier_mask_nonuna = ~masked_dem[0, ...].mask
 

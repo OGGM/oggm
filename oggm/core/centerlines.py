@@ -2312,7 +2312,11 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     df['width'] = df['area'] / df['dx']
 
     # Remove possible NaNs from above
-    df = df.dropna()
+    if not bin_variables:
+        df = df.dropna()
+    else:
+        # only remove if all bin_variables are NaN
+        df = df.dropna(how='all', subset=bin_variables)
 
     # Check for binned vars
     for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,

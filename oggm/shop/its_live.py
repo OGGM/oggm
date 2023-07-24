@@ -292,7 +292,7 @@ def compile_itslive_statistics(gdirs, filesuffix='', path=True):
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                                    ('millan_statistics' +
+                                    ('its_live_statistics' +
                                      filesuffix + '.csv')))
         else:
             out.to_csv(path)
