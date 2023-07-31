@@ -850,18 +850,19 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         write only the main flowlines to the output files
     simplify_line_before : float
         apply shapely's `simplify` method to the line before corner cutting.
-        It is a purely cosmetic option, although glacier length will be affected.
+        It is a cosmetic option: it avoids hard "angles" in the centerlines.
         All points in the simplified object will be within the tolerance
         distance of the original geometry (units: grid points). A good
-        value to test first is 0.5
+        value to test first is 0.75
     corner_cutting : int
         apply the Chaikin's corner cutting algorithm to the geometry before
         writing. The integer represents the number of refinements to apply.
-        A good first value to test is 5.
+        A good first value to test is 3.
     simplify_line_after : float
         apply shapely's `simplify` method to the line *after* corner cutting.
         This is to reduce the size of the geometeries after they have been
-        smoothed. A value to test first is 0.1 or 0.05.
+        smoothed. The default value of 0 is fine if you use corner cutting less
+        than 4. Otherwize try a small number, like 0.05 or 0.1.
     """
     from oggm.workflow import execute_entity_task
 
@@ -2876,8 +2877,10 @@ class GlacierDirectory(object):
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
             if entity.get('utm_zone', False):
+                # RGI7 has an utm zone
                 proj4_str = {'proj': 'utm', 'zone': entity['utm_zone']}
             else:
+                # Find it out
                 from pyproj.aoi import AreaOfInterest
                 from pyproj.database import query_utm_crs_info
                 utm_crs_list = query_utm_crs_info(
@@ -2907,8 +2910,8 @@ class GlacierDirectory(object):
         geometry = shp_trafo(project, entity['geometry'])
         if len(self.rgi_id) == 23 and (not geometry.is_valid or
                                        type(geometry) != shpg.Polygon):
-            # In RGI7 we know that the geometries are valid in entry
-            # So we have to validate them after proj as well
+            # In RGI7 we know that the geometries are valid in the source file,
+            # so we have to validate them after projection them as well
             # Try buffer first
             geometry = geometry.buffer(0)
             if not geometry.is_valid:

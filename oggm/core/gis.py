@@ -1147,7 +1147,7 @@ def rasterio_glacier_exterior_mask(gdir, overwrite=True):
     """Writes a 1-0 glacier exterior mask GeoTiff with the same dimensions as dem.tif
 
     This is the "one" grid point on the glacier exterior (ignoring nunataks).
-    This is useful to know where the terminus is, for example.
+    This is useful to know where the terminus might be, for example.
 
     Parameters
     ----------
