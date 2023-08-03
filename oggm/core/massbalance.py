@@ -949,9 +949,6 @@ class RandomMassBalance(MassBalanceModel):
     @temp_bias.setter
     def temp_bias(self, value):
         """Temperature bias to add to the original series."""
-        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
-            if hasattr(self, attr_name):
-                delattr(self, attr_name)
         self.mbmod.temp_bias = value
 
     @property
@@ -962,9 +959,6 @@ class RandomMassBalance(MassBalanceModel):
     @prcp_fac.setter
     def prcp_fac(self, value):
         """Precipitation factor to apply to the original series."""
-        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
-            if hasattr(self, attr_name):
-                delattr(self, attr_name)
         self.mbmod.prcp_fac = value
 
     @property
@@ -1064,6 +1058,9 @@ class UncertainMassBalance(MassBalanceModel):
         self._state_prcp = dict()
         self._state_bias = dict()
 
+    def is_year_valid(self, year):
+        return self.mbmod.is_year_valid(year)
+
     @property
     def temp_bias(self):
         """Temperature bias to add to the original series."""
@@ -1072,9 +1069,6 @@ class UncertainMassBalance(MassBalanceModel):
     @temp_bias.setter
     def temp_bias(self, value):
         """Temperature bias to add to the original series."""
-        for attr_name in ['_lazy_interp_yr', '_lazy_interp_m']:
-            if hasattr(self, attr_name):
-                delattr(self, attr_name)
         self.mbmod.temp_bias = value
 
     @property
