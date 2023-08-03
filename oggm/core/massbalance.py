@@ -665,9 +665,19 @@ class MonthlyTIModel(MassBalanceModel):
 class ConstantMassBalance(MassBalanceModel):
     """Constant mass balance during a chosen period.
 
-    This is useful for equilibrium experiments. Note that is is the "correct"
-    way to represent the average mass balance over a given period.
-    See: https://oggm.org/2021/08/05/mean-forcing/
+    This is useful for equilibrium experiments.
+
+    IMPORTANT: the "naive" implementation requires to compute the massbalance
+    N times for each simulation year, where N is the number of years over the
+    climate period to average. This is very expensive, and therefore we use
+    interpolation. This makes it *unusable* with MB models relying on the
+    computational domain being always the same.
+
+    If your model requires constant domain size, conisder using RandomMassBalance
+    instead.
+
+    Note that it uses the "correct" way to represent the average mass balance
+    over a given period. See: https://oggm.org/2021/08/05/mean-forcing/
 
     Attributes
     ----------
@@ -765,7 +775,7 @@ class ConstantMassBalance(MassBalanceModel):
     @lazy_property
     def interp_yr(self):
         # annual MB
-        mb_on_h = self.hbins*0.
+        mb_on_h = self.hbins * 0.
         for yr in self.years:
             mb_on_h += self.mbmod.get_annual_mb(self.hbins, year=yr)
         return interp1d(self.hbins, mb_on_h / len(self.years))
