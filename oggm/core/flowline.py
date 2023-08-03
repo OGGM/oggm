@@ -1529,6 +1529,29 @@ def flux_gate_with_build_up(year, flux_value=None, flux_gate_yr=None):
     return flux_value * utils.clip_scalar(fac, 0, 1)
 
 
+def k_calving_law(model, flowline, last_above_wl):
+    """Compute calving from the model state using the k-calving law.
+
+    Currently this still assumes that the model has an attribute
+    called "calving_k", which might be changed in the future.
+
+    Parameters
+    ----------
+    model : oggm.core.flowline.FlowlineModel
+        the model instance calling the function
+    flowline : oggm.core.flowline.Flowline
+        the instance of the flowline object on which the calving law is called
+    last_above_wl : int
+        the index of the last pixel above water (in case you need to know
+        where it is).
+    """
+    h = flowline.thick[last_above_wl]
+    d = h - (flowline.surface_h[last_above_wl] - model.water_level)
+    k = model.calving_k
+    q_calving = k * d * h * flowline.widths_m[last_above_wl]
+    return q_calving
+
+
 class FluxBasedModel(FlowlineModel):
     """The flowline model used by OGGM in production.
 
@@ -1547,8 +1570,9 @@ class FluxBasedModel(FlowlineModel):
                  fs=0., inplace=False, fixed_dt=None, cfl_number=None,
                  min_dt=None, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
-                 do_kcalving=None, calving_k=None, calving_use_limiter=None,
-                 calving_limiter_frac=None, water_level=None,
+                 do_kcalving=None, calving_k=None, calving_law=k_calving_law,
+                 calving_use_limiter=None, calving_limiter_frac=None,
+                 water_level=None,
                  **kwargs):
         """Instantiate the model.
 
@@ -1611,6 +1635,10 @@ class FluxBasedModel(FlowlineModel):
         do_kcalving : bool
             switch on the k-calving parameterisation. Ignored if not a
             tidewater glacier. Use the option from PARAMS per default
+        calving_law : func
+             option to use another calving law. This is a temporary workaround
+             to test other calving laws, and the system might be improved in
+             future OGGM versions.
         calving_k : float
             the calving proportionality constant (units: yr-1). Use the
             one from PARAMS per default
@@ -1648,6 +1676,7 @@ class FluxBasedModel(FlowlineModel):
         # Calving params
         if do_kcalving is None:
             do_kcalving = cfg.PARAMS['use_kcalving_for_run']
+        self.calving_law = calving_law
         self.do_calving = do_kcalving and self.is_tidewater
         if calving_k is None:
             calving_k = cfg.PARAMS['calving_k']
@@ -1903,10 +1932,8 @@ class FluxBasedModel(FlowlineModel):
             section = fl.section
 
             # Calving law
-            h = fl.thick[last_above_wl]
-            d = h - (fl.surface_h[last_above_wl] - self.water_level)
-            k = self.calving_k
-            q_calving = k * d * h * fl.widths_m[last_above_wl]
+            q_calving = self.calving_law(self, fl, last_above_wl)
+
             # Add to the bucket and the diagnostics
             fl.calving_bucket_m3 += q_calving * dt
             self.calving_m3_since_y0 += q_calving * dt

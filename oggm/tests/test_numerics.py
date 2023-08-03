@@ -1713,6 +1713,30 @@ class TestKCalving():
             plt.ylabel('Altitude [m]')
             plt.show()
 
+    @pytest.mark.slow
+    def test_other_calving_law(self, default_calving):
+
+        _, ds_1, _ = default_calving
+
+        # We just multiply by 2 inside and divide by 2 outside, should be same
+        def my_calving_law(model, flowline, last_above_wl):
+            h = flowline.thick[last_above_wl]
+            d = h - (flowline.surface_h[last_above_wl] - model.water_level)
+            k = model.calving_k
+            q_calving = k * d * h * flowline.widths_m[last_above_wl] * 2
+            return q_calving
+
+        model = FluxBasedModel(bu_tidewater_bed(),
+                               mb_model=ScalarMassBalance(),
+                               is_tidewater=True, calving_use_limiter=True,
+                               flux_gate=0.06, do_kcalving=True,
+                               calving_law=my_calving_law,
+                               calving_k=0.2 / 2)
+        ds_2 = model.run_until_and_store(3000)
+        assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
+                        model.flux_gate_m3_since_y0)
+        assert_allclose(ds_1.calving_m3, ds_2.calving_m3)
+
 
 class TestSia2d(unittest.TestCase):
 
