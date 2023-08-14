@@ -36,7 +36,7 @@ warnings.filterwarnings(action='ignore', category=FutureWarning, module=r'.*geop
 
 # API
 # Some decorators used by many
-from oggm.utils import entity_task, global_task
+from oggm.utils import entity_task, global_task, DEFAULT_BASE_URL
 
 # Classes
 from oggm.utils import GlacierDirectory
