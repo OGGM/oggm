@@ -1,4 +1,5 @@
 import logging
+import warnings
 from packaging.version import Version
 
 import numpy as np
@@ -171,7 +172,10 @@ def hugonnet_statistics(gdir):
             dhdt = ds['hugonnet_dhdt'].where(ds['glacier_mask'], np.NaN).load()
             d['hugonnet_area_km2'] = float((~dhdt.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
             d['hugonnet_perc_cov'] = float(d['hugonnet_area_km2'] / gdir.rgi_area_km2)
-            d['hugonnet_avg_dhdt'] = np.nanmean(dhdt.data)
+            with warnings.catch_warnings():
+                # This can trigger an empty mean warning
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                d['hugonnet_avg_dhdt'] = np.nanmean(dhdt.data)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 

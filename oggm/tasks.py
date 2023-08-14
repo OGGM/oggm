@@ -8,6 +8,8 @@ from oggm.core.gis import process_dem
 from oggm.core.gis import glacier_masks
 from oggm.core.gis import simple_glacier_masks
 from oggm.core.gis import rasterio_glacier_mask
+from oggm.core.gis import rasterio_glacier_exterior_mask
+from oggm.core.gis import compute_hypsometry_attributes
 from oggm.core.gis import gridded_attributes
 from oggm.core.gis import gridded_mb_attributes
 from oggm.core.gis import gridded_data_var_to_geotiff

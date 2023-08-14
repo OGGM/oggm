@@ -494,6 +494,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS['grid_dx_method'] = cp['grid_dx_method']
     PARAMS['map_proj'] = cp['map_proj']
     PARAMS['topo_interp'] = cp['topo_interp']
+    PARAMS['clip_dem_to_zero'] = cp.as_bool('clip_dem_to_zero')
     PARAMS['use_intersects'] = cp.as_bool('use_intersects')
     PARAMS['use_compression'] = cp.as_bool('use_compression')
     PARAMS['border'] = cp.as_int('border')
@@ -561,7 +562,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
            'grid_dx_method', 'compress_climate_netcdf',
-           'mp_processes', 'use_multiprocessing',
+           'mp_processes', 'use_multiprocessing', 'clip_dem_to_zero',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'border', 'use_temp_bias_from_file',
            'mpi_recv_buf_size', 'map_proj', 'evolution_model',

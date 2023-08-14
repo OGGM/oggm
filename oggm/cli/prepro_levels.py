@@ -360,7 +360,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(gis.rasterio_glacier_mask,
                                          gdirs, source='ALL')
 
-            # Compress all in output directory
+            # Glacier stats
+            sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
+            utils.mkdir(sum_dir)
+            opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+            utils.compile_glacier_statistics(gdirs, path=opath)
+
+            # L1 OK - compress all in output directory
+            log.workflow('L1 done. Writing to tar...')
             level_base_dir = os.path.join(output_base_dir, 'L1')
             workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                          base_dir=level_base_dir)
@@ -509,8 +516,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             opath = os.path.join(sum_dir, f'centerlines_smoothed_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              ensure_exterior_match=True,
-                                             simplify_line=0.5,
-                                             corner_cutting=5,
+                                             simplify_line_before=0.75,
+                                             corner_cutting=3,
                                              path=opath)
             opath = os.path.join(sum_dir, f'flowlines_{rgi_reg}.shp')
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,

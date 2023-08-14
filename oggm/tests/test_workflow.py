@@ -51,7 +51,7 @@ def up_to_climate(reset=False, use_mp=None):
     cfg.initialize()
 
     # Use multiprocessing
-    use_mp = True
+    use_mp = False
     if use_mp is None:
         cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
     else:
@@ -242,8 +242,9 @@ class TestFullRun(unittest.TestCase):
         fpath = os.path.join(_TEST_DIR, 'centerlines_ext_smooth.shp')
         write_centerlines_to_shape(gdirs, path=fpath,
                                    ensure_exterior_match=True,
-                                   simplify_line=0.2,
-                                   corner_cutting=3)
+                                   simplify_line_before=0.2,
+                                   corner_cutting=3,
+                                   simplify_line_after=0.05)
         shp_ext_smooth = salem.read_shapefile(fpath)
         # This is a bit different of course
         assert_allclose(shp_ext['LE_SEGMENT'], shp_ext_smooth['LE_SEGMENT'],
@@ -453,3 +454,4 @@ def test_rgi7_glacier_dirs():
     assert gdir
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 8
+    assert gdir.name == 'Hintereis Ferner'

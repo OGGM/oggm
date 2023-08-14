@@ -259,12 +259,17 @@ Date of acquisition: 2010-2015
 Date range: 2010-2015
 
 # Credit
-Any usage or publication must include the following statement:
-“Includes material ©CCME (year of acquisition ), provided under COPERNICUS by
-the European Union and ESA, all rights reserved”.
 
-Please also read and agree to the full ESA user license:
-https://spacedata.copernicus.eu/documents/20126/0/CSCDA_ESA_User_Licence_2021_11_17.pdf
+The GLO-90 dataset is available worldwide with a free license.
+
+Full licences are available here:
+https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex_31_Oct_22.pdf/fb109818-56ad-bbee-053c-d972aed25ce6?t=1674741175657
+
+ESA – EU users who use the Copernicus DEM in their research are requested
+to use the following DOI when citing the data source in their publications:
+
+    https://doi.org/10.5270/ESA-c5d3d65
+
 
 [COPDEM30]
 Copernicus DEM GLO-30
@@ -274,12 +279,17 @@ Date of acquisition: 2010-2015
 Date range: 2010-2015
 
 # Credit
-Any usage or publication must include the following statement:
-“Includes material ©CCME (year of acquisition ), provided under COPERNICUS by
-the European Union and ESA, all rights reserved”.
 
-Please also read and agree to the full ESA user license:
-https://spacedata.copernicus.eu/documents/20126/0/CSCDA_ESA_User_Licence_2021_11_17.pdf
+The GLO-30 dataset is available worldwide with a free license
+with the exception of two countries (Armenia and Azerbaijan).
+
+Full licences are available here:
+https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex_31_Oct_22.pdf/fb109818-56ad-bbee-053c-d972aed25ce6?t=1674741175657
+
+ESA – EU users who use the Copernicus DEM in their research are requested
+to use the following DOI when citing the data source in their publications:
+
+    https://doi.org/10.5270/ESA-c5d3d65
 
 [NASADEM]
 NASADEM Merged DEM Global

@@ -79,9 +79,13 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
         # Subset to avoid mega files
         dsb = salem.GeoTiff(input_file)
         x0, x1, y0, y1 = gdir.grid.extent_in_crs(dsb.grid.proj)
-        dsb.set_subset(corners=((x0, y0), (x1, y1)),
-                       crs=dsb.grid.proj,
-                       margin=5)
+        with warnings.catch_warnings():
+            # This can trigger an out of bounds warning
+            warnings.filterwarnings("ignore", category=RuntimeWarning,
+                                    message='.*out of bounds.*')
+            dsb.set_subset(corners=((x0, y0), (x1, y1)),
+                           crs=dsb.grid.proj,
+                           margin=5)
 
         data = _filter(dsb)
         if not allow_neg:
@@ -93,7 +97,11 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
             continue
 
         # Reproject now
-        r_data = gdir.grid.map_gridded_data(data, dsb.grid, interp='linear')
+        with warnings.catch_warnings():
+            # This can trigger an out of bounds warning
+            warnings.filterwarnings("ignore", category=RuntimeWarning,
+                                    message='.*out of bounds.*')
+            r_data = gdir.grid.map_gridded_data(data, dsb.grid, interp='linear')
         total_data += r_data.filled(0)
         grids_used.append(dsb)
         files_used.append(s.file_id)

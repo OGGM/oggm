@@ -442,6 +442,11 @@ class TestWorkflowTools(unittest.TestCase):
 
         assert 'glc_ext_num_perc' in df.columns
         assert np.all(np.isfinite(df.glc_ext_num_perc.values))
+        assert df['geometry_type'].iloc[0] == 'Polygon'
+        assert df['geometry_is_valid'].iloc[0]
+        np.testing.assert_allclose(df['geometry_area_km2'].iloc[0],
+                                   gdir.rgi_area_km2,
+                                   rtol=0.001)
 
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],

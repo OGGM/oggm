@@ -1297,7 +1297,11 @@ def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
 
     url = get_prepro_base_url(rgi_version=rgi_version, border=border,
                               prepro_level=prepro_level, base_url=base_url)
-    url += '{}/{}.tar' .format(rgi_id[:8], rgi_id[:11])
+    if len(rgi_id) == 23:
+        # RGI7
+        url += '{}/{}.tar'.format(rgi_id[:17], rgi_id[:20])
+    else:
+        url += '{}/{}.tar'.format(rgi_id[:8], rgi_id[:11])
     tar_base = file_downloader(url)
     if tar_base is None:
         raise RuntimeError('Could not find file at ' + url)

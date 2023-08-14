@@ -60,7 +60,8 @@ except ImportError:
 from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
-                               haversine, multipolygon_to_polygon, clip_scalar)
+                               haversine, multipolygon_to_polygon,
+                               recursive_valid_polygons)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
@@ -651,8 +652,9 @@ def get_centerline_lonlat(gdir,
                           geometrical_widths_output=False,
                           corrected_widths_output=False,
                           to_crs='wgs84',
-                          simplify_line=0,
-                          corner_cutting=0):
+                          simplify_line_before=0,
+                          corner_cutting=0,
+                          simplify_line_after=0):
     """Helper task to convert the centerlines to a shapefile
 
     Parameters
@@ -717,6 +719,11 @@ def get_centerline_lonlat(gdir,
             gs = dict()
             gs['RGIID'] = gdir.rgi_id
             gs['SEGMENT_ID'] = j
+            gs['STRAHLER'] = cl.order
+            if mm == 0:
+                gs['OUTFLOW_ID'] = cls.index(cl.flows_to)
+            else:
+                gs['OUTFLOW_ID'] = -1
             gs['LE_SEGMENT'] = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
             gs['MAIN'] = mm
             line = cl.line
@@ -736,10 +743,12 @@ def get_centerline_lonlat(gdir,
                         line = shpg.LineString([*line.coords[:-2], *ls.coords])
 
                 # Simplify and smooth?
-                if simplify_line:
-                    line = line.simplify(simplify_line)
+                if simplify_line_before:
+                    line = line.simplify(simplify_line_before)
                 if corner_cutting:
                     line = _chaikins_corner_cutting(line, corner_cutting)
+                if simplify_line_after:
+                    line = line.simplify(simplify_line_after)
 
                 # Intersect with exterior geom
                 line = line.intersection(exterior)
@@ -808,8 +817,9 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                geometrical_widths_output=False,
                                corrected_widths_output=False,
                                keep_main_only=False,
-                               simplify_line=0,
-                               corner_cutting=0):
+                               simplify_line_before=0,
+                               corner_cutting=0,
+                               simplify_line_after=0):
     """Write the centerlines to a shapefile.
 
     Parameters
@@ -838,16 +848,21 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         write the shape to another coordinate reference system (CRS)
     keep_main_only : bool
         write only the main flowlines to the output files
-    simplify_line : float
-        apply shapely's `simplify` method to the line before writing. It is
-        a purely cosmetic option, although glacier length will be affected.
+    simplify_line_before : float
+        apply shapely's `simplify` method to the line before corner cutting.
+        It is a cosmetic option: it avoids hard "angles" in the centerlines.
         All points in the simplified object will be within the tolerance
         distance of the original geometry (units: grid points). A good
-        value to test first is 0.5
+        value to test first is 0.75
     corner_cutting : int
         apply the Chaikin's corner cutting algorithm to the geometry before
         writing. The integer represents the number of refinements to apply.
-        A good first value to test is 5.
+        A good first value to test is 3.
+    simplify_line_after : float
+        apply shapely's `simplify` method to the line *after* corner cutting.
+        This is to reduce the size of the geometeries after they have been
+        smoothed. The default value of 0 is fine if you use corner cutting less
+        than 4. Otherwize try a small number, like 0.05 or 0.1.
     """
     from oggm.workflow import execute_entity_task
 
@@ -867,13 +882,14 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                 geometrical_widths_output=geometrical_widths_output,
                                 corrected_widths_output=corrected_widths_output,
                                 keep_main_only=keep_main_only,
-                                simplify_line=simplify_line,
+                                simplify_line_before=simplify_line_before,
                                 corner_cutting=corner_cutting,
+                                simplify_line_after=simplify_line_after,
                                 to_crs=_to_crs)
     # filter for none
     olist = [o for o in olist if o is not None]
     odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
-    odf = odf.sort_values(by='RGIID')
+    odf = odf.sort_values(by=['RGIID', 'SEGMENT_ID'])
     odf.crs = to_crs
     # Sanity checks to avoid bad surprises
     gtype = np.array([g.geom_type for g in odf.geometry])
@@ -1581,6 +1597,15 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
 
         try:
+            # Geom stuff
+            outline = gdir.read_shapefile('outlines')
+            d['geometry_type'] = outline.type.iloc[0]
+            d['geometry_is_valid'] = outline.is_valid.iloc[0]
+            d['geometry_area_km2'] = outline.to_crs({'proj': 'cea'}).area.iloc[0] * 1e-6
+        except BaseException:
+            pass
+
+        try:
             # Inversion
             if gdir.has_file('inversion_output'):
                 vol = []
@@ -1764,6 +1789,64 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
                                     ('glacier_statistics' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+    return out
+
+
+@entity_task(log)
+def read_glacier_hypsometry(gdir):
+    """Utility function to read the glacier hypsometry in the folder.
+
+    Parameters
+    ----------
+    gdir :  :py:class:`oggm.GlacierDirectory` object
+        the glacier directory to process
+
+    Returns
+    -------
+    the dataframe
+    """
+    try:
+        out = pd.read_csv(gdir.get_filepath('hypsometry')).iloc[0]
+    except:
+        out = pd.Series({'rgi_id': gdir.rgi_id})
+    return out
+
+
+@global_task(log)
+def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
+                               add_column=None):
+    """Gather as much statistics as possible about a list of glaciers.
+
+    It can be used to do result diagnostics and other stuffs. If the data
+    necessary for a statistic is not available (e.g.: flowlines length) it
+    will simply be ignored.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    add_column : tuple
+        if you feel like adding a key - value pair to the compiled dataframe
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(read_glacier_hypsometry, gdirs)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+    if add_column is not None:
+        out[add_column[0]] = add_column[1]
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('glacier_hypsometry' +
                                      filesuffix + '.csv')))
         else:
             out.to_csv(path)
@@ -2595,6 +2678,7 @@ class GlacierDirectory(object):
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
             try:
+                # RGIv7
                 self.cenlon = float(rgi_entity.cenlon)
                 self.cenlat = float(rgi_entity.cenlat)
             except AttributeError:
@@ -2616,7 +2700,7 @@ class GlacierDirectory(object):
                                   '{:02d}'.format(int(rgi_entity.O2Region)))
 
         try:
-            name = str(rgi_entity.name)
+            name = rgi_entity.glac_name
             rgi_datestr = rgi_entity.src_date
         except AttributeError:
             # RGI V6
@@ -2656,6 +2740,12 @@ class GlacierDirectory(object):
                                    '{}'.format(self.rgi_version))
             else:
                 self.rgi_version = rgi_version
+
+        try:
+            self.rgi_dem_source = rgi_entity.dem_source
+        except AttributeError:
+            self.rgi_dem_source = ''
+
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
@@ -2784,21 +2874,25 @@ class GlacierDirectory(object):
         return '\n'.join(summary) + '\n'
 
     def _reproject_and_write_shapefile(self, entity):
-
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
-            from pyproj.aoi import AreaOfInterest
-            from pyproj.database import query_utm_crs_info
-            utm_crs_list = query_utm_crs_info(
-                datum_name="WGS 84",
-                area_of_interest=AreaOfInterest(
-                    west_lon_degree=self.cenlon,
-                    south_lat_degree=self.cenlat,
-                    east_lon_degree=self.cenlon,
-                    north_lat_degree=self.cenlat,
-                ),
-            )
-            proj4_str = utm_crs_list[0].code
+            if entity.get('utm_zone', False):
+                # RGI7 has an utm zone
+                proj4_str = {'proj': 'utm', 'zone': entity['utm_zone']}
+            else:
+                # Find it out
+                from pyproj.aoi import AreaOfInterest
+                from pyproj.database import query_utm_crs_info
+                utm_crs_list = query_utm_crs_info(
+                    datum_name="WGS 84",
+                    area_of_interest=AreaOfInterest(
+                        west_lon_degree=self.cenlon,
+                        south_lat_degree=self.cenlat,
+                        east_lon_degree=self.cenlon,
+                        north_lat_degree=self.cenlat,
+                    ),
+                )
+                proj4_str = utm_crs_list[0].code
         elif cfg.PARAMS['map_proj'] == 'tmerc':
             params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
                           k=0.9996, x_0=0, y_0=0, datum='WGS84')
@@ -2814,7 +2908,20 @@ class GlacierDirectory(object):
         # transform geometry to map
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
-        if not cfg.PARAMS['keep_multipolygon_outlines']:
+        if len(self.rgi_id) == 23 and (not geometry.is_valid or
+                                       type(geometry) != shpg.Polygon):
+            # In RGI7 we know that the geometries are valid in the source file,
+            # so we have to validate them after projection them as well
+            # Try buffer first
+            geometry = geometry.buffer(0)
+            if not geometry.is_valid:
+                correct = recursive_valid_polygons([geometry], crs=proj4_str)
+                if len(correct) != 1:
+                    raise RuntimeError('Cant correct this geometry')
+                geometry = correct[0]
+            if type(geometry) != shpg.Polygon:
+                raise ValueError(f'{self.rgi_id}: geometry not valid')
+        elif not cfg.PARAMS['keep_multipolygon_outlines']:
             geometry = multipolygon_to_polygon(geometry, gdir=self)
 
         # Save transformed geometry to disk
@@ -2889,7 +2996,7 @@ class GlacierDirectory(object):
         except KeyError:
             # RGI V7
             _area = self.read_shapefile('outlines')['area_km2']
-        return np.round(float(_area.iloc[0]), decimals=3)
+        return float(_area.iloc[0])
 
     @lazy_property
     def intersects_ids(self):

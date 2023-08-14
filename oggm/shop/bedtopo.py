@@ -1,4 +1,5 @@
 import logging
+import warnings
 import os
 
 import numpy as np
@@ -47,7 +48,11 @@ def add_consensus_thickness(gdir, base_url=None):
     dsb = salem.GeoTiff(input_file)
     thick = utils.clip_min(dsb.get_vardata(), 0)
     in_volume = thick.sum() * dsb.grid.dx ** 2
-    thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear')
+    with warnings.catch_warnings():
+        # This can trigger an out of bounds warning
+        warnings.filterwarnings("ignore", category=RuntimeWarning,
+                                message='.*out of bounds.*')
+        thick = gdir.grid.map_gridded_data(thick, dsb.grid, interp='linear')
 
     # Correct for volume
     thick = utils.clip_min(thick.filled(0), 0)
