@@ -405,6 +405,10 @@ class TestInitialize(unittest.TestCase):
         expected = os.path.join(self.homedir, 'my_OGGM_wd')
         assert cfg.PATHS['working_dir'] == expected
 
+    def test_default_url(self):
+        from oggm import DEFAULT_BASE_URL
+        assert '2023.3' in DEFAULT_BASE_URL
+
 
 class TestWorkflowTools(unittest.TestCase):
 

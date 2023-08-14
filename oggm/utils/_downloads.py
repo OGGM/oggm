@@ -75,6 +75,10 @@ CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
 CHECKSUM_LIFETIME = 24 * 60 * 60
 
+# Recommended url for runs
+DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
+                    'L3-L5_files/2023.3/elev_bands/W5E5_spinup')
+
 # Web mercator proj constants
 WEB_N_PIX = 256
 WEB_EARTH_RADUIS = 6378137.
