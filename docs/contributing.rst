@@ -206,14 +206,13 @@ Installation
 ~~~~~~~~~~~~
 
 There are some extra requirements to build the docs: you will need to
-have ``sphinx``, ``sphinx-togglebutton``, ``sphinx-book-theme``, ``numpydoc``
-and ``ipython`` installed.
+have ``sphinx``, ``sphinx-togglebutton``, ``sphinx-book-theme``,
+``sphinx-reredirects``, ``numpydoc`` and ``ipython`` installed.
 
 If you have a conda environment named ``oggm_env``, you can install the extra
 requirements with::
 
-      mamba install -c conda-forge sphinx ipython numpydoc sphinx-book-theme
-      pip install sphinx-togglebutton
+      mamba install -c conda-forge sphinx ipython numpydoc sphinx-book-theme sphinx-reredirects sphinx-togglebutton
 
 If you don't have an oggm installation yet, download (or clone) the latest version
 of the oggm repository.

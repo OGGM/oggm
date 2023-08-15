@@ -4,6 +4,12 @@ Assets and downloads
 This page lists some datasets that are either generated or used by OGGM and
 that can be useful to others.
 
+.. _standard-projs:
+
+OGGM standard projections (new in v1.6.1!)
+------------------------------------------
+
+TODO
 
 Shapefiles of glacier centerlines, flowlines and widths
 -------------------------------------------------------

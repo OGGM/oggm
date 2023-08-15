@@ -7,17 +7,17 @@ the past and future mass balance, volume, and geometry of glaciers worldwide.
 
 The model features several glacier evolution models, including an explicit ice
 dynamics module accounting for glacier geometry and frontal ablation.
-With an unwavering commitment to using publicly available data for calibration
-and validation, OGGM is a reliable and readily applicable tool for studying glaciers.
+**With an unwavering commitment to using publicly available data for calibration
+and validation, OGGM is a reliable and readily applicable tool for studying glaciers**.
 
 OGGM is also a modular platform that supports novel modelling workflows,
-encouraging researchers to create unique models and analyses for their research.
+**encouraging researchers to create unique models and analyses for their research**.
 Our framework is designed to be flexible and adaptable, making it an
 ideal tool for a wide range of applications in glaciology and related fields.
 
 .. warning::
 
-   OGGM v1.6.0 is a substantial change to v1.5.3. Among other developments,
+   OGGM v1.6 is a substantial change to v1.5.3. Among other developments,
    the mass balance calibration has substantially improved. In order to
    allow easier and faster developments from the community in the future,
    several variable names have changed and older workflows are not available
@@ -26,12 +26,8 @@ ideal tool for a wide range of applications in glaciology and related fields.
    Older versions of OGGM will always be available via github and Zenodo,
    and older documentation pages can be accessed via the interface below.
 
-
 **This webpage is for the software documentation: for general information about the
 OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
-
-
-.. include:: _generated/version_text.txt
 
 Video presentation
 ^^^^^^^^^^^^^^^^^^

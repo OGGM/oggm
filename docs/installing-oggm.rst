@@ -275,6 +275,26 @@ are frequent and point to errors in upstream packages, rarely in OGGM itself.
 If you encounter issues, please get in touch with
 us `on github <https://github.com/OGGM/oggm/issues>`_.
 
+Install a minimal OGGM environment
+----------------------------------
+
+If you plan to use only the numerical core of OGGM (that is, for idealized
+simulations or teaching), you can skip many dependencies and only
+install this shorter list:
+
+.. include:: recommended_minimal_env.yml
+   :literal:
+
+Installing them with pip or conda should be much easier.
+`Install OGGM itself`_ then as above.
+
+Running the tests in this minimal environment works the same. Simply run
+from a terminal::
+
+    pytest.oggm
+
+The number of tests will be much smaller!
+
 .. _virtualenv-install:
 
 Install with pyenv (Linux)
@@ -303,7 +323,7 @@ For building python and stuff::
 
 For NetCDF and HDF::
 
-    $ sudo apt-get install netcdf-bin ncview hdf5-tools libhdf5-dev 
+    $ sudo apt-get install netcdf-bin ncview hdf5-tools libhdf5-dev
 
 
 Pyenv and pyenv-virtualenv
@@ -314,7 +334,7 @@ Pyenv and pyenv-virtualenv
     If you are not familiar with pyenv, you can visit
     `their documentation <https://realpython.com/intro-to-pyenv/>`_
     (especially the installing pyenv section).
-    
+
 Install `pyenv <https://github.com/pyenv/pyenv>`_ and create a new virtual environment
 with a recent python version (3.7+) using `pyenv-virtualenv <https://github.com/pyenv/pyenv-virtualenv>`_.
 
@@ -348,23 +368,3 @@ Install OGGM and run the tests
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Refer to `Install OGGM itself`_ above.
-
-Install a minimal OGGM environment
-----------------------------------
-
-If you plan to use only the numerical core of OGGM (that is, for idealized
-simulations or teaching), you can skip many dependencies and only
-install this shorter list:
-
-.. include:: recommended_minimal_env.yml
-   :literal:
-
-Installing them with pip or conda should be much easier.
-`Install OGGM itself`_ then as above.
-
-Running the tests in this minimal environment works the same. Simply run
-from a terminal::
-
-    pytest.oggm
-
-The number of tests will be much smaller!
