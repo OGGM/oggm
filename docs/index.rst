@@ -54,11 +54,12 @@ Core principles and structure of the OGGM modelling framework.
 * :doc:`inversion`
 * :doc:`frontal-ablation`
 * :doc:`dynamic-spinup`
+* :doc:`whats-new`
 
 .. toctree::
     :maxdepth: 1
     :hidden:
-    :caption: Principles
+    :caption: Overview
 
     introduction.rst
     structure.rst
@@ -68,6 +69,7 @@ Core principles and structure of the OGGM modelling framework.
     inversion.rst
     frontal-ablation.rst
     dynamic-spinup.rst
+    whats-new.rst
 
 Using OGGM
 ^^^^^^^^^^
@@ -77,15 +79,10 @@ How to use the model, with concrete code examples and links to the tutorials.
 * :doc:`cloud`
 * :doc:`installing-oggm`
 * :doc:`getting-started`
-* :doc:`shop`
 * `Tutorials <https://oggm.org/tutorials/stable>`_
 * :doc:`api`
 * :doc:`practicalities`
 * :doc:`faq`
-* :doc:`pitfalls`
-* :doc:`assets`
-* :doc:`hub`
-* :doc:`whats-new`
 
 .. toctree::
     :maxdepth: 1
@@ -95,15 +92,30 @@ How to use the model, with concrete code examples and links to the tutorials.
     cloud.rst
     installing-oggm.rst
     getting-started.rst
-    shop.rst
     Tutorials <https://oggm.org/tutorials/stable>
     api.rst
     practicalities.rst
     faq.rst
-    pitfalls.rst
+
+Datasets and downloads
+^^^^^^^^^^^^^^^^^^^^^^
+
+All the things that OGGM has on offer.
+
+* :doc:`shop`
+* :doc:`rgitopo`
+* :doc:`download-projections`
+* :doc:`assets`
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+    :caption: Datasets and downloads
+
+    shop.rst
+    rgitopo.rst
+    download-projections.rst
     assets.rst
-    hub.rst
-    whats-new.rst
 
 Contributing
 ^^^^^^^^^^^^
@@ -112,7 +124,6 @@ Do you want to contribute to the model? This is the right place to start.
 
 * :doc:`citing-oggm`
 * :doc:`add-module`
-* :doc:`oeps`
 * :doc:`contributing`
 
 .. toctree::
@@ -122,7 +133,6 @@ Do you want to contribute to the model? This is the right place to start.
 
     citing-oggm.rst
     add-module.rst
-    oeps.rst
     contributing.rst
 
 .. _contact:

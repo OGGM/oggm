@@ -210,7 +210,7 @@ The recommended ``prepro_base_url`` for a standard OGGM run is:
     DEFAULT_BASE_URL
 
 This is the setup that was used to generate the OGGM 1.6.1 standard projections
-(:ref:`standard-projs`).
+(:doc:`download-projections`).
 The basic set-up is following:
 
 - all default OGGM parameters
