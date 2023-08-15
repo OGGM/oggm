@@ -195,7 +195,8 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_from_simulation(gdir, input_filesuffix='',
                                          ys=None, ye=None,
-                                         smooth_radius=None):
+                                         smooth_radius=None,
+                                         add_monthly=False):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
     For this to work, the glacier cannot advance beyond its initial area!
@@ -230,6 +231,9 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         pixel size of the gaussian smoothing. Default is to use
         cfg.PARAMS['smooth_window'] (i.e. a size in meters). Set to zero to
         suppress smoothing.
+    add_monthly : bool
+        If True the yearly flowline diagnostics will be linearly interpolated
+        to a monthly resolution. Default is False
     """
 
     fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
@@ -239,6 +243,20 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         if ys or ye:
             dg = dg.sel(time=slice(ye, ye))
         dg = dg.load()
+
+    if add_monthly:
+        # create new monthly time coordinate, last year only with month 1
+        years = np.append(np.repeat(dg.time[:-1], 12),
+                          dg.time[-1])
+        months = np.append(np.tile(np.arange(1, 13), len(dg.time[:-1])),
+                           1)
+        time_monthly = utils.date_to_floatyear(years, months)
+
+        # interpolate and add years and months as new coords
+        dg = dg[['area_m2', 'volume_m3']].interp(time=time_monthly,
+                                                 method='linear')
+        dg.coords['calender_year'] = ('time', years)
+        dg.coords['calender_month'] = ('time', months)
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         band_index_mask = ds.band_index.data
@@ -292,9 +310,19 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         ds = ds.load()
 
-    ds['time'] = dg['time']
+    # the distinction between time_monthly and time is needed to have data in
+    # yearly AND monthly resolution in the same gridded data, maybe and one
+    # point we decide for one option
+    if add_monthly:
+        time_var = 'time_monthly'
+    else:
+        time_var = 'time'
+    ds.coords[time_var] = dg['time'].data
     vn = "simulation_distributed_thickness" + input_filesuffix
     if vn in ds:
         warnings.warn(f'Overwriting existing variable {vn}')
-    ds[vn] = (('time', 'y', 'x',), out_thick)
+    ds[vn] = ((time_var, 'y', 'x',), out_thick)
+    if add_monthly:
+        ds.coords['calender_year_monthly'] = (time_var, dg.calender_year.data)
+        ds.coords['calender_month_monthly'] = (time_var, dg.calender_month.data)
     ds.to_netcdf(gdir.get_filepath('gridded_data'))
