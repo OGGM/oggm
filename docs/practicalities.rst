@@ -368,11 +368,6 @@ the interpolation routines of GDAL/rasterio can change the glacier
 topography in a non-traceable way for OGGM. This is an obstacle to
 reproducible science, and we should try to avoid these situations.
 
-Therefore, we have written :doc:`oeps/oep--0001-dependencies`
-as a tool to guide our decision regarding software dependencies in OGGM.
-This document also lists some example situations affecting model users and
-developers.
-
 .. important::
 
     **The short answer is: use our docker/singularity containers for the

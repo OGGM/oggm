@@ -35,7 +35,7 @@ If you want to change some of these parameters, you may have to start a
 run from a lower processing level and re-run the processing tasks.
 Whether or not this is necessary depends on the stage of the workflow
 you'd like your computations to diverge from the
-defaults (this will become more clear as we provide examples below).
+defaults (this will become clearer as we provide examples workflow below).
 
 To start from a pre-processed state, simply use the
 :py:func:`workflow.init_glacier_directories` function with the
@@ -48,9 +48,10 @@ Processing levels
 
 .. admonition:: **New in version 1.6!**
 
-   Since v1.6, Level 4 and Level 5 have changed!
+   In v1.6, Level 4 and Level 5 have changed! The explanations below are
+   valid for OGGM version 1.6.0 and above.
 
-Currently, there are six available levels of pre-processing:
+There are six available levels of pre-processing:
 
 - **Level 0**: the lowest level, with directories containing the glacier
   outlines only.
@@ -89,18 +90,16 @@ experiments (but easily recovered if needed).
    In previous versions, level 4 files were the "reduced" directories with intermediate
    files removed. Level 5 was very similar, but without the dynamic spinup files.
    I practice, most users wont really see a change.
-   **All v1.4 directories are still working with OGGM v1.6: however, you may have to change
-   the run parameters back to their previous values**.
 
 Here are some example use cases for glacier directories, and recommendations on which
 level to pick:
 
-1. *Running OGGM from GCM / RCM data with the default settings*: **start at level 5**
-2. *Using OGGM's flowlines but running your own baseline climate,
-   mass balance or ice thickness inversion models*: **start at level 2** (and maybe
+1. Running OGGM from GCM / RCM data with the default settings: **start at level 5**
+2. Using OGGM's flowlines but running your own baseline climate,
+   mass balance or ice thickness inversion models: **start at level 2** (and maybe
    use OGGM's workflow again for glacier dynamic evolution?). This is the workflow used
    by associated model `PyGEM <https://github.com/drounce/PyGEM>`_ for example.
-3. *Run sensitivity experiments for the ice thickness inversion*: start at level
+3. Run sensitivity experiments for the ice thickness inversion: start at level
    3 (with climate data available) and re-run the inversion steps.
 
 
@@ -136,6 +135,8 @@ become. Here is an example with Hintereisferner in the Alps:
 
 .. code-block:: python
 
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6'
+    base_url += '/L1-L2_files/elev_bands'
     f, axs = plt.subplots(2, 2, figsize=(8, 6))
     for ax, border in zip(np.array(axs).flatten(), [10, 80, 160, 240]):
         gdir = workflow.init_glacier_directories('RGI60-11.00897',
@@ -192,18 +193,38 @@ Available pre-processed configurations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 OGGM has several configurations and directories to choose from,
-and the list is getting larger. Don't hesitate to ask us if you are
+and the list is getting larger regularly. Don't hesitate to ask us if you are
 unsure about which to use, or if you'd like to have more configurations
 to choose from!
 
-To choose from a specific model configuration, use the ``prepro_base_url``
+To choose from a specific preprocessed configuration, use the ``prepro_base_url``
 argument in your call to :py:func:`workflow.init_glacier_directories`,
 and set it to one of the urls listed below.
 
-As of March 10, 2023, we offer several urls. Explore
-`https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_ and our `tutorials <https://oggm.org/tutorials>`_ for examples of applications.
+The recommended ``prepro_base_url`` for a standard OGGM run is:
 
-.. admonition:: **Version 1.4 and 1.5 directories (before v1.6)**
+.. ipython:: python
+   :okwarning:
+
+    from oggm import DEFAULT_BASE_URL
+    DEFAULT_BASE_URL
+
+This is the setup that was used to generate the OGGM 1.6.1 standard projections
+(:doc:`download-projections`).
+The basic set-up is following:
+
+- all default OGGM parameters
+- :ref:`eb-flowlines`
+- :ref:`climate-w5e5` reference climate
+- "informed three-step" mass balance model calibration (see :ref:`mb-calib`)
+- :ref:`dynamic-spinup` with dynamic melt factor calibration
+
+
+Explore
+`cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_ for more options. Our `tutorials <https://oggm.org/tutorials>`_ showcase
+example of applications for some of them.
+
+.. admonition:: Deprecated: **version 1.4 and 1.5 directories (before v1.6)**
     :class: note, dropdown
 
     **All v1.4 directories are still working with OGGM v1.6: however, you may have to change
@@ -342,8 +363,6 @@ As of March 10, 2023, we offer several urls. Explore
     you can check out this
     `jupyter notebook <https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~lschuster/error_analysis/working_glacier_gdirs_comparison.ipynb?flush_cache=true>`_.
 
-
-
 .. _Marzeion et al., 2012: http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 Climate data
@@ -351,11 +370,15 @@ Climate data
 
 Here are the various climate datasets that OGGM handles automatically.
 
+.. _climate-w5e5:
+
 W5E5
 ~~~~
 
-Since OGGM v1.5, users can also use the reanalysis data W5E5, which is a
-bias-corrected ERA5...
+As of v1.6, W5E5 is the standard dataset used by OGGM as reference. All
+preprocessed directories use it.
+
+TODO: explain what W5E5 is and why it is the default.
 
 CRU
 ~~~
@@ -366,6 +389,16 @@ If asked to do so, OGGM will automatically download and unpack the
 latest dataset from the CRU servers.
 
 .. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
+
+To download CRU data you can use the
+following convenience functions:
+
+.. code-block:: python
+
+    from oggm.shop import cru
+    cru.get_cl_file()
+    cru.get_cru_file(var='tmp')
+    cru.get_cru_file(var='pre')
 
 .. warning::
 
@@ -381,13 +414,18 @@ based on a presumably better climatology. The monthly anomalies are computed
 following [Harris_et_al_2010]_ : we use standard anomalies for temperature and
 scaled (fractional) anomalies for precipitation.
 
+**When using these data, please refer to the original provider:**
+
+Harris, I., Jones, P. D., Osborn, T. J., & Lister, D. H. (2014). Updated
+high-resolution grids of monthly climatic observations - the CRU TS3.10 Dataset.
+International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/joc.3711
+
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
 
 .. [Harris_et_al_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
    D. H. (2014). Updated high-resolution grids of monthly climatic observations
    - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
    623–642. https://doi.org/10.1002/joc.3711
-
 
 ERA5 and CERA-20C
 ~~~~~~~~~~~~~~~~~
@@ -401,12 +439,22 @@ datasets as baseline. One can also apply a combination of both, for example
 by applying the CERA-20C anomalies to the reference ERA5 for example
 (useful only in some circumstances).
 
+**When using these data, please refer to the original provider:**
+
+For example for ERA5:
+
+Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A.,
+Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I.,
+Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2019):
+ERA5 monthly averaged data on single levels from 1979 to present.
+Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
+(Accessed on < 01-12-2020 >), 10.24381/cds.f17050d7
+
 HISTALP
 ~~~~~~~
 
-If required by the user, OGGM can also automatically
-download and use the data from the `HISTALP`_ dataset (available only
-for the European Alps region, more details in [Chimani_et_al_2012]_.
+OGGM can also automatically download and use the data from the `HISTALP`_
+dataset (available only for the European Alps region, more details in [Chimani_et_al_2012]_.
 The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
 However, the data is considered spurious before 1850. Therefore, we
 recommend to use data from 1850 onwards.
@@ -431,8 +479,11 @@ recommend to use data from 1850 onwards.
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()  # the code for these examples is posted below
 
-User-provided climate dataset
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Any other climate dataset
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is fairly easy to add a dataset to OGGM. Recent publications have used
+plenty of options, from ERA5-Land to regional reanalyses or more.
 
 You can provide any other dataset to OGGM. See the `HISTALP_oetztal.nc` data
 file in the OGGM `sample-data`_ folder for an example format.
@@ -444,10 +495,11 @@ GCM data
 ~~~~~~~~
 
 OGGM can also use climate model output to drive the mass balance model. In
-this case we still rely on gridded observations (e.g. CRU) for the reference
+this case we still rely on gridded observations (e.g. W5E5) for the reference
 climatology and apply the GCM anomalies computed from a preselected reference
 period. This method is often called the
 `delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
+
 Visit our online tutorials to see how this can be done
 (`OGGM run with GCM tutorial <https://oggm.org/tutorials/master/notebooks/run_with_gcm.html>`_).
 
@@ -612,9 +664,9 @@ global study (visit our `tutorials`_ if you are interested!).
 Raw data sources
 ----------------
 
-These data are used to create the pre-processed directories explained above.
 If you want to run your own workflow from A to Z, or if you would like
-to know which data are used in OGGM, read further!
+to know which data are used in OGGM before being available in the
+pre-processed directories, read further!
 
 .. _outlines:
 
@@ -779,82 +831,3 @@ reproduce this information
     requirements a DEM must fulfill to be helpful to OGGM. And we also explain
     why and how we preprocess some DEMs before we make them available to the
     OGGM workflow.
-
-Climate data
-~~~~~~~~~~~~
-
-**‣ CRU**
-
-To download CRU data you can use the
-following convenience functions:
-
-.. code-block:: python
-
-    from oggm.shop import cru
-    cru.get_cl_file()
-    cru.get_cru_file(var='tmp')
-    cru.get_cru_file(var='pre')
-
-
-.. warning::
-
-    While each downloaded zip file is ~200mb in size, they are ~2.9Gb large
-    after decompression!
-
-The raw, coarse dataset (CRU TS v4.04 at 0.5° resolution) is then downscaled to
-a higher resolution grid (CRU CL v2.0 at 10' resolution) following the anomaly mapping approach
-described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
-this downscaling to add any new information than already available at the
-original resolution, but this allows us to have an elevation-dependent dataset
-based on a presumably better climatology. The monthly anomalies are computed
-following Harris et al., (2010): we use standard anomalies for temperature and
-scaled (fractional) anomalies for precipitation. At the locations where the
-monthly precipitation climatology is 0 we fall back to the standard anomalies.
-
-**When using these data, please refer to the original provider:**
-
-Harris, I., Jones, P. D., Osborn, T. J., & Lister, D. H. (2014). Updated
-high-resolution grids of monthly climatic observations - the CRU TS3.10 Dataset.
-International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/joc.3711
-
-.. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
-
-**‣ ECMWF (ERA5, CERA, ERA5-Land)**
-
-The data from ECMWF are used "as is", i.e. without any further downscaling.
-We propose several datasets (see :py:func:`oggm.shop.ecmwf.process_ecmwf_data`)
-and, with the task :py:func:`oggm.tasks.historical_delta_method`, also
-allow for combinations of them.
-
-**When using these data, please refer to the original provider:**
-
-For example for ERA5:
-
-Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A.,
-Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I.,
-Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2019):
-ERA5 monthly averaged data on single levels from 1979 to present.
-Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
-(Accessed on < 01-12-2020 >), 10.24381/cds.f17050d7
-
-
-**‣ User-provided dataset**
-
-You can provide any other dataset to OGGM by setting the ``climate_file``
-parameter in ``params.cfg``. See the HISTALP data file in the `sample-data`_
-folder for an example.
-
-.. _sample-data: https://github.com/OGGM/oggm-sample-data/tree/master/test-workflow
-
-**‣ GCM data**
-
-OGGM can also use climate model output to drive the mass balance model. In
-this case we still rely on gridded observations (CRU) for the baseline
-climatology and apply the GCM anomalies computed from a preselected reference
-period. This method is sometimes called the
-`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
-
-Currently we can process data from the
-`CESM Last Millennium Ensemble <http://www.cesm.ucar.edu/projects/community-projects/LME/>`_
-project (see :py:func:`tasks.process_cesm_data`), and CMIP5/CMIP6
-(:py:func:`tasks.process_cmip_data`).

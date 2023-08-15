@@ -30,6 +30,8 @@ temperature and precipitation at the altitude :math:`z` of the glacier
 grid points. The default is to use a fixed lapse rate of
 -6.5K km :math:`^{-1}` and no gradient for precipitation.
 
+.. _mb-calib:
+
 Calibration
 -----------
 

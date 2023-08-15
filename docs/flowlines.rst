@@ -158,6 +158,7 @@ Note that a *perfect* match is not possible since the sample size is
 not the same between the "1.5D" and the 2D representation of the glacier,
 but it's close enough.
 
+.. _eb-flowlines:
 
 Elevation bands flowlines
 -------------------------

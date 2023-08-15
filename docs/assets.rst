@@ -1,9 +1,8 @@
-Assets and downloads
-====================
+Other datasets
+==============
 
 This page lists some datasets that are either generated or used by OGGM and
 that can be useful to others.
-
 
 Shapefiles of glacier centerlines, flowlines and widths
 -------------------------------------------------------
@@ -26,21 +25,6 @@ If you use these data, please cite `Maussion et al., 2019 <https://gmd.copernicu
     :align: left
 
     Shapefile of OGGM's flowlines and widths for a subset of RGI region 15
-
-
-RGI-TOPO
---------
-
-The `RGI-TOPO <https://rgitools.readthedocs.io/en/latest/dems.html>`_ dataset
-provides a local topography map for each single glacier in the RGI (currently version 6).
-It was generated with OGGM, and can be used very easily from the :doc:`shop` (visit
-our `tutorials <https://oggm.org/tutorials>`_ if you want to learn how to use them!).
-
-.. figure:: _static/malaspina_topo.png
-    :width: 100%
-    :align: left
-
-    Example of the various RGI-TOPO products at Malaspina glacier
 
 
 Useful data tables

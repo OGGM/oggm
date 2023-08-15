@@ -133,6 +133,8 @@ extlinks = {'issue': ('https://github.com/OGGM/oggm/issues/%s', 'GH'),
 
 redirects = {
     "input-data": "shop.html",
+    "pitfalls": "faq.html",
+    "hub": "cloud.html#oggm-hub",
     "mass-balance-2012-pergla": "mass-balance-monthly.html",
     "mass-balance-2012": "mass-balance-16guide.html",
 }
@@ -177,7 +179,6 @@ release = oggm.__version__
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = 'en'
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -228,7 +229,7 @@ html_theme = 'sphinx_book_theme'
 # further.  For a list of options available for each theme, see the
 # documentation.
 html_theme_options = {
-    "logo_only": True,
+    # "logo_only": True,
     "repository_url": "https://github.com/OGGM/oggm",
     "use_repository_button": True,
     "use_issues_button": True,
