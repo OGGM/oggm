@@ -196,7 +196,8 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
 def distribute_thickness_from_simulation(gdir, input_filesuffix='',
                                          ys=None, ye=None,
                                          smooth_radius=None,
-                                         add_monthly=False):
+                                         add_monthly=False,
+                                         fl_thickness_threshold=0):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
     For this to work, the glacier cannot advance beyond its initial area!
@@ -234,6 +235,9 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
     add_monthly : bool
         If True the yearly flowline diagnostics will be linearly interpolated
         to a monthly resolution. Default is False
+    fl_thickness_threshold: int
+        A minimum threshold (all values below the threshold are set to 0) is applied to the area and volume of the
+        flowline diagnostics before the distribution process.
     """
 
     fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
@@ -243,6 +247,11 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         if ys or ye:
             dg = dg.sel(time=slice(ye, ye))
         dg = dg.load()
+
+    # tackling flickering issue
+    if fl_thickness_threshold:
+        dg['area_m2'].values = np.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg['area_m2'])
+        dg['volume_m3'].values = np.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg['volume_m3'])
 
     if add_monthly:
         # create new monthly time coordinate, last year only with month 1
