@@ -197,7 +197,8 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
                                          ys=None, ye=None,
                                          smooth_radius=None,
                                          add_monthly=False,
-                                         fl_thickness_threshold=0):
+                                         fl_thickness_threshold=0,
+                                         area_smoothing = False):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
     For this to work, the glacier cannot advance beyond its initial area!
@@ -238,6 +239,11 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
     fl_thickness_threshold: int
         A minimum threshold (all values below the threshold are set to 0) is applied to the area and volume of the
         flowline diagnostics before the distribution process.
+    area_smoothing: bool
+        If True, the area and volume of the flowline diagnostics will be smoothed linearly for each grid point of the
+        flowline. It is simply a linear interpolation between the beginning area/volume of the grid point and its
+        state of complete mass loss. This is not area and volume conserving anymore and can also not represent regain
+        of glacier mass during the simulation.
     """
 
     fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
@@ -248,10 +254,25 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
             dg = dg.sel(time=slice(ye, ye))
         dg = dg.load()
 
+    # smoothing area
+
+
     # tackling flickering issue
     if fl_thickness_threshold:
         dg['area_m2'].values = np.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg['area_m2'])
         dg['volume_m3'].values = np.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg['volume_m3'])
+
+
+    if area_smoothing:
+        for variable_name in ['area_m2', 'volume_m3']:
+            for i in np.arange(0, len(dg.dis_along_flowline)):
+                nr_non_zero = sum(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}] != 0).item() + 1
+                if nr_non_zero > len(dg.time):
+                    nr_non_zero -= 1
+                new_values = np.linspace(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}][0], 0,
+                                         num=nr_non_zero)
+                dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i],
+                                'time': slice(dg.time[nr_non_zero - 1])}] = new_values
 
     if add_monthly:
         # create new monthly time coordinate, last year only with month 1
