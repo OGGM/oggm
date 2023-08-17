@@ -198,7 +198,8 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
                                          smooth_radius=None,
                                          add_monthly=False,
                                          fl_thickness_threshold=0,
-                                         area_smoothing = False):
+                                         area_smoothing = False,
+                                         rolling_window = 0):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
     For this to work, the glacier cannot advance beyond its initial area!
@@ -244,6 +245,10 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         flowline. It is simply a linear interpolation between the beginning area/volume of the grid point and its
         state of complete mass loss. This is not area and volume conserving anymore and can also not represent regain
         of glacier mass during the simulation.
+    rolling_window: int
+        'area_smoothing' has to be switched on for this arg to have an effect.
+        If a rolling window value is given, the area smoothing is done with the
+        rolling window algorithm instead of linear interpolation.
     """
 
     fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
@@ -254,8 +259,6 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
             dg = dg.sel(time=slice(ye, ye))
         dg = dg.load()
 
-    # smoothing area
-
 
     # tackling flickering issue
     if fl_thickness_threshold:
@@ -264,15 +267,19 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
 
 
     if area_smoothing:
-        for variable_name in ['area_m2', 'volume_m3']:
-            for i in np.arange(0, len(dg.dis_along_flowline)):
-                nr_non_zero = sum(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}] != 0).item() + 1
-                if nr_non_zero > len(dg.time):
-                    nr_non_zero -= 1
-                new_values = np.linspace(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}][0], 0,
-                                         num=nr_non_zero)
-                dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i],
-                                'time': slice(dg.time[nr_non_zero - 1])}] = new_values
+        if rolling_window:
+            dg[['area_m2', 'volume_m3']] = dg[['area_m2', 'volume_m3']].rolling(min_periods=1, time=rolling_window,
+                                                                                center=True).mean()
+        else:
+            for variable_name in ['area_m2', 'volume_m3']:
+                for i in np.arange(0, len(dg.dis_along_flowline)):
+                    nr_non_zero = sum(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}] != 0).item() + 1
+                    if nr_non_zero > len(dg.time):
+                        nr_non_zero -= 1
+                    new_values = np.linspace(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}][0], 0,
+                                             num=nr_non_zero)
+                    dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i],
+                                    'time': slice(dg.time[nr_non_zero - 1])}] = new_values
 
     if add_monthly:
         # create new monthly time coordinate, last year only with month 1
