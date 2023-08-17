@@ -99,6 +99,14 @@ class Flowline(Centerline):
     def has_ice(self):
         return np.any(self.thick > 0)
 
+    @utils.lazy_property
+    def water_depth(self):
+        return utils.clip_min(self.water_level - self.bed_h, 0)
+
+    @utils.lazy_property
+    def bed_below_wl(self):
+        return self.bed_h < self.water_level
+
     @Centerline.widths.getter
     def widths(self):
         """Compute the widths out of H and shape"""
