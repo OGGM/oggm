@@ -314,7 +314,6 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
 
         dgy = dg.sel(time=yr)
 
-        residual_pix = 0
         area_cov = 0
         new_thick = out_thick[i, :]
         for band_id, npix in zip(band_ids.astype(int), counts):
@@ -322,10 +321,9 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
             band_volume = dgy.volume_m3.values[band_id]
             if band_area != 0:
                 # We have some ice left
-                pix_cov = (band_area / dx2) + residual_pix
+                pix_cov = band_area / dx2
                 mask = (band_index_mask == band_id) & \
                        (rank_per_band >= (npix - pix_cov))
-                residual_pix = pix_cov - mask.sum()
                 vol_orig = np.where(mask, orig_distrib_thick, 0).sum() * dx2
                 area_dis = mask.sum() * dx2
                 thick_cor = (vol_orig - band_volume) / area_dis
