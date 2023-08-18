@@ -9,6 +9,7 @@ from scipy import ndimage
 from scipy.stats import mstats
 from oggm.core.gis import gaussian_blur
 from oggm.utils import ncDataset, entity_task
+import matplotlib.pyplot as plt
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -198,8 +199,8 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
                                          smooth_radius=None,
                                          add_monthly=False,
                                          fl_thickness_threshold=0,
-                                         area_smoothing = False,
-                                         rolling_window = 0):
+                                         rolling_mean_smoothing=False,
+                                         show_area_plot=False):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
     For this to work, the glacier cannot advance beyond its initial area!
@@ -237,18 +238,20 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
     add_monthly : bool
         If True the yearly flowline diagnostics will be linearly interpolated
         to a monthly resolution. Default is False
-    fl_thickness_threshold: int
-        A minimum threshold (all values below the threshold are set to 0) is applied to the area and volume of the
-        flowline diagnostics before the distribution process.
-    area_smoothing: bool
-        If True, the area and volume of the flowline diagnostics will be smoothed linearly for each grid point of the
-        flowline. It is simply a linear interpolation between the beginning area/volume of the grid point and its
-        state of complete mass loss. This is not area and volume conserving anymore and can also not represent regain
-        of glacier mass during the simulation.
-    rolling_window: int
-        'area_smoothing' has to be switched on for this arg to have an effect.
-        If a rolling window value is given, the area smoothing is done with the
-        rolling window algorithm instead of linear interpolation.
+    fl_thickness_threshold : float
+        A minimum threshold (all values below the threshold are set to 0) is
+        applied to the area and volume of the flowline diagnostics before the
+        distribution process. Default is 0 (using no threshold).
+    rolling_mean_smoothing : bool or int
+        If int, the area and volume of the flowline diagnostics will be
+        smoothed using a rolling mean. The window size is defined with this
+        number. If True a default window size of 3 is used. If False no
+        smoothing is applied.  Default is False.
+    show_area_plot : bool
+        If True, only a plot of the 'original-total-area- evolution' and the
+        'smoothed-total-area- evolution' (after using fl_thickness_threshold
+        and rolling_mean_smoothing) is returned. This is useful for finding the
+        best smoothing parameters for the visualisation of your glacier.
     """
 
     fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
@@ -259,28 +262,22 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
             dg = dg.sel(time=slice(ye, ye))
         dg = dg.load()
 
+    # save the original area evolution for the area plot
+    if show_area_plot:
+        area_evolution_orig = dg['area_m2'].sum(dim='dis_along_flowline')
 
-    # tackling flickering issue
-    if fl_thickness_threshold:
-        dg['area_m2'].values = np.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg['area_m2'])
-        dg['volume_m3'].values = np.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg['volume_m3'])
+    # applying the thickness threshold
+    dg = xr.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg)
 
+    # applying the rolling mean smoothing
+    if rolling_mean_smoothing:
+        if isinstance(rolling_mean_smoothing, bool):
+            rolling_mean_smoothing = 3
 
-    if area_smoothing:
-        if rolling_window:
-            dg[['area_m2', 'volume_m3']] = dg[['area_m2', 'volume_m3']].rolling(min_periods=1, time=rolling_window,
-                                                                                center=True).mean()
-        else:
-            for variable_name in ['area_m2', 'volume_m3']:
-                for i in np.arange(0, len(dg.dis_along_flowline)):
-                    nr_non_zero = sum(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}] != 0).item() + 1
-                    if nr_non_zero > len(dg.time):
-                        nr_non_zero -= 1
-                    new_values = np.linspace(dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i]}][0], 0,
-                                             num=nr_non_zero)
-                    dg[variable_name].loc[{'dis_along_flowline': dg.dis_along_flowline[i],
-                                    'time': slice(dg.time[nr_non_zero - 1])}] = new_values
+        dg[['area_m2', 'volume_m3']] = dg[['area_m2', 'volume_m3']].rolling(
+            min_periods=1, time=rolling_mean_smoothing, center=True).mean()
 
+    # monthly interpolation for higher temporal resolution
     if add_monthly:
         # create new monthly time coordinate, last year only with month 1
         years = np.append(np.repeat(dg.time[:-1], 12),
@@ -295,13 +292,21 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         dg.coords['calender_year'] = ('time', years)
         dg.coords['calender_month'] = ('time', months)
 
+    if show_area_plot:
+        area_evolution_orig.plot(label='original')
+        dg['area_m2'].sum(dim='dis_along_flowline').plot(label='smoothed')
+        plt.legend()
+        plt.show()
+        return None
+
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         band_index_mask = ds.band_index.data
         rank_per_band = ds.rank_per_band.data
         glacier_mask = ds.glacier_mask.data == 1
         orig_distrib_thick = ds.distributed_thickness.data
 
-    band_ids, counts = np.unique(np.sort(band_index_mask[glacier_mask]), return_counts=True)
+    band_ids, counts = np.unique(np.sort(band_index_mask[glacier_mask]),
+                                 return_counts=True)
 
     dx2 = gdir.grid.dx**2
     out_thick = np.zeros((len(dg.time), *glacier_mask.shape))
@@ -318,7 +323,8 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
             if band_area != 0:
                 # We have some ice left
                 pix_cov = (band_area / dx2) + residual_pix
-                mask = (band_index_mask == band_id) & (rank_per_band >= (npix - pix_cov))
+                mask = (band_index_mask == band_id) & \
+                       (rank_per_band >= (npix - pix_cov))
                 residual_pix = pix_cov - mask.sum()
                 vol_orig = np.where(mask, orig_distrib_thick, 0).sum() * dx2
                 area_dis = mask.sum() * dx2
@@ -348,7 +354,7 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         ds = ds.load()
 
     # the distinction between time_monthly and time is needed to have data in
-    # yearly AND monthly resolution in the same gridded data, maybe and one
+    # yearly AND monthly resolution in the same gridded data, maybe at one
     # point we decide for one option
     if add_monthly:
         time_var = 'time_monthly'
