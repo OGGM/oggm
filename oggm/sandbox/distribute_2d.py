@@ -1,6 +1,7 @@
 import logging
 import warnings
 
+import oggm
 import oggm.cfg as cfg
 from oggm import utils
 import numpy as np
@@ -195,6 +196,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
 
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_from_simulation(gdir, input_filesuffix='',
+                                         fl_diag=None,
                                          ys=None, ye=None,
                                          smooth_radius=None,
                                          add_monthly=False,
@@ -225,6 +227,10 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         where to write the data
     input_filesuffix : str
         the filesuffix of the flowline diagnostics file.
+    fl_diag : xarray.core.dataset.Dataset
+        can directly provide a flowline diagnostics file. If provided
+        'input_filesuffix' is only used for the name to save the distributed
+        data in gridded data.
     ys : int
         pick another year to start the series (default: the first year
         of the diagnostic file)
@@ -254,13 +260,16 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         best smoothing parameters for the visualisation of your glacier.
     """
 
-    fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
-    with xr.open_dataset(fp) as dg:
-        assert len(dg.flowlines.data) == 1, 'Only works with one flowline.'
-    with xr.open_dataset(fp, group=f'fl_0') as dg:
-        if ys or ye:
-            dg = dg.sel(time=slice(ye, ye))
-        dg = dg.load()
+    if fl_diag is not None:
+        dg = fl_diag
+    else:
+        fp = gdir.get_filepath('fl_diagnostics',  filesuffix=input_filesuffix)
+        with xr.open_dataset(fp) as dg:
+            assert len(dg.flowlines.data) == 1, 'Only works with one flowline.'
+        with xr.open_dataset(fp, group=f'fl_0') as dg:
+            if ys or ye:
+                dg = dg.sel(time=slice(ye, ye))
+            dg = dg.load()
 
     # save the original area evolution for the area plot
     if show_area_plot:
