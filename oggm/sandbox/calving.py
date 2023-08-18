@@ -413,8 +413,8 @@ class CalvingFluxBasedModel_v1(FlowlineModel):
                 # towards infinity...
                 # Not sure if sf_stag is correct here
                 u_slide[:] = (stress**N / z_a_b) * self.fs * sf_stag**N
-                u_slide = np.where(z_a_b <= 0.01 * thick_stag, 4 * u_drag,
-                                   u_slide)
+                u_slide[:] = np.where(z_a_b <= 0.01 * thick_stag, 4 * u_drag,
+                                      u_slide)
 
                 # Force velocity beyond grounding line to be zero in order to
                 # prevent shelf dynamics. This might accumulate too much volume
@@ -764,7 +764,8 @@ class CalvingFluxBasedModel_v1(FlowlineModel):
 
 
 class CalvingFluxBasedModel_v2(FlowlineModel):
-    """
+    """This is the version currently in progress - written by Fabien based
+    on Jan's code.
     """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
@@ -1001,12 +1002,20 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
 
             # Staggered velocity
             # -> depends on calving
-            ice_in_water = fl.bed_below_wl & (fl.thick > 0)
+            if self.do_calving:
+                ice_in_water = fl.bed_below_wl & (fl.thick > 0)
+            else:
+                ice_in_water = False
 
             N = self.glen_n
+            calving_is_happening = False
 
-            # First determine if calving is happening
+            # First determine if calving (or sliding) might be happening
             if self.do_calving and np.any(ice_in_water):
+
+                # Here we have to do two things:
+                # - change the sliding where the bed is below water
+                # - decide on whether calving is happening or not
 
                 rho_ocean = cfg.PARAMS['ocean_density']
                 eff_water_depth = (rho_ocean / self.rho) * water_depth
@@ -1020,107 +1029,118 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
                     # Sometimes when glaciers are advancing there is a
                     # bit of ice into the water, but it's not above water.
                     # Let's use that instead
-                    last_above_wl = np.where(ice_in_water)[0][0]
+                    last_above_wl = np.where(ice_in_water)[0][-1]
 
-                if last_above_wl > len(fl.bed_h) - 2:
+                # Don't go further than the end of the domain
+                if last_above_wl >= len(fl.bed_h) - 2:
                     last_above_wl = len(fl.bed_h) - 2
 
-                first_ice = np.where(fl.thick[0:last_above_wl + 1] > 0)[0][0]
-
-                # Check that the "last_above_wl" is not just the last in an
-                # upstream basin connected to ice "above_wl" downstream
-                land_interface = ((fl.bed_h[last_above_wl + 1] > self.water_level)
-                                  & (fl.thick[last_above_wl + 1] > 0))
+                # Check that the "last_above_wl" is not just the last in a
+                # "lake" (over-deepening) which is followed by land again.
+                # If after last_above_wl we still have ice, we don't calve.
+                calving_is_happening = fl.thick[last_above_wl + 1] > 0
 
                 # Determine water depth at the front
                 h = fl.thick[last_above_wl]
                 d = h - (fl.surface_h[last_above_wl] - self.water_level)
+
+                # Force the staggered grid to these values (Fabi: why?)
                 thick_stag[last_above_wl + 1] = h
                 water_depth_stag[last_above_wl + 1] = d
-                eff_water_depth_stag = (rho_ocean / self.rho) * water_depth_stag
-
-                # Determine height above buoyancy
-                z_a_b = utils.clip_min(thick_stag - eff_water_depth_stag, 0)
 
                 # Compute net hydrostatic force at the front. One could think
                 # about incorporating ice mélange / sea ice here as an
-                # additional backstress term. (And also in the frontal ablation
-                # formulation below.)
-                if not land_interface:
+                # additional backstress term.
+                # (And also in the frontal ablation formulation below.)
+                if calving_is_happening:
+
                     # Calculate the additional (pull) force
-                    pull_last = utils.clip_min(0, 0.5 * G * (self.rho * h ** 2 -
-                                                             rho_ocean * d ** 2))
+                    pull_last = 0.5 * G * (self.rho * h ** 2 - rho_ocean * d ** 2)
+                    if pull_last < 0:
+                        pull_last = 0
 
                     # Determine distance over which above force is distributed
-                    max_stretch = cfg.PARAMS['max_calving_stretch_distance']
-                    stretch_length = (last_above_wl - first_ice) * dx
-                    stretch_length = utils.clip_min(stretch_length, dx)
-                    stretch_dist = utils.clip_max(stretch_length, max_stretch)
+                    max_dist = cfg.PARAMS['max_calving_stretch_distance']
+                    first_ice = np.where(fl.thick > 0)[0][0]
+                    glacier_len = (last_above_wl - first_ice) * dx
+                    if glacier_len < dx:
+                        glacier_len = dx
+
+                    stretch_dist = glacier_len if glacier_len < max_dist else max_dist
                     n_stretch = np.rint(stretch_dist / dx).astype(int)
 
                     # Define stretch factor and add to driving stress
-                    stretch_factor = np.zeros(n_stretch)
-                    for j in range(n_stretch):
-                        stretch_factor[j] = 2 * (j + 1) / (n_stretch + 1)
-                    if dx > stretch_dist:
-                        stretch_factor = stretch_dist / dx
-                        n_stretch = 1
-
-                    stretch_first = utils.clip_min(0, (last_above_wl + 2) -
-                                                   n_stretch).astype(int)
-                    stretch_last = last_above_wl + 2
+                    stretch_factor = np.arange(1, n_stretch + 2) * 2 / (n_stretch + 1)
+                    stretch_last = last_above_wl + 2  # because last is excluded
+                    stretch_first = (last_above_wl + 2) - n_stretch
 
                     # Take slope for stress calculation at boundary grid cell
                     # as the mean over the stretched distance (see above)
                     if stretch_first != stretch_last - 1:
-                        slope_stag[last_above_wl + 1] = np.nanmean(slope_stag
-                                                                   [stretch_first - 1:
-                                                                    stretch_last - 1])
+                        avg_sl = np.mean(slope_stag[stretch_first - 1: stretch_last - 1])
+                        slope_stag[last_above_wl + 1] = avg_sl
+
+                # OK now we compute the deformation stress, which might
+                # be slightly different at the front if calving is happening
                 stress = self.rho * G * slope_stag * thick_stag
 
                 # Add "stretching stress" to basal shear/driving stress
-                if not land_interface:
-                    stress[stretch_first:stretch_last] = (stress[stretch_first:
-                                                                 stretch_last] +
-                                                          stretch_factor *
-                                                          (pull_last /
-                                                           stretch_dist))
+                if calving_is_happening:
+                    stress[stretch_first:stretch_last] += stretch_factor * (pull_last / stretch_dist)
+
                 # Compute velocities
-                # Deformation
+                # Deformation is the usual formulation with changed stress
                 ud_stag[:] = thick_stag * stress ** N * self._fd
 
-                # Arbitrarily manipulating us_stag for grid cells
-                # approaching buoyancy to prevent it from going
-                # towards infinity...
+                # Sliding is increased where there is water
+                # Determine height above buoyancy
+                eff_water_depth_stag = (rho_ocean / self.rho) * water_depth_stag
+                z_a_b = utils.clip_min(thick_stag - eff_water_depth_stag, 0.01)
                 us_stag[:] = (stress ** N / z_a_b) * self.fs
-                us_stag[:] = np.where(z_a_b <= 0.01 * thick_stag, 4 * ud_stag, us_stag)
 
                 # Force velocity beyond grounding line to be zero in order to
                 # prevent shelf dynamics. This might accumulate too much volume
                 # in the last_above_wl+1 grid cell, which we deal with in the
                 # calving scheme below
-                if not land_interface:
+                if calving_is_happening:
                     us_stag[last_above_wl + 2:] = 0
                     ud_stag[last_above_wl + 2:] = 0
 
                 u_stag[:] = ud_stag + us_stag
 
-                # For the flux out of the last grid cell, the staggered section
-                # is set to the cross-section of the calving front, as we are
-                # dealing with a terminal cliff.
-                if not land_interface:
+                if calving_is_happening:
+                    # For the flux out of the last grid cell, the staggered section
+                    # is set to the cross-section of the calving front, as we are
+                    # dealing with a terminal cliff.
                     section_stag[last_above_wl + 1] = section[last_above_wl]
-                    # We calculate the "baseline" calving flux here
-                    # to be consistent with the dynamics:
+
+                    # We calculate the calving flux here to be consistent with
+                    # mass balance which is also computed before mass
+                    # redistribution
                     k = self.calving_k
                     w = fl.widths_m[last_above_wl]
-                    calving_flux = utils.clip_min(0, k * d * h * w)
+                    calving_flux = k * d * h * w
+                    if calving_flux < 0:
+                        calving_flux = 0
 
             else:
-                # In simplest case, velocity is deformation + sliding
+
+                # Simplest case (no water): velocity is deformation + sliding
                 rhogh = (self.rho * G * slope_stag)**N
                 ud_stag[:] = (thick_stag**(N + 1)) * self._fd * rhogh
+
+                # Temporary check for above
+                stress = self.rho * G * slope_stag * thick_stag
+                vel = thick_stag * stress ** N * self._fd
+                assert np.allclose(ud_stag, vel)
+
                 us_stag[:] = (thick_stag**(N - 1)) * self.fs * rhogh
+
+                # Temporary check for above
+                z_a_b = thick_stag
+                vel = (stress ** N / z_a_b) * self.fs
+                assert np.allclose(us_stag, vel)
+
                 u_stag[:] = ud_stag + us_stag
 
             # Staggered flux rate
@@ -1188,7 +1208,10 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
             # Allow parabolic beds to grow
             mb = dt * mb * np.where((mb > 0.) & (widths == 0), 10., widths)
 
-            # We could prevent MB below water here (to consider)
+            # We prevent MB processes below water, since this should be
+            # part of calving (in theory)
+            if calving_is_happening:
+                mb[fl.surface_h < 0] = 0
 
             # Update section with ice flow and mass balance
             new_section = (fl.section + (flx_stag[0:-1] - flx_stag[1:])*dt/dx +
@@ -1210,12 +1233,7 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
             # --- The rest is for calving only ---
             self.calving_rate_myr = 0.
 
-            # We empty the calving bucket if there is no ice below water
-            # (to not carry a dead bucket for the rest of the simulation)
-            if (fl.calving_bucket_m3 > 0) and not np.any((fl.thick > 0) & (fl.bed_h < self.water_level)):
-                fl.calving_bucket_m3 = 0
-
-            # If tributary, do calving only if we are not transferring mass
+            # If tributary, do the things below only if we are not transferring mass
             if is_trib and flx_stag[-1] > 0:
                 continue
 
@@ -1229,27 +1247,28 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
             if fl.bed_h[fl.thick > 0][-1] > self.water_level:
                 continue
 
-            iceberg_calving_m3 = 0
             section = fl.section
 
             # If there is only ice below water, we just remove it
             # (should be super rare?)
             if np.all(fl.surface_h[fl.thick > 0] < self.water_level):
                 iceberg_calving_m3 = np.sum(section) * dx
+                self.calving_m3_since_y0 += iceberg_calving_m3
                 section[:] = 0
                 fl.section = section
+                fl.calving_bucket_m3 = 0
                 continue
 
             # Remove detached bodies of ice in the water, which can happen as
             # a result of dynamics + surface melt
             # Detached means bed below water and some ice thickness,
-            # but untouching other areas. That's perfect for labelling.
+            # but not touching any other areas. That's perfect for labelling.
             just_ice = fl.thick > 0
             ice_in_water = just_ice & (fl.bed_h < self.water_level)
             just_ice_labels = measure.label(just_ice)
             if just_ice_labels.max() > 1:
                 # OK we have disconnections. Is one of them fully in water?
-                for label in range(2, just_ice_labels.max()+1):
+                for label in range(2, just_ice_labels.max() + 1):
                     is_detached = just_ice_labels == label
                     if not np.all(ice_in_water[is_detached]):
                         # That's still connected to land, ignore
@@ -1260,62 +1279,47 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
                         continue
 
                     iceberg_calving_m3 = np.sum(section[is_detached]) * dx
+                    self.calving_m3_since_y0 += iceberg_calving_m3
+                    self.calving_rate_myr += (iceberg_calving_m3 / dt /
+                                              section[last_above_wl] *
+                                              cfg.SEC_IN_YEAR)
+
                     section[is_detached] = 0
                     fl.section = section  # recompute the other vars
 
-            # We do calving only if there is some ice grounded below water
-            rho_ocean = cfg.PARAMS['ocean_density']
-            eff_water_depth = (rho_ocean / self.rho) * water_depth
-
-            ice_above_wl = fl.bed_below_wl & (fl.thick >= eff_water_depth)
-            ice_in_water = fl.bed_below_wl & (fl.thick > 0)
-
-            if np.any(ice_above_wl):
-                last_above_wl = np.where(ice_above_wl)[0][-1]
-            elif np.any(ice_in_water):
-                last_above_wl = np.where(ice_in_water)[0][0]
-
-            # Make sure again we are where we want to be; the end of the glacier
-            if fl.bed_h[last_above_wl+1] > self.water_level and \
-               np.any(ice_in_water[last_above_wl+1:]):
-                last_above_wl = (np.where(ice_in_water[last_above_wl+1:])[0][0] +
-                                 last_above_wl+1)
-
-            last_above_wl = int(utils.clip_max(last_above_wl, len(fl.bed_h)-2))
-
-            # As above in the dynamics, make sure we are not at a land-interface
-            if (fl.bed_h[last_above_wl+1] > self.water_level and
-                    fl.thick[last_above_wl+1] > 0):
+            if not calving_is_happening:
                 continue
 
-            # OK, we're really calving
-            # Make sure that we have a smooth front. Necessary due to inhibiting
-            # ice flux beyond the grounding line in the dynamics above
-            section = fl.section
-            while ((fl.surface_h[last_above_wl] > fl.surface_h[last_above_wl-1])
-                   and fl.thick[last_above_wl] > 0) and last_above_wl > 0:
-                old_thick = fl.thick[last_above_wl]
-                old_sec = fl.section[last_above_wl]
-                new_thick = (old_thick - (fl.surface_h[last_above_wl] -
-                                          fl.surface_h[last_above_wl-1]))
-                fl.thick[last_above_wl] = new_thick
-                diff_sec = old_sec - fl.section[last_above_wl]
-                section[last_above_wl+1] += diff_sec
-                section[last_above_wl] -= diff_sec
-                fl.section = section
-                section = fl.section
-                if ((fl.bed_h[last_above_wl+1] < self.water_level) &
-                    (fl.thick[last_above_wl+1] >= (rho_ocean / self.rho) *
-                     water_depth[last_above_wl+1])):
-                    last_above_wl += 1
-                else:
-                    break
+            # # Make sure that we have a smooth front. Necessary due to inhibiting
+            # # ice flux beyond the grounding line in the dynamics above
+            # section = fl.section
+            # while ((fl.surface_h[last_above_wl] > fl.surface_h[last_above_wl-1])
+            #        and fl.thick[last_above_wl] > 0) and last_above_wl > 0:
+            #     old_thick = fl.thick[last_above_wl]
+            #     old_sec = fl.section[last_above_wl]
+            #     new_thick = (old_thick - (fl.surface_h[last_above_wl] -
+            #                               fl.surface_h[last_above_wl-1]))
+            #     fl.thick[last_above_wl] = new_thick
+            #     diff_sec = old_sec - fl.section[last_above_wl]
+            #     section[last_above_wl+1] += diff_sec
+            #     section[last_above_wl] -= diff_sec
+            #     fl.section = section
+            #     section = fl.section
+            #     if ((fl.bed_h[last_above_wl+1] < self.water_level) &
+            #         (fl.thick[last_above_wl+1] >= (rho_ocean / self.rho) *
+            #          water_depth[last_above_wl+1])):
+            #         last_above_wl += 1
+            #     else:
+            #         break
 
+            # OK, we're really calving
             q_calving = calving_flux * dt
+
             # Remove ice below flotation beyond the first grid cell after the
             # grounding line. That cell is the "advance" bucket, meaning it can
             # contain ice below flotation.
             add_calving = np.sum(section[last_above_wl+2:]) * dx
+
             # Add to the bucket and the diagnostics. As we calculated the
             # calving flux from the glacier state at the start of the time step,
             # we do not add to the calving bucket what is already removed by the
