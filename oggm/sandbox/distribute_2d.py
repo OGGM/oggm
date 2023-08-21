@@ -339,7 +339,7 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         for band_id, npix in zip(band_ids.astype(int), counts):
             band_area = dgy.area_m2.values[band_id]
             band_volume = dgy.volume_m3.values[band_id]
-            if band_area != 0:
+            if ~np.isclose(band_area, 0):
                 # We have some ice left
                 pix_cov = band_area / dx2
                 mask = (band_index_mask == band_id) & \
