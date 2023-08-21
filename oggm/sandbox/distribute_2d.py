@@ -143,6 +143,17 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
     npix_per_band = fl.bin_area_m2 / (gdir.grid.dx ** 2)
     nnpix_per_band_cumsum = np.around(npix_per_band[::-1].cumsum()[::-1])
 
+    # check if their is a differenze between the flowline area and gridded area
+    pix_diff = int(nnpix_per_band_cumsum[0] - len(topo_data_flat))
+    if pix_diff > 0:
+        # we have more fl pixels, for this we can adapt a little
+        # search for the largest differences between elevation bands and reduce
+        # area for one pixel
+        sorted_indices = np.argsort(np.abs(np.diff(nnpix_per_band_cumsum)))
+        npix_per_band[sorted_indices[-pix_diff:]] = \
+            npix_per_band[sorted_indices[-pix_diff:]] - 1
+        nnpix_per_band_cumsum = np.around(npix_per_band[::-1].cumsum()[::-1])
+
     rank_elev = mstats.rankdata(topo_data_flat)
     bins = nnpix_per_band_cumsum[nnpix_per_band_cumsum > 0].copy()
     bins[0] = len(topo_data_flat) + 1
