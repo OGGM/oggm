@@ -23,8 +23,7 @@ the glacier directories, but details are also listed in this document).
 .. important::
 
     Don't forget to set-up or check your system (:ref:`system-settings`) before
-    downloading new data! (You'll need to
-    do this only once per computer.)
+    downloading new data! You'll need to do this only once per computer.
 
 .. _preprodir:
 
@@ -79,10 +78,10 @@ There are six available levels of pre-processing:
 - **Level 4**: includes a historical simulation from
   the RGI date to the last possible date of the baseline climate file
   (currently January 1<sup>st</sup> 2020 at 00H for most datasets), stored with the file suffix
-  ``_historical``. Moreover, some configurations (called ``dynspin``) may include
+  ``_historical``. Moreover, some configurations (called ``spinup``) may include
   a simulation running a spinup from 1979 to the last possible date of the baseline climate file,
   stored with the file suffix ``_spinup_historical``. This spinup attempts to conduct a
-  dynamic mu star calibration and a dynamic spinup matching the RGI area.
+  dynamic melt factor calibration and a dynamic spinup matching the RGI area.
   If this fails, only a dynamic spinup is carried out. If this also fails, a
   fixed geometry spinup is conducted. To learn more about these different spinup types,
   check out :ref:`dynamic-spinup`.
@@ -235,21 +234,18 @@ There are however multiple options to choose from. Our `tutorials <https://oggm.
 showcase example of applications for some of them. One can explore
 `cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_
 for more options. Here follows a brief guide through the folder structure:
-Step 1:
- - L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
- - L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
-Step 2: one can select a version of the directories (e.g. 2023.3)
-Step 3: select the flowline type, centerlines or elevation band flowlines (elev_bands), optionally
-with the extension of you choice in when using L1_L2_files.
-Step 4: This is only needed when taking the L3_L5_files route. The folder name starts with the name
-of the baseline climate (e.g. w5e5) that has been used, optionally followed by one or more extensions.
+
+- Step 1:
+   - L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
+   - L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
+- Step 2: one can select a version of the directories (e.g. 2023.3)
+- Step 3: select the flowline type, centerlines or elevation band flowlines (elev_bands), optionally with the extension of you choice in when using L1_L2_files.
+- Step 4: This is only needed when taking the L3_L5_files route. The folder name starts with the name of the baseline climate (e.g. w5e5) that has been used, optionally followed by one or more extensions.
 
 Explanation of the naming convention for the folder name extensions:
 
-'_spinup' indications the dynamic spin-up has been used for the calibration, if left out the calibration was done
-without the dynamic spin-up.
-'w_data' shows that additional data has been added to the directories: ITS-LIVE, Millan et al. ice
-velocity product and the consensus ice thickness estimate (all described in more detail later).
+- `_spinup` indicates that the dynamic spin-up has been used for the calibration, if left out the calibration was done without the dynamic spin-up.
+- `w_data` indicates that additional data has been added to the directories: ITS-LIVE, Millan et al. ice velocity product and the consensus ice thickness estimate (all described in more detail later).
 
 .. admonition:: Deprecated: **version 1.4 and 1.5 directories (before v1.6)**
     :class: note, dropdown
