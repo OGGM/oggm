@@ -236,8 +236,8 @@ showcase example of applications for some of them. One can explore
 for more options. Here follows a brief guide through the folder structure:
 
 - Step 1:
-L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
-L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
+   L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
+   L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
 - Step 2: one can select a version of the directories (e.g. 2023.3)
 - Step 3: select the flowline type, centerlines or elevation band flowlines (elev_bands), optionally with the extension of you choice in when using L1_L2_files.
 - Step 4: This is only needed when taking the L3_L5_files route. The folder name starts with the name of the baseline climate (e.g. w5e5) that has been used, optionally followed by one or more extensions.
