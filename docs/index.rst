@@ -103,6 +103,8 @@ Datasets and downloads
 All the things that OGGM has on offer.
 
 * :doc:`shop`
+* :doc:`climate-data`
+* :doc:`reference-mass-balance-data`
 * :doc:`rgitopo`
 * :doc:`download-projections`
 * :doc:`assets`
@@ -113,6 +115,8 @@ All the things that OGGM has on offer.
     :caption: Datasets and downloads
 
     shop.rst
+    climate-data.rst
+    reference-mass-balance-data.rst
     rgitopo.rst
     download-projections.rst
     assets.rst
