@@ -48,7 +48,7 @@ from oggm.core.flowline import FlowlineModel, flux_gate_with_build_up
 
 
 class CalvingFluxBasedModel_v1(FlowlineModel):
-    """
+    """Jan Malles' implementation of calving as in his paper.
     """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
@@ -754,6 +754,10 @@ class CalvingFluxBasedModel_v1(FlowlineModel):
         df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2 + _u_slide
         df['surface_ice_velocity'] = (((var[1:nx+1] + var[:nx])/2  *
                                        self._surf_vel_fac) + _u_slide)
+        var = self.u_drag[fl_id]
+        df['deformation_velocity'] = (var[1:nx+1] + var[:nx])/2
+        var = self.u_slide[fl_id]
+        df['sliding_velocity'] = (var[1:nx+1] + var[:nx])/2
         var = self.shapefac_stag[fl_id]
         df['shape_fac'] = (var[1:nx+1] + var[:nx])/2
 
@@ -765,7 +769,8 @@ class CalvingFluxBasedModel_v1(FlowlineModel):
 
 class CalvingFluxBasedModel_v2(FlowlineModel):
     """This is the version currently in progress - written by Fabien based
-    on Jan's code.
+    on Jan's code. Code is prettier but does not exactly do the same at the
+    moment.
     """
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
@@ -1038,7 +1043,7 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
                 # Check that the "last_above_wl" is not just the last in a
                 # "lake" (over-deepening) which is followed by land again.
                 # If after last_above_wl we still have ice, we don't calve.
-                calving_is_happening = fl.thick[last_above_wl + 1] > 0
+                calving_is_happening = not fl.thick[last_above_wl + 1] > 0
 
                 # Determine water depth at the front
                 h = fl.thick[last_above_wl]
@@ -1086,7 +1091,7 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
 
                 # Add "stretching stress" to basal shear/driving stress
                 if calving_is_happening:
-                    stress[stretch_first:stretch_last] += stretch_factor * (pull_last / stretch_dist)
+                    stress[stretch_first:stretch_last+1] += stretch_factor * (pull_last / stretch_dist)
 
                 # Compute velocities
                 # Deformation is the usual formulation with changed stress
@@ -1095,7 +1100,9 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
                 # Sliding is increased where there is water
                 # Determine height above buoyancy
                 eff_water_depth_stag = (rho_ocean / self.rho) * water_depth_stag
+                # Avoid dividing by zero where thick equals water depth
                 z_a_b = utils.clip_min(thick_stag - eff_water_depth_stag, 0.01)
+                z_a_b[thick_stag == 0] = 1  # Stress is zero there
                 us_stag[:] = (stress ** N / z_a_b) * self.fs
 
                 # Force velocity beyond grounding line to be zero in order to
@@ -1138,9 +1145,9 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
 
                 # Temporary check for above
                 z_a_b = thick_stag
+                z_a_b[thick_stag == 0] = 1
                 vel = (stress ** N / z_a_b) * self.fs
                 assert np.allclose(us_stag, vel)
-
                 u_stag[:] = ud_stag + us_stag
 
             # Staggered flux rate
@@ -1406,6 +1413,10 @@ class CalvingFluxBasedModel_v2(FlowlineModel):
         df['ice_flux'] = (var[1:nx+1] + var[:nx])/2
         var = self.u_stag[fl_id]
         df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
+        var = self.ud_stag[fl_id]
+        df['deformation_velocity'] = (var[1:nx+1] + var[:nx])/2
+        var = self.us_stag[fl_id]
+        df['sliding_velocity'] = (var[1:nx+1] + var[:nx])/2
 
         # Surface vel is deformation corrected by factor + sliding
         var = self.ud_stag[fl_id]
