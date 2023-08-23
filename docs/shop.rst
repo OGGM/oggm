@@ -11,7 +11,10 @@ open-access data that can be downloaded automatically for the user**. This
 data needs to be extracted and pre-processed for each individual glacier. To
 avoid that everyone needs to repeat these steps, we have added a
 service that we like to call a "shop", allowing users to define a shopping list
-of data that they wish to add to their :ref:`glacierdir`.
+of data that they wish to add to their :ref:`glacierdir`. The data that can be
+included your glacier directories range from essentials for standard OGGM workflow
+to other data, like velocity provided as gridded_data for each respective glacier,
+that might be of interest to you.
 
 This page describes the various products you will find in the shop.
 
@@ -103,9 +106,9 @@ level to pick:
 1. Running OGGM from GCM / RCM data with the default settings: **start from level 5**
 2. Using OGGM's flowlines but running your own baseline climate,
    mass balance or ice thickness inversion models: **start at level 2**.
-   (and maybe use OGGM’s workflow again for glacier dynamic evolution?)
-   This is the workflow used
-   by associated model `PyGEM <https://github.com/drounce/PyGEM>`_ for example.
+   When using an own module, for instance for the mass balance, one can still decide to
+   use OGGM again further on in the workflow, for instance for the glacier dynamics. This is
+   the workflow used by associated model `PyGEM <https://github.com/drounce/PyGEM>`_ for example.
 3. Run sensitivity experiments for the ice thickness inversion: start at level
    3 (with climate data available) and re-run the inversion steps.
 
@@ -226,10 +229,25 @@ The basic set-up is following:
 - "informed three-step" mass balance model calibration (see :ref:`mb-calib`)
 - :ref:`dynamic-spinup` with dynamic melt factor calibration
 
+There are however multiple options to choose from. Our `tutorials <https://oggm.org/tutorials>`_
+showcase example of applications for some of them. One can explore
+`cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_
+for more options. Here follows a brief guide through the folder structure:
+Step 1:
+ - L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
+ - L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
+Step 2: one can select a version of the directories (e.g. 2023.3)
+Step 3: select the flowline type, centerlines or elevation band flowlines (elev_bands), optionally
+with the extension of you choice in when using L1_L2_files.
+Step 4: This is only needed when taking the L3_L5_files route. The folder name starts with the name
+of the baseline climate (e.g. w5e5) that has been used, optionally followed by one or more extensions.
 
-Explore
-`cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_ for more options. Our `tutorials <https://oggm.org/tutorials>`_ showcase
-example of applications for some of them.
+Explanation of the naming convention for the folder name extensions:
+
+'_spinup' indications the dynamic spin-up has been used for the calibration, if left out the calibration was done
+without the dynamic spin-up.
+'w_data' shows that additional data has been added to the directories: ITS-LIVE, Millan et al. ice
+velocity product and the consensus ice thickness estimate (all described in more detail later).
 
 .. admonition:: Deprecated: **version 1.4 and 1.5 directories (before v1.6)**
     :class: note, dropdown
