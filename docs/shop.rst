@@ -16,7 +16,9 @@ included your glacier directories range from essentials for standard OGGM workfl
 to other data, like velocity provided as gridded_data for each respective glacier,
 that might be of interest to you.
 
-This page describes the various products you will find in the shop.
+This page describes the various products you will find in the shop. Don't forget to
+cite the original data sources of the data that you use (all details can be found
+the glacier directories, but details are also listed in this document).
 
 .. important::
 
