@@ -18,7 +18,7 @@ that might be of interest to you.
 
 This page describes the various products you will find in the shop. Don't forget to
 cite the original data sources of the data that you use (all details can be found
-the glacier directories, but details are also listed in this document).
+the glacier directories, but details are also listed throughout the documentation).
 
 .. important::
 
@@ -236,8 +236,8 @@ showcase example of applications for some of them. One can explore
 for more options. Here follows a brief guide through the folder structure:
 
 - Step 1:
-   - L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
-   - L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
+   L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
+   L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
 - Step 2: one can select a version of the directories (e.g. 2023.3)
 - Step 3: select the flowline type, centerlines or elevation band flowlines (elev_bands), optionally with the extension of you choice in when using L1_L2_files.
 - Step 4: This is only needed when taking the L3_L5_files route. The folder name starts with the name of the baseline climate (e.g. w5e5) that has been used, optionally followed by one or more extensions.
@@ -389,258 +389,14 @@ Explanation of the naming convention for the folder name extensions:
 .. _Marzeion et al., 2012: http://www.the-cryosphere.net/6/1295/2012/tc-6-1295-2012.html
 
 
-Climate data
-------------
-
-Here are the various climate datasets that OGGM can handle automatically, using the for instance
-one of the following functions to pre-process the climate data:
-
-.. code-block:: python
-
-    from oggm.tasks import process_w5e5_data
-    from oggm.tasks import import process_cru_data
-    from oggm.tasks import import process_histalp_data
-    from oggm.tasks import import process_ecmwf_data
-
-.. warning::
-
-.. _climate-w5e5:
-
-W5E5
-~~~~
-
-As of v1.6, W5E5 is the standard dataset used by OGGM as reference. All
-preprocessed directories use it.
-
-TODO: explain what W5E5 is and why it is the default.
-
-CRU
-~~~
-
-`CRU TS`_
-data provided by the Climatic Research Unit of the University of East Anglia.
-If asked to do so, OGGM will automatically download and unpack the
-latest dataset from the CRU servers.
-
-.. _CRU TS: https://crudata.uea.ac.uk/cru/data/hrg/
-
-To download CRU data you can use the
-following convenience functions:
-
-.. code-block:: python
-
-    from oggm.shop import cru
-    cru.get_cl_file()
-    cru.get_cru_file(var='tmp')
-    cru.get_cru_file(var='pre')
-
-.. warning::
-
-    While the downloaded zip files are ~370mb in size, they are ~5.6Gb large
-    after decompression!
-
-The raw, coarse (0.5°) dataset is then downscaled to a higher resolution grid
-(CRU CL v2.0 at 10' resolution [New_et_al_2002]_) following the anomaly mapping approach
-described by Tim Mitchell in his `CRU faq`_ (Q25). Note that we don't expect
-this downscaling to add any new information than already available at the
-original resolution, but this allows us to have an elevation-dependent dataset
-based on a presumably better climatology. The monthly anomalies are computed
-following [Harris_et_al_2010]_ : we use standard anomalies for temperature and
-scaled (fractional) anomalies for precipitation.
-
-**When using these data, please refer to the original providers:**
-
-Harris, I., Jones, P. D., Osborn, T. J., & Lister, D. H. (2014). Updated
-high-resolution grids of monthly climatic observations - the CRU TS3.10 Dataset.
-International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/joc.3711
-
-New, M., Lister, D., Hulme, M., & Makin, I (2002). A high-resolution data
-set of surface climate over global land areas. Climate Research, 21(715), 1–25.
-https://doi.org/10.3354/cr021001
-
-.. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
-
-.. [Harris_et_al_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
-   D. H. (2014). Updated high-resolution grids of monthly climatic observations
-   - the CRU TS3.10 Dataset. International Journal of Climatology, 34(3),
-   623–642. https://doi.org/10.1002/joc.3711
-
-.. [New_et_al_2002] New, M., Lister, D., Hulme, M., & Makin, I (2002). A high-resolution
-   data set of surface climate over global land areas. Climate Research, 21(715),
-   1–25. https://doi.org/10.3354/cr021001
-
-ERA5 and CERA-20C
-~~~~~~~~~~~~~~~~~
-
-Since OGGM v1.4, users can also use reanalysis data from the ECMWF, the
-European Centre for Medium-Range Weather Forecasts based in Reading, UK.
-OGGM can use the
-`ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1979-2019, 0.25° resolution) and
-`CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
-datasets as baseline. One can also apply a combination of both, for example
-by applying the CERA-20C anomalies to the reference ERA5 for example
-(useful only in some circumstances).
-
-**When using these data, please refer to the original provider:**
-
-For example for ERA5:
-
-Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A.,
-Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I.,
-Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2019):
-ERA5 monthly averaged data on single levels from 1979 to present.
-Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
-(Accessed on < 01-12-2020 >), 10.24381/cds.f17050d7
-
-HISTALP
-~~~~~~~
-
-OGGM can also automatically download and use the data from the `HISTALP`_
-dataset (available only for the European Alps region, more details in [Chimani_et_al_2012]_.
-The data is available at 5' resolution (about 0.0833°) from 1801 to 2014.
-However, the data is considered spurious before 1850. Therefore, we
-recommend to use data from 1850 onwards.
-
-.. _HISTALP: http://www.zamg.ac.at/histalp/
-
-.. [Chimani_et_al_2012] Chimani, B., Matulla, C., Böhm, R., Hofstätter, M.:
-   A new high resolution absolute Temperature Grid for the Greater Alpine Region
-   back to 1780, Int. J. Climatol., 33(9), 2129–2141, DOI 10.1002/joc.3574, 2012.
-
-.. ipython:: python
-   :suppress:
-
-    fpath = "_code/prepare_hef.py"
-    with open(fpath) as f:
-        code = compile(f.read(), fpath, 'exec')
-        exec(code)
-
-.. ipython:: python
-   :okwarning:
-
-    @savefig plot_temp_ts.png width=100%
-
-Any other climate dataset
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-It is fairly easy to force OGGM with other datasets too. Recent publications have used
-plenty of options, from ERA5-Land to regional reanalyses or more.
-
-
-GCM data
-~~~~~~~~
-
-OGGM can also use climate model output to drive the mass balance model. In
-this case we still rely on gridded observations (e.g. W5E5) for the reference
-climatology and apply the GCM anomalies computed from a preselected reference
-period. This method is often called the
-`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
-
-Visit our online tutorials to see how this can be done
-(`OGGM run with GCM tutorial <https://oggm.org/tutorials/master/notebooks/run_with_gcm.html>`_).
-
-
-Reference mass balance data
----------------------------
-
-Traditional in-situ MB data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-In-situ mass balance data are used by OGGM to calibrate and validate the
-first generation mass balance model.
-We rely on mass balance observations provided by the
-World Glacier Monitoring Service (`WGMS`_).
-The `Fluctuations of Glaciers (FoG)`_ database contains annual mass balance
-values for several hundreds of glaciers worldwide. We exclude water-terminating
-glaciers and the time series with less than five years of
-data.
-Since 2017, the WGMS provides a lookup table
-linking the RGI and the WGMS databases. We updated this list for version 6 of
-the RGI, leaving us with 268 mass balance time series. These are not equally
-reparted over the globe:
-
-.. figure:: _static/wgms_rgi_map.png
-    :width: 100%
-    :align: left
-
-    Map of the RGI regions; the red dots indicate the glacier locations
-    and the blue circles the location of the 254 reference WGMS
-    glaciers used by the OGGM calibration. From our `GMD paper`_.
-
-These data are shipped automatically with OGGM. All reference glaciers
-have access to the timeseries through the glacier directory:
-
-.. ipython:: python
-
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
-    gdir = workflow.init_glacier_directories('RGI60-11.00897',
-                                             from_prepro_level=3,
-                                             prepro_base_url=base_url,
-                                             prepro_border=80)[0]
-    mb = gdir.get_ref_mb_data()
-    @savefig plot_ref_mbdata.png width=100%
-    mb[['ANNUAL_BALANCE']].plot(title='WGMS data: Hintereisferner');
-
-
-.. _WGMS: https://wgms.ch
-.. _Fluctuations of Glaciers (FoG): https://wgms.ch/data_databaseversions/
-.. _GMD Paper: https://www.geosci-model-dev.net/12/909/2019/
-
-.. _shop-geod:
-
-Geodetic MB data
-~~~~~~~~~~~~~~~~
-
-OGGM ships with a geodetic mass balance table containing MB information for all
-of the world's glaciers as obtained from `Hugonnet et al., 2021`_.
-
-The original, raw data have been modified in three ways
-(`code <https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb?flush_cache=true>`_):
-
-- the glaciers in RGI region 12 (Caucasus) had to be manually linked to the product by
-  Hugonnet because of large errors in the RGI outlines. The resulting product
-  used by OGGM in region 12 has large uncertainties.
-- outliers have been filtered as following: all glaciers with an error estimate
-  larger than 3 :math:`\Sigma` at the RGI region level are filtered out
-- all missing data (including outliers) are attributed with the regional average.
-
-You can access the table with:
-
-.. ipython:: python
-
-    from oggm import utils
-    mbdf = utils.get_geodetic_mb_dataframe()
-    mbdf.head()
-
-The data contains the climatic mass balance (in units meters water-equivalent per year)
-for three reference periods (2000-2010, 2010-2020, 2000-2020):
-
-.. ipython:: python
-
-    mbdf['dmdtda'].loc[mbdf.period=='2000-01-01_2010-01-01'].plot.hist(bins=100, alpha=0.5, label='2000-2010');
-    mbdf['dmdtda'].loc[mbdf.period=='2010-01-01_2020-01-01'].plot.hist(bins=100, alpha=0.5, label='2010-2020');
-    @savefig plot_hugonnet_mbdata.png width=100%
-    plt.xlabel(''); plt.xlim(-3, 3); plt.legend();
-
-Just for fun, here is a comparison of both products at Hintereisferner:
-
-.. ipython:: python
-
-    sel = mbdf.loc[gdir.rgi_id].set_index('period') * 1000
-    _mb, _err = sel.loc['2000-01-01_2010-01-01'][['dmdtda', 'err_dmdtda']]
-    plt.fill_between([2000, 2010], [_mb-_err, _mb-_err], [_mb+_err, _mb+_err], alpha=0.5, color='C0');
-    plt.plot([2000, 2010], [_mb, _mb], color='C0');
-    _mb, _err = sel.loc['2010-01-01_2020-01-01'][['dmdtda', 'err_dmdtda']]
-    plt.fill_between([2010, 2020], [_mb-_err, _mb-_err], [_mb+_err, _mb+_err], alpha=0.5, color='C1');
-    plt.plot([2010, 2020], [_mb, _mb], color='C1');
-    @savefig plot_hugonnet_mbdata_hef.png width=100%
-    mb[['ANNUAL_BALANCE']].loc[2000:].plot(ax=plt.gca(), title='MB data: Hintereisferner', c='k', legend=False);
-
-.. _Hugonnet et al., 2021: https://www.sedoo.fr/theia-publication-products/?uuid=c428c5b9-df8f-4f86-9b75-e04c778e29b9
-
+Additional available data
+-------------------------
+
+Here follows a description of the additional data that can be added to the
+pre-processed glacier directories, by choosing the 'w_data' option.
 
 ITS_LIVE
---------
+~~~~~~~~
 
 The `ITS_LIVE <https://its-live.jpl.nasa.gov/>`_ ice velocity products
 can be downloaded and reprojected to the glacier directory
@@ -661,7 +417,7 @@ If you want more velocity products, feel free to open a new topic
 on the OGGM issue tracker!
 
 Ice thickness
--------------
+~~~~~~~~~~~~~
 
 The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`_
 ice thickness products can be downloaded and reprojected to the glacier directory
@@ -675,7 +431,7 @@ ice thickness products can be downloaded and reprojected to the glacier director
 
 
 Millan et al. (2022) ice velocity and thickness products
---------------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Similarly, we provide data from the recent
 `Millan et al. (2022) <https://www.nature.com/articles/s41561-021-00885-z>`_
@@ -687,7 +443,7 @@ Raw data sources
 
 If you want to run your own workflow from A to Z, or if you would like
 to know which data are used in OGGM before being available in the
-pre-processed directories, read further!
+pre-processed directories, read further for some more details!
 
 .. _outlines:
 
