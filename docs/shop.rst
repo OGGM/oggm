@@ -18,7 +18,7 @@ that might be of interest to you.
 
 This page describes the various products you will find in the shop. Don't forget to
 cite the original data sources of the data that you use (all details can be found
-the glacier directories, but details are also listed in this document).
+the glacier directories, but details are also listed throughout the documentation).
 
 .. important::
 
