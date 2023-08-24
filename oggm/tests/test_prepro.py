@@ -96,7 +96,7 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
         extent = gdir.extent_ll
 
-        tdf = gdir.read_shapefile('outlines')
+        tdf = gdir.read_shapefile('outlines').iloc[0]
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, float(tdf['Area']), rtol=1e-2)
         self.assertTrue(gdir.has_file('intersects'))
@@ -871,7 +871,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
 
-        tdf = gdir.read_shapefile('outlines')
+        tdf = gdir.read_shapefile('outlines').iloc[0]
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
         np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
         area *= gdir.grid.dx ** 2
@@ -1104,7 +1104,7 @@ class TestGeometry(unittest.TestCase):
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
 
-        tdf = gdir.read_shapefile('outlines')
+        tdf = gdir.read_shapefile('outlines').iloc[0]
         np.testing.assert_allclose(area, otherarea, rtol=0.1)
         np.testing.assert_allclose(evenotherarea, gdir.rgi_area_m2)
         area *= (gdir.grid.dx) ** 2

@@ -1181,7 +1181,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
 
         # shift parabola to the ds-line
         p2 = np.copy(p)
-        p2[2] = z[ro == 0]
+        p2[2] = z[ro == 0][0]
 
         err = _parabola_error(roN, zN, p2) * 100
 
