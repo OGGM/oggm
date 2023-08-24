@@ -18,10 +18,28 @@ one of the following functions to pre-process the climate data:
 W5E5
 ~~~~
 
-As of v1.6, W5E5 is the standard dataset used by OGGM as reference. All
-preprocessed directories use it.
+As of v1.6, w5e5 [Lang_et_al_2021]_ is the standard dataset used by OGGM as baseline climate.
+It is currently being used for all preprocessed directories. Over land the w5e5 data is
+bias corrected ERA5 re-analysis data. The main reasons this climate product is currently being
+used as the default baseline climate in OGGM, is that the (ISMIP)[https://www.isimip.org/]
+simulations have been bias corrected using this dataset. Normally we always need to bias correct
+the climate data when the using another climate (e.g. a GCM simulation) to force OGGM than the
+baseline climate, that has been used for the calibration of the mass balance model. We no longer
+need to bias correct these ISMIP climate simulations, when calibrating the mass balance model
+with w5e5 a baseline climate. This is a big advantage, as we only use a simple bias correction
+approach (the delta method) to bias correct climate data in other cases.
 
-TODO: explain what W5E5 is and why it is the default.
+**When using these data, please refer to the original providers:**
+
+Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N.,
+Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021). WFDE5 over land
+merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
+https://doi.org/10.48364/ISIMIP.342217
+
+.. [Lang_et_al_2021] Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici,
+A., Bellouin, N., Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021).
+WFDE5 over land merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
+https://doi.org/10.48364/ISIMIP.342217
 
 CRU
 ~~~
