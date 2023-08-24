@@ -210,7 +210,7 @@ Test OGGM
 You can test your OGGM installation by running the following command from
 anywhere (don't forget to activate your environment first)::
 
-    pytest.oggm
+    pytest.oggm  --disable-warnings
 
 The tests should run for 5 to 10 minutes. If everything worked fine, you should see something like::
 
@@ -239,9 +239,6 @@ The tests should run for 5 to 10 minutes. If everything worked fine, you should 
 
     ======================= 224 passed, 149 skipped in 217.03s (0:03:37) ======================
 
-
-You can safely ignore deprecation warnings and other messages (there might be plenty),
-as long as the tests end without errors.
 
 .. important::
 

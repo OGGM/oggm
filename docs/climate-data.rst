@@ -11,8 +11,6 @@ one of the following functions to pre-process the climate data:
     from oggm.tasks import import process_histalp_data
     from oggm.tasks import import process_ecmwf_data
 
-.. warning::
-
 .. _climate-w5e5:
 
 W5E5
@@ -186,6 +184,7 @@ recommend to use data from 1850 onwards.
 .. ipython:: python
    :okwarning:
 
+    # Bla
     @savefig plot_temp_ts.png width=100%
 
 Any other climate dataset

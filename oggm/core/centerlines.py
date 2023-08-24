@@ -923,7 +923,7 @@ def compute_centerlines(gdir, heads=None):
     # Compute the routes
     lines = []
     for h in heads:
-        h_coord = np.asarray(h.xy)[::-1].astype(np.int64)
+        h_coord = np.asarray(h.xy)[::-1].astype(np.int64).flatten()
         indices, _ = route_through_array(costgrid, h_coord, t_coord)
         lines.append(shpg.LineString(np.array(indices)[:, [1, 0]]))
     log.debug('(%s) computed the routes', gdir.rgi_id)
@@ -1668,14 +1668,14 @@ def catchment_intersections(gdir):
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
 
-    gdfc = gpd.GeoDataFrame()
+    poly_nos = []
     for i, ci in enumerate(catchment_indices):
         # Catchment polygon
         mask[:] = 0
         mask[tuple(ci.T)] = 1
         _, poly_no = _mask_to_polygon(mask, gdir=gdir)
-        gdfc.loc[i, 'geometry'] = poly_no
-
+        poly_nos.append(poly_no)
+    gdfc = gpd.GeoDataFrame(geometry=poly_nos)
     gdfi = utils.polygon_intersections(gdfc)
 
     # We project them onto the mercator proj before writing. This is a bit

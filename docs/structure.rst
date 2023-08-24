@@ -87,7 +87,7 @@ downloading and extracting these data locally:
 
     rgi_ids = ['RGI60-11.00897']
     gdirs = workflow.init_glacier_directories(rgi_ids,  # glaciers to download
-                                              from_prepro_level=3,  # pre-processing level
+                                              from_prepro_level=4,  # pre-processing level
                                               prepro_border=80,  # pre-processing map size
                                               prepro_base_url=base_url)  # online repository
     workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs);

@@ -42,7 +42,7 @@ have access to the timeseries through the glacier directory:
 .. ipython:: python
 
     gdir = workflow.init_glacier_directories('RGI60-11.00897',
-                                             from_prepro_level=3,
+                                             from_prepro_level=5,
                                              prepro_base_url=DEFAULT_BASE_URL,
                                              prepro_border=80)[0]
     mb = gdir.get_ref_mb_data()

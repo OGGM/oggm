@@ -10,5 +10,3 @@ our `tutorials <https://oggm.org/tutorials>`_ if you want to learn how to use th
     :align: left
 
     Example of the various RGI-TOPO products at Malaspina glacier
-
-TODO: move the old website to this one.

@@ -607,3 +607,4 @@ reproduce this information
     why and how we preprocess some DEMs before we make them available to the
     OGGM workflow.
 
+.. _Hugonnet et al., 2021: https://www.nature.com/articles/s41586-021-03436-z

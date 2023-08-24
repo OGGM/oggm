@@ -446,7 +446,7 @@ level 5.
     # The base url is where to find the pre-processed directories
     base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5'
     gdirs = workflow.init_glacier_directories('RGI60-11.00897',
-                                              from_prepro_level=5,
+                                              from_prepro_level=3,
                                               prepro_base_url=base_url,
                                               prepro_border=80)
     gdir = gdirs[0]  # init_glacier_directories always returns a list

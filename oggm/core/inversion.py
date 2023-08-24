@@ -807,7 +807,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         if len(pzero[0]) == 0:
             thick[y, x] = np.average(ts[pok], weights=1 / sqr)
         elif len(pzero[0]) == 1:
-            thick[y, x] = ts[pzero[0]]
+            thick[y, x] = ts[pzero[0][0]]
         else:
             raise RuntimeError('We should not be there')
 
