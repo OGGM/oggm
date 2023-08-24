@@ -246,7 +246,10 @@ def distribute_thickness_from_simulation(gdir,
         the filesuffix of the gridded_simulation file to write. If empty,
         it will be set to input_filesuffix.
     concat_input_filesuffix : str
-        the filesuffix of the flowline diagnostics file.
+        the filesuffix of the flowline diagnostics file to concat with the
+        main one. `concat_input_filesuffix` is assumed to be prior to the
+        main one, i.e. often you will be calling
+        `concat_input_filesuffix='_spinup_historical'`.
     fl_diag : xarray.core.dataset.Dataset
         directly provide a flowline diagnostics file instead of reading it
         from disk. This could be useful, for example, to merge two files
