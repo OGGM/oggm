@@ -206,7 +206,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         v[:] = per_band_rank
 
 
-@entity_task(log, writes=['gridded_data'])
+@entity_task(log, writes=['gridded_simulation'])
 def distribute_thickness_from_simulation(gdir,
                                          input_filesuffix='',
                                          concat_input_filesuffix=None,
@@ -221,7 +221,8 @@ def distribute_thickness_from_simulation(gdir,
                                          concat_ds=None):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
-    For this to work, the glacier cannot advance beyond its initial area!
+    For this to work, the glacier cannot advance beyond its initial area! It
+    wont fail, but it will redistribute mass at the bottom of the glacier.
 
     We assume that add_smoothed_glacier_topo and assign_points_to_band have
     been run before, and that the user stored the data from their simulation
@@ -229,13 +230,11 @@ def distribute_thickness_from_simulation(gdir,
 
     The algorithm simply melts each flowline band onto the
     2D grid points, but adds some heuristics (see :py:func:`assign_points_to_band`)
-    as to which grid points melts faster. Currently it does not take elevation
+    as to which grid points melt faster. Currently it does not take elevation
     into account for the melt *within* one band, a downside which is somehow
     mitigated with smoothing (the default is quite some smoothing).
 
-    Writes a new variable to gridded_data.nc (simulation_distributed_thickness)
-    together with a new time dimension. If a variable already exists we
-    will try to concatenate.
+    Writes a new file caller gridded_simulation.nc together with a new time dimension.
 
     Parameters
     ----------
@@ -391,7 +390,8 @@ def distribute_thickness_from_simulation(gdir,
         out_thick[i, :] = new_thick
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-        ds = ds[['glacier_mask']].copy()
+        ds['bedrock'] = (ds['glacier_topo_smoothed'] - ds['distributed_thickness']).fillna(0)
+        ds = ds[['glacier_mask', 'topo', 'glacier_topo_smoothed', 'bedrock']].load()
 
     ds.coords['time'] = dg['time']
 
