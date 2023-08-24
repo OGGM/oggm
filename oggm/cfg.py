@@ -209,8 +209,12 @@ BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
 _doc = ('A netcdf file containing several gridded data variables such as '
         'topography, the glacier masks, the interpolated 2D glacier bed, '
-        'and more.')
+        'and more. This is for static, non time-dependant data.')
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
+
+_doc = ('A netcdf file containing gridded data variables which are time '
+        'dependant. It has the same coordinates as `gridded_data`.')
+BASENAMES['gridded_simulation'] = ('gridded_simulation.nc', _doc)
 
 _doc = ('A dictionary containing the shapely.Polygons of a glacier. The '
         '"polygon_hr" entry contains the geometry transformed to the local '

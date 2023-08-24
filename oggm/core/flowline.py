@@ -3304,6 +3304,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
 
 @entity_task(log)
 def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                       ys=None, ye=None,
                        bias=0, seed=None, temperature_bias=None,
                        precipitation_factor=None,
                        store_monthly_step=False,
@@ -3329,6 +3330,12 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         the glacier directory to process
     nyears : int
         length of the simulation
+    ys : int, default: 0 or init_model_yr
+        first year of the fake output timeseries. Since these simulations
+        are idealized, the concept of "time" is only relative to the start of
+        the simulation.
+    ye : int, default: nyears
+        can be used instead of "nyears"
     y0 : int
         central year of the random climate period. Has to be set!
     halfsize : int, optional
@@ -3402,8 +3409,13 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
     if precipitation_factor is not None:
         mb_model.prcp_fac *= precipitation_factor
 
+    if ys is None:
+        ys = init_model_yr if init_model_yr is not None else 0
+    if ye is None:
+        ye = ys + nyears
+
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb_model, ys=0, ye=nyears,
+                              mb_model=mb_model, ys=ys, ye=ye,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,
@@ -3416,6 +3428,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
 
 @entity_task(log)
 def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
+                         ys=None, ye=None,
                          bias=0, temperature_bias=None,
                          precipitation_factor=None,
                          store_monthly_step=False,
@@ -3443,6 +3456,12 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     nyears : int
         length of the simulation (default: as long as needed for reaching
         equilibrium)
+    ys : int, default: 0 or init_model_yr
+        first year of the fake output timeseries. Since these simulations
+        are idealized, the concept of "time" is only relative to the start of
+        the simulation.
+    ye : int, default: nyears
+        can be used instead of "nyears"
     y0 : int
         central year of the random climate period. Has to be set!
     halfsize : int, optional
@@ -3506,8 +3525,13 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     if precipitation_factor is not None:
         mb_model.prcp_fac *= precipitation_factor
 
+    if ys is None:
+        ys = init_model_yr if init_model_yr is not None else 0
+    if ye is None:
+        ye = ys + nyears
+
     return flowline_model_run(gdir, output_filesuffix=output_filesuffix,
-                              mb_model=mb_model, ys=0, ye=nyears,
+                              mb_model=mb_model, ys=ys, ye=ye,
                               store_monthly_step=store_monthly_step,
                               store_model_geometry=store_model_geometry,
                               store_fl_diagnostics=store_fl_diagnostics,

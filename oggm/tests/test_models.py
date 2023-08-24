@@ -5628,13 +5628,17 @@ class TestDistribute2D:
         ds_diag, fl_diag = model.run_until_and_store(2100, fl_diag_path=fl_diag_path)
         fl_diag = fl_diag[0]
 
-        distribute_2d.distribute_thickness_from_simulation(hef_elev_gdir, input_filesuffix='_commit')
-
-        with xr.open_dataset(hef_elev_gdir.get_filepath('gridded_data')) as ds:
+        distribute_2d.distribute_thickness_from_simulation(hef_elev_gdir,
+                                                           input_filesuffix='_commit')
+        fp = hef_elev_gdir.get_filepath('gridded_simulation', filesuffix='_commit')
+        with xr.open_dataset(fp) as ds:
+            thick = ds.distributed_thickness.load()
+            
+        fp = hef_elev_gdir.get_filepath('gridded_data')
+        with xr.open_dataset(fp) as ds:
             ds = ds.load()
         dx2 = hef_elev_gdir.grid.dx ** 2
 
-        thick = ds.simulation_distributed_thickness_commit
         area_dis = (thick > 0).sum(dim=('x', 'y')) * dx2
         vol_dis = thick.sum(dim=('x', 'y')) * dx2
 

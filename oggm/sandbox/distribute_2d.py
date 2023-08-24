@@ -4,6 +4,7 @@ import warnings
 import oggm
 import oggm.cfg as cfg
 from oggm import utils
+from oggm.exceptions import InvalidWorkflowError
 import numpy as np
 import xarray as xr
 from scipy import ndimage
@@ -205,18 +206,23 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         v[:] = per_band_rank
 
 
-@entity_task(log, writes=['gridded_data'])
-def distribute_thickness_from_simulation(gdir, input_filesuffix='',
+@entity_task(log, writes=['gridded_simulation'])
+def distribute_thickness_from_simulation(gdir,
+                                         input_filesuffix='',
+                                         concat_input_filesuffix=None,
+                                         output_filesuffix='',
                                          fl_diag=None,
                                          ys=None, ye=None,
                                          smooth_radius=None,
                                          add_monthly=False,
                                          fl_thickness_threshold=0,
-                                         rolling_mean_smoothing=False,
-                                         show_area_plot=False):
+                                         rolling_mean_smoothing=0,
+                                         debug_area_timeseries=False,
+                                         concat_ds=None):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
 
-    For this to work, the glacier cannot advance beyond its initial area!
+    For this to work, the glacier cannot advance beyond its initial area! It
+    wont fail, but it will redistribute mass at the bottom of the glacier.
 
     We assume that add_smoothed_glacier_topo and assign_points_to_band have
     been run before, and that the user stored the data from their simulation
@@ -224,13 +230,11 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
 
     The algorithm simply melts each flowline band onto the
     2D grid points, but adds some heuristics (see :py:func:`assign_points_to_band`)
-    as to which grid points melts faster. Currently it does not take elevation
+    as to which grid points melt faster. Currently it does not take elevation
     into account for the melt *within* one band, a downside which is somehow
     mitigated with smoothing (the default is quite some smoothing).
 
-    Writes a new variable to gridded_data.nc (simulation_distributed_thickness)
-    together with a new time dimension. If a variable already exists we
-    will try to concatenate.
+    Writes a new file caller gridded_simulation.nc together with a new time dimension.
 
     Parameters
     ----------
@@ -238,10 +242,20 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         where to write the data
     input_filesuffix : str
         the filesuffix of the flowline diagnostics file.
+    output_filesuffix : str
+        the filesuffix of the gridded_simulation file to write. If empty,
+        it will be set to input_filesuffix.
+    concat_input_filesuffix : str
+        the filesuffix of the flowline diagnostics file to concat with the
+        main one. `concat_input_filesuffix` is assumed to be prior to the
+        main one, i.e. often you will be calling
+        `concat_input_filesuffix='_spinup_historical'`.
     fl_diag : xarray.core.dataset.Dataset
-        can directly provide a flowline diagnostics file. If provided
-        'input_filesuffix' is only used for the name to save the distributed
-        data in gridded data.
+        directly provide a flowline diagnostics file instead of reading it
+        from disk. This could be useful, for example, to merge two files
+        before sending it to the algorithm, and if you want to smooth the time
+        series. If provided, 'input_filesuffix' is only used to name
+        the distributed data file to save.
     ys : int
         pick another year to start the series (default: the first year
         of the diagnostic file)
@@ -258,66 +272,76 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
     fl_thickness_threshold : float
         A minimum threshold (all values below the threshold are set to 0) is
         applied to the area and volume of the flowline diagnostics before the
-        distribution process. Default is 0 (using no threshold).
-    rolling_mean_smoothing : bool or int
-        If int, the area and volume of the flowline diagnostics will be
-        smoothed using a rolling mean. The window size is defined with this
-        number. If True a default window size of 3 is used. If False no
-        smoothing is applied.  Default is False.
-    show_area_plot : bool
-        If True, only a plot of the 'original-total-area- evolution' and the
-        'smoothed-total-area- evolution' (after using fl_thickness_threshold
-        and rolling_mean_smoothing) is returned. This is useful for finding the
+        distribution process. Default is 0 (using no threshold). We recommend
+        to set it to 1 if you are having artefacts in your visualizations.
+    rolling_mean_smoothing : int
+        If > 0, the area and volume of the flowline diagnostics will be
+        smoothed using a rolling mean over time. The window size is defined
+        with this number. We recommend 3, 5, or more (in extreme cases).
+    debug_area_timeseries : bool
+        If True, the algorithm will return a dataframe additionally to the
+        gridded dataset. The dataframe contains two columns: the original area
+        timeseries, and the post-processed one (i.e. after applying the thickness
+        threshold filter and the rolling mean). This is useful for finding the
         best smoothing parameters for the visualisation of your glacier.
+    concat_ds = None
+        set this to a dataset you want to concatenate to the newly computed
+        one. The dataset should be prior in time to the one to compute, and
+        should end when the new one starts. Note that this is only a convenience
+        function, and won't work well if you use smoothing on the timeseries
+        (for smoothing, use the `concat_input_filesuffix` or `fl_diag`
+        keyword above).
     """
 
     if fl_diag is not None:
         dg = fl_diag
     else:
-        fp = gdir.get_filepath('fl_diagnostics',  filesuffix=input_filesuffix)
+        fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
         with xr.open_dataset(fp) as dg:
             assert len(dg.flowlines.data) == 1, 'Only works with one flowline.'
         with xr.open_dataset(fp, group=f'fl_0') as dg:
-            if ys or ye:
-                dg = dg.sel(time=slice(ye, ye))
+            if concat_input_filesuffix is not None:
+                fp0 = gdir.get_filepath('fl_diagnostics',
+                                        filesuffix=concat_input_filesuffix)
+                with xr.open_dataset(fp0, group=f'fl_0') as dg0:
+                    dg0 = dg0.load()
+                    if dg0.time[-1] != dg.time[0]:
+                        raise InvalidWorkflowError(f'The two dataset times dont match: '
+                                                   f'{float(dg0.time[-1])} vs '
+                                                   f'{float(dg.time[0])}.')
+                    dg = xr.concat([dg0, dg.isel(time=slice(1, None))], dim='time')
+            if ys is not None or ye is not None:
+                dg = dg.sel(time=slice(ys, ye))
             dg = dg.load()
 
+    if not output_filesuffix:
+        output_filesuffix = input_filesuffix
+
     # save the original area evolution for the area plot
-    if show_area_plot:
-        area_evolution_orig = dg['area_m2'].sum(dim='dis_along_flowline')
+    if debug_area_timeseries:
+        out_df = dg['area_m2'].sum(dim='dis_along_flowline').to_dataframe(name='initial_area')
 
     # applying the thickness threshold
     dg = xr.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg)
 
     # applying the rolling mean smoothing
     if rolling_mean_smoothing:
-        if isinstance(rolling_mean_smoothing, bool):
-            rolling_mean_smoothing = 3
-
         dg[['area_m2', 'volume_m3']] = dg[['area_m2', 'volume_m3']].rolling(
             min_periods=1, time=rolling_mean_smoothing, center=True).mean()
 
     # monthly interpolation for higher temporal resolution
     if add_monthly:
         # create new monthly time coordinate, last year only with month 1
-        years = np.append(np.repeat(dg.time[:-1], 12),
-                          dg.time[-1])
-        months = np.append(np.tile(np.arange(1, 13), len(dg.time[:-1])),
-                           1)
-        time_monthly = utils.date_to_floatyear(years, months)
-
+        monthly_time = utils.monthly_timeseries(dg.time[0], dg.time[-1])
+        yrs, months = utils.floatyear_to_date(monthly_time)
         # interpolate and add years and months as new coords
-        dg = dg[['area_m2', 'volume_m3']].interp(time=time_monthly,
+        dg = dg[['area_m2', 'volume_m3']].interp(time=monthly_time,
                                                  method='linear')
-        dg.coords['calender_year'] = ('time', years)
-        dg.coords['calender_month'] = ('time', months)
+    else:
+        yrs, months = utils.floatyear_to_date(dg.time)
 
-    if show_area_plot:
-        area_evolution_orig.plot(label='original')
-        dg['area_m2'].sum(dim='dis_along_flowline').plot(label='smoothed')
-        plt.legend()
-        plt.show()
-        return None
+    if debug_area_timeseries:
+        out_df['smoothed_area'] = dg['area_m2'].sum(dim='dis_along_flowline').to_series()
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         band_index_mask = ds.band_index.data
@@ -369,21 +393,26 @@ def distribute_thickness_from_simulation(gdir, input_filesuffix='',
         out_thick[i, :] = new_thick
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-        ds = ds.load()
+        ds['bedrock'] = ds['topo'] - ds['distributed_thickness'].fillna(0)
+        ds = ds[['glacier_mask', 'topo', 'bedrock']].load()
 
-    # the distinction between time_monthly and time is needed to have data in
-    # yearly AND monthly resolution in the same gridded data, maybe at one
-    # point we decide for one option
-    if add_monthly:
-        time_var = 'time_monthly'
-    else:
-        time_var = 'time'
-    ds.coords[time_var] = dg['time'].data
-    vn = "simulation_distributed_thickness" + input_filesuffix
-    if vn in ds:
-        warnings.warn(f'Overwriting existing variable {vn}')
-    ds[vn] = ((time_var, 'y', 'x',), out_thick)
-    if add_monthly:
-        ds.coords['calender_year_monthly'] = (time_var, dg.calender_year.data)
-        ds.coords['calender_month_monthly'] = (time_var, dg.calender_month.data)
-    ds.to_netcdf(gdir.get_filepath('gridded_data'))
+    ds.coords['time'] = dg['time']
+
+    vn = "distributed_thickness"
+    ds[vn] = (('time', 'y', 'x',), out_thick)
+    ds.coords['calendar_year'] = ('time', yrs)
+    ds.coords['calendar_month'] = ('time', months)
+
+    if concat_ds is not None:
+        if concat_ds.time[-1] != ds.time[0]:
+            raise InvalidWorkflowError(f'The two dataset times dont match: '
+                                       f'{concat_ds.time[-1]} vs {ds.time[0]}.')
+        ds = xr.concat([concat_ds, ds.isel(time=(1, None))], dim='time')
+
+    ds.to_netcdf(gdir.get_filepath('gridded_simulation',
+                                   filesuffix=output_filesuffix))
+
+    if debug_area_timeseries:
+        return ds, out_df
+
+    return ds
