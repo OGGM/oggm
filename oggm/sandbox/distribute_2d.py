@@ -390,8 +390,8 @@ def distribute_thickness_from_simulation(gdir,
         out_thick[i, :] = new_thick
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-        ds['bedrock'] = (ds['glacier_topo_smoothed'] - ds['distributed_thickness']).fillna(0)
-        ds = ds[['glacier_mask', 'topo', 'glacier_topo_smoothed', 'bedrock']].load()
+        ds['bedrock'] = ds['topo'] - ds['distributed_thickness'].fillna(0)
+        ds = ds[['glacier_mask', 'topo', 'bedrock']].load()
 
     ds.coords['time'] = dg['time']
 
