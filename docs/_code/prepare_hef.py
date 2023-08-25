@@ -58,7 +58,6 @@ fdf['Mass balance'] = mbx
 # For thickness plot
 tasks.distribute_thickness_per_altitude(gdir)
 
-
 # plot functions
 def example_plot_temp_ts():
     d = xr.open_dataset(gdir.get_filepath('climate_historical'))
