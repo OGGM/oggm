@@ -11,15 +11,13 @@ one of the following functions to pre-process the climate data:
     from oggm.tasks import import process_histalp_data
     from oggm.tasks import import process_ecmwf_data
 
-.. warning::
-
 .. _climate-w5e5:
 
 W5E5
 ~~~~
 
 GSWP3-W5E5
-~~~~
+~~~~~~~~~~
 
 As of v1.6, GSWP3-W5E5 [Lange_et_al_2021]_ is the standard baseline climate dataset used by OGGM
 for all preprocessed directories. GSWP3-W5E5 is a combination of W5E5 v2.0 [Lange_et_al_2021]_ for
@@ -28,59 +26,48 @@ url file paths are only named `W5E5` to make it shorter, however they include bo
 
 GSWP3-W5E5 has a spatial resolution of 0.5° over the entire globe and is also the observational
 climate input data for the impact assessments in phase 3a of the Inter-Sectoral Impact Model
-Intercomparison Project (ISIMIP3a)[https://www.isimip.org/protocol/3/]. Over land, W5E5 uses
+Intercomparison Project ` ISIMIP3a <https://www.isimip.org/protocol/3>`_. Over land, W5E5 uses
 the WATCH Forcing Data methodology version 2 which they applied on ERA5 data
 (WFDE5; Weedon et al., 2014, [Cuchi_2020]_). W5E5 precipitation is based on WFDE5 rainfall and
 snowfall bias-adjusted using version 2.3 of the Global Precipitation Climatology Project
 (GPCP; Adler et al., 2003) monthly precipitation.
 
 One of the reasons, why we chose W5E5 for all preprocessed directories is that the climate input data for the
-(ISIMIP3b CMIP6 GCMs)[https://www.isimip.org/protocol/3/ have been bias-corrected using this dataset.
-Normally, we need to bias-correct the GCMs ourselves to approximately coincide with the applied climate dataset
+`ISIMIP3b CMIP6 GCMs <https://www.isimip.org/protocol/3>`_ have been bias-corrected using this dataset.
+Usually, we need to bias-correct the GCMs ourselves to approximately coincide with the applied climate dataset
 used for model calibration. If we use W5E5 for the calibration of the mass-balance model and the ISIMIP3b
 GCMs for projections, no additional bias-correction from OGGM is needed, as the statistically downscaled GCMs
 from ISIMIP3b (0.5° resolution) are already internally bias-adjusted to W5E5 over the period
 1979–2014 [Lange_2019]_. This is a big advantage, as their quantile-mapping bias correction
-approach is more robust for extreme values than the "delta"-method commonly applied in OGGM.
-
-Note, that per-default, the preprocessed directories [](https://cluster.klima.uni-bremen.de/~oggm/climate/gswp3-w5e5/),
+approach is more robust for extreme values than the "delta-methof" commonly applied in OGGM.
 
 **When using this data, please refer to the original providers:**
 
 *if you only use W5E5 data (1979-2019):*
 
-Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N.,
-Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021). WFDE5 over land
-merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
-https://doi.org/10.48364/ISIMIP.342217
+.. [Lange_et_al_2021] Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici,
+   A., Bellouin, N., Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021).
+   WFDE5 over land merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
+   https://doi.org/10.48364/ISIMIP.342217
 
-Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N., Lange, S., Müller Schmied, H., Hersbach, H. and Buontempo, C. (2020).
-WFDE5: bias-adjusted ERA5 reanalysis data for impact studies. Earth System Science Data, 12, 2097–2120
+.. [Cuchi_2020] Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N., Lange, S.,
+   Müller Schmied, H., Hersbach, H. and Buontempo, C. (2020). WFDE5: bias-adjusted
+   ERA5 reanalysis data for impact studies. Earth System Science Data, 12, 2097–2120
 
 *if you also use the GSWP3 part of the GSWP3-W5E5 data (1901-1978):*
 
 Dirmeyer, P. A., Gao, X., Zhao, M., Guo, Z., Oki, T. and Hanasaki, N. (2006). GSWP-2: Multimodel Analysis
 and Implications for Our Perception of the Land Surface. Bulletin of the American Meteorological Society, 87(10), 1381–98.
 
-Kim, H. (2017). Global Soil Wetness Project Phase 3 Atmospheric Boundary Conditions (Experiment 1)
-[Data set]. Data Integration and Analysis System (DIAS). https://doi.org/10.20783/DIAS.501
-
-
 .. [Kim_2017] Kim, H. (2017). Global Soil Wetness Project Phase 3 Atmospheric Boundary Conditions (Experiment 1)
-[Data set]. Data Integration and Analysis System (DIAS). https://doi.org/10.20783/DIAS.501
+   [Data set]. Data Integration and Analysis System (DIAS). https://doi.org/10.20783/DIAS.501
 
-.. [Lange_et_al_2021] Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici,
-A., Bellouin, N., Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021).
-WFDE5 over land merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
-https://doi.org/10.48364/ISIMIP.342217
-
-.. [Cuchi_2019] Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N., Lange, S.,
-Müller Schmied, H., Hersbach, H. and Buontempo, C. (2020). WFDE5: bias-adjusted
-ERA5 reanalysis data for impact studies. Earth System Science Data, 12, 2097–2120
+*for more info:*
 
 .. [Lange_2019] Trend-preserving bias adjustment and statistical downscaling
-with ISIMIP3BASD (v1.0). Geoscientific Model Development 12(7), 3055–3070.
-https://doi:10.5194/gmd-12-3055-2019
+   with ISIMIP3BASD (v1.0). Geoscientific Model Development 12(7), 3055–3070.
+   https://doi:10.5194/gmd-12-3055-2019
+
 
 CRU
 ~~~
@@ -116,17 +103,9 @@ based on a presumably better climatology. The monthly anomalies are computed
 following [Harris_et_al_2010]_ : we use standard anomalies for temperature and
 scaled (fractional) anomalies for precipitation.
 
-**When using these data, please refer to the original providers:**
-
-Harris, I., Jones, P. D., Osborn, T. J., & Lister, D. H. (2014). Updated
-high-resolution grids of monthly climatic observations - the CRU TS3.10 Dataset.
-International Journal of Climatology, 34(3), 623–642. https://doi.org/10.1002/joc.3711
-
-New, M., Lister, D., Hulme, M., & Makin, I (2002). A high-resolution data
-set of surface climate over global land areas. Climate Research, 21(715), 1–25.
-https://doi.org/10.3354/cr021001
-
 .. _CRU faq: https://crudata.uea.ac.uk/~timm/grid/faq.html
+
+**When using these data, please refer to the original providers:**
 
 .. [Harris_et_al_2010] Harris, I., Jones, P. D., Osborn, T. J., & Lister,
    D. H. (2014). Updated high-resolution grids of monthly climatic observations
@@ -187,6 +166,7 @@ recommend to use data from 1850 onwards.
    :okwarning:
 
     @savefig plot_temp_ts.png width=100%
+    example_plot_temp_ts()
 
 Any other climate dataset
 ~~~~~~~~~~~~~~~~~~~~~~~~~

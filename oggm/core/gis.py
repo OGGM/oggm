@@ -1350,7 +1350,7 @@ def gridded_mb_attributes(gdir):
         smb = mbmod.get_annual_mb(heights=topo)
         return np.sum(smb)**2
     ela_h = optimization.minimize(to_minimize, [0.], method='Powell')
-    mbmod = LinearMassBalance(float(ela_h['x']))
+    mbmod = LinearMassBalance(float(ela_h['x'][0]))
     lin_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
     if not np.isclose(np.sum(lin_mb_on_z), 0, atol=10):
         raise RuntimeError('Spec mass balance should be zero but is: {}'
@@ -1363,7 +1363,7 @@ def gridded_mb_attributes(gdir):
         smb = mbmod.get_annual_mb(heights=topo)
         return np.sum(smb)**2
     opt = optimization.minimize(to_minimize, [0.], method='Powell')
-    mbmod = ConstantMassBalance(gdir, temp_bias=float(opt['x']), y0=1995,
+    mbmod = ConstantMassBalance(gdir, temp_bias=float(opt['x'][0]), y0=1995,
                                 check_calib_params=False)
     oggm_mb_on_z = mbmod.get_annual_mb(heights=topo) * cfg.SEC_IN_YEAR * rho
     if not np.isclose(np.sum(oggm_mb_on_z), 0, atol=10):

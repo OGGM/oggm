@@ -28,11 +28,22 @@ These data are shipped automatically with OGGM. All reference glaciers
 have access to the timeseries through the glacier directory:
 
 .. ipython:: python
+   :suppress:
 
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
+    import os
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from oggm import cfg, tasks, workflow, graphics, DEFAULT_BASE_URL
+    from oggm.utils import gettempdir
+
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_MB')
+
+.. ipython:: python
+
     gdir = workflow.init_glacier_directories('RGI60-11.00897',
-                                             from_prepro_level=3,
-                                             prepro_base_url=base_url,
+                                             from_prepro_level=5,
+                                             prepro_base_url=DEFAULT_BASE_URL,
                                              prepro_border=80)[0]
     mb = gdir.get_ref_mb_data()
     @savefig plot_ref_mbdata.png width=100%

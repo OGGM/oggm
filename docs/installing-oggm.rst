@@ -24,9 +24,7 @@ fine there as well.
 
 For most users we recommend to
 install Python and the package dependencies with the :ref:`conda package manager <conda-install>`,
-in particular with the ``mamba`` and ``conda-forge`` infrastructure.
-Linux users with experience with `pip`_ can follow
-:ref:`these instructions <virtualenv-install>` to install OGGM in a pyenv environment with pip.
+in particular with ``mamba`` and ``conda-forge``.
 
 .. _tested: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
 .. _conda: https://conda.io/projects/conda/en/latest/user-guide/index.html
@@ -68,11 +66,11 @@ GIS tools:
 
 Testing:
     - pytest
-    - pytest-mpl (`OGGM fork <https://github.com/OGGM/pytest-mpl>`_ required)
+    - pytest-mpl (for image tests only: `OGGM fork <https://github.com/OGGM/pytest-mpl>`_ required)
 
 Other libraries:
     - `salem <https://github.com/fmaussion/salem>`_
-    - `motionless <https://github.com/ryancox/motionless/>`_
+    - `motionless <https://github.com/ryancox/motionless>`_
 
 Optional:
     - progressbar2 (displays the download progress)
@@ -88,8 +86,8 @@ This is the recommended way to install OGGM for most users.
 .. note::
 
     If you are not familiar with Python and its
-    `way too many package management systems <https://xkcd.com/1987/>`_, you might find all
-    of this quite confusing and overwhelming. Be patient,
+    `way too many package management systems <https://xkcd.com/1987/>`_,
+    you might find all of this quite confusing and overwhelming. Be patient,
     `read the docs <https://docs.conda.io>`_ and stay hydrated.
 
 Prerequisites
@@ -212,9 +210,9 @@ Test OGGM
 You can test your OGGM installation by running the following command from
 anywhere (don't forget to activate your environment first)::
 
-    pytest.oggm
+    pytest.oggm  --disable-warnings
 
-The tests should run for about 5 minutes. If everything worked fine, you should see something like::
+The tests should run for 5 to 10 minutes. If everything worked fine, you should see something like::
 
     =================================== test session starts ====================================
     platform linux -- Python 3.10.6, pytest-7.1.3, pluggy-1.0.0
@@ -242,21 +240,17 @@ The tests should run for about 5 minutes. If everything worked fine, you should 
     ======================= 224 passed, 149 skipped in 217.03s (0:03:37) ======================
 
 
-You can safely ignore deprecation warnings and other messages (if any),
-as long as the tests end without errors.
-
 .. important::
 
-   The tests (without the ``--run-slow`` option) should run in 5 to 10 minutes.
-   If this takes too long, this may be an indiv
+   The tests (without the ``--run-slow`` option) should run in 5 to 15 minutes.
+   If this takes too long, this may be an indication that something's wrong
 
-This runs a minimal suite of tests. If you want to run the entire test suite
-(including graphics and slow running tests), type::
+This runs a comprehensive suite of tests. If you want to run the *entire* test
+suite (including graphics and slow running tests), type::
 
     pytest.oggm --run-slow --mpl
 
 **Congrats**, you are now set-up for the :doc:`getting-started` section!
-
 
 .. _install-troubleshooting:
 
@@ -305,9 +299,8 @@ Install with pyenv (Linux)
    We recommend our users to use ``conda`` instead of ``pip``, because
    of the ease of installation with ``conda``. If you are familiar with ``pip`` and
    ``pyenv``, the instructions below work as well: as of Sept 2022 (and thanks
-   to pip wheels), a pyenv
-   installation is possible without major issue on Debian/Ubuntu/Mint
-   systems.
+   to pip wheels), a pyenv installation is possible without major issue
+   on Debian/Ubuntu/Mint systems.
 
 Linux packages
 ~~~~~~~~~~~~~~

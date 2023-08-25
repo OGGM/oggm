@@ -431,23 +431,22 @@ Access
 
 The easiest and most common way to access the model flowlines of a glacier is
 with its GlacierDirectory. For this we initialize a minimal working example
-including the model flowlines. This is achieved by choosing preprocessing level
-4.
+including the model flowlines. This is achieved by choosing preprocessing
+level 5.
 
 .. ipython:: python
 
     import os
     import oggm
-    from oggm import cfg, workflow
+    from oggm import cfg, workflow, DEFAULT_BASE_URL
     from oggm.utils import gettempdir
     cfg.initialize()  # always initialize before an OGGM task
     # The working directory is where OGGM will store the run's data
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_GlacierDir2')
-    # The base url is where to find the pre-processed directories
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5'
+    # The prepro_base_url is where to find the pre-processed directories
     gdirs = workflow.init_glacier_directories('RGI60-11.00897',
                                               from_prepro_level=5,
-                                              prepro_base_url=base_url,
+                                              prepro_base_url=DEFAULT_BASE_URL,
                                               prepro_border=80)
     gdir = gdirs[0]  # init_glacier_directories always returns a list
 

@@ -127,13 +127,11 @@ become. Here is an example with Hintereisferner in the Alps:
     import os
     import matplotlib.pyplot as plt
     import numpy as np
-    from oggm import cfg, tasks, workflow, graphics
+    from oggm import cfg, tasks, workflow, graphics, DEFAULT_BASE_URL
     from oggm.utils import gettempdir
 
     cfg.initialize()
     cfg.PATHS['working_dir'] = os.path.join(gettempdir(), 'Docs_BorderSize')
-
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/elev_bands/'
 
 ..
   replace with
@@ -609,3 +607,4 @@ reproduce this information
     why and how we preprocess some DEMs before we make them available to the
     OGGM workflow.
 
+.. _Hugonnet et al., 2021: https://www.nature.com/articles/s41586-021-03436-z

@@ -408,8 +408,7 @@ class TrapezoidalBedFlowline(Flowline):
         if np.any(self._w0_m <= 0):
             raise ValueError('Trapezoid beds need to have origin widths > 0.')
 
-        self._prec = np.where(lambdas == 0)[0]
-
+        self._prec = lambdas == 0
         self._lambdas = lambdas
 
     @property
@@ -508,7 +507,7 @@ class MixedBedFlowline(Flowline):
 
         assert np.all(self.bed_shape[~is_trapezoid] > 0)
 
-        self._prec = np.where(is_trapezoid & (lambdas == 0))[0]
+        self._prec = is_trapezoid & (lambdas == 0)
 
         assert np.allclose(section, self.section)
 

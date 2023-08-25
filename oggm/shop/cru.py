@@ -176,8 +176,10 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     assert len(hgt_f) > 0.
 
     # maybe this will throw out of bounds warnings
-    nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
-    nc_ts_pre.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        nc_ts_tmp.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
+        nc_ts_pre.set_subset(corners=((lon, lat), (lon, lat)), margin=1)
 
     # compute monthly anomalies
     # of temp

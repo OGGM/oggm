@@ -1206,8 +1206,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     with utils.DisableLogger():
         ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
                                       path=False)
-    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
-                   ds.volume.loc[yr0_ref_mb].values) /
+    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values[0] -
+                   ds.volume.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
                   cfg.PARAMS['ice_density'])
@@ -1785,14 +1785,13 @@ def run_dynamic_melt_f_calibration(
     # Get the reference geodetic mb and error if not given
     if ref_dmdtda is None:
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
         # reference geodetic mass balance from Hugonnet 2021
-        ref_dmdtda = float(
-            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        ref_dmdtda = float(sel['dmdtda'])
         # dmdtda: in meters water-equivalent per year -> we convert
         ref_dmdtda *= 1000  # kg m-2 yr-1
         # error of reference geodetic mass balance from Hugonnet 2021
-        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
-                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda = float(sel['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda *= err_dmdtda_scaling_factor
 
@@ -1957,8 +1956,10 @@ def run_dynamic_melt_f_calibration(
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         # calculate the mismatch of dmdtda
-        cost = float(dmdtda_mdl - ref_dmdtda)
-
+        try:
+            cost = float(dmdtda_mdl - ref_dmdtda)
+        except:
+            t = 1
         return cost
 
     def init_cost_fun():

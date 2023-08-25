@@ -3606,11 +3606,10 @@ class TestDynamicSpinup:
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        ref_dmdtda = float(
-            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+        ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
-                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda = float(sel['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
         if do_inversion:
@@ -3795,11 +3794,10 @@ class TestDynamicSpinup:
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        ref_dmdtda = float(
-            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]
+        ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
-                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda = float(sel['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
         melt_f_max = 1000 * 12 / 365
@@ -4038,11 +4036,10 @@ class TestDynamicSpinup:
                                 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
             df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-            ref_dmdtda = float(
-                df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+            sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+            ref_dmdtda = float(sel['dmdtda'])
             ref_dmdtda *= 1000  # kg m-2 yr-1
-            err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
-                                                     ref_period]['err_dmdtda'])
+            err_ref_dmdtda = float(sel['err_dmdtda'])
             err_ref_dmdtda *= 1000  # kg m-2 yr-1
             delta_ref_dmdtda = 100
             delta_err_ref_dmdtda = -50
@@ -4172,11 +4169,10 @@ class TestDynamicSpinup:
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        ref_dmdtda = float(
-            df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]['dmdtda'])
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+        ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
-                                                 ref_period]['err_dmdtda'])
+        err_ref_dmdtda = float(sel['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
         # conduct the run

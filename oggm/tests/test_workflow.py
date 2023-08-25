@@ -382,6 +382,8 @@ class TestFullRun(unittest.TestCase):
 @mpl_image_compare(remove_text=True, multi=True)
 def test_plot_region_inversion():
 
+    pytest.importorskip('pytest_mpl')
+
     gdirs = up_to_inversion()
 
     # We prepare for the plot, which needs our own map to proceed.
@@ -408,6 +410,8 @@ def test_plot_region_inversion():
 @pytest.mark.graphic
 @mpl_image_compare(remove_text=True, multi=True)
 def test_plot_region_model():
+
+    pytest.importorskip('pytest_mpl')
 
     gdirs = random_for_plot()
 

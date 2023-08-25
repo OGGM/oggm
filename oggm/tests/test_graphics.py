@@ -9,6 +9,7 @@ import numpy as np
 
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
+pytest.importorskip('pytest_mpl')
 
 # Local imports
 import oggm.utils

@@ -609,6 +609,11 @@ def floatyear_to_date(yr):
     """
 
     try:
+        try:
+            if len(yr) == 1:
+                yr = yr[0]
+        except TypeError:
+            pass
         sec, out_y = math.modf(yr)
         out_y = int(out_y)
         sec = round(sec * SEC_IN_YEAR)
