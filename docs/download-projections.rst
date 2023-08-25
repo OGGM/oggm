@@ -1,15 +1,15 @@
 OGGM standard projections
 =========================
 
-Since OGGM v1.6.1, we provide range for climate projections the corresponding global glacier projections. These 
-simulations are and will be done with the default most recent released version of OGGM. We call these state-of-the-art 
+Since OGGM v1.6.1, we provide for a range of climate projections the corresponding global glacier projections. These 
+simulations are and will be done with the most recent released default version of OGGM. We call these state-of-the-art 
 simulations our "standard projections". Here we give a brief introduction to the available data and show were you can 
 find all the details.
 
 A detailed description of the experimental-setup, information on the data structure, analysis of the data and a `brief comparison to Rounce et al. (2023) together with the corresponding jupyter notebooks are in the `OGGM/oggm-standard-projections-csv-files repository <https://github.com/OGGM/oggm-standard-projections-csv-files/tree/main>`_.  
 These projections use `elevation-band flowlines <https://docs.oggm.org/en/stable/flowlines.html#elevation-bands-flowlines>`_, include the `dynamical spinup <https://docs.oggm.org/en/latest/dynamic-spinup.html>`_, the `new informed 3-step per-glacier geodetic calibration method <https://docs.oggm.org/en/latest/mass-balance-monthly.html>`_, and use the W5E5v2.0 climate dataset `(Lange and others, 2021) <https://doi.org/10.48364/ISIMIP.342217>`_ for calibration and a border of 160. 
 
-We have driven OGGM with a range of climate projections from different GCMs until 2100 and where available in a different run again until 2300. All the climate projections that are available on our cluster have been used. There are three categories projections available: CMIP6, CMIP6 GCMs from the bias-corrected CMIP6 ISIMIP3b GCMs <https://www.isimip.org/gettingstarted/isimip3b-bias-adjustment/>_, and CMIP5 GCMs. An overview of the amount of GCMs per scenario and the resulting global volume changes is given in the figures below. Feel free make selection that suites your purpose when using the data.
+We have driven OGGM with a range of climate projections from different GCMs until 2100 and where available in a different run again until 2300. All the climate projections that are available on our cluster have been used. There are three categories projections available: CMIP6, CMIP6 GCMs from the bias-corrected CMIP6 ISIMIP3b GCMs <https://www.isimip.org/gettingstarted/isimip3b-bias-adjustment/>_, and CMIP5 GCMs. An overview of the amount of GCMs per scenario and the resulting global volume changes is given in the figures below. Feel free to make a selection that suites your purpose when using the data.
 
 .. figure:: _static/global_glacier_volume_until2100_common_running_2100_oggm_v16.png
    :width: 80%
