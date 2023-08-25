@@ -39,7 +39,9 @@ presentation from April 2020:
 
     <iframe width="672" height="378" src="https://www.youtube.com/embed/ttJMxcwXUjw?start=1270" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
+Disclaimer: If you don't have access to youtube from your location, you won't be able to see this video.
 *Slides available* `here <https://oggm.org/framework_talk>`_
+
 
 Overview
 ^^^^^^^^
