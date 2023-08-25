@@ -18,10 +18,69 @@ one of the following functions to pre-process the climate data:
 W5E5
 ~~~~
 
-As of v1.6, W5E5 is the standard dataset used by OGGM as reference. All
-preprocessed directories use it.
+GSWP3-W5E5
+~~~~
 
-TODO: explain what W5E5 is and why it is the default.
+As of v1.6, GSWP3-W5E5 [Lange_et_al_2021]_ is the standard baseline climate dataset used by OGGM
+for all preprocessed directories. GSWP3-W5E5 is a combination of W5E5 v2.0 [Lange_et_al_2021]_ for
+1979-2019 with GSWP3 v1.09 [Kim_2017]_ homogenized to W5E5 for 1901-1978. Note that the baseline
+url file paths are only named `W5E5` to make it shorter, however they include both, GSWP3 and W5E5 data.
+
+GSWP3-W5E5 has a spatial resolution of 0.5° over the entire globe and is also the observational
+climate input data for the impact assessments in phase 3a of the Inter-Sectoral Impact Model
+Intercomparison Project (ISIMIP3a)[https://www.isimip.org/protocol/3/]. Over land, W5E5 uses
+the WATCH Forcing Data methodology version 2 which they applied on ERA5 data
+(WFDE5; Weedon et al., 2014, [Cuchi_2020]_). W5E5 precipitation is based on WFDE5 rainfall and
+snowfall bias-adjusted using version 2.3 of the Global Precipitation Climatology Project
+(GPCP; Adler et al., 2003) monthly precipitation.
+
+One of the reasons, why we chose W5E5 for all preprocessed directories is that the climate input data for the
+(ISIMIP3b CMIP6 GCMs)[https://www.isimip.org/protocol/3/ have been bias-corrected using this dataset.
+Normally, we need to bias-correct the GCMs ourselves to approximately coincide with the applied climate dataset
+used for model calibration. If we use W5E5 for the calibration of the mass-balance model and the ISIMIP3b
+GCMs for projections, no additional bias-correction from OGGM is needed, as the statistically downscaled GCMs
+from ISIMIP3b (0.5° resolution) are already internally bias-adjusted to W5E5 over the period
+1979–2014 [Lange_2019]_. This is a big advantage, as their quantile-mapping bias correction
+approach is more robust for extreme values than the "delta"-method commonly applied in OGGM.
+
+Note, that per-default, the preprocessed directories [](https://cluster.klima.uni-bremen.de/~oggm/climate/gswp3-w5e5/),
+
+**When using this data, please refer to the original providers:**
+
+*if you only use W5E5 data (1979-2019):*
+
+Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N.,
+Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021). WFDE5 over land
+merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
+https://doi.org/10.48364/ISIMIP.342217
+
+Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N., Lange, S., Müller Schmied, H., Hersbach, H. and Buontempo, C. (2020).
+WFDE5: bias-adjusted ERA5 reanalysis data for impact studies. Earth System Science Data, 12, 2097–2120
+
+*if you also use the GSWP3 part of the GSWP3-W5E5 data (1901-1978):*
+
+Dirmeyer, P. A., Gao, X., Zhao, M., Guo, Z., Oki, T. and Hanasaki, N. (2006). GSWP-2: Multimodel Analysis
+and Implications for Our Perception of the Land Surface. Bulletin of the American Meteorological Society, 87(10), 1381–98.
+
+Kim, H. (2017). Global Soil Wetness Project Phase 3 Atmospheric Boundary Conditions (Experiment 1)
+[Data set]. Data Integration and Analysis System (DIAS). https://doi.org/10.20783/DIAS.501
+
+
+.. [Kim_2017] Kim, H. (2017). Global Soil Wetness Project Phase 3 Atmospheric Boundary Conditions (Experiment 1)
+[Data set]. Data Integration and Analysis System (DIAS). https://doi.org/10.20783/DIAS.501
+
+.. [Lange_et_al_2021] Lange, S., Menz, C., Gleixner, S., Cucchi, M., Weedon, G. P., Amici,
+A., Bellouin, N., Müller Schmied, H., Hersbach, H., Buontempo, C. & Cagnazzo, C. (2021).
+WFDE5 over land merged with ERA5 over the ocean (W5E5 v2.0). ISIMIP Repository.
+https://doi.org/10.48364/ISIMIP.342217
+
+.. [Cuchi_2019] Cucchi, M., Weedon, G. P., Amici, A., Bellouin, N., Lange, S.,
+Müller Schmied, H., Hersbach, H. and Buontempo, C. (2020). WFDE5: bias-adjusted
+ERA5 reanalysis data for impact studies. Earth System Science Data, 12, 2097–2120
+
+.. [Lange_2019] Trend-preserving bias adjustment and statistical downscaling
+with ISIMIP3BASD (v1.0). Geoscientific Model Development 12(7), 3055–3070.
+https://doi:10.5194/gmd-12-3055-2019
 
 CRU
 ~~~
