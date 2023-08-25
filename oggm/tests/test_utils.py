@@ -1397,6 +1397,7 @@ class TestPreproCLI(unittest.TestCase):
                               dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
                               test_intersects_file=inter,
                               store_fl_diagnostics=True,
+                              continue_on_error=False,
                               mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
                               override_params={'geodetic_mb_period': ref_period,
