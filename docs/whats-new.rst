@@ -3,8 +3,15 @@
 Version history
 ===============
 
-v1.6.1 (unreleased)
--------------------
+v1.6.1 (August 27, 2023)
+------------------------
+
+A new minor release of the OGGM with several improvements and bug fixes.
+We recommend all users currently using 1.6.0 to switch to this version if they
+are still in the testing/learning phase. If you rely on your results
+staying stricly the same, you should stick to the version you are currently
+running.
+
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
