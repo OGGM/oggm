@@ -1,5 +1,10 @@
-OGGM standard projections
-=========================
+OGGM global glacier projections
+===============================
+
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.8286065.svg
+   :target: https://doi.org/10.5281/zenodo.8286065
+
+|
 
 Since OGGM v1.6.1, each version of OGGM now provides a set of global glacier
 projections realized with the default set-up of OGGM for that version.
@@ -46,9 +51,11 @@ reposity.
 Data usage requirements
 -----------------------
 
-When using the aggregated or the raw per-glacier data, please cite the dataset via:
-- TODO: zenodo-link ...
+If you use these data (either aggregated csv or the per-glacier netcdf files), please cite the dataset as following:
 
-In addition, refer to `OGGM <https://doi.org/10.5194/gmd-12-909-2019>`_
-and the CMIP option that you are using
-(references in this `README <https://github.com/OGGM/oggm-standard-projections-csv-files/blob/main/README.md>`_).
+*Lilian Schuster, Patrick Schmitt, Anouk Vlug, & Fabien Maussion. (2023). OGGM/oggm-standard-projections-csv-files: v1.0 (v1.0). Zenodo. https://doi.org/10.5281/zenodo.8286065*
+
+In addition, please cite OGGM (Maussion et al., 2019) and the specific OGGM version as
+specified in the OGGM documentation: :ref:`citing-oggm`.
+
+We also recommend to refer to the CMIP option that you are using (references are listed in the data repository).
