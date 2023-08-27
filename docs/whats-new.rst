@@ -3,12 +3,28 @@
 Version history
 ===============
 
-v1.6.x (unreleased)
+v1.6.1 (unreleased)
 -------------------
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+OGGM 1.6.1 should be fully compatible with 1.6.0 code. We have updated the
+pre-procecessed directories however, and recommend users to switch to the
+new OGGM version if possible.
+
+The new pre-processed directories are available in the 2023.3 version:
+https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3
+
+These incorporate all the changes listed below.
 
 Bug fixes
 ~~~~~~~~~
 
+- Corrected a small bug in the W5E5 climate files, which led to some glaciers
+  getting climate data from a grid point further away than they should. This
+  should affect the results of a few thousand glaciers in a minimal way.
+  Fix (:pull:`1547`, :pull:`1557`) by `Lilian Schuster <https://github.com/lilianschuster>`_
 - Added more flexibility to ``compile_run_output``. It is now possible to
   compile runs with different data variables (the default is NaN). It is
   needed to compile different spinup strategies together, as some include
@@ -27,10 +43,11 @@ Enhancements
 ~~~~~~~~~~~~
 
 - There is now the possibility to compute distributed area and thickness
-  changes from the flowline projections (:pull:`1576`, :pull:`1585`). The
-  functionality is currently in the sandbox and needs to be documented.
-  By `Anouk Vlug <https://github.com/anoukvlug>`_ and
-  `Fabien Maussion <https://github.com/fmaussion>`_
+  changes from the flowline projections (:pull:`1576`, :pull:`1585`,
+  :pull:`1619`, :pull:`1623`). The
+  functionality is currently in the sandbox but is documented in the tutorials.
+  By `Anouk Vlug <https://github.com/anoukvlug>`_, `Patrick Schmitt <https://github.com/pat-schmitt>`_
+  and `Fabien Maussion <https://github.com/fmaussion>`_
 - Added three new flowline diagnostic variables: thickness change in one year
   (``dhdt``), forcing climatic mass balance (``climatic_mb``) and flux divergence
   (``flux_divergence``). All variables are in units meter of ice per year
@@ -45,6 +62,18 @@ Enhancements
   outlines (e.g. older outline single polygon but newer outline multi polygon for
   the same glacier) (:pull:`1604`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- OGGM can now read RGI7 files. OGGM was used to generate the RGI-TOPO dataset
+  as well as auxiliary products for RGI7 (:pull:`1572`, :pull:`1590`).
+  By `Alexander Fischer <https://github.com/afisc>`_
+  and `Fabien Maussion <https://github.com/fmaussion>`_
+- The pre-processed directories are now run with dynamical spinup and calibration
+  as the standard option. Dynamical calibration is run with a lower error
+  tolerance than before, improving results in all regions (:pull:`1558`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- OGGM now provides "standard" projections, attached to a specific OGGM version
+  (:pull:`1627`). This will be a huge asset for many users and will help to
+  track important changes as OGGM continues to improve.
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
 
 
 v1.6.0 (March 10, 2023)

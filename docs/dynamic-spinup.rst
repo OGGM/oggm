@@ -4,19 +4,23 @@ Dynamic spinup
 ==============
 
 OGGM offers an option for reconstructing the recent past of a glacier by using
-a dynamic spinup. For this dynamic spinup, you can choose if you want to match
-area OR volume at the RGI-date.
+a so called "dynamic spinup", during which the state of the glacier in the past
+is estimated by an iterative approach. MAny possible past (1979) states are
+tested, and the first one which leads to a correct representation of today's
+glacier geometry after a forward run from 1979 to the RGI date.
+For the match criterion, you can choose if you want to match
+area OR volume at the RGI date.
 
-Further, this dynamic spinup can be combined
-with a dynamic calibration of the temperature sensitivity :math:`d_f`. This calibration also tries to
-calibrate :math:`d_f` to match geodetic MB data as described in
-:doc:`mass-balance-monthly`, but further takes a dynamically changing glacier
-geometry into account.
+Furthermore, this dynamic spinup can be combined
+with a dynamic calibration of the temperature sensitivity :math:`d_f`.
+This calibration attempts to also calibrate :math:`d_f` to match geodetic MB
+data as described in :doc:`mass-balance-monthly`, but taking the
+dynamically changing glacier geometry into account.
 
 Both functions, the dynamic spinup and the dynamic :math:`d_f` calibration,
 are combined in one consistent model calibration and initialisation workflow.
 This workflow also includes the glacier bed inversion for consistency. See the
-following schematic for a description of how everything is connected by default.
+following schematic for a description of the standard steps in the spinup.
 
 .. figure:: _static/dynamic_calibration_flowchart.png
    :width: 100%
