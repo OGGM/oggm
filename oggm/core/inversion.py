@@ -543,6 +543,18 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     cls = gdir.read_pickle('inversion_output')
     cl = cls[-1]
 
+    # check that their are enough grid points for smoothing
+    nr_grid_points = len(cl['thick'])
+    if (nr_grid_points <= n_smoothing) and (nr_grid_points > 2):
+        if nr_grid_points > 2:
+            n_smoothing = nr_grid_points - 1
+        else:
+            log.warning(f'({gdir.rgi_id}) filter_inversion_output: flowline '
+                        f'has not enough grid points for applying the filter '
+                        f'(only {nr_grid_points} grid points)!')
+            # Return volume for convenience
+            return np.sum([np.sum(cl['volume']) for cl in cls])
+
     # convert to negative number for indexing
     n_smoothing = -abs(n_smoothing)
 
