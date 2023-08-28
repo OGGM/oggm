@@ -272,12 +272,12 @@ Geometrical centerlines
 
 .. admonition:: **Summary**
 
-   **When to use:** when geometry matters, and when length is a important variable.
+   **When to use:** when geometry matters, and when length is an important variable.
    For mountain glaciers (e.g. Alps, Himalayas). With the old mass balance
    model.
 
    **When not to use:** for ice caps, badly outlined glaciers, very large and
-   flat glaciers, for global applications where geometrical details matters less.
+   flat glaciers, for global applications where geometrical details matter less.
    With the more fancy mass balance models.
 
 Elevation-band flowlines
