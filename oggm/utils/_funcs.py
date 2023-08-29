@@ -614,6 +614,9 @@ def floatyear_to_date(yr):
     if isinstance(yr, float):
         out_y = out_y.item()
         out_m = out_m.item()
+    elif (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
+        out_y = out_y.item()
+        out_m = out_m.item()
 
     return out_y, out_m
 
