@@ -610,6 +610,11 @@ def floatyear_to_date(yr):
 
     out_y = np.floor(yr).astype(int)
     out_m = np.minimum(12, np.round(((yr - out_y) * 12 + 1)).astype(int))
+
+    if len(yr) == 1:
+        out_y = out_y.item()
+        out_m = out_m.item()
+
     return out_y, out_m
 
 
