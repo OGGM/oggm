@@ -609,8 +609,15 @@ def floatyear_to_date(yr):
         The floating year
     """
 
-    out_y = np.floor(yr).astype(int)
-    out_m = np.minimum(12, np.round(((yr - out_y) * 12 + 1)).astype(int))
+    out_y, remainder = np.divmod(yr, 1)
+    out_y = out_y.astype(int)
+
+    month_exact = (remainder * 12 + 1)
+    # np.where to deal with floating point precision
+    out_m = np.minimum(12,
+                       np.where(np.isclose(month_exact, np.round(month_exact)),
+                                np.round(month_exact),
+                                np.floor(month_exact)).astype(int))
 
     if isinstance(yr, float):
         out_y = out_y.item()
