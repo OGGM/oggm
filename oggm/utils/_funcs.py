@@ -604,32 +604,12 @@ def floatyear_to_date(yr):
 
     Parameters
     ----------
-    yr : float
+    yr : float or list of float
         The floating year
     """
 
-    try:
-        try:
-            if len(yr) == 1:
-                yr = yr[0]
-        except TypeError:
-            pass
-        sec, out_y = math.modf(yr)
-        out_y = int(out_y)
-        sec = round(sec * SEC_IN_YEAR)
-        if sec == SEC_IN_YEAR:
-            # Floating errors
-            out_y += 1
-            sec = 0
-        out_m = int(sec / SEC_IN_MONTH) + 1
-    except TypeError:
-        # TODO: inefficient but no time right now
-        out_y = np.zeros(len(yr), np.int64)
-        out_m = np.zeros(len(yr), np.int64)
-        for i, y in enumerate(yr):
-            y, m = floatyear_to_date(y)
-            out_y[i] = y
-            out_m[i] = m
+    out_y = np.floor(yr).astype(int)
+    out_m = np.minimum(12, np.round(((yr - out_y) * 12 + 1)).astype(int))
     return out_y, out_m
 
 
