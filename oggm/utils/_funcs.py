@@ -13,6 +13,7 @@ from packaging.version import Version
 # External libs
 import pandas as pd
 import numpy as np
+import xarray as xr
 from scipy.ndimage import convolve1d
 try:
     from scipy.signal.windows import gaussian
@@ -617,9 +618,11 @@ def floatyear_to_date(yr):
     elif (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
         out_y = out_y.item()
         out_m = out_m.item()
+    elif isinstance(yr, xr.DataArray):
+        out_y = np.array(out_y)
+        out_m = np.array(out_m)
 
-    # np.array to be sure to return the correct type, if yr is xr.Dataset
-    return np.array(out_y), np.array(out_m)
+    return out_y, out_m
 
 
 def date_to_floatyear(y, m):
