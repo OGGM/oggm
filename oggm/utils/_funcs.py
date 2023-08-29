@@ -618,7 +618,8 @@ def floatyear_to_date(yr):
         out_y = out_y.item()
         out_m = out_m.item()
 
-    return out_y, out_m
+    # np.array to be sure to return the correct type, if yr is xr.Dataset
+    return np.array(out_y), np.array(out_m)
 
 
 def date_to_floatyear(y, m):
