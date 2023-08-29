@@ -619,10 +619,7 @@ def floatyear_to_date(yr):
                                 np.round(month_exact),
                                 np.floor(month_exact)).astype(int))
 
-    if isinstance(yr, float):
-        out_y = out_y.item()
-        out_m = out_m.item()
-    elif (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
+    if (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
         out_y = out_y.item()
         out_m = out_m.item()
     elif isinstance(yr, xr.DataArray):
