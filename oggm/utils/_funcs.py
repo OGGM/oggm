@@ -668,25 +668,16 @@ def hydrodate_to_calendardate(y, m, start_month=None):
                                  'callers of this function to specify the '
                                  'hydrological convention they are using.')
 
+    # nothing to do if start_month is 1
+    if start_month == 1:
+        return y, m
+
+    y = np.array(y)
+    m = np.array(m)
+
     e = 13 - start_month
-    try:
-        if m <= e:
-            if start_month == 1:
-                out_y = y
-            else:
-                out_y = y - 1
-            out_m = m + start_month - 1
-        else:
-            out_y = y
-            out_m = m - e
-    except (TypeError, ValueError):
-        # TODO: inefficient but no time right now
-        out_y = np.zeros(len(y), np.int64)
-        out_m = np.zeros(len(y), np.int64)
-        for i, (_y, _m) in enumerate(zip(y, m)):
-            _y, _m = hydrodate_to_calendardate(_y, _m, start_month=start_month)
-            out_y[i] = _y
-            out_m[i] = _m
+    out_m = m + np.where(m <= e, start_month - 1, -e)
+    out_y = y - np.where(m <= e, 1, 0)
     return out_y, out_m
 
 
@@ -708,24 +699,15 @@ def calendardate_to_hydrodate(y, m, start_month=None):
                                  'callers of this function to specify the '
                                  'hydrological convention they are using.')
 
-    try:
-        if m >= start_month:
-            if start_month == 1:
-                out_y = y
-            else:
-                out_y = y + 1
-            out_m = m - start_month + 1
-        else:
-            out_y = y
-            out_m = m + 13 - start_month
-    except (TypeError, ValueError):
-        # TODO: inefficient but no time right now
-        out_y = np.zeros(len(y), np.int64)
-        out_m = np.zeros(len(y), np.int64)
-        for i, (_y, _m) in enumerate(zip(y, m)):
-            _y, _m = calendardate_to_hydrodate(_y, _m, start_month=start_month)
-            out_y[i] = _y
-            out_m[i] = _m
+    # nothing to do if start_month is 1
+    if start_month == 1:
+        return y, m
+
+    y = np.array(y)
+    m = np.array(m)
+
+    out_m = m - start_month + np.where(m >= start_month, 1, 13)
+    out_y = y + np.where(m >= start_month, 1, 0)
     return out_y, out_m
 
 
