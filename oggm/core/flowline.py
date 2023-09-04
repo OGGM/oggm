@@ -567,7 +567,7 @@ class FlowlineModel(object):
                  fs=None, inplace=False, smooth_trib_influx=True,
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
-                 water_level=None, required_model_steps='monthly'):
+                 water_level=None):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -603,15 +603,6 @@ class FlowlineModel(object):
             whether the model should raise an error when the glacier exceeds
             the domain boundaries. The default is to follow
             PARAMS['error_when_glacier_reaches_boundaries']
-        required_model_steps : str
-            some Flowline models have an adaptive time stepping scheme, which
-            is randomly taking steps towards the goal of a "run_until". The
-            default ('monthly') makes sure that the model results are
-            consistent whether the users want data at monthly or annual
-            timesteps by forcing the model to land on monthly steps even if
-            only annual updates are required. You may want to change this
-            for optimisation reasons for models that don't require adaptive
-            steps (for example the deltaH method).
         """
 
         self.is_tidewater = is_tidewater
@@ -649,10 +640,6 @@ class FlowlineModel(object):
         self.calving_rate_myr = 0.
 
         # Time
-        if required_model_steps not in ['annual', 'monthly']:
-            raise InvalidParamsError('required_model_steps needs to be of '
-                                     '`annual` or `monthly`.')
-        self.required_model_steps = required_model_steps
         self.y0 = None
         self.t = None
         self.reset_y0(y0)
@@ -880,16 +867,26 @@ class FlowlineModel(object):
             Upper time span for how long the model should run
         """
 
-        if self.required_model_steps == 'monthly':
-            # We force timesteps to monthly frequencies for consistent results
-            # among use cases (monthly or yearly output) and also to prevent
-            # "too large" steps in the adaptive scheme.
+        # Here we make sure that the mass balance model is correctly updated
+        # by fixing some intermediate time steps
+        if self.mb_elev_feedback == 'monthly':
             ts = utils.monthly_timeseries(self.yr, y1)
             # Add the last date to be sure we end on it - implementations
             # of `step()` and of the loop below should not run twice anyways
             ts = np.append(ts, y1)
+        elif self.mb_elev_feedback == 'annual':
+            # if the current yr is a monthly time we use np.ceil, and also if
+            # the target year is a monthly time we use np.floor. If
+            # np.ceil(self.yr) >= (np.floor(y1) + 1) np.arange gives [], which
+            # is what we want
+            ts = np.arange(np.ceil(self.yr), np.floor(y1) + 1)
+            # Add the last date to be sure we end on it - implementations
+            # of `step()` and of the loop below should not run twice anyways
+            ts = np.append(ts, y1)
+        elif self.mb_elev_feedback in ['never', 'always']:
+            ts = [y1]
         else:
-            ts = np.arange(int(self.yr), int(y1+1))
+            raise ValueError('mb_elev_feedback not understood')
 
         # Loop over the steps we want to meet
         for y in ts:
@@ -2655,7 +2652,6 @@ class MassRedistributionCurveModel(FlowlineModel):
                                                            y0=y0,
                                                            water_level=water_level,
                                                            mb_elev_feedback='annual',
-                                                           required_model_steps='annual',
                                                            **kwargs)
 
         if len(self.fls) > 1:
