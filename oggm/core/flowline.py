@@ -39,7 +39,7 @@ from oggm.core.centerlines import Centerline, line_order
 from oggm.core.inversion import find_sia_flux_from_thickness
 
 # Constants
-from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR
+from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.cfg import G, GAUSSIAN_KERNEL
 
 # Module logger
@@ -1564,7 +1564,7 @@ class FluxBasedModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None,
                  fs=0., inplace=False, fixed_dt=None, cfl_number=None,
-                 min_dt=None, flux_gate_thickness=None,
+                 min_dt=None, max_dt=SEC_IN_MONTH, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_law=k_calving_law,
                  calving_use_limiter=None, calving_limiter_frac=None,
@@ -1602,6 +1602,10 @@ class FluxBasedModel(FlowlineModel):
             At high velocities, time steps can become very small and your
             model might run very slowly. In production, it might be useful to
             set a limit below which the model will just error.
+        max_dt : float
+            Time limit to prevent 'too large' time steps. It is ignored if
+            `fixed_dt` is set.
+            Default is SEC_IN_MONTH
         is_tidewater: bool, default: False
             is this a tidewater glacier?
         is_lake_terminating: bool, default: False
@@ -1668,6 +1672,7 @@ class FluxBasedModel(FlowlineModel):
             cfl_number = cfg.PARAMS['cfl_number']
         self.min_dt = min_dt
         self.cfl_number = cfl_number
+        self.max_dt = max_dt
 
         # Calving params
         if do_kcalving is None:
@@ -1863,6 +1868,10 @@ class FluxBasedModel(FlowlineModel):
             # change only if step dt is larger than the chosen dt
             if self.fixed_dt < dt:
                 dt = self.fixed_dt
+        else:
+            # check upper time step limit
+            if dt > self.max_dt:
+                dt = self.max_dt
 
         # A second loop for the mass exchange
         for fl_id, fl in enumerate(self.fls):
