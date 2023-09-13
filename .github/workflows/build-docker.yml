@@ -31,7 +31,7 @@ jobs:
     - name: Stop Commands
       run: T="$(echo -n ${{ github.token }} | sha256sum | head -c 64)" && echo -e "::add-mask::${T}\n::stop-commands::${T}"
     - name: Build image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         context: deployment/docker
         pull: true
@@ -44,7 +44,7 @@ jobs:
     - name: Test image
       run: docker run --rm ${{ steps.names.outputs.name }}:test /root/test.sh
     - name: Push image
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       if: ${{ github.repository_owner == 'OGGM' }}
       with:
         context: deployment/docker
