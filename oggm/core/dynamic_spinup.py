@@ -137,7 +137,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is 10.
+        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1026,7 +1026,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is 10.
+        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1221,7 +1221,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
         target_yr=None, precision_percent=1,
-        precision_absolute=1, min_ice_thickness=10,
+        precision_absolute=1, min_ice_thickness=None,
         first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
@@ -1311,7 +1311,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is 10.
+        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
     first_guess_t_bias : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1428,18 +1428,6 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                     f'original melt factor ({melt_f}). Therefore the last '
                     'try is to conduct a run until ye without a dynamic '
                     'spinup.')
-        model_end = run_from_climate_data(
-            gdir,
-            add_to_log_file=False,
-            min_ys=yr_clim_min, ye=ye,
-            output_filesuffix=output_filesuffix,
-            climate_input_filesuffix=climate_input_filesuffix,
-            store_model_geometry=store_model_geometry,
-            store_fl_diagnostics=store_fl_diagnostics,
-            init_model_fls=fls_init, evolution_model=evolution_model,
-            fixed_geometry_spinup_yr=ys)
-
-        gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
 
         # set all dynamic diagnostics to None if there where some successful
         # runs
@@ -1460,6 +1448,22 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                 gdir.add_to_diagnostics(key, None)
 
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
+
+        # try to make a fixed geometry spinup
+        model_end = run_from_climate_data(
+            gdir,
+            continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,
+            min_ys=yr_clim_min, ye=ye,
+            output_filesuffix=output_filesuffix,
+            climate_input_filesuffix=climate_input_filesuffix,
+            store_model_geometry=store_model_geometry,
+            store_fl_diagnostics=store_fl_diagnostics,
+            init_model_fls=fls_init, evolution_model=evolution_model,
+            fixed_geometry_spinup_yr=ys)
+
+        gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
+
     return model_end
 
 
