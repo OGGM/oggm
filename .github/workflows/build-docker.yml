@@ -36,6 +36,7 @@ jobs:
         context: deployment/docker
         pull: true
         load: true
+        provenance: false
         build-args: |
           GITHUB_SHA=${{ github.sha }}
           GITHUB_REPOSITORY=${{ github.repository }}
@@ -49,6 +50,7 @@ jobs:
       with:
         context: deployment/docker
         push: true
+        provenance: false
         build-args: |
           GITHUB_SHA=${{ github.sha }}
           GITHUB_REPOSITORY=${{ github.repository }}
