@@ -129,10 +129,7 @@ def mkdir(path, reset=False):
 
     if reset and os.path.exists(path):
         shutil.rmtree(path)
-    try:
-        os.makedirs(path)
-    except FileExistsError:
-        pass
+    os.makedirs(path, exist_ok=True)
     return path
 
 
