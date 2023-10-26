@@ -32,7 +32,7 @@ OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
 Video presentation
 ^^^^^^^^^^^^^^^^^^
 
-If you are new to OGGM would like a short introduction, here is a 15'
+If you are new to OGGM and would like a short introduction, here is a 15'
 presentation from April 2020:
 
 .. raw:: html

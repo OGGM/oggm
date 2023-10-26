@@ -19,7 +19,7 @@ The purpose of OGGM is to be an *easy to use*, *fully automated*
 world with or without specific tuning or tweaking. Therefore, it does not attempt to
 replace (and even less compete with) these established ice dynamics models:
 it can be seen as a "framework", a
-set of unified tools with eases the process of working with many mountain
+set of unified tools that eases the process of working with many mountain
 glaciers at once.
 
 There is a standard modelling chain in OGGM (with a mass balance model
@@ -65,7 +65,7 @@ found today. For these situations, fully distributed models like IGM or PISM
 are more appropriate.
 
 In addition, there is some issues about glacier growth: you have to be sure the
-limit border you have defined is large enough to allow a large growth of glaciers ;
+limit border you have defined is large enough to allow a large growth of glaciers;
 secondly, you need to authorize the merge of glaciers which is implemented
 into OGGM but not automated ; last, there might be not negligible changes
 in the landscape around the glacier as well as evolution of the glacier
