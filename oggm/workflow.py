@@ -436,9 +436,22 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                 try:
                     rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
                                                  entities]))
-                    rgi_version = rgi_ids[0].split('-')[0][-2:]
-                    fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                           version=rgi_version)
+                    if len(rgi_ids[0]) == 23:
+                        # RGI7
+                        assert rgi_ids[0].split('-')[1] == 'v7.0'
+                        if rgi_ids[0].split('-')[2] == 'C':
+                            # No need for interstects
+                            fp = []
+                            rgi_version = '70C'
+                        else:
+                            rgi_version = '70G'
+                            fp = utils.get_rgi_intersects_entities(rgi_ids, 
+                                                                   version=rgi_version)
+
+                    else: 
+                        rgi_version = rgi_ids[0].split('-')[0][-2:]
+                        fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                            version=rgi_version)
                     cfg.set_intersects_db(fp)
                 except AttributeError:
                     # RGI V6

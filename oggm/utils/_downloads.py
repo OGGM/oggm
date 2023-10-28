@@ -69,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '2ad86c93f9235e40edea506f13f6f489adeee805'
+SAMPLE_DATA_COMMIT = '96dd1ec0cf281015d52d1e9fbc560d0051409e2e'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -1875,7 +1875,8 @@ def get_rgi_dir(version=None, reset=False):
     Parameters
     ----------
     version : str
-        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+        '5', '6', '62', '70G', '70C', 
+        defaults to None (linking to the one specified in cfg.PARAMS)
     reset : bool
         If True, deletes the RGI directory first and downloads the data
 
@@ -1906,6 +1907,9 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     rgi_dir = os.path.join(rgi_dir, 'RGIV' + version)
     mkdir(rgi_dir, reset=reset)
 
+    pattern = '*_rgi{}_*.zip'.format(version)
+    test_file = os.path.join(rgi_dir, f'*_rgi*{version}_manifest.txt')
+
     if version == '50':
         dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
     elif version == '60':
@@ -1914,9 +1918,14 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
     elif version == '62':
         dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62.zip'
-
-    test_file = os.path.join(rgi_dir,
-                             '*_rgi*{}_manifest.txt'.format(version))
+    elif version == '70G':
+        pattern = 'RGI2000-*.zip'
+        test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-G-01_alaska', f'README.md')
+        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/global_files/RGI2000-v7.0-G-global.zip'
+    elif version == '70C':
+        pattern = 'RGI2000-*.zip'
+        test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-C-01_alaska', f'README.md')
+        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/global_files/RGI2000-v7.0-C-global.zip'
 
     if len(glob.glob(test_file)) == 0:
         # if not there download it
@@ -1925,7 +1934,6 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)
         # Extract subdirs
-        pattern = '*_rgi{}_*.zip'.format(version)
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
             for filename in fnmatch.filter(files, pattern):
                 zfile = os.path.join(root, filename)
@@ -1936,7 +1944,7 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
                 # delete the zipfile after success
                 os.remove(zfile)
         if len(glob.glob(test_file)) == 0:
-            raise RuntimeError('Could not find a manifest file in the RGI '
+            raise RuntimeError('Could not find a readme file in the RGI '
                                'directory: ' + rgi_dir)
     return rgi_dir
 
@@ -1962,7 +1970,10 @@ def get_rgi_region_file(region, version=None, reset=False):
     """
 
     rgi_dir = get_rgi_dir(version=version, reset=reset)
-    f = list(glob.glob(rgi_dir + "/*/*{}_*.shp".format(region)))
+    if version in ['70G', '70C']:
+        f = list(glob.glob(rgi_dir + f"/*/*-{region}_*.shp"))
+    else:    
+        f = list(glob.glob(rgi_dir + "/*/*{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
 
@@ -1985,13 +1996,19 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
         containing the desired RGI glacier outlines
     """
 
-    regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    if version in ['70G', '70C']:
+        regions = [s.split('-')[-2] for s in rgi_ids]
+    else:    
+        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
     if version is None:
         version = rgi_ids[0].split('-')[0][-2:]
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_region_file(reg, version=version))
-        selection.append(sh.loc[sh.RGIId.isin(rgi_ids)])
+        try:
+            selection.append(sh.loc[sh.RGIId.isin(rgi_ids)])
+        except AttributeError:
+            selection.append(sh.loc[sh.rgi_id.isin(rgi_ids)])
 
     # Make a new dataframe of those
     selection = pd.concat(selection)
@@ -2010,7 +2027,7 @@ def get_rgi_intersects_dir(version=None, reset=False):
     Parameters
     ----------
     version : str
-        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+        '5', '6', '70G', defaults to None (linking to the one specified in cfg.PARAMS)
     reset : bool
         If True, deletes the intersects before redownloading them
 
@@ -2046,6 +2063,9 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
     if version == '62':
         dfile = ('https://cluster.klima.uni-bremen.de/~oggm/rgi/'
                  'rgi62_Intersects.zip')
+    if version == '70G':
+        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/global_files/RGI2000-v7.0-I-global.zip'
+        
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
     if reset and os.path.exists(odir):
@@ -2063,7 +2083,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
             if not os.path.exists(test_file):
                 raise RuntimeError('Could not find a manifest file in the RGI '
                                    'directory: ' + odir)
-    else:
+    elif version == '62':
         test_file = os.path.join(odir,
                                  '*ntersect*anifest.txt'.format(version))
         if len(glob.glob(test_file)) == 0:
@@ -2085,6 +2105,28 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
                     os.remove(zfile)
             if len(glob.glob(test_file)) == 0:
                 raise RuntimeError('Could not find a manifest file in the RGI '
+                                   'directory: ' + odir)
+    elif version == '70G':
+        test_file = os.path.join(odir, 'README.md')
+        if len(glob.glob(test_file)) == 0:
+            # if not there download it
+            ofile = file_downloader(dfile, reset=reset)
+            # Extract root
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(odir)
+            # Extract subdirs
+            pattern = 'RGI2000-*.zip'
+            for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
+                for filename in fnmatch.filter(files, pattern):
+                    zfile = os.path.join(root, filename)
+                    with zipfile.ZipFile(zfile) as zf:
+                        ex_root = zfile.replace('.zip', '')
+                        mkdir(ex_root)
+                        zf.extractall(ex_root)
+                    # delete the zipfile after success
+                    os.remove(zfile)
+            if len(glob.glob(test_file)) == 0:
+                raise RuntimeError('Could not find a README file in the RGI intersects'
                                    'directory: ' + odir)
 
     return odir
@@ -2126,8 +2168,12 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
         else:
             raise InvalidParamsError("From RGI version 61 onwards, please use "
                                      "get_rgi_intersects_entities() instead.")
-    f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
-                                    '_rgi*' + version + '*.shp')))
+        
+    if version == '70G':
+        f = list(glob.glob(os.path.join(rgi_dir, "*", f'*-{region}_*.shp')))
+    else:
+        f = list(glob.glob(os.path.join(rgi_dir, "*", '*intersects*' + region +
+                                        '_rgi*' + version + '*.shp')))
     assert len(f) == 1
     return f[0]
 
@@ -2150,20 +2196,29 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
 
     if version is None:
         version = cfg.PARAMS['rgi_version']
+
     if len(version) == 1:
         version += '0'
-    try:
-        regions = [s.split('-')[3] for s in rgi_ids]
 
-    except IndexError:
-        # RGI V6
-        regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+
+    # RGI V6 or 7
+    if version == '70G':
+        regions = [s.split('-')[-2] for s in rgi_ids]
+    else:
+        try:
+            regions = [s.split('-')[3] for s in rgi_ids]
+        except IndexError:
+            regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+    
     selection = []
     for reg in sorted(np.unique(regions)):
-        sh = gpd.read_file(get_rgi_intersects_region_file(reg,
-                                                          version=version))
-        selection.append(sh.loc[sh.RGIId_1.isin(rgi_ids) |
-                                sh.RGIId_2.isin(rgi_ids)])
+        sh = gpd.read_file(get_rgi_intersects_region_file(reg, version=version))
+        if version == '70G':
+            selection.append(sh.loc[sh.rgi_g_id_1.isin(rgi_ids) |
+                                    sh.rgi_g_id_2.isin(rgi_ids)])
+        else:
+            selection.append(sh.loc[sh.RGIId_1.isin(rgi_ids) |
+                                    sh.RGIId_2.isin(rgi_ids)])
 
     # Make a new dataframe of those
     selection = pd.concat(selection)
