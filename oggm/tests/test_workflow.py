@@ -468,6 +468,7 @@ def test_rgi7_glacier_dirs():
     assert gdir.rgi_dem_source == 'COPDEM30'
     assert gdir.utm_zone == 32
 
+
 def test_rgi7_complex_glacier_dirs():
     # create test dir
     if not os.path.exists(_TEST_DIR):

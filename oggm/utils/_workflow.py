@@ -2675,7 +2675,7 @@ class GlacierDirectory(object):
             # RGI V6
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
-        
+            
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
             if is_rgi7:
@@ -2732,10 +2732,15 @@ class GlacierDirectory(object):
             try:
                 # RGI5
                 gtype = rgi_entity.GlacType
-                gstatus = rgi_entity.RGIFlag[0]
             except AttributeError:
                 # RGI V6
                 gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
+
+            try:
+                # RGI5
+                gstatus = rgi_entity.RGIFlag[0]
+            except AttributeError:
+                # RGI V6
                 gstatus = rgi_entity.Status
 
             rgi_version = self.rgi_id.split('-')[0][-2:]
@@ -2768,11 +2773,11 @@ class GlacierDirectory(object):
             self.glacier_type = gtkeys[gtype[0]]
             self.terminus_type = ttkeys[gtype[1]]
             self.status = stkeys['{}'.format(gstatus)]
-                 
+               
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
-        # region
+        # RGI region
         reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version[0])
         reg_name = reg_names.loc[int(self.rgi_region)]
 
@@ -3680,7 +3685,6 @@ class GlacierDirectory(object):
         out.columns = [float(c) for c in out.columns]
         return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
-
     def get_ref_length_data(self):
         """Get the glacier length data from P. Leclercq's data base.
 
@@ -4096,7 +4100,8 @@ def base_dir_to_tar(base_dir=None, delete=True):
         # RGI60-01.00
         bname = os.path.basename(dirname)
         # second argument for RGI7 naming convention
-        if not ((len(bname) == 11 and bname[-3] == '.') or (len(bname) == 20 and bname[-3] == '-')) :
+        if not ((len(bname) == 11 and bname[-3] == '.') or
+                (len(bname) == 20 and bname[-3] == '-')):
             continue
         opath = dirname + '.tar'
         with tarfile.open(opath, 'w') as tar:
