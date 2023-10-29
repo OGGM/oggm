@@ -11,6 +11,7 @@ import shutil
 import argparse
 import time
 import logging
+import json
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -862,6 +863,7 @@ def parse_args(args):
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
                              "a bit.")
+    parser.add_argument('--override-params', type=json.loads, default=None)
 
     args = parser.parse_args(args)
 
@@ -921,6 +923,7 @@ def parse_args(args):
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 store_fl_diagnostics=args.store_fl_diagnostics,
+                override_params=args.override_params,
                 )
 
 
