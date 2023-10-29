@@ -1923,6 +1923,8 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     if len(glob.glob(test_file)) == 0:
         # if not there download it
         ofile = file_downloader(dfile, reset=reset)
+        if ofile is None:
+            raise RuntimeError(f'Could not download RGI file: {dfile}')
         # Extract root
         with zipfile.ZipFile(ofile) as zf:
             zf.extractall(rgi_dir)

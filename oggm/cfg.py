@@ -153,6 +153,7 @@ class ParamsLoggingDict(ResettingOrderedDict):
                                                                       prev,
                                                                       value))
 
+
 # Globals
 IS_INITIALIZED = False
 PARAMS = ParamsLoggingDict()
@@ -203,7 +204,7 @@ BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
-_doc = ('A dictionary containing runtime diagnostics useful for debugging or ' 
+_doc = ('A dictionary containing runtime diagnostics useful for debugging or '
         'logging of run parameters.')
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
@@ -572,7 +573,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
            'mpi_recv_buf_size', 'map_proj', 'evolution_model',
            'hydro_month_sh', 'hydro_month_nh',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
-           'auto_skip_task','ref_mb_valid_window',
+           'auto_skip_task', 'ref_mb_valid_window',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
            'use_rgi_area', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
