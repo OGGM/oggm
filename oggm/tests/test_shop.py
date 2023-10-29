@@ -81,6 +81,7 @@ class Test_its_live:
         df = its_live.compile_itslive_statistics([gdir]).iloc[0]
         assert df['itslive_avg_vel'] > 180
         assert df['itslive_max_vel'] > 2000
+        assert df['itslive_perc_cov'] > 0.95
 
         if DO_PLOT:
 

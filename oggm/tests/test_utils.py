@@ -453,6 +453,10 @@ class TestWorkflowTools(unittest.TestCase):
                                    gdir.rgi_area_km2,
                                    rtol=0.001)
 
+        assert df['grid_dx'].iloc[0] >= 50
+        assert df['grid_nx'].iloc[0] >= 50
+        assert df['grid_ny'].iloc[0] >= 50
+
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)

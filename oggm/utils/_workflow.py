@@ -1597,6 +1597,14 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
 
         try:
+            # Grid stuff
+            d['grid_dx'] = gdir.grid.dx
+            d['grid_nx'] = gdir.grid.nx
+            d['grid_ny'] = gdir.grid.ny
+        except BaseException:
+            pass
+
+        try:
             # Geom stuff
             outline = gdir.read_shapefile('outlines')
             d['geometry_type'] = outline.type.iloc[0]
