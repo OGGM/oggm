@@ -1926,8 +1926,11 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         if ofile is None:
             raise RuntimeError(f'Could not download RGI file: {dfile}')
         # Extract root
-        with zipfile.ZipFile(ofile) as zf:
-            zf.extractall(rgi_dir)
+        try:
+            with zipfile.ZipFile(ofile) as zf:
+                zf.extractall(rgi_dir)
+        except zipfile.BadZipFile:
+            raise zipfile.BadZipFile(f'RGI file BadZipFile error: {ofile}')
         # Extract subdirs
         for root, dirs, files in os.walk(cfg.PATHS['rgi_dir']):
             for filename in fnmatch.filter(files, pattern):
