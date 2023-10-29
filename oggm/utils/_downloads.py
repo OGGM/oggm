@@ -42,17 +42,9 @@ except ImportError:
     pass
 try:
     import rasterio
-    try:
-        # rasterio V > 1.0
-        from rasterio.merge import merge as merge_tool
-    except ImportError:
-        from rasterio.tools.merge import merge as merge_tool
+    from rasterio.merge import merge as merge_tool
 except ImportError:
     pass
-try:
-    ModuleNotFoundError
-except NameError:
-    ModuleNotFoundError = ImportError
 
 # Locals
 import oggm.cfg as cfg
@@ -421,7 +413,7 @@ def _classic_urlretrieve(url, path, reporthook, auth=None, timeout=None):
         urllib.request.urlretrieve(url, path, reporthook)
     except urllib.error.HTTPError as e:
         raise HttpDownloadError(e.code, ourl)
-    except urllib.error.ContentTooShortError as e:
+    except urllib.error.ContentTooShortError:
         raise HttpContentTooShortError()
     finally:
         socket.setdefaulttimeout(old_def_timeout)
@@ -565,7 +557,7 @@ def _progress_urlretrieve(url, cache_name=None, reset=False,
         except BaseException:
             pass
         return res
-    except (ImportError, ModuleNotFoundError):
+    except ImportError:
         return oggm_urlretrieve(url, cache_obj_name=cache_name,
                                 reset=reset, auth=auth, timeout=timeout)
 
@@ -1380,7 +1372,6 @@ def get_temp_bias_dataframe(dataset='w5e5'):
     base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
                 'w5e5_temp_bias_v2023.4.csv')
 
-
     file_path = file_downloader(base_url)
 
     # Did we open it yet?
@@ -1875,7 +1866,7 @@ def get_rgi_dir(version=None, reset=False):
     Parameters
     ----------
     version : str
-        '5', '6', '62', '70G', '70C', 
+        '5', '6', '62', '70G', '70C'
         defaults to None (linking to the one specified in cfg.PARAMS)
     reset : bool
         If True, deletes the RGI directory first and downloads the data
@@ -1920,12 +1911,14 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62.zip'
     elif version == '70G':
         pattern = 'RGI2000-*.zip'
-        test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-G-01_alaska', f'README.md')
-        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/global_files/RGI2000-v7.0-G-global.zip'
+        test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-G-01_alaska', 'README.md')
+        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/'
+        dfile += 'global_files/RGI2000-v7.0-G-global.zip'
     elif version == '70C':
         pattern = 'RGI2000-*.zip'
-        test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-C-01_alaska', f'README.md')
-        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/global_files/RGI2000-v7.0-C-global.zip'
+        test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-C-01_alaska', 'README.md')
+        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/'
+        dfile += 'global_files/RGI2000-v7.0-C-global.zip'
 
     if len(glob.glob(test_file)) == 0:
         # if not there download it
@@ -1972,7 +1965,7 @@ def get_rgi_region_file(region, version=None, reset=False):
     rgi_dir = get_rgi_dir(version=version, reset=reset)
     if version in ['70G', '70C']:
         f = list(glob.glob(rgi_dir + f"/*/*-{region}_*.shp"))
-    else:    
+    else:
         f = list(glob.glob(rgi_dir + "/*/*{}_*.shp".format(region)))
     assert len(f) == 1
     return f[0]
@@ -1998,7 +1991,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
 
     if version in ['70G', '70C']:
         regions = [s.split('-')[-2] for s in rgi_ids]
-    else:    
+    else:
         regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
     if version is None:
         version = rgi_ids[0].split('-')[0][-2:]
@@ -2064,8 +2057,8 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
         dfile = ('https://cluster.klima.uni-bremen.de/~oggm/rgi/'
                  'rgi62_Intersects.zip')
     if version == '70G':
-        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/global_files/RGI2000-v7.0-I-global.zip'
-        
+        dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/'
+        dfile += 'global_files/RGI2000-v7.0-I-global.zip'
 
     odir = os.path.join(rgi_dir, 'RGI_V' + version + '_Intersects')
     if reset and os.path.exists(odir):
@@ -2084,8 +2077,7 @@ def _get_rgi_intersects_dir_unlocked(version=None, reset=False):
                 raise RuntimeError('Could not find a manifest file in the RGI '
                                    'directory: ' + odir)
     elif version == '62':
-        test_file = os.path.join(odir,
-                                 '*ntersect*anifest.txt'.format(version))
+        test_file = os.path.join(odir, '*ntersect*anifest.txt')
         if len(glob.glob(test_file)) == 0:
             # if not there download it
             ofile = file_downloader(dfile, reset=reset)
@@ -2168,7 +2160,7 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
         else:
             raise InvalidParamsError("From RGI version 61 onwards, please use "
                                      "get_rgi_intersects_entities() instead.")
-        
+
     if version == '70G':
         f = list(glob.glob(os.path.join(rgi_dir, "*", f'*-{region}_*.shp')))
     else:
@@ -2200,7 +2192,6 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
     if len(version) == 1:
         version += '0'
 
-
     # RGI V6 or 7
     if version == '70G':
         regions = [s.split('-')[-2] for s in rgi_ids]
@@ -2209,7 +2200,7 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
             regions = [s.split('-')[3] for s in rgi_ids]
         except IndexError:
             regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
-    
+
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_intersects_region_file(reg, version=version))
@@ -2314,7 +2305,7 @@ def default_dem_source(rgi_id):
     return 'COPDEM90'
 
 
-def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
+def get_topo_file(lon_ex=None, lat_ex=None, gdir=None, *,
                   dx_meter=None, zoom=None, source=None):
     """Path(s) to the DEM file(s) covering the desired extent.
 
@@ -2334,7 +2325,7 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
         a (min_lon, max_lon) tuple delimiting the requested area longitudes
     lat_ex : tuple or int, required
         a (min_lat, max_lat) tuple delimiting the requested area latitudes
-    rgi_id : str, required if source=None
+    gdir : GlacierDirectory, required if source=None
         the glacier id, used to decide on the DEM source
     rgi_region : str, optional
         the RGI region number (required for the GIMP DEM)
@@ -2359,7 +2350,7 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
         # check all user options
         for s in source:
             demf, source_str = get_topo_file(lon_ex=lon_ex, lat_ex=lat_ex,
-                                             rgi_id=rgi_id, source=s)
+                                             gdir=gdir, source=s)
             if demf[0]:
                 return demf, source_str
 
@@ -2371,9 +2362,11 @@ def get_topo_file(lon_ex=None, lat_ex=None, rgi_id=None, *,
 
     # Some logic to decide which source to take if unspecified
     if source is None:
-        if rgi_id is None:
-            raise InvalidParamsError('rgi_id is needed if source=None')
-        source = default_dem_source(rgi_id)
+        if gdir is None:
+            raise InvalidParamsError('gdir is needed if source=None')
+        source = getattr(gdir, 'rgi_dem_source')
+        if source is None:
+            source = default_dem_source(gdir.rgi_id)
 
     if source not in DEM_SOURCES:
         raise InvalidParamsError('`source` must be one of '

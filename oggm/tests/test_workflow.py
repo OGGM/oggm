@@ -489,5 +489,5 @@ def test_rgi7_complex_glacier_dirs():
     assert gdir.rgi_region_name == '11: Central Europe'
     assert gdir.rgi_subregion_name == '11-01: Alps'
     assert gdir.rgi_version == '70C'
-    assert gdir.rgi_dem_source == ''
+    assert gdir.rgi_dem_source is None
     assert gdir.utm_zone == 32

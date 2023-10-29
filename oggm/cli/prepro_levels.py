@@ -266,33 +266,36 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if demo:
         rgidf = utils.get_rgi_glacier_entities(cfg.DATA['demo_glaciers'].index)
     elif test_rgidf is None:
+
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
         # We use intersects
-        rgif = utils.get_rgi_intersects_region_file(rgi_reg,
-                                                    version=rgi_version)
-        cfg.set_intersects_db(rgif)
+        if rgi_version != '70C':
+            rgif = utils.get_rgi_intersects_region_file(rgi_reg,
+                                                        version=rgi_version)
+            cfg.set_intersects_db(rgif)
 
-        # Some RGI input quality checks - this is based on visual checks
-        # of large glaciers in the RGI
-        ids_to_ice_cap = [
-            'RGI60-05.10315',  # huge Greenland ice cap
-            'RGI60-03.01466',  # strange thing next to Devon
-            'RGI60-09.00918',  # Academy of sciences Ice cap
-            'RGI60-09.00969',
-            'RGI60-09.00958',
-            'RGI60-09.00957',
-        ]
-        rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = '1'
+        if rgi_version == '62':
+            # Some RGI input quality checks - this is based on visual checks
+            # of large glaciers in the RGI
+            ids_to_ice_cap = [
+                'RGI60-05.10315',  # huge Greenland ice cap
+                'RGI60-03.01466',  # strange thing next to Devon
+                'RGI60-09.00918',  # Academy of sciences Ice cap
+                'RGI60-09.00969',
+                'RGI60-09.00958',
+                'RGI60-09.00957',
+            ]
+            rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = '1'
 
-        # In AA almost all large ice bodies are actually ice caps
-        if rgi_reg == '19':
-            rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
+            # In AA almost all large ice bodies are actually ice caps
+            if rgi_reg == '19':
+                rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
 
-        # For greenland we omit connectivity level 2
-        if rgi_reg == '05':
-            rgidf = rgidf.loc[rgidf['Connect'] != 2]
+            # For greenland we omit connectivity level 2
+            if rgi_reg == '05':
+                rgidf = rgidf.loc[rgidf['Connect'] != 2]
     else:
         rgidf = test_rgidf
         cfg.set_intersects_db(test_intersects_file)
@@ -302,7 +305,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             try:
                 rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
             except AttributeError:
-                #RGI7
+                # RGI7
                 rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
             rgidf = rgidf.sample(4)

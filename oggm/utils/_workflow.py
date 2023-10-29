@@ -2675,7 +2675,7 @@ class GlacierDirectory(object):
             # RGI V6
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
-            
+
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
             if is_rgi7:
@@ -2694,7 +2694,7 @@ class GlacierDirectory(object):
             rgi_entity['src_date'] = '2000-01-01 00:00:00'
             rgi_entity['dem_source'] = ''
             rgi_entity['term_type'] = 9
-        
+
         if is_rgi7:
             self.rgi_region = rgi_entity.o1region
             self.rgi_subregion = rgi_entity.o2region
@@ -2727,7 +2727,7 @@ class GlacierDirectory(object):
             self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
             self.rgi_subregion = f'{self.rgi_region}-{int(rgi_entity.O2Region):02d}'
             name = rgi_entity.Name
-            rgi_datestr = rgi_entity.BgnDate      
+            rgi_datestr = rgi_entity.BgnDate
 
             try:
                 # RGI5
@@ -2748,7 +2748,7 @@ class GlacierDirectory(object):
                 raise RuntimeError('RGI Version not supported: '
                                    '{}'.format(self.rgi_version))
             self.rgi_version = rgi_version
-            self.rgi_dem_source = ''
+            self.rgi_dem_source = None
 
             # Read glacier attrs
             gtkeys = {'0': 'Glacier',
@@ -2773,7 +2773,7 @@ class GlacierDirectory(object):
             self.glacier_type = gtkeys[gtype[0]]
             self.terminus_type = ttkeys[gtype[1]]
             self.status = stkeys['{}'.format(gstatus)]
-               
+
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
@@ -2902,7 +2902,7 @@ class GlacierDirectory(object):
         elif cfg.PARAMS['map_proj'] == 'tmerc':
             params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
                           k=0.9996, x_0=0, y_0=0, datum='WGS84')
-            proj4_str = ("+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " 
+            proj4_str = ("+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} "
                          "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**params))
         else:
             raise InvalidParamsError("cfg.PARAMS['map_proj'] must be one of "
@@ -3172,7 +3172,7 @@ class GlacierDirectory(object):
                 if err.name == "shapely.io":
                     err.msg = "You need shapely version 2.0 or higher for this to work."
                 raise
-                
+
         # Some new attrs to add to old pre-processed directories
         if filename == 'model_flowlines':
             if getattr(out[0], 'map_trafo', None) is None:
