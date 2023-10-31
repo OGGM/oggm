@@ -17,7 +17,7 @@ from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
-from oggm.shop import gcm_climate, bedtopo, millan22
+from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError

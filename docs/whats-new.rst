@@ -3,6 +3,16 @@
 Version history
 ===============
 
+v1.6.2 (unreleased)
+-------------------
+
+Enhancements
+~~~~~~~~~~~~
+
+- Their is now a possibility for initializing a elevation-band flowline using external thickness data and conduct a dynamic run with it (:pull:`1658`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+
+
 v1.6.1 (August 27, 2023)
 ------------------------
 
