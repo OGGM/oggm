@@ -2996,7 +2996,8 @@ def calving_glacier_downstream_line(line, n_points):
 
 
 @entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir, filesuffix=''):
+def init_present_time_glacier(gdir, filesuffix='',
+                              use_binned_thickness_data=False):
     """Merges data from preprocessing tasks. First task after inversion!
 
     This updates the `mode_flowlines` file and creates a stand-alone numerical
@@ -3007,9 +3008,14 @@ def init_present_time_glacier(gdir, filesuffix=''):
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
     filesuffix : str
-            append a suffix to the model_flowlines filename (e.g. useful for
-            dynamic melt_f calibration including an inversion, so the original
-            model_flowlines are not changed).
+        append a suffix to the model_flowlines filename (e.g. useful for
+        dynamic melt_f calibration including an inversion, so the original
+        model_flowlines are not changed).
+    use_binned_thickness_data : bool or str
+        if you want to use thickness data, which was binned to the elevation
+        band flowlines with tasks.elevation_band_flowine and
+        tasks.fixed_dx_elevation_band_flowline, you can provide the name of the
+        data here to create a flowline for a dynamic model run
     """
 
     # Some vars
@@ -3026,20 +3032,53 @@ def init_present_time_glacier(gdir, filesuffix=''):
 
         # Get the data to make the model flowlines
         line = cl.line
-        section = inv['volume'] / (cl.dx * map_dx)
         surface_h = cl.surface_h
-        bed_h = surface_h - inv['thick']
         widths_m = cl.widths * map_dx
-
         assert np.all(widths_m > 0)
-        bed_shape = 4 * inv['thick'] / (cl.widths * map_dx) ** 2
 
-        lambdas = inv['thick'] * np.NaN
-        lambdas[inv['is_trapezoid']] = def_lambda
-        lambdas[inv['is_rectangular']] = 0.
+        if not use_binned_thickness_data:
+            # classical initialisation after the inversion
+            section = inv['volume'] / (cl.dx * map_dx)
+            bed_h = surface_h - inv['thick']
 
-        # Where the flux and the thickness is zero we just assume trapezoid:
-        lambdas[bed_shape == 0] = def_lambda
+            bed_shape = 4 * inv['thick'] / widths_m ** 2
+
+            lambdas = inv['thick'] * np.NaN
+            lambdas[inv['is_trapezoid']] = def_lambda
+            lambdas[inv['is_rectangular']] = 0.
+
+            # Where the flux and the thickness is zero we just assume trapezoid:
+            lambdas[bed_shape == 0] = def_lambda
+
+        else:
+            # here we use binned thickness data for the initialisation
+            elev_fl = pd.read_csv(
+                gdir.get_filepath('elevation_band_flowline',
+                                  filesuffix='_fixed_dx'), index_col=0)
+            assert np.allclose(widths_m, elev_fl['widths_m'])
+            elev_fl_thick = elev_fl[use_binned_thickness_data].values
+            section = elev_fl_thick * widths_m
+            lambdas = np.ones(len(section)) * def_lambda
+
+            # for trapezoidal the calculation of thickness results in quadratic
+            # equation, we only keep solution which results in a positive w0
+            # value (-> w/lambda >= h),
+            # it still could happen that we would need a negative w0 if the
+            # section is too large, in those cases we get a negative value
+            # inside sqrt (we ignore the RuntimeWarning) -> if this happens we
+            # use rectangular shape with original thickness
+            with np.errstate(invalid='ignore'):
+                thick = ((2 * widths_m -
+                          np.sqrt(4 * widths_m ** 2 -
+                                  4 * lambdas * 2 * section)) /
+                         (2 * lambdas))
+            nan_thick = np.isnan(thick)
+            thick[nan_thick] = elev_fl_thick[nan_thick]
+            lambdas[nan_thick] = 0
+
+            # finally the glacier bed and other stuff
+            bed_h = surface_h - thick
+            bed_shape = 4 * thick / widths_m ** 2
 
         if not gdir.is_tidewater and inv['is_last']:
             # for valley glaciers, simply add the downstream line, depending on
