@@ -2224,7 +2224,14 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         bin_variables = keep
         for var in bin_variables:
             data = nc.variables[var][:]
-            out_totals.append(np.nansum(data) * gdir.grid.dx ** 2)
+            if var == 'consensus_ice_thickness':
+                # individual handling for consensus thickness as they use a
+                # different glacier mask than oggm (which was already applied)
+                data_sum = np.nansum(data)
+            else:
+                # use oggm glacier mask for all other data
+                data_sum = np.nansum(data[glacier_mask])
+            out_totals.append(data_sum * gdir.grid.dx ** 2)
             out_vars.append(data[glacier_mask])
 
     preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
