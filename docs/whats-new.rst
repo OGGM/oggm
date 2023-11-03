@@ -3,6 +3,16 @@
 Version history
 ===============
 
+v1.6.2 (unreleased)
+-------------------
+
+Bug fixes
+~~~~~~~~~
+- The binned variables in the elevation band flowlines did not used the
+  glacier mask when preserving the total values (:pull:`1661`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+
+
 v1.6.1 (August 27, 2023)
 ------------------------
 
