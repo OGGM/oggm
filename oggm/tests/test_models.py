@@ -17,7 +17,7 @@ from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
-from oggm.shop import gcm_climate
+from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
@@ -152,6 +152,67 @@ class TestInitPresentDayFlowline:
         cfg.PARAMS['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
             init_present_time_glacier(gdir)
+
+    def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
+                                                 monkeypatch):
+
+        gdir = hef_elev_gdir
+
+        # need to change rgi_id, which is needed to be different in other tests
+        # when comparing to centerlines
+        gdir.rgi_id = 'RGI60-11.00897'
+
+        # add some thickness data
+        ft = utils.get_demo_file('RGI60-11.00897_thickness.tif')
+        monkeypatch.setattr(utils, 'file_downloader', lambda x: ft)
+        bedtopo.add_consensus_thickness(gdir)
+        vn = 'consensus_ice_thickness'
+        centerlines.elevation_band_flowline(gdir, bin_variables=[vn])
+        centerlines.fixed_dx_elevation_band_flowline(gdir,
+                                                     bin_variables=[vn])
+
+        tasks.init_present_time_glacier(gdir, filesuffix='_consensus',
+                                        use_binned_thickness_data=vn)
+        fl_consensus = gdir.read_pickle('model_flowlines',
+                                        filesuffix='_consensus')[0]
+
+        # check that resulting flowline has the same volume as observation
+        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
+        np.testing.assert_allclose(fl_consensus.volume_m3, ref_vol)
+
+        # should be trapezoid where ice
+        assert np.all(fl_consensus.is_trapezoid[fl_consensus.thick > 0])
+
+        # test that we can use fl in an dynamic model run without an error
+        mb = LinearMassBalance(3000.)
+        model_ref = FluxBasedModel(gdir.read_pickle('model_flowlines'),
+                                   mb_model=mb)
+        model_ref.run_until(100)
+        model_consensus = FluxBasedModel([fl_consensus], mb_model=mb)
+        model_consensus.run_until(100)
+        np.testing.assert_allclose(model_ref.volume_km3,
+                                   model_consensus.volume_km3,
+                                   atol=0.02)
+
+        # test that if w0<0 it is converted to rectangular
+        # set some thickness to very large values to force it
+        df_fixed_dx = pd.read_csv(gdir.get_filepath('elevation_band_flowline',
+                                                    filesuffix='_fixed_dx'))
+        new_thick = df_fixed_dx['consensus_ice_thickness']
+        new_thick[-10:] = new_thick[-10:] + 1000
+        df_fixed_dx['consensus_ice_thickness'] = new_thick
+        ref_vol_rect = np.sum(df_fixed_dx['area_m2'] * new_thick)
+        df_fixed_dx.to_csv(gdir.get_filepath('elevation_band_flowline',
+                                             filesuffix='_fixed_dx'))
+
+        tasks.init_present_time_glacier(gdir, filesuffix='_consensus_rect',
+                                        use_binned_thickness_data=vn)
+        fl_consensus_rect = gdir.read_pickle('model_flowlines',
+                                             filesuffix='_consensus_rect')[0]
+
+        np.testing.assert_allclose(fl_consensus_rect.volume_m3, ref_vol_rect)
+        assert np.sum(fl_consensus_rect.is_rectangular) == 10
 
     def test_present_time_glacier_massbalance(self, hef_gdir):
 
