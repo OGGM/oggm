@@ -1957,7 +1957,7 @@ def get_rgi_region_file(region, version=None, reset=False):
     region : str
         from '01' to '19'
     version : str
-        '5', '6', defaults to None (linking to the one specified in cfg.PARAMS)
+        '62', '70G', '70C', defaults to None (linking to the one specified in cfg.PARAMS)
     reset : bool
         If True, deletes the RGI directory first and downloads the data
 
@@ -1986,7 +1986,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     rgi_ids : list of str
         the glaciers you want the outlines for
     version : str
-        the rgi version
+        the rgi version ('62', '70G', '70C')
 
     Returns
     -------
@@ -1994,12 +1994,20 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
         containing the desired RGI glacier outlines
     """
 
+    if version is None:
+        if len(rgi_ids[0]) == 14:
+            # RGI6
+            version = rgi_ids[0].split('-')[0][-2:]
+        else:
+            # RGI7 RGI2000-v7.0-G-02-00003
+            assert rgi_ids[0].split('-')[1] == 'v7.0'
+            version = '70' + rgi_ids[0].split('-')[2]
+
     if version in ['70G', '70C']:
         regions = [s.split('-')[-2] for s in rgi_ids]
     else:
         regions = [s.split('-')[1].split('.')[0] for s in rgi_ids]
-    if version is None:
-        version = rgi_ids[0].split('-')[0][-2:]
+
     selection = []
     for reg in sorted(np.unique(regions)):
         sh = gpd.read_file(get_rgi_region_file(reg, version=version))
@@ -2141,7 +2149,7 @@ def get_rgi_intersects_region_file(region=None, version=None, reset=False):
         From RGI version '61' onwards, please use `get_rgi_intersects_entities`
         with a list of glaciers instead of relying to the global file.
     version : str
-        '5', '6', '61'... defaults the one specified in cfg.PARAMS
+        '5', '6', '61', '70G'. Defaults the one specified in cfg.PARAMS
     reset : bool
         If True, deletes the intersect file before redownloading it
 
@@ -2183,7 +2191,7 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
     rgi_ids: list of str
         list of rgi_ids you want to look for intersections for
     version: str
-        '5', '6', '61'... defaults the one specified in cfg.PARAMS
+        '5', '6', '61', '70G'. Defaults the one specified in cfg.PARAMS
 
     Returns
     -------
