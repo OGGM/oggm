@@ -666,7 +666,10 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
-    smap.set_topography(topo)
+    try:
+        smap.set_topography(topo)
+    except ValueError:
+        pass
 
     for gdir in gdirs:
         grids_file = gdir.get_filepath('gridded_data')

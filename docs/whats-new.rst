@@ -9,7 +9,15 @@ v1.6.2 (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
-- Their is now a possibility for initializing a elevation-band flowline using external thickness data and conduct a dynamic run with it (:pull:`1658`).
+- There is now a possibility for initializing a elevation-band flowline using 
+  external thickness data and conduct a dynamic run with it (:pull:`1658`).
+
+Bug fixes
+~~~~~~~~~
+
+- The binned variables in the elevation band flowlines did not use the
+  glacier mask when preserving the total values. This is a bad 
+  bug that is now fixed (:pull:`1661`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
