@@ -343,6 +343,8 @@ def millan_statistics(gdir):
             v = ds['millan_v'].where(ds['glacier_mask'], np.NaN).load()
             d['millan_avg_vel'] = np.nanmean(v)
             d['millan_max_vel'] = np.nanmax(v)
+            d['millan_vel_perc_cov'] = (float((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
+                                        gdir.rgi_area_km2)
 
             if 'millan_err_vx' in ds:
                 err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.NaN).load()

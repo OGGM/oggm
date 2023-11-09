@@ -448,14 +448,46 @@ def test_rgi7_glacier_dirs():
         os.makedirs(_TEST_DIR)
     # initialize
     cfg.initialize()
-    # no intersects for RGI7 available
-    cfg.PARAMS['use_intersects'] = False
+    # Set intersects
+    cfg.set_intersects_db(gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp')))
     cfg.PATHS['working_dir'] = _TEST_DIR
     # load and read test data
-    hef_rgi7_df = gpd.read_file(get_demo_file('Hintereisferner_RGI7.shp'))
+    hef_rgi7_df = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
     # create GDIR
     gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
     assert gdir
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 8
-    assert gdir.name == 'Hintereis Ferner'
+    assert gdir.name == 'Hintereisferner'
+    assert len(gdir.intersects_ids) == 2
+    assert gdir.rgi_region == '11'
+    assert gdir.rgi_subregion == '11-01'
+    assert gdir.rgi_region_name == '11: Central Europe'
+    assert gdir.rgi_subregion_name == '11-01: Alps'
+    assert gdir.rgi_version == '70G'
+    assert gdir.rgi_dem_source == 'COPDEM30'
+    assert gdir.utm_zone == 32
+
+
+def test_rgi7_complex_glacier_dirs():
+    # create test dir
+    if not os.path.exists(_TEST_DIR):
+        os.makedirs(_TEST_DIR)
+    # initialize
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = _TEST_DIR
+    # load and read test data
+    hef_rgi7_df = gpd.read_file(get_demo_file('rgi7c_hef.shp'))
+    # create GDIR
+    gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
+    assert gdir
+    assert gdir.rgi_region == '11'
+    assert gdir.rgi_area_km2 > 20
+    assert gdir.name == ''
+    assert gdir.rgi_region == '11'
+    assert gdir.rgi_subregion == '11-01'
+    assert gdir.rgi_region_name == '11: Central Europe'
+    assert gdir.rgi_subregion_name == '11-01: Alps'
+    assert gdir.rgi_version == '70C'
+    assert gdir.rgi_dem_source is None
+    assert gdir.utm_zone == 32

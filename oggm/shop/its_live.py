@@ -259,6 +259,8 @@ def itslive_statistics(gdir):
             v = ds['itslive_v'].where(ds['glacier_mask'], np.NaN).load()
             d['itslive_avg_vel'] = np.nanmean(v)
             d['itslive_max_vel'] = np.nanmax(v)
+            d['itslive_perc_cov'] = (float((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
+                                     gdir.rgi_area_km2)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 

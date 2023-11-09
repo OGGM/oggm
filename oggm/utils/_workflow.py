@@ -1597,6 +1597,14 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
 
         try:
+            # Grid stuff
+            d['grid_dx'] = gdir.grid.dx
+            d['grid_nx'] = gdir.grid.nx
+            d['grid_ny'] = gdir.grid.ny
+        except BaseException:
+            pass
+
+        try:
             # Geom stuff
             outline = gdir.read_shapefile('outlines')
             d['geometry_type'] = outline.type.iloc[0]
@@ -2660,16 +2668,17 @@ class GlacierDirectory(object):
         # Extent of the glacier in lon/lat
         self.extent_ll = [xx, yy]
 
-        try:
-            # RGI V4?
-            rgi_entity.RGIID
-            raise ValueError('RGI Version 4 is not supported anymore')
-        except AttributeError:
-            pass
-
+        is_rgi7 = False
+        is_glacier_complex = False
         try:
             self.rgi_id = rgi_entity.rgi_id
-            self.glims_id = rgi_entity.glims_id
+            is_rgi7 = True
+            try:
+                self.glims_id = rgi_entity.glims_id
+            except AttributeError:
+                # Complex product
+                self.glims_id = ''
+                is_glacier_complex = True
         except AttributeError:
             # RGI V6
             self.rgi_id = rgi_entity.RGIId
@@ -2677,12 +2686,10 @@ class GlacierDirectory(object):
 
         # Do we want to use the RGI center point or ours?
         if cfg.PARAMS['use_rgi_area']:
-            try:
-                # RGIv7
+            if is_rgi7:
                 self.cenlon = float(rgi_entity.cenlon)
                 self.cenlat = float(rgi_entity.cenlat)
-            except AttributeError:
-                # RGI V6
+            else:
                 self.cenlon = float(rgi_entity.CenLon)
                 self.cenlat = float(rgi_entity.CenLat)
         else:
@@ -2690,71 +2697,102 @@ class GlacierDirectory(object):
             self.cenlon = float(cenlon[0])
             self.cenlat = float(cenlat[0])
 
-        try:
+        if is_glacier_complex:
+            rgi_entity['glac_name'] = ''
+            rgi_entity['src_date'] = '2000-01-01 00:00:00'
+            rgi_entity['dem_source'] = None
+            rgi_entity['term_type'] = 9
+
+        if is_rgi7:
             self.rgi_region = rgi_entity.o1region
             self.rgi_subregion = rgi_entity.o2region
-        except AttributeError:
-            # RGI V6
-            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
-            self.rgi_subregion = (self.rgi_region + '-' +
-                                  '{:02d}'.format(int(rgi_entity.O2Region)))
-
-        try:
             name = rgi_entity.glac_name
             rgi_datestr = rgi_entity.src_date
-        except AttributeError:
-            # RGI V6
+            self.rgi_version = '70G'
+            self.glacier_type = 'Glacier'
+            self.status = 'Glacier'
+            ttkeys = {0: 'Land-terminating',
+                      1: 'Marine-terminating',
+                      2: 'Lake-terminating',
+                      3: 'Shelf-terminating',
+                      9: 'Not assigned',
+                      }
+            self.terminus_type = ttkeys[rgi_entity['term_type']]
+            if is_glacier_complex:
+                self.rgi_version = '70C'
+                self.glacier_type = 'Glacier complex'
+                self.status = 'Glacier complex'
+            self.rgi_dem_source = rgi_entity.dem_source
+            self.utm_zone = rgi_entity.utm_zone
+
+            # New attrs
+            try:
+                self.rgi_termlon = rgi_entity.termlon
+                self.rgi_termlat = rgi_entity.termlat
+            except AttributeError:
+                pass
+        else:
+            self.rgi_region = '{:02d}'.format(int(rgi_entity.O1Region))
+            self.rgi_subregion = f'{self.rgi_region}-{int(rgi_entity.O2Region):02d}'
             name = rgi_entity.Name
             rgi_datestr = rgi_entity.BgnDate
 
-
-        try:
-            gtype = rgi_entity.GlacType
-        except AttributeError:
             try:
+                # RGI5
+                gtype = rgi_entity.GlacType
+            except AttributeError:
                 # RGI V6
                 gtype = [str(rgi_entity.Form), str(rgi_entity.TermType)]
-            except AttributeError:
-                # temporary default for RGI V7:
-                gtype = ['0', '0']
 
-        try:
-            gstatus = rgi_entity.RGIFlag[0]
-        except AttributeError:
             try:
+                # RGI5
+                gstatus = rgi_entity.RGIFlag[0]
+            except AttributeError:
                 # RGI V6
                 gstatus = rgi_entity.Status
-            except AttributeError:
-                # temporary default for RGI V7:
-                gstatus = '0'
 
-        # rgi version can be useful
-        # RGI2000-v7.0-G-06-00029
-        # RGI60-07.00245
-        if self.rgi_id.count('-') == 4:
-            self.rgi_version = '70'
-        else:
             rgi_version = self.rgi_id.split('-')[0][-2:]
             if rgi_version not in ['50', '60', '61']:
                 raise RuntimeError('RGI Version not supported: '
                                    '{}'.format(self.rgi_version))
-            else:
-                self.rgi_version = rgi_version
+            self.rgi_version = rgi_version
+            self.rgi_dem_source = None
 
-        try:
-            self.rgi_dem_source = rgi_entity.dem_source
-        except AttributeError:
-            self.rgi_dem_source = ''
+            # Read glacier attrs
+            gtkeys = {'0': 'Glacier',
+                      '1': 'Ice cap',
+                      '2': 'Perennial snowfield',
+                      '3': 'Seasonal snowfield',
+                      '9': 'Not assigned',
+                      }
+            ttkeys = {'0': 'Land-terminating',
+                      '1': 'Marine-terminating',
+                      '2': 'Lake-terminating',
+                      '3': 'Dry calving',
+                      '4': 'Regenerated',
+                      '5': 'Shelf-terminating',
+                      '9': 'Not assigned',
+                      }
+            stkeys = {'0': 'Glacier or ice cap',
+                      '1': 'Glacier complex',
+                      '2': 'Nominal glacier',
+                      '9': 'Not assigned',
+                      }
+            self.glacier_type = gtkeys[gtype[0]]
+            self.terminus_type = ttkeys[gtype[1]]
+            self.status = stkeys['{}'.format(gstatus)]
 
         # remove spurious characters and trailing blanks
         self.name = filter_rgi_name(name)
 
-        # region
+        # RGI region
         reg_names, subreg_names = parse_rgi_meta(version=self.rgi_version[0])
         reg_name = reg_names.loc[int(self.rgi_region)]
+
         # RGI V6
         if not isinstance(reg_name, str):
             reg_name = reg_name.values[0]
+
         self.rgi_region_name = self.rgi_region + ': ' + reg_name
         try:
             subreg_name = subreg_names.loc[self.rgi_subregion]
@@ -2764,30 +2802,6 @@ class GlacierDirectory(object):
             self.rgi_subregion_name = self.rgi_subregion + ': ' + subreg_name
         except KeyError:
             self.rgi_subregion_name = self.rgi_subregion + ': NoName'
-
-        # Read glacier attrs
-        gtkeys = {'0': 'Glacier',
-                  '1': 'Ice cap',
-                  '2': 'Perennial snowfield',
-                  '3': 'Seasonal snowfield',
-                  '9': 'Not assigned',
-                  }
-        ttkeys = {'0': 'Land-terminating',
-                  '1': 'Marine-terminating',
-                  '2': 'Lake-terminating',
-                  '3': 'Dry calving',
-                  '4': 'Regenerated',
-                  '5': 'Shelf-terminating',
-                  '9': 'Not assigned',
-                  }
-        stkeys = {'0': 'Glacier or ice cap',
-                  '1': 'Glacier complex',
-                  '2': 'Nominal glacier',
-                  '9': 'Not assigned',
-                  }
-        self.glacier_type = gtkeys[gtype[0]]
-        self.terminus_type = ttkeys[gtype[1]]
-        self.status = stkeys['{}'.format(gstatus)]
 
         # Decide what is a tidewater glacier
         user = cfg.PARAMS['tidewater_type']
@@ -2896,7 +2910,7 @@ class GlacierDirectory(object):
         elif cfg.PARAMS['map_proj'] == 'tmerc':
             params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
                           k=0.9996, x_0=0, y_0=0, datum='WGS84')
-            proj4_str = ("+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} " 
+            proj4_str = ("+proj={name} +lat_0={lat_0} +lon_0={lon_0} +k={k} "
                          "+x_0={x_0} +y_0={y_0} +datum={datum}".format(**params))
         else:
             raise InvalidParamsError("cfg.PARAMS['map_proj'] must be one of "
@@ -2931,7 +2945,10 @@ class GlacierDirectory(object):
         # Do we want to use the RGI area or ours?
         if not cfg.PARAMS['use_rgi_area']:
             # Update Area
-            area = geometry.area * 1e-6
+            try:
+                area = geometry.area * 1e-6
+            except:
+                area = geometry.area_m2 * 1e-6
             entity['Area'] = area
 
         # Avoid fiona bug: https://github.com/Toblerity/Fiona/issues/365
@@ -2947,8 +2964,13 @@ class GlacierDirectory(object):
         # Also transform the intersects if necessary
         gdf = cfg.PARAMS['intersects_gdf']
         if len(gdf) > 0:
-            gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
-                           (gdf.RGIId_2 == self.rgi_id))]
+            try:
+                gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
+                               (gdf.RGIId_2 == self.rgi_id))]
+            except AttributeError:
+                gdf = gdf.loc[((gdf.rgi_g_id_1 == self.rgi_id) |
+                               (gdf.rgi_g_id_2 == self.rgi_id))]
+
             if len(gdf) > 0:
                 gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
                 if hasattr(gdf.crs, 'srs'):
@@ -2957,7 +2979,7 @@ class GlacierDirectory(object):
                 self.write_shapefile(gdf, 'intersects')
         else:
             # Sanity check
-            if cfg.PARAMS['use_intersects']:
+            if cfg.PARAMS['use_intersects'] and not self.rgi_version == '70C':
                 raise InvalidParamsError(
                     'You seem to have forgotten to set the '
                     'intersects file for this run. OGGM '
@@ -3003,7 +3025,10 @@ class GlacierDirectory(object):
         """The glacier's intersects RGI ids."""
         try:
             gdf = self.read_shapefile('intersects')
-            ids = np.append(gdf['RGIId_1'], gdf['RGIId_2'])
+            try:
+                ids = np.append(gdf['RGIId_1'], gdf['RGIId_2'])
+            except KeyError:
+                ids = np.append(gdf['rgi_g_id_1'], gdf['rgi_g_id_2'])
             ids = list(np.unique(np.sort(ids)))
             ids.remove(self.rgi_id)
             return ids
@@ -3155,7 +3180,7 @@ class GlacierDirectory(object):
                 if err.name == "shapely.io":
                     err.msg = "You need shapely version 2.0 or higher for this to work."
                 raise
-                
+
         # Some new attrs to add to old pre-processed directories
         if filename == 'model_flowlines':
             if getattr(out[0], 'map_trafo', None) is None:
@@ -3668,7 +3693,6 @@ class GlacierDirectory(object):
         out.columns = [float(c) for c in out.columns]
         return out.dropna(axis=1, how='all').dropna(axis=0, how='all')
 
-
     def get_ref_length_data(self):
         """Get the glacier length data from P. Leclercq's data base.
 
@@ -4084,7 +4108,8 @@ def base_dir_to_tar(base_dir=None, delete=True):
         # RGI60-01.00
         bname = os.path.basename(dirname)
         # second argument for RGI7 naming convention
-        if not ((len(bname) == 11 and bname[-3] == '.') or (len(bname) == 20 and bname[-3] == '-')) :
+        if not ((len(bname) == 11 and bname[-3] == '.') or
+                (len(bname) == 20 and bname[-3] == '-')):
             continue
         opath = dirname + '.tar'
         with tarfile.open(opath, 'w') as tar:

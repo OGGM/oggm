@@ -436,9 +436,22 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                 try:
                     rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
                                                  entities]))
-                    rgi_version = rgi_ids[0].split('-')[0][-2:]
-                    fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                           version=rgi_version)
+                    if len(rgi_ids[0]) == 23:
+                        # RGI7
+                        assert rgi_ids[0].split('-')[1] == 'v7.0'
+                        if rgi_ids[0].split('-')[2] == 'C':
+                            # No need for interstects
+                            fp = []
+                            rgi_version = '70C'
+                        else:
+                            rgi_version = '70G'
+                            fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                                   version=rgi_version)
+
+                    else:
+                        rgi_version = rgi_ids[0].split('-')[0][-2:]
+                        fp = utils.get_rgi_intersects_entities(rgi_ids,
+                                                               version=rgi_version)
                     cfg.set_intersects_db(fp)
                 except AttributeError:
                     # RGI V6
@@ -676,13 +689,14 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                          ref_vol_1, odf1.oggm, a_bounds[0],
                          ref_vol_2, odf2.oggm, a_bounds[1]))
         if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
+            do_filter = filter_inversion_output
             return calibrate_inversion_from_consensus(gdirs,
                                                       ignore_missing=ignore_missing,
                                                       fs=5.7e-20, a_bounds=a_bounds,
                                                       apply_fs_on_mismatch=False,
                                                       error_on_mismatch=error_on_mismatch,
                                                       volume_m3_reference=volume_m3_reference,
-                                                      filter_inversion_output=filter_inversion_output,
+                                                      filter_inversion_output=do_filter,
                                                       add_to_log_file=add_to_log_file)
         if error_on_mismatch:
             raise ValueError(msg)

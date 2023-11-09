@@ -42,8 +42,7 @@ class Test_its_live:
         # use our files
         region_files = {'ALA': {
             'vx': get_demo_file('crop_ALA_G0120_0000_vx.tif'),
-            'vy': get_demo_file('crop_ALA_G0120_0000_vy.tif')}
-                        }
+            'vy': get_demo_file('crop_ALA_G0120_0000_vy.tif')}}
         monkeypatch.setattr(its_live, 'region_files', region_files)
         monkeypatch.setattr(utils, 'file_downloader', lambda x: x)
 
@@ -82,9 +81,9 @@ class Test_its_live:
         df = its_live.compile_itslive_statistics([gdir]).iloc[0]
         assert df['itslive_avg_vel'] > 180
         assert df['itslive_max_vel'] > 2000
+        assert df['itslive_perc_cov'] > 0.95
 
         if DO_PLOT:
-            import matplotlib.pyplot as plt
 
             smap = salem.Map(gdir.grid.center_grid, countries=False)
             smap.set_shapefile(gdir.read_shapefile('outlines'))
@@ -155,12 +154,15 @@ class Test_millan22:
         # Simply some coverage and sanity checks
         assert np.isfinite(v).sum() / mask.sum() > 0.98
         assert np.nanmax(v) > 2000
+        assert np.nanmax(vx) > 500
+        assert np.nanmax(vy) > 400
 
         # Stats
         df = millan22.compile_millan_statistics([gdir]).iloc[0]
         assert df['millan_avg_vel'] > 180
         assert df['millan_max_vel'] > 2000
         assert df['millan_perc_cov'] > 0.95
+        assert df['millan_vel_perc_cov'] > 0.97
         assert df['millan_vol_km3'] > 174
 
 
@@ -384,13 +386,13 @@ class Test_w5e5:
                                               add_climate_period=[1999, 2010],
                                               add_raw_climate_statistics=True,
                                               halfsize=20)
-        fs= '1979-2019'
+        fs = '1979-2019'
         assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] > 1.5)
         assert np.all(df[f'{fs}_uncorrected_winter_daily_mean_prcp'] < 1.8)
 
         # we don't have climate data for that time period
         with pytest.raises(KeyError):
-            df[f'1990-2030_uncorrected_winter_daily_mean_prcp']
+            df['1990-2030_uncorrected_winter_daily_mean_prcp']
 
 
 class Test_ecmwf:
@@ -541,23 +543,21 @@ class Test_ecmwf:
 
         cfg.PARAMS['baseline_climate'] = 'CERA+ERA5L'
         tasks.process_climate_data(gdir)
-        f_ref = gdir.get_filepath('climate_historical')
-        with xr.open_dataset(f_ref) as his:
-            # Let's do some basic checks
-            ci = gdir.get_climate_info()
-            assert ci['baseline_climate_source'] == 'CERA+ERA5L'
-            assert ci['baseline_yr_0'] == 1901
-            assert ci['baseline_yr_1'] == 2018
+        assert gdir.get_filepath('climate_historical')
+        # Let's do some basic checks
+        ci = gdir.get_climate_info()
+        assert ci['baseline_climate_source'] == 'CERA+ERA5L'
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2018
 
         cfg.PARAMS['baseline_climate'] = 'CERA|ERA5'
         tasks.process_climate_data(gdir)
-        f_ref = gdir.get_filepath('climate_historical')
-        with xr.open_dataset(f_ref) as his:
-            # Let's do some basic checks
-            ci = gdir.get_climate_info()
-            assert ci['baseline_climate_source'] == 'CERA|ERA5'
-            assert ci['baseline_yr_0'] == 1901
-            assert ci['baseline_yr_1'] == 2010
+        assert gdir.get_filepath('climate_historical')
+        # Let's do some basic checks
+        ci = gdir.get_climate_info()
+        assert ci['baseline_climate_source'] == 'CERA|ERA5'
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2010
 
 
 class Test_climate_datasets:

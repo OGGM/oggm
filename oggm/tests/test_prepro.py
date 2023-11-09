@@ -1379,8 +1379,6 @@ class TestClimate(unittest.TestCase):
         mb_calibration_from_scalar_mb = partial(mb_calibration_from_scalar_mb,
                                                 overwrite_gdir=True)
 
-
-
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
@@ -1653,7 +1651,6 @@ class TestClimate(unittest.TestCase):
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
 
-
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
 
@@ -1679,8 +1676,7 @@ class TestClimate(unittest.TestCase):
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ref_mb.mean()
         ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
-                                        ref_period=ref_period)
+        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb, ref_period=ref_period)
         mb_new = massbalance.MonthlyTIModel(gdir)
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -2559,7 +2555,7 @@ class TestGrindelInvert(unittest.TestCase):
         self.assertGreaterEqual(len(gdfc), len(fls)-1)
 
         # check touch borders qualitatively
-        self.assertGreaterEqual(np.sum(fls[-1].is_rectangular),  10)
+        self.assertGreaterEqual(np.sum(fls[-1].is_rectangular), 10)
 
 
 class TestGCMClimate(unittest.TestCase):
@@ -2844,8 +2840,8 @@ class TestGCMClimate(unittest.TestCase):
         fh = gdir.get_filepath('climate_historical')
         fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
         fcmip_y0_y1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_y0_y1')
-        with xr.open_dataset(fh) as cru,\
-              xr.open_dataset(fcmip) as cmip,\
+        with xr.open_dataset(fh) as cru, \
+              xr.open_dataset(fcmip) as cmip, \
               xr.open_dataset(fcmip_y0_y1) as cmip_y0_y1:
 
             # Let's do some basic checks
