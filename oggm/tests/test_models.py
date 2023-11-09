@@ -3867,7 +3867,7 @@ class TestDynamicSpinup:
         ye = gdir.get_climate_info()['baseline_yr_1'] + 1
         yr_rgi = gdir.rgi_date
 
-        # succesful run to compare to
+        # successful run to compare to
         run_dynamic_melt_f_calibration(
             gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run_with_dynamic_spinup,
@@ -4753,7 +4753,7 @@ class TestHydro:
 
         odf = pd.concat([odf_hist, odf_run])
         # Domain area is constant and equal to the first year
-        # Except at the begining of the simulation where the glacier
+        # Except at the beginning of the simulation where the glacier
         # advances a little
         odf['dom_area'] = odf['on_area'] + odf['off_area']
         assert_allclose(odf['dom_area'], odf['dom_area'].iloc[0], rtol=3e-3)
