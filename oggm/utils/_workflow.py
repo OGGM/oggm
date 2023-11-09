@@ -2700,7 +2700,7 @@ class GlacierDirectory(object):
         if is_glacier_complex:
             rgi_entity['glac_name'] = ''
             rgi_entity['src_date'] = '2000-01-01 00:00:00'
-            rgi_entity['dem_source'] = ''
+            rgi_entity['dem_source'] = None
             rgi_entity['term_type'] = 9
 
         if is_rgi7:
