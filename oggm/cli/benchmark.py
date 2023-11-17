@@ -70,7 +70,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     override_params['working_dir'] = working_dir
 
     # Initialize OGGM and set up the run parameters
-    cfg.initialize(logging_level=logging_level, params=override_params, future=True)
+    cfg.initialize(logging_level=logging_level, params=override_params)
 
     # Use multiprocessing?
     cfg.PARAMS['use_multiprocessing'] = True

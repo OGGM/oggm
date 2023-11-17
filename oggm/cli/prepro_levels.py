@@ -102,7 +102,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     output_folder : str
         path to the output folder (where to put the preprocessed tar files)
     dem_source : str
-        which DEM source to use: default, SOURCE_NAME or ALL
+        which DEM source to use: default, SOURCE_NAME, STANDARD or ALL
+        "standard" is COPDEM + NASADEM
     working_dir : str
         path to the OGGM working directory
     params_file : str
@@ -238,8 +239,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Initialize OGGM and set up the run parameters
     cfg.initialize(file=params_file, params=override_params,
-                   logging_level=logging_level,
-                   future=True)
+                   logging_level=logging_level)
 
     # Prepare the download of climate file to be shared across processes
     # TODO
@@ -348,10 +348,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             cfg.PATHS['dem_file'] = test_topofile
 
         # Which DEM source?
-        if dem_source.upper() == 'ALL':
+        if dem_source.upper() in ['ALL', 'STANDARD']:
             # This is the complex one, just do the job and leave
-            log.workflow('Running prepro on ALL sources')
-            for i, s in enumerate(utils.DEM_SOURCES):
+
+            if dem_source.upper() == 'ALL':
+                sources = utils.DEM_SOURCES
+            if dem_source.upper() == 'STANDARD':
+                sources = ['COPDEM30', 'COPDEM90', 'NASADEM']
+
+            log.workflow('Running prepro on several sources')
+            for i, s in enumerate(sources):
                 rs = i == 0
                 log.workflow('Running prepro on sources: {}'.format(s))
                 gdirs = workflow.init_glacier_directories(rgidf, reset=rs,

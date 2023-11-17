@@ -261,6 +261,13 @@ def glacier_grid_params(gdir):
         dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
     elif dxmethod == 'fixed':
         dx = np.rint(cfg.PARAMS['fixed_dx'])
+    elif dxmethod == 'by_bin':
+        bins = cfg.PARAMS['by_bin_bins']
+        bin_dx = cfg.PARAMS['by_bin_dx']
+        for i, (b1, b2) in enumerate(zip(bins[:-1], bins[1:])):
+            if b1 < area <= b2:
+                dx = np.rint(bin_dx[i])
+                break
     else:
         raise InvalidParamsError('grid_dx_method not supported: {}'
                                  .format(dxmethod))
