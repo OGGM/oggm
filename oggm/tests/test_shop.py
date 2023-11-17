@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo, bedtopo, millan22, hugonnet_maps
+from oggm.shop import its_live, rgitopo, bedtopo, millan22, hugonnet_maps, glathida
 from oggm.core import gis, centerlines, massbalance
 from oggm import cfg, tasks, workflow
 
@@ -722,3 +722,35 @@ class Test_bedtopo:
         df = bedtopo.compile_consensus_statistics([gdir]).iloc[0]
         np.testing.assert_allclose(my_vol*1e-9, df['consensus_vol_km3'], rtol=1e-2)
         np.testing.assert_allclose(1, df['consensus_perc_cov'], rtol=0.05)
+
+
+class Test_Glathida:
+
+    @pytest.mark.slow
+    def test_to_glacier(self, class_case_dir, monkeypatch):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        # use our files
+        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
+                    'glathida/glathida_2023-11-16_rgi_{}.h5')
+        monkeypatch.setattr(glathida, 'GTD_BASE_URL', base_url)
+
+        df = glathida.glathida_to_gdir(gdir)
+        assert 11000 < len(df) < 12000
+
+        assert 'i_grid' in df
+        assert 'x_proj' in df
+
+        dsf = df[['ij_grid', 'thickness']].groupby('ij_grid').mean()
+        assert 1600 < len(dsf) < 1700
