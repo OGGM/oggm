@@ -213,6 +213,11 @@ _doc = ('A netcdf file containing several gridded data variables such as '
         'and more. This is for static, non time-dependant data.')
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
 
+_doc = ('A csv file containing ice thickness observations from the GlaThiDa '
+        'database. Only available when added from the shop, and only for about 2800 '
+        'glaciers worldwide.')
+BASENAMES['glathida_data'] = ('glathida_data.csv', _doc)
+
 _doc = ('A netcdf file containing gridded data variables which are time '
         'dependant. It has the same coordinates as `gridded_data`.')
 BASENAMES['gridded_simulation'] = ('gridded_simulation.nc', _doc)
