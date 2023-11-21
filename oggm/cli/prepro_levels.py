@@ -81,6 +81,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       elev_bands=False, centerlines=False,
                       override_params=None,
                       mb_calibration_strategy='informed_threestep',
+                      select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False,
@@ -133,6 +134,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'informed_threestep' (default)
         - 'melt_temp'
         - 'temp_melt'
+    select_source_from_dir : str
+        if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
+        select the chosen DEM source here. If you set it to "BY_RES" here,
+        COPDEM will be used and its resolution chosen based on the gdir's
+        map resolution (COPDEM30 for dx < 60 m, COPDEM90 elsewhere).
+    keep_dem_folders : bool
+        if `select_source_from_dir` is used, wether to keep the original
+        DEM folders in or not.
     add_consensus_thickness : bool
         adds (reprojects) the consensus estimates thickness to the glacier
         directories. With elev_bands=True, the data will also be binned.
@@ -426,6 +435,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                      'N centerline type: {}, '
                      'N elev bands type: {}.'
                      ''.format(len(gdirs_cent), len(gdirs_band)))
+
+        # If we are coming from a multi-dem setup, let's select it from there
+        if select_source_from_dir is not None:
+            from oggm.shop.rgitopo import select_dem_from_dir
+            workflow.execute_entity_task(select_dem_from_dir, gdirs_band,
+                                         dem_source=select_source_from_dir,
+                                         keep_dem_folders=keep_dem_folders)
+            workflow.execute_entity_task(select_dem_from_dir, gdirs_cent,
+                                         dem_source=select_source_from_dir,
+                                         keep_dem_folders=keep_dem_folders)
 
         # HH2015 method
         workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs_band)
@@ -814,6 +833,17 @@ def parse_args(args):
                              'compatible with level 1 folders, after which '
                              'the processing will stop. The default is to use '
                              'the default OGGM DEM.')
+    parser.add_argument('--select-source-from-dir', type=str,
+                        default=None,
+                        help='if starting from a level 1 "ALL" or "STANDARD" DEM '
+                        'sources directory, select the chosen DEM source here. '
+                        'If you set it to "BY_RES" here, COPDEM will be used and '
+                        'its resolution chosen based on the gdirs map resolution '
+                        '(COPDEM30 for dx < 60 m, COPDEM90 elsewhere).')
+    parser.add_argument('--keep-dem-folders', type=bool,
+                        default=False,
+                        help='if `select_source_from_dir` is used, wether to keep '
+                        'the original DEM folders in or not.')
     parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
                         help='adds (reprojects) the consensus thickness '
                              'estimates to the glacier directories. '
@@ -919,6 +949,8 @@ def parse_args(args):
                 logging_level=args.logging_level,
                 elev_bands=args.elev_bands,
                 centerlines=args.centerlines,
+                select_source_from_dir=args.select_source_from_dir,
+                keep_dem_folders=args.keep_dem_folders,
                 add_consensus_thickness=args.add_consensus_thickness,
                 add_millan_thickness=args.add_millan_thickness,
                 add_itslive_velocity=args.add_itslive_velocity,

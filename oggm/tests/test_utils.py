@@ -965,6 +965,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
+                                           '--select-source-from-dir', 'BY_RES',
                                            '--dem-source', 'ALL',
                                            '--add-consensus-thickness',
                                            '--add-millan-thickness',
@@ -984,6 +985,8 @@ class TestPreproCLI(unittest.TestCase):
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
         assert not kwargs['centerlines']
+        assert kwargs['select_source_from_dir'] == 'BY_RES'
+        assert kwargs['keep_dem_folders'] is False
         assert kwargs['add_consensus_thickness']
         assert kwargs['add_millan_thickness']
         assert kwargs['add_millan_velocity']
