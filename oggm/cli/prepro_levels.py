@@ -84,7 +84,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
-                      add_hugonnet_dhdt=False,
+                      add_hugonnet_dhdt=False, add_glathida=False,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
@@ -157,6 +157,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     add_hugonnet_dhdt : bool
         adds (reprojects) the hugonnet dhdt maps to the glacier
         directories. With elev_bands=True, the data will also be binned.
+    add_glathida : bool
+        adds (reprojects) the glathida thickness data to the glacier
+        directories. Data points are stored as csv files.
     start_level : int
         the pre-processed level to start from (default is to start from
         scratch). If set, you'll need to indicate start_base_url as well.
@@ -473,6 +476,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.shop.hugonnet_maps import hugonnet_to_gdir
             workflow.execute_entity_task(hugonnet_to_gdir, gdirs)
             bin_variables.append('hugonnet_dhdt')
+        if add_glathida:
+            from oggm.shop.glathida import glathida_to_gdir
+            workflow.execute_entity_task(glathida_to_gdir, gdirs)
 
         if bin_variables and gdirs_band:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
@@ -528,14 +534,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             from oggm.shop.millan22 import compile_millan_statistics
             opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))
             compile_millan_statistics(gdirs, path=opath)
-        if add_hugonnet_dhdt:
-            from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
-            opath = os.path.join(sum_dir, 'hugonnet_statistics_{}.csv'.format(rgi_reg))
-            compile_hugonnet_statistics(gdirs, path=opath)
         if add_consensus_thickness:
             from oggm.shop.bedtopo import compile_consensus_statistics
             opath = os.path.join(sum_dir, 'consensus_statistics_{}.csv'.format(rgi_reg))
             compile_consensus_statistics(gdirs, path=opath)
+        if add_hugonnet_dhdt:
+            from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
+            opath = os.path.join(sum_dir, 'hugonnet_statistics_{}.csv'.format(rgi_reg))
+            compile_hugonnet_statistics(gdirs, path=opath)
+        if add_glathida:
+            from oggm.shop.glathida import compile_glathida_statistics
+            opath = os.path.join(sum_dir, 'glathida_statistics_{}.csv'.format(rgi_reg))
+            compile_glathida_statistics(gdirs, path=opath)
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
@@ -868,6 +878,10 @@ def parse_args(args):
                              'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
+    parser.add_argument('--add-glathida', nargs='?', const=True, default=False,
+                        help='adds (reprojects) the glathida point thickness '
+                             'observations to the glacier directories. '
+                             'The data points are stored as csv.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -955,6 +969,7 @@ def parse_args(args):
                 add_itslive_velocity=args.add_itslive_velocity,
                 add_millan_velocity=args.add_millan_velocity,
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
+                add_glathida=args.add_glathida,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,

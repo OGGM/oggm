@@ -754,3 +754,9 @@ class Test_Glathida:
 
         dsf = df[['ij_grid', 'thickness']].groupby('ij_grid').mean()
         assert 1600 < len(dsf) < 1700
+
+        sdf = glathida.compile_glathida_statistics([gdir]).iloc[0]
+
+        assert sdf['n_valid_gridded_points'] < sdf['n_valid_thick_points']
+        assert sdf['date_mode'] < sdf['date_max']
+        assert sdf['avg_thick'] < sdf['max_thick']
