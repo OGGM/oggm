@@ -840,8 +840,7 @@ def parse_args(args):
                         'If you set it to "BY_RES" here, COPDEM will be used and '
                         'its resolution chosen based on the gdirs map resolution '
                         '(COPDEM30 for dx < 60 m, COPDEM90 elsewhere).')
-    parser.add_argument('--keep-dem-folders', type=bool,
-                        default=False,
+    parser.add_argument('--keep-dem-folders', nargs='?', const=True, default=False,
                         help='if `select_source_from_dir` is used, wether to keep '
                         'the original DEM folders in or not.')
     parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
