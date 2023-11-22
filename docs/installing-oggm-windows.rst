@@ -19,7 +19,7 @@ the ‘configuration’ tab. Select ‘Intel Virtual Technology’ and change th
 from ‘disabled’ to ‘enabled’. Save the change and exit the BIOS or UEFI settings by 
 using F10.
 
-.. image:: filepath/enable_intel_virtual_technology.png
+.. image:: docs/_static/windows_installation/enable_intel_virtual_technology.png
    :width: 400
 
 Enable WSL
