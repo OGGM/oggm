@@ -19,22 +19,23 @@ the ‘configuration’ tab. Select ‘Intel Virtual Technology’ and change th
 from ‘disabled’ to ‘enabled’. Save the change and exit the BIOS or UEFI settings by 
 using F10.
 
-.. image:: docs/_static/windows_installation/enable_intel_virtual_technology.png
-   :width: 400
+.. figure:: _static/windows_installation/enable_intel_virtual_technology.png
+    :width: 100%
+
 
 Enable WSL
 ~~~~~~~~~~
 
 Next you need to enable WSL. This is possible through the Windows Features dialog 
-or Power Shell. 
+or Power Shell. In the Windows search bar, type 'features' to bring up the 
+**Turn Windows Features on or off** dialog. Scroll down and check **Windows 
+Subsystem for Linux**. It is also necessary to tick **Virtual Machine Platform** 
+and **Windows Hypervisor Platform** to avoid errors. Click ‘OK’ and in the prompted 
+new field ‘install’.
 
-.. image:: filepath/windows_features_on_off.png
-   :width: 400
-
-In the Windows search bar, type 'features' to bring up the **Turn Windows Features 
-on or off** dialog. Scroll down and check **Windows Subsystem for Linux**. It is also
-necessary to tick **Virtual Machine Platform** and **Windows Hypervisor Platform** to 
-avoid errors. Click ‘OK’ and in the prompted new field ‘install’.
+.. figure:: _static/windows_installation/windows_features_on_off.png
+   :width: 40%
+|
 
 It is also possible to enable WSL as administrator via the Power Shell by using the 
 following command::
@@ -49,8 +50,8 @@ Check WSL
 To be sure WSL is enabled you can check it by opening a Command Prompt and type ’WSL’ 
 after restarting Windows:
 
-.. image:: filepath/check_wsl.png
-   :width: 400
+.. figure:: _static/windows_installation/check_wsl.png
+   :width: 50%
 
 This means, WLS in enabled but you have not installed a Linux distribution yet.
 
@@ -70,8 +71,8 @@ UNIX User Account
 
 Now open Ubuntu. You will automatically be asked to create a UNIX account.
 
-.. image:: filepath/unix_user_account.png
-   :width: 400
+.. figure:: _static/windows_installation/unix_user_account.png
+   :width: 75%
 
 Installing OGGM
 ---------------
