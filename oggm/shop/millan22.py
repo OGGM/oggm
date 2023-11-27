@@ -40,7 +40,7 @@ def _get_lookup_thickness():
 def _get_lookup_velocity():
     global _lookup_velocity
     if _lookup_velocity is None:
-        fname = default_base_url + 'millan22_velocity_lookup_shp_20220902.zip'
+        fname = default_base_url + 'millan22_velocity_lookup_shp_20231127.zip'
         _lookup_velocity = gpd.read_file('zip://' + utils.file_downloader(fname))
     return _lookup_velocity
 
