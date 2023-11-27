@@ -18,7 +18,7 @@ from oggm import utils, cfg
 log = logging.getLogger(__name__)
 
 GTD_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/glathida/glathida-main/'
-                'data/glathida_2023-11-16_rgi_{}.h5')
+                'data/glathida_2023-11-16_rgi_{}_per_id.h5')
 
 
 @utils.entity_task(log, writes=['glathida_data'])
@@ -58,12 +58,15 @@ def glathida_to_gdir(gdir):
     try:
         df = pd.read_hdf(gtd_file, key=gdir.rgi_id)
     except KeyError:
+        log.debug(f'({gdir.rgi_id}): no GlaThiDa data for this glacier')
         return None
 
     # OK - transform for later
     xx, yy = salem.transform_proj(salem.wgs84, gdir.grid.proj, df['longitude'], df['latitude'])
     df['x_proj'] = xx
     df['y_proj'] = yy
+
+    log.debug(f'({gdir.rgi_id}): {len(df)} GlaThiDa points for this glacier')
 
     ii, jj = gdir.grid.transform(df['longitude'], df['latitude'], crs=salem.wgs84, nearest=True)
     df['i_grid'] = ii
