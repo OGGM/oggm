@@ -379,7 +379,7 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
         'transform': dst_transform,
         'nodata': nodata,
         'width': grid_data['nx'],
-        'height': ['ny'],
+        'height': grid_data['ny'],
         'driver': 'GTiff'
     })
     profile.pop('blockxsize', None)
@@ -394,7 +394,6 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
     else:
         raise InvalidParamsError('{} interpolation not understood'
                                  .format(cfg.PARAMS['topo_interp']))
-
 
     with rasterio.open(dem_path, 'w', **profile) as dest:
         dst_array = np.empty((grid_data['ny'], grid_data['nx']), dtype=dem_dss[0].dtypes[0])
