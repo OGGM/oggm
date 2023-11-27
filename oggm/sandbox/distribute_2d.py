@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 from scipy import ndimage
 from scipy.stats import mstats
-from oggm.core.gis import gaussian_blur
+from oggm.core.gis import gaussian_blur, dem_for_combined_grid, CombinedNcdfFile
 from oggm.utils import ncDataset, entity_task
 import matplotlib.pyplot as plt
 
@@ -416,3 +416,43 @@ def distribute_thickness_from_simulation(gdir,
         return ds, out_df
 
     return ds
+
+def combine_distributed_thickness(gdirs, output_folder, source=None):
+    """
+    This function takes a list of glacier directories that have a distributed_thickness
+    Parameters
+    ----------
+    gdirs - list of GlacierDirectories
+    output_folder - folder where the intermediate files and the final combined distributed thickness
+                    will be stored
+    source - DEM source
+
+    Returns
+    -------
+
+    """
+    # create a combined salem.Grid object, which serves as canvas/boundaries of the combined glacier region
+    combined_grid = utils.combine_grids(gdirs)
+
+    #create gridded_data.nc
+    with CombinedNcdfFile(combined_grid, output_folder) as nc:
+        # is there still something else needed in the gridded_data.nc? add it here or use function
+        pass
+
+    # retrieve and project a topography/DEM for the defined region
+    dem_for_combined_grid(combined_grid, output_folder, source=source)
+
+    # add 'write_dem_to_gridded_data' function and use it here
+
+
+    # add individual add individual distributed thicknesses to gridded data
+    # for gdir in gdirs:
+    #     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+    #         ds = ds.load()
+    #
+    #     r_data = combined_grid.map_gridded_data(ds[f'simulation_distributed_thickness_{ssp}_projection'],
+    #                                             grid=gdir.grid)
+    #     total_data += r_data.filled(0)
+    # total_data = np.where(total_data == 0, np.NaN, total_data)
+
+
