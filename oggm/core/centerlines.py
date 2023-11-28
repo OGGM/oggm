@@ -2326,12 +2326,15 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         df = df.dropna(how='all', subset=bin_variables)
 
     # Check for binned vars
-    for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
-                                         preserve_totals):
-        if do_p:
-            out_total = np.nansum(df[var] * df['area'])
-            if out_total > 0:
-                df[var] *= in_total / out_total
+    with warnings.catch_warnings():
+        # This can trigger an invalid value
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
+                                             preserve_totals):
+            if do_p:
+                out_total = np.nansum(df[var] * df['area'])
+                if out_total > 0:
+                    df[var] *= in_total / out_total
 
     # In OGGM we go from top to bottom
     df = df[::-1]

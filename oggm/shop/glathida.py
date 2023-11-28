@@ -114,7 +114,7 @@ def glathida_statistics(gdir):
         d['date_mode'] = df.date.mode().iloc[0]
         d['date_min'] = df.date.min()
         d['date_max'] = df.date.max()
-    except (FileNotFoundError, AttributeError, KeyError):
+    except:
         pass
 
     return d
