@@ -434,15 +434,16 @@ def combine_distributed_thickness(gdirs, output_folder, source=None):
     # create a combined salem.Grid object, which serves as canvas/boundaries of the combined glacier region
     combined_grid = utils.combine_grids(gdirs)
 
-    #create gridded_data.nc
+    #create gridded_data.nc - maybe use this further down, where we can already add the Topography to the gridded_data
     with CombinedNcdfFile(combined_grid, output_folder) as nc:
-        # is there still something else needed in the gridded_data.nc? add it here or use function
+        # need to check which other data is necessary for the plotting of the distributed_thickness? or which other
+        # data should be included? glacier outlines etc.?
         pass
 
     # retrieve and project a topography/DEM for the defined region
     dem_for_combined_grid(combined_grid, output_folder, source=source)
 
-    # add 'write_dem_to_gridded_data' function and use it here
+    # add 'write_dem_to_gridded_data' function and add dem to the gridded data
 
 
     # add individual add individual distributed thicknesses to gridded data
