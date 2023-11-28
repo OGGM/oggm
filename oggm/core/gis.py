@@ -438,7 +438,7 @@ def dem_for_combined_grid(grid, fpath, source=None):
 
     # further checks if given fpath exists?
     dem_path = os.path.join(fpath, 'dem.tif')
-    reproject_dem(dem_list, fpath, source, grid_data)
+    reproject_dem(dem_list, dem_path, source, grid_data)
 
     """
     currently not needed for the multiple glacier visualisation task.
