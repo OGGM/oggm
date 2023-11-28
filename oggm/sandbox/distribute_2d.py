@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 from scipy import ndimage
 from scipy.stats import mstats
-from oggm.core.gis import gaussian_blur, dem_for_combined_grid, CombinedNcdfFile
+from oggm.core.gis import gaussian_blur, get_dem_for_grid, GriddedNcdfFile
 from oggm.utils import ncDataset, entity_task
 import matplotlib.pyplot as plt
 
@@ -417,31 +417,40 @@ def distribute_thickness_from_simulation(gdir,
 
     return ds
 
+
 def combine_distributed_thickness(gdirs, output_folder, source=None):
     """
-    This function takes a list of glacier directories that have a distributed_thickness
+    This function takes a list of glacier directories that have a
+    distributed_thickness.
+
     Parameters
     ----------
-    gdirs - list of GlacierDirectories
-    output_folder - folder where the intermediate files and the final combined distributed thickness
-                    will be stored
-    source - DEM source
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        The glacier directories which should be combined
+    output_folder : str
+        Folder where the intermediate files and the final combined gridded data
+        should be stored
+    source : str
+        DEM source
 
     Returns
     -------
 
     """
-    # create a combined salem.Grid object, which serves as canvas/boundaries of the combined glacier region
+    # create a combined salem.Grid object, which serves as canvas/boundaries of
+    # the combined glacier region
     combined_grid = utils.combine_grids(gdirs)
 
-    #create gridded_data.nc - maybe use this further down, where we can already add the Topography to the gridded_data
-    with CombinedNcdfFile(combined_grid, output_folder) as nc:
-        # need to check which other data is necessary for the plotting of the distributed_thickness? or which other
+    #create gridded_data.nc - maybe use this further down, where we can already
+    # add the Topography to the gridded_data
+    with GriddedNcdfFile(grid=combined_grid, fpath=output_folder) as nc:
+        # need to check which other data is necessary for the plotting of the
+        # distributed_thickness? or which other
         # data should be included? glacier outlines etc.?
         pass
 
     # retrieve and project a topography/DEM for the defined region
-    dem_for_combined_grid(combined_grid, output_folder, source=source)
+    get_dem_for_grid(combined_grid, output_folder, source=source)
 
     # add 'write_dem_to_gridded_data' function and add dem to the gridded data
 

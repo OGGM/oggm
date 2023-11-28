@@ -539,6 +539,7 @@ def recursive_valid_polygons(geoms, crs):
     assert np.all([type(geom) == shpg.Polygon for geom in new_geoms])
     return new_geoms
 
+
 def combine_grids(gdirs):
     """ Combines individual grids of different glacier directories to show
         multiple glaciers in the same plot. The resulting grid extent includes
@@ -610,6 +611,7 @@ def combine_grids(gdirs):
     new_grid['dxdy'] = (dx_use, dy_use)
 
     return Grid.from_dict(new_grid)
+
 
 def multipolygon_to_polygon(geometry, gdir=None):
     """Sometimes an RGI geometry is a multipolygon: this should not happen.

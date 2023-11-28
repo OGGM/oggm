@@ -297,22 +297,33 @@ def glacier_grid_params(gdir):
 
     return utm_proj, nx, ny, ulx, uly, dx
 
+
 def check_dem_source(source, extent_ll, rgi_id=None):
     """
-    This function can check for multiple DEM sources and is in charge of the error handling if a requested source is
-    not available for the given glacier/extent
+    This function can check for multiple DEM sources and is in charge of the
+    error handling if a requested source is not available for the given
+    glacier/extent
+
     Parameters
     ----------
-    source
-    extent_ll
-    gdir
+    source : str or list of str
+        If you want to force the use of a certain DEM source. If list is
+        provided they are checked in order. For a list of available options
+        check docstring of oggm.core.gis.define_glacier_region.
+    extent_ll : list
+        The longitude and latitude extend which should be checked for. Should
+        be provided as extent_ll = [[minlon, maxlon], [minlat, maxlat]].
+    rgi_id : str
+        The RGI-ID of the glacier, only used for a descriptive error message in
+        case.
 
     Returns
     -------
-
+    String of the working DEM source.
     """
-# We test DEM availability for glacier only (maps can grow big)
-    if isinstance(source, list):  # when multiple sources are provided, try them sequentially
+
+    # when multiple sources are provided, try them sequentially
+    if isinstance(source, list):
         for src in source:
             source_exists = is_dem_source_available(src, *extent_ll)
             if source_exists:
@@ -322,26 +333,36 @@ def check_dem_source(source, extent_ll, rgi_id=None):
         source_exists = is_dem_source_available(source, *extent_ll)
     if not source_exists:
         if rgi_id is None:
-            extent_string = f"the grid extent of longitudes {extent_ll[0]} and latitudes {extent_ll[1]}"
+            extent_string = (f"the grid extent of longitudes {extent_ll[0]} "
+                             f"and latitudes {extent_ll[1]}")
         else:
-            extent_string = f"the glacier {rgi_id} with border {cfg.PARAMS['border']}"
-        raise InvalidWorkflowError(f'Source: {source} is not available for {extent_string}')
+            extent_string = (f"the glacier {rgi_id} with border "
+                             f"{cfg.PARAMS['border']}")
+        raise InvalidWorkflowError(f"Source: {source} is not available for "
+                                   f"{extent_string}")
     return source
 
 
-def reproject_dem(dem_list, dem_path, source, grid_data):
+def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
     """
-    This function
+    This function reprojects a provided DEM to the destination grid and saves
+    the result to disk.
+
     Parameters
     ----------
-    dem_list
-    dem_path
-    source
-    grid_data - holds necessary grid dimension data that is needed for reprojection
+    dem_list : list of str
+        list with path(s) to the DEM file(s)
+    dem_source : str
+        DEM source string
+    dst_grid_prop : dict
+        Holds necessary grid properties. Must contain 'utm_proj', 'dx', 'ulx',
+        'uly', 'nx' and 'ny.
+    output_path : str
+        Filepath where to store the reprojected DEM.
 
     Returns
     -------
-
+    None
     """
 
     # Decide how to tag nodata
@@ -349,7 +370,7 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
         nodata = rio_ds[0].meta.get('nodata', None)
         if nodata is None:
             # badly tagged geotiffs, let's do it ourselves
-            nodata = -32767 if source == 'TANDEM' else -9999
+            nodata = -32767 if dem_source == 'TANDEM' else -9999
         return nodata
 
     # A glacier area can cover more than one tile:
@@ -368,18 +389,19 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
 
     # Use Grid properties to create a transform (see rasterio cookbook)
     dst_transform = rasterio.transform.from_origin(
-        grid_data['ulx'], grid_data['uly'], grid_data['dx'], grid_data['dx']
+        dst_grid_prop['ulx'], dst_grid_prop['uly'], dst_grid_prop['dx'],
+        dst_grid_prop['dx']
         # sign change (2nd dx) is done by rasterio.transform
     )
 
     # Set up profile for writing output
     profile = dem_dss[0].profile
     profile.update({
-        'crs': grid_data['utm_proj'].srs,
+        'crs': dst_grid_prop['utm_proj'].srs,
         'transform': dst_transform,
         'nodata': nodata,
-        'width': grid_data['nx'],
-        'height': grid_data['ny'],
+        'width': dst_grid_prop['nx'],
+        'height': dst_grid_prop['ny'],
         'driver': 'GTiff'
     })
     profile.pop('blockxsize', None)
@@ -395,8 +417,9 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
         raise InvalidParamsError('{} interpolation not understood'
                                  .format(cfg.PARAMS['topo_interp']))
 
-    with rasterio.open(dem_path, 'w', **profile) as dest:
-        dst_array = np.empty((grid_data['ny'], grid_data['nx']), dtype=dem_dss[0].dtypes[0])
+    with rasterio.open(output_path, 'w', **profile) as dest:
+        dst_array = np.empty((dst_grid_prop['ny'], dst_grid_prop['nx']),
+                             dtype=dem_dss[0].dtypes[0])
         reproject(
             # Source parameters
             source=dem_data,
@@ -406,7 +429,7 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
             # Destination parameters
             destination=dst_array,
             dst_transform=dst_transform,
-            dst_crs=grid_data['utm_proj'].srs,
+            dst_crs=dst_grid_prop['utm_proj'].srs,
             dst_nodata=nodata,
             # Configuration
             resampling=resampling)
@@ -416,10 +439,31 @@ def reproject_dem(dem_list, dem_path, source, grid_data):
         dem_ds.close()
 
 
-def dem_for_combined_grid(grid, fpath, source=None):
+def get_dem_for_grid(grid, fpath, source=None, rgi_id=None):
+    """
+    Fetch a DEM from source, reproject it to the extent defined by grid and
+    saves it to disk.
+
+    Parameters
+    ----------
+    grid : :py:class:`salem.gis.Grid`
+        Grid which defines the extent and projection of the final DEM
+    fpath : str
+        The output filepath for the final DEM.
+    source : str or list of str
+        If you want to force the use of a certain DEM source. If list is
+        provided they are checked in order. For a list of available options
+        check docstring of oggm.core.gis.define_glacier_region.
+    rgi_id : str
+        The RGI-ID of the glacier.
+
+    Returns
+    -------
+    tuple: (list with path(s) to the DEM file(s), data source str)
+    """
     minlon, maxlon, minlat, maxlat = grid.extent_in_crs(crs=salem.wgs84)
     extent_ll = [[minlon, maxlon], [minlat, maxlat]]
-    grid_data = {
+    grid_prop = {
         'utm_proj': grid.proj,
         'dx': grid.dx,
         'ulx': grid.x0,
@@ -428,37 +472,28 @@ def dem_for_combined_grid(grid, fpath, source=None):
         'ny': grid.ny
     }
 
-    source = check_dem_source(source, extent_ll)
+    source = check_dem_source(source, extent_ll, rgi_id=rgi_id)
 
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         dx_meter=grid_data['dx'],
+                                         rgi_id=rgi_id,
+                                         dx_meter=grid_prop['dx'],
                                          source=source)
-    log.debug('(%s) DEM source: %s', f'extent(lon, lat) {extent_ll}', dem_source)
-    log.debug('(%s) N DEM Files: %s', f'extent(lon, lat) {extent_ll}', len(dem_list))
+
+    if rgi_id is not None:
+        log.debug('(%s) DEM source: %s', rgi_id, dem_source)
+        log.debug('(%s) N DEM Files: %s', rgi_id, len(dem_list))
 
     # further checks if given fpath exists?
-    dem_path = os.path.join(fpath, 'dem.tif')
-    reproject_dem(dem_list, dem_path, source, grid_data)
+    if fpath[-4:] != '.tif':
+        # we add the default filename
+        fpath = os.path.join(fpath, 'dem.tif')
 
-    """
-    currently not needed for the multiple glacier visualisation task.
-    
-    # Glacier grid
-    x0y0 = (ulx + dx / 2, uly - dx / 2)  # To pixel center coordinates
-    glacier_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), dxdy=(dx, -dx),
-                              x0y0=x0y0)
-    glacier_grid.to_json(gdir.get_filepath('glacier_grid'))
+    reproject_dem(dem_list=dem_list, dem_source=dem_source,
+                  dst_grid_prop=grid_prop,
+                  output_path=fpath)
 
-    # Write DEM source info
-    gdir.add_to_diagnostics('dem_source', dem_source)
-    source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
-    with open(gdir.get_filepath('dem_source'), 'w') as fw:
-        fw.write(source_txt)
-        fw.write('\n\n')
-        fw.write('# Data files\n\n')
-        for fname in dem_list:
-            fw.write('{}\n'.format(os.path.basename(fname)))
-    """
+    return dem_list, dem_source
+
 
 @entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
 def define_glacier_region(gdir, entity=None, source=None):
@@ -506,28 +541,10 @@ def define_glacier_region(gdir, entity=None, source=None):
     # Back to lon, lat for DEM download/preparation
     tmp_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), x0y0=(ulx, uly),
                           dxdy=(dx, -dx), pixel_ref='corner')
-    minlon, maxlon, minlat, maxlat = tmp_grid.extent_in_crs(crs=salem.wgs84)
 
-    # Open DEM
-    source = check_dem_source(source, gdir.extent_ll, rgi_id=gdir.rgi_id)
-
-    dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         rgi_id=gdir.rgi_id,
-                                         dx_meter=dx,
-                                         source=source)
-    log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
-    log.debug('(%s) N DEM Files: %s', gdir.rgi_id, len(dem_list))
-
-    grid_data = {
-        'utm_proj': utm_proj,
-        'dx': dx,
-        'ulx': ulx,
-        'uly': uly,
-        'nx': nx,
-        'ny': ny
-    }
-
-    reproject_dem(dem_list, gdir.get_filepath('dem'), source, grid_data)
+    dem_list, dem_source = get_dem_for_grid(grid=tmp_grid,
+                                            fpath=gdir.get_filepath('dem'),
+                                            source=source, rgi_id=gdir.rgi_id)
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
@@ -621,94 +638,80 @@ def read_geotiff_dem(gdir):
     return topo
 
 
-def prepareNcdfFile(ncdf_object):
-    """
-    This function takes care of the basic assembly of a gridded netCDF file, before other parameters can be added to it.
-    Parameters
-    ----------
-    ncdf_object
-
-    Returns
-    -------
-
-    """
-    if os.path.exists(ncdf_object.fpath):
-        # Already there - just append
-        ncdf_object.nc = ncDataset(ncdf_object.fpath, 'a', format='NETCDF4')
-        return ncdf_object.nc
-
-    # Create and fill
-    nc = ncDataset(ncdf_object.fpath, 'w', format='NETCDF4')
-
-    nc.createDimension('x', ncdf_object.grid.nx)
-    nc.createDimension('y', ncdf_object.grid.ny)
-
-    nc.author = 'OGGM'
-    nc.author_info = 'Open Global Glacier Model'
-    nc.pyproj_srs = ncdf_object.grid.proj.srs
-
-    x = ncdf_object.grid.x0 + np.arange(ncdf_object.grid.nx) * ncdf_object.grid.dx
-    y = ncdf_object.grid.y0 + np.arange(ncdf_object.grid.ny) * ncdf_object.grid.dy
-
-    v = nc.createVariable('x', 'f4', ('x',), zlib=True)
-    v.units = 'm'
-    v.long_name = 'x coordinate of projection'
-    v.standard_name = 'projection_x_coordinate'
-    v[:] = x
-
-    v = nc.createVariable('y', 'f4', ('y',), zlib=True)
-    v.units = 'm'
-    v.long_name = 'y coordinate of projection'
-    v.standard_name = 'projection_y_coordinate'
-    v[:] = y
-
-    ncdf_object.nc = nc
-    return nc
-
 class GriddedNcdfFile(object):
     """Creates or opens a gridded netcdf file template.
 
     The other variables have to be created and filled by the calling
     routine.
     """
-    def __init__(self, gdir, basename='gridded_data', reset=False):
-        self.fpath = gdir.get_filepath(basename)
-        self.grid = gdir.grid
-        if reset and os.path.exists(self.fpath):
-            os.remove(self.fpath)
-
-    def __enter__(self):
-        return prepareNcdfFile(self)
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.nc.close()
-
-
-class CombinedNcdfFile(object):
-    """
-    Creates or opens a gridded netcdf file template independent of the gdir-logic.
-
-    The other variables have to be created and filled by the calling
-    routine.
-    """
-
-    def __init__(self, combined_grid, fpath, basename='gridded_data', reset=False):
+    def __init__(self, gdir=None, grid=None, fpath=None,
+                 basename='gridded_data', reset=False):
         """
         Parameters
         ----------
-        combined_grid: an already combined salem.Grid of several glaciers.
-        fpath: file path to a directory where the netCDF file of a combined grid is stored.
-        basename: name of the output .nc file
-
-        reset
+        gdir : :py:class:`oggm.GlacierDirectory`
+            The glacier directory. If provided it defines the filepath and the
+            grid used for the netcdf file. It overrules grid and fpath if all
+            are provided.
+        grid : :py:class:`salem.gis.Grid`
+            Grid which defines the extend of the netcdf file. Needed if gdir is
+            not provided.
+        fpath : str
+            The output filepath for the netcdf file. Needed if gdir is not
+            provided.
+        basename : str
+            The filename of the resulting netcdf file
+        reset : bool
+            If True, a potentially existing file will be deleted.
         """
-        self.grid = combined_grid
-        self.fpath = os.path.join(fpath, basename)
+
+        if gdir is not None:
+            self.fpath = gdir.get_filepath(basename)
+            self.grid = gdir.grid
+        else:
+            if grid is None or fpath is None:
+                raise InvalidParamsError('If you do not provide a gdir you must'
+                                         'define grid and fpath! Given grid='
+                                         f'{grid} and fpath={fpath}.')
+            self.fpath = os.path.join(fpath, basename)
+            self.grid = grid
+
         if reset and os.path.exists(self.fpath):
             os.remove(self.fpath)
 
     def __enter__(self):
-        return prepareNcdfFile(self)
+        if os.path.exists(self.fpath):
+            # Already there - just append
+            self.nc = ncDataset(self.fpath, 'a', format='NETCDF4')
+            return self.nc
+
+        # Create and fill
+        nc = ncDataset(self.fpath, 'w', format='NETCDF4')
+
+        nc.createDimension('x', self.grid.nx)
+        nc.createDimension('y', self.grid.ny)
+
+        nc.author = 'OGGM'
+        nc.author_info = 'Open Global Glacier Model'
+        nc.pyproj_srs = self.grid.proj.srs
+
+        x = self.grid.x0 + np.arange(self.grid.nx) * self.grid.dx
+        y = self.grid.y0 + np.arange(self.grid.ny) * self.grid.dy
+
+        v = nc.createVariable('x', 'f4', ('x',), zlib=True)
+        v.units = 'm'
+        v.long_name = 'x coordinate of projection'
+        v.standard_name = 'projection_x_coordinate'
+        v[:] = x
+
+        v = nc.createVariable('y', 'f4', ('y',), zlib=True)
+        v.units = 'm'
+        v.long_name = 'y coordinate of projection'
+        v.standard_name = 'projection_y_coordinate'
+        v[:] = y
+
+        self.nc = nc
+        return nc
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.nc.close()
@@ -794,7 +797,7 @@ def process_dem(gdir):
         utils.clip_min(smoothed_dem, 0, out=smoothed_dem)
 
     # Write to file
-    with GriddedNcdfFile(gdir, reset=True) as nc:
+    with GriddedNcdfFile(gdir=gdir, reset=True) as nc:
 
         v = nc.createVariable('topo', 'f4', ('y', 'x',), zlib=True)
         v.units = 'm'
@@ -903,7 +906,7 @@ def glacier_masks(gdir):
     gdir.write_pickle(geometries, 'geometries')
 
     # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir) as nc:
+    with GriddedNcdfFile(gdir=gdir) as nc:
 
         if 'glacier_mask' not in nc.variables:
             v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ),
@@ -1037,7 +1040,7 @@ def simple_glacier_masks(gdir):
                               .format(gdir.rgi_id))
 
     # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir) as nc:
+    with GriddedNcdfFile(gdir=gdir) as nc:
 
         if 'glacier_mask' not in nc.variables:
             v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ),
@@ -1751,7 +1754,7 @@ def merged_glacier_masks(gdir, geometry):
                            .format(gdir.rgi_id))
 
     # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir, reset=True) as nc:
+    with GriddedNcdfFile(gdir=gdir, reset=True) as nc:
 
         v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
         v.units = 'm'
