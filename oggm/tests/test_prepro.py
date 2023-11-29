@@ -201,6 +201,18 @@ class TestGIS(unittest.TestCase):
         mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
         np.testing.assert_allclose(np.abs(mygrid.dx), 50.)
 
+        # Test binned method
+        cfg.PARAMS['grid_dx_method'] = 'by_bin'
+        gis.define_glacier_region(gdir)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(np.abs(mygrid.dx), 50.)
+
+        cfg.PARAMS['grid_dx_method'] = 'by_bin'
+        cfg.PARAMS['by_bin_dx'] = [25, 75, 100, 200]
+        gis.define_glacier_region(gdir)
+        mygrid = salem.Grid.from_json(gdir.get_filepath('glacier_grid'))
+        np.testing.assert_allclose(np.abs(mygrid.dx), 75.)
+
         # Test linear method
         cfg.PARAMS['grid_dx_method'] = 'linear'
         cfg.PARAMS['d1'] = 5.
