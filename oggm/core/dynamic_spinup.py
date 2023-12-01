@@ -511,8 +511,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
                         # ok we set a new lower limit
-                        t_spinup_limits[0] = t_spinup_limits[0] - \
-                                             t_spinup_max_step_length
+                        t_spinup_limits[0] = (t_spinup_limits[0] -
+                                              t_spinup_max_step_length)
             elif t_spinup > t_spinup_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if t_spinup_limits[1] not in t_spinup_guess:
@@ -527,8 +527,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
                         # ok we set a new upper limit
-                        t_spinup_limits[1] = t_spinup_limits[1] + \
-                                             t_spinup_max_step_length
+                        t_spinup_limits[1] = (t_spinup_limits[1] +
+                                              t_spinup_max_step_length)
 
             # now clip t_spinup with limits
             t_spinup = np.clip(t_spinup, t_spinup_limits[0], t_spinup_limits[1])
@@ -597,8 +597,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                         else:
                             # if lower limit was already used change it and use
                             if t_spinup == t_spinup_limits[0]:
-                                t_spinup_limits[0] = t_spinup_limits[0] - \
-                                                     t_spinup_max_step_length
+                                t_spinup_limits[0] = (t_spinup_limits[0] -
+                                                      t_spinup_max_step_length)
                                 t_spinup = copy.deepcopy(t_spinup_limits[0])
                             else:
                                 # otherwise just try with a colder t_spinup
@@ -680,12 +680,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     was_errors[1] = False
                     if t_spinup <= t_spinup_limits[0]:
                         t_spinup_limits[0] = t_spinup
-                        t_spinup_limits[1] = t_spinup_limits[0] + \
-                                             t_spinup_max_step_length
+                        t_spinup_limits[1] = (t_spinup_limits[0] +
+                                              t_spinup_max_step_length)
                     elif t_spinup >= t_spinup_limits[1]:
                         t_spinup_limits[1] = t_spinup
-                        t_spinup_limits[0] = t_spinup_limits[1] - \
-                                             t_spinup_max_step_length
+                        t_spinup_limits[0] = (t_spinup_limits[1] -
+                                              t_spinup_max_step_length)
                     else:
                         if is_first_guess_ice_free:
                             t_spinup_limits[1] = t_spinup
@@ -698,15 +698,15 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     if t_spinup >= t_spinup_limits[1]:
                         # this happens when the first guess was out of domain
                         was_errors[0] = False
-                        t_spinup_limits[1] = t_spinup_limits[0] + \
-                                             t_spinup_max_step_length
+                        t_spinup_limits[1] = (t_spinup_limits[0] +
+                                              t_spinup_max_step_length)
                 elif define_new_upper_limit:
                     t_spinup_limits[1] = copy.deepcopy(t_spinup)
                     if t_spinup <= t_spinup_limits[0]:
                         # this happens when the first guess was ice free
                         was_errors[1] = False
-                        t_spinup_limits[0] = t_spinup_limits[1] - \
-                                             t_spinup_max_step_length
+                        t_spinup_limits[0] = (t_spinup_limits[1] -
+                                              t_spinup_max_step_length)
 
             return float(tmp_mismatch), float(t_spinup)
 
