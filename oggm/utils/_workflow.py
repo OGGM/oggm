@@ -515,6 +515,8 @@ class entity_task(object):
                 return out
 
         _entity_task.__dict__['is_entity_task'] = True
+        # adds the possibility to use a function, decorated as entity_task, without its decoration.
+        _entity_task.unwrapped = task_func
         return _entity_task
 
 
