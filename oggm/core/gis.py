@@ -619,19 +619,34 @@ def rasterio_to_gdir(gdir, input_file, output_file_name,
                     dst.write(dest, indexes=i)
 
 
-def read_geotiff_dem(gdir):
-    """Reads (and masks out) the DEM out of the gdir's geotiff file.
+def read_geotiff_dem(gdir=None, fpath=None):
+    """Reads (and masks out) the DEM out of the gdir's geotiff file or a geotiff file given by the fpath variable.
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory
+    fpath : 'str'
+        path to a gdir
 
     Returns
     -------
     2D np.float32 array
     """
-    with rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff') as ds:
+    if gdir is not None:
+        dem_path = gdir.get_filepath('dem')
+    else:
+        if fpath is not None:
+            if fpath[-4:] != '.tif':
+                # we add the default filename
+                fpath = os.path.join(fpath, 'dem.tif')
+            dem_path = fpath
+        else:
+            raise InvalidParamsError('If you do not provide a gdir you must'
+                                     f'define a fpath! Given fpath={fpath}.')
+
+
+    with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
         topo[topo <= -999.] = np.NaN
         topo[ds.read_masks(1) == 0] = np.NaN
