@@ -6,6 +6,7 @@ to be realized by any OGGM pre-processing workflow.
 import os
 import logging
 import warnings
+import json
 from packaging.version import Version
 from functools import partial
 
@@ -733,7 +734,7 @@ class GriddedNcdfFile(object):
 
 
 @entity_task(log, writes=['gridded_data'])
-def process_dem(gdir):
+def process_dem(gdir=None, grid=None, fpath=None):
     """Reads the DEM from the tiff, attempts to fill voids and apply smooth.
 
     The data is then written to `gridded_data.nc`.
@@ -743,13 +744,39 @@ def process_dem(gdir):
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
     """
+    if gdir is not None:
+        # open srtm tif-file:
+        dem = read_geotiff_dem(gdir)
+        # Grid
+        dem_grid = gdir.grid
+        grid_name = gdir.rgi_id
+    else:
+        if grid is None or fpath is None:
+            raise InvalidParamsError('If you do not provide a gdir you must'
+                                     'define grid and fpath! Given grid='
+                                     f'{grid} and fpath={fpath}.')
+        dem = read_geotiff_dem(fpath=fpath)
+        grid_name = 'custom_grid'
+        dem_grid = grid
+        diagnostics_dict = dict()
+    # Grid parameters
+    nx = dem_grid.nx
+    ny = dem_grid.ny
+    dx = dem_grid.dx
+    xx, yy = dem_grid.ij_coordinates
 
-    # open srtm tif-file:
-    dem = read_geotiff_dem(gdir)
-
-    # Grid
-    nx = gdir.grid.nx
-    ny = gdir.grid.ny
+    def _log_and_diagnostics(pnan, log_string='extra'):
+        if log_string != 'extra':
+            perc_string = 'dem_invalid_perc'
+        else:
+            perc_string = 'dem_extrapol_perc'
+        log.info(grid_name + f': DEM needed {log_string}polation.')
+        if gdir is not None:
+            gdir.add_to_diagnostics(f'dem_needed_{log_string}polation', True)
+            gdir.add_to_diagnostics(perc_string, len(pnan[0]) / (nx * ny))
+        else:
+            diagnostics_dict[f'dem_needed_{log_string}polation'] = True
+            diagnostics_dict[perc_string] = len(pnan[0]) / (nx * ny)
 
     # Correct the DEM
     valid_mask = np.isfinite(dem)
@@ -759,8 +786,7 @@ def process_dem(gdir):
     if np.any(~valid_mask):
         # We interpolate
         if np.sum(~valid_mask) > (0.25 * nx * ny):
-            log.info('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
-        xx, yy = gdir.grid.ij_coordinates
+            log.info('({}) more than 25% NaNs in DEM'.format(grid_name))
         pnan = np.nonzero(~valid_mask)
         pok = np.nonzero(valid_mask)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
@@ -770,15 +796,13 @@ def process_dem(gdir):
                                  method='linear')
         except ValueError:
             raise InvalidDEMError('DEM interpolation not possible.')
-        log.info(gdir.rgi_id + ': DEM needed interpolation.')
-        gdir.add_to_diagnostics('dem_needed_interpolation', True)
-        gdir.add_to_diagnostics('dem_invalid_perc', len(pnan[0]) / (nx * ny))
+
+        _log_and_diagnostics(pnan, log_string='inter')
 
     isfinite = np.isfinite(dem)
     if np.any(~isfinite):
         # interpolation will still leave NaNs in DEM:
         # extrapolate with NN if needed (e.g. coastal areas)
-        xx, yy = gdir.grid.ij_coordinates
         pnan = np.nonzero(~isfinite)
         pok = np.nonzero(isfinite)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
@@ -788,13 +812,11 @@ def process_dem(gdir):
                                  method='nearest')
         except ValueError:
             raise InvalidDEMError('DEM extrapolation not possible.')
-        log.info(gdir.rgi_id + ': DEM needed extrapolation.')
-        gdir.add_to_diagnostics('dem_needed_extrapolation', True)
-        gdir.add_to_diagnostics('dem_extrapol_perc', len(pnan[0]) / (nx * ny))
+        _log_and_diagnostics(pnan, log_string='extra')
 
     if np.min(dem) == np.max(dem):
         raise InvalidDEMError('({}) min equal max in the DEM.'
-                              .format(gdir.rgi_id))
+                              .format(grid_name))
 
     # Clip topography to 0 m a.s.l.
     if cfg.PARAMS['clip_dem_to_zero']:
@@ -802,7 +824,7 @@ def process_dem(gdir):
 
     # Smooth DEM?
     if cfg.PARAMS['smooth_window'] > 0.:
-        gsize = np.rint(cfg.PARAMS['smooth_window'] / gdir.grid.dx)
+        gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         smoothed_dem = gaussian_blur(dem, int(gsize))
     else:
         smoothed_dem = dem.copy()
@@ -811,8 +833,12 @@ def process_dem(gdir):
     if cfg.PARAMS['clip_dem_to_zero']:
         utils.clip_min(smoothed_dem, 0, out=smoothed_dem)
 
+    if gdir is None:
+        with open(os.path.join(fpath, 'dem_diagnostics.json'), 'w') as f:
+            json.dump(diagnostics_dict, f)
+
     # Write to file
-    with GriddedNcdfFile(gdir=gdir, reset=True) as nc:
+    with GriddedNcdfFile(gdir=gdir, grid=dem_grid, fpath=fpath, reset=True) as nc:
 
         v = nc.createVariable('topo', 'f4', ('y', 'x',), zlib=True)
         v.units = 'm'
