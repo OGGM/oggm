@@ -1,6 +1,7 @@
 import logging
 import warnings
 
+import os
 import oggm
 import oggm.cfg as cfg
 from oggm import utils
@@ -9,7 +10,7 @@ import numpy as np
 import xarray as xr
 from scipy import ndimage
 from scipy.stats import mstats
-from oggm.core.gis import gaussian_blur, get_dem_for_grid, GriddedNcdfFile
+from oggm.core.gis import gaussian_blur, get_dem_for_grid, GriddedNcdfFile, process_dem
 from oggm.utils import ncDataset, entity_task
 import matplotlib.pyplot as plt
 
@@ -418,7 +419,7 @@ def distribute_thickness_from_simulation(gdir,
     return ds
 
 
-def combine_distributed_thickness(gdirs, output_folder, source=None):
+def combine_distributed_thickness(gdirs, output_folder, suffix='', source=None):
     """
     This function takes a list of glacier directories that have a
     distributed_thickness.
@@ -441,28 +442,28 @@ def combine_distributed_thickness(gdirs, output_folder, source=None):
     # the combined glacier region
     combined_grid = utils.combine_grids(gdirs)
 
-    #create gridded_data.nc - maybe use this further down, where we can already
-    # add the Topography to the gridded_data
-    with GriddedNcdfFile(grid=combined_grid, fpath=output_folder) as nc:
-        # need to check which other data is necessary for the plotting of the
-        # distributed_thickness? or which other
-        # data should be included? glacier outlines etc.?
-        pass
+    # check if output_folder exists
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
     # retrieve and project a topography/DEM for the defined region
     get_dem_for_grid(combined_grid, output_folder, source=source)
+    # processes dem(smoothing etc.) and creates gridded_data and adds DEM data
+    process_dem.unwrapped(gdir=None, grid=combined_grid, fpath=output_folder)
 
     # add 'write_dem_to_gridded_data' function and add dem to the gridded data
 
 
     # add individual add individual distributed thicknesses to gridded data
-    # for gdir in gdirs:
-    #     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-    #         ds = ds.load()
-    #
-    #     r_data = combined_grid.map_gridded_data(ds[f'simulation_distributed_thickness_{ssp}_projection'],
-    #                                             grid=gdir.grid)
-    #     total_data += r_data.filled(0)
-    # total_data = np.where(total_data == 0, np.NaN, total_data)
+    total_data = np.zeros((combined_grid.ny, combined_grid.nx))
+    for gdir in gdirs:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ds = ds.load()
+
+        r_data = combined_grid.map_gridded_data(ds['distributed_thickness'],
+                                                grid=gdir.grid)
+        total_data += r_data.filled(0)
+    total_data = np.where(total_data == 0, np.NaN, total_data)
+    return total_data
 
 
