@@ -453,17 +453,61 @@ def combine_distributed_thickness(gdirs, output_folder, suffix='', source=None):
 
     # add 'write_dem_to_gridded_data' function and add dem to the gridded data
 
+    def _get_gridded_simulation_path(gdir, suffix=''):
+        """
+        can insert a suffix in the gridded_simulation path
+        Parameters
+        ----------
+        gdir - :py:class:`oggm.GlacierDirectory`
+        An OGGM glacier directory
+        suffix - str, optional
+        suffix chosen for the simulation run
 
-    # add individual add individual distributed thicknesses to gridded data
-    total_data = np.zeros((combined_grid.ny, combined_grid.nx))
+        Returns
+        -------
+
+        """
+        gridded_sim_path = gdir.get_filepath('gridded_simulation')
+        return gridded_sim_path[:-3] + suffix + gridded_sim_path[-3:]
+
+    # combine individual distributed thicknesses
+    combined_dt = None
+    time_coord = None
     for gdir in gdirs:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with xr.open_dataset(_get_gridded_simulation_path(gdir, suffix)) as ds:
             ds = ds.load()
+
+        # assuming that the same simulation ran the same time for each glacier
+        # => taking the simulation duration from the first gdir
+        if combined_dt is None:
+            time_coord = ds.time
+            combined_dt = np.zeros((len(time_coord), combined_grid.ny, combined_grid.nx))
 
         r_data = combined_grid.map_gridded_data(ds['distributed_thickness'],
                                                 grid=gdir.grid)
-        total_data += r_data.filled(0)
-    total_data = np.where(total_data == 0, np.NaN, total_data)
-    return total_data
+        combined_dt += r_data.filled(0)
+    combined_dt = np.where(combined_dt == 0, np.NaN, combined_dt)
+
+    # add combined data to the gridded_data
+    # with xr.open_dataset(os.path.join(output_folder, 'gridded_data.nc')) as ds:
+    #     ds = ds.load()
+    # ds = ds.assign_coords({'time': time_coord.values})
+    # ds = ds.assign({'combined_distributed_thickness': (('time', 'y', 'x'), combined_dt)})
+    # return ds
+
+    with GriddedNcdfFile(gdir=None, fpath=output_folder, grid=combined_grid) as gridded_data:
+        # add time dimension to dataframe
+        gridded_data.createDimension('time', len(time_coord))
+        v = gridded_data.createVariable('time', 'f4', ('time',), zlib=True)
+        v.units = 'years'
+        v.long_name = 'time coordinate of the simulation'
+        v.standard_name = 'time'
+        v[:] = time_coord.values
+        # add combined distributed thickness
+        v = gridded_data.createVariable('combined_distributed_thickness', 'f4', ('time', 'y', 'x',), zlib=True)
+        v.units = 'm'
+        v.long_name = 'combined distributed thickness'
+        v[:] = combined_dt
+
 
 
