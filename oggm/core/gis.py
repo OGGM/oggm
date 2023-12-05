@@ -689,7 +689,7 @@ class GriddedNcdfFile(object):
                 raise InvalidParamsError('If you do not provide a gdir you must'
                                          'define grid and fpath! Given grid='
                                          f'{grid} and fpath={fpath}.')
-            self.fpath = os.path.join(fpath, basename)
+            self.fpath = os.path.join(fpath, basename + '.nc')
             self.grid = grid
 
         if reset and os.path.exists(self.fpath):
