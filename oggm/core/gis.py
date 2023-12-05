@@ -669,7 +669,7 @@ class GriddedNcdfFile(object):
             grid used for the netcdf file. It overrules grid and fpath if all
             are provided.
         grid : :py:class:`salem.gis.Grid`
-            Grid which defines the extend of the netcdf file. Needed if gdir is
+            Grid which defines the extent of the netcdf file. Needed if gdir is
             not provided.
         fpath : str
             The output filepath for the netcdf file. Needed if gdir is not
