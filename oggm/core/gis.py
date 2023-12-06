@@ -443,7 +443,7 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
         dem_ds.close()
 
 
-def get_dem_for_grid(grid, fpath, source=None, rgi_id=None):
+def get_dem_for_grid(grid, fpath, source=None, gdir=None):
     """
     Fetch a DEM from source, reproject it to the extent defined by grid and
     saves it to disk.
@@ -467,6 +467,11 @@ def get_dem_for_grid(grid, fpath, source=None, rgi_id=None):
     """
     minlon, maxlon, minlat, maxlat = grid.extent_in_crs(crs=salem.wgs84)
     extent_ll = [[minlon, maxlon], [minlat, maxlat]]
+    if gdir is not None:
+        rgi_id = gdir.rgi_id
+    else:
+        rgi_id = None
+
     grid_prop = {
         'utm_proj': grid.proj,
         'dx': grid.dx,
@@ -479,7 +484,7 @@ def get_dem_for_grid(grid, fpath, source=None, rgi_id=None):
     source = check_dem_source(source, extent_ll, rgi_id=rgi_id)
 
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         rgi_id=rgi_id,
+                                         gdir=gdir,
                                          dx_meter=grid_prop['dx'],
                                          source=source)
 
@@ -548,7 +553,7 @@ def define_glacier_region(gdir, entity=None, source=None):
 
     dem_list, dem_source = get_dem_for_grid(grid=tmp_grid,
                                             fpath=gdir.get_filepath('dem'),
-                                            source=source, rgi_id=gdir.rgi_id)
+                                            source=source, gdir=gdir)
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
