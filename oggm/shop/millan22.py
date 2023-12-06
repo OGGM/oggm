@@ -40,7 +40,7 @@ def _get_lookup_thickness():
 def _get_lookup_velocity():
     global _lookup_velocity
     if _lookup_velocity is None:
-        fname = default_base_url + 'millan22_velocity_lookup_shp_20220902.zip'
+        fname = default_base_url + 'millan22_velocity_lookup_shp_20231127.zip'
         _lookup_velocity = gpd.read_file('zip://' + utils.file_downloader(fname))
     return _lookup_velocity
 
@@ -328,27 +328,35 @@ def millan_statistics(gdir):
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             thick = ds['millan_ice_thickness'].where(ds['glacier_mask'], np.NaN).load()
-            d['millan_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
-            d['millan_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
-            d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
+            with warnings.catch_warnings():
+                # For operational runs we ignore the warnings
+                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                d['millan_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
+                d['millan_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
+                d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
 
-            if 'millan_ice_thickness_err' in ds:
-                err = ds['millan_ice_thickness_err'].where(ds['glacier_mask'], np.NaN).load()
-                d['millan_vol_err_km3'] = float(err.sum() * gdir.grid.dx ** 2 * 1e-9)
+                if 'millan_ice_thickness_err' in ds:
+                    err = ds['millan_ice_thickness_err'].where(ds['glacier_mask'], np.NaN).load()
+                    d['millan_vol_err_km3'] = float(err.sum() * gdir.grid.dx ** 2 * 1e-9)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             v = ds['millan_v'].where(ds['glacier_mask'], np.NaN).load()
-            d['millan_avg_vel'] = np.nanmean(v)
-            d['millan_max_vel'] = np.nanmax(v)
+            with warnings.catch_warnings():
+                # For operational runs we ignore the warnings
+                warnings.filterwarnings('ignore', category=RuntimeWarning)
+                d['millan_avg_vel'] = np.nanmean(v)
+                d['millan_max_vel'] = np.nanmax(v)
+                d['millan_vel_perc_cov'] = (float((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
+                                            gdir.rgi_area_km2)
 
-            if 'millan_err_vx' in ds:
-                err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.NaN).load()
-                err_vy = ds['millan_err_vy'].where(ds['glacier_mask'], np.NaN).load()
-                err = (err_vx**2 + err_vy**2)**0.5
-                d['millan_avg_err_vel'] = np.nanmean(err)
+                if 'millan_err_vx' in ds:
+                    err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.NaN).load()
+                    err_vy = ds['millan_err_vy'].where(ds['glacier_mask'], np.NaN).load()
+                    err = (err_vx**2 + err_vy**2)**0.5
+                    d['millan_avg_err_vel'] = np.nanmean(err)
 
     except (FileNotFoundError, AttributeError, KeyError):
         pass

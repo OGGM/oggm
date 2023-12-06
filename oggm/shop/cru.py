@@ -365,7 +365,6 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     hgt_f = loc_hgt[isok].flatten()
     assert len(hgt_f) > 0.
 
-
     # Make DataArrays
     rng = np.random.RandomState(seed)
     loc_tmp = xr.DataArray(loc_tmp[:, 1, 1], dims=['month'],

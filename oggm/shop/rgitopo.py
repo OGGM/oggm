@@ -91,23 +91,17 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
         the glacier directory
     dem_source : str
         the source to pick from. If 'RGI', we assume that there is a
-        `dem_source` attribute in the RGI file.
+        `dem_source` attribute in the RGI file. If 'BY_RES', we use
+        COPDEM30 for all gdirs with resolution smaller than 60m
     keep_dem_folders : bool
         the default is to delete the other DEM directories to save space.
         Set this to True to prevent that (e.g. for sensitivity tests)
     """
 
-    # Start by deleting noise
-    for fn in os.listdir(gdir.dir):
-        if fn in ['glacier_mask.tif', 'glacier_grid.json',
-                  'outlines.tar.gz', 'intersects.tar.gz']:
-            continue
-        fn = os.path.join(gdir.dir, fn)
-        if os.path.isfile(fn):
-            os.remove(fn)
-
     if dem_source == 'RGI':
         dem_source = gdir.rgi_dem_source
+    if dem_source == 'BY_RES':
+        dem_source = 'COPDEM30' if gdir.grid.dx < 60 else 'COPDEM90'
 
     sources = [f.name for f in os.scandir(gdir.dir) if f.is_dir()
                and not f.name.startswith('.')]

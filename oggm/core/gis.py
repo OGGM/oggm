@@ -43,11 +43,7 @@ try:
     import rasterio
     from rasterio.warp import reproject, Resampling
     from rasterio.mask import mask as riomask
-    try:
-        # rasterio V > 1.0
-        from rasterio.merge import merge as merge_tool
-    except ImportError:
-        from rasterio.tools.merge import merge as merge_tool
+    from rasterio.merge import merge as merge_tool
 except ImportError:
     pass
 
@@ -266,6 +262,13 @@ def glacier_grid_params(gdir):
         dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
     elif dxmethod == 'fixed':
         dx = np.rint(cfg.PARAMS['fixed_dx'])
+    elif dxmethod == 'by_bin':
+        bins = cfg.PARAMS['by_bin_bins']
+        bin_dx = cfg.PARAMS['by_bin_dx']
+        for i, (b1, b2) in enumerate(zip(bins[:-1], bins[1:])):
+            if b1 < area <= b2:
+                dx = np.rint(bin_dx[i])
+                break
     else:
         raise InvalidParamsError('grid_dx_method not supported: {}'
                                  .format(dxmethod))
@@ -696,6 +699,7 @@ class GriddedNcdfFile(object):
             os.remove(self.fpath)
 
     def __enter__(self):
+
         if os.path.exists(self.fpath):
             # Already there - just append
             self.nc = ncDataset(self.fpath, 'a', format='NETCDF4')
@@ -1081,7 +1085,7 @@ def simple_glacier_masks(gdir):
                               .format(gdir.rgi_id))
 
     # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir=gdir) as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         if 'glacier_mask' not in nc.variables:
             v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ),
@@ -1190,7 +1194,7 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     if aspect_for_bin >= sec_bins[-1]:
         aspect_for_bin -= 360
     aspect_sec = np.digitize(aspect_for_bin, sec_bins)
-    dx2 =gdir.grid.dx**2 * 1e-6
+    dx2 = gdir.grid.dx**2 * 1e-6
 
     # Terminus loc
     j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
@@ -1634,9 +1638,6 @@ def gridded_mb_attributes(gdir):
 
     for i, (catch_id, h) in enumerate(zip(catchment_mask, topo)):
 
-        if h == np.min(topo):
-            t = 1
-
         # Find the catchment area of the point itself by eliminating points
         # below the point altitude. We assume we keep all of them first,
         # then remove those we don't want
@@ -1795,7 +1796,7 @@ def merged_glacier_masks(gdir, geometry):
                            .format(gdir.rgi_id))
 
     # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir=gdir, reset=True) as nc:
+    with GriddedNcdfFile(gdir, reset=True) as nc:
 
         v = nc.createVariable('topo', 'f4', ('y', 'x', ), zlib=True)
         v.units = 'm'

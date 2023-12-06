@@ -212,7 +212,7 @@ elevation-band and geometrical flowlines.
 
 Both flowline types are available for download and for use in the OGGM
 framework. The plot below has been obtained from the
-`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/master/notebooks/elevation_bands_vs_centerlines.html>`_.
+`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/stable/notebooks/10minutes/elevation_bands_vs_centerlines.html>`_.
 
 
 .. figure:: _static/eb_vs_cl.png
