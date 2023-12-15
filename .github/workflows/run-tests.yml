@@ -45,7 +45,7 @@ jobs:
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
       - name: Upload pytest-mpl artifacts
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pytest-mpl-results
           path: /tmp/oggm-mpl-results/
