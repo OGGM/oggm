@@ -1890,6 +1890,62 @@ def mb_calibration_from_scalar_mb(gdir, *,
     return df
 
 
+@entity_task(log, writes=['mb_calib'])
+def perturbate_mb_params(gdir, perturbation=None, reset_default=False):
+    """Replaces pre-calibrated MB params with perturbed ones for this glacier.
+
+    It simply replaces the existing `mb_calib.json` file with an
+    updated one with perturbed parameters. The original ones
+    are stored in the file for re-use after perturbation.
+
+    Users can change the following 4 parameters:
+    - 'melt_f': unit [kg m-2 day-1 K-1], the melt factor
+    - 'prcp_fac': unit [-], the precipitation factor
+    - 'temp_bias': unit [K], the temperature correction applied to the timeseries
+    - 'bias': unit [mm we yr-1], *substracted* from the computed MB. Rarely used.
+
+    All parameter perturbations are additive, i.e. the value
+    provided by the user is added to the *precalibrated* value.
+    For example, `temp_bias=1` means that the temp_bias used by the
+    model will be the precalibrated one, plus 1 Kelvin.
+
+    The only exception is prpc_fac, which is multiplicative.
+    For example prcp_fac=1 will leave the precalibrated prcp_fac unchanged,
+    while 2 will double it.
+
+    Parameters
+    ----------
+    perturbation : dict
+        the parameters to change and the associated value (see doc above)
+    reset_default : bool
+        reset the parameters to their original value
+    """
+
+    df = gdir.read_json('mb_calib')
+
+    # Save original params if not there
+    if 'bias_orig' not in df:
+        for k in ['bias', 'melt_f', 'prcp_fac', 'temp_bias']:
+            df[k + '_orig'] = df[k]
+
+    if reset_default:
+        for k in ['bias', 'melt_f', 'prcp_fac', 'temp_bias']:
+            df[k] = df[k + '_orig']
+        gdir.write_json(df, 'mb_calib')
+        return df
+
+    for k, v in perturbation.items():
+        if k == 'prcp_fac':
+            df[k] = df[k + '_orig'] * v
+        elif k in ['bias', 'melt_f', 'temp_bias']:
+            df[k] = df[k + '_orig'] + v
+        else:
+            raise InvalidParamsError(f'Perturbation not valid: {k}')
+
+    gdir.write_json(df, 'mb_calib')
+    return df
+
+
 def _check_terminus_mass_flux(gdir, fls):
     # Check that we have done this correctly
     rho = cfg.PARAMS['ice_density']

@@ -1663,6 +1663,19 @@ class TestClimate(unittest.TestCase):
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
 
+        # Test perturbate
+        massbalance.perturbate_mb_params(gdir, perturbation={'temp_bias': -1,
+                                                             'prcp_fac': 2})
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min'] - 1
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max'] * 2
+
+        massbalance.perturbate_mb_params(gdir, reset_default=True)
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
+        assert pdf['melt_f'] < cfg.PARAMS['melt_f']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
+
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
 
