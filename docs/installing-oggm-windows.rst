@@ -86,7 +86,7 @@ the case. Here, we provide an example of steps that have resulted in a successfu
 for creating a python environment.
 
 2. Create a `python environment <https://docs.oggm.org/en/stable/installing-oggm.html#the-simplest-way-with-an-environment-file>`_
-using  a yml file.
+using a yml file.
 
 3. `Install OGGM <https://docs.oggm.org/en/stable/installing-oggm.html#install-oggm-itself>`_
 with ``pip install oggm``
