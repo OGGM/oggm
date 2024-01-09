@@ -46,7 +46,7 @@ with :math:`\dot{m}` the mass balance, :math:`\int_{\Omega}` the sum of all surf
 point considered, and
 :math:`\widetilde{m} = \dot{m} - \rho \partial h / \partial t` the
 "apparent mass balance" after [Farinotti_et_al_2009]_. If the glacier is in
-steady state, the apparent mass balance is equivalent to the the actual (and
+steady state, the apparent mass balance is equivalent to the actual (and
 observable) mass balance. Unfortunately, that is rarely the case, hence :math:`\partial h / \partial t` is not
 known and there is no easy way to compute it. In order to continue, we have
 to make the assumption that our geometry is in equilibrium.

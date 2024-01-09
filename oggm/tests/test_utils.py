@@ -42,6 +42,7 @@ TEST_GDIR_URL_v14_L35 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                          'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
                          'no_match/')
 
+
 def clean_dir(testdir):
     shutil.rmtree(testdir)
     os.makedirs(testdir)
@@ -452,6 +453,10 @@ class TestWorkflowTools(unittest.TestCase):
                                    gdir.rgi_area_km2,
                                    rtol=0.001)
 
+        assert df['grid_dx'].iloc[0] >= 50
+        assert df['grid_nx'].iloc[0] >= 50
+        assert df['grid_ny'].iloc[0] >= 50
+
         df = df.iloc[0]
         np.testing.assert_allclose(df['dem_mean_elev'],
                                    df['flowline_mean_elev'], atol=5)
@@ -751,6 +756,7 @@ class TestDLVerify(unittest.TestCase):
                                                   prepro_border=20)
         assert gdirs[0].has_file('model_flowlines')
 
+
 class TestStartFromV14(unittest.TestCase):
 
     def setUp(self):
@@ -959,11 +965,13 @@ class TestPreproCLI(unittest.TestCase):
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
+                                           '--select-source-from-dir', 'BY_RES',
                                            '--dem-source', 'ALL',
                                            '--add-consensus-thickness',
                                            '--add-millan-thickness',
                                            '--add-millan-velocity',
                                            '--add-hugonnet-dhdt',
+                                           '--override-params', '{"map_proj": "tmerc"}',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -977,15 +985,20 @@ class TestPreproCLI(unittest.TestCase):
         assert not kwargs['is_test']
         assert not kwargs['elev_bands']
         assert not kwargs['centerlines']
+        assert kwargs['select_source_from_dir'] == 'BY_RES'
+        assert kwargs['keep_dem_folders'] is False
         assert kwargs['add_consensus_thickness']
         assert kwargs['add_millan_thickness']
         assert kwargs['add_millan_velocity']
         assert kwargs['add_hugonnet_dhdt']
+        assert kwargs['override_params']['map_proj'] == 'tmerc'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
+                                           '--select-source-from-dir', 'BY_RES',
+                                           '--keep-dem-folders',
                                            '--test',
                                            '--test-ids', 'RGI60-19.00134',
                                                          'RGI60-19.00156',
@@ -996,6 +1009,8 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['rgi_version'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
+        assert kwargs['select_source_from_dir'] == 'BY_RES'
+        assert kwargs['keep_dem_folders'] is True
         assert kwargs['is_test']
         assert kwargs['test_ids']
         assert len(kwargs['test_ids']) == 2
@@ -1437,7 +1452,6 @@ class TestPreproCLI(unittest.TestCase):
             assert os.path.isdir(os.path.join(odir, 'RGI61', bstr, 'L5'))
 
             # See if we can start from L3 and L4
-            from oggm import tasks
             from oggm.core.flowline import FlowlineModel, FileModel
             cfg.PARAMS['continue_on_error'] = False
             rid = df.rgi_id.iloc[0]
@@ -1549,7 +1563,7 @@ class TestPreproCLI(unittest.TestCase):
                   'use_temp_bias_from_file': False,
                   'prcp_fac': 2.5,
                   'evolution_model': 'MassRedistributionCurve',
-                  'downstream_line_shape':'parabola',
+                  'downstream_line_shape': 'parabola',
                   }
         # Remove bad actors
         rgidf = rgidf.loc[~rgidf.RGIId.str.contains('_d0')]
@@ -1843,7 +1857,7 @@ class TestBenchmarkCLI(unittest.TestCase):
 
         # Read in the RGI file
         inter, rgidf = _read_shp()
-        cru_file = utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
+        utils.get_demo_file('cru_ts3.23.1901.2014.tmp.dat.nc')
         wdir = os.path.join(self.testdir, 'wd')
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')

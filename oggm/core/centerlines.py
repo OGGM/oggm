@@ -2224,7 +2224,14 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         bin_variables = keep
         for var in bin_variables:
             data = nc.variables[var][:]
-            out_totals.append(np.nansum(data) * gdir.grid.dx ** 2)
+            if var == 'consensus_ice_thickness':
+                # individual handling for consensus thickness as they use a
+                # different glacier mask than oggm (which was already applied)
+                data_sum = np.nansum(data)
+            else:
+                # use oggm glacier mask for all other data
+                data_sum = np.nansum(data[glacier_mask])
+            out_totals.append(data_sum * gdir.grid.dx ** 2)
             out_vars.append(data[glacier_mask])
 
     preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
@@ -2319,12 +2326,15 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         df = df.dropna(how='all', subset=bin_variables)
 
     # Check for binned vars
-    for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
-                                         preserve_totals):
-        if do_p:
-            out_total = np.nansum(df[var] * df['area'])
-            if out_total > 0:
-                df[var] *= in_total / out_total
+    with warnings.catch_warnings():
+        # This can trigger an invalid value
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
+                                             preserve_totals):
+            if do_p:
+                out_total = np.nansum(df[var] * df['area'])
+                if out_total > 0:
+                    df[var] *= in_total / out_total
 
     # In OGGM we go from top to bottom
     df = df[::-1]

@@ -153,6 +153,7 @@ class ParamsLoggingDict(ResettingOrderedDict):
                                                                       prev,
                                                                       value))
 
+
 # Globals
 IS_INITIALIZED = False
 PARAMS = ParamsLoggingDict()
@@ -203,7 +204,7 @@ BASENAMES['catchments_intersects'] = ('catchments_intersects.shp', _doc)
 _doc = 'A ``salem.Grid`` handling the georeferencing of the local grid.'
 BASENAMES['glacier_grid'] = ('glacier_grid.json', _doc)
 
-_doc = ('A dictionary containing runtime diagnostics useful for debugging or ' 
+_doc = ('A dictionary containing runtime diagnostics useful for debugging or '
         'logging of run parameters.')
 BASENAMES['diagnostics'] = ('diagnostics.json', _doc)
 
@@ -211,6 +212,11 @@ _doc = ('A netcdf file containing several gridded data variables such as '
         'topography, the glacier masks, the interpolated 2D glacier bed, '
         'and more. This is for static, non time-dependant data.')
 BASENAMES['gridded_data'] = ('gridded_data.nc', _doc)
+
+_doc = ('A csv file containing ice thickness observations from the GlaThiDa '
+        'database. Only available when added from the shop, and only for about 2800 '
+        'glaciers worldwide.')
+BASENAMES['glathida_data'] = ('glathida_data.csv', _doc)
 
 _doc = ('A netcdf file containing gridded data variables which are time '
         'dependant. It has the same coordinates as `gridded_data`.')
@@ -294,7 +300,7 @@ _doc = "A table containing the Huss&Farinotti 2012 squeezed flowlines."
 BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 
 
-def set_logging_config(logging_level='INFO', future=False):
+def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.
 
     Logging levels:
@@ -323,8 +329,6 @@ def set_logging_config(logging_level='INFO', future=False):
         the logging level. See description above for a list of options. Setting
         to `None` is equivalent to `'CRITICAL'`, i.e. no log output will be
         generated.
-    future : bool
-        use the new behavior of logging='WORKFLOW'.
     """
 
     # Add a custom level - just for us
@@ -357,31 +361,12 @@ def set_logging_config(logging_level='INFO', future=False):
 
     logging_level = logging_level.upper()
 
-    # Deprecation warning
-    if logging_level == 'WORKFLOW' and not future:
-
-        msg = ('In future versions of OGGM, the logging config WORKFLOW '
-               'will no longer print ERROR or WARNING messages, but only high '
-               'level information (i.e. hiding potential errors in your code '
-               'but also avoiding cluttered log files for runs with '
-               'many expected errors, e.g. global runs). If you want to obtain '
-               'a similar logger behavior as before, set '
-               "`logging_level='WARNING'`, which will print high level info "
-               "as well as errors and warnings during the run. If you "
-               "want to use the new behavior and suppress this warning, "
-               "set `logging_level='WORKFLOW'` and `future=True`.")
-        warnings.warn(msg, category=FutureWarning)
-
-        # Set old behavior
-        logging_level = 'WARNING'
-
     logging.basicConfig(format='%(asctime)s: %(name)s: %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S',
                         level=getattr(logging, logging_level))
 
 
-def initialize_minimal(file=None, logging_level='INFO', params=None,
-                       future=False):
+def initialize_minimal(file=None, logging_level='INFO', params=None):
     """Same as initialise() but without requiring any download of data.
 
     This is useful for "flowline only" OGGM applications
@@ -394,14 +379,12 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
         overrides for specific parameters from the config file
-    future : bool
-        use the new behavior of logging='WORKFLOW'.
     """
     global IS_INITIALIZED
     global PARAMS
     global PATHS
 
-    set_logging_config(logging_level=logging_level, future=future)
+    set_logging_config(logging_level=logging_level)
 
     is_default = False
     if file is None:
@@ -541,6 +524,10 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
     k = 'store_fl_diagnostic_variables'
     PARAMS[k] = [str(vk) for vk in cp.as_list(k)]
+    k = 'by_bin_dx'
+    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
+    k = 'by_bin_bins'
+    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
 
     # Flowline model
     k = 'glacier_length_method'
@@ -565,14 +552,14 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
 
     # Delete non-floats
     ltr = ['working_dir', 'dem_file', 'climate_file', 'use_tar_shapefiles',
-           'grid_dx_method', 'compress_climate_netcdf',
+           'grid_dx_method', 'compress_climate_netcdf', 'by_bin_dx',
            'mp_processes', 'use_multiprocessing', 'clip_dem_to_zero',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
            'use_multiple_flowlines', 'border', 'use_temp_bias_from_file',
            'mpi_recv_buf_size', 'map_proj', 'evolution_model',
-           'hydro_month_sh', 'hydro_month_nh',
+           'hydro_month_sh', 'hydro_month_nh', 'by_bin_bins',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
-           'auto_skip_task','ref_mb_valid_window',
+           'auto_skip_task', 'ref_mb_valid_window',
            'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
            'use_rgi_area', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
@@ -596,7 +583,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None,
     IS_INITIALIZED = True
 
 
-def initialize(file=None, logging_level='INFO', params=None, future=False):
+def initialize(file=None, logging_level='INFO', params=None):
     """Read the configuration file containing the run's parameters.
 
     This should be the first call, before using any of the other OGGM modules
@@ -610,20 +597,17 @@ def initialize(file=None, logging_level='INFO', params=None, future=False):
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
         overrides for specific parameters from the config file
-    future : bool
-        use the new behavior of logging='WORKFLOW'.
     """
     global PARAMS
     global DATA
 
-    initialize_minimal(file=file, logging_level=logging_level, params=params,
-                       future=future)
+    initialize_minimal(file=file, logging_level=logging_level, params=params)
 
     # Do not spam
     PARAMS.do_log = False
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files, get_demo_file
+    from oggm.utils import download_oggm_files
     download_oggm_files()
 
     # Read in the demo glaciers

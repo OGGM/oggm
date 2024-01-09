@@ -212,7 +212,7 @@ elevation-band and geometrical flowlines.
 
 Both flowline types are available for download and for use in the OGGM
 framework. The plot below has been obtained from the
-`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/master/notebooks/elevation_bands_vs_centerlines.html>`_.
+`centerlines versus elevation-band flowlines comparison tutorial <https://oggm.org/tutorials/stable/notebooks/10minutes/elevation_bands_vs_centerlines.html>`_.
 
 
 .. figure:: _static/eb_vs_cl.png
@@ -272,12 +272,12 @@ Geometrical centerlines
 
 .. admonition:: **Summary**
 
-   **When to use:** when geometry matters, and when length is a important variable.
+   **When to use:** when geometry matters, and when length is an important variable.
    For mountain glaciers (e.g. Alps, Himalayas). With the old mass balance
    model.
 
    **When not to use:** for ice caps, badly outlined glaciers, very large and
-   flat glaciers, for global applications where geometrical details matters less.
+   flat glaciers, for global applications where geometrical details matter less.
    With the more fancy mass balance models.
 
 Elevation-band flowlines

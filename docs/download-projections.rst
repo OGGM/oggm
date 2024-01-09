@@ -46,7 +46,7 @@ Feel free to make a selection of GCMs that suits your purpose when using the dat
 
 For more information and access to the data, visit the
 `OGGM/oggm-standard-projections-csv-files <https://github.com/OGGM/oggm-standard-projections-csv-files>`_
-reposity.
+repository.
 
 Data usage requirements
 -----------------------

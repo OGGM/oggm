@@ -42,11 +42,7 @@ try:
     import rasterio
     from rasterio.warp import reproject, Resampling
     from rasterio.mask import mask as riomask
-    try:
-        # rasterio V > 1.0
-        from rasterio.merge import merge as merge_tool
-    except ImportError:
-        from rasterio.tools.merge import merge as merge_tool
+    from rasterio.merge import merge as merge_tool
 except ImportError:
     pass
 
@@ -265,6 +261,13 @@ def glacier_grid_params(gdir):
         dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
     elif dxmethod == 'fixed':
         dx = np.rint(cfg.PARAMS['fixed_dx'])
+    elif dxmethod == 'by_bin':
+        bins = cfg.PARAMS['by_bin_bins']
+        bin_dx = cfg.PARAMS['by_bin_dx']
+        for i, (b1, b2) in enumerate(zip(bins[:-1], bins[1:])):
+            if b1 < area <= b2:
+                dx = np.rint(bin_dx[i])
+                break
     else:
         raise InvalidParamsError('grid_dx_method not supported: {}'
                                  .format(dxmethod))
@@ -356,13 +359,13 @@ def define_glacier_region(gdir, entity=None, source=None):
                 break
     else:
         source_exists = is_dem_source_available(source, *gdir.extent_ll)
-        
+
     if not source_exists:
         raise InvalidWorkflowError(f'Source: {source} is not available for '
                                    f'glacier {gdir.rgi_id} with border '
                                    f"{cfg.PARAMS['border']}")
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
-                                         rgi_id=gdir.rgi_id,
+                                         gdir=gdir,
                                          dx_meter=dx,
                                          source=source)
     log.debug('(%s) DEM source: %s', gdir.rgi_id, dem_source)
@@ -1014,7 +1017,7 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     if aspect_for_bin >= sec_bins[-1]:
         aspect_for_bin -= 360
     aspect_sec = np.digitize(aspect_for_bin, sec_bins)
-    dx2 =gdir.grid.dx**2 * 1e-6
+    dx2 = gdir.grid.dx**2 * 1e-6
 
     # Terminus loc
     j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
@@ -1457,9 +1460,6 @@ def gridded_mb_attributes(gdir):
         inflows.append([cls.index(l) for l in line_inflows(cl, keep=False)])
 
     for i, (catch_id, h) in enumerate(zip(catchment_mask, topo)):
-
-        if h == np.min(topo):
-            t = 1
 
         # Find the catchment area of the point itself by eliminating points
         # below the point altitude. We assume we keep all of them first,
