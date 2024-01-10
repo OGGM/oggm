@@ -37,11 +37,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        target_yr=None, target_value=None,
                        minimise_for='area', precision_percent=1,
                        precision_absolute=1, min_ice_thickness=None,
-                       first_guess_t_bias=-2, t_bias_max_step_length=2,
+                       first_guess_t_spinup=-2, t_spinup_max_step_length=2,
                        maxiter=30, output_filesuffix='_dynamic_spinup',
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=False,
-                       return_t_bias_best=False, ye=None,
+                       return_t_spinup_best=False, ye=None,
                        model_flowline_filesuffix='',
                        add_fixed_geometry_spinup=False, **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
@@ -137,13 +137,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is 10.
-    first_guess_t_bias : float
+        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+    first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
         Default is -2.
-    t_bias_max_step_length : float
-        Defines the maximums allowed change of t_bias between two iterations.
+    t_spinup_max_step_length : float
+        Defines the maximums allowed change of t_spinup between two iterations.
         Is needed to avoid to large changes.
         Default is 2.
     maxiter : int
@@ -171,7 +171,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         the 'output_filesuffix', if an error during the dynamic spinup occurs.
         This is useful if you want to keep glaciers for the following tasks.
         Default is True
-    return_t_bias_best : bool
+    return_t_spinup_best : bool
         If True the used temperature bias for the spinup is returned in
         addition to the final model. If an error occurs and ignore_error=True,
         the returned value is np.nan.
@@ -338,7 +338,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     'climate data (if yr_climate_start > target_yr)')
         if ignore_errors:
             model_dynamic_spinup_end = save_model_without_dynamic_spinup()
-            if return_t_bias_best:
+            if return_t_spinup_best:
                 return model_dynamic_spinup_end, np.nan
             else:
                 return model_dynamic_spinup_end
@@ -374,7 +374,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     if reference_value == 0.:
         if ignore_errors:
             model_dynamic_spinup_end = save_model_without_dynamic_spinup()
-            if return_t_bias_best:
+            if return_t_spinup_best:
                 return model_dynamic_spinup_end, np.nan
             else:
                 return model_dynamic_spinup_end
@@ -391,11 +391,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     forward_model_runs = [0]
 
     # the actual spinup run
-    def run_model_with_spinup_to_target_year(t_bias):
+    def run_model_with_spinup_to_target_year(t_spinup):
         forward_model_runs.append(forward_model_runs[-1] + 1)
 
-        # with t_bias the glacier state after spinup is changed between iterations
-        mb_model_spinup.temp_bias = t_bias
+        # with t_spinup the glacier state after spinup is changed between iterations
+        mb_model_spinup.temp_bias = t_spinup
         # run the spinup
         model_spinup = evolution_model(copy.deepcopy(fls_spinup),
                                        mb_model_spinup,
@@ -456,10 +456,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         else:
             raise NotImplementedError(f'{cost_var}')
 
-    def cost_fct(t_bias, model_dynamic_spinup_end_loc, other_variable_mismatch_loc):
+    def cost_fct(t_spinup, model_dynamic_spinup_end_loc, other_variable_mismatch_loc):
         # actual model run
         model_value, other_value, model_dynamic_spinup, ice_free = \
-            run_model_with_spinup_to_target_year(t_bias)
+            run_model_with_spinup_to_target_year(t_spinup)
 
         # save the final model for later
         model_dynamic_spinup_end_loc.append(copy.deepcopy(model_dynamic_spinup))
@@ -475,18 +475,18 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         model_dynamic_spinup_end_loc = []
         other_variable_mismatch_loc = []
 
-        def c_fct(t_bias):
-            return cost_fct(t_bias, model_dynamic_spinup_end_loc,
+        def c_fct(t_spinup):
+            return cost_fct(t_spinup, model_dynamic_spinup_end_loc,
                             other_variable_mismatch_loc)
 
         return c_fct, model_dynamic_spinup_end_loc, other_variable_mismatch_loc
 
     def minimise_with_spline_fit(fct_to_minimise):
-        # defines limits of t_bias in accordance to maximal allowed change
+        # defines limits of t_spinup in accordance to maximal allowed change
         # between iterations
-        t_bias_limits = [first_guess_t_bias - t_bias_max_step_length,
-                         first_guess_t_bias + t_bias_max_step_length]
-        t_bias_guess = []
+        t_spinup_limits = [first_guess_t_spinup - t_spinup_max_step_length,
+                           first_guess_t_spinup + t_spinup_max_step_length]
+        t_spinup_guess = []
         mismatch = []
         # this two variables indicate that the limits were already adapted to
         # avoid an ice_free or out_of_domain error
@@ -494,13 +494,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         was_out_of_domain = False
         was_errors = [was_out_of_domain, was_ice_free]
 
-        def get_mismatch(t_bias):
-            t_bias = copy.deepcopy(t_bias)
-            # first check if the new t_bias is in limits
-            if t_bias < t_bias_limits[0]:
+        def get_mismatch(t_spinup):
+            t_spinup = copy.deepcopy(t_spinup)
+            # first check if the new t_spinup is in limits
+            if t_spinup < t_spinup_limits[0]:
                 # was the smaller limit already executed, if not first do this
-                if t_bias_limits[0] not in t_bias_guess:
-                    t_bias = copy.deepcopy(t_bias_limits[0])
+                if t_spinup_limits[0] not in t_spinup_guess:
+                    t_spinup = copy.deepcopy(t_spinup_limits[0])
                 else:
                     # smaller limit was already used, check if it was
                     # already newly defined with glacier exceeding domain
@@ -511,12 +511,12 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
                         # ok we set a new lower limit
-                        t_bias_limits[0] = t_bias_limits[0] - \
-                            t_bias_max_step_length
-            elif t_bias > t_bias_limits[1]:
+                        t_spinup_limits[0] = (t_spinup_limits[0] -
+                                              t_spinup_max_step_length)
+            elif t_spinup > t_spinup_limits[1]:
                 # was the larger limit already executed, if not first do this
-                if t_bias_limits[1] not in t_bias_guess:
-                    t_bias = copy.deepcopy(t_bias_limits[1])
+                if t_spinup_limits[1] not in t_spinup_guess:
+                    t_spinup = copy.deepcopy(t_spinup_limits[1])
                 else:
                     # larger limit was already used, check if it was
                     # already newly defined with ice free glacier
@@ -527,19 +527,19 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                            f'{np.min(np.abs(mismatch))}%')
                     else:
                         # ok we set a new upper limit
-                        t_bias_limits[1] = t_bias_limits[1] + \
-                            t_bias_max_step_length
+                        t_spinup_limits[1] = (t_spinup_limits[1] +
+                                              t_spinup_max_step_length)
 
-            # now clip t_bias with limits
-            t_bias = np.clip(t_bias, t_bias_limits[0], t_bias_limits[1])
+            # now clip t_spinup with limits
+            t_spinup = np.clip(t_spinup, t_spinup_limits[0], t_spinup_limits[1])
 
             # now start with mismatch calculation
 
             # if error during spinup (ice_free or out_of_domain) this defines
-            # how much t_bias is changed to look for an error free glacier spinup
-            t_bias_search_change = t_bias_max_step_length / 10
+            # how much t_spinup is changed to look for an error free glacier spinup
+            t_spinup_search_change = t_spinup_max_step_length / 10
             # maximum number of changes to look for an error free glacier
-            max_iterations = int(t_bias_max_step_length / t_bias_search_change)
+            max_iterations = int(t_spinup_max_step_length / t_spinup_search_change)
             is_out_of_domain = True
             is_ice_free_spinup = True
             is_ice_free_end = True
@@ -553,57 +553,57 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
             while ((is_out_of_domain | is_ice_free_spinup | is_ice_free_end) &
                    (iteration < max_iterations)):
                 try:
-                    tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_bias)
+                    tmp_mismatch, is_ice_free_spinup = fct_to_minimise(t_spinup)
 
                     # no error occurred, so we are not outside the domain
                     is_out_of_domain = False
 
                     # check if we are ice_free after spinup, if so we search
-                    # for a new upper limit for t_bias
+                    # for a new upper limit for t_spinup
                     if is_ice_free_spinup:
                         was_errors[1] = True
                         define_new_upper_limit = True
                         # special treatment if it is the first guess
-                        if np.isclose(t_bias, first_guess_t_bias) & \
+                        if np.isclose(t_spinup, first_guess_t_spinup) & \
                                 doing_first_guess:
                             is_first_guess_ice_free = True
                             # here directly jump to the smaller limit
-                            t_bias = copy.deepcopy(t_bias_limits[0])
+                            t_spinup = copy.deepcopy(t_spinup_limits[0])
                         elif is_first_guess_ice_free & doing_first_guess:
                             # make large steps if it is first guess
-                            t_bias = t_bias - t_bias_max_step_length
+                            t_spinup = t_spinup - t_spinup_max_step_length
                         else:
-                            t_bias = np.round(t_bias - t_bias_search_change,
-                                              decimals=1)
-                        if np.isclose(t_bias, t_bias_guess).any():
+                            t_spinup = np.round(t_spinup - t_spinup_search_change,
+                                                decimals=1)
+                        if np.isclose(t_spinup, t_spinup_guess).any():
                             iteration = copy.deepcopy(max_iterations)
 
                     # check if we are ice_free at the end of the model run, if
-                    # so we use the lower t_bias limit and change the limit if
+                    # so we use the lower t_spinup limit and change the limit if
                     # needed
                     elif np.isclose(tmp_mismatch, -100.):
                         is_ice_free_end = True
                         was_errors[1] = True
                         define_new_upper_limit = True
                         # special treatment if it is the first guess
-                        if np.isclose(t_bias, first_guess_t_bias) & \
+                        if np.isclose(t_spinup, first_guess_t_spinup) & \
                                 doing_first_guess:
                             is_first_guess_ice_free = True
                             # here directly jump to the smaller limit
-                            t_bias = copy.deepcopy(t_bias_limits[0])
+                            t_spinup = copy.deepcopy(t_spinup_limits[0])
                         elif is_first_guess_ice_free & doing_first_guess:
                             # make large steps if it is first guess
-                            t_bias = t_bias - t_bias_max_step_length
+                            t_spinup = t_spinup - t_spinup_max_step_length
                         else:
                             # if lower limit was already used change it and use
-                            if t_bias == t_bias_limits[0]:
-                                t_bias_limits[0] = t_bias_limits[0] - \
-                                    t_bias_max_step_length
-                                t_bias = copy.deepcopy(t_bias_limits[0])
+                            if t_spinup == t_spinup_limits[0]:
+                                t_spinup_limits[0] = (t_spinup_limits[0] -
+                                                      t_spinup_max_step_length)
+                                t_spinup = copy.deepcopy(t_spinup_limits[0])
                             else:
-                                # otherwise just try with a colder t_bias
-                                t_bias = np.round(t_bias - t_bias_search_change,
-                                                  decimals=1)
+                                # otherwise just try with a colder t_spinup
+                                t_spinup = np.round(t_spinup - t_spinup_search_change,
+                                                    decimals=1)
 
                     else:
                         is_ice_free_end = False
@@ -612,23 +612,23 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     # check if glacier grow to large
                     if 'Glacier exceeds domain boundaries, at year:' in f'{e}':
                         # ok we where outside the domain, therefore we search
-                        # for a new lower limit for t_bias in 0.1 °C steps
+                        # for a new lower limit for t_spinup in 0.1 °C steps
                         is_out_of_domain = True
                         define_new_lower_limit = True
                         was_errors[0] = True
                         # special treatment if it is the first guess
-                        if np.isclose(t_bias, first_guess_t_bias) & \
+                        if np.isclose(t_spinup, first_guess_t_spinup) & \
                                 doing_first_guess:
                             is_first_guess_out_of_domain = True
                             # here directly jump to the larger limit
-                            t_bias = t_bias_limits[1]
+                            t_spinup = t_spinup_limits[1]
                         elif is_first_guess_out_of_domain & doing_first_guess:
                             # make large steps if it is first guess
-                            t_bias = t_bias + t_bias_max_step_length
+                            t_spinup = t_spinup + t_spinup_max_step_length
                         else:
-                            t_bias = np.round(t_bias + t_bias_search_change,
-                                              decimals=1)
-                        if np.isclose(t_bias, t_bias_guess).any():
+                            t_spinup = np.round(t_spinup + t_spinup_search_change,
+                                                decimals=1)
+                        if np.isclose(t_spinup, t_spinup_guess).any():
                             iteration = copy.deepcopy(max_iterations)
 
                     else:
@@ -646,9 +646,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     # free run
                     msg = 'Not able to conduct one error free run. Error is '
                     if is_first_guess_ice_free:
-                        msg += f'"ice_free" with last t_bias of {t_bias}.'
+                        msg += f'"ice_free" with last t_spinup of {t_spinup}.'
                     elif is_first_guess_out_of_domain:
-                        msg += f'"out_of_domain" with last t_bias of {t_bias}.'
+                        msg += f'"out_of_domain" with last t_spinup of {t_spinup}.'
                     else:
                         raise RuntimeError('Something unexpected happened!')
 
@@ -664,13 +664,13 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                        'free glacier after spinup! Best mismatch '
                                        f'{np.min(np.abs(mismatch))}%')
                 elif is_ice_free_end:
-                    raise RuntimeError('Not able to find a t_bias so that '
+                    raise RuntimeError('Not able to find a t_spinup so that '
                                        'glacier is not ice free at the end! '
-                                       '(Last t_bias '
-                                       f'{t_bias + t_bias_max_step_length} °C)')
+                                       '(Last t_spinup '
+                                       f'{t_spinup + t_spinup_max_step_length} °C)')
                 else:
                     raise RuntimeError('Something unexpected happened during '
-                                       'definition of new t_bias limits!')
+                                       'definition of new t_spinup limits!')
             else:
                 # if we found a new limit set it
                 if define_new_upper_limit & define_new_lower_limit:
@@ -678,71 +678,71 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     # a to large step
                     was_errors[0] = False
                     was_errors[1] = False
-                    if t_bias <= t_bias_limits[0]:
-                        t_bias_limits[0] = t_bias
-                        t_bias_limits[1] = t_bias_limits[0] + \
-                            t_bias_max_step_length
-                    elif t_bias >= t_bias_limits[1]:
-                        t_bias_limits[1] = t_bias
-                        t_bias_limits[0] = t_bias_limits[1] - \
-                            t_bias_max_step_length
+                    if t_spinup <= t_spinup_limits[0]:
+                        t_spinup_limits[0] = t_spinup
+                        t_spinup_limits[1] = (t_spinup_limits[0] +
+                                              t_spinup_max_step_length)
+                    elif t_spinup >= t_spinup_limits[1]:
+                        t_spinup_limits[1] = t_spinup
+                        t_spinup_limits[0] = (t_spinup_limits[1] -
+                                              t_spinup_max_step_length)
                     else:
                         if is_first_guess_ice_free:
-                            t_bias_limits[1] = t_bias
+                            t_spinup_limits[1] = t_spinup
                         elif is_out_of_domain:
-                            t_bias_limits[0] = t_bias
+                            t_spinup_limits[0] = t_spinup
                         else:
                             raise RuntimeError('I have not expected to get here!')
                 elif define_new_lower_limit:
-                    t_bias_limits[0] = copy.deepcopy(t_bias)
-                    if t_bias >= t_bias_limits[1]:
+                    t_spinup_limits[0] = copy.deepcopy(t_spinup)
+                    if t_spinup >= t_spinup_limits[1]:
                         # this happens when the first guess was out of domain
                         was_errors[0] = False
-                        t_bias_limits[1] = t_bias_limits[0] + \
-                            t_bias_max_step_length
+                        t_spinup_limits[1] = (t_spinup_limits[0] +
+                                              t_spinup_max_step_length)
                 elif define_new_upper_limit:
-                    t_bias_limits[1] = copy.deepcopy(t_bias)
-                    if t_bias <= t_bias_limits[0]:
+                    t_spinup_limits[1] = copy.deepcopy(t_spinup)
+                    if t_spinup <= t_spinup_limits[0]:
                         # this happens when the first guess was ice free
                         was_errors[1] = False
-                        t_bias_limits[0] = t_bias_limits[1] - \
-                            t_bias_max_step_length
+                        t_spinup_limits[0] = (t_spinup_limits[1] -
+                                              t_spinup_max_step_length)
 
-            return float(tmp_mismatch), float(t_bias)
+            return float(tmp_mismatch), float(t_spinup)
 
         # first guess
-        new_mismatch, new_t_bias = get_mismatch(first_guess_t_bias)
-        t_bias_guess.append(new_t_bias)
+        new_mismatch, new_t_spinup = get_mismatch(first_guess_t_spinup)
+        t_spinup_guess.append(new_t_spinup)
         mismatch.append(new_mismatch)
 
         if abs(mismatch[-1]) < precision_percent:
-            return t_bias_guess, mismatch
+            return t_spinup_guess, mismatch
 
         # second (arbitrary) guess is given depending on the outcome of first
-        # guess, when mismatch is 100% t_bias is changed for
-        # t_bias_max_step_length, but at least the second guess is 0.2 °C away
+        # guess, when mismatch is 100% t_spinup is changed for
+        # t_spinup_max_step_length, but at least the second guess is 0.2 °C away
         # from the first guess
         step = np.sign(mismatch[-1]) * max(np.abs(mismatch[-1]) *
-                                           t_bias_max_step_length / 100,
+                                           t_spinup_max_step_length / 100,
                                            0.2)
-        new_mismatch, new_t_bias = get_mismatch(t_bias_guess[0] + step)
-        t_bias_guess.append(new_t_bias)
+        new_mismatch, new_t_spinup = get_mismatch(t_spinup_guess[0] + step)
+        t_spinup_guess.append(new_t_spinup)
         mismatch.append(new_mismatch)
 
         if abs(mismatch[-1]) < precision_percent:
-            return t_bias_guess, mismatch
+            return t_spinup_guess, mismatch
 
         # Now start with splin fit for guessing
-        while len(t_bias_guess) < maxiter:
+        while len(t_spinup_guess) < maxiter:
             # get next guess from splin (fit partial linear function to previously
-            # calculated (mismatch, t_bias) pairs and get t_bias value where
+            # calculated (mismatch, t_spinup) pairs and get t_spinup value where
             # mismatch=0 from this fitted curve)
             sort_index = np.argsort(np.array(mismatch))
             tck = interpolate.splrep(np.array(mismatch)[sort_index],
-                                     np.array(t_bias_guess)[sort_index],
+                                     np.array(t_spinup_guess)[sort_index],
                                      k=1)
-            # here we catch interpolation errors (two different t_bias with
-            # same mismatch), could happen if one t_bias was close to a newly
+            # here we catch interpolation errors (two different t_spinup with
+            # same mismatch), could happen if one t_spinup was close to a newly
             # defined limit
             if np.isnan(tck[1]).any():
                 if was_errors[0]:
@@ -759,14 +759,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                        'unknown, need to check by hand! Best '
                                        'mismatch '
                                        f'{np.min(np.abs(mismatch))}%')
-            new_mismatch, new_t_bias = get_mismatch(float(interpolate.splev(0,
+            new_mismatch, new_t_spinup = get_mismatch(float(interpolate.splev(0,
                                                                             tck)
                                                           ))
-            t_bias_guess.append(new_t_bias)
+            t_spinup_guess.append(new_t_spinup)
             mismatch.append(new_mismatch)
 
             if abs(mismatch[-1]) < precision_percent:
-                return t_bias_guess, mismatch
+                return t_spinup_guess, mismatch
 
         # Ok when we end here the spinup could not find satisfying match after
         # maxiter(ations)
@@ -827,7 +827,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         # try to conduct minimisation, if an error occurred try shorter spinup
         # period
         try:
-            final_t_bias_guess, final_mismatch = minimise_with_spline_fit(c_fun)
+            final_t_spinup_guess, final_mismatch = minimise_with_spline_fit(c_fun)
             # ok no error occurred so we succeeded
             break
         except RuntimeError as e:
@@ -840,7 +840,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                             f'The error message of the dynamic spinup is: {e}')
                 if ignore_errors:
                     model_dynamic_spinup_end = save_model_without_dynamic_spinup()
-                    if return_t_bias_best:
+                    if return_t_spinup_best:
                         return model_dynamic_spinup_end, np.nan
                     else:
                         return model_dynamic_spinup_end
@@ -863,7 +863,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
     # also save some other stuff
     gdir.add_to_diagnostics('temp_bias_dynamic_spinup',
-                            float(final_t_bias_guess[-1]))
+                            float(final_t_spinup_guess[-1]))
     gdir.add_to_diagnostics('dynamic_spinup_target_year',
                             int(target_yr))
     gdir.add_to_diagnostics('dynamic_spinup_period',
@@ -891,8 +891,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path, )
 
-    if return_t_bias_best:
-        return model_dynamic_spinup_end[-1], final_t_bias_guess[-1]
+    if return_t_spinup_best:
+        return model_dynamic_spinup_end[-1], final_t_spinup_guess[-1]
     else:
         return model_dynamic_spinup_end[-1]
 
@@ -931,7 +931,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
         precision_absolute=1, min_ice_thickness=None,
-        first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
+        first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
         spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
@@ -1026,14 +1026,14 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is 10.
-    first_guess_t_bias : float
+        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+    first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
         Default is -2.
-    t_bias_max_step_length : float
-        Defines the maximums allowed change of t_bias between two iterations. Is
-        needed to avoid to large changes.
+    t_spinup_max_step_length : float
+        Defines the maximums allowed change of t_spinup between two iterations.
+        Is needed to avoid to large changes.
         Default is 2
     maxiter : int
         Maximum number of minimisation iterations per dynamic spinup where area
@@ -1054,9 +1054,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         Default is None (-> raise an error if no dict is provided)
     set_local_variables : bool
         If True this resets the local_variables to their initial state. It
-        sets the first_guess_t_bias with the key 't_bias' AND sets the current
-        glacier volume with the key 'vol_m3_ref' which is later used in the
-        calibration during inversion.
+        sets the first_guess_t_spinup with the key 't_spinup' AND sets the
+        current glacier volume with the key 'vol_m3_ref' which is later used in
+        the calibration during inversion.
         Default is False
     do_inversion : bool
         If True a complete inversion is conducted using the provided melt_f
@@ -1093,7 +1093,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     if set_local_variables:
         # clear the provided dictionary and set the first elements
         local_variables.clear()
-        local_variables['t_bias'] = [first_guess_t_bias]
+        local_variables['t_spinup'] = [first_guess_t_spinup]
         # ATTENTION: it is assumed that the flowlines in gdir have the volume
         # we want to match during calibrate_inversion_from_consensus when we
         # set_local_variables
@@ -1166,7 +1166,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     # do not ignore errors in dynamic spinup, so all 'bad'/intermediate files
     # are deleted in run_dynamic_spinup function
     try:
-        model, last_best_t_bias = run_dynamic_spinup(
+        model, last_best_t_spinup = run_dynamic_spinup(
             gdir,
             continue_on_error=False,  # force to raise an error in @entity_task
             add_to_log_file=False,  # dont write to log file in @entity_task
@@ -1182,13 +1182,13 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
             min_ice_thickness=min_ice_thickness,
-            t_bias_max_step_length=t_bias_max_step_length,
+            t_spinup_max_step_length=t_spinup_max_step_length,
             maxiter=maxiter,
             minimise_for=minimise_for,
-            first_guess_t_bias=local_variables['t_bias'][-1],
+            first_guess_t_spinup=local_variables['t_spinup'][-1],
             output_filesuffix=output_filesuffix,
             store_model_evolution=True, ignore_errors=False,
-            return_t_bias_best=True, ye=ye,
+            return_t_spinup_best=True, ye=ye,
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             model_flowline_filesuffix=model_flowline_filesuffix,
@@ -1198,7 +1198,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         # as we expect we are not so far away in the next iteration (only
         # needed for optimisation, potentially need less iterations in
         # run_dynamic_spinup)
-        local_variables['t_bias'].append(last_best_t_bias)
+        local_variables['t_spinup'].append(last_best_t_spinup)
     except RuntimeError as e:
         raise RuntimeError(f'Dynamic spinup raised error! (Message: {e})')
 
@@ -1221,8 +1221,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
         target_yr=None, precision_percent=1,
-        precision_absolute=1, min_ice_thickness=10,
-        first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter=30,
+        precision_absolute=1, min_ice_thickness=None,
+        first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
         add_fixed_geometry_spinup=True, **kwargs):
@@ -1311,13 +1311,13 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is 10.
-    first_guess_t_bias : float
+        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+    first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
         Default is -2.
-    t_bias_max_step_length : float
-        Defines the maximums allowed change of t_bias between two iterations. Is
+    t_spinup_max_step_length : float
+        Defines the maximums allowed change of t_spinup between two iterations. Is
         needed to avoid to large changes.
         Default is 2
     maxiter : int
@@ -1410,8 +1410,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
             min_ice_thickness=min_ice_thickness,
-            first_guess_t_bias=first_guess_t_bias,
-            t_bias_max_step_length=t_bias_max_step_length,
+            first_guess_t_spinup=first_guess_t_spinup,
+            t_spinup_max_step_length=t_spinup_max_step_length,
             maxiter=maxiter,
             output_filesuffix=output_filesuffix,
             store_model_geometry=store_model_geometry,
@@ -1428,18 +1428,6 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                     f'original melt factor ({melt_f}). Therefore the last '
                     'try is to conduct a run until ye without a dynamic '
                     'spinup.')
-        model_end = run_from_climate_data(
-            gdir,
-            add_to_log_file=False,
-            min_ys=yr_clim_min, ye=ye,
-            output_filesuffix=output_filesuffix,
-            climate_input_filesuffix=climate_input_filesuffix,
-            store_model_geometry=store_model_geometry,
-            store_fl_diagnostics=store_fl_diagnostics,
-            init_model_fls=fls_init, evolution_model=evolution_model,
-            fixed_geometry_spinup_yr=ys)
-
-        gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
 
         # set all dynamic diagnostics to None if there where some successful
         # runs
@@ -1460,6 +1448,22 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                 gdir.add_to_diagnostics(key, None)
 
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
+
+        # try to make a fixed geometry spinup
+        model_end = run_from_climate_data(
+            gdir,
+            continue_on_error=False,  # force to raise an error in @entity_task
+            add_to_log_file=False,
+            min_ys=yr_clim_min, ye=ye,
+            output_filesuffix=output_filesuffix,
+            climate_input_filesuffix=climate_input_filesuffix,
+            store_model_geometry=store_model_geometry,
+            store_fl_diagnostics=store_fl_diagnostics,
+            init_model_fls=fls_init, evolution_model=evolution_model,
+            fixed_geometry_spinup_yr=ys)
+
+        gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
+
     return model_end
 
 
