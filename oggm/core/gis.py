@@ -363,10 +363,6 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
         'uly', 'nx' and 'ny.
     output_path : str
         Filepath where to store the reprojected DEM.
-
-    Returns
-    -------
-    None
     """
 
     # Decide how to tag nodata
@@ -458,8 +454,8 @@ def get_dem_for_grid(grid, fpath, source=None, gdir=None):
         If you want to force the use of a certain DEM source. If list is
         provided they are checked in order. For a list of available options
         check docstring of oggm.core.gis.define_glacier_region.
-    rgi_id : str
-        The RGI-ID of the glacier.
+    gdir: py:class:`oggm.GlacierDirectory`
+        If source is None, gdir is used to decide on the source
 
     Returns
     -------
@@ -669,14 +665,15 @@ class GriddedNcdfFile(object):
     routine.
     """
     def __init__(self, gdir=None, grid=None, fpath=None,
-                 basename='gridded_data', reset=False):
+                 basename=None, reset=False):
         """
         Parameters
         ----------
         gdir : :py:class:`oggm.GlacierDirectory`
             The glacier directory. If provided it defines the filepath and the
             grid used for the netcdf file. It overrules grid and fpath if all
-            are provided.
+            are provided. (It is assumed to be the first kwarg at some places
+            in the code.)
         grid : :py:class:`salem.gis.Grid`
             Grid which defines the extent of the netcdf file. Needed if gdir is
             not provided.
@@ -688,6 +685,9 @@ class GriddedNcdfFile(object):
         reset : bool
             If True, a potentially existing file will be deleted.
         """
+
+        if basename is None:
+            basename = 'gridded_data'
 
         if gdir is not None:
             self.fpath = gdir.get_filepath(basename)
@@ -743,7 +743,7 @@ class GriddedNcdfFile(object):
 
 
 @entity_task(log, writes=['gridded_data'])
-def process_dem(gdir=None, grid=None, fpath=None):
+def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
     """Reads the DEM from the tiff, attempts to fill voids and apply smooth.
 
     The data is then written to `gridded_data.nc`.
@@ -751,7 +751,13 @@ def process_dem(gdir=None, grid=None, fpath=None):
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
-        where to write the data
+        Where to write the data. If set it overrules grid and fpath.
+    grid : :py:class:`salem.gis.Grid`
+        Grid of the DEM file. Needed if gdir is not provided.
+    fpath : str
+        The filepath of the DEM file. Needed if gdir is not provided.
+    output_filename : str
+        The filename of the nc file to add the DEM to. Defaults to gridded_data
     """
     if gdir is not None:
         # open srtm tif-file:
@@ -774,19 +780,6 @@ def process_dem(gdir=None, grid=None, fpath=None):
     dx = dem_grid.dx
     xx, yy = dem_grid.ij_coordinates
 
-    def _log_and_diagnostics(pnan, log_string='extra'):
-        if log_string != 'extra':
-            perc_string = 'dem_invalid_perc'
-        else:
-            perc_string = 'dem_extrapol_perc'
-        log.info(grid_name + f': DEM needed {log_string}polation.')
-        if gdir is not None:
-            gdir.add_to_diagnostics(f'dem_needed_{log_string}polation', True)
-            gdir.add_to_diagnostics(perc_string, len(pnan[0]) / (nx * ny))
-        else:
-            diagnostics_dict[f'dem_needed_{log_string}polation'] = True
-            diagnostics_dict[perc_string] = len(pnan[0]) / (nx * ny)
-
     # Correct the DEM
     valid_mask = np.isfinite(dem)
     if np.all(~valid_mask):
@@ -794,8 +787,8 @@ def process_dem(gdir=None, grid=None, fpath=None):
 
     if np.any(~valid_mask):
         # We interpolate
-        if np.sum(~valid_mask) > (0.25 * nx * ny):
-            log.info('({}) more than 25% NaNs in DEM'.format(grid_name))
+        if np.sum(~valid_mask) > (0.25 * nx * ny) and gdir is not None:
+            log.info('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
         pnan = np.nonzero(~valid_mask)
         pok = np.nonzero(valid_mask)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
@@ -805,8 +798,14 @@ def process_dem(gdir=None, grid=None, fpath=None):
                                  method='linear')
         except ValueError:
             raise InvalidDEMError('DEM interpolation not possible.')
-
-        _log_and_diagnostics(pnan, log_string='inter')
+        if gdir is not None:
+            log.info(gdir.rgi_id + ': DEM needed interpolation.')
+            gdir.add_to_diagnostics('dem_needed_interpolation', True)
+            gdir.add_to_diagnostics('dem_invalid_perc',
+                                    len(pnan[0]) / (nx * ny))
+        else:
+            diagnostics_dict['dem_needed_interpolation'] = True
+            diagnostics_dict['dem_invalid_perc'] = len(pnan[0]) / (nx * ny)
 
     isfinite = np.isfinite(dem)
     if np.any(~isfinite):
@@ -821,7 +820,14 @@ def process_dem(gdir=None, grid=None, fpath=None):
                                  method='nearest')
         except ValueError:
             raise InvalidDEMError('DEM extrapolation not possible.')
-        _log_and_diagnostics(pnan, log_string='extra')
+        if gdir is not None:
+            log.info(gdir.rgi_id + ': DEM needed extrapolation.')
+            gdir.add_to_diagnostics('dem_needed_extrapolation', True)
+            gdir.add_to_diagnostics('dem_extrapol_perc',
+                                    len(pnan[0]) / (nx * ny))
+        else:
+            diagnostics_dict['dem_needed_extrapolation'] = True
+            diagnostics_dict['dem_extrapol_perc'] = len(pnan[0]) / (nx * ny)
 
     if np.min(dem) == np.max(dem):
         raise InvalidDEMError('({}) min equal max in the DEM.'
@@ -847,7 +853,8 @@ def process_dem(gdir=None, grid=None, fpath=None):
             json.dump(diagnostics_dict, f)
 
     # Write to file
-    with GriddedNcdfFile(gdir=gdir, grid=dem_grid, fpath=fpath, reset=True) as nc:
+    with GriddedNcdfFile(gdir=gdir, grid=dem_grid, fpath=fpath,
+                         basename=output_filename, reset=True) as nc:
 
         v = nc.createVariable('topo', 'f4', ('y', 'x',), zlib=True)
         v.units = 'm'
@@ -956,7 +963,7 @@ def glacier_masks(gdir):
     gdir.write_pickle(geometries, 'geometries')
 
     # write out the grids in the netcdf file
-    with GriddedNcdfFile(gdir=gdir) as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         if 'glacier_mask' not in nc.variables:
             v = nc.createVariable('glacier_mask', 'i1', ('y', 'x', ),

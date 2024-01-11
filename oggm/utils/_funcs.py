@@ -541,14 +541,15 @@ def recursive_valid_polygons(geoms, crs):
 
 
 def combine_grids(gdirs):
-    """ Combines individual grids of different glacier directories to show
-        multiple glaciers in the same plot. The resulting grid extent includes
-        all individual grids completely.
+    """ Combines individual grids of different glacier directories. The
+    resulting grid extent includes all individual grids completely. The first
+    glacier directory in the list defines the projection of the resulting grid.
 
     Parameters
     ----------
     gdirs : [], required
-        A list of GlacierDirectories.
+        A list of GlacierDirectories. The first gdir in the list defines the
+        projection of the resulting grid.
 
     Returns
     -------
