@@ -479,5 +479,3 @@ def merge_simulated_thickness(gdirs,
     ds_merged['bedrock'] = (ds_merged['topo'] -
                             ds_merged['distributed_thickness'].fillna(0))
     ds_merged.to_netcdf(fp)
-
-
