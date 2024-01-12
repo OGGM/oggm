@@ -885,10 +885,12 @@ def merge_gridded_data(gdirs, output_folder=None,
         Potential filesuffix for the input file(s). If input_file is a list,
         input_filesuffix should also be a list of the same length.
         Default is ''.
-    included_variables : str or list
-        The variables which should be merged from the input_file(s). If set to
+    included_variables : str or list or list of lists
+        The variable(s) which should be merged from the input_file(s). For one
+        variable it can be provided as str, otherwise as a list. If set to
         'all' we merge everything. If input_file is a list, include_variables
-        should also be a list of the same length.
+        should be a list of lists with the same length, where the lists define
+        the variables for the individual input_files.
     preserve_totals : bool
         If True we preserve the total value of all float-variables of the
         original file. The total value is defined as the sum of all grid cell
@@ -939,6 +941,11 @@ def merge_gridded_data(gdirs, output_folder=None,
     if not isinstance(input_filesuffix, list):
         input_filesuffix = [input_filesuffix]
     if not isinstance(included_variables, list):
+        # special case if only one variable should be merged
+        included_variables = [included_variables]
+    if len(input_file) == 1:
+        # in the case of one input file we still convert included_variables
+        # into a list of lists
         included_variables = [included_variables]
 
     # create a combined salem.Grid object, which serves as canvas/boundaries of
@@ -975,7 +982,7 @@ def merge_gridded_data(gdirs, output_folder=None,
                                                     input_filesuffix,
                                                     included_variables):
         # if want to save all variables we take the first gdir and extract vars
-        if included_var == 'all':
+        if 'all' in included_var:
             with xr.open_dataset(
                     gdirs[0].get_filepath(in_file,
                                           filesuffix=in_filesuffix)) as ds:
