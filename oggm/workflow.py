@@ -852,7 +852,6 @@ def merge_gridded_data(gdirs, output_folder=None,
                        add_topography=False,
                        keep_dem_file=False,
                        interp='nearest',
-                       ignore_missing_data=False,
                        reset=False):
     """ This function takes a list of glacier directories and combines their
     gridded_data into a new NetCDF file and saves it into the output_folder. It
@@ -912,9 +911,6 @@ def merge_gridded_data(gdirs, output_folder=None,
     interp : str
         The interpolation method used by salem.Grid.map_gridded_data. Currently
         available 'nearest' (default), 'linear', or 'spline'.
-    ignore_missing_data : bool
-        If False and their is data missing for some gdirs an error is raised.
-        Default is False.
     reset : bool
         If the file defined in output_filename already exists and reset is
         False an error is raised. If reset is True and the file exists it is
@@ -977,25 +973,26 @@ def merge_gridded_data(gdirs, output_folder=None,
             if os.path.exists(fpath):
                 os.remove(fpath)
 
-    # start adding the data of one file after another to the merged dataset
-    for in_file, in_filesuffix, included_var in zip(input_file,
-                                                    input_filesuffix,
-                                                    included_variables):
-        # if want to save all variables we take the first gdir and extract vars
-        if 'all' in included_var:
-            with xr.open_dataset(
-                    gdirs[0].get_filepath(in_file,
-                                          filesuffix=in_filesuffix)) as ds:
-                included_var = list(ds.data_vars)
+    with gis.GriddedNcdfFile(grid=combined_grid, fpath=output_folder,
+                             basename=output_filename) as nc:
 
-        # add one variable after another
-        for var in included_var:
-            # we do not merge topo variables, for this we have add_topography
-            if var in ['topo', 'topo_smoothed', 'topo_valid_mask']:
-                continue
+        # adding the data of one file after another to the merged dataset
+        for in_file, in_filesuffix, included_var in zip(input_file,
+                                                        input_filesuffix,
+                                                        included_variables):
 
-            with gis.GriddedNcdfFile(grid=combined_grid, fpath=output_folder,
-                                     basename=output_filename) as nc:
+            # if want to save all variables, take them from the first gdir
+            if 'all' in included_var:
+                with xr.open_dataset(
+                        gdirs[0].get_filepath(in_file,
+                                              filesuffix=in_filesuffix)) as ds:
+                    included_var = list(ds.data_vars)
+
+            # add one variable after another
+            for var in included_var:
+                # do not merge topo variables, for this we have add_topography
+                if var in ['topo', 'topo_smoothed', 'topo_valid_mask']:
+                    continue
 
                 # check dimensions, if other than y or x it is added to file
                 with xr.open_dataset(
@@ -1036,59 +1033,24 @@ def merge_gridded_data(gdirs, output_folder=None,
                 for attr in ds_template[var].attrs:
                     setattr(v, attr, ds_template[var].attrs[attr])
 
-                # finally merge data of gdirs
-                combined_data = np.zeros(dim_lengths)
-                for gdir in gdirs:
-                    try:
-                        with xr.open_dataset(
-                                gdir.get_filepath(
-                                    in_file, filesuffix=in_filesuffix)) as ds:
-                            ds = ds
-                    except FileNotFoundError:
-                        if ignore_missing_data:
-                            continue
-                        else:
-                            raise InvalidWorkflowError(
-                                f'No file {in_file} for {gdir.rgi_id} found. '
-                                f'If you want to ignore you can set '
-                                f'ignore_missing_data=True!')
+                r_data = execute_entity_task(
+                    gis.reproject_gridded_data_variable_to_grid,
+                    gdirs,
+                    variable=var,
+                    target_grid=combined_grid,
+                    filename=in_file,
+                    filesuffix=in_filesuffix,
+                    use_glacier_mask=use_glacier_mask,
+                    interp=interp,
+                    preserve_totals=preserve_totals
+                )
 
-                    try:
-                        if use_glacier_mask:
-                            # transpose is used to keep dimension order,
-                            # important for map_gridded_data which expect the
-                            # last two dimensions are y and x
-                            data = xr.where(ds['glacier_mask'], ds[var],
-                                            0).transpose(*ds[var].dims)
-                        else:
-                            data = ds[var]
-                    except KeyError:
-                        if ignore_missing_data:
-                            continue
-                        else:
-                            raise InvalidWorkflowError(
-                                f'The file {in_file} from {gdir.rgi_id} does '
-                                f'not contain the variable {var}. If you want '
-                                f'to ignore you can set '
-                                f'ignore_missing_data=True!')
+                # if we continue_on_error and their was a file or a variable
+                # missing some entries could be None, here we filter them
+                r_data = list(filter(lambda e: e is not None, r_data))
 
-                    r_data = combined_grid.map_gridded_data(
-                        data, grid=gdir.grid, interp=interp,
-                    ).filled(0)
+                v[:] = np.sum(r_data, axis=0)
 
-                    if preserve_totals:
-                        # only preserve for variables which makes sense
-                        if not np.issubdtype(data, np.integer):
-                            total_before = (np.nansum(data.values) *
-                                            ds.salem.grid.dx**2)
-                            total_after = (np.nansum(r_data) *
-                                           combined_grid.dx**2)
-                            r_data *= total_before / total_after
-                    combined_data += r_data
-                v[:] = combined_data
-
-    # and some metadata for the combined dataset
-    with gis.GriddedNcdfFile(grid=combined_grid, fpath=output_folder,
-                             basename=output_filename) as nc:
+        # and some metadata to the merged dataset
         nc.nr_of_merged_glaciers = len(gdirs)
         nc.rgi_ids = [gdir.rgi_id for gdir in gdirs]

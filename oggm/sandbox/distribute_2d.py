@@ -11,7 +11,7 @@ import xarray as xr
 from scipy import ndimage
 from scipy.stats import mstats
 from oggm.core.gis import gaussian_blur, get_dem_for_grid, GriddedNcdfFile, process_dem
-from oggm.utils import ncDataset, entity_task
+from oggm.utils import ncDataset, entity_task, global_task
 import matplotlib.pyplot as plt
 
 # Module logger
@@ -419,13 +419,16 @@ def distribute_thickness_from_simulation(gdir,
     return ds
 
 
+@global_task(log)
 def merge_simulated_thickness(gdirs,
                               output_folder=None,
                               output_filename=None,
                               simulation_filesuffix='',
                               keep_dem_file=False,
                               interp='nearest',
-                              ignore_missing_data=False,
+                              preserve_totals=True,
+                              use_glacier_mask=True,
+                              add_topography=True,
                               reset=False):
     """
     This function is a wrapper for workflow.merge_gridded_data when one wants
@@ -444,7 +447,9 @@ def merge_simulated_thickness(gdirs,
         the filesuffix of the gridded_simulation file
     keep_dem_file
     interp
-    ignore_missing_data
+    add_topography
+    use_glacier_mask
+    preserve_totals
     reset
     """
     if output_filename is None:
@@ -464,12 +469,11 @@ def merge_simulated_thickness(gdirs,
                              'distributed_thickness',
                              ],
                             ['simulated_thickness']],
-        preserve_totals=True,
-        use_glacier_mask=True,
-        add_topography=True,
+        preserve_totals=preserve_totals,
+        use_glacier_mask=use_glacier_mask,
+        add_topography=add_topography,
         keep_dem_file=keep_dem_file,
         interp=interp,
-        ignore_missing_data=ignore_missing_data,
         reset=reset)
 
     # recalculate bed topography after reprojection

@@ -1885,3 +1885,90 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None):
         # Write GeoTiff file
         with rasterio.open(outpath, 'w', **profile) as dst:
             dst.write(data, 1)
+
+
+@entity_task(log)
+def reproject_gridded_data_variable_to_grid(gdir,
+                                            variable,
+                                            target_grid,
+                                            filename='gridded_data',
+                                            filesuffix='',
+                                            use_glacier_mask=True,
+                                            interp='nearest',
+                                            preserve_totals=True):
+    """
+    Function for reprojecting a gridded data variable to a different grid.
+    Useful when combining gridded data from different gdirs (see
+    workflow.merge_gridded_data).
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        Defines from where we should open the gridded data file.
+    variable : str
+        The variable for reprojection.
+    target_grid : salem.gis.Grid
+        The target grid for reprojection.
+    filename : str
+        The filename of the gridded data file. Default is gridded_data.
+    filesuffix : str
+        The filesuffix of filename. Default is ''.
+    use_glacier_mask : bool
+        If True only the data cropped by the glacier mask is included in the
+        merged file. You must make sure that the variable 'glacier_mask' exists
+        in the input file (which is the oggm default). Default is True.
+    interp : str
+        The interpolation method used by salem.Grid.map_gridded_data. Currently
+        available 'nearest' (default), 'linear', or 'spline'.
+    preserve_totals : bool
+        If True we preserve the total value of variable if variable is a float.
+        The total value is defined as the sum of all grid cell values times the
+        area of the grid cell (e.g. preserving ice volume).
+        Default is True.
+
+    Returns
+    -------
+    r_data : np.ndarray
+        The reprojected data as a np.array with spatial-dimensions defined by
+        target_grid.
+    """
+    with xr.open_dataset(gdir.get_filepath(filename,
+                                           filesuffix=filesuffix)) as ds:
+        if use_glacier_mask:
+            # transpose is used to keep dimension order for 3d data, important
+            # for map_gridded_data which expects the last two dimensions are y
+            # and x
+            data = xr.where(ds['glacier_mask'], ds[variable],
+                            0).transpose(*ds[variable].dims)
+        else:
+            data = ds[variable]
+
+    r_data = target_grid.map_gridded_data(data,
+                                          grid=gdir.grid,
+                                          interp=interp,).filled(0)
+
+    if preserve_totals:
+        # only preserve for float variables
+        if not np.issubdtype(data, np.integer):
+
+            if len(data.dims) == 2:
+                sum_axis = None
+            elif len(data.dims) == 3:
+                # for 3D data we want to preserve value for each time step
+                sum_axis = (1, 2)
+            else:
+                raise NotImplementedError(f'len(data.dims) = {len(data.dims)}')
+
+            total_before = (np.nansum(data.values, axis=sum_axis) *
+                            ds.salem.grid.dx ** 2)
+            total_after = (np.nansum(r_data, axis=sum_axis) *
+                           target_grid.dx ** 2)
+
+            factor = total_before / total_after
+            if len(data.dims) == 3:
+                # need to add two axis for broadcasting
+                factor = factor[:, np.newaxis, np.newaxis]
+
+            r_data *= factor
+
+    return r_data
