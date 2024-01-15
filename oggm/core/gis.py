@@ -625,7 +625,8 @@ def rasterio_to_gdir(gdir, input_file, output_file_name,
 
 
 def read_geotiff_dem(gdir=None, fpath=None):
-    """Reads (and masks out) the DEM out of the gdir's geotiff file or a geotiff file given by the fpath variable.
+    """Reads (and masks out) the DEM out of the gdir's geotiff file or a
+    geotiff file given by the fpath variable.
 
     Parameters
     ----------
@@ -649,7 +650,6 @@ def read_geotiff_dem(gdir=None, fpath=None):
         else:
             raise InvalidParamsError('If you do not provide a gdir you must'
                                      f'define a fpath! Given fpath={fpath}.')
-
 
     with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
