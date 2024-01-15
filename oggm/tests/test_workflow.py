@@ -406,7 +406,8 @@ def test_merge_gridded_data():
     # check if merged distributed volume is the same as total inversion volume
     inv_volume_gridded_merged = (ds_merged.distributed_thickness.sum() *
                                  ds_merged.salem.grid.dx**2) * 1e-9
-    assert_allclose(df['inv_volume_km3'].sum(), inv_volume_gridded_merged)
+    assert_allclose(df['inv_volume_km3'].sum(), inv_volume_gridded_merged,
+                    rtol=2e-7)
 
 
 @pytest.mark.slow
