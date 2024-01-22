@@ -1589,6 +1589,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_min=None,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
+                                  filesuffix='',
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
@@ -1684,6 +1685,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
     temp_bias_max: float
         the maximum accepted value for the temperature bias during optimisation.
         Defaults to cfg.PARAMS['temp_bias_max'].
+    filesuffix: str
+        add a filesuffix to mb_params.json. This could be useful for sensitivity
+        analyses with MB models, if they need to fetch other sets of params for
+        example.
     """
 
     # Param constraints
@@ -1881,12 +1886,12 @@ def mb_calibration_from_scalar_mb(gdir, *,
     df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
     # Write
     if write_to_gdir:
-        if gdir.has_file('mb_calib') and not overwrite_gdir:
+        if gdir.has_file('mb_calib', filesuffix=filesuffix) and not overwrite_gdir:
             raise InvalidWorkflowError('`mb_calib.json` already exists for '
                                        'this repository. Set `overwrite_gdir` '
                                        'to True if you want to overwrite '
                                        'a previous calibration.')
-        gdir.write_json(df, 'mb_calib')
+        gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
     return df
 
 
