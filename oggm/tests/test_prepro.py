@@ -518,6 +518,12 @@ class TestGIS(unittest.TestCase):
             assert ds.salem.grid == gtiff_ds.salem.grid
             assert np.allclose(gridded_topo.data, gtiff_ds.data)
 
+        # compare coordinates of topo.tif with dem.tif
+        demtiff_ds = salem.open_xr_dataset(gdir.get_filepath('dem'))
+        gtiff_ds = salem.open_xr_dataset(gtiff_path)
+        assert np.allclose(demtiff_ds.data, gtiff_ds.data.values)
+        assert demtiff_ds.salem.grid.__eq__(gtiff_ds.salem.grid)
+
 
 class TestCenterlines(unittest.TestCase):
 
