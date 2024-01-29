@@ -24,6 +24,10 @@ Bug fixes
   glacier mask when preserving the total values. This is a bad
   bug that is now fixed (:pull:`1661`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- When converting a variable of gridded_data to an tiff-file using
+  ``tasks.gridded_data_var_to_geotiff`` the resulting coordinates where
+  shifted half a pixel, this is now fixed (:pull:`1682`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
 v1.6.1 (August 27, 2023)
