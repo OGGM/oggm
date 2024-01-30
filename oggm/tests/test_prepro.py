@@ -9,11 +9,11 @@ import shapely.geometry as shpg
 import numpy as np
 import pandas as pd
 import xarray as xr
-import rioxarray as rioxr
 
 salem = pytest.importorskip('salem')
 rasterio = pytest.importorskip('rasterio')
 gpd = pytest.importorskip('geopandas')
+rioxr = pytest.importorskip('rioxarray')
 
 # Local imports
 import oggm
