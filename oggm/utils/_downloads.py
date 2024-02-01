@@ -1164,12 +1164,9 @@ def _download_copdem_file_unlocked(cppfile, tilename, source):
         return demfile
 
     # Did we download it yet?
-    ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-{}-DGED/2022_1/'.format(source[-2:]) +
-               cppfile)
-
-    dest_file = download_with_authentication(ftpfile,
-                                             'spacedata.copernicus.eu')
+    url = (f"https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload"
+           f"/COP-DEM_GLO-{source[-2:]}-DGED__2022_1/{tilename}.tar")
+    dest_file = file_downloader(url)
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
