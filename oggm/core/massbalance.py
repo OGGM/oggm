@@ -382,7 +382,7 @@ class MonthlyTIModel(MassBalanceModel):
         super(MonthlyTIModel, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.fl_id = fl_id  # which flowline are we the model of?
-        self.mb_params_filesuffix = mb_params_filesuffix  # which mb params?
+        self._mb_params_filesuffix = mb_params_filesuffix  # which mb params?
         self.gdir = gdir
 
         if melt_f is None:
@@ -548,16 +548,16 @@ class MonthlyTIModel(MassBalanceModel):
     @lazy_property
     def calib_params(self):
         if self.fl_id is None:
-            return self.gdir.read_json('mb_calib', self.mb_params_filesuffix)
+            return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
         else:
             try:
                 out = self.gdir.read_json('mb_calib', filesuffix=f'_fl{self.fl_id}')
-                if self.mb_params_filesuffix:
+                if self._mb_params_filesuffix:
                     raise InvalidWorkflowError('mb_params_filesuffix cannot be '
                                                'used with multiple flowlines')
                 return out
             except FileNotFoundError:
-                return self.gdir.read_json('mb_calib', self.mb_params_filesuffix)
+                return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
 
     def is_year_valid(self, year):
         return self.ys <= year <= self.ye
