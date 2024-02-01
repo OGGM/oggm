@@ -312,14 +312,16 @@ def set_logging_config(logging_level='INFO'):
         Print confirmation that things are working as expected, e.g. when
         each task is run correctly (this is the default).
     WARNING
-        Indication that something unexpected happened on a glacier,
-        but that OGGM is still working on this glacier.
+        Do not print INFO or DEBUG but print WARNING (which indicate that
+        something unexpected happened on a glacier but that OGGM is
+        still working on this glacier).
     ERROR
         Print workflow messages and errors only, e.g. when a glacier cannot
         run properly.
     WORKFLOW
         Print only high level, workflow information (typically, one message
-        per task). Errors and warnings will NOT be printed.
+        per task). Errors and warnings will NOT be printed. This is the level
+        we recommend for operational large-scale runs.
     CRITICAL
         Print nothing but fatal errors.
 

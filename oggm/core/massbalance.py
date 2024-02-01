@@ -320,6 +320,7 @@ class MonthlyTIModel(MassBalanceModel):
     def __init__(self, gdir,
                  filename='climate_historical',
                  input_filesuffix='',
+                 mb_params_filesuffix='',
                  fl_id=None,
                  melt_f=None,
                  temp_bias=None,
@@ -340,7 +341,10 @@ class MonthlyTIModel(MassBalanceModel):
             set to a different BASENAME if you want to use alternative climate
             data. Default is 'climate_historical'
         input_filesuffix : str, optional
-            append a suffix to the filename (useful for GCM runs).
+            append a suffix to the climate input filename (useful for GCM runs).
+        mb_params_filesuffix : str, optional
+            append a suffix to the mb params calibration file (useful for
+            sensitivity runs).
         fl_id : int, optional
             if this flowline has been calibrated alone and has specific
             model parameters.
@@ -378,6 +382,7 @@ class MonthlyTIModel(MassBalanceModel):
         super(MonthlyTIModel, self).__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.fl_id = fl_id  # which flowline are we the model of?
+        self.mb_params_filesuffix = mb_params_filesuffix  # which mb params?
         self.gdir = gdir
 
         if melt_f is None:
@@ -543,13 +548,16 @@ class MonthlyTIModel(MassBalanceModel):
     @lazy_property
     def calib_params(self):
         if self.fl_id is None:
-            return self.gdir.read_json('mb_calib')
+            return self.gdir.read_json('mb_calib', self.mb_params_filesuffix)
         else:
             try:
-                return self.gdir.read_json('mb_calib',
-                                           filesuffix=f'_fl{self.fl_id}')
+                out = self.gdir.read_json('mb_calib', filesuffix=f'_fl{self.fl_id}')
+                if self.mb_params_filesuffix:
+                    raise InvalidWorkflowError('mb_params_filesuffix cannot be '
+                                               'used with multiple flowlines')
+                return out
             except FileNotFoundError:
-                return self.gdir.read_json('mb_calib')
+                return self.gdir.read_json('mb_calib', self.mb_params_filesuffix)
 
     def is_year_valid(self, year):
         return self.ys <= year <= self.ye
@@ -1403,6 +1411,7 @@ def mb_calibration_from_wgms_mb(gdir, **kwargs):
     Parameters
     ----------
     **kwargs : any kwarg accepted by mb_calibration_from_scalar_mb
+    except `ref_mb` and `ref_mb_years`
     """
 
     # Note that this currently does not work for hydro years (WGMS uses hydro)
@@ -1428,12 +1437,15 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     calibrate_param2=None,
                                     calibrate_param3=None,
                                     mb_model_class=MonthlyTIModel,
+                                    filesuffix='',
                                     ):
     """Calibrate for geodetic MB data from Hugonnet et al., 2021.
 
     The data table can be obtained with utils.get_geodetic_mb_dataframe().
     It is equivalent to the original data from Hugonnet, but has some outlier
-    values filtered. See `this notebook` for more details.
+    values filtered. See [this notebook](https://nbviewer.org/urls/
+    cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert_vold1.ipynb)
+    for more details.
 
     The problem of calibrating many unknown parameters on geodetic data is
     currently unsolved. This is OGGM's current take, based on trial and
@@ -1480,6 +1492,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
+    filesuffix: str
+        add a filesuffix to mb_params.json. This could be useful for sensitivity
+        analyses with MB models, if they need to fetch other sets of params for
+        example.
 
     Returns
     -------
@@ -1551,6 +1567,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              prcp_fac_max=prcp_fac_max,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
+                                             filesuffix=filesuffix,
                                              )
 
     else:
@@ -1565,6 +1582,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              calibrate_param3=calibrate_param3,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
+                                             filesuffix=filesuffix,
                                              )
 
 
@@ -1896,7 +1914,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
 
 @entity_task(log, writes=['mb_calib'])
-def perturbate_mb_params(gdir, perturbation=None, reset_default=False):
+def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffix=''):
     """Replaces pre-calibrated MB params with perturbed ones for this glacier.
 
     It simply replaces the existing `mb_calib.json` file with an
@@ -1923,9 +1941,15 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False):
     perturbation : dict
         the parameters to change and the associated value (see doc above)
     reset_default : bool
-        reset the parameters to their original value
+        reset the parameters to their original value. This might be
+        unnecessary if using the filesuffix mechanism.
+    filesuffix : str
+        write the modified parameters in a separate mb_calib.json file
+        with the filesuffix appended. This can then be read by the
+        MassBalanceModel for example instead of the default one.
+        Note that it's always the default, precalibrated params
+        file which is read to start with.
     """
-
     df = gdir.read_json('mb_calib')
 
     # Save original params if not there
@@ -1936,7 +1960,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False):
     if reset_default:
         for k in ['bias', 'melt_f', 'prcp_fac', 'temp_bias']:
             df[k] = df[k + '_orig']
-        gdir.write_json(df, 'mb_calib')
+        gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
         return df
 
     for k, v in perturbation.items():
@@ -1947,7 +1971,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False):
         else:
             raise InvalidParamsError(f'Perturbation not valid: {k}')
 
-    gdir.write_json(df, 'mb_calib')
+    gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
     return df
 
 
