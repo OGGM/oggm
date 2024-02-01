@@ -1973,7 +1973,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
 
     gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
     return df
-
+    
 
 def _check_terminus_mass_flux(gdir, fls):
     # Check that we have done this correctly
