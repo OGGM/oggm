@@ -1978,8 +1978,10 @@ def run_dynamic_melt_f_calibration(
     def minimise_with_spline_fit(fct_to_minimise, melt_f_guess, mismatch):
         # defines limits of melt_f in accordance to maximal allowed change
         # between iterations
-        melt_f_limits = [melt_f_initial - melt_f_max_step_length,
-                         melt_f_initial + melt_f_max_step_length]
+        melt_f_limits = [max(melt_f_initial - melt_f_max_step_length,
+                             melt_f_min),
+                         min(melt_f_initial + melt_f_max_step_length,
+                             melt_f_max)]
 
         # this two variables indicate that the limits were already adapted to
         # avoid an error
