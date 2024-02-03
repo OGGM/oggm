@@ -9,15 +9,24 @@ v1.6.2 (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
-- There is now a possibility for initializing a elevation-band flowline using 
+- There is now a possibility for initializing a elevation-band flowline using
   external thickness data and conduct a dynamic run with it (:pull:`1658`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- The default minimum thickness for the dynamic spinup was changed from 10 m
+  to 2 m. The new value was found in a local study and makes a larger
+  difference for smaller (thinner) glaciers (:pull:`1667`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
 
 - The binned variables in the elevation band flowlines did not use the
-  glacier mask when preserving the total values. This is a bad 
+  glacier mask when preserving the total values. This is a bad
   bug that is now fixed (:pull:`1661`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- When converting a variable of gridded_data to an tiff-file using
+  ``tasks.gridded_data_var_to_geotiff`` the resulting coordinates where
+  shifted half a pixel, this is now fixed (:pull:`1682`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
