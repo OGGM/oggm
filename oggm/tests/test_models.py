@@ -198,9 +198,16 @@ class TestInitPresentDayFlowline:
         # test that if w0<0 it is converted to rectangular
         # set some thickness to very large values to force it
         df_fixed_dx = pd.read_csv(gdir.get_filepath('elevation_band_flowline',
-                                                    filesuffix='_fixed_dx'))
+                                                    filesuffix='_fixed_dx'),
+                                                    index_col=0)
+
+        # Check consistency between csv and flowline object
+        fl_inv = gdir.read_pickle('inversion_flowlines')[0]
+        assert fl_inv.nx == len(df_fixed_dx)
+        assert fl_inv.dx_meter == (df_fixed_dx.index[1] - df_fixed_dx.index[0])
+        np.testing.assert_allclose(fl_inv.dx_meter * np.arange(fl_inv.nx), df_fixed_dx.index)
         new_thick = df_fixed_dx['consensus_ice_thickness']
-        new_thick[-10:] = new_thick[-10:] + 1000
+        new_thick.iloc[-10:] = new_thick.iloc[-10:] + 1000
         df_fixed_dx['consensus_ice_thickness'] = new_thick
         ref_vol_rect = np.sum(df_fixed_dx['area_m2'] * new_thick)
         df_fixed_dx.to_csv(gdir.get_filepath('elevation_band_flowline',

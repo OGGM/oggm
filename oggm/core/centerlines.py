@@ -2430,6 +2430,8 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
                         warnings.filterwarnings("ignore", category=RuntimeWarning)
                         interp *= in_total / out_total
             odf[var] = interp
+        # Match how OGGM computes distance along flowline
+        odf.index = np.arange(nx) * dx_meter
         odf.to_csv(gdir.get_filepath('elevation_band_flowline',
                                      filesuffix='_fixed_dx'))
 
