@@ -4170,7 +4170,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
             ods[varname] = ('time', data)
         for k, v in d.items():
             ods[varname].attrs[k] = v
-            if store_monthly_hydro:
+            if store_monthly_hydro and (varname + '_monthly') in ods:
                 ods[varname + '_monthly'].attrs[k] = v
 
     # Append the output to the existing diagnostics
