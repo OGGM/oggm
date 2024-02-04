@@ -510,7 +510,7 @@ class entity_task(object):
                     raise
 
                 if self.fallback is not None:
-                    self.fallback(gdir)
+                    out = self.fallback(gdir)
             if return_value:
                 return out
 
