@@ -1895,7 +1895,8 @@ def reproject_gridded_data_variable_to_grid(gdir,
                                             filesuffix='',
                                             use_glacier_mask=True,
                                             interp='nearest',
-                                            preserve_totals=True):
+                                            preserve_totals=True,
+                                            slice_of_variable=None):
     """
     Function for reprojecting a gridded data variable to a different grid.
     Useful when combining gridded data from different gdirs (see
@@ -1925,6 +1926,10 @@ def reproject_gridded_data_variable_to_grid(gdir,
         The total value is defined as the sum of all grid cell values times the
         area of the grid cell (e.g. preserving ice volume).
         Default is True.
+    slice_of_variable : None | dict
+        Can provide dimensions with values as a dictionary for extracting only
+        a slice of the data before reprojecting. This can be useful for large
+        datasets or if only part of the data is of interest. Default is None.
 
     Returns
     -------
@@ -1943,9 +1948,12 @@ def reproject_gridded_data_variable_to_grid(gdir,
         else:
             data = ds[variable]
 
-    r_data = target_grid.map_gridded_data(data,
-                                          grid=gdir.grid,
-                                          interp=interp,).filled(0)
+        if slice_of_variable is not None:
+            data = data.sel(**slice_of_variable)
+
+        r_data = target_grid.map_gridded_data(data,
+                                              grid=gdir.grid,
+                                              interp=interp,).filled(0)
 
     if preserve_totals:
         # only preserve for float variables

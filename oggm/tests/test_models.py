@@ -5823,3 +5823,17 @@ class TestDistribute2D:
                 ds_merged.loc[{'time': yr}].simulated_thickness.plot()
                 plt.title(f'Year {yr}')
                 plt.show()
+
+        # try merging only for a few years, also testing use_multiprocessing
+        distribute_2d.merge_simulated_thickness(
+            gdirs, simulation_filesuffix='_random',
+            output_filename='gridded_simulation_only_selected_years',
+            years_to_merge=years_to_test,
+            use_multiprocessing=True,
+            reset=True)
+        with xr.open_dataset(
+                os.path.join(cfg.PATHS['working_dir'],
+                             'gridded_simulation_only_selected_years.nc')) as ds:
+            ds_merged_selected_years = ds
+        assert_allclose(ds_merged_selected_years.simulated_thickness.values,
+                        ds_merged.loc[{'time': years_to_test}].simulated_thickness.values)

@@ -424,11 +424,13 @@ def merge_simulated_thickness(gdirs,
                               output_folder=None,
                               output_filename=None,
                               simulation_filesuffix='',
+                              years_to_merge=None,
                               keep_dem_file=False,
                               interp='nearest',
                               preserve_totals=True,
                               use_glacier_mask=True,
                               add_topography=True,
+                              use_multiprocessing=False,
                               reset=False):
     """
     This function is a wrapper for workflow.merge_gridded_data when one wants
@@ -445,11 +447,16 @@ def merge_simulated_thickness(gdirs,
         Default is gridded_simulation_merged{simulation_filesuffix}.
     simulation_filesuffix : str
         the filesuffix of the gridded_simulation file
+    years_to_merge : list | None
+        If not None, only the years in this list are merged. Default is None.
     keep_dem_file
     interp
     add_topography
     use_glacier_mask
     preserve_totals
+    use_multiprocessing : bool
+        If we use multiprocessing the merging is done in parallel, but requires
+        more memory. Default is True.
     reset
     """
     if output_filename is None:
@@ -457,6 +464,11 @@ def merge_simulated_thickness(gdirs,
 
     if output_folder is None:
         output_folder = cfg.PATHS['working_dir']
+
+    if years_to_merge is None:
+        selected_time = None
+    else:
+        selected_time = {'time': years_to_merge}
 
     workflow.merge_gridded_data(
         gdirs,
@@ -468,12 +480,13 @@ def merge_simulated_thickness(gdirs,
                              'glacier_mask',
                              'distributed_thickness',
                              ],
-                            ['simulated_thickness']],
+                            [('simulated_thickness', selected_time)]],
         preserve_totals=preserve_totals,
         use_glacier_mask=use_glacier_mask,
         add_topography=add_topography,
         keep_dem_file=keep_dem_file,
         interp=interp,
+        use_multiprocessing=use_multiprocessing,
         reset=reset)
 
     # recalculate bed topography after reprojection, if topo was added

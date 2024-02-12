@@ -852,6 +852,7 @@ def merge_gridded_data(gdirs, output_folder=None,
                        add_topography=False,
                        keep_dem_file=False,
                        interp='nearest',
+                       use_multiprocessing=True,
                        reset=False):
     """ This function takes a list of glacier directories and combines their
     gridded_data into a new NetCDF file and saves it into the output_folder. It
@@ -889,7 +890,11 @@ def merge_gridded_data(gdirs, output_folder=None,
         variable it can be provided as str, otherwise as a list. If set to
         'all' we merge everything. If input_file is a list, include_variables
         should be a list of lists with the same length, where the lists define
-        the variables for the individual input_files.
+        the variables for the individual input_files. Furthermore, if you only
+        want to merge a subset of the variables you can define the variable as
+        a tuple with the first element being the variable name and the second
+        element being the selected coordinates as a dictionary (e.g.
+        ('variable', {'time': [0, 1, 2]})). Default is 'all'.
     preserve_totals : bool
         If True we preserve the total value of all float-variables of the
         original file. The total value is defined as the sum of all grid cell
@@ -911,6 +916,9 @@ def merge_gridded_data(gdirs, output_folder=None,
     interp : str
         The interpolation method used by salem.Grid.map_gridded_data. Currently
         available 'nearest' (default), 'linear', or 'spline'.
+    use_multiprocessing : bool
+        If True the merging is done in parallel using multiprocessing. This
+        could require a lot of memory. Default is True.
     reset : bool
         If the file defined in output_filename already exists and reset is
         False an error is raised. If reset is True and the file exists it is
@@ -958,7 +966,7 @@ def merge_gridded_data(gdirs, output_folder=None,
             dem_gdir = gdirs[0]
         gis.get_dem_for_grid(combined_grid, output_folder,
                              source=dem_source, gdir=dem_gdir)
-        # unwrapped is needed execute process_dem without the entity_task
+        # unwrapped is needed to execute process_dem without the entity_task
         # overhead (this would need a valid gdir)
         gis.process_dem.unwrapped(gdir=None, grid=combined_grid,
                                   fpath=output_folder,
@@ -990,6 +998,12 @@ def merge_gridded_data(gdirs, output_folder=None,
 
             # add one variable after another
             for var in included_var:
+                # check if we only want to merge a subset of the variable
+                if isinstance(var, tuple):
+                    var, slice_of_var = var
+                else:
+                    slice_of_var = None
+
                 # do not merge topo variables, for this we have add_topography
                 if var in ['topo', 'topo_smoothed', 'topo_valid_mask']:
                     continue
@@ -998,8 +1012,8 @@ def merge_gridded_data(gdirs, output_folder=None,
                 with xr.open_dataset(
                         gdirs[0].get_filepath(in_file,
                                               filesuffix=in_filesuffix)) as ds:
-                    ds_template = ds
-                dims = ds_template[var].dims
+                    ds_templ = ds
+                dims = ds_templ[var].dims
 
                 dim_lengths = []
                 for dim in dims:
@@ -1008,48 +1022,86 @@ def merge_gridded_data(gdirs, output_folder=None,
                     elif dim == 'x':
                         dim_lengths.append(combined_grid.nx)
                     else:
-                        dim_var = ds_template[var][dim]
+                        if slice_of_var is not None:
+                            # only keep selected part of the variable
+                            if dim in slice_of_var:
+                                dim_var = ds_templ[var][dim].sel(
+                                    {dim: slice_of_var[dim]})
+                            else:
+                                dim_var = ds_templ[var][dim]
+                        else:
+                            dim_var = ds_templ[var][dim]
                         if dim not in nc.dimensions:
                             nc.createDimension(dim, len(dim_var))
                             v = nc.createVariable(dim, 'f4', (dim,), zlib=True)
                             # add attributes
                             for attr in dim_var.attrs:
                                 setattr(v, attr, dim_var.attrs[attr])
-                            v[:] = dim_var.values
+                            if slice_of_var is not None:
+                                if dim in slice_of_var:
+                                    v[:] = slice_of_var[dim]
+                                else:
+                                    v[:] = dim_var.values
+                            else:
+                                v[:] = dim_var.values
                             # also add potential coords (e.g. calender_year)
                             for coord in dim_var.coords:
                                 if coord != dim:
-                                    coord_val = ds_template[coord].values
+                                    if slice_of_var is not None:
+                                        if dim in slice_of_var:
+                                            coord_val = ds_templ[coord].sel(
+                                                {dim: slice_of_var[dim]})
+                                        else:
+                                            coord_val = ds_templ[coord].values
+                                    else:
+                                        coord_val = ds_templ[coord].values
                                     tmp_coord = nc.createVariable(
                                         coord, 'f4', (dim,))
                                     tmp_coord[:] = coord_val
-                                    for attr in ds_template[coord].attrs:
+                                    for attr in ds_templ[coord].attrs:
                                         setattr(tmp_coord, attr,
-                                                ds_template[coord].attrs[attr])
+                                                ds_templ[coord].attrs[attr])
                         dim_lengths.append(len(dim_var))
 
                 # before merging add variable attributes to final file
                 v = nc.createVariable(var, 'f4', dims, zlib=True)
-                for attr in ds_template[var].attrs:
-                    setattr(v, attr, ds_template[var].attrs[attr])
+                for attr in ds_templ[var].attrs:
+                    setattr(v, attr, ds_templ[var].attrs[attr])
 
-                r_data = execute_entity_task(
-                    gis.reproject_gridded_data_variable_to_grid,
-                    gdirs,
+                kwargs_reproject = dict(
                     variable=var,
                     target_grid=combined_grid,
                     filename=in_file,
                     filesuffix=in_filesuffix,
                     use_glacier_mask=use_glacier_mask,
                     interp=interp,
-                    preserve_totals=preserve_totals
+                    preserve_totals=preserve_totals,
+                    slice_of_variable=slice_of_var,
                 )
 
-                # if we continue_on_error and their was a file or a variable
-                # missing some entries could be None, here we filter them
-                r_data = list(filter(lambda e: e is not None, r_data))
+                if use_multiprocessing:
+                    r_data = execute_entity_task(
+                        gis.reproject_gridded_data_variable_to_grid,
+                        gdirs,
+                        **kwargs_reproject
+                    )
 
-                v[:] = np.sum(r_data, axis=0)
+                    # if we continue_on_error and their was a file or a variable
+                    # missing some entries could be None, here we filter them
+                    r_data = list(filter(lambda e: e is not None, r_data))
+
+                    v[:] = np.sum(r_data, axis=0)
+                else:
+                    # if we do not use multiprocessing we have to loop over the
+                    # gdirs and add the data one after another
+                    r_data = np.zeros(dim_lengths)
+                    for gdir in gdirs:
+                        tmp_data = gis.reproject_gridded_data_variable_to_grid(
+                            gdir, **kwargs_reproject)
+                        if tmp_data is not None:
+                            r_data += tmp_data
+
+                    v[:] = r_data
 
         # and some metadata to the merged dataset
         nc.nr_of_merged_glaciers = len(gdirs)
