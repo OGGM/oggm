@@ -311,7 +311,6 @@ class TestInitFlowlineOtherGlacier:
     def test_define_divides(self, class_case_dir):
 
         from oggm.core import centerlines
-        from oggm.core import climate
         from oggm.core import inversion
         from oggm.core import gis
         from oggm import GlacierDirectory
@@ -392,8 +391,6 @@ class TestMassBalanceModels:
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
-
-        df = gdir.read_json('mb_calib')
 
         # Climate period
         yrp = [1851, 2000]
@@ -1709,9 +1706,8 @@ class TestIO():
                     surface_h_previous_timestep = model.fls[0].surface_h
                     # smooth flux divergence where glacier is getting ice free
                     has_become_ice_free = np.logical_and(
-                                np.isclose(model.fls[0].thick, 0.),
-                                dhdt_ref[-1] < 0.
-                            )
+                        np.isclose(model.fls[0].thick, 0.),
+                        dhdt_ref[-1] < 0.)
                     flux_divergence_ref.append(
                         (dhdt_ref[-1] - climatic_mb_ref[-1]) *
                         np.where(has_become_ice_free, 0.1, 1.))
@@ -2787,7 +2783,6 @@ class TestHEF:
                                               glen_a=inversion_params['inversion_glen_a'])
         init_present_time_glacier(hef_gdir)
 
-
         fls = hef_gdir.read_pickle('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['inversion_fs'],
@@ -3356,21 +3351,21 @@ class TestDynamicSpinup:
         # first we artificially produce some errors in hef_gdir using extreme kwargs
         error_settings = {
             'Not able to conduct one error free run. Error is "ice_free"':
-                {'first_guess_t_bias': 100},
+                {'first_guess_t_spinup': 100},
             'The difference between the rgi_date and the start year of the '
             'climate data is too small to run a dynamic spinup!':
                 {'min_spinup_period': 300},
             'The given reference value is Zero, no dynamic spinup possible!':
                 {'init_model_fls': fls_zero_ice},
             'Not able to conduct one error free run. Error is "out_of_domain"':
-                {'first_guess_t_bias': -100},
+                {'first_guess_t_spinup': -100},
             'Could not find mismatch smaller 0.1%':
                 {'precision_percent': 0.1}
         }
 
         for err_msg, kwarg_dyn_spn in error_settings.items():
             # test that error is thrown
-            ignore_errors=False
+            ignore_errors = False
             with pytest.raises(RuntimeError,
                                match=err_msg):
                 run_dynamic_spinup(
@@ -3390,8 +3385,7 @@ class TestDynamicSpinup:
                                           filesuffix='_dynamic_spinup', ))
 
             # check that it passes with ignore_errors=True
-            ignore_errors=True
-
+            ignore_errors = True
             model = run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
@@ -3416,19 +3410,19 @@ class TestDynamicSpinup:
         ye = hef_gdir.get_climate_info()['baseline_yr_1'] + 1
         precision_percent = 1
         precision_absolute = 1
-        model_dynamic_spinup_ye, t_bias = run_dynamic_spinup(
+        model_dynamic_spinup_ye, t_spinup = run_dynamic_spinup(
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
             target_yr=yr_rgi,
             ye=ye,
-            return_t_bias_best=True,
+            return_t_spinup_best=True,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
             output_filesuffix='_dynamic_spinup_historical', )
 
-        assert isinstance(t_bias, float)
+        assert isinstance(t_spinup, float)
         assert model_dynamic_spinup_ye.yr == ye
         ds = utils.compile_run_output(
             hef_gdir, input_filesuffix='_dynamic_spinup_historical', path=False)
@@ -3448,7 +3442,7 @@ class TestDynamicSpinup:
 
         # test parameter and spinup_start_yr_max, should override spinup_period
         # to start at spinup_start_yr_max
-        model_dynamic_spinup_max_start_yr = run_dynamic_spinup(
+        run_dynamic_spinup(
             hef_gdir,
             spinup_period=5,
             spinup_start_yr=None,
@@ -3601,13 +3595,13 @@ class TestDynamicSpinup:
             # check that ignore_error is working correctly
             ignore_errors = True
 
-            model_dynamic_spinup_error, t_bias_best = run_dynamic_spinup(
+            model_dynamic_spinup_error, t_spinup_best = run_dynamic_spinup(
                 gdir,
                 minimise_for=minimise_for,
                 output_filesuffix='_dynamic_spinup',
                 maxiter=10,
                 ignore_errors=ignore_errors,
-                return_t_bias_best=True)
+                return_t_spinup_best=True)
 
             # check if model geometry is correctly saved in gdir
             fp = gdir.get_filepath('model_geometry',
@@ -3620,7 +3614,7 @@ class TestDynamicSpinup:
             yr_rgi = gdir.rgi_date + 1  # convert to hydro year
             assert fmod.last_yr == np.clip(yr_rgi, yr_min, None)
             assert len(model_dynamic_spinup_error.fls) == len(fmod.fls)
-            assert np.isnan(t_bias_best)
+            assert np.isnan(t_spinup_best)
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -4568,7 +4562,6 @@ class TestHydro:
         # that it works here
         assert_allclose(odf['tot_prcp'], odf['tot_prcp'].iloc[0])
 
-
         # Glacier area is the same (remove on_area?)
         assert_allclose(odf['on_area'], odf['area_m2'])
 
@@ -5034,7 +5027,7 @@ class TestHydro:
         # check if melt on glacier is always above or equal zero
         assert np.all(odf['melt_on_glacier'] >= 0)
 
-    #@pytest.mark.slow
+    @pytest.mark.slow
     @pytest.mark.parametrize('mb_type', ['random', 'const', 'hist'])
     @pytest.mark.parametrize('mb_bias', [500, -500, 0])
     def test_hydro_monhly_vs_annual(self, hef_gdir, inversion_params,
@@ -5668,7 +5661,7 @@ class TestDistribute2D:
         # This can be done without any run
         from oggm.sandbox import distribute_2d
         distribute_2d.add_smoothed_glacier_topo(hef_elev_gdir)
-        tasks.distribute_thickness_per_altitude(hef_elev_gdir);
+        tasks.distribute_thickness_per_altitude(hef_elev_gdir)
         distribute_2d.assign_points_to_band(hef_elev_gdir)
 
         mb_mod = massbalance.RandomMassBalance(hef_elev_gdir, y0=1980,
@@ -5691,7 +5684,7 @@ class TestDistribute2D:
         fp = hef_elev_gdir.get_filepath('gridded_simulation', filesuffix='_commit')
         with xr.open_dataset(fp) as ds:
             thick = ds.simulated_thickness.load()
-            
+
         fp = hef_elev_gdir.get_filepath('gridded_data')
         with xr.open_dataset(fp) as ds:
             ds = ds.load()
@@ -5726,30 +5719,33 @@ class TestDistribute2D:
             yr = 2030
             plt.figure()
             f, ax = plt.subplots()
-            fl_diag.sel(time=yr)['volume_m3'].plot(ax=ax);
-            fl_diag.sel(time=yr)['volume_m3_dis'].plot(ax=ax);
-            plt.show(); plt.figure();
+            fl_diag.sel(time=yr)['volume_m3'].plot(ax=ax)
+            fl_diag.sel(time=yr)['volume_m3_dis'].plot(ax=ax)
+            plt.figure()
             f, ax = plt.subplots()
-            fl_diag.sel(time=yr)['area_m2'].plot(ax=ax);
-            fl_diag.sel(time=yr)['area_m2_dis'].plot(ax=ax);
-            plt.show(); plt.figure();
+            fl_diag.sel(time=yr)['area_m2'].plot(ax=ax)
+            fl_diag.sel(time=yr)['area_m2_dis'].plot(ax=ax)
+            plt.figure()
             f, ax = plt.subplots()
-            ds_diag.area_m2.plot(ax=ax);
-            area_dis.plot(ax=ax);
-            plt.show(); plt.figure();
+            ds_diag.area_m2.plot(ax=ax)
+            area_dis.plot(ax=ax)
+            plt.figure()
             f, ax = plt.subplots()
-            ds_diag.volume_m3.plot(ax=ax);
-            vol_dis.plot(ax=ax);
-            plt.show();
+            ds_diag.volume_m3.plot(ax=ax)
+            vol_dis.plot(ax=ax)
+            plt.show()
 
-        if False:
+        if do_plot:
             from matplotlib import animation
-            import matplotlib; matplotlib.use("TkAgg");
+            import matplotlib
+            matplotlib.use("TkAgg")
             # Get a handle on the figure and the axes
             fig, ax = plt.subplots()
             # Plot the initial frame.
             cax = thick.isel(time=0).plot(add_colorbar=True, cmap='viridis',
-                vmin=0, vmax=350, cbar_kwargs={'extend': 'neither'})
+                                          vmin=0, vmax=350,
+                                          cbar_kwargs={'extend': 'neither'})
+
             def animate(frame):
                 cax.set_array(thick.values[frame, :].flatten())
             animation.FuncAnimation(fig, animate, frames=len(thick.time),

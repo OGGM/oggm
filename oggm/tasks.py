@@ -32,6 +32,7 @@ from oggm.core.massbalance import mb_calibration_from_geodetic_mb
 from oggm.core.massbalance import mb_calibration_from_wgms_mb
 from oggm.core.massbalance import apparent_mb_from_linear_mb
 from oggm.core.massbalance import apparent_mb_from_any_mb
+from oggm.core.massbalance import perturbate_mb_params
 from oggm.core.massbalance import fixed_geometry_mass_balance
 from oggm.core.massbalance import compute_ela
 from oggm.shop.w5e5 import process_w5e5_data

@@ -1867,7 +1867,7 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None):
         # Prepare the profile dict
         crs = ds.pyproj_srs
         var = ds[varname]
-        grid = ds.salem.grid
+        grid = ds.salem.grid.corner_grid
         data = var.data
         data_type = data.dtype.name
         height, width = var.data.shape

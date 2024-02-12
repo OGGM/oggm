@@ -13,6 +13,7 @@ import xarray as xr
 salem = pytest.importorskip('salem')
 rasterio = pytest.importorskip('rasterio')
 gpd = pytest.importorskip('geopandas')
+rioxr = pytest.importorskip('rioxarray')
 
 # Local imports
 import oggm
@@ -528,9 +529,17 @@ class TestGIS(unittest.TestCase):
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             gridded_topo = ds[target_var]
-            gtiff_ds = salem.open_xr_dataset(gtiff_path)
-            assert ds.salem.grid == gtiff_ds.salem.grid
+            gtiff_ds = rioxr.open_rasterio(gtiff_path)
+            np.allclose(ds.salem.grid.x_coord, gtiff_ds.x)
+            np.allclose(ds.salem.grid.y_coord, gtiff_ds.y)
             assert np.allclose(gridded_topo.data, gtiff_ds.data)
+
+        # compare coordinates of topo.tif with dem.tif
+        demtiff_ds = rioxr.open_rasterio(gdir.get_filepath('dem'))
+        gtiff_ds = rioxr.open_rasterio(gtiff_path)
+        assert np.allclose(demtiff_ds.data, gtiff_ds.data)
+        assert np.allclose(demtiff_ds.x, gtiff_ds.x)
+        assert np.allclose(demtiff_ds.y, gtiff_ds.y)
 
 
 class TestCenterlines(unittest.TestCase):
@@ -1672,6 +1681,19 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb3']].corr(),
                                    atol=0.5)
 
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
+        assert pdf['melt_f'] < cfg.PARAMS['melt_f']
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
+
+        # Test perturbate
+        massbalance.perturbate_mb_params(gdir, perturbation={'temp_bias': -1,
+                                                             'prcp_fac': 2})
+        pdf = gdir.read_json('mb_calib')
+        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min'] - 1
+        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max'] * 2
+
+        massbalance.perturbate_mb_params(gdir, reset_default=True)
         pdf = gdir.read_json('mb_calib')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']

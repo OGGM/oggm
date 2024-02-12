@@ -1328,8 +1328,7 @@ class FlowlineModel(object):
                             surface_h_previous[fl_id] = fl.surface_h
                         if 'flux_divergence' in ovars_fl and (yr > self.y0):
                             # calculated after the formula dhdt = mb + flux_div
-                            val = ds['dhdt_myr'].data[j, :] -\
-                                  ds['climatic_mb_myr'].data[j, :]
+                            val = ds['dhdt_myr'].data[j, :] - ds['climatic_mb_myr'].data[j, :]
                             # special treatment for retreating: If the glacier
                             # terminus is getting ice free it means the
                             # climatic mass balance is more negative than the
@@ -3173,6 +3172,7 @@ def decide_evolution_model(evolution_model=None):
 def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
                        init_model_fls=None, store_monthly_step=False,
+                       glen_a_fac=None, fs_fac=None,
                        fixed_geometry_spinup_yr=None,
                        store_model_geometry=None,
                        store_fl_diagnostics=None,
@@ -3209,6 +3209,13 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     store_monthly_step : bool
         whether to store the diagnostic data at a monthly time step or not
         (default is yearly)
+    glen_a_fac : float
+        perturbate the default glen_a (either from the inversion if
+        PARAMS['use_inversion_params_for_run'] is True or PARAMS['glen_a'] if
+        False) with a chosen multiplicative parameter. Useful for
+        parameter perturbation experiments.
+    fs_fac : float
+        same as glen_a_fac but for sliding
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
         (new in OGGM v1.4.1: default is to follow
@@ -3270,6 +3277,11 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         fs = cfg.PARAMS['fs']
         glen_a = cfg.PARAMS['glen_a']
 
+    if glen_a_fac is not None:
+        glen_a *= glen_a_fac
+    if fs_fac is not None:
+        fs *= fs_fac
+
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
 
@@ -3320,11 +3332,11 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                                        'to prevent this error.')
 
     model = evolution_model(fls, mb_model=mb_model, y0=ys,
-                           inplace=True,
-                           is_tidewater=gdir.is_tidewater,
-                           is_lake_terminating=gdir.is_lake_terminating,
-                           water_level=water_level,
-                           **kwargs)
+                            inplace=True,
+                            is_tidewater=gdir.is_tidewater,
+                            is_lake_terminating=gdir.is_lake_terminating,
+                            water_level=water_level,
+                            **kwargs)
 
     with warnings.catch_warnings():
         # For operational runs we ignore the warnings
@@ -3429,7 +3441,7 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         if false, every model year will be chosen from the random climate
         period with the same probability
     kwargs : dict
-        kwargs to pass to the FluxBasedModel instance
+        kwargs to pass to the flowline_model_run task
     """
 
     mb_model = MultipleFlowlineMassBalance(gdir,
@@ -3546,7 +3558,7 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
         list of flowlines to use to initialize the model (the default is the
         present_time_glacier file from the glacier directory)
     kwargs : dict
-        kwargs to pass to the FluxBasedModel instance
+        kwargs to pass to the flowline_model_run task
     """
 
     mb_model = MultipleFlowlineMassBalance(gdir,
@@ -3661,14 +3673,14 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         multiply a factor to the precipitation time series (note that
         this factor is multiplied to any factor that was decided during
         calibration or by global parameters)
-    kwargs : dict
-        kwargs to pass to the FluxBasedModel instance
     fixed_geometry_spinup_yr : int
         if set to an integer, the model will artificially prolongate
         all outputs of run_until_and_store to encompass all time stamps
         starting from the chosen year. The only output affected are the
         glacier wide diagnostic files - all other outputs are set
         to constants during "spinup"
+    kwargs : dict
+        kwargs to pass to the flowline_model_run task
     """
 
     if init_model_filesuffix is not None:
