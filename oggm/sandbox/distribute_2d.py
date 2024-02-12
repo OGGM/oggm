@@ -476,10 +476,11 @@ def merge_simulated_thickness(gdirs,
         interp=interp,
         reset=reset)
 
-    # recalculate bed topography after reprojection
-    fp = os.path.join(output_folder, f'{output_filename}.nc')
-    with xr.open_dataset(fp) as ds:
-        ds_merged = ds.load()
-    ds_merged['bedrock'] = (ds_merged['topo'] -
-                            ds_merged['distributed_thickness'].fillna(0))
-    ds_merged.to_netcdf(fp)
+    # recalculate bed topography after reprojection, if topo was added
+    if add_topography:
+        fp = os.path.join(output_folder, f'{output_filename}.nc')
+        with xr.open_dataset(fp) as ds:
+            ds_merged = ds.load()
+        ds_merged['bedrock'] = (ds_merged['topo'] -
+                                ds_merged['distributed_thickness'].fillna(0))
+        ds_merged.to_netcdf(fp)
