@@ -36,7 +36,7 @@ Get in touch
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
-.. _Twitter: https://twitter.com/OGGM1
+.. _Twitter: https://twitter.com/OGGM_org
 
 
 About
@@ -46,7 +46,7 @@ About
     .. image:: https://img.shields.io/pypi/v/oggm.svg
         :target: https://pypi.python.org/pypi/oggm
         :alt: Pypi version
-        
+
     .. image:: https://img.shields.io/pypi/pyversions/oggm.svg
         :target: https://pypi.python.org/pypi/oggm
         :alt: Supported python versions
@@ -60,7 +60,7 @@ About
         :target: https://zenodo.org/badge/latestdoi/43965645
         :alt: Zenodo
 
-:Tests:       
+:Tests:
     .. image:: https://coveralls.io/repos/github/OGGM/oggm/badge.svg?branch=master
         :target: https://coveralls.io/github/OGGM/oggm?branch=master
         :alt: Code coverage
