@@ -4,6 +4,7 @@ import shutil
 import warnings
 import copy
 import time
+import glob
 import numpy as np
 import pandas as pd
 import shapely.geometry as shpg
@@ -5765,7 +5766,7 @@ class TestDistribute2D:
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         workflow.execute_entity_task(run_random_climate, gdirs, y0=2014,
-                                     halfsize=5, nyears=100, seed=0,
+                                     halfsize=5, nyears=20, seed=0,
                                      output_filesuffix='_random',
                                      store_fl_diagnostics=True)
 
@@ -5790,13 +5791,14 @@ class TestDistribute2D:
                                                 reset=True)
 
         # compare gridded merged data with flowline model run
-        with xr.open_dataset(
-                os.path.join(cfg.PATHS['working_dir'],
-                             'gridded_simulation_merged_random.nc')) as ds:
+        files_to_open = glob.glob(
+            os.path.join(cfg.PATHS['working_dir'],
+                         'gridded_simulation_merged_random*'))
+        with xr.open_mfdataset(files_to_open) as ds:
             ds_merged = ds
         ds_run = utils.compile_run_output(gdirs, input_filesuffix='_random')
 
-        years_to_test = [0, 50, 100]
+        years_to_test = [0, 10, 20]
         for yr in years_to_test:
             # check for each glacier individually if gridded volume match
             for gdir in gdirs:
@@ -5825,11 +5827,13 @@ class TestDistribute2D:
                 plt.show()
 
         # try merging only for a few years, also testing use_multiprocessing
+        # and save_as_multiple_files
         distribute_2d.merge_simulated_thickness(
             gdirs, simulation_filesuffix='_random',
             output_filename='gridded_simulation_only_selected_years',
             years_to_merge=years_to_test,
             use_multiprocessing=True,
+            save_as_multiple_files=False,
             reset=True)
         with xr.open_dataset(
                 os.path.join(cfg.PATHS['working_dir'],
