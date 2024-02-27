@@ -1,16 +1,17 @@
 import logging
 import warnings
 
+import os
 import oggm
 import oggm.cfg as cfg
-from oggm import utils
+from oggm import utils, workflow
 from oggm.exceptions import InvalidWorkflowError
 import numpy as np
 import xarray as xr
 from scipy import ndimage
 from scipy.stats import mstats
-from oggm.core.gis import gaussian_blur
-from oggm.utils import ncDataset, entity_task
+from oggm.core.gis import gaussian_blur, get_dem_for_grid, GriddedNcdfFile, process_dem
+from oggm.utils import ncDataset, entity_task, global_task
 import matplotlib.pyplot as plt
 
 # Module logger
@@ -398,7 +399,7 @@ def distribute_thickness_from_simulation(gdir,
 
     ds.coords['time'] = dg['time']
 
-    vn = "distributed_thickness"
+    vn = "simulated_thickness"
     ds[vn] = (('time', 'y', 'x',), out_thick)
     ds.coords['calendar_year'] = ('time', yrs)
     ds.coords['calendar_month'] = ('time', months)
@@ -416,3 +417,147 @@ def distribute_thickness_from_simulation(gdir,
         return ds, out_df
 
     return ds
+
+
+@global_task(log)
+def merge_simulated_thickness(gdirs,
+                              output_folder=None,
+                              output_filename=None,
+                              simulation_filesuffix='',
+                              years_to_merge=None,
+                              keep_dem_file=False,
+                              interp='nearest',
+                              preserve_totals=True,
+                              use_glacier_mask=True,
+                              add_topography=True,
+                              use_multiprocessing=False,
+                              save_as_multiple_files=True,
+                              reset=False):
+    """
+    This function is a wrapper for workflow.merge_gridded_data when one wants
+    to merge the distributed thickness after a simulation. It adds all
+    variables needed for a '3D-visualisation'. The bedrock topography is
+    recalculated for the combined grid. For more information about the
+    parameters see the docstring of workflow.merge_gridded_data.
+
+    Parameters
+    ----------
+    gdirs
+    output_folder
+    output_filename : str
+        Default is gridded_simulation_merged{simulation_filesuffix}.
+    simulation_filesuffix : str
+        the filesuffix of the gridded_simulation file
+    years_to_merge : list | None
+        If not None, only the years in this list are merged. Default is None.
+    keep_dem_file
+    interp
+    add_topography
+    use_glacier_mask
+    preserve_totals
+    use_multiprocessing : bool
+        If we use multiprocessing the merging is done in parallel, but requires
+        more memory. Default is True.
+    save_as_multiple_files : bool
+        If True, the merged simulated-thickness data is saved as multiple
+        files, one for each year of simulation to avoid memory overflow
+        problems. In this case the other data like glacier mask, glacier
+        extent, bedrock topography, etc. are saved in a separate file (with
+        suffix _topo_data). If False, all data is saved in one file.
+        Default is True.
+    reset
+    """
+    if output_filename is None:
+        output_filename = f'gridded_simulation_merged{simulation_filesuffix}'
+
+    if output_folder is None:
+        output_folder = cfg.PATHS['working_dir']
+
+    # function for calculating the bedrock topography
+    def _calc_bedrock_topo(fp):
+        with xr.open_dataset(fp) as ds:
+            ds = ds.load()
+        ds['bedrock'] = (ds['topo'] - ds['distributed_thickness'].fillna(0))
+        ds.to_netcdf(fp)
+
+    if save_as_multiple_files:
+        # first the _topo_data file
+        workflow.merge_gridded_data(
+            gdirs,
+            output_folder=output_folder,
+            output_filename=f"{output_filename}_topo_data",
+            input_file='gridded_data',
+            input_filesuffix='',
+            included_variables=['glacier_ext',
+                                'glacier_mask',
+                                'distributed_thickness',
+                                ],
+            preserve_totals=preserve_totals,
+            use_glacier_mask=use_glacier_mask,
+            add_topography=add_topography,
+            keep_dem_file=keep_dem_file,
+            interp=interp,
+            use_multiprocessing=use_multiprocessing,
+            reset=reset)
+
+        # recalculate bed topography after reprojection, if topo was added
+        if add_topography:
+            fp = os.path.join(output_folder,
+                              f"{output_filename}_topo_data.nc")
+            _calc_bedrock_topo(fp)
+
+        # then the simulated thickness files
+        if years_to_merge is None:
+            # open first file to get the years
+            with xr.open_dataset(
+                    gdirs[0].get_filepath('gridded_simulation',
+                                          filesuffix=simulation_filesuffix)
+            ) as ds:
+                years_to_merge = ds.time.values
+
+        for yr in years_to_merge:
+            workflow.merge_gridded_data(
+                gdirs,
+                output_folder=output_folder,
+                output_filename=f"{output_filename}_{yr}",
+                input_file='gridded_simulation',
+                input_filesuffix=simulation_filesuffix,
+                included_variables=[('simulated_thickness', {'time': [yr]})],
+                preserve_totals=preserve_totals,
+                use_glacier_mask=use_glacier_mask,
+                add_topography=False,
+                keep_dem_file=False,
+                interp=interp,
+                use_multiprocessing=use_multiprocessing,
+                reset=reset)
+
+    else:
+        # here we save everything in one file
+        if years_to_merge is None:
+            selected_time = None
+        else:
+            selected_time = {'time': years_to_merge}
+
+        workflow.merge_gridded_data(
+            gdirs,
+            output_folder=output_folder,
+            output_filename=output_filename,
+            input_file=['gridded_data', 'gridded_simulation'],
+            input_filesuffix=['', simulation_filesuffix],
+            included_variables=[['glacier_ext',
+                                 'glacier_mask',
+                                 'distributed_thickness',
+                                 ],
+                                [('simulated_thickness', selected_time)]],
+            preserve_totals=preserve_totals,
+            use_glacier_mask=use_glacier_mask,
+            add_topography=add_topography,
+            keep_dem_file=keep_dem_file,
+            interp=interp,
+            use_multiprocessing=use_multiprocessing,
+            reset=reset)
+
+        # recalculate bed topography after reprojection, if topo was added
+        if add_topography:
+            fp = os.path.join(output_folder, f'{output_filename}.nc')
+            _calc_bedrock_topo(fp)

@@ -8,12 +8,13 @@ from collections.abc import Sequence
 import multiprocessing
 import numpy as np
 import pandas as pd
+import xarray as xr
 from scipy import optimize as optimization
 
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
-from oggm.core import centerlines, flowline, climate
+from oggm.core import centerlines, flowline, climate, gis
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.utils import global_task
 
@@ -838,3 +839,270 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None, dem_source=None,
                                   input_filesuffix=input_filesuffix)
 
     return gdir_merged, gdirs
+
+
+@global_task(log)
+def merge_gridded_data(gdirs, output_folder=None,
+                       output_filename='gridded_data_merged',
+                       input_file='gridded_data',
+                       input_filesuffix='',
+                       included_variables='all',
+                       preserve_totals=True,
+                       use_glacier_mask=True,
+                       add_topography=False,
+                       keep_dem_file=False,
+                       interp='nearest',
+                       use_multiprocessing=True,
+                       reset=False):
+    """ This function takes a list of glacier directories and combines their
+    gridded_data into a new NetCDF file and saves it into the output_folder. It
+    also could merge data from different source files if you provide a list
+    of input_file(s) (together with a list of input_filesuffix and a list of
+    included_variables).
+
+    Attention: You always should check the first gdir from gdirs as this
+    defines the projection of the resulting dataset and the data which is
+    merged, if included_variables is set to 'all'.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        The glacier directories which should be combined. If an additonal
+        dimension than x or y is given (e.g. time) we assume it has the same
+        length for all gdirs (we currently do not check). The first gdir in the
+        list serves as the template for the merged gridded_data (it defines the
+        used projection, if you want to merge all variables they are taken from
+        the input data of the first gdir).
+    output_folder : str
+        Folder where the intermediate files and the final combined gridded data
+        should be stored. Default is cfg.PATHS['working_dir']
+    output_filename : str
+        The name for the resulting file. Default is 'gridded_data_merged'.
+    input_file : str or list
+        The file(s) which should be merged. If a list is provided the data of
+        all files is merged into the same dataset. Default is 'gridded_data'.
+    input_filesuffix : str or list
+        Potential filesuffix for the input file(s). If input_file is a list,
+        input_filesuffix should also be a list of the same length.
+        Default is ''.
+    included_variables : str or list or list of lists
+        The variable(s) which should be merged from the input_file(s). For one
+        variable it can be provided as str, otherwise as a list. If set to
+        'all' we merge everything. If input_file is a list, include_variables
+        should be a list of lists with the same length, where the lists define
+        the variables for the individual input_files. Furthermore, if you only
+        want to merge a subset of the variables you can define the variable as
+        a tuple with the first element being the variable name and the second
+        element being the selected coordinates as a dictionary (e.g.
+        ('variable', {'time': [0, 1, 2]})). Default is 'all'.
+    preserve_totals : bool
+        If True we preserve the total value of all float-variables of the
+        original file. The total value is defined as the sum of all grid cell
+        values times the area of the grid cell (e.g. preserving ice volume).
+        Default is True.
+    use_glacier_mask : bool
+        If True only the data cropped by the glacier mask is included in the
+        merged file. You must make sure that the variable 'glacier_mask' exists
+        in the input_file(s) (which is the oggm default). Default is True.
+    add_topography : bool or str
+        If True we try to add the default DEM source of the first glacier
+        directory of gdirs. Alternatively you could define a DEM source
+        directly as string. Default is False.
+    keep_dem_file : bool
+        If we add a topography to the merged gridded_data we save the DEM as
+        a tiff in the output_folder as an intermediate step. If keep_dem_file
+        is True we will keep this file, otherwise we delete it at the end.
+        Default is False.
+    interp : str
+        The interpolation method used by salem.Grid.map_gridded_data. Currently
+        available 'nearest' (default), 'linear', or 'spline'.
+    use_multiprocessing : bool
+        If True the merging is done in parallel using multiprocessing. This
+        could require a lot of memory. Default is True.
+    reset : bool
+        If the file defined in output_filename already exists and reset is
+        False an error is raised. If reset is True and the file exists it is
+        deleted before merging. Default is False.
+    """
+
+    # check if output_folder exists, otherwise creates it
+    if output_folder is None:
+        output_folder = cfg.PATHS['working_dir']
+    utils.mkdir(output_folder)
+
+    # check if file already exists
+    fpath = os.path.join(output_folder, f'{output_filename}.nc')
+    if os.path.exists(fpath):
+        if reset:
+            os.remove(fpath)
+        else:
+            raise InvalidWorkflowError(f'The file {output_filename}.nc already'
+                                       f' exists in the output folder. If you '
+                                       f'want to replace it set reset=True!')
+
+    if not isinstance(input_file, list):
+        input_file = [input_file]
+    if not isinstance(input_filesuffix, list):
+        input_filesuffix = [input_filesuffix]
+    if not isinstance(included_variables, list):
+        # special case if only one variable should be merged
+        included_variables = [included_variables]
+    if len(input_file) == 1:
+        # in the case of one input file we still convert included_variables
+        # into a list of lists
+        included_variables = [included_variables]
+
+    # create a combined salem.Grid object, which serves as canvas/boundaries of
+    # the combined glacier region
+    combined_grid = utils.combine_grids(gdirs)
+
+    if add_topography:
+        # ok, lets get a DEM and add it to the final file
+        if isinstance(add_topography, str):
+            dem_source = add_topography
+            dem_gdir = None
+        else:
+            dem_source = None
+            dem_gdir = gdirs[0]
+        gis.get_dem_for_grid(combined_grid, output_folder,
+                             source=dem_source, gdir=dem_gdir)
+        # unwrapped is needed to execute process_dem without the entity_task
+        # overhead (this would need a valid gdir)
+        gis.process_dem.unwrapped(gdir=None, grid=combined_grid,
+                                  fpath=output_folder,
+                                  output_filename=output_filename)
+        if not keep_dem_file:
+            fpath = os.path.join(output_folder, 'dem.tif')
+            if os.path.exists(fpath):
+                os.remove(fpath)
+
+            # also delete diagnostics
+            fpath = os.path.join(output_folder, 'dem_diagnostics.json')
+            if os.path.exists(fpath):
+                os.remove(fpath)
+
+    with gis.GriddedNcdfFile(grid=combined_grid, fpath=output_folder,
+                             basename=output_filename) as nc:
+
+        # adding the data of one file after another to the merged dataset
+        for in_file, in_filesuffix, included_var in zip(input_file,
+                                                        input_filesuffix,
+                                                        included_variables):
+
+            # if want to save all variables, take them from the first gdir
+            if 'all' in included_var:
+                with xr.open_dataset(
+                        gdirs[0].get_filepath(in_file,
+                                              filesuffix=in_filesuffix)) as ds:
+                    included_var = list(ds.data_vars)
+
+            # add one variable after another
+            for var in included_var:
+                # check if we only want to merge a subset of the variable
+                if isinstance(var, tuple):
+                    var, slice_of_var = var
+                else:
+                    slice_of_var = None
+
+                # do not merge topo variables, for this we have add_topography
+                if var in ['topo', 'topo_smoothed', 'topo_valid_mask']:
+                    continue
+
+                # check dimensions, if other than y or x it is added to file
+                with xr.open_dataset(
+                        gdirs[0].get_filepath(in_file,
+                                              filesuffix=in_filesuffix)) as ds:
+                    ds_templ = ds
+                dims = ds_templ[var].dims
+
+                dim_lengths = []
+                for dim in dims:
+                    if dim == 'y':
+                        dim_lengths.append(combined_grid.ny)
+                    elif dim == 'x':
+                        dim_lengths.append(combined_grid.nx)
+                    else:
+                        if slice_of_var is not None:
+                            # only keep selected part of the variable
+                            if dim in slice_of_var:
+                                dim_var = ds_templ[var][dim].sel(
+                                    {dim: slice_of_var[dim]})
+                            else:
+                                dim_var = ds_templ[var][dim]
+                        else:
+                            dim_var = ds_templ[var][dim]
+                        if dim not in nc.dimensions:
+                            nc.createDimension(dim, len(dim_var))
+                            v = nc.createVariable(dim, 'f4', (dim,), zlib=True)
+                            # add attributes
+                            for attr in dim_var.attrs:
+                                setattr(v, attr, dim_var.attrs[attr])
+                            if slice_of_var is not None:
+                                if dim in slice_of_var:
+                                    v[:] = slice_of_var[dim]
+                                else:
+                                    v[:] = dim_var.values
+                            else:
+                                v[:] = dim_var.values
+                            # also add potential coords (e.g. calender_year)
+                            for coord in dim_var.coords:
+                                if coord != dim:
+                                    if slice_of_var is not None:
+                                        if dim in slice_of_var:
+                                            coord_val = ds_templ[coord].sel(
+                                                {dim: slice_of_var[dim]})
+                                        else:
+                                            coord_val = ds_templ[coord].values
+                                    else:
+                                        coord_val = ds_templ[coord].values
+                                    tmp_coord = nc.createVariable(
+                                        coord, 'f4', (dim,))
+                                    tmp_coord[:] = coord_val
+                                    for attr in ds_templ[coord].attrs:
+                                        setattr(tmp_coord, attr,
+                                                ds_templ[coord].attrs[attr])
+                        dim_lengths.append(len(dim_var))
+
+                # before merging add variable attributes to final file
+                v = nc.createVariable(var, 'f4', dims, zlib=True)
+                for attr in ds_templ[var].attrs:
+                    setattr(v, attr, ds_templ[var].attrs[attr])
+
+                kwargs_reproject = dict(
+                    variable=var,
+                    target_grid=combined_grid,
+                    filename=in_file,
+                    filesuffix=in_filesuffix,
+                    use_glacier_mask=use_glacier_mask,
+                    interp=interp,
+                    preserve_totals=preserve_totals,
+                    slice_of_variable=slice_of_var,
+                )
+
+                if use_multiprocessing:
+                    r_data = execute_entity_task(
+                        gis.reproject_gridded_data_variable_to_grid,
+                        gdirs,
+                        **kwargs_reproject
+                    )
+
+                    # if we continue_on_error and their was a file or a variable
+                    # missing some entries could be None, here we filter them
+                    r_data = list(filter(lambda e: e is not None, r_data))
+
+                    v[:] = np.sum(r_data, axis=0)
+                else:
+                    # if we do not use multiprocessing we have to loop over the
+                    # gdirs and add the data one after another
+                    r_data = np.zeros(dim_lengths)
+                    for gdir in gdirs:
+                        tmp_data = gis.reproject_gridded_data_variable_to_grid(
+                            gdir, **kwargs_reproject)
+                        if tmp_data is not None:
+                            r_data += tmp_data
+
+                    v[:] = r_data
+
+        # and some metadata to the merged dataset
+        nc.nr_of_merged_glaciers = len(gdirs)
+        nc.rgi_ids = [gdir.rgi_id for gdir in gdirs]

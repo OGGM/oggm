@@ -378,6 +378,39 @@ class TestFullRun(unittest.TestCase):
 
 
 @pytest.mark.slow
+def test_merge_gridded_data():
+    gdirs = up_to_inversion()
+    workflow.execute_entity_task(tasks.distribute_thickness_per_altitude,
+                                 gdirs
+                                 )
+    workflow.merge_gridded_data(gdirs,
+                                included_variables='distributed_thickness',
+                                reset=True)
+
+    df = utils.compile_glacier_statistics(gdirs)
+
+    with xr.open_dataset(os.path.join(cfg.PATHS['working_dir'],
+                                      'gridded_data_merged.nc')) as ds:
+        ds_merged = ds.load()
+
+    # check if distributed volume is the same as inversion volume for each gdir
+    for gdir in gdirs:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ds = ds.load()
+
+        inv_volume = df[df.index == gdir.rgi_id]['inv_volume_km3'].values
+        inv_volume_gridded = (ds.distributed_thickness.sum() *
+                              ds.salem.grid.dx**2) * 1e-9
+        assert_allclose(inv_volume, inv_volume_gridded, atol=1.1e-7)
+
+    # check if merged distributed volume is the same as total inversion volume
+    inv_volume_gridded_merged = (ds_merged.distributed_thickness.sum() *
+                                 ds_merged.salem.grid.dx**2) * 1e-9
+    assert_allclose(df['inv_volume_km3'].sum(), inv_volume_gridded_merged,
+                    rtol=2e-7)
+
+
+@pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(remove_text=True, multi=True)
 def test_plot_region_inversion():

@@ -104,6 +104,20 @@ class TestGIS(unittest.TestCase):
         np.testing.assert_array_equal(gdir.intersects_ids,
                                       ['RGI50-11.00846', 'RGI50-11.00950'])
 
+        # testing of functions called inside of define_glacier_region
+        assert 'COPDEM30' == gis.check_dem_source(
+            ['BESTDEM', 'COPDEM30'], gdir.extent_ll, rgi_id=gdir.rgi_id)
+        err_msg_with_id = ('BESTDEM is not available for the glacier '
+                           'RGI50-11.00897 with border 20')
+        with pytest.raises(InvalidWorkflowError, match=err_msg_with_id):
+            gis.check_dem_source('BESTDEM', gdir.extent_ll, rgi_id=gdir.rgi_id)
+        err_msg_without_id = ('BESTDEM is not available for the grid extent '
+                              'of longitudes ')
+        with pytest.raises(InvalidWorkflowError, match=err_msg_without_id):
+            gis.check_dem_source('BESTDEM', gdir.extent_ll, rgi_id=None)
+        assert gdir.has_file('dem')
+        assert gdir.get_diagnostics()['dem_source'] == 'USER'
+
         # From string
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
         # This is not guaranteed to be equal because of projection issues

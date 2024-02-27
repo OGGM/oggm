@@ -4,6 +4,7 @@ import shutil
 import warnings
 import copy
 import time
+import glob
 import numpy as np
 import pandas as pd
 import shapely.geometry as shpg
@@ -5654,6 +5655,7 @@ class TestSemiImplicitModel:
             plt.show()
 
 
+@pytest.mark.usefixtures('with_class_wd')
 class TestDistribute2D:
 
     @pytest.mark.slow
@@ -5689,7 +5691,7 @@ class TestDistribute2D:
                                                            input_filesuffix='_commit')
         fp = hef_elev_gdir.get_filepath('gridded_simulation', filesuffix='_commit')
         with xr.open_dataset(fp) as ds:
-            thick = ds.distributed_thickness.load()
+            thick = ds.simulated_thickness.load()
 
         fp = hef_elev_gdir.get_filepath('gridded_data')
         with xr.open_dataset(fp) as ds:
@@ -5757,3 +5759,92 @@ class TestDistribute2D:
             animation.FuncAnimation(fig, animate, frames=len(thick.time),
                                     interval=200)
             plt.show()
+
+    @pytest.mark.slow
+    def test_merge_simulated_thickness(self):
+        rgi_ids = ['RGI60-11.00897',  # Hintereisferner
+                   'RGI60-11.00746',  # Gepatsch Ferner
+                   'RGI60-11.00787',  # Kesselwandferner
+                   ]
+
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+
+        workflow.execute_entity_task(run_random_climate, gdirs, y0=2014,
+                                     halfsize=5, nyears=20, seed=0,
+                                     output_filesuffix='_random',
+                                     store_fl_diagnostics=True)
+
+        # make redistribution
+        from oggm.sandbox import distribute_2d
+        redis_pretasks = [
+            distribute_2d.add_smoothed_glacier_topo,
+            tasks.distribute_thickness_per_altitude,
+            distribute_2d.assign_points_to_band
+        ]
+        for task in redis_pretasks:
+            workflow.execute_entity_task(task, gdirs)
+
+        workflow.execute_entity_task(
+            distribute_2d.distribute_thickness_from_simulation,
+            gdirs,
+            input_filesuffix='_random'
+        )
+
+        distribute_2d.merge_simulated_thickness(gdirs,
+                                                simulation_filesuffix='_random',
+                                                reset=True)
+
+        # compare gridded merged data with flowline model run
+        files_to_open = glob.glob(
+            os.path.join(cfg.PATHS['working_dir'],
+                         'gridded_simulation_merged_random*'))
+        with xr.open_mfdataset(files_to_open) as ds:
+            ds_merged = ds
+        ds_run = utils.compile_run_output(gdirs, input_filesuffix='_random')
+
+        years_to_test = [0, 10, 20]
+        for yr in years_to_test:
+            # check for each glacier individually if gridded volume match
+            for gdir in gdirs:
+                with xr.open_dataset(gdir.get_filepath('gridded_simulation',
+                                                       filesuffix='_random')) as ds:
+                    ds_sim = ds
+                volume_sim = (
+                    ds_sim.loc[{'time': yr}].simulated_thickness.sum().values *
+                    ds_sim.salem.grid.dx**2 * 1e-9)
+                volume_run_single = (
+                    ds_run.loc[{'time': yr,
+                                'rgi_id': gdir.rgi_id}].volume.values *
+                    1e-9)
+                assert_allclose(volume_run_single, volume_sim)
+
+            # now compare merged gridded data
+            volume_run = ds_run.loc[{'time': yr}].volume.sum().values * 1e-9
+            volume_merged = (
+                ds_merged.loc[{'time': yr}].simulated_thickness.sum().values *
+                ds_merged.salem.grid.dx**2 * 1e-9)
+            assert_allclose(volume_run, volume_merged, atol=2e-7)
+
+            if do_plot:
+                ds_merged.loc[{'time': yr}].simulated_thickness.plot()
+                plt.title(f'Year {yr}')
+                plt.show()
+
+        # try merging only for a few years, also testing use_multiprocessing
+        # and save_as_multiple_files
+        distribute_2d.merge_simulated_thickness(
+            gdirs, simulation_filesuffix='_random',
+            output_filename='gridded_simulation_only_selected_years',
+            years_to_merge=years_to_test,
+            use_multiprocessing=True,
+            save_as_multiple_files=False,
+            reset=True)
+        with xr.open_dataset(
+                os.path.join(cfg.PATHS['working_dir'],
+                             'gridded_simulation_only_selected_years.nc')) as ds:
+            ds_merged_selected_years = ds
+        assert_allclose(ds_merged_selected_years.simulated_thickness.values,
+                        ds_merged.loc[{'time': years_to_test}].simulated_thickness.values)
