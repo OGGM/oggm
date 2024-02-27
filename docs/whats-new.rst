@@ -16,6 +16,14 @@ Enhancements
   to 2 m. The new value was found in a local study and makes a larger
   difference for smaller (thinner) glaciers (:pull:`1667`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Two new functions, ``workflow.merge_gridded_data`` and
+  ``sandbox.distribute_2d.merge_simulated_thickness``, have been introduced
+  for merging distributed data from multiple glacier directories, including
+  the possibility of adding topography to the merged grid. The latter function
+  acts as a wrapper for the first one, specifically designed for merging
+  distributed thickness data from a dynamic model run.
+  By `Alex Fischer <https://github.com/afisc>`_ and
+  `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
