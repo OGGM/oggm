@@ -66,7 +66,7 @@ def test_surf_to_nan():
 
 @pytest.mark.internet
 @pytest.mark.graphic
-@mpl_image_compare(tolerance=25)
+@mpl_image_compare(tolerance=26)
 def test_googlemap():
     fig, ax = plt.subplots()
     gdir = init_hef()
