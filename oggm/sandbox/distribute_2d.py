@@ -310,7 +310,12 @@ def distribute_thickness_from_simulation(gdir,
                         raise InvalidWorkflowError(f'The two dataset times dont match: '
                                                    f'{float(dg0.time[-1])} vs '
                                                    f'{float(dg.time[0])}.')
-                    dg = xr.concat([dg0, dg.isel(time=slice(1, None))], dim='time')
+                    # Only include thickness, area, and volume to avoid errors
+                    # with variables not present in both.
+                    vars_of_interest = ['thickness_m', 'area_m2', 'volume_m3']
+                    dg = xr.concat([dg0[vars_of_interest],
+                                    dg[vars_of_interest].isel(time=slice(1, None))],
+                                   dim='time')
             if ys is not None or ye is not None:
                 dg = dg.sel(time=slice(ys, ye))
             dg = dg.load()
