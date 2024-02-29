@@ -503,6 +503,7 @@ def merge_simulated_thickness(gdirs,
             keep_dem_file=keep_dem_file,
             interp=interp,
             use_multiprocessing=use_multiprocessing,
+            return_dataset=False,
             reset=reset)
 
         # recalculate bed topography after reprojection, if topo was added
@@ -534,6 +535,7 @@ def merge_simulated_thickness(gdirs,
                 keep_dem_file=False,
                 interp=interp,
                 use_multiprocessing=use_multiprocessing,
+                return_dataset=False,
                 reset=reset)
 
     else:
@@ -560,6 +562,7 @@ def merge_simulated_thickness(gdirs,
             keep_dem_file=keep_dem_file,
             interp=interp,
             use_multiprocessing=use_multiprocessing,
+            return_dataset=False,
             reset=reset)
 
         # recalculate bed topography after reprojection, if topo was added

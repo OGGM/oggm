@@ -383,15 +383,12 @@ def test_merge_gridded_data():
     workflow.execute_entity_task(tasks.distribute_thickness_per_altitude,
                                  gdirs
                                  )
-    workflow.merge_gridded_data(gdirs,
-                                included_variables='distributed_thickness',
-                                reset=True)
+    ds_merged = workflow.merge_gridded_data(
+        gdirs,
+        included_variables='distributed_thickness',
+        reset=True)
 
     df = utils.compile_glacier_statistics(gdirs)
-
-    with xr.open_dataset(os.path.join(cfg.PATHS['working_dir'],
-                                      'gridded_data_merged.nc')) as ds:
-        ds_merged = ds.load()
 
     # check if distributed volume is the same as inversion volume for each gdir
     for gdir in gdirs:
