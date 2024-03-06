@@ -14,7 +14,7 @@ from scipy import optimize
 import oggm.cfg as cfg
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
-                        floatyear_to_date, date_to_floatyear,
+                        floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
                         weighted_average_1d, lazy_property)
@@ -1431,6 +1431,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     ref_period=None,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
+                                    use_regional_avg=False,
                                     override_missing=None,
                                     informed_threestep=False,
                                     calibrate_param1='melt_f',
@@ -1443,9 +1444,13 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
     The data table can be obtained with utils.get_geodetic_mb_dataframe().
     It is equivalent to the original data from Hugonnet, but has some outlier
-    values filtered. See [this notebook](https://nbviewer.org/urls/
-    cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert_vold1.ipynb)
-    for more details.
+    values filtered. See this notebook* for more details.
+
+    https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert_vold1.ipynb
+
+    This glacier-specific calibration can be replaced by a region-wide calibration
+    by using regional averages (same units: mm w.e.) instead of the glacier
+    specific averages.
 
     The problem of calibrating many unknown parameters on geodetic data is
     currently unsolved. This is OGGM's current take, based on trial and
@@ -1468,6 +1473,8 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         if a `mb_calib.json` exists, this task won't overwrite it per default.
         Set this to True to enforce overwriting (i.e. with consequences for the
         future workflow).
+    use_regional_avg : bool
+        use the regional average instead of the glacier specific one.
     override_missing : scalar
         if the reference geodetic data is not available, use this value instead
         (mostly for testing with exotic datasets, but could be used to open
@@ -1506,16 +1513,24 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
     # Get the reference data
     ref_mb_err = np.NaN
-    try:
-        ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
-        # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
-        ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
-        ref_mb_err = ref_mb_df['err_dmdtda'].iloc[0] * 1000
-    except KeyError:
-        if override_missing is None:
-            raise
-        ref_mb = override_missing
+    if use_regional_avg:
+        ref_mb_df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+        ref_mb_df = pd.read_csv(get_demo_file(ref_mb_df))
+        ref_mb_df = ref_mb_df.loc[ref_mb_df.period == ref_period].set_index('reg')
+         # dmdtda already in kg m-2 yr-1
+        ref_mb = ref_mb_df.loc[int(gdir.rgi_region), 'dmdtda']
+        ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda']
+    else:
+        try:
+            ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+            ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
+            # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
+            ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
+            ref_mb_err = ref_mb_df['err_dmdtda'].iloc[0] * 1000
+        except KeyError:
+            if override_missing is None:
+                raise
+            ref_mb = override_missing
 
     temp_bias = 0
     if cfg.PARAMS['use_temp_bias_from_file']:
@@ -1973,7 +1988,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
 
     gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
     return df
-    
+
 
 def _check_terminus_mass_flux(gdir, fls):
     # Check that we have done this correctly
