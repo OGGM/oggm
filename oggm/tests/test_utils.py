@@ -961,6 +961,7 @@ class TestPreproCLI(unittest.TestCase):
         assert not kwargs['is_test']
         assert kwargs['demo']
         assert not kwargs['disable_mp']
+        assert not kwargs['skip_inversion']
         assert kwargs['max_level'] == 5
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -969,6 +970,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--working-dir', 'local/work',
                                            '--select-source-from-dir', 'BY_RES',
                                            '--dem-source', 'ALL',
+                                           '--skip-inversion',
                                            '--add-consensus-thickness',
                                            '--add-millan-thickness',
                                            '--add-millan-velocity',
@@ -993,6 +995,7 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['add_millan_thickness']
         assert kwargs['add_millan_velocity']
         assert kwargs['add_hugonnet_dhdt']
+        assert kwargs['skip_inversion']
         assert kwargs['override_params']['map_proj'] == 'tmerc'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
