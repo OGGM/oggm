@@ -175,9 +175,9 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
 
     # Ok now assign within band using ice thickness weighted by elevation
     # We rank the pixels within one band by elevation, but also add
-    # a penaltly is added to higher elevation grid points
+    # a penalty is added to higher elevation grid points
     min_alt = np.nanmin(topo_data)
-    weighted_thick = ((topo_data - min_alt + 1) * 1.003) * distrib_thick
+    weighted_thick = ((topo_data - min_alt + 1) * elevation_weight) * distrib_thick
     for band_id in np.unique(np.sort(band_index[glacier_mask])):
         # We work per band here
         is_band = band_index == band_id
