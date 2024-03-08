@@ -2719,7 +2719,7 @@ class GlacierDirectory(object):
                       3: 'Shelf-terminating',
                       9: 'Not assigned',
                       }
-            self.terminus_type = ttkeys[rgi_entity['term_type']]
+            self.terminus_type = ttkeys[int(rgi_entity['term_type'])]
             if is_glacier_complex:
                 self.rgi_version = '70C'
                 self.glacier_type = 'Glacier complex'

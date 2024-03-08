@@ -444,6 +444,16 @@ class TestSouthGlacier(unittest.TestCase):
 
         df = utils.compile_fixed_geometry_mass_balance(gdirs)
         assert len(df) > 100
+        df.columns = ['glacier']
+
+        # recalibrate with regio values
+        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                            use_regional_avg=True,
+                            overwrite_gdir=True,
+                            ref_period='2000-01-01_2010-01-01')
+        df['region'] = utils.compile_fixed_geometry_mass_balance(gdirs)['RGI60-01.16195']
+        assert 0.99 < df.corr().iloc[0, 1] < 1
+        assert np.all(df.std() > 450)
 
         if do_plot:
             import matplotlib.pyplot as plt

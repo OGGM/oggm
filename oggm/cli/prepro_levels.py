@@ -79,7 +79,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
-                      override_params=None,
+                      override_params=None, skip_inversion=False,
                       mb_calibration_strategy='informed_threestep',
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
@@ -134,6 +134,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'informed_threestep' (default)
         - 'melt_temp'
         - 'temp_melt'
+        Add the `_regional` suffix to use regional values instead,
+        for example `informed_threestep_regional`
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -167,6 +169,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the pre-processed base-url to fetch the data from.
     max_level : int
         the maximum pre-processing level before stopping
+    skip_inversion : bool
+         do not run the inversion (level 3 files). This is a temporary
+         workaround for workflows that wont run that far into level 3.
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
     override_params : dict
@@ -592,38 +597,49 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
         utils.get_temp_bias_dataframe()
+
+        use_regional_avg = False
+        if '_regional' in mb_calibration_strategy:
+            use_regional_avg = True
+            mb_calibration_strategy = mb_calibration_strategy.replace('_regional', '')
+
         if mb_calibration_strategy == 'informed_threestep':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                         gdirs, informed_threestep=True)
+                                         gdirs,
+                                         informed_threestep=True,
+                                         use_regional_avg=use_regional_avg)
         elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
-                                         calibrate_param2='temp_bias')
+                                         calibrate_param2='temp_bias',
+                                         use_regional_avg=use_regional_avg)
         elif mb_calibration_strategy == 'temp_melt':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='temp_bias',
-                                         calibrate_param2='melt_f')
+                                         calibrate_param2='melt_f',
+                                         use_regional_avg=use_regional_avg)
         else:
             raise InvalidParamsError('mb_calibration_strategy not understood: '
                                      f'{mb_calibration_strategy}')
 
-        workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+        if not skip_inversion:
+            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
-        # Inversion: we match the consensus
-        filter = border >= 20
-        workflow.calibrate_inversion_from_consensus(gdirs,
-                                                    apply_fs_on_mismatch=True,
-                                                    error_on_mismatch=False,
-                                                    filter_inversion_output=filter)
+            # Inversion: we match the consensus
+            filter = border >= 20
+            workflow.calibrate_inversion_from_consensus(gdirs,
+                                                        apply_fs_on_mismatch=True,
+                                                        error_on_mismatch=False,
+                                                        filter_inversion_output=filter)
 
-        # We get ready for modelling
-        if border >= 20:
-            workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
-        else:
-            log.workflow('L3: for map border values < 20, wont initialize glaciers '
-                         'for the run.')
+            # We get ready for modelling
+            if border >= 20:
+                workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+            else:
+                log.workflow('L3: for map border values < 20, wont initialize glaciers '
+                             'for the run.')
         # Glacier stats
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
@@ -829,11 +845,17 @@ def parse_args(args):
     parser.add_argument('--centerlines', nargs='?', const=True, default=False,
                         help='compute the flowlines based on the OGGM '
                              'centerline(s) method.')
+    parser.add_argument('--skip-inversion', nargs='?', const=True, default=False,
+                        help='do not run the inversion (level 3 files). '
+                             'this is a temporary workaround for workflows '
+                             'that wont run that far into level 3.')
     parser.add_argument('--mb-calibration-strategy', type=str,
                         default='informed_threestep',
                         help='how to calibrate the massbalance. Currently one of '
-                             'informed_threestep (default) , melt_temp'
-                             'or temp_melt.')
+                             'informed_threestep (default) , melt_temp '
+                             'or temp_melt. Add the _regional suffix to '
+                             'use regional values instead, for example '
+                             'informed_threestep_regional')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -961,6 +983,7 @@ def parse_args(args):
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level,
                 elev_bands=args.elev_bands,
+                skip_inversion=args.skip_inversion,
                 centerlines=args.centerlines,
                 select_source_from_dir=args.select_source_from_dir,
                 keep_dem_folders=args.keep_dem_folders,
