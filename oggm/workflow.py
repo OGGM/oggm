@@ -1123,9 +1123,20 @@ def merge_gridded_data(gdirs, output_folder=None,
         nc.nr_of_merged_glaciers = len(gdirs)
         nc.rgi_ids = [gdir.rgi_id for gdir in gdirs]
 
-    if return_dataset:
-        with xr.open_dataset(os.path.join(output_folder,
-                                          output_filename + '.nc')) as ds:
-            ds = ds.load()
+    # finally we set potential additional time coordinates correctly again
+    fp = os.path.join(output_folder, output_filename + '.nc')
+    ds_was_adapted = False
 
-        return ds
+    with xr.open_dataset(fp) as ds:
+        for time_var in ['calendar_year', 'calendar_month',
+                         'hydro_year', 'hydro_month']:
+            if time_var in ds.data_vars:
+                ds = ds.set_coords(time_var)
+                ds_was_adapted = True
+        ds_adapted = ds.load()
+
+    if ds_was_adapted:
+        ds_adapted.to_netcdf(fp)
+
+    if return_dataset:
+        return ds_adapted
