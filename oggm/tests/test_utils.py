@@ -2230,8 +2230,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         # Make a fake topo file
         deep_path = os.path.join(self.dldir,
-                                 'DEM1_SAR_DGE_90_20110517T170701_20140817T170857'
-                                 '_ADS_000000_3682.DEM',
+                                 'COP-DEM_GLO-90-DGED__2022_1',
                                  'Copernicus_DSM_30_N46_00_E010_00', 'DEM')
         utils.mkdir(deep_path)
         upper_path = os.path.dirname(os.path.dirname(deep_path))
@@ -2242,14 +2241,13 @@ class TestFakeDownloads(unittest.TestCase):
                               archive='tar', extension='.tar')
 
         def down_check(url, *args, **kwargs):
-            expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-90-DGED/2022_1/'
-                        'DEM1_SAR_DGE_90_20110517T170701_20140817T170857_ADS_'
-                        '000000_3682.DEM.tar')
+            expected = ('https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/'
+                        'COP-DEM_GLO-90-DGED__2022_1/'
+                        'Copernicus_DSM_30_N46_00_E010_00.tar')
             self.assertEqual(expected, url)
             return tf
 
-        with FakeDownloadManager('download_with_authentication', down_check):
+        with FakeDownloadManager('file_downloader', down_check):
             of, source = utils.get_topo_file([10.5, 10.8], [46.6, 46.8],
                                              source='COPDEM90')
 
@@ -2260,8 +2258,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         # Make a fake topo file
         deep_path = os.path.join(self.dldir,
-                                 'DEM1_SAR_DGE_30_20110517T170701_20140817T170857'
-                                 '_ADS_000000_bma2.DEM',
+                                 'COP-DEM_GLO-30-DGED__2022_1',
                                  'Copernicus_DSM_10_N46_00_E010_00', 'DEM')
         utils.mkdir(deep_path)
         upper_path = os.path.dirname(os.path.dirname(deep_path))
@@ -2272,14 +2269,13 @@ class TestFakeDownloads(unittest.TestCase):
                               archive='tar', extension='.tar')
 
         def down_check(url, *args, **kwargs):
-            expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-30-DGED/2022_1/'
-                        'DEM1_SAR_DGE_30_20110517T170701_20140817T170857_ADS_'
-                        '000000_bma2.DEM.tar')
+            expected = ('https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/'
+                        'COP-DEM_GLO-30-DGED__2022_1/'
+                        'Copernicus_DSM_10_N46_00_E010_00.tar')
             self.assertEqual(expected, url)
             return tf
 
-        with FakeDownloadManager('download_with_authentication', down_check):
+        with FakeDownloadManager('file_downloader', down_check):
             of, source = utils.get_topo_file([10.5, 10.8], [46.6, 46.8],
                                              source='COPDEM30')
 
