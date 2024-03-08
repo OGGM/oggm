@@ -639,7 +639,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
             else:
                 log.workflow('L3: for map border values < 20, wont initialize glaciers '
-                            'for the run.')
+                             'for the run.')
         # Glacier stats
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
