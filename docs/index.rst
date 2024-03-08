@@ -159,7 +159,7 @@ Get in touch
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
-.. _Twitter: https://twitter.com/OGGM1
+.. _Twitter: https://twitter.com/OGGM_org
 .. _meeting: https://oggm.org/meetings/
 .. _reach out: info@oggm.org
 
