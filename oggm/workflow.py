@@ -853,6 +853,7 @@ def merge_gridded_data(gdirs, output_folder=None,
                        keep_dem_file=False,
                        interp='nearest',
                        use_multiprocessing=True,
+                       return_dataset=True,
                        reset=False):
     """ This function takes a list of glacier directories and combines their
     gridded_data into a new NetCDF file and saves it into the output_folder. It
@@ -919,6 +920,8 @@ def merge_gridded_data(gdirs, output_folder=None,
     use_multiprocessing : bool
         If True the merging is done in parallel using multiprocessing. This
         could require a lot of memory. Default is True.
+    return_dataset : bool
+        If True the merged dataset is returned. Default is True.
     reset : bool
         If the file defined in output_filename already exists and reset is
         False an error is raised. If reset is True and the file exists it is
@@ -929,6 +932,12 @@ def merge_gridded_data(gdirs, output_folder=None,
     if output_folder is None:
         output_folder = cfg.PATHS['working_dir']
     utils.mkdir(output_folder)
+
+    # for some data we want to set zero values outside of outline to nan
+    # (e.g. for visualization purposes)
+    vars_setting_zero_to_nan = ['distributed_thickness', 'simulated_thickness',
+                                'consensus_ice_thickness',
+                                'millan_ice_thickness']
 
     # check if file already exists
     fpath = os.path.join(output_folder, f'{output_filename}.nc')
@@ -1090,7 +1099,11 @@ def merge_gridded_data(gdirs, output_folder=None,
                     # missing some entries could be None, here we filter them
                     r_data = list(filter(lambda e: e is not None, r_data))
 
-                    v[:] = np.sum(r_data, axis=0)
+                    r_data = np.sum(r_data, axis=0)
+                    if var in vars_setting_zero_to_nan:
+                        r_data = np.where(r_data == 0, np.nan, r_data)
+
+                    v[:] = r_data
                 else:
                     # if we do not use multiprocessing we have to loop over the
                     # gdirs and add the data one after another
@@ -1101,8 +1114,29 @@ def merge_gridded_data(gdirs, output_folder=None,
                         if tmp_data is not None:
                             r_data += tmp_data
 
+                    if var in vars_setting_zero_to_nan:
+                        r_data = np.where(r_data == 0, np.nan, r_data)
+
                     v[:] = r_data
 
         # and some metadata to the merged dataset
         nc.nr_of_merged_glaciers = len(gdirs)
         nc.rgi_ids = [gdir.rgi_id for gdir in gdirs]
+
+    # finally we set potential additional time coordinates correctly again
+    fp = os.path.join(output_folder, output_filename + '.nc')
+    ds_was_adapted = False
+
+    with xr.open_dataset(fp) as ds:
+        for time_var in ['calendar_year', 'calendar_month',
+                         'hydro_year', 'hydro_month']:
+            if time_var in ds.data_vars:
+                ds = ds.set_coords(time_var)
+                ds_was_adapted = True
+        ds_adapted = ds.load()
+
+    if ds_was_adapted:
+        ds_adapted.to_netcdf(fp)
+
+    if return_dataset:
+        return ds_adapted

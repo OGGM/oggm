@@ -5803,6 +5803,8 @@ class TestDistribute2D:
                          'gridded_simulation_merged_random*'))
         with xr.open_mfdataset(files_to_open) as ds:
             ds_merged = ds
+        assert 'calendar_year' in ds_merged.coords
+        assert 'calendar_month' in ds_merged.coords
         ds_run = utils.compile_run_output(gdirs, input_filesuffix='_random')
 
         years_to_test = [0, 10, 20]

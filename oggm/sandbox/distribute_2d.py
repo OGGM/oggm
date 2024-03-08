@@ -175,9 +175,9 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
 
     # Ok now assign within band using ice thickness weighted by elevation
     # We rank the pixels within one band by elevation, but also add
-    # a penaltly is added to higher elevation grid points
+    # a penalty is added to higher elevation grid points
     min_alt = np.nanmin(topo_data)
-    weighted_thick = ((topo_data - min_alt + 1) * 1.003) * distrib_thick
+    weighted_thick = ((topo_data - min_alt + 1) * elevation_weight) * distrib_thick
     for band_id in np.unique(np.sort(band_index[glacier_mask])):
         # We work per band here
         is_band = band_index == band_id
@@ -310,7 +310,12 @@ def distribute_thickness_from_simulation(gdir,
                         raise InvalidWorkflowError(f'The two dataset times dont match: '
                                                    f'{float(dg0.time[-1])} vs '
                                                    f'{float(dg.time[0])}.')
-                    dg = xr.concat([dg0, dg.isel(time=slice(1, None))], dim='time')
+                    # Only include thickness, area, and volume to avoid errors
+                    # with variables not present in both.
+                    vars_of_interest = ['thickness_m', 'area_m2', 'volume_m3']
+                    dg = xr.concat([dg0[vars_of_interest],
+                                    dg[vars_of_interest].isel(time=slice(1, None))],
+                                   dim='time')
             if ys is not None or ye is not None:
                 dg = dg.sel(time=slice(ys, ye))
             dg = dg.load()
@@ -498,6 +503,7 @@ def merge_simulated_thickness(gdirs,
             keep_dem_file=keep_dem_file,
             interp=interp,
             use_multiprocessing=use_multiprocessing,
+            return_dataset=False,
             reset=reset)
 
         # recalculate bed topography after reprojection, if topo was added
@@ -529,6 +535,7 @@ def merge_simulated_thickness(gdirs,
                 keep_dem_file=False,
                 interp=interp,
                 use_multiprocessing=use_multiprocessing,
+                return_dataset=False,
                 reset=reset)
 
     else:
@@ -555,6 +562,7 @@ def merge_simulated_thickness(gdirs,
             keep_dem_file=keep_dem_file,
             interp=interp,
             use_multiprocessing=use_multiprocessing,
+            return_dataset=False,
             reset=reset)
 
         # recalculate bed topography after reprojection, if topo was added
