@@ -1972,7 +1972,11 @@ def reproject_gridded_data_variable_to_grid(gdir,
             total_after = (np.nansum(r_data, axis=sum_axis) *
                            target_grid.dx ** 2)
 
-            factor = total_before / total_after
+            # only preserve total if there is some data before
+            factor = np.where(np.isclose(total_before, 0, atol=1e-6),
+                              0.,
+                              total_before / total_after)
+
             if len(data.dims) == 3:
                 # need to add two axis for broadcasting
                 factor = factor[:, np.newaxis, np.newaxis]

@@ -5772,7 +5772,15 @@ class TestDistribute2D:
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
-        workflow.execute_entity_task(run_random_climate, gdirs, y0=2014,
+        # we run the first glacier with a larger temperature bias to force a
+        # a complete retreat for testing
+        workflow.execute_entity_task(tasks.run_random_climate, gdirs[0:1],
+                                     y0=2014, halfsize=5, nyears=20, seed=0,
+                                     temperature_bias=5,
+                                     output_filesuffix='_random',
+                                     store_fl_diagnostics=True)
+
+        workflow.execute_entity_task(run_random_climate, gdirs[1:], y0=2014,
                                      halfsize=5, nyears=20, seed=0,
                                      output_filesuffix='_random',
                                      store_fl_diagnostics=True)
