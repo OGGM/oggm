@@ -848,6 +848,7 @@ def merge_gridded_data(gdirs, output_folder=None,
                        input_filesuffix='',
                        included_variables='all',
                        preserve_totals=True,
+                       smooth_radius=None,
                        use_glacier_mask=True,
                        add_topography=False,
                        keep_dem_file=False,
@@ -901,6 +902,10 @@ def merge_gridded_data(gdirs, output_folder=None,
         original file. The total value is defined as the sum of all grid cell
         values times the area of the grid cell (e.g. preserving ice volume).
         Default is True.
+    smooth_radius : int
+        pixel size of the gaussian smoothing, only used if preserve_totals is
+        True. Default is to use cfg.PARAMS['smooth_window'] (i.e. a size in
+        meters). Set to zero to suppress smoothing.
     use_glacier_mask : bool
         If True only the data cropped by the glacier mask is included in the
         merged file. You must make sure that the variable 'glacier_mask' exists
@@ -1085,6 +1090,7 @@ def merge_gridded_data(gdirs, output_folder=None,
                     use_glacier_mask=use_glacier_mask,
                     interp=interp,
                     preserve_totals=preserve_totals,
+                    smooth_radius=smooth_radius,
                     slice_of_variable=slice_of_var,
                 )
 

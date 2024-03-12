@@ -385,17 +385,23 @@ def distribute_thickness_from_simulation(gdir,
         this_glacier_mask = new_thick > 0
         this_vol = dgy.volume_m3.values.sum()
 
-        # Smooth
-        dx = gdir.grid.dx
-        if smooth_radius != 0:
-            if smooth_radius is None:
-                smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
-            new_thick = gaussian_blur(new_thick, int(smooth_radius))
+        if np.isclose(this_vol, 0, atol=1e-6):
+            # No ice left
+            new_thick = np.NaN
+        else:
+            # Smooth
+            dx = gdir.grid.dx
+            if smooth_radius != 0:
+                if smooth_radius is None:
+                    smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
+                new_thick = gaussian_blur(new_thick, int(smooth_radius))
+
             new_thick[~this_glacier_mask] = np.NaN
 
-        # Conserve volume
-        tmp_vol = np.nansum(new_thick) * dx2
-        new_thick *= this_vol / tmp_vol
+            # Conserve volume
+            tmp_vol = np.nansum(new_thick) * dx2
+            new_thick *= this_vol / tmp_vol
+
         out_thick[i, :] = new_thick
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
@@ -433,6 +439,7 @@ def merge_simulated_thickness(gdirs,
                               keep_dem_file=False,
                               interp='nearest',
                               preserve_totals=True,
+                              smooth_radius=None,
                               use_glacier_mask=True,
                               add_topography=True,
                               use_multiprocessing=False,
@@ -460,6 +467,7 @@ def merge_simulated_thickness(gdirs,
     add_topography
     use_glacier_mask
     preserve_totals
+    smooth_radius
     use_multiprocessing : bool
         If we use multiprocessing the merging is done in parallel, but requires
         more memory. Default is True.
@@ -498,6 +506,7 @@ def merge_simulated_thickness(gdirs,
                                 'distributed_thickness',
                                 ],
             preserve_totals=preserve_totals,
+            smooth_radius=smooth_radius,
             use_glacier_mask=use_glacier_mask,
             add_topography=add_topography,
             keep_dem_file=keep_dem_file,
@@ -530,6 +539,7 @@ def merge_simulated_thickness(gdirs,
                 input_filesuffix=simulation_filesuffix,
                 included_variables=[('simulated_thickness', {'time': [yr]})],
                 preserve_totals=preserve_totals,
+                smooth_radius=smooth_radius,
                 use_glacier_mask=use_glacier_mask,
                 add_topography=False,
                 keep_dem_file=False,
@@ -557,6 +567,7 @@ def merge_simulated_thickness(gdirs,
                                  ],
                                 [('simulated_thickness', selected_time)]],
             preserve_totals=preserve_totals,
+            smooth_radius=smooth_radius,
             use_glacier_mask=use_glacier_mask,
             add_topography=add_topography,
             keep_dem_file=keep_dem_file,
