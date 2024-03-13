@@ -9,7 +9,7 @@ import os
 
 try:
     import rasterio
-    from rasterio.warp import reproject, Resampling
+    from rasterio.warp import reproject, Resampling, calculate_default_transform
     from rasterio import MemoryFile
     try:
         # rasterio V > 1.0
@@ -90,6 +90,7 @@ def hugonnet_to_gdir(gdir, add_error=False):
     # A glacier area can cover more than one tile:
     if len(flist) == 1:
         dem_dss = [rasterio.open(flist[0])]  # if one tile, just open it
+        file_crs = dem_dss[0].crs
         dem_data = rasterio.band(dem_dss[0], 1)
         if Version(rasterio.__version__) >= Version('1.0'):
             src_transform = dem_dss[0].transform
@@ -98,8 +99,61 @@ def hugonnet_to_gdir(gdir, add_error=False):
         nodata = dem_dss[0].meta.get('nodata', None)
     else:
         dem_dss = [rasterio.open(s) for s in flist]  # list of rasters
-        nodata = dem_dss[0].meta.get('nodata', None)
-        dem_data, src_transform = merge_tool(dem_dss, nodata=nodata)  # merge
+
+        # make sure all files have the same crs and reproject if needed;
+        # defining the target crs to the one most commonly used, minimizing
+        # the number of files for reprojection
+        crs_list = np.array([dem_ds.crs.to_string() for dem_ds in dem_dss])
+        unique_crs, crs_counts = np.unique(crs_list, return_counts=True)
+        file_crs = rasterio.crs.CRS.from_string(
+            unique_crs[np.argmax(crs_counts)])
+
+        if len(unique_crs) != 1:
+            # more than one crs, we need to do reprojection
+            memory_files = []
+            for i, src in enumerate(dem_dss):
+                if file_crs != src.crs:
+                    transform, width, height = calculate_default_transform(
+                        src.crs, file_crs, src.width, src.height, *src.bounds)
+                    kwargs = src.meta.copy()
+                    kwargs.update({
+                        'crs': file_crs,
+                        'transform': transform,
+                        'width': width,
+                        'height': height
+                    })
+
+                    reprojected_array = np.empty(shape=(src.count, height, width),
+                                                 dtype=src.dtypes[0])
+                    # just for completeness; even the data only has one band
+                    for band in range(1, src.count + 1):
+                        reproject(source=rasterio.band(src, band),
+                                  destination=reprojected_array[band - 1],
+                                  src_transform=src.transform,
+                                  src_crs=src.crs,
+                                  dst_transform=transform,
+                                  dst_crs=file_crs,
+                                  resampling=Resampling.nearest)
+
+                    memfile = MemoryFile()
+                    with memfile.open(**kwargs) as mem_dst:
+                        mem_dst.write(reprojected_array)
+                    memory_files.append(memfile)
+                else:
+                    memfile = MemoryFile()
+                    with memfile.open(**src.meta) as mem_src:
+                        mem_src.write(src.read())
+                    memory_files.append(memfile)
+
+            with rasterio.Env():
+                datasets_to_merge = [memfile.open() for memfile in memory_files]
+                nodata = datasets_to_merge[0].meta.get('nodata', None)
+                dem_data, src_transform = merge_tool(datasets_to_merge,
+                                                     nodata=nodata)
+        else:
+            # only one single crs occurring, no reprojection needed
+            nodata = dem_dss[0].meta.get('nodata', None)
+            dem_data, src_transform = merge_tool(dem_dss, nodata=nodata)
 
     # Set up profile for writing output
     with rasterio.open(gdir.get_filepath('dem')) as dem_ds:
@@ -120,7 +174,7 @@ def hugonnet_to_gdir(gdir, add_error=False):
         reproject(
             # Source parameters
             source=dem_data,
-            src_crs=dem_dss[0].crs,
+            src_crs=file_crs,
             src_transform=src_transform,
             src_nodata=nodata,
             # Destination parameters
