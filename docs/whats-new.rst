@@ -36,6 +36,13 @@ Bug fixes
   ``tasks.gridded_data_var_to_geotiff`` the resulting coordinates where
   shifted half a pixel, this is now fixed (:pull:`1682`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- When adding the Hugonnet et al. (2021) dh/dt maps to the glacier directory
+  and multiple files are needed, previously there was no check to ensure they
+  all used the same coordinate reference system (CRS). This caused errors
+  during the file merging process. The bug fix now checks if the files have
+  different CRS. If they do, all files are converted to a single, common CRS
+  to make sure they can be merged without issues (:pull:`1698`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
 v1.6.1 (August 27, 2023)
