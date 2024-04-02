@@ -1986,19 +1986,19 @@ def reproject_gridded_data_variable_to_grid(gdir,
 def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
     """Adds the individual glacier outlines to this glacier complex gdir.
 
-    Also adds a mask to gridded_data.nc with number indicating the 
+    Also adds a mask to gridded_data.nc with number indicating the
     respective subentity index in the shapefile (-1 means no glacier).
 
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory` object
         the glacier directory to process
-    rgi7g_file : gpd.GeoDataFrame   
-        the RGI7G file to extract the outlines from (we can read it 
+    rgi7g_file : gpd.GeoDataFrame
+        the RGI7G file to extract the outlines from (we can read it
         from disk but if you give it, this may faster for large number
         of glaciers)
-    rgi7c_to_g_links : gpd.GeoDataFrame   
-        the RGI7G file to extract the outlines from (we can read it 
+    rgi7c_to_g_links : gpd.GeoDataFrame
+        the RGI7G file to extract the outlines from (we can read it
         from disk but if you give it, this may faster for large number
         of glaciers)
     """
