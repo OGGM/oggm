@@ -9,7 +9,6 @@ import sys
 import glob
 from collections import OrderedDict
 from distutils.util import strtobool
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -28,7 +27,7 @@ try:
 except ImportError:
     pass
 
-from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.exceptions import InvalidParamsError
 
 # Local logger
 log = logging.getLogger(__name__)
@@ -298,6 +297,9 @@ BASENAMES['fl_diagnostics'] = ('fl_diagnostics.nc', _doc)
 
 _doc = "A table containing the Huss&Farinotti 2012 squeezed flowlines."
 BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
+
+_doc = "The outlines of this glacier complex sub-entities (for RGI7C only!)."
+BASENAMES['complex_sub_entities'] = ('complex_sub_entities.shp', _doc)
 
 
 def set_logging_config(logging_level='INFO'):

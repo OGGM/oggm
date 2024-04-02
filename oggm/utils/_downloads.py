@@ -23,6 +23,7 @@ from netrc import netrc
 import ftplib
 import ssl
 import tarfile
+import json
 
 # External libs
 import pandas as pd
@@ -2229,6 +2230,31 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
     selection.crs = sh.crs  # for geolocalisation
 
     return selection
+
+
+def get_rgi7c_to_g_links(region, version='70C', reset=False):
+    """Path to the RGI7 glacier complex to glacier json file.
+
+    This is for version 7C only!
+
+    Parameters
+    ----------
+    region : str
+        from '01' to '19'
+    version : str
+        '70C', defaults to 70C
+    reset : bool
+        If True, deletes the RGI directory first and downloads the data
+
+    Returns
+    -------
+    a dictionary containing the links
+    """
+    jfile = get_rgi_region_file(region, version=version, reset=reset)
+    jfile = jfile.replace('.shp', '-CtoG_links.json')
+    with open(jfile) as f:
+        out = json.load(f)
+    return out
 
 
 def is_dem_source_available(source, lon_ex, lat_ex):

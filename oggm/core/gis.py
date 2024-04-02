@@ -1980,3 +1980,86 @@ def reproject_gridded_data_variable_to_grid(gdir,
             r_data *= factor
 
     return r_data
+
+
+@entity_task(log, writes=['gridded_data', 'complex_sub_entities'])
+def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
+    """Adds the individual glacier outlines to this glacier complex gdir.
+
+    Also adds a mask to gridded_data.nc with number indicating the 
+    respective subentity index in the shapefile (-1 means no glacier).
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory` object
+        the glacier directory to process
+    rgi7g_file : gpd.GeoDataFrame   
+        the RGI7G file to extract the outlines from (we can read it 
+        from disk but if you give it, this may faster for large number
+        of glaciers)
+    rgi7c_to_g_links : gpd.GeoDataFrame   
+        the RGI7G file to extract the outlines from (we can read it 
+        from disk but if you give it, this may faster for large number
+        of glaciers)
+    """
+
+    if not gdir.rgi_version == '70C':
+        raise InvalidWorkflowError('Needs to be run on a glacier complex!')
+
+    if rgi7g_file is None:
+        from oggm.utils import get_rgi_region_file
+        rgi7g_file = get_rgi_region_file(gdir.rgi_region, version='70G')
+        rgi7g_file = gpd.read_file(rgi7g_file)
+    if rgi7c_to_g_links is None:
+        from oggm.utils import get_rgi7c_to_g_links
+        rgi7c_to_g_links = get_rgi7c_to_g_links(gdir.rgi_region)
+
+    subset = rgi7g_file.loc[rgi7g_file.rgi_id.isin(rgi7c_to_g_links[gdir.rgi_id])]
+    subset = subset.reset_index(drop=True)
+
+    # Reproject and write
+    subset = subset.to_crs(gdir.grid.proj.srs)
+    gdir.write_shapefile(subset, 'complex_sub_entities')
+
+    # OK all good, now the mask
+    # Load the DEM
+    with rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff') as ds:
+        data = ds.read(1).astype(rasterio.float32)
+        profile = ds.profile
+
+    # Initialize the mask with -1s, the same shape as the DEM
+    mask = np.full(data.shape, -1, dtype=np.int16)
+
+    # Iterate over each polygon, rasterizing it onto the mask
+    for index, geometry in enumerate(subset.geometry):
+        # Correct invalid polygons
+        geometry = geometry.buffer(0)
+        if not geometry.is_valid:
+            raise Exception('Invalid geometry.')
+
+        # Compute the glacier mask using rasterio
+        # Small detour as mask only accepts DataReader objects
+        profile['dtype'] = 'int16'
+        profile.pop('nodata', None)
+        with rasterio.io.MemoryFile() as memfile:
+            with memfile.open(**profile) as dataset:
+                dataset.write(data.astype(np.int16)[np.newaxis, ...])
+            dem_data = rasterio.open(memfile.name)
+            masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
+                                    filled=False)
+        glacier_mask = ~masked_dem[0, ...].mask
+
+        # Update the mask: only change -1 to the new index
+        mask = np.where((mask == -1) & glacier_mask, index, mask)
+
+    grids_file = gdir.get_filepath('gridded_data')
+    with ncDataset(grids_file, 'a') as nc:
+
+        vn = 'sub_entities'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+        v.units = '-'
+        v.long_name = 'Sub-entities glacier mask (number is index)'
+        v[:] = mask

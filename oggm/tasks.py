@@ -13,6 +13,7 @@ from oggm.core.gis import compute_hypsometry_attributes
 from oggm.core.gis import gridded_attributes
 from oggm.core.gis import gridded_mb_attributes
 from oggm.core.gis import gridded_data_var_to_geotiff
+from oggm.core.gis import rgi7g_to_complex
 from oggm.core.centerlines import compute_centerlines
 from oggm.core.centerlines import compute_downstream_line
 from oggm.core.centerlines import compute_downstream_bedshape
