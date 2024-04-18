@@ -29,7 +29,8 @@ Enhancements
   cannot be used operational yet. In general, calving is not
   operational in the v1.6 series, it can only be used on a glacier
   by glacier basis and is not yet fully integrated in the workflow
-  (:pull:`16731615`).
+  (:pull:`1615`).
+  Based on :pull:`1403` and :pull:`1532` (unmerged).
   By `Jan Malles <https://github.com/jmalles>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
 
