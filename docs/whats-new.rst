@@ -43,6 +43,9 @@ Bug fixes
   different CRS. If they do, all files are converted to a single, common CRS
   to make sure they can be merged without issues (:pull:`1698`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- COPDEM data is now downloaded from public http server (no credentials
+  required) (:pull:`1684`).
+  By `Codruț Diaconu <https://github.com/dcodrut>`_
 
 
 v1.6.1 (August 27, 2023)
