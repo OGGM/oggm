@@ -24,6 +24,15 @@ Enhancements
   distributed thickness data from a dynamic model run.
   By `Alex Fischer <https://github.com/afisc>`_ and
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added a new calving module to the sandbox. The module is based on
+  Malles et al., 2023, but is currently still in development and
+  cannot be used operational yet. In general, calving is not
+  operational in the v1.6 series, it can only be used on a glacier
+  by glacier basis and is not yet fully integrated in the workflow
+  (:pull:`1615`).
+  Based on :pull:`1403` and :pull:`1532` (unmerged).
+  By `Jan Malles <https://github.com/jmalles>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -564,7 +573,7 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added support for writing a NetCDF variable in ``gridded_data.nc`` file to
   a georeferenced GeoTiff file (:pull:`1118`). The new task are
-  :py:func:`tasks.gridded_data_var_to_geotiff`. 
+  :py:func:`tasks.gridded_data_var_to_geotiff`.
   By `Li Fei <https://github.com/Keeptg>`_
 - Added a `find_inversion_calving_from_any_mb` task which uses the Recinos et
   al. approach, but on any mass balance profile (:pull:`1043`).
@@ -578,7 +587,7 @@ Bug fixes
   (:pull:`957`, :pull:`967`, :pull:`968`, :pull:`958`, :pull:`974`, :pull:`977`,
   :pull:`976`, :pull:`1124`).
   By `Fabien Maussion <https://github.com/fmaussion>`_,
-  `Matthias Dusch <https://github.com/matthiasdusch>`_ and 
+  `Matthias Dusch <https://github.com/matthiasdusch>`_ and
   `Li Fei <https://github.com/Keeptg>`_.
 
 
