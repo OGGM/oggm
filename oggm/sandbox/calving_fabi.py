@@ -2,36 +2,50 @@
 import logging
 import copy
 from functools import partial
-import warnings
 
 # External libs
 import numpy as np
-import xarray as xr
 import pandas as pd
 
 # Optional libs
-try:
-    import salem
-except ImportError:
-    pass
 try:
     from skimage import measure
 except ImportError:
     pass
 
 # Locals
-from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
-from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.exceptions import InvalidParamsError
 from oggm.core.inversion import find_sia_flux_from_thickness
+from oggm.core.flowline import FlowlineModel, flux_gate_with_build_up
 
 # Constants
 from oggm.cfg import G
 
 # Module logger
 log = logging.getLogger(__name__)
-from oggm.core.flowline import FlowlineModel, flux_gate_with_build_up
+
+
+def initialize_calving_params():
+    """Initialize the parameters for the calving model.
+
+    This should be part of params.cfg but this is still
+    sandboxed...
+    """
+
+    # ocean water density in kg m-3; should be >= ice density
+    # for lake-terminating glaciers this could be changed to
+    # 1000 kg m-3
+    if 'ocean_density' not in cfg.PARAMS:
+        cfg.PARAMS['ocean_density'] = 1028
+
+    # Stretch distance in hydrostatic pressure balance
+    # calculations for terminal water-terminating cliffs
+    # (in meters) - See Malles et al.
+    # (the current value of 8000m might be too high)
+    if 'max_calving_stretch_distance' not in cfg.PARAMS:
+        cfg.PARAMS['max_calving_stretch_distance'] = 8000
 
 
 class CalvingFluxBasedModelFabi(FlowlineModel):
@@ -127,6 +141,9 @@ class CalvingFluxBasedModelFabi(FlowlineModel):
                                                         inplace=inplace,
                                                         water_level=water_level,
                                                         **kwargs)
+
+        # Initialize the parameters
+        initialize_calving_params()
 
         self.fixed_dt = fixed_dt
         if min_dt is None:

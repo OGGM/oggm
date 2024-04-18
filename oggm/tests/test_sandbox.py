@@ -1,33 +1,22 @@
 import unittest
-from functools import partial
 import pytest
-import copy
 import numpy as np
 from numpy.testing import assert_allclose
 
 # Local imports
-import oggm
 from oggm.core.massbalance import LinearMassBalance, ScalarMassBalance
-from oggm.core.inversion import find_sia_flux_from_thickness
-from oggm import utils, cfg
-from oggm.cfg import SEC_IN_DAY
-from oggm.core.sia2d import Upstream2D
-from oggm.exceptions import InvalidParamsError
+from oggm import cfg
 
 # Tests
-from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
-                              dummy_constant_bed_cliff,
-                              dummy_mixed_bed, dummy_constant_bed_obstacle,
-                              dummy_noisy_bed, dummy_parabolic_bed,
-                              dummy_trapezoidal_bed, dummy_width_bed,
-                              dummy_width_bed_tributary, bu_tidewater_bed,
-                              dummy_bed_tributary_tail_to_head,
-                              dummy_mixed_trap_rect_bed)
+from oggm.tests.funcs import (dummy_constant_bed,
+                              dummy_noisy_bed,
+                              bu_tidewater_bed,
+                              )
 
 # after oggm.test
 import matplotlib.pyplot as plt
 
-from oggm.core.flowline import FluxBasedModel, MassConservationChecker
+from oggm.core.flowline import FluxBasedModel
 from oggm.sandbox.calving_jan import CalvingFluxBasedModelJan
 from oggm.sandbox.calving_fabi import CalvingFluxBasedModelFabi
 
@@ -188,6 +177,8 @@ def default_calving():
 
 @pytest.mark.usefixtures('default_calving')
 class TestKCalving():
+
+    @pytest.mark.slow
     def test_bu_bed(self, default_calving):
 
         _, ds1, df_diag1 = default_calving
