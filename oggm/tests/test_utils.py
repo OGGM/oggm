@@ -2230,8 +2230,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         # Make a fake topo file
         deep_path = os.path.join(self.dldir,
-                                 'DEM1_SAR_DGE_90_20110517T170701_20140817T170857'
-                                 '_ADS_000000_3682.DEM',
+                                 'COP-DEM_GLO-90-DGED__2023_1',
                                  'Copernicus_DSM_30_N46_00_E010_00', 'DEM')
         utils.mkdir(deep_path)
         upper_path = os.path.dirname(os.path.dirname(deep_path))
@@ -2242,14 +2241,13 @@ class TestFakeDownloads(unittest.TestCase):
                               archive='tar', extension='.tar')
 
         def down_check(url, *args, **kwargs):
-            expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-90-DGED/2022_1/'
-                        'DEM1_SAR_DGE_90_20110517T170701_20140817T170857_ADS_'
-                        '000000_3682.DEM.tar')
+            expected = ('https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/'
+                        'COP-DEM_GLO-90-DGED__2023_1/'
+                        'Copernicus_DSM_30_N46_00_E010_00.tar')
             self.assertEqual(expected, url)
             return tf
 
-        with FakeDownloadManager('download_with_authentication', down_check):
+        with FakeDownloadManager('file_downloader', down_check):
             of, source = utils.get_topo_file([10.5, 10.8], [46.6, 46.8],
                                              source='COPDEM90')
 
@@ -2260,8 +2258,7 @@ class TestFakeDownloads(unittest.TestCase):
 
         # Make a fake topo file
         deep_path = os.path.join(self.dldir,
-                                 'DEM1_SAR_DGE_30_20110517T170701_20140817T170857'
-                                 '_ADS_000000_bma2.DEM',
+                                 'COP-DEM_GLO-30-DGED__2023_1',
                                  'Copernicus_DSM_10_N46_00_E010_00', 'DEM')
         utils.mkdir(deep_path)
         upper_path = os.path.dirname(os.path.dirname(deep_path))
@@ -2272,14 +2269,13 @@ class TestFakeDownloads(unittest.TestCase):
                               archive='tar', extension='.tar')
 
         def down_check(url, *args, **kwargs):
-            expected = ('ftps://cdsdata.copernicus.eu:990/datasets/'
-                        'COP-DEM_GLO-30-DGED/2022_1/'
-                        'DEM1_SAR_DGE_30_20110517T170701_20140817T170857_ADS_'
-                        '000000_bma2.DEM.tar')
+            expected = ('https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload/'
+                        'COP-DEM_GLO-30-DGED__2023_1/'
+                        'Copernicus_DSM_10_N46_00_E010_00.tar')
             self.assertEqual(expected, url)
             return tf
 
-        with FakeDownloadManager('download_with_authentication', down_check):
+        with FakeDownloadManager('file_downloader', down_check):
             of, source = utils.get_topo_file([10.5, 10.8], [46.6, 46.8],
                                              source='COPDEM30')
 
@@ -2762,29 +2758,25 @@ class TestDataFiles(unittest.TestCase):
     def test_copdemzone(self):
         z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM90')
         self.assertTrue(len(z) == 1)
-        self.assertEqual(('DEM1_SAR_DGE_90_20110427T104941_20140819T105300_'
-                          'ADS_000000_7913.DEM.tar'), z[0][0])
-        self.assertEqual('Copernicus_DSM_30_S10_00_W078_00', z[0][1])
+        self.assertEqual('Copernicus_DSM_30_S10_00_W078_00', z[0])
 
         z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM30')
         self.assertTrue(len(z) == 1)
-        self.assertEqual(('DEM1_SAR_DGE_30_20110427T104941_20140819T105300_'
-                          'ADS_000000_elyt.DEM.tar'), z[0][0])
-        self.assertEqual('Copernicus_DSM_10_S10_00_W078_00', z[0][1])
+        self.assertEqual('Copernicus_DSM_10_S10_00_W078_00', z[0])
 
         z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM90')
         self.assertTrue(len(z) == 2)
         self.assertTrue('Copernicus_DSM_30_N46_00_E008_00' in
-                        [z[0][1], z[1][1]])
+                        [z[0], z[1]])
         self.assertTrue('Copernicus_DSM_30_N46_00_E007_00' in
-                        [z[0][1], z[1][1]])
+                        [z[0], z[1]])
 
         z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM30')
         self.assertTrue(len(z) == 2)
         self.assertTrue('Copernicus_DSM_10_N46_00_E008_00' in
-                        [z[0][1], z[1][1]])
+                        [z[0], z[1]])
         self.assertTrue('Copernicus_DSM_10_N46_00_E007_00' in
-                        [z[0][1], z[1][1]])
+                        [z[0], z[1]])
 
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])

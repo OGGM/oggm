@@ -1137,12 +1137,12 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
-def _download_copdem_file(cppfile, tilename, source):
+def _download_copdem_file(tilename, source):
     with get_lock():
-        return _download_copdem_file_unlocked(cppfile, tilename, source)
+        return _download_copdem_file_unlocked(tilename, source)
 
 
-def _download_copdem_file_unlocked(cppfile, tilename, source):
+def _download_copdem_file_unlocked(tilename, source):
     """Checks if Copernicus DEM file is in the directory, if not download it.
 
     cppfile : name of the tarfile to download
@@ -1164,12 +1164,9 @@ def _download_copdem_file_unlocked(cppfile, tilename, source):
         return demfile
 
     # Did we download it yet?
-    ftpfile = ('ftps://cdsdata.copernicus.eu:990/' +
-               'datasets/COP-DEM_GLO-{}-DGED/2022_1/'.format(source[-2:]) +
-               cppfile)
-
-    dest_file = download_with_authentication(ftpfile,
-                                             'spacedata.copernicus.eu')
+    url = (f"https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload"
+           f"/COP-DEM_GLO-{source[-2:]}-DGED__2023_1/{tilename}.tar")
+    dest_file = file_downloader(url)
 
     # None means we tried hard but we couldn't find it
     if not dest_file:
@@ -1563,7 +1560,21 @@ def alaska_dem_zone(lon_ex, lat_ex):
 
 
 def copdem_zone(lon_ex, lat_ex, source):
-    """Returns a list of Copernicus DEM tarfile and tilename tuples
+    """Returns a list of Copernicus DEM tilenames.
+
+    New:
+    We now go for the PRISM server download, which has a slightly different
+    API.
+
+    Parse available datasets:
+    curl -k -H "accept: csv" https://prism-dem-open.copernicus.eu/pd-desk-open-access/publicDemURLs
+
+    Parse available tiles:
+    curl -k -H "accept: csv" https://prism-dem-open.copernicus.eu/pd-desk-open-access/publicDemURLs/COP-DEM_GLO-30-DGED__2023_1
+
+    But I'm not sure why parsing the tiles is necessary, we can just use the
+    tilename as is and try to download it. If it doesn't exist, it's probably
+    OK to skip it.
     """
 
     # because we use both meters and arc secs in our filenames...
@@ -1573,13 +1584,6 @@ def copdem_zone(lon_ex, lat_ex, source):
         asec = '10'
     else:
         raise InvalidDEMError('COPDEM Version not valid.')
-
-    # either reuse or load lookup table
-    if source in cfg.DATA:
-        df = cfg.DATA[source]
-    else:
-        df = pd.read_csv(get_demo_file('{}_2022_1.csv'.format(source.lower())))
-        cfg.DATA[source] = df
 
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0
     lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
@@ -1594,14 +1598,7 @@ def copdem_zone(lon_ex, lat_ex, source):
             ew = 'W' if lon < 0 else 'E'
             lat_str = '{}{:02.0f}'.format(ns, abs(lat))
             lon_str = '{}{:03.0f}'.format(ew, abs(lon))
-            try:
-                filename = df.loc[(df['Long'] == lon_str) &
-                                  (df['Lat'] == lat_str)]['CPP filename'].iloc[0]
-                flist.append((filename,
-                              'Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str)))
-            except IndexError:
-                # COPDEM is global, if we miss tiles it is probably in the ocean
-                pass
+            flist.append('Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str))
     return flist
 
 
@@ -2480,9 +2477,9 @@ def get_topo_file(lon_ex=None, lat_ex=None, gdir=None, *,
             files.append(_download_srtm_file(z))
 
     if source in ['COPDEM30', 'COPDEM90']:
-        filetuple = copdem_zone(lon_ex, lat_ex, source)
-        for cpp, eop in filetuple:
-            files.append(_download_copdem_file(cpp, eop, source))
+        tilenames = copdem_zone(lon_ex, lat_ex, source)
+        for tilename in tilenames:
+            files.append(_download_copdem_file(tilename, source))
 
     if source == 'NASADEM':
         zones = nasadem_zone(lon_ex, lat_ex)
