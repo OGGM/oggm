@@ -5858,3 +5858,27 @@ class TestDistribute2D:
             ds_merged_selected_years = ds
         assert_allclose(ds_merged_selected_years.simulated_thickness.values,
                         ds_merged.loc[{'time': years_to_test}].simulated_thickness.values)
+
+        # test merging of monthly distributed data
+        workflow.execute_entity_task(run_random_climate, gdirs, y0=2014,
+                                     halfsize=5, nyears=2, seed=0,
+                                     output_filesuffix='_random_short',
+                                     store_fl_diagnostics=True)
+        workflow.execute_entity_task(
+            distribute_2d.distribute_thickness_from_simulation,
+            gdirs,
+            input_filesuffix='_random_short',
+            add_monthly=True,
+        )
+        distribute_2d.merge_simulated_thickness(
+            gdirs,
+            simulation_filesuffix='_random_short',
+            reset=True)
+        files_to_open_monthly = glob.glob(
+            os.path.join(cfg.PATHS['working_dir'],
+                         'gridded_simulation_merged_random_short*'))
+        assert len(files_to_open_monthly) == 26
+        with xr.open_mfdataset(files_to_open_monthly) as ds:
+            ds_merged_monthly = ds
+
+        assert len(ds_merged_monthly.time) == 25

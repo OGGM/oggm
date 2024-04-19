@@ -460,8 +460,12 @@ def merge_simulated_thickness(gdirs,
         Default is gridded_simulation_merged{simulation_filesuffix}.
     simulation_filesuffix : str
         the filesuffix of the gridded_simulation file
-    years_to_merge : list | None
-        If not None, only the years in this list are merged. Default is None.
+    years_to_merge : list | xr.DataArray | None
+        If not None, and list of integers only the years at month 1 are
+        merged. You can also provide the timesteps as xarray.DataArray
+        containing calendar_year and calendar_month as it is the standard
+        output format for gridded nc files of OGGM.
+        Default is None.
     keep_dem_file
     interp
     add_topography
@@ -523,21 +527,33 @@ def merge_simulated_thickness(gdirs,
 
         # then the simulated thickness files
         if years_to_merge is None:
-            # open first file to get the years
+            # open first file to get all available timesteps
             with xr.open_dataset(
                     gdirs[0].get_filepath('gridded_simulation',
                                           filesuffix=simulation_filesuffix)
             ) as ds:
-                years_to_merge = ds.time.values
+                years_to_merge = ds.time
 
-        for yr in years_to_merge:
+        for timestep in years_to_merge:
+            if isinstance(timestep, int):
+                year = timestep
+                month = '1'
+            elif isinstance(timestep, xr.DataArray):
+                year = int(timestep.calendar_year)
+                month = int(timestep.calendar_month)
+            else:
+                raise NotImplementedError('Wrong type for years_to_merge! '
+                                          'Should be list of int or'
+                                          'xarray.DataArray.')
+
             workflow.merge_gridded_data(
                 gdirs,
                 output_folder=output_folder,
-                output_filename=f"{output_filename}_{yr}",
+                output_filename=f"{output_filename}_{year}_{month:02d}",
                 input_file='gridded_simulation',
                 input_filesuffix=simulation_filesuffix,
-                included_variables=[('simulated_thickness', {'time': [yr]})],
+                included_variables=[('simulated_thickness',
+                                     {'time': [timestep]})],
                 preserve_totals=preserve_totals,
                 smooth_radius=smooth_radius,
                 use_glacier_mask=use_glacier_mask,
