@@ -1896,6 +1896,7 @@ def reproject_gridded_data_variable_to_grid(gdir,
                                             use_glacier_mask=True,
                                             interp='nearest',
                                             preserve_totals=True,
+                                            smooth_radius=None,
                                             slice_of_variable=None):
     """
     Function for reprojecting a gridded data variable to a different grid.
@@ -1926,6 +1927,10 @@ def reproject_gridded_data_variable_to_grid(gdir,
         The total value is defined as the sum of all grid cell values times the
         area of the grid cell (e.g. preserving ice volume).
         Default is True.
+    smooth_radius : int
+        pixel size of the gaussian smoothing, only used if preserve_totals is
+        True. Default is to use cfg.PARAMS['smooth_window'] (i.e. a size in
+        meters). Set to zero to suppress smoothing.
     slice_of_variable : None | dict
         Can provide dimensions with values as a dictionary for extracting only
         a slice of the data before reprojecting. This can be useful for large
@@ -1958,6 +1963,7 @@ def reproject_gridded_data_variable_to_grid(gdir,
     if preserve_totals:
         # only preserve for float variables
         if not np.issubdtype(data, np.integer):
+            # do we want to do smoothing?
 
             if len(data.dims) == 2:
                 sum_axis = None
@@ -1969,10 +1975,29 @@ def reproject_gridded_data_variable_to_grid(gdir,
 
             total_before = (np.nansum(data.values, axis=sum_axis) *
                             ds.salem.grid.dx ** 2)
+
+            if smooth_radius != 0:
+                if smooth_radius is None:
+                    smooth_radius = np.rint(cfg.PARAMS['smooth_window'] /
+                                            target_grid.dx)
+                # use data_mask to not expand the extent of the data
+                data_mask = ~np.isclose(r_data, 0, atol=1e-6)
+                if r_data.ndim == 3:
+                    r_data = np.array(
+                        [gaussian_blur(r_data[i, :, :], int(smooth_radius))
+                         for i in range(r_data.shape[0])])
+                else:
+                    r_data = gaussian_blur(r_data, int(smooth_radius))
+                r_data[~data_mask] = 0
+
             total_after = (np.nansum(r_data, axis=sum_axis) *
                            target_grid.dx ** 2)
 
-            factor = total_before / total_after
+            # only preserve total if there is some data before
+            factor = np.where(np.isclose(total_before, 0, atol=1e-6),
+                              0.,
+                              total_before / total_after)
+
             if len(data.dims) == 3:
                 # need to add two axis for broadcasting
                 factor = factor[:, np.newaxis, np.newaxis]

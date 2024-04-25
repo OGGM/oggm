@@ -235,7 +235,8 @@ def distribute_thickness_from_simulation(gdir,
     into account for the melt *within* one band, a downside which is somehow
     mitigated with smoothing (the default is quite some smoothing).
 
-    Writes a new file caller gridded_simulation.nc together with a new time dimension.
+    Writes a new file called gridded_simulation.nc together with a new time
+    dimension.
 
     Parameters
     ----------
@@ -244,13 +245,13 @@ def distribute_thickness_from_simulation(gdir,
     input_filesuffix : str
         the filesuffix of the flowline diagnostics file.
     output_filesuffix : str
-        the filesuffix of the gridded_simulation file to write. If empty,
+        the filesuffix of the gridded_simulation.nc file to write. If empty,
         it will be set to input_filesuffix.
     concat_input_filesuffix : str
-        the filesuffix of the flowline diagnostics file to concat with the
-        main one. `concat_input_filesuffix` is assumed to be prior to the
-        main one, i.e. often you will be calling
-        `concat_input_filesuffix='_spinup_historical'`.
+        the filesuffix of the flowline diagnostics file to concat with the main
+        one, provided with input_filesuffix. `concat_input_filesuffix` is
+        assumed to be prior in time to the main one, i.e. often you will be
+        calling `concat_input_filesuffix='_spinup_historical'`.
     fl_diag : xarray.core.dataset.Dataset
         directly provide a flowline diagnostics file instead of reading it
         from disk. This could be useful, for example, to merge two files
@@ -385,17 +386,23 @@ def distribute_thickness_from_simulation(gdir,
         this_glacier_mask = new_thick > 0
         this_vol = dgy.volume_m3.values.sum()
 
-        # Smooth
-        dx = gdir.grid.dx
-        if smooth_radius != 0:
-            if smooth_radius is None:
-                smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
-            new_thick = gaussian_blur(new_thick, int(smooth_radius))
+        if np.isclose(this_vol, 0, atol=1e-6):
+            # No ice left
+            new_thick = np.NaN
+        else:
+            # Smooth
+            dx = gdir.grid.dx
+            if smooth_radius != 0:
+                if smooth_radius is None:
+                    smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
+                new_thick = gaussian_blur(new_thick, int(smooth_radius))
+
             new_thick[~this_glacier_mask] = np.NaN
 
-        # Conserve volume
-        tmp_vol = np.nansum(new_thick) * dx2
-        new_thick *= this_vol / tmp_vol
+            # Conserve volume
+            tmp_vol = np.nansum(new_thick) * dx2
+            new_thick *= this_vol / tmp_vol
+
         out_thick[i, :] = new_thick
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
@@ -433,6 +440,7 @@ def merge_simulated_thickness(gdirs,
                               keep_dem_file=False,
                               interp='nearest',
                               preserve_totals=True,
+                              smooth_radius=None,
                               use_glacier_mask=True,
                               add_topography=True,
                               use_multiprocessing=False,
@@ -453,13 +461,18 @@ def merge_simulated_thickness(gdirs,
         Default is gridded_simulation_merged{simulation_filesuffix}.
     simulation_filesuffix : str
         the filesuffix of the gridded_simulation file
-    years_to_merge : list | None
-        If not None, only the years in this list are merged. Default is None.
+    years_to_merge : list | xr.DataArray | None
+        If not None, and list of integers only the years at month 1 are
+        merged. You can also provide the timesteps as xarray.DataArray
+        containing calendar_year and calendar_month as it is the standard
+        output format for gridded nc files of OGGM.
+        Default is None.
     keep_dem_file
     interp
     add_topography
     use_glacier_mask
     preserve_totals
+    smooth_radius
     use_multiprocessing : bool
         If we use multiprocessing the merging is done in parallel, but requires
         more memory. Default is True.
@@ -498,6 +511,7 @@ def merge_simulated_thickness(gdirs,
                                 'distributed_thickness',
                                 ],
             preserve_totals=preserve_totals,
+            smooth_radius=smooth_radius,
             use_glacier_mask=use_glacier_mask,
             add_topography=add_topography,
             keep_dem_file=keep_dem_file,
@@ -514,22 +528,36 @@ def merge_simulated_thickness(gdirs,
 
         # then the simulated thickness files
         if years_to_merge is None:
-            # open first file to get the years
+            # open first file to get all available timesteps
             with xr.open_dataset(
                     gdirs[0].get_filepath('gridded_simulation',
                                           filesuffix=simulation_filesuffix)
             ) as ds:
-                years_to_merge = ds.time.values
+                years_to_merge = ds.time
 
-        for yr in years_to_merge:
+        for timestep in years_to_merge:
+            if isinstance(timestep, int) or isinstance(timestep, np.int64):
+                year = timestep
+                month = 1
+            elif isinstance(timestep, xr.DataArray):
+                year = int(timestep.calendar_year)
+                month = int(timestep.calendar_month)
+            else:
+                raise NotImplementedError('Wrong type for years_to_merge! '
+                                          'Should be list of int or '
+                                          'xarray.DataArray for monthly '
+                                          'timesteps.')
+
             workflow.merge_gridded_data(
                 gdirs,
                 output_folder=output_folder,
-                output_filename=f"{output_filename}_{yr}",
+                output_filename=f"{output_filename}_{year}_{month:02d}",
                 input_file='gridded_simulation',
                 input_filesuffix=simulation_filesuffix,
-                included_variables=[('simulated_thickness', {'time': [yr]})],
+                included_variables=[('simulated_thickness',
+                                     {'time': [timestep]})],
                 preserve_totals=preserve_totals,
+                smooth_radius=smooth_radius,
                 use_glacier_mask=use_glacier_mask,
                 add_topography=False,
                 keep_dem_file=False,
@@ -557,6 +585,7 @@ def merge_simulated_thickness(gdirs,
                                  ],
                                 [('simulated_thickness', selected_time)]],
             preserve_totals=preserve_totals,
+            smooth_radius=smooth_radius,
             use_glacier_mask=use_glacier_mask,
             add_topography=add_topography,
             keep_dem_file=keep_dem_file,
