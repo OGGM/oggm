@@ -235,7 +235,8 @@ def distribute_thickness_from_simulation(gdir,
     into account for the melt *within* one band, a downside which is somehow
     mitigated with smoothing (the default is quite some smoothing).
 
-    Writes a new file caller gridded_simulation.nc together with a new time dimension.
+    Writes a new file called gridded_simulation.nc together with a new time
+    dimension.
 
     Parameters
     ----------
@@ -244,13 +245,13 @@ def distribute_thickness_from_simulation(gdir,
     input_filesuffix : str
         the filesuffix of the flowline diagnostics file.
     output_filesuffix : str
-        the filesuffix of the gridded_simulation file to write. If empty,
+        the filesuffix of the gridded_simulation.nc file to write. If empty,
         it will be set to input_filesuffix.
     concat_input_filesuffix : str
-        the filesuffix of the flowline diagnostics file to concat with the
-        main one. `concat_input_filesuffix` is assumed to be prior to the
-        main one, i.e. often you will be calling
-        `concat_input_filesuffix='_spinup_historical'`.
+        the filesuffix of the flowline diagnostics file to concat with the main
+        one, provided with input_filesuffix. `concat_input_filesuffix` is
+        assumed to be prior in time to the main one, i.e. often you will be
+        calling `concat_input_filesuffix='_spinup_historical'`.
     fl_diag : xarray.core.dataset.Dataset
         directly provide a flowline diagnostics file instead of reading it
         from disk. This could be useful, for example, to merge two files
@@ -535,16 +536,17 @@ def merge_simulated_thickness(gdirs,
                 years_to_merge = ds.time
 
         for timestep in years_to_merge:
-            if isinstance(timestep, int):
+            if isinstance(timestep, int) or isinstance(timestep, np.int64):
                 year = timestep
-                month = '1'
+                month = 1
             elif isinstance(timestep, xr.DataArray):
                 year = int(timestep.calendar_year)
                 month = int(timestep.calendar_month)
             else:
                 raise NotImplementedError('Wrong type for years_to_merge! '
-                                          'Should be list of int or'
-                                          'xarray.DataArray.')
+                                          'Should be list of int or '
+                                          'xarray.DataArray for monthly '
+                                          'timesteps.')
 
             workflow.merge_gridded_data(
                 gdirs,
