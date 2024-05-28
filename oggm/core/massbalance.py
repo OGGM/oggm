@@ -1433,6 +1433,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     overwrite_gdir=False,
                                     use_regional_avg=False,
                                     override_missing=None,
+                                    mb_2d=False,
                                     informed_threestep=False,
                                     calibrate_param1='melt_f',
                                     calibrate_param2=None,
@@ -1479,6 +1480,8 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         if the reference geodetic data is not available, use this value instead
         (mostly for testing with exotic datasets, but could be used to open
         the door to using other datasets).
+    mb_2d : bool
+        2D data is used for the mass balance calibration
     informed_threestep : bool
         the magic method Fabi found out one day before release.
         Overrides the calibrate_param order below.
@@ -1574,6 +1577,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              ref_period=ref_period,
                                              write_to_gdir=write_to_gdir,
                                              overwrite_gdir=overwrite_gdir,
+                                             mb_2d=mb_2d,
                                              calibrate_param1='prcp_fac',
                                              calibrate_param2='melt_f',
                                              calibrate_param3='temp_bias',
@@ -1592,6 +1596,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              ref_period=ref_period,
                                              write_to_gdir=write_to_gdir,
                                              overwrite_gdir=overwrite_gdir,
+                                             mb_2d=mb_2d,
                                              calibrate_param1=calibrate_param1,
                                              calibrate_param2=calibrate_param2,
                                              calibrate_param3=calibrate_param3,
@@ -1609,6 +1614,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   ref_mb_years=None,
                                   write_to_gdir=True,
                                   overwrite_gdir=False,
+                                  mb_2d=False,
                                   calibrate_param1='melt_f',
                                   calibrate_param2=None,
                                   calibrate_param3=None,
@@ -1673,6 +1679,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
         if a `mb_calib.json` exists, this task won't overwrite it per default.
         Set this to True to enforce overwriting (i.e. with consequences for the
         future workflow).
+    mb_2d : bool
+        2D data is used for the mass balance calibration
     mb_model_class : MassBalanceModel class
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
@@ -1741,7 +1749,17 @@ def mb_calibration_from_scalar_mb(gdir, *,
         raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_period` '
                                  'at the same time.')
 
-    fls = gdir.read_pickle('inversion_flowlines')
+    if not mb_2d:
+        fls = gdir.read_pickle('inversion_flowlines')
+    else:
+        # if the 2D data is used, the flowline is not needed.
+        fls = None
+        # get the 2D data
+        fp = gdir.get_filepath('gridded_data')
+        with xr.open_dataset(fp) as ds:
+            _heights = np.where(ds.glacier_mask, ds.topo_smoothed, np.nan).flatten() # 'topo' instead of 'topo_smoothed'?
+            heights =_heights[~np.isnan(_heights)]
+            widths = np.ones(len(heights))
 
     # Let's go
     # Climate period
@@ -1814,7 +1832,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
     def to_minimize(x, model_attr):
         # Set the new attr value
         setattr(mb_mod, model_attr, x)
-        out = mb_mod.get_specific_mb(fls=fls, year=years).mean()
+        if mb_2d:
+            out = mb_mod.get_specific_mb(heights=heights, widths=widths, year=years).mean()
+        else:
+            out = mb_mod.get_specific_mb(fls=fls, year=years).mean()
         return np.mean(out - ref_mb)
 
     try:
