@@ -1757,8 +1757,9 @@ def mb_calibration_from_scalar_mb(gdir, *,
         # get the 2D data
         fp = gdir.get_filepath('gridded_data')
         with xr.open_dataset(fp) as ds:
-            _heights = np.where(ds.glacier_mask, ds.topo_smoothed, np.nan).flatten() # 'topo' instead of 'topo_smoothed'?
-            heights =_heights[~np.isnan(_heights)]
+            # 'topo' instead of 'topo_smoothed'?
+            _heights = np.where(ds.glacier_mask, ds.topo_smoothed, np.nan).flatten()
+            heights = _heights[~np.isnan(_heights)]
             widths = np.ones(len(heights))
 
     # Let's go
