@@ -1703,13 +1703,13 @@ class TestClimate(unittest.TestCase):
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
                                       ref_period=ref_period,
-                                      mb_2d=False)
+                                      use_2d_mb=False)
         mb_calib_1d = gdir.read_json('mb_calib')
 
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
                                       ref_period=ref_period,
-                                      mb_2d=True)
+                                      use_2d_mb=True)
         mb_calib_2d = gdir.read_json('mb_calib')
         # the calibration results for the melt factor should be close to each other (+/- 5% are tolerated)
         np.testing.assert_allclose(mb_calib_2d['melt_f'], mb_calib_1d['melt_f'], rtol=0.05)
