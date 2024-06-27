@@ -1699,6 +1699,21 @@ class TestClimate(unittest.TestCase):
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
 
+        # Test the use of gridded data(2D) instead of flowline data(1D) for the calibration
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      use_2d_mb=False)
+        mb_calib_1d = gdir.read_json('mb_calib')
+
+        mb_calibration_from_scalar_mb(gdir,
+                                      ref_mb=ref_mb,
+                                      ref_period=ref_period,
+                                      use_2d_mb=True)
+        mb_calib_2d = gdir.read_json('mb_calib')
+        # the calibration results for the melt factor should be close to each other (+/- 5% are tolerated)
+        np.testing.assert_allclose(mb_calib_2d['melt_f'], mb_calib_1d['melt_f'], rtol=0.05)
+
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
 
