@@ -532,6 +532,7 @@ def process_cmip_data(gdir, fpath_temp=None, fpath_precip=None, y0=None, y1=None
 @entity_task(log, writes=['gcm_data'])
 def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                      ensemble_member=None,
+                     version='v2.1',
                      year_range=('1951', '1980'),
                      filesuffix='',
                      output_filesuffix='',
@@ -539,9 +540,10 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
     """Read, process and store the Last Millennium Reanalysis (LMR) data for this glacier.
 
     LMR v2.1 data: https://atmos.washington.edu/~hakim/lmr/LMRv2/
+    LMR data:
 
-    LMR data is annualised in anomaly format relative to 1951-1980. We
-    create synthetic timeseries from the reference data.
+    LMR data is annualised in anomaly format relative to 1951-1980. (2.1 or online)
+    We create synthetic timeseries from the reference data.
 
     It stores the data in a format that can be used by the OGGM mass balance
     model and in the glacier directory.
@@ -552,6 +554,9 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         path to the temp file (default: LMR v2.1 from server above)
     fpath_precip : str
         path to the precip file (default: LMR v2.1 from server above)
+    version : str
+        Version is 'v2.1' or 'online'. Default is 'v2.1'. 'online' is the
+        latest version from the server.
     year_range : tuple of str
         the year range for which you want to compute the anomalies. Default
         for LMR is `('1951', '1980')`
@@ -570,47 +575,65 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         output_filesuffix = filesuffix
 
     # Get the path of GCM temperature & precipitation data
-    base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
-    if fpath_temp is None:
-        with utils.get_lock():
-            fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
-    if fpath_precip is None:
-        with utils.get_lock():
-            fpath_precip = utils.file_downloader(
-                base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+    if version == 'v2.1':
+        base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
+        if fpath_temp is None:
+            with utils.get_lock():
+                fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
+        if fpath_precip is None:
+            with utils.get_lock():
+                fpath_precip = utils.file_downloader(
+                    base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+    elif version == 'online':
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/climate/lmr/LMR_Online/'
+        if fpath_temp is None:
+            with utils.get_lock():
+                fpath_temp = utils.file_downloader(base_url + 'spatial_ens_mean.nc')
+    else:
+        raise InvalidParamsError('Version not understood: {}'.format(version))
 
     # Glacier location
     glon = gdir.cenlon
     glat = gdir.cenlat
 
     # Read the GCM files
-    with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
-            xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
+    if version == 'v2.1':
+        with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
+                xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
 
-        # Check longitude conventions
-        if tempds.lon.min() >= 0 and glon <= 0:
-            glon += 360
+            # Check longitude conventions
+            if tempds.lon.min() >= 0 and glon <= 0:
+                glon += 360
 
-        # Take the closest to the glacier
-        # Should we consider GCM interpolation?
-        temp = tempds.air.sel(lat=glat, lon=glon, method='nearest')
-        precip = precipds.prate.sel(lat=glat, lon=glon, method='nearest')
+            # Take the closest to the glacier
+            # Should we consider GCM interpolation?
+            temp = tempds.air.sel(lat=glat, lon=glon, method='nearest')
+            precip = precipds.prate.sel(lat=glat, lon=glon, method='nearest')
 
-        # Currently we just take the mean of the ensemble as default
-        # The GCM climate will correct anyways
-        if ensemble_member is not None:
-            temp = temp.isel(MCrun=ensemble_member)
-            precip = precip.isel(MCrun=ensemble_member)
-        else:
-            temp = temp.mean(dim='MCrun')
-            precip = precip.mean(dim='MCrun')
+            # Currently we just take the mean of the ensemble as default
+            # The GCM climate will correct anyways
+            if ensemble_member is not None:
+                temp = temp.isel(MCrun=ensemble_member)
+                precip = precip.isel(MCrun=ensemble_member)
+            else:
+                temp = temp.mean(dim='MCrun')
+                precip = precip.mean(dim='MCrun')
 
-        # Precip unit is kg/m^2/s we convert to mm month since we apply the anomaly after
-        precip = precip * 30.5 * (60 * 60 * 24)
+    elif version == 'online':
+        with xr.open_dataset(fpath_temp, use_cftime=True) as ods:
+            # Check longitude conventions
+            if ods.lon.min() >= 0 and glon <= 0:
+                glon += 360
 
-        # Back to [-180, 180] for OGGM
-        temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
-        precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
+            temp = ods.tas_sfc.sel(lat=glat, lon=glon, method='nearest')
+            precip = ods.pr_sfc.sel(lat=glat, lon=glon, method='nearest')
+
+    # Precip unit is kg/m^2/s we convert to mm month since we apply the anomaly after
+    precip = precip * 30.5 * (60 * 60 * 24)
+
+    # Back to [-180, 180] for OGGM
+    temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
+    precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
 
     # OK now we have to turn these annual timeseries in monthly data
     # We take the ref climate
@@ -622,9 +645,13 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         loc_pre = ds_ref.prcp.groupby('time.month').mean()
 
         # Make time coord
+        if version == 'v2.1':
+            units = 'days since 0000-01-01 00:00:00'
+        elif version == 'online':
+            units = 'days since 1000-01-01 00:00:00'
+
         t = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] * len(temp))
-        t = cftime.num2date(np.append([0], t[:-1]), 'days since 0000-01-01 00:00:00',
-                            calendar='noleap')
+        t = cftime.num2date(np.append([0], t[:-1]), units, calendar='noleap')
 
         temp = xr.DataArray((loc_tmp.data + temp.data[:, np.newaxis]).flatten(),
                             coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
