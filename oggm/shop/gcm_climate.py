@@ -2,7 +2,6 @@
 # Built ins
 import logging
 from packaging.version import Version
-import warnings
 
 # External libs
 import cftime
@@ -21,8 +20,9 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log, writes=['gcm_data'])
-def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
+def process_gcm_data(gdir, prcp=None, temp=None,
                      year_range=('1961', '1990'), scale_stddev=True,
+                     filesuffix='', output_filesuffix='',
                      time_unit=None, calendar=None, source='',
                      apply_bias_correction=True):
     """ Applies the anomaly method to GCM climate data
@@ -39,8 +39,6 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    filesuffix : str
-        append a suffix to the filename (useful for ensemble experiments).
     prcp : :py:class:`xarray.DataArray`
         | monthly total precipitation [mm month-1]
         | Coordinates:
@@ -58,6 +56,10 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         is `('1961', '1990')`
     scale_stddev : bool
         whether or not to scale the temperature standard deviation as well
+    filesuffix : str
+        same as `output_filesuffix` but deprecated.
+    output_filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
     time_unit : str
         The unit conversion for NetCDF files. It must be adapted to the
         length of the time series. The default is to choose
@@ -73,6 +75,9 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
         observational calibration dataset (true for ISIMIP 3b that is bias-corrected
         to W5E5). !!! We assume that temp is in Kelvin and convert to CELSIUS !!!
     """
+
+    if filesuffix:
+        output_filesuffix = filesuffix
 
     # Standard sanity checks
     months = temp['time.month']
@@ -169,7 +174,7 @@ def process_gcm_data(gdir, filesuffix='', prcp=None, temp=None,
                                         calendar=calendar,
                                         file_name='gcm_data',
                                         source=source,
-                                        filesuffix=filesuffix)
+                                        filesuffix=output_filesuffix)
 
 
 @entity_task(log, writes=['gcm_data'])
@@ -315,13 +320,16 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
         precip = precip * dimo * (60 * 60 * 24)
 
-    process_gcm_data(gdir, filesuffix=output_filesuffix, prcp=precip, temp=temp,
+    process_gcm_data(gdir, output_filesuffix=output_filesuffix,
+                     prcp=precip, temp=temp,
                      year_range=year_range, source=output_filesuffix,
                      apply_bias_correction=apply_bias_correction,
                      **kwargs)
 
+
 @entity_task(log, writes=['gcm_data'])
-def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
+def process_cesm_data(gdir, fpath_temp=None, fpath_precc=None,
+                      filesuffix='', output_filesuffix='',
                       fpath_precl=None, **kwargs):
     """Processes and writes CESM climate data for this glacier.
 
@@ -334,16 +342,21 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
-    filesuffix : str
-        append a suffix to the filename (useful for ensemble experiments).
     fpath_temp : str
         path to the temp file (default: cfg.PATHS['cesm_temp_file'])
     fpath_precc : str
         path to the precc file (default: cfg.PATHS['cesm_precc_file'])
     fpath_precl : str
         path to the precl file (default: cfg.PATHS['cesm_precl_file'])
+    filesuffix : str
+        same as `output_filesuffix` but deprecated.
+    output_filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
+
+    if filesuffix:
+        output_filesuffix = filesuffix
 
     # CESM temperature and precipitation data
     if fpath_temp is None:
@@ -415,13 +428,13 @@ def process_cesm_data(gdir, filesuffix='', fpath_temp=None, fpath_precc=None,
     # Here:
     # - time_unit='days since 0850-01-01 00:00:00'
     # - calendar='noleap'
-    process_gcm_data(gdir, filesuffix=filesuffix, prcp=prcp, temp=temp,
+    process_gcm_data(gdir, output_filesuffix=output_filesuffix, prcp=prcp, temp=temp,
                      time_unit=time_unit, calendar=calendar, **kwargs)
 
 
 @entity_task(log, writes=['gcm_data'])
-def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
-                      fpath_precip=None, y0=None, y1=None,
+def process_cmip_data(gdir, fpath_temp=None, fpath_precip=None, y0=None, y1=None,
+                      filesuffix='', output_filesuffix='',
                       **kwargs):
     """Read, process and store the CMIP5 and CMIP6 climate data for this glacier.
 
@@ -433,8 +446,6 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
 
     Parameters
     ----------
-    filesuffix : str
-        append a suffix to the filename (useful for ensemble experiments).
     fpath_temp : str
         path to the temp file
     fpath_precip : str
@@ -450,8 +461,15 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
         Set this to the end of your projection period
         plus half of bc period. Default is None to process
         the entire time series, same as y0.
+    filesuffix : str
+        same as `output_filesuffix` but deprecated.
+    output_filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
+
+    if filesuffix:
+        output_filesuffix = filesuffix
 
     # Glacier location
     glon = gdir.cenlon
@@ -484,10 +502,8 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
             # are the gcms flattened? if yes,
             # compute all the distances and choose the
             # nearest gridpoint
-            c_tempds = ((tempds.lon - glon) ** 2 +
-                 (tempds.lat - glat) ** 2)
-            c_precipds = ((precipds.lon - glon) ** 2 +
-                        (precipds.lat - glat) ** 2)
+            c_tempds = ((tempds.lon - glon) ** 2 + (tempds.lat - glat) ** 2)
+            c_precipds = ((precipds.lon - glon) ** 2 + (precipds.lat - glat) ** 2)
             temp_0 = tempds.isel(points=np.argmin(c_tempds.data))
             precip_0 = precipds.isel(points=np.argmin(c_precipds.data))
             temp = temp_0.tas
@@ -509,19 +525,25 @@ def process_cmip_data(gdir, filesuffix='', fpath_temp=None,
         dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
         precip = precip * dimo * (60 * 60 * 24)
 
-    process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
-                     source=filesuffix, **kwargs)
+    process_gcm_data(gdir, output_filesuffix=output_filesuffix, prcp=precip, temp=temp,
+                     source=output_filesuffix, **kwargs)
 
 
 @entity_task(log, writes=['gcm_data'])
 def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
-                     year_range=('1951', '1980'), filesuffix='', **kwargs):
+                     ensemble_member=None,
+                     version='v2.1',
+                     year_range=('1951', '1980'),
+                     filesuffix='',
+                     output_filesuffix='',
+                     **kwargs):
     """Read, process and store the Last Millennium Reanalysis (LMR) data for this glacier.
 
-    LMR data: https://atmos.washington.edu/~hakim/lmr/LMRv2/
+    LMR v2.1 data: https://atmos.washington.edu/~hakim/lmr/LMRv2/
+    LMR data:
 
-    LMR data is annualised in anomaly format relative to 1951-1980. We
-    create synthetic timeseries from the reference data.
+    LMR data is annualised in anomaly format relative to 1951-1980. (2.1 or online)
+    We create synthetic timeseries from the reference data.
 
     It stores the data in a format that can be used by the OGGM mass balance
     model and in the glacier directory.
@@ -532,54 +554,86 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         path to the temp file (default: LMR v2.1 from server above)
     fpath_precip : str
         path to the precip file (default: LMR v2.1 from server above)
+    version : str
+        Version is 'v2.1' or 'online'. Default is 'v2.1'. 'online' is the
+        latest version from the server.
     year_range : tuple of str
         the year range for which you want to compute the anomalies. Default
         for LMR is `('1951', '1980')`
+    ensemble_member : int
+        the ensemble member to use (default is the ensemble mean). An
+        integer between 0 and 19.
     filesuffix : str
+        Same as `output_filesuffix` but deprecated
+    output_filesuffix : str
         append a suffix to the filename (useful for ensemble experiments).
 
     **kwargs: any kwarg to be passed to ref:`process_gcm_data`
     """
 
+    if filesuffix:
+        output_filesuffix = filesuffix
+
     # Get the path of GCM temperature & precipitation data
-    base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
-    if fpath_temp is None:
-        with utils.get_lock():
-            fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
-    if fpath_precip is None:
-        with utils.get_lock():
-            fpath_precip = utils.file_downloader(
-                base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+    if version == 'v2.1':
+        base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
+        if fpath_temp is None:
+            with utils.get_lock():
+                fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
+        if fpath_precip is None:
+            with utils.get_lock():
+                fpath_precip = utils.file_downloader(
+                    base_url + 'prate_MCruns_ensemble_mean_LMRv2.1.nc')
+    elif version == 'online':
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/climate/lmr/LMR_Online/'
+        if fpath_temp is None:
+            with utils.get_lock():
+                fpath_temp = utils.file_downloader(base_url + 'spatial_ens_mean.nc')
+    else:
+        raise InvalidParamsError('Version not understood: {}'.format(version))
 
     # Glacier location
     glon = gdir.cenlon
     glat = gdir.cenlat
 
     # Read the GCM files
-    with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
-            xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
+    if version == 'v2.1':
+        with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
+                xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
 
-        # Check longitude conventions
-        if tempds.lon.min() >= 0 and glon <= 0:
-            glon += 360
+            # Check longitude conventions
+            if tempds.lon.min() >= 0 and glon <= 0:
+                glon += 360
 
-        # Take the closest to the glacier
-        # Should we consider GCM interpolation?
-        temp = tempds.air.sel(lat=glat, lon=glon, method='nearest')
-        precip = precipds.prate.sel(lat=glat, lon=glon, method='nearest')
+            # Take the closest to the glacier
+            # Should we consider GCM interpolation?
+            temp = tempds.air.sel(lat=glat, lon=glon, method='nearest')
+            precip = precipds.prate.sel(lat=glat, lon=glon, method='nearest')
 
-        # Currently we just take the mean of the ensemble, although
-        # this is probably not advised. The GCM climate will correct
-        # anyways
-        temp = temp.mean(dim='MCrun')
-        precip = precip.mean(dim='MCrun')
+            # Currently we just take the mean of the ensemble as default
+            # The GCM climate will correct anyways
+            if ensemble_member is not None:
+                temp = temp.isel(MCrun=ensemble_member)
+                precip = precip.isel(MCrun=ensemble_member)
+            else:
+                temp = temp.mean(dim='MCrun')
+                precip = precip.mean(dim='MCrun')
 
-        # Precip unit is kg/m^2/s we convert to mm month since we apply the anomaly after
-        precip = precip * 30.5 * (60 * 60 * 24)
+    elif version == 'online':
+        with xr.open_dataset(fpath_temp, use_cftime=True) as ods:
+            # Check longitude conventions
+            if ods.lon.min() >= 0 and glon <= 0:
+                glon += 360
 
-        # Back to [-180, 180] for OGGM
-        temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
-        precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
+            temp = ods.tas_sfc.sel(lat=glat, lon=glon, method='nearest')
+            precip = ods.pr_sfc.sel(lat=glat, lon=glon, method='nearest')
+
+    # Precip unit is kg/m^2/s we convert to mm month since we apply the anomaly after
+    precip = precip * 30.5 * (60 * 60 * 24)
+
+    # Back to [-180, 180] for OGGM
+    temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
+    precip.lon.values = precip.lon if precip.lon <= 180 else precip.lon - 360
 
     # OK now we have to turn these annual timeseries in monthly data
     # We take the ref climate
@@ -591,9 +645,13 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         loc_pre = ds_ref.prcp.groupby('time.month').mean()
 
         # Make time coord
+        if version == 'v2.1':
+            units = 'days since 0000-01-01 00:00:00'
+        elif version == 'online':
+            units = 'days since 1000-01-01 00:00:00'
+
         t = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] * len(temp))
-        t = cftime.num2date(np.append([0], t[:-1]), 'days since 0000-01-01 00:00:00',
-                            calendar='noleap')
+        t = cftime.num2date(np.append([0], t[:-1]), units, calendar='noleap')
 
         temp = xr.DataArray((loc_tmp.data + temp.data[:, np.newaxis]).flatten(),
                             coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
@@ -605,6 +663,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         precip = xr.DataArray(precip, dims=('time',),
                               coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
 
-    process_gcm_data(gdir, filesuffix=filesuffix, prcp=precip, temp=temp,
+    process_gcm_data(gdir, output_filesuffix=output_filesuffix,
+                     prcp=precip, temp=temp,
                      year_range=year_range, calendar='noleap',
                      source='lmr', **kwargs)
