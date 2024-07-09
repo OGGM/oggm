@@ -48,9 +48,9 @@ jobs:
         if: failure()
         run: |
           SANITIZED_NAME="pytest-mpl-results-${{ matrix.test-env }}-${{ matrix.container }}"
-          SANITIZED_NAME="${SANITIZED_NAME/:/_}"
-          SANITIZED_NAME="${SANITIZED_NAME/\//_}"
-          SANITIZED_NAME="${SANITIZED_NAME/./_}"
+          SANITIZED_NAME="${SANITIZED_NAME//:/_}"
+          SANITIZED_NAME="${SANITIZED_NAME//\//_}"
+          SANITIZED_NAME="${SANITIZED_NAME//./_}"
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
       - name: Upload pytest-mpl artifacts
         if: failure()
