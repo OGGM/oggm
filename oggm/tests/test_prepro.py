@@ -122,7 +122,6 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
         # This is not guaranteed to be equal because of projection issues
         np.testing.assert_allclose(extent, gdir.extent_ll, atol=1e-5)
-        warnings.filterwarnings("error")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
             # Warning in salem

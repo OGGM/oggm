@@ -2977,7 +2977,7 @@ class GlacierDirectory(object):
                 gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
                 if hasattr(gdf.crs, 'srs'):
                     # salem uses pyproj
-                    gdf.crs = gdf.crs.srs
+                    gdf.set_crs(gdf.crs.srs, allow_override=True, inplace=True)
                 self.write_shapefile(gdf, 'intersects')
         else:
             # Sanity check
