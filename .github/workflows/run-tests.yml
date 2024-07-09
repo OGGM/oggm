@@ -46,6 +46,7 @@ jobs:
       - name: Normalize Artifact Name
         id: sanitize-name
         if: failure()
+        shell: bash
         run: |
           SANITIZED_NAME="pytest-mpl-results-${{ matrix.test-env }}-${{ matrix.container }}"
           SANITIZED_NAME="${SANITIZED_NAME//:/_}"
