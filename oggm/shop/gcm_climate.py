@@ -579,7 +579,8 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         base_url = 'https://atmos.washington.edu/%7Ehakim/lmr/LMRv2/'
         if fpath_temp is None:
             with utils.get_lock():
-                fpath_temp = utils.file_downloader(base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
+                fpath_temp = utils.file_downloader(
+                    base_url + 'air_MCruns_ensemble_mean_LMRv2.1.nc')
         if fpath_precip is None:
             with utils.get_lock():
                 fpath_precip = utils.file_downloader(
@@ -667,3 +668,126 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                      prcp=precip, temp=temp,
                      year_range=year_range, calendar='noleap',
                      source='lmr', **kwargs)
+
+
+@entity_task(log, writes=['gcm_data'])
+def process_modera_data(gdir, fpath_temp=None, fpath_precip=None,
+                        y0=None, y1=None,
+                        year_range=('1901', '2000'),
+                        ensemble_member=None,
+                        output_filesuffix='',
+                        **kwargs):
+    """Read, process and store the ModE-RA climate data for this glacier.
+
+    ModE-RA data was downloaded from WDCC and added to the cluster for
+    easy download.
+
+    Data contains anomalies with respect to the period 1901-2000.
+
+    Parameters
+    ----------
+    fpath_temp : str
+        path to the precip file. Defaults to the ensemble statistics
+        on server or ensemble member on server.
+    fpath_precip : str
+        path to the precip file. Defaults to the ensemble statistics
+        on server or ensemble member on server.
+    y0 : int
+        start year of the data processing.
+        Default is None which processes the entire timeseries.
+        Set this to make process_cmip_data faster if you
+        can afford a shorter period.
+    y1 : int
+        end year of the data processing.
+        Default is None which processes the entire timeseries.
+        Set this to make process_cmip_data faster if you
+        can afford a shorter period.
+    year_range : tuple of str
+        the year range for which you want to compute the anomalies.
+        We default to the period 1901-2000 which is the reference period
+        for the anomalies.
+    ensemble_member : int
+        the ensemble member to use (default is the ensemble mean). An
+        integer between 0 and 19.
+    output_filesuffix : str
+        append a suffix to the filename (useful for ensemble experiments).
+    **kwargs: any kwarg to be passed to ref:`process_gcm_data`
+    """
+
+    # Glacier location
+    glon = gdir.cenlon
+    glat = gdir.cenlat
+
+    if y0 is not None:
+        y0 = str(y0)
+    if y1 is not None:
+        y1 = str(y1)
+
+    # Get the path of GCM temperature & precipitation data
+    if fpath_temp is None:
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/climate/ModE-RA/'
+        if ensemble_member is None:
+            base_url += 'ens_stats/'
+        else:
+            base_url += 'ens_members/'
+
+        if fpath_temp is None:
+            file_url = 'ModE-RA_ensmean_temp2_anom_wrt_1901-2000_1421-2008_mon.nc'
+            if ensemble_member is not None:
+                eid = int(ensemble_member) + 41
+                file_url = f'ModE-RA_m0{eid}_temp2_anom_wrt_1901-2000_1421-2008_mon.nc'
+            with utils.get_lock():
+                fpath_temp = utils.file_downloader(base_url + file_url)
+        if fpath_precip is None:
+            file_url = 'ModE-RA_ensmean_totprec_anom_wrt_1901-2000_1421-2008_mon.nc'
+            if ensemble_member is not None:
+                eid = int(ensemble_member) + 41
+                file_url = f'ModE-RA_m0{eid}_totprec_anom_wrt_1901-2000_1421-2008_mon.nc'
+            with utils.get_lock():
+                fpath_precip = utils.file_downloader(base_url + file_url)
+
+    # Read the GCM files
+    with xr.open_dataarray(fpath_temp, use_cftime=True) as tempds, \
+            xr.open_dataarray(fpath_precip, use_cftime=True) as precipds:
+
+        # only process and save the gcm data selected --> saves some time!
+        if (y0 is not None) or (y1 is not None):
+            tempds = tempds.sel(time=slice(y0, y1))
+            precipds = precipds.sel(time=slice(y0, y1))
+
+        # Take the closest to the glacier
+        # Should we consider GCM interpolation?
+        temp = tempds.sel(latitude=glat, longitude=glon, method='nearest')
+        precip = precipds.sel(latitude=glat, longitude=glon, method='nearest')
+
+        # Rename coords
+        temp = temp.rename({'longitude': 'lon', 'latitude': 'lat'})
+        precip = precip.rename({'longitude': 'lon', 'latitude': 'lat'})
+
+        # Convert kg m-2 s-1 to mm mth-1 => 1 kg m-2 = 1 mm !!!
+        assert 'kg m-2 s-1' in precip.units, 'Precip units not understood'
+
+        ny, r = divmod(len(temp), 12)
+        assert r == 0
+        dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
+        precip = precip * dimo * (60 * 60 * 24)
+
+        # Now add the anomalies to the reference data
+        # We take the ref climate
+        fpath = gdir.get_filepath('climate_historical')
+        with xr.open_dataset(fpath) as ds_ref:
+            ds_ref = ds_ref.sel(time=slice(*year_range))
+
+            loc_tmp = ds_ref.temp.groupby('time.month').mean()
+            loc_pre = ds_ref.prcp.groupby('time.month').mean()
+
+        # Add this to the anomalies
+        temp = np.tile(loc_tmp.data, ny) + temp
+        precip = np.tile(loc_pre.data, ny) + precip
+
+        # Anomalies are bad and precip can be negative
+        precip = utils.clip_min(precip, 0)
+
+    process_gcm_data(gdir, output_filesuffix=output_filesuffix, prcp=precip, temp=temp,
+                     source=output_filesuffix, year_range=year_range, calendar='noleap',
+                     **kwargs)
