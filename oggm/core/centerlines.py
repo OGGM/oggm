@@ -685,8 +685,8 @@ def _make_costgrid(mask, ext, z):
     numpy.array of the costgrid
     """
 
-    dis = np.where(mask, distance_transform_edt(mask), np.NaN)
-    z = np.where(mask, z, np.NaN)
+    dis = np.where(mask, distance_transform_edt(mask), np.nan)
+    z = np.where(mask, z, np.nan)
 
     dmax = np.nanmax(dis)
     zmax = np.nanmax(z)
@@ -1132,8 +1132,8 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     for ic, (cc, dontcomp) in enumerate(zip(cs, donot_compute)):
 
         if dontcomp:
-            bed.append(np.NaN)
-            terrain_heights.append(np.NaN)
+            bed.append(np.nan)
+            terrain_heights.append(np.nan)
             continue
 
         z = []
@@ -1154,8 +1154,8 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
         # find local minima in set of distances
         extr = scipy.signal.argrelextrema(dsts, np.less, mode='wrap')
         if len(extr[0]) == 0:
-            bed.append(np.NaN)
-            terrain_heights.append(np.NaN)
+            bed.append(np.nan)
+            terrain_heights.append(np.nan)
             continue
 
         # from local minima find that with the minimum |x|
@@ -1190,7 +1190,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
         if err < 1.5:
             bed.append(p2[0])
         else:
-            bed.append(np.NaN)
+            bed.append(np.nan)
 
     terrain_heights = np.asarray(terrain_heights)
     assert len(terrain_heights) == idl.nx, 'len(terrain_heights) == idl.nx'
@@ -1207,7 +1207,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # interpolation, filling the gaps
     default = cfg.PARAMS['default_parabolic_bedshape']
     bed_int = interp_nans(bed, default=default)
-    default = 100.  # assume a default terrain height of 100 m if all NaN
+    default = 100.  # assume a default terrain height of 100 m if all nan
     terrain_heights = interp_nans(terrain_heights, default=default)
 
     # We forbid super small shapes (important! This can lead to huge volumes)
@@ -1396,7 +1396,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
                 oline = l
                 break
         if oline is None:
-            return np.NaN, shpg.MultiLineString()
+            return np.nan, shpg.MultiLineString()
         line = oline
     else:
         extext = 'Geometry collection not expected: {}'.format(line.geom_type)
@@ -1409,7 +1409,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
         try:
             line = shpg.MultiLineString([line])
         except shapely.errors.EmptyPartError:
-            return np.NaN, shpg.MultiLineString()
+            return np.nan, shpg.MultiLineString()
     elif line.geom_type == 'MultiLineString':
         pass  # nothing to be done
     elif line.geom_type == 'GeometryCollection':
@@ -1419,7 +1419,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
                 continue
             oline.append(l)
         if len(oline) == 0:
-            return np.NaN, shpg.MultiLineString()
+            return np.nan, shpg.MultiLineString()
         line = shpg.MultiLineString(oline)
     else:
         extext = 'Geometry collection not expected: {}'.format(line.geom_type)
@@ -1432,7 +1432,7 @@ def _point_width(normals, point, centerline, poly, poly_no_nunataks):
 
 
 def _filter_small_slopes(hgt, dx, min_slope):
-    """Masks out slopes with NaN until the slope if all valid points is at
+    """Masks out slopes with nan until the slope if all valid points is at
     least min_slope (in radians).
     """
 
@@ -1441,7 +1441,7 @@ def _filter_small_slopes(hgt, dx, min_slope):
     slope[-1] = min_slope
 
     # Find the locs where it doesn't work and expand till we got everything
-    slope_mask = np.where(slope >= min_slope, slope, np.NaN)
+    slope_mask = np.where(slope >= min_slope, slope, np.nan)
     r, nr = label(~np.isfinite(slope_mask))
     for objs in find_objects(r):
         obj = objs[0]
@@ -1456,9 +1456,9 @@ def _filter_small_slopes(hgt, dx, min_slope):
             current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
             if i0 <= 0 or current_slope[0] >= min_slope:
                 break
-        slope_mask[i0:obj.stop] = np.NaN
+        slope_mask[i0:obj.stop] = np.nan
     out = hgt.copy()
-    out[~np.isfinite(slope_mask)] = np.NaN
+    out[~np.isfinite(slope_mask)] = np.nan
     return out
 
 
@@ -1488,7 +1488,7 @@ def _filter_for_altitude_range(widths, wlines, topo):
             altrange = topo[yc, xc]
             if len(np.where(np.isfinite(altrange))[0]) != 0:
                 if (np.nanmax(altrange) - np.nanmin(altrange)) > alt_range_th:
-                    out_width[i] = np.NaN
+                    out_width[i] = np.nan
 
         valid = np.where(np.isfinite(out_width))
         if len(valid[0]) > 0:
@@ -1840,8 +1840,8 @@ def catchment_width_geom(gdir):
         topo = nc.variables['topo'][:]
         mask_ext = nc.variables['glacier_ext'][:]
         mask_glacier = nc.variables['glacier_mask'][:]
-    topo[np.where(mask_glacier == 0)] = np.NaN
-    topo[np.where(mask_ext == 1)] = np.NaN
+    topo[np.where(mask_glacier == 0)] = np.nan
+    topo[np.where(mask_ext == 1)] = np.nan
 
     # Intersects between catchments/glaciers
     gdfi = gpd.GeoDataFrame(columns=['geometry'])
@@ -1906,7 +1906,7 @@ def catchment_width_geom(gdir):
         for fid in fl.inflow_indices:
             i0 = int(utils.clip_scalar(fid-jpix, jpix/2, n-jpix/2))
             i1 = int(utils.clip_scalar(fid+jpix+1, jpix/2, n-jpix/2))
-            fil_widths[i0:i1] = np.NaN
+            fil_widths[i0:i1] = np.nan
 
         valid = np.where(np.isfinite(fil_widths))
         if len(valid[0]) == 0:
@@ -1932,7 +1932,7 @@ def catchment_width_geom(gdir):
 
 @entity_task(log, writes=['inversion_flowlines'])
 def catchment_width_correction(gdir):
-    """Corrects for NaNs and inconsistencies in the geometrical widths.
+    """Corrects for nans and inconsistencies in the geometrical widths.
 
     Interpolates missing values, ensures consistency of the
     surface-area distribution AND with the geometrical area of the glacier
@@ -1956,7 +1956,7 @@ def catchment_width_correction(gdir):
     with utils.ncDataset(fpath) as nc:
         topo = nc.variables['topo'][:]
         ext = nc.variables['glacier_ext'][:]
-    topo[np.where(ext == 1)] = np.NaN
+    topo[np.where(ext == 1)] = np.nan
 
     # Param
     nmin = int(cfg.PARAMS['min_n_per_bin'])
@@ -2103,7 +2103,7 @@ def terminus_width_correction(gdir, new_width=None):
 
     # Change the value and interpolate
     width = copy.deepcopy(fl.widths)
-    width[-5:] = np.NaN
+    width[-5:] = np.nan
     width[-1] = new_width / mapdx
     width = utils.interp_nans(width)
 
@@ -2281,7 +2281,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
             # Ignored in this case - which I believe is strange because deltaH
             # should be larger for the previous bin, but this is what they do
             # according to Zekollari 2019 review
-            df.loc[bi, 'area'] = np.NaN
+            df.loc[bi, 'area'] = np.nan
             continue
         df.loc[bi, 'area'] = bin_area
 
@@ -2318,11 +2318,11 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     df['dx'] = bsize / np.tan(df['slope'])
     df['width'] = df['area'] / df['dx']
 
-    # Remove possible NaNs from above
+    # Remove possible nans from above
     if not bin_variables:
         df = df.dropna()
     else:
-        # only remove if all bin_variables are NaN
+        # only remove if all bin_variables are nan
         df = df.dropna(how='all', subset=bin_variables)
 
     # Check for binned vars

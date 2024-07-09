@@ -51,12 +51,12 @@ def test_surf_to_nan():
     surf = np.array([1., 0, 0, 0, 1])
     thick = np.array([1, 0, 0, 0, 1])
     sh = graphics.surf_to_nan(surf, thick)
-    np.testing.assert_allclose(sh, [1, 0, np.NaN, 0, 1])
+    np.testing.assert_allclose(sh, [1, 0, np.nan, 0, 1])
 
     surf = np.array([1., 0, 0, 0, 0, 1])
     thick = np.array([1, 0, 0, 0, 0, 1])
     sh = graphics.surf_to_nan(surf, thick)
-    np.testing.assert_allclose(sh, [1, 0, np.NaN, np.NaN, 0, 1])
+    np.testing.assert_allclose(sh, [1, 0, np.nan, np.nan, 0, 1])
 
     surf = np.array([1., 0, 1, 0, 1])
     thick = np.array([1, 0, 1, 0, 1])

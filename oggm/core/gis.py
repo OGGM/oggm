@@ -653,8 +653,8 @@ def read_geotiff_dem(gdir=None, fpath=None):
 
     with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
-        topo[topo <= -999.] = np.NaN
-        topo[ds.read_masks(1) == 0] = np.NaN
+        topo[topo <= -999.] = np.nan
+        topo[ds.read_masks(1) == 0] = np.nan
     return topo
 
 
@@ -788,7 +788,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
     if np.any(~valid_mask):
         # We interpolate
         if np.sum(~valid_mask) > (0.25 * nx * ny) and gdir is not None:
-            log.info('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
+            log.info('({}) more than 25% nans in DEM'.format(gdir.rgi_id))
         pnan = np.nonzero(~valid_mask)
         pok = np.nonzero(valid_mask)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
@@ -809,7 +809,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
 
     isfinite = np.isfinite(dem)
     if np.any(~isfinite):
-        # interpolation will still leave NaNs in DEM:
+        # interpolation will still leave nans in DEM:
         # extrapolate with NN if needed (e.g. coastal areas)
         pnan = np.nonzero(~isfinite)
         pok = np.nonzero(isfinite)
@@ -1528,7 +1528,7 @@ def gridded_mb_attributes(gdir):
         topo_2d = nc.variables['topo_smoothed'][:]
         glacier_mask_2d = nc.variables['glacier_mask'][:]
         glacier_mask_2d = glacier_mask_2d == 1
-        catchment_mask_2d = glacier_mask_2d * np.NaN
+        catchment_mask_2d = glacier_mask_2d * np.nan
 
     topo = topo_2d[glacier_mask_2d]
 
@@ -1563,9 +1563,9 @@ def gridded_mb_attributes(gdir):
                            .format(np.sum(oggm_mb_on_z)))
 
     # Altitude based mass balance
-    catch_area_above_z = topo * np.NaN
-    lin_mb_above_z = topo * np.NaN
-    oggm_mb_above_z = topo * np.NaN
+    catch_area_above_z = topo * np.nan
+    lin_mb_above_z = topo * np.nan
+    oggm_mb_above_z = topo * np.nan
     for i, h in enumerate(topo):
         catch_area_above_z[i] = np.sum(topo >= h) * dx2
         lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h]) * dx2
@@ -1573,7 +1573,7 @@ def gridded_mb_attributes(gdir):
 
     # Make 2D again
     def _fill_2d_like(data):
-        out = topo_2d * np.NaN
+        out = topo_2d * np.nan
         out[glacier_mask_2d] = data
         return out
 
@@ -1637,9 +1637,9 @@ def gridded_mb_attributes(gdir):
 
     catchment_mask = catchment_mask_2d[glacier_mask_2d].astype(int)
 
-    catchment_area = topo * np.NaN
-    lin_mb_above_z_on_catch = topo * np.NaN
-    oggm_mb_above_z_on_catch = topo * np.NaN
+    catchment_area = topo * np.nan
+    lin_mb_above_z_on_catch = topo * np.nan
+    oggm_mb_above_z_on_catch = topo * np.nan
 
     # First, find all inflows indices and min altitude per catchment
     inflows = []

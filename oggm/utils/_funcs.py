@@ -206,10 +206,10 @@ def haversine(lon1, lat1, lon2, lat2):
 
 
 def interp_nans(array, default=None):
-    """Interpolate NaNs using np.interp.
+    """Interpolate nans using np.interp.
 
     np.interp is reasonable in that it does not extrapolate, it replaces
-    NaNs at the bounds with the closest valid value.
+    nans at the bounds with the closest valid value.
     """
 
     _tmp = array.copy()
@@ -895,7 +895,7 @@ def shape_factor_adhikari(widths, heights, is_rectangular):
         zetas[~is_rectangular])
 
     shape_factors = clip_array(shape_factors, 0.2, 1.)
-    # Set NaN values resulting from zero height to a shape factor of 1
+    # Set nan values resulting from zero height to a shape factor of 1
     shape_factors[np.isnan(shape_factors)] = 1.
 
     return shape_factors

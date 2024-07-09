@@ -137,9 +137,9 @@ def dummy_mixed_bed(deflambdas=3.5, map_dx=100., mixslice=None):
     bed_h = surface_h
     shape = surface_h * 0. + 3.e-03
     if mixslice:
-        shape[mixslice] = np.NaN
+        shape[mixslice] = np.nan
     else:
-        shape[10:20] = np.NaN
+        shape[10:20] = np.nan
     is_trapezoid = ~np.isfinite(shape)
     lambdas = shape * 0.
     lambdas[is_trapezoid] = deflambdas
@@ -165,7 +165,7 @@ def dummy_mixed_trap_rect_bed(deflambdas=2., map_dx=100., mixslice=None):
 
     surface_h = np.linspace(3000, 1000, nx)
     bed_h = surface_h
-    shape = np.ones(nx) * np.NaN
+    shape = np.ones(nx) * np.nan
     is_trapezoid = ~np.isfinite(shape)
     lambdas = shape * 0.
     lambdas[is_trapezoid] = deflambdas

@@ -123,7 +123,7 @@ class TestSouthGlacier(unittest.TestCase):
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
 
         mbref = mbref.get_vardata()
-        mbref[mbref == -9999] = np.NaN
+        mbref[mbref == -9999] = np.nan
         demref = demref.get_vardata()[np.isfinite(mbref)]
         mbref = mbref[np.isfinite(mbref)] * 1000
 
@@ -289,7 +289,7 @@ class TestSouthGlacier(unittest.TestCase):
             v = ds.distributed_thickness_int
             df['oggm_int'] = v.isel(x=('z', df['i']), y=('z', df['j']))
 
-            ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.NaN
+            ds['ref'] = xr.zeros_like(ds.distributed_thickness_int) * np.nan
             ds['ref'].data[df['j'], df['i']] = df['thick']
 
         rmsd_int = ((df.oggm_int - df.thick) ** 2).mean() ** .5
@@ -379,7 +379,7 @@ class TestSouthGlacier(unittest.TestCase):
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             df['oggm'] = ds.distributed_thickness.isel(x=('z', df['i']),
                                                        y=('z', df['j']))
-            ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.NaN
+            ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.nan
             ds['ref'].data[df['j'], df['i']] = df['thick']
 
         rmsd = ((df.oggm - df.thick) ** 2).mean() ** .5

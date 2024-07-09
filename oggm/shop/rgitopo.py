@@ -152,8 +152,8 @@ def dem_quality_check(gdir):
             with rasterio.open(os.path.join(gdir.dir, s, 'dem.tif'), 'r',
                                driver='GTiff') as ds:
                 topo = ds.read(1).astype(rasterio.float32)
-                topo[topo <= -999.] = np.NaN
-                topo[ds.read_masks(1) == 0] = np.NaN
+                topo[topo <= -999.] = np.nan
+                topo[ds.read_masks(1) == 0] = np.nan
             valid_mask = np.isfinite(topo) & mask
             if np.all(~valid_mask):
                 continue
