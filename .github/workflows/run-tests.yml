@@ -47,7 +47,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-mpl-results
+          name: pytest-mpl-results-${{ matrix.test-env }}-${{ matrix.container }}
           path: /tmp/oggm-mpl-results/
       - name: Upload Coverage
         if: ${{ !contains(matrix.container, 'py3') }}
