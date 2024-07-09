@@ -43,11 +43,20 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
+      - name: Normalize Artifact Name
+        id: sanitize-name
+        if: failure()
+        run: |
+          SANITIZED_NAME="pytest-mpl-results-${{ matrix.test-env }}-${{ matrix.container }}"
+          SANITIZED_NAME="${SANITIZED_NAME/:/_}"
+          SANITIZED_NAME="${SANITIZED_NAME/\//_}"
+          SANITIZED_NAME="${SANITIZED_NAME/./_}"
+          echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
       - name: Upload pytest-mpl artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-mpl-results-${{ matrix.test-env }}-${{ matrix.container }}
+          name: "${{ steps.sanitize-name.outputs.sanitized_name }}"
           path: /tmp/oggm-mpl-results/
       - name: Upload Coverage
         if: ${{ !contains(matrix.container, 'py3') }}
