@@ -215,7 +215,7 @@ def plot_googlemap(gdirs, ax=None, figsize=None, key=None):
                              ' or set the STATIC_MAP_API_KEY environment'
                              ' variable.')
 
-    log.workflow(f'plot_googlemap Google API key: {key[:4]}...{key[-4:]}')
+    log.workflow(f'API key. Len: {len(key)}. Type: {type(key)} Value: {key[:4]}...{key[-4:]}')
 
     dofig = False
     if ax is None:
