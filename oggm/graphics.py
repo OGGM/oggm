@@ -215,6 +215,9 @@ def plot_googlemap(gdirs, ax=None, figsize=None, key=None):
                              ' or set the STATIC_MAP_API_KEY environment'
                              ' variable.')
 
+    if 'o-Z' not in key:
+        raise ValueError(f'What is this key: {key}')
+
     dofig = False
     if ax is None:
         fig = plt.figure(figsize=figsize)
