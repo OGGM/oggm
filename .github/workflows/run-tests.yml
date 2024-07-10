@@ -43,6 +43,8 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
+        env:
+          STATIC_MAP_API_KEY: ${{ secrets.STATIC_MAP_API_KEY }}
       - name: Normalize Artifact Name
         id: sanitize-name
         if: failure()
