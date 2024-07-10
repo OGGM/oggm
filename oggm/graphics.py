@@ -204,8 +204,16 @@ def _plot_map(plotfunc):
     return newplotfunc
 
 
-def plot_googlemap(gdirs, ax=None, figsize=None):
+def plot_googlemap(gdirs, ax=None, figsize=None, key=None):
     """Plots the glacier(s) over a googlemap."""
+
+    if key is None:
+        try:
+            key = os.environ['STATIC_MAP_API_KEY']
+        except KeyError:
+            raise ValueError('You need to provide a Google API key'
+                             ' or set the STATIC_MAP_API_KEY environment'
+                             ' variable.')
 
     dofig = False
     if ax is None:
@@ -220,7 +228,7 @@ def plot_googlemap(gdirs, ax=None, figsize=None):
         xx.extend(gdir.extent_ll[0])
         yy.extend(gdir.extent_ll[1])
 
-    gm = salem.GoogleVisibleMap(xx, yy)
+    gm = salem.GoogleVisibleMap(xx, yy, key=key)
 
     img = gm.get_vardata()
     cmap = salem.Map(gm.grid, countries=False, nx=gm.grid.nx)
