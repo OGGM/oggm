@@ -440,7 +440,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         df = utils.compile_glacier_statistics(gdirs)
         df['inv_thickness_m'] = df['inv_volume_km3'] / df['rgi_area_km2'] * 1e3
-        assert df.inv_thickness_m[0] < 100
+        assert df.inv_thickness_m.iloc[0] < 100
 
         df = utils.compile_fixed_geometry_mass_balance(gdirs)
         assert len(df) > 100

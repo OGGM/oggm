@@ -356,7 +356,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
             data = data.loc[cache_path]
             if data['size'] != size or bytes(data['sha256']) != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path, size, sha256.hex(), data[0], data[1].hex())
+                    path, size, sha256.hex(), data.iloc[0], data.iloc[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
             cfg.DL_VERIFIED[cache_obj_name] = True

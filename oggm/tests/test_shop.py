@@ -591,7 +591,7 @@ class Test_climate_datasets:
         dfp = pd.concat(dfp, axis=1, keys=exps)
 
         # Common period
-        dfy = dft.resample('AS').mean().dropna().iloc[1:]
+        dfy = dft.resample('YS').mean().dropna().iloc[1:]
         dfm = dft.groupby(dft.index.month).mean()
         assert dfy.corr().min().min() > 0.44  # ERA5L and CERA do no correlate
         assert dfm.corr().min().min() > 0.97
@@ -610,7 +610,7 @@ class Test_climate_datasets:
 
         # PRECIP
         # Common period
-        dfy = dfp.resample('AS').mean().dropna().iloc[1:] * 12
+        dfy = dfp.resample('YS').mean().dropna().iloc[1:] * 12
         dfm = dfp.groupby(dfp.index.month).mean()
         assert dfy.corr().min().min() > 0.5
         assert dfm.corr().min().min() > 0.8

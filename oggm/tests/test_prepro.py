@@ -389,7 +389,7 @@ class TestGIS(unittest.TestCase):
         dfh.index = ['oggm']
         dft = dfh[bins].T
         dft['ref'] = dfr[bins].T
-        assert dft.sum()[0] == 1000
+        assert dft.sum().iloc[0] == 1000
         assert utils.rmsd(dft['ref'], dft['oggm']) < 5
 
     @pytest.mark.skipif((Version(rasterio.__version__) <
