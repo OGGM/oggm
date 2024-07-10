@@ -45,6 +45,8 @@ from oggm.shop.gcm_climate import process_gcm_data
 from oggm.shop.gcm_climate import process_cesm_data
 from oggm.shop.gcm_climate import process_monthly_isimip_data
 from oggm.shop.gcm_climate import process_cmip_data
+from oggm.shop.gcm_climate import process_lmr_data
+from oggm.shop.gcm_climate import process_modera_data
 from oggm.core.inversion import prepare_for_inversion
 from oggm.core.inversion import mass_conservation_inversion
 from oggm.core.inversion import filter_inversion_output
