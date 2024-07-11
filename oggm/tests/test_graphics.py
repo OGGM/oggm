@@ -64,6 +64,7 @@ def test_surf_to_nan():
     np.testing.assert_allclose(sh, [1, 0, 1, 0, 1])
 
 
+@pytest.mark.static_map
 @pytest.mark.internet
 @pytest.mark.graphic
 @mpl_image_compare(tolerance=26)
