@@ -1414,12 +1414,12 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
     ds['calendar_month'].attrs['description'] = 'Calendar month'
 
     shape = (len(time), len(rgi_ids))
-    temp = np.zeros(shape) * np.NaN
-    prcp = np.zeros(shape) * np.NaN
+    temp = np.zeros(shape) * np.nan
+    prcp = np.zeros(shape) * np.nan
 
-    ref_hgt = np.zeros(len(rgi_ids)) * np.NaN
-    ref_pix_lon = np.zeros(len(rgi_ids)) * np.NaN
-    ref_pix_lat = np.zeros(len(rgi_ids)) * np.NaN
+    ref_hgt = np.zeros(len(rgi_ids)) * np.nan
+    ref_pix_lon = np.zeros(len(rgi_ids)) * np.nan
+    ref_pix_lat = np.zeros(len(rgi_ids)) * np.nan
 
     for i, gdir in enumerate(gdirs):
         try:
@@ -1924,7 +1924,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 
     for idx, s in enumerate(out_df):
         if s is None:
-            out_df[idx] = pd.Series(np.NaN)
+            out_df[idx] = pd.Series(np.nan)
 
     out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
     out = out.dropna(axis=0, how='all')
@@ -2004,7 +2004,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
 
     for idx, s in enumerate(out_df):
         if s is None:
-            out_df[idx] = pd.Series(np.NaN)
+            out_df[idx] = pd.Series(np.nan)
 
     out = pd.concat(out_df, axis=1, keys=[gd.rgi_id for gd in gdirs])
     out = out.dropna(axis=0, how='all')
@@ -2106,7 +2106,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                     d[fs + '_mb_grad'] = mb_slope
                 except BaseException:
                     # we don't mind if something goes wrong
-                    d[fs + '_mb_grad'] = np.NaN
+                    d[fs + '_mb_grad'] = np.nan
                 d[fs + '_ela_h'] = mbmod.get_ela()
                 # Climate
                 t, tm, p, ps = mbmod.flowline_mb_models[0].get_annual_climate(
@@ -2404,7 +2404,7 @@ def extend_past_climate_run(past_run_file=None,
         ods = ods.rename(dict((o, o.replace('_ext', ''))
                               for o in ods.data_vars))
 
-        # Remove t0 (which is NaN)
+        # Remove t0 (which is nan)
         ods = ods.isel(time=slice(1, None))
 
         # To file?
@@ -2977,7 +2977,7 @@ class GlacierDirectory(object):
                 gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
                 if hasattr(gdf.crs, 'srs'):
                     # salem uses pyproj
-                    gdf.crs = gdf.crs.srs
+                    gdf.set_crs(gdf.crs.srs, allow_override=True, inplace=True)
                 self.write_shapefile(gdf, 'intersects')
         else:
             # Sanity check

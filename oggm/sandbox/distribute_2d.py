@@ -132,8 +132,8 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         topo_data = ds[topo_variable].data.copy()
         glacier_mask = ds.glacier_mask.data == 1
         topo_data_flat = topo_data[glacier_mask]
-        band_index = topo_data * np.NaN  # container
-        per_band_rank = topo_data * np.NaN  # container
+        band_index = topo_data * np.nan  # container
+        per_band_rank = topo_data * np.nan  # container
         distrib_thick = ds.distributed_thickness.data
 
     # For the flowline we need the model flowlines only
@@ -388,7 +388,7 @@ def distribute_thickness_from_simulation(gdir,
 
         if np.isclose(this_vol, 0, atol=1e-6):
             # No ice left
-            new_thick = np.NaN
+            new_thick = np.nan
         else:
             # Smooth
             dx = gdir.grid.dx
@@ -397,7 +397,7 @@ def distribute_thickness_from_simulation(gdir,
                     smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
                 new_thick = gaussian_blur(new_thick, int(smooth_radius))
 
-            new_thick[~this_glacier_mask] = np.NaN
+            new_thick[~this_glacier_mask] = np.nan
 
             # Conserve volume
             tmp_vol = np.nansum(new_thick) * dx2

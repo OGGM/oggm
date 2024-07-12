@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def pytest_configure(config):
     for marker in ["slow", "download", "creds", "internet", "test_env",
-                   "graphic "]:
+                   "graphic", "static_map"]:
         config.addinivalue_line("markers", marker)
     if config.pluginmanager.hasplugin('xdist'):
         try:
@@ -57,6 +57,8 @@ def pytest_collection_modifyitems(config, items):
     skip_download = not use_internet or not config.getoption("--run-download")
     skip_cred = skip_download or not config.getoption("--run-creds")
     run_test_env = config.getoption("--run-test-env")
+    skip_static = (("STATIC_MAP_API_KEY" not in os.environ) or
+                   (not os.environ.get("STATIC_MAP_API_KEY")))
 
     slow_marker = pytest.mark.skip(reason="need --run-slow option to run")
     download_marker = pytest.mark.skip(reason="need --run-download option to "
@@ -65,6 +67,7 @@ def pytest_collection_modifyitems(config, items):
     cred_marker = pytest.mark.skip(reason="need --run-creds option to run, "
                                           "internet access is required")
     internet_marker = pytest.mark.skip(reason="internet access is required")
+    static_marker = pytest.mark.skip(reason="requires STATIC_MAP_API_KEY env variable")
     test_env_marker = pytest.mark.skip(reason="only test_env=%s tests are run"
                                               % run_test_env)
     graphic_marker = pytest.mark.skip(reason="requires mpl V1.5+ and "
@@ -77,6 +80,8 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(download_marker)
         if skip_cred and "creds" in item.keywords:
             item.add_marker(cred_marker)
+        if skip_static and "static_map" in item.keywords:
+            item.add_marker(static_marker)
         if not use_internet and "internet" in item.keywords:
             item.add_marker(internet_marker)
 

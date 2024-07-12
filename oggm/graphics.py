@@ -72,7 +72,7 @@ def surf_to_nan(surf_h, thick):
     t2 = thick[1:-1]
     t3 = thick[2:]
     pnan = ((t1 == 0) & (t2 == 0)) & ((t2 == 0) & (t3 == 0))
-    surf_h[np.where(pnan)[0] + 1] = np.NaN
+    surf_h[np.where(pnan)[0] + 1] = np.nan
     return surf_h
 
 
@@ -204,8 +204,16 @@ def _plot_map(plotfunc):
     return newplotfunc
 
 
-def plot_googlemap(gdirs, ax=None, figsize=None):
+def plot_googlemap(gdirs, ax=None, figsize=None, key=None):
     """Plots the glacier(s) over a googlemap."""
+
+    if key is None:
+        try:
+            key = os.environ['STATIC_MAP_API_KEY']
+        except KeyError:
+            raise ValueError('You need to provide a Google API key'
+                             ' or set the STATIC_MAP_API_KEY environment'
+                             ' variable.')
 
     dofig = False
     if ax is None:
@@ -220,8 +228,7 @@ def plot_googlemap(gdirs, ax=None, figsize=None):
         xx.extend(gdir.extent_ll[0])
         yy.extend(gdir.extent_ll[1])
 
-    gm = salem.GoogleVisibleMap(xx, yy,
-                                key='AIzaSyDWG_aTgfU7CeErtIzWfdGxpStTlvDXV_o')
+    gm = salem.GoogleVisibleMap(xx, yy, key=key, use_cache=False)
 
     img = gm.get_vardata()
     cmap = salem.Map(gm.grid, countries=False, nx=gm.grid.nx)
@@ -409,7 +416,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
 
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
-        mask = nc.variables['glacier_mask'][:] * np.NaN
+        mask = nc.variables['glacier_mask'][:] * np.nan
 
     smap.set_topography(topo)
 
@@ -609,7 +616,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
                 thick = nc.variables[vn][:]
                 mask = nc.variables['glacier_mask'][:]
 
-        thick = np.where(mask, thick, np.NaN)
+        thick = np.where(mask, thick, np.nan)
 
         crs = gdir.grid.center_grid
 
@@ -802,12 +809,12 @@ def plot_modeloutput_section(model=None, ax=None, title=''):
 
     # Where trapezoid change color
     if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
-        bed_t = cls.bed_h * np.NaN
+        bed_t = cls.bed_h * np.nan
         pt = cls.is_trapezoid & (~cls.is_rectangular)
         bed_t[pt] = cls.bed_h[pt]
         ax.plot(x, bed_t, color='rebeccapurple', linewidth=2.5,
                 label='Bed (Trap.)')
-        bed_t = cls.bed_h * np.NaN
+        bed_t = cls.bed_h * np.nan
         bed_t[cls.is_rectangular] = cls.bed_h[cls.is_rectangular]
         ax.plot(x, bed_t, color='crimson', linewidth=2.5, label='Bed (Rect.)')
 
@@ -901,12 +908,12 @@ def plot_modeloutput_section_withtrib(model=None, fig=None, title=''):
 
         # Where trapezoid change color
         if hasattr(cls, '_do_trapeze') and cls._do_trapeze:
-            bed_t = cls.bed_h * np.NaN
+            bed_t = cls.bed_h * np.nan
             pt = cls.is_trapezoid & (~cls.is_rectangular)
             bed_t[pt] = cls.bed_h[pt]
             ax.plot(x, bed_t, color='rebeccapurple', linewidth=2.5,
                     label='Bed (Trap.)')
-            bed_t = cls.bed_h * np.NaN
+            bed_t = cls.bed_h * np.nan
             bed_t[cls.is_rectangular] = cls.bed_h[cls.is_rectangular]
             ax.plot(x, bed_t, color='crimson', linewidth=2.5,
                     label='Bed (Rect.)')

@@ -129,8 +129,8 @@ def _reproject_and_scale(gdir, do_error=False):
     xx1 = dsx.get_vardata()
     yy1 = dsy.get_vardata()
     non_valid = (xx1 == nodata) | (yy1 == nodata)
-    xx1[non_valid] = np.NaN
-    yy1[non_valid] = np.NaN
+    xx1[non_valid] = np.nan
+    yy1[non_valid] = np.nan
     orig_vel = np.sqrt(xx1**2 + yy1**2)
     xx1 += xx0
     yy1 += yy0
@@ -140,8 +140,8 @@ def _reproject_and_scale(gdir, do_error=False):
     xx1, yy1 = salem.transform_proj(proj_vel, grid_gla.proj, xx1, yy1)
 
     # Correct no data after proj as well (inf)
-    xx1[non_valid] = np.NaN
-    yy1[non_valid] = np.NaN
+    xx1[non_valid] = np.nan
+    yy1[non_valid] = np.nan
 
     # Compute velocities from there
     vx = xx1 - xx0
@@ -256,7 +256,7 @@ def itslive_statistics(gdir):
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            v = ds['itslive_v'].where(ds['glacier_mask'], np.NaN).load()
+            v = ds['itslive_v'].where(ds['glacier_mask'], np.nan).load()
             with warnings.catch_warnings():
                 # For operational runs we ignore the warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning)

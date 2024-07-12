@@ -201,7 +201,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 self.get_annual_mb([b0, b1], year=year, **kwargs))) or
                 (self.get_annual_mb([b0], year=year, **kwargs)[0] > 0) or
                 (self.get_annual_mb([b1], year=year, **kwargs)[0] < 0)):
-            return np.NaN
+            return np.nan
 
         def to_minimize(x):
             return (self.get_annual_mb([x], year=year, **kwargs)[0] *
@@ -1516,7 +1516,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         ref_period = cfg.PARAMS['geodetic_mb_period']
 
     # Get the reference data
-    ref_mb_err = np.NaN
+    ref_mb_err = np.nan
     if use_regional_avg:
         ref_mb_df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
         ref_mb_df = pd.read_csv(get_demo_file(ref_mb_df))

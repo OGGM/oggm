@@ -146,7 +146,7 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
         # take another candidate where finite
         isok = np.isfinite(loc_hgt)
 
-        # wait: some areas are entirely NaNs, make the subset larger
+        # wait: some areas are entirely nans, make the subset larger
         _margin = 1
         while not np.any(isok):
             _margin += 1
@@ -336,7 +336,7 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
         # take another candidate where finite
         isok = np.isfinite(loc_hgt)
 
-        # wait: some areas are entirely NaNs, make the subset larger
+        # wait: some areas are entirely nans, make the subset larger
         _margin = 1
         while not np.any(isok):
             _margin += 1

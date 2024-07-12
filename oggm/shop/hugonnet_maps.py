@@ -158,14 +158,14 @@ def hugonnet_to_gdir(gdir, add_error=False):
     # Set up profile for writing output
     with rasterio.open(gdir.get_filepath('dem')) as dem_ds:
         dst_array = dem_ds.read().astype(np.float32)
-        dst_array[:] = np.NaN
+        dst_array[:] = np.nan
         profile = dem_ds.profile
         transform = dem_ds.transform
         dst_crs = dem_ds.crs
 
     # Set up profile for writing output
     profile.update({
-        'nodata': np.NaN,
+        'nodata': np.nan,
     })
 
     resampling = Resampling.bilinear
@@ -181,7 +181,7 @@ def hugonnet_to_gdir(gdir, add_error=False):
             destination=dst_array,
             dst_transform=transform,
             dst_crs=dst_crs,
-            dst_nodata=np.NaN,
+            dst_nodata=np.nan,
             # Configuration
             resampling=resampling)
         dest.write(dst_array)
@@ -219,11 +219,11 @@ def hugonnet_statistics(gdir):
     d['rgi_area_km2'] = gdir.rgi_area_km2
     d['hugonnet_area_km2'] = 0
     d['hugonnet_perc_cov'] = 0
-    d['hugonnet_avg_dhdt'] = np.NaN
+    d['hugonnet_avg_dhdt'] = np.nan
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            dhdt = ds['hugonnet_dhdt'].where(ds['glacier_mask'], np.NaN).load()
+            dhdt = ds['hugonnet_dhdt'].where(ds['glacier_mask'], np.nan).load()
             d['hugonnet_area_km2'] = float((~dhdt.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
             d['hugonnet_perc_cov'] = float(d['hugonnet_area_km2'] / gdir.rgi_area_km2)
             with warnings.catch_warnings():

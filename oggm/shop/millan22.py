@@ -133,11 +133,11 @@ def thickness_to_gdir(gdir, add_error=False):
                                                     allow_neg=False)
 
     # We mask zero ice as nodata
-    total_thick = np.where(total_thick == 0, np.NaN, total_thick)
+    total_thick = np.where(total_thick == 0, np.nan, total_thick)
 
     if add_error:
         total_err, _, _ = _filter_and_reproj(gdir, 'err', sel, allow_neg=False)
-        total_err[~ np.isfinite(total_thick)] = np.NaN
+        total_err[~ np.isfinite(total_thick)] = np.nan
         # Error cannot be larger than ice thickness itself
         total_err = utils.clip_max(total_err, total_thick)
 
@@ -240,8 +240,8 @@ def velocity_to_gdir(gdir, add_error=False):
         vx[p_ok] = vx[p_ok] * scaler
         vy[p_ok] = vy[p_ok] * scaler
 
-    vx = vx.filled(np.NaN)
-    vy = vy.filled(np.NaN)
+    vx = vx.filled(np.nan)
+    vy = vy.filled(np.nan)
 
     if add_error:
         err_vx, _, _ = _filter_and_reproj(gdir, 'err_vx', sel, allow_neg=False)
@@ -327,7 +327,7 @@ def millan_statistics(gdir):
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            thick = ds['millan_ice_thickness'].where(ds['glacier_mask'], np.NaN).load()
+            thick = ds['millan_ice_thickness'].where(ds['glacier_mask'], np.nan).load()
             with warnings.catch_warnings():
                 # For operational runs we ignore the warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -336,14 +336,14 @@ def millan_statistics(gdir):
                 d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
 
                 if 'millan_ice_thickness_err' in ds:
-                    err = ds['millan_ice_thickness_err'].where(ds['glacier_mask'], np.NaN).load()
+                    err = ds['millan_ice_thickness_err'].where(ds['glacier_mask'], np.nan).load()
                     d['millan_vol_err_km3'] = float(err.sum() * gdir.grid.dx ** 2 * 1e-9)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            v = ds['millan_v'].where(ds['glacier_mask'], np.NaN).load()
+            v = ds['millan_v'].where(ds['glacier_mask'], np.nan).load()
             with warnings.catch_warnings():
                 # For operational runs we ignore the warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -353,8 +353,8 @@ def millan_statistics(gdir):
                                             gdir.rgi_area_km2)
 
                 if 'millan_err_vx' in ds:
-                    err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.NaN).load()
-                    err_vy = ds['millan_err_vy'].where(ds['glacier_mask'], np.NaN).load()
+                    err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.nan).load()
+                    err_vy = ds['millan_err_vy'].where(ds['glacier_mask'], np.nan).load()
                     err = (err_vx**2 + err_vy**2)**0.5
                     d['millan_avg_err_vel'] = np.nanmean(err)
 

@@ -122,7 +122,6 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(gdir.rgi_id, base_dir=self.testdir)
         # This is not guaranteed to be equal because of projection issues
         np.testing.assert_allclose(extent, gdir.extent_ll, atol=1e-5)
-        warnings.filterwarnings("error")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
             # Warning in salem
@@ -390,7 +389,7 @@ class TestGIS(unittest.TestCase):
         dfh.index = ['oggm']
         dft = dfh[bins].T
         dft['ref'] = dfr[bins].T
-        assert dft.sum()[0] == 1000
+        assert dft.sum().iloc[0] == 1000
         assert utils.rmsd(dft['ref'], dft['oggm']) < 5
 
     @pytest.mark.skipif((Version(rasterio.__version__) <
