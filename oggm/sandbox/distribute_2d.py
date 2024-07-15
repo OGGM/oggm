@@ -218,6 +218,7 @@ def distribute_thickness_from_simulation(gdir,
                                          add_monthly=False,
                                          fl_thickness_threshold=0,
                                          rolling_mean_smoothing=0,
+                                         only_allow_retreating=False,
                                          debug_area_timeseries=False,
                                          concat_ds=None):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
@@ -280,6 +281,10 @@ def distribute_thickness_from_simulation(gdir,
         If > 0, the area and volume of the flowline diagnostics will be
         smoothed using a rolling mean over time. The window size is defined
         with this number. We recommend 3, 5, or more (in extreme cases).
+    only_allow_retreating : bool
+        If True, the algorithm will adapt the flowline diagnostics data in the way that each bin can only shrink
+        over time. If the simulated flowline's bin would actually gain mass/volume in a timestep, it stays unchanged
+        when "only_allow_retreating" is set to True. This can prevent flickering in distributed animations.
     debug_area_timeseries : bool
         If True, the algorithm will return a dataframe additionally to the
         gridded dataset. The dataframe contains two columns: the original area
@@ -335,6 +340,25 @@ def distribute_thickness_from_simulation(gdir,
     if rolling_mean_smoothing:
         dg[['area_m2', 'volume_m3']] = dg[['area_m2', 'volume_m3']].rolling(
             min_periods=1, time=rolling_mean_smoothing, center=True).mean()
+
+    # applying the only retreating algorithm
+    if only_allow_retreating:
+        increasing = True
+        while increasing:
+            thick_diff = dg.thickness_m.diff(dim='time')
+            nr_of_diff_timesteps = 0
+            for t in range(1, len(dg.coords['time'])):
+                # Find where the thickness difference is greater than 0
+                mask = thick_diff.isel(time=t - 1) > 0
+
+                if mask.any():
+                    nr_of_diff_timesteps += 1
+                    dg['thickness_m'][t, :] = xr.where(mask, dg['thickness_m'][t - 1, :], dg['thickness_m'][t, :])
+                    dg['area_m2'][t, :] = xr.where(mask, dg['area_m2'][t - 1, :], dg['area_m2'][t, :])
+                    dg['volume_m3'][t, :] = xr.where(mask, dg['volume_m3'][t - 1, :], dg['volume_m3'][t, :])
+            if nr_of_diff_timesteps == 0:
+                # when no timestep requires further modification, the while loop can end.
+                increasing = False
 
     # monthly interpolation for higher temporal resolution
     if add_monthly:
