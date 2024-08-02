@@ -282,9 +282,11 @@ def distribute_thickness_from_simulation(gdir,
         smoothed using a rolling mean over time. The window size is defined
         with this number. We recommend 3, 5, or more (in extreme cases).
     only_allow_retreating : bool
-        If True, the algorithm will adapt the flowline diagnostics data in the way that each bin can only shrink
-        over time. If the simulated flowline's bin would actually gain mass/volume in a timestep, it stays unchanged
-        when "only_allow_retreating" is set to True. This can prevent flickering in distributed animations.
+        If True, the algorithm will adapt the flowline diagnostics data in the way
+        that each bin can only shrink over time. If the simulated flowline's bin would
+        actually gain mass/volume in a timestep, it stays unchanged when
+        "only_allow_retreating" is set to True.
+        This can prevent flickering in distributed animations.
     debug_area_timeseries : bool
         If True, the algorithm will return a dataframe additionally to the
         gridded dataset. The dataframe contains two columns: the original area
