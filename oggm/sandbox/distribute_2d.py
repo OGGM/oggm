@@ -343,22 +343,22 @@ def distribute_thickness_from_simulation(gdir,
 
     # applying the only retreating algorithm
     if only_allow_retreating:
-        increasing = True
-        while increasing:
-            thick_diff = dg.thickness_m.diff(dim='time')
-            nr_of_diff_timesteps = 0
-            for t in range(1, len(dg.coords['time'])):
-                # Find where the thickness difference is greater than 0
-                mask = thick_diff.isel(time=t - 1) > 0
+        # stay in the loop as long as their is a glacier growing
+        for _ in range(len(dg['time'])):
+            # get time_steps where thickness is increasing
+            mask = dg.thickness_m.diff(dim='time') > 0
+            # add False for the first time step to keep the same dimensions
+            mask = xr.concat([xr.full_like(dg.thickness_m.isel(time=0),
+                                           False),
+                              mask],
+                             dim='time')
+            if mask.any():
+                # for each increasing time-step use the future time-step
+                dg = xr.where(mask, dg.shift(time=1), dg)
+            else:
+                # if nothing is increasing we are done
+                break
 
-                if mask.any():
-                    nr_of_diff_timesteps += 1
-                    dg['thickness_m'][t, :] = xr.where(mask, dg['thickness_m'][t - 1, :], dg['thickness_m'][t, :])
-                    dg['area_m2'][t, :] = xr.where(mask, dg['area_m2'][t - 1, :], dg['area_m2'][t, :])
-                    dg['volume_m3'][t, :] = xr.where(mask, dg['volume_m3'][t - 1, :], dg['volume_m3'][t, :])
-            if nr_of_diff_timesteps == 0:
-                # when no timestep requires further modification, the while loop can end.
-                increasing = False
 
     # monthly interpolation for higher temporal resolution
     if add_monthly:
