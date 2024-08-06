@@ -3,6 +3,7 @@ import shutil
 import unittest
 import pickle
 import pytest
+import json
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
@@ -506,6 +507,9 @@ def test_rgi7_complex_glacier_dirs():
     # initialize
     cfg.initialize()
     cfg.PATHS['working_dir'] = _TEST_DIR
+    cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+    cfg.PARAMS['border'] = 5
+
     # load and read test data
     hef_rgi7_df = gpd.read_file(get_demo_file('rgi7c_hef.shp'))
     # create GDIR
@@ -521,3 +525,16 @@ def test_rgi7_complex_glacier_dirs():
     assert gdir.rgi_version == '70C'
     assert gdir.rgi_dem_source is None
     assert gdir.utm_zone == 32
+
+    # Also test rgi7g_to_complex
+    tasks.define_glacier_region(gdir)
+    tasks.glacier_masks(gdir)
+    rgi7g_file = gpd.read_file(get_demo_file('rgi7g_hef_complex.shp'))
+    with open(get_demo_file('hef-CtoG_links.json'), 'r') as f:
+        rgi7c_to_g_links = json.load(f)
+    tasks.rgi7g_to_complex(gdir,
+                           rgi7g_file=rgi7g_file,
+                           rgi7c_to_g_links=rgi7c_to_g_links)
+
+    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
