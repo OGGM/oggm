@@ -350,7 +350,7 @@ def distribute_thickness_from_simulation(gdir,
                               mask],
                              dim='time')
             if mask.any():
-                # for each increasing time-step use the future time-step
+                # for each increasing time-step use the past time-step
                 dg = xr.where(mask, dg.shift(time=1), dg)
             else:
                 # if nothing is increasing we are done
