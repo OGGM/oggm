@@ -2048,6 +2048,7 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
 
     # OK all good, now the mask
     # Load the DEM
+    # TODO: this is really really unnecessary, we should have a better way
     with rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff') as ds:
         data = ds.read(1).astype(rasterio.float32)
         profile = ds.profile
@@ -2055,27 +2056,27 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
     # Initialize the mask with -1s, the same shape as the DEM
     mask = np.full(data.shape, -1, dtype=np.int16)
 
-    # Iterate over each polygon, rasterizing it onto the mask
-    for index, geometry in enumerate(subset.geometry):
-        # Correct invalid polygons
-        geometry = geometry.buffer(0)
-        if not geometry.is_valid:
-            raise Exception('Invalid geometry.')
+    # Compute the glacier mask using rasterio
+    # Small detour as mask only accepts DataReader objects
+    profile['dtype'] = 'int16'
+    profile.pop('nodata', None)
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(data.astype(np.int16)[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
 
-        # Compute the glacier mask using rasterio
-        # Small detour as mask only accepts DataReader objects
-        profile['dtype'] = 'int16'
-        profile.pop('nodata', None)
-        with rasterio.io.MemoryFile() as memfile:
-            with memfile.open(**profile) as dataset:
-                dataset.write(data.astype(np.int16)[np.newaxis, ...])
-            dem_data = rasterio.open(memfile.name)
+        # Iterate over each polygon, rasterizing it onto the mask
+        for index, geometry in enumerate(subset.geometry):
+            # Correct invalid polygons
+            geometry = geometry.buffer(0)
+            if not geometry.is_valid:
+                raise Exception('Invalid geometry.')
             masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
                                     filled=False)
-        glacier_mask = ~masked_dem[0, ...].mask
+            glacier_mask = ~masked_dem[0, ...].mask
 
-        # Update the mask: only change -1 to the new index
-        mask = np.where((mask == -1) & glacier_mask, index, mask)
+            # Update the mask: only change -1 to the new index
+            mask = np.where((mask == -1) & glacier_mask, index, mask)
 
     grids_file = gdir.get_filepath('gridded_data')
     with ncDataset(grids_file, 'a') as nc:
@@ -2084,7 +2085,7 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+            v = nc.createVariable(vn, 'i2', ('y', 'x', ))
         v.units = '-'
         v.long_name = 'Sub-entities glacier mask (number is index)'
         v[:] = mask
