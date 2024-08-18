@@ -20,8 +20,14 @@ fine there as well.
     **OGGM does not work on Windows. However there is a workaround available**. If you are using Windows 10,
     we recommend to install the free
     `Windows subsystem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_ (WSL)
-    and install and run OGGM from there. Though we don't offer support for installation, documentation 
-    of a succesfull installation can be found :ref:`here <installing-oggm-windows>`.
+    and install and run OGGM from there. Though we don't offer support for installation, documentation
+    of a succesfull installation can be found here:
+
+    .. toctree::
+        :maxdepth: 1
+
+        installing-oggm-windows.rst
+
 
 For most users we recommend to
 install Python and the package dependencies with the :ref:`conda package manager <conda-install>`,
