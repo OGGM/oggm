@@ -33,6 +33,9 @@ Enhancements
   Based on :pull:`1403` and :pull:`1532` (unmerged).
   By `Jan Malles <https://github.com/jmalles>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
+- Added new last millennium climate data to the shop:
+  LMR Online and  ModE-RA (:pull:`1712`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the option to use the 2D mask of a glacier for the calibration
   of the mass balance. One can now calibrate the mass balance from 2D data, which
   adds consistency when also the run itself is fully distributed. Changes are
@@ -40,7 +43,6 @@ Enhancements
   By `Alex Fischer <https://github.com/afisc>`_
 - Added Cook et al 2023 Alps thickness data to the shop (:pull:`1724`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-
 
 Bug fixes
 ~~~~~~~~~

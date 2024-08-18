@@ -3034,11 +3034,64 @@ class TestGCMClimate(unittest.TestCase):
 
         fpath_temp = get_demo_file('air_MCruns_ensemble_mean_LMRv2.1.nc')
         fpath_precip = get_demo_file('prate_MCruns_ensemble_mean_LMRv2.1.nc')
-        gcm_climate.process_lmr_data(gdir, fpath_temp=fpath_temp,
-                                     fpath_precip=fpath_precip)
+
+        for ensemble_member in [None, 0]:
+
+            fs = '_CCSM4'
+            if ensemble_member is not None:
+                fs = '_CCSM4_' + str(ensemble_member)
+
+            gcm_climate.process_lmr_data(gdir,
+                                         ensemble_member=ensemble_member,
+                                         fpath_temp=fpath_temp,
+                                         fpath_precip=fpath_precip,
+                                         output_filesuffix=fs)
+
+            fh = gdir.get_filepath('climate_historical')
+            fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
+            with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+                # Let's do some basic checks
+                scru = cru.sel(time=slice('1951', '1980'))
+                scesm = cmip.sel(time=slice('1951', '1980'))
+                # Climate during the chosen period should be the same
+                np.testing.assert_allclose(scru.temp.mean(),
+                                           scesm.temp.mean(),
+                                           rtol=1e-3)
+                np.testing.assert_allclose(scru.prcp.mean(),
+                                           scesm.prcp.mean(),
+                                           rtol=1e-3)
+
+                # Here also std dev! But its not perfect because std_dev
+                # is preserved over 31 years
+                _scru = scru.groupby('time.month').std(dim='time')
+                _scesm = scesm.groupby('time.month').std(dim='time')
+                np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=0.2)
+
+                # And also the annual cycle
+                scru = scru.groupby('time.month').mean(dim='time')
+                scesm = scesm.groupby('time.month').mean(dim='time')
+                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
+                # How did the annual cycle change with time?
+                scmip1 = cmip.sel(time=slice('1970', '1999'))
+                scmip2 = cmip.sel(time=slice('1800', '1829'))
+                scmip1 = scmip1.groupby('time.month').mean(dim='time')
+                scmip2 = scmip2.groupby('time.month').mean(dim='time')
+                # It has warmed
+                assert scmip2.temp.mean() < scmip1.temp.mean()
+
+        # LMR Online
+        fpath_temp = get_demo_file('LMR_Online_spatial_ens_mean.nc')
+        fs = '_online'
+        gcm_climate.process_lmr_data(gdir,
+                                     version='online',
+                                     fpath_temp=fpath_temp,
+                                     output_filesuffix=fs)
 
         fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data')
+        fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
         with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
 
             # Let's do some basic checks
@@ -3056,7 +3109,7 @@ class TestGCMClimate(unittest.TestCase):
             # is preserved over 31 years
             _scru = scru.groupby('time.month').std(dim='time')
             _scesm = scesm.groupby('time.month').std(dim='time')
-            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=0.15)
+            np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=0.2)
 
             # And also the annual cycle
             scru = scru.groupby('time.month').mean(dim='time')
@@ -3071,6 +3124,71 @@ class TestGCMClimate(unittest.TestCase):
             scmip2 = scmip2.groupby('time.month').mean(dim='time')
             # It has warmed
             assert scmip2.temp.mean() < scmip1.temp.mean()
+
+    def test_process_modera(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        tasks.process_cru_data(gdir)
+
+        ci = gdir.get_climate_info()
+        self.assertEqual(ci['baseline_yr_0'], 1901)
+        self.assertEqual(ci['baseline_yr_1'], 2014)
+
+        fpath_temp = get_demo_file('ModE-RA_ensmean_temp2_anom_wrt_'
+                                   '1901-2000_1421-2008_mon.nc')
+        fpath_precip = get_demo_file('ModE-RA_ensmean_totprec_anom_wrt'
+                                     '_1901-2000_1421-2008_mon.nc')
+
+        for ensemble_member in [None]:
+
+            fs = '_modera'
+            if ensemble_member is not None:
+                fs = '_modera_' + str(ensemble_member)
+
+            gcm_climate.process_modera_data(gdir,
+                                            # ensemble_member=ensemble_member,
+                                            fpath_temp=fpath_temp,
+                                            fpath_precip=fpath_precip,
+                                            output_filesuffix=fs)
+
+            fh = gdir.get_filepath('climate_historical')
+            fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
+            with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+
+                # Let's do some basic checks
+                scru = cru.sel(time=slice('1901', '2000'))
+                scesm = cmip.sel(time=slice('1901', '2000'))
+                # Climate during the chosen period should be the same
+                np.testing.assert_allclose(scru.temp.mean(),
+                                           scesm.temp.mean(),
+                                           rtol=1e-3)
+                np.testing.assert_allclose(scru.prcp.mean(),
+                                           scesm.prcp.mean(),
+                                           rtol=1e-3)
+
+                # Here also std dev! But its not perfect because std_dev
+                # is preserved over 31 years
+                _scru = scru.groupby('time.month').std(dim='time')
+                _scesm = scesm.groupby('time.month').std(dim='time')
+                np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=0.2)
+
+                # And also the annual cycle
+                scru = scru.groupby('time.month').mean(dim='time')
+                scesm = scesm.groupby('time.month').mean(dim='time')
+                np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
+                np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
+
+                # How did the annual cycle change with time?
+                scmip1 = cmip.sel(time=slice('1970', '1999'))
+                scmip2 = cmip.sel(time=slice('1800', '1829'))
+                scmip1 = scmip1.groupby('time.month').mean(dim='time')
+                scmip2 = scmip2.groupby('time.month').mean(dim='time')
+                # It has warmed
+                assert scmip2.temp.mean() < scmip1.temp.mean()
 
     def test_process_cmip5_scale(self):
 
