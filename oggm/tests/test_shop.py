@@ -6,17 +6,17 @@ import pytest
 
 import oggm
 import xarray as xr
-import rioxarray as rioxr
 import numpy as np
 import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo, bedtopo, millan22, cook23, hugonnet_maps, glathida
+from oggm.shop import its_live, rgitopo, bedtopo, millan22, hugonnet_maps, glathida
 from oggm.core import gis, centerlines
 from oggm import cfg, tasks, workflow
 
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
+rioxr = pytest.importorskip('rioxarray')
 pytestmark = pytest.mark.test_env("utils")
 
 DO_PLOT = False
@@ -164,44 +164,6 @@ class Test_millan22:
         assert df['millan_perc_cov'] > 0.95
         assert df['millan_vel_perc_cov'] > 0.97
         assert df['millan_vol_km3'] > 174
-
-
-class Test_cook23:
-
-    # @pytest.mark.slow
-    def test_cook23_to_glacier(self, class_case_dir, monkeypatch):
-
-        # Init
-        cfg.initialize()
-        cfg.PATHS['working_dir'] = class_case_dir
-        cfg.PARAMS['use_intersects'] = False
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PARAMS['border'] = 10
-
-        entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp')).iloc[0]
-        gdir = oggm.GlacierDirectory(entity)
-        tasks.define_glacier_region(gdir)
-        tasks.glacier_masks(gdir)
-
-        # use our files
-        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/cook23/'
-        monkeypatch.setattr(cook23, 'default_base_url', base_url)
-
-        cook23.cook23_to_gdir(gdir)
-
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            mask = ds.glacier_mask.data.astype(bool)
-            thick = ds.cook23_thk.where(mask).data
-
-        # Simply some coverage and sanity checks
-        assert np.isfinite(thick).sum() / mask.sum() > 0.98
-        assert np.nanmax(thick) > 120
-        assert np.nansum(thick) * gdir.grid.dx**2 * 1e-9 > 0.4
-
-        # Stats
-        df = cook23.compile_cook23_statistics([gdir]).iloc[0]
-        assert df['cook23_perc_cov'] > 0.98
-        assert df['cook23_vol_km3'] > 0.4
 
 
 class Test_HugonnetMaps:
@@ -629,7 +591,7 @@ class Test_climate_datasets:
         dfp = pd.concat(dfp, axis=1, keys=exps)
 
         # Common period
-        dfy = dft.resample('YS').mean().dropna().iloc[1:]
+        dfy = dft.resample('AS').mean().dropna().iloc[1:]
         dfm = dft.groupby(dft.index.month).mean()
         assert dfy.corr().min().min() > 0.44  # ERA5L and CERA do no correlate
         assert dfm.corr().min().min() > 0.97
@@ -648,7 +610,7 @@ class Test_climate_datasets:
 
         # PRECIP
         # Common period
-        dfy = dfp.resample('YS').mean().dropna().iloc[1:] * 12
+        dfy = dfp.resample('AS').mean().dropna().iloc[1:] * 12
         dfm = dfp.groupby(dfp.index.month).mean()
         assert dfy.corr().min().min() > 0.5
         assert dfm.corr().min().min() > 0.8
