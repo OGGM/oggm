@@ -281,7 +281,7 @@ class TestIdealisedCases(unittest.TestCase):
                 length[i] = fl.length_m
                 vol[i] = fl.volume_km3
 
-                hgt = np.where(fl.thick > 0, fl.surface_h, np.NaN)
+                hgt = np.where(fl.thick > 0, fl.surface_h, np.nan)
                 sl = np.arctan(-np.gradient(hgt, fl.dx_meter))
                 slope[i] = np.rad2deg(np.nanmin(sl))
 
@@ -1266,7 +1266,7 @@ class TestIdealisedCases(unittest.TestCase):
                 # Just for the plot
                 _sh = model.fls[-1].surface_h.copy()
                 pp = np.nonzero(model.fls[-1].thick)[0][-1] + 2
-                _sh[pp:] = np.NaN
+                _sh[pp:] = np.nan
                 surface_h.append(_sh)
 
             # We are almost at equilibrium. Spec MB should be close to 0
@@ -1369,7 +1369,7 @@ class TestIdealisedCases(unittest.TestCase):
                 # Just for the plot
                 _sh = model.fls[-1].surface_h.copy()
                 pp = np.nonzero(model.fls[-1].thick)[0][-1] + 2
-                _sh[pp:] = np.NaN
+                _sh[pp:] = np.nan
                 surface_h.append(_sh)
 
             # We are almost at equilibrium. Spec MB should be close to 0

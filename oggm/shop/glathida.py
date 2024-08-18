@@ -95,8 +95,8 @@ def glathida_statistics(gdir):
     d['n_valid_thick_points'] = 0
     d['n_valid_elev_points'] = 0
     d['n_valid_gridded_points'] = 0
-    d['avg_thick'] = np.NaN
-    d['max_thick'] = np.NaN
+    d['avg_thick'] = np.nan
+    d['max_thick'] = np.nan
     d['date_mode'] = None
     d['date_min'] = None
     d['date_max'] = None

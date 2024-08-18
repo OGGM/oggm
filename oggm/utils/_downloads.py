@@ -62,7 +62,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'effdba66da4767635c55150b57244e2e8b682610'
+SAMPLE_DATA_COMMIT = '281ccfae3c0e82a2cae34ccb47f4ef32eb5bf6f5'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -356,7 +356,7 @@ def _verified_download_helper(cache_obj_name, dl_func, reset=False):
             data = data.loc[cache_path]
             if data['size'] != size or bytes(data['sha256']) != sha256:
                 err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path, size, sha256.hex(), data[0], data[1].hex())
+                    path, size, sha256.hex(), data.iloc[0], data.iloc[1].hex())
                 raise DownloadVerificationFailedException(msg=err, path=path)
             logger.info('%s verified successfully.' % path)
             cfg.DL_VERIFIED[cache_obj_name] = True
@@ -1917,6 +1917,8 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
         test_file = os.path.join(rgi_dir, 'RGI2000-v7.0-C-01_alaska', 'README.md')
         dfile = 'https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v7/'
         dfile += 'global_files/RGI2000-v7.0-C-global.zip'
+    else:
+        raise InvalidParamsError(f'RGI version not valid: {version}')
 
     if len(glob.glob(test_file)) == 0:
         # if not there download it

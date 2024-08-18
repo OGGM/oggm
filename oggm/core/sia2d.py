@@ -189,7 +189,7 @@ class Model2D(object):
                 self.ice_thick = self.ice_thick_filter(self.ice_thick)
 
         if np.any(~np.isfinite(self.ice_thick)):
-            raise FloatingPointError('NaN in numerical solution.')
+            raise FloatingPointError('nan in numerical solution.')
 
     def run_until_equilibrium(self, rate=0.001, ystep=5, max_ite=200):
         """Run until an equilibrium is reached (can take a while)."""

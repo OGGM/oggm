@@ -61,7 +61,7 @@ def add_consensus_thickness(gdir, base_url=None):
         thick *= in_volume / out_volume
 
     # We mask zero ice as nodata
-    thick = np.where(thick == 0, np.NaN, thick)
+    thick = np.where(thick == 0, np.nan, thick)
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
@@ -96,7 +96,7 @@ def consensus_statistics(gdir):
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            thick = ds['consensus_ice_thickness'].where(ds['glacier_mask'], np.NaN).load()
+            thick = ds['consensus_ice_thickness'].where(ds['glacier_mask'], np.nan).load()
             d['consensus_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
             d['consensus_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
             d['consensus_perc_cov'] = float(d['consensus_area_km2'] / gdir.rgi_area_km2)

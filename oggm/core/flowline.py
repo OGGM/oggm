@@ -491,8 +491,8 @@ class MixedBedFlowline(Flowline):
         self.is_rectangular = self.is_trapezoid & (self._lambdas == 0)
 
         # Sanity
-        self.bed_shape[is_trapezoid] = np.NaN
-        self._lambdas[~is_trapezoid] = np.NaN
+        self.bed_shape[is_trapezoid] = np.nan
+        self._lambdas[~is_trapezoid] = np.nan
 
         # Here we have to compute the widths out of section and lambda
         thick = surface_h - bed_h
@@ -507,7 +507,7 @@ class MixedBedFlowline(Flowline):
                                  'shapes unless you provide widths_m.')
             self._w0_m[need_w] = widths_m[need_w]
 
-        self._w0_m[~is_trapezoid] = np.NaN
+        self._w0_m[~is_trapezoid] = np.nan
 
         if (np.any(self._w0_m[self._ptrap] <= 0) or
                 np.any(~np.isfinite(self._w0_m[self._ptrap]))):
@@ -913,10 +913,10 @@ class FlowlineModel(object):
                     raise RuntimeError('Glacier exceeds domain boundaries, '
                                        'at year: {}'.format(self.yr))
 
-            # Check for NaNs
+            # Check for nans
             for fl in self.fls:
                 if np.any(~np.isfinite(fl.thick)):
-                    raise FloatingPointError('NaN in numerical solution, '
+                    raise FloatingPointError('nan in numerical solution, '
                                              'at year: {}'.format(self.yr))
 
     def run_until_and_store(self, y1,
@@ -1044,8 +1044,8 @@ class FlowlineModel(object):
         nm = len(monthly_time)
 
         if do_geom or do_fl_diag:
-            sects = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
-            widths = [(np.zeros((ny, fl.nx)) * np.NaN) for fl in self.fls]
+            sects = [(np.zeros((ny, fl.nx)) * np.nan) for fl in self.fls]
+            widths = [(np.zeros((ny, fl.nx)) * np.nan) for fl in self.fls]
             buckets = [np.zeros(ny) for _ in self.fls]
 
         # Diagnostics dataset
@@ -1084,26 +1084,26 @@ class FlowlineModel(object):
         ovars = cfg.PARAMS['store_diagnostic_variables']
 
         if 'volume' in ovars:
-            diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['volume_m3'].attrs['description'] = 'Total glacier volume'
             diag_ds['volume_m3'].attrs['unit'] = 'm 3'
 
         if 'volume_bsl' in ovars:
-            diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_bsl_m3'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['volume_bsl_m3'].attrs['description'] = ('Glacier volume '
                                                              'below '
                                                              'sea-level')
             diag_ds['volume_bsl_m3'].attrs['unit'] = 'm 3'
 
         if 'volume_bwl' in ovars:
-            diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['volume_bwl_m3'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['volume_bwl_m3'].attrs['description'] = ('Glacier volume '
                                                              'below '
                                                              'water-level')
             diag_ds['volume_bwl_m3'].attrs['unit'] = 'm 3'
 
         if 'area' in ovars:
-            diag_ds['area_m2'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['area_m2'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
             diag_ds['area_m2'].attrs['unit'] = 'm 2'
 
@@ -1112,32 +1112,32 @@ class FlowlineModel(object):
 
         if 'area_min_h' in ovars:
             # filled with a value if dynamic_spinup_min_ice_thick is not None
-            diag_ds['area_m2_min_h'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['area_m2_min_h'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['area_m2_min_h'].attrs['description'] = \
                 f'Total glacier area of gridpoints with a minimum ice' \
                 f'thickness of {dynamic_spinup_min_ice_thick} m'
             diag_ds['area_m2_min_h'].attrs['unit'] = 'm 2'
 
         if 'length' in ovars:
-            diag_ds['length_m'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['length_m'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['length_m'].attrs['description'] = 'Glacier length'
             diag_ds['length_m'].attrs['unit'] = 'm'
 
         if 'calving' in ovars:
-            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['calving_m3'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['calving_m3'].attrs['description'] = ('Total accumulated '
                                                           'calving flux')
             diag_ds['calving_m3'].attrs['unit'] = 'm 3'
 
         if 'calving_rate' in ovars:
-            diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.NaN)
+            diag_ds['calving_rate_myr'] = ('time', np.zeros(nm) * np.nan)
             diag_ds['calving_rate_myr'].attrs['description'] = 'Calving rate'
             diag_ds['calving_rate_myr'].attrs['unit'] = 'm yr-1'
 
         for gi in range(10):
             vn = f'terminus_thick_{gi}'
             if vn in ovars:
-                diag_ds[vn] = ('time', np.zeros(nm) * np.NaN)
+                diag_ds[vn] = ('time', np.zeros(nm) * np.nan)
                 diag_ds[vn].attrs['description'] = ('Thickness of grid point '
                                                     f'{gi} from terminus.')
                 diag_ds[vn].attrs['unit'] = 'm'
@@ -1200,7 +1200,7 @@ class FlowlineModel(object):
                     ds['area_m2'].attrs['description'] = 'Section area'
                     ds['area_m2'].attrs['unit'] = 'm 2'
                 if 'thickness' in ovars_fl:
-                    ds['thickness_m'] = (('time', 'dis_along_flowline'), width * np.NaN)
+                    ds['thickness_m'] = (('time', 'dis_along_flowline'), width * np.nan)
                     ds['thickness_m'].attrs['description'] = 'Section thickness'
                     ds['thickness_m'].attrs['unit'] = 'm'
                 if 'ice_velocity' in ovars_fl:
@@ -1208,7 +1208,7 @@ class FlowlineModel(object):
                         raise InvalidParamsError('This flowline model does not seem '
                                                  'to be able to provide surface '
                                                  'velocities.')
-                    ds['ice_velocity_myr'] = (('time', 'dis_along_flowline'), width * np.NaN)
+                    ds['ice_velocity_myr'] = (('time', 'dis_along_flowline'), width * np.nan)
                     ds['ice_velocity_myr'].attrs['description'] = 'Ice velocity at the surface'
                     ds['ice_velocity_myr'].attrs['unit'] = 'm yr-1'
                 if 'calving_bucket' in ovars_fl:
@@ -1229,7 +1229,7 @@ class FlowlineModel(object):
                         ovars_fl.append('climatic_mb')
 
                     ds['flux_divergence_myr'] = (('time', 'dis_along_flowline'),
-                                                 width * np.NaN)
+                                                 width * np.nan)
                     desc = 'Ice-flux divergence'
                     ds['flux_divergence_myr'].attrs['description'] = desc
                     ds['flux_divergence_myr'].attrs['unit'] = 'm yr-1'
@@ -1239,7 +1239,7 @@ class FlowlineModel(object):
                         ovars_fl.append('dhdt')
 
                     ds['climatic_mb_myr'] = (('time', 'dis_along_flowline'),
-                                             width * np.NaN)
+                                             width * np.nan)
                     desc = 'Climatic mass balance forcing'
                     ds['climatic_mb_myr'].attrs['description'] = desc
                     ds['climatic_mb_myr'].attrs['unit'] = 'm yr-1'
@@ -1250,7 +1250,7 @@ class FlowlineModel(object):
                         surface_h_previous[fl_id] = fl.surface_h
                 if 'dhdt' in ovars_fl:
                     ds['dhdt_myr'] = (('time', 'dis_along_flowline'),
-                                      width * np.NaN)
+                                      width * np.nan)
                     desc = 'Thickness change'
                     ds['dhdt_myr'].attrs['description'] = desc
                     ds['dhdt_myr'].attrs['unit'] = 'm yr-1'
@@ -1424,7 +1424,7 @@ class FlowlineModel(object):
                                                           coords=varcoords)
 
                 if stop_criterion is not None:
-                    # Remove probable NaNs
+                    # Remove probable nans
                     ds = ds.dropna('time', subset=['ts_section'])
 
                 geom_ds.append(ds)
@@ -1438,7 +1438,7 @@ class FlowlineModel(object):
             diag_ds['volume_m3'].data[:] += spinup_vol
 
         if stop_criterion is not None:
-            # Remove probable NaNs
+            # Remove probable nans
             diag_ds = diag_ds.dropna('time', subset=['volume_m3'])
 
         # write output?
@@ -1451,7 +1451,7 @@ class FlowlineModel(object):
                 ds['volume_m3'] = ds['volume_m3'] * dx
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
                 if stop_criterion is not None:
-                    # Remove probable NaNs
+                    # Remove probable nans
                     fl_diag_dss[i] = ds.dropna('time', subset=['volume_m3'])
 
             # Write out?
@@ -3050,7 +3050,7 @@ def init_present_time_glacier(gdir, filesuffix='',
 
             bed_shape = 4 * inv['thick'] / widths_m ** 2
 
-            lambdas = inv['thick'] * np.NaN
+            lambdas = inv['thick'] * np.nan
             lambdas[inv['is_trapezoid']] = def_lambda
             lambdas[inv['is_rectangular']] = 0.
 
@@ -3093,10 +3093,10 @@ def init_present_time_glacier(gdir, filesuffix='',
             dic_ds = gdir.read_pickle('downstream_line')
             if cfg.PARAMS['downstream_line_shape'] == 'parabola':
                 bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
-                lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.NaN)
+                lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.nan)
                 widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
             elif cfg.PARAMS['downstream_line_shape'] == 'trapezoidal':
-                bed_shape = np.append(bed_shape, dic_ds['bedshapes'] * np.NaN)
+                bed_shape = np.append(bed_shape, dic_ds['bedshapes'] * np.nan)
                 lambdas = np.append(lambdas, np.ones(len(dic_ds['w0s'])) *
                                     def_lambda)
                 widths_m = np.append(widths_m, dic_ds['w0s'])
@@ -4167,14 +4167,14 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                 ods[varname] = ('time', data[:, 0])
             else:
                 # Last year is never good
-                data[-1, :] = np.NaN
+                data[-1, :] = np.nan
                 ods[varname] = ('time', np.sum(data, axis=1))
             # Then the monthly ones
             if store_monthly_hydro:
                 ods[varname + '_monthly'] = (('time', 'month_2d'), data)
         else:
             assert varname != 'snow_bucket'
-            data[-1] = np.NaN
+            data[-1] = np.nan
             ods[varname] = ('time', data)
         for k, v in d.items():
             ods[varname].attrs[k] = v
@@ -4261,7 +4261,7 @@ def spec_mb_stop_criterion(model, state, spec_mb_threshold=50, n_years=60):
     area = model.area_m2
     volume = model.volume_m3
     if area < 1 or len(state['volume_m3']) == 0:
-        spec_mb = np.NaN
+        spec_mb = np.nan
     else:
         spec_mb = (volume - state['volume_m3'][-1]) / area * cfg.PARAMS['ice_density']
 

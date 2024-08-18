@@ -653,8 +653,8 @@ def read_geotiff_dem(gdir=None, fpath=None):
 
     with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
-        topo[topo <= -999.] = np.NaN
-        topo[ds.read_masks(1) == 0] = np.NaN
+        topo[topo <= -999.] = np.nan
+        topo[ds.read_masks(1) == 0] = np.nan
     return topo
 
 
@@ -788,7 +788,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
     if np.any(~valid_mask):
         # We interpolate
         if np.sum(~valid_mask) > (0.25 * nx * ny) and gdir is not None:
-            log.info('({}) more than 25% NaNs in DEM'.format(gdir.rgi_id))
+            log.info('({}) more than 25% nans in DEM'.format(gdir.rgi_id))
         pnan = np.nonzero(~valid_mask)
         pok = np.nonzero(valid_mask)
         points = np.array((np.ravel(yy[pok]), np.ravel(xx[pok]))).T
@@ -809,7 +809,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
 
     isfinite = np.isfinite(dem)
     if np.any(~isfinite):
-        # interpolation will still leave NaNs in DEM:
+        # interpolation will still leave nans in DEM:
         # extrapolate with NN if needed (e.g. coastal areas)
         pnan = np.nonzero(~isfinite)
         pok = np.nonzero(isfinite)
@@ -1528,7 +1528,7 @@ def gridded_mb_attributes(gdir):
         topo_2d = nc.variables['topo_smoothed'][:]
         glacier_mask_2d = nc.variables['glacier_mask'][:]
         glacier_mask_2d = glacier_mask_2d == 1
-        catchment_mask_2d = glacier_mask_2d * np.NaN
+        catchment_mask_2d = glacier_mask_2d * np.nan
 
     topo = topo_2d[glacier_mask_2d]
 
@@ -1563,9 +1563,9 @@ def gridded_mb_attributes(gdir):
                            .format(np.sum(oggm_mb_on_z)))
 
     # Altitude based mass balance
-    catch_area_above_z = topo * np.NaN
-    lin_mb_above_z = topo * np.NaN
-    oggm_mb_above_z = topo * np.NaN
+    catch_area_above_z = topo * np.nan
+    lin_mb_above_z = topo * np.nan
+    oggm_mb_above_z = topo * np.nan
     for i, h in enumerate(topo):
         catch_area_above_z[i] = np.sum(topo >= h) * dx2
         lin_mb_above_z[i] = np.sum(lin_mb_on_z[topo >= h]) * dx2
@@ -1573,7 +1573,7 @@ def gridded_mb_attributes(gdir):
 
     # Make 2D again
     def _fill_2d_like(data):
-        out = topo_2d * np.NaN
+        out = topo_2d * np.nan
         out[glacier_mask_2d] = data
         return out
 
@@ -1637,9 +1637,9 @@ def gridded_mb_attributes(gdir):
 
     catchment_mask = catchment_mask_2d[glacier_mask_2d].astype(int)
 
-    catchment_area = topo * np.NaN
-    lin_mb_above_z_on_catch = topo * np.NaN
-    oggm_mb_above_z_on_catch = topo * np.NaN
+    catchment_area = topo * np.nan
+    lin_mb_above_z_on_catch = topo * np.nan
+    oggm_mb_above_z_on_catch = topo * np.nan
 
     # First, find all inflows indices and min altitude per catchment
     inflows = []
@@ -2048,6 +2048,7 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
 
     # OK all good, now the mask
     # Load the DEM
+    # TODO: this is really really unnecessary, we should have a better way
     with rasterio.open(gdir.get_filepath('dem'), 'r', driver='GTiff') as ds:
         data = ds.read(1).astype(rasterio.float32)
         profile = ds.profile
@@ -2055,27 +2056,27 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
     # Initialize the mask with -1s, the same shape as the DEM
     mask = np.full(data.shape, -1, dtype=np.int16)
 
-    # Iterate over each polygon, rasterizing it onto the mask
-    for index, geometry in enumerate(subset.geometry):
-        # Correct invalid polygons
-        geometry = geometry.buffer(0)
-        if not geometry.is_valid:
-            raise Exception('Invalid geometry.')
+    # Compute the glacier mask using rasterio
+    # Small detour as mask only accepts DataReader objects
+    profile['dtype'] = 'int16'
+    profile.pop('nodata', None)
+    with rasterio.io.MemoryFile() as memfile:
+        with memfile.open(**profile) as dataset:
+            dataset.write(data.astype(np.int16)[np.newaxis, ...])
+        dem_data = rasterio.open(memfile.name)
 
-        # Compute the glacier mask using rasterio
-        # Small detour as mask only accepts DataReader objects
-        profile['dtype'] = 'int16'
-        profile.pop('nodata', None)
-        with rasterio.io.MemoryFile() as memfile:
-            with memfile.open(**profile) as dataset:
-                dataset.write(data.astype(np.int16)[np.newaxis, ...])
-            dem_data = rasterio.open(memfile.name)
+        # Iterate over each polygon, rasterizing it onto the mask
+        for index, geometry in enumerate(subset.geometry):
+            # Correct invalid polygons
+            geometry = geometry.buffer(0)
+            if not geometry.is_valid:
+                raise Exception('Invalid geometry.')
             masked_dem, _ = riomask(dem_data, [shpg.mapping(geometry)],
                                     filled=False)
-        glacier_mask = ~masked_dem[0, ...].mask
+            glacier_mask = ~masked_dem[0, ...].mask
 
-        # Update the mask: only change -1 to the new index
-        mask = np.where((mask == -1) & glacier_mask, index, mask)
+            # Update the mask: only change -1 to the new index
+            mask = np.where((mask == -1) & glacier_mask, index, mask)
 
     grids_file = gdir.get_filepath('gridded_data')
     with ncDataset(grids_file, 'a') as nc:
@@ -2084,7 +2085,7 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'i1', ('y', 'x', ))
+            v = nc.createVariable(vn, 'i2', ('y', 'x', ))
         v.units = '-'
         v.long_name = 'Sub-entities glacier mask (number is index)'
         v[:] = mask

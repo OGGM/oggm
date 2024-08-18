@@ -1,5 +1,6 @@
 *.py[cod]
 __pycache__
+.env
 
 # asv stuff
 .asv/

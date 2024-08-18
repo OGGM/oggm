@@ -132,8 +132,8 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         topo_data = ds[topo_variable].data.copy()
         glacier_mask = ds.glacier_mask.data == 1
         topo_data_flat = topo_data[glacier_mask]
-        band_index = topo_data * np.NaN  # container
-        per_band_rank = topo_data * np.NaN  # container
+        band_index = topo_data * np.nan  # container
+        per_band_rank = topo_data * np.nan  # container
         distrib_thick = ds.distributed_thickness.data
 
     # For the flowline we need the model flowlines only
@@ -218,6 +218,7 @@ def distribute_thickness_from_simulation(gdir,
                                          add_monthly=False,
                                          fl_thickness_threshold=0,
                                          rolling_mean_smoothing=0,
+                                         only_allow_retreating=False,
                                          debug_area_timeseries=False,
                                          concat_ds=None):
     """Redistributes the simulated flowline area and volume back onto the 2D grid.
@@ -280,6 +281,12 @@ def distribute_thickness_from_simulation(gdir,
         If > 0, the area and volume of the flowline diagnostics will be
         smoothed using a rolling mean over time. The window size is defined
         with this number. We recommend 3, 5, or more (in extreme cases).
+    only_allow_retreating : bool
+        If True, the algorithm will adapt the flowline diagnostics data in the way
+        that each bin can only shrink over time. If the simulated flowline's bin would
+        actually gain mass/volume in a timestep, it stays unchanged when
+        "only_allow_retreating" is set to True.
+        This can prevent flickering in distributed animations.
     debug_area_timeseries : bool
         If True, the algorithm will return a dataframe additionally to the
         gridded dataset. The dataframe contains two columns: the original area
@@ -330,6 +337,24 @@ def distribute_thickness_from_simulation(gdir,
 
     # applying the thickness threshold
     dg = xr.where(dg['thickness_m'] < fl_thickness_threshold, 0, dg)
+
+    # applying the only retreating algorithm
+    if only_allow_retreating:
+        # stay in the loop as long as there is a glacier growing
+        for _ in range(len(dg['time'])):
+            # get time_steps where thickness is increasing
+            mask = dg.thickness_m.diff(dim='time') > 0
+            # add False for the first time step to keep the same dimensions
+            mask = xr.concat([xr.full_like(dg.thickness_m.isel(time=0),
+                                           False),
+                              mask],
+                             dim='time')
+            if mask.any():
+                # for each increasing time-step use the past time-step
+                dg = xr.where(mask, dg.shift(time=1), dg)
+            else:
+                # if nothing is increasing we are done
+                break
 
     # applying the rolling mean smoothing
     if rolling_mean_smoothing:
@@ -388,7 +413,7 @@ def distribute_thickness_from_simulation(gdir,
 
         if np.isclose(this_vol, 0, atol=1e-6):
             # No ice left
-            new_thick = np.NaN
+            new_thick = np.nan
         else:
             # Smooth
             dx = gdir.grid.dx
@@ -397,7 +422,7 @@ def distribute_thickness_from_simulation(gdir,
                     smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
                 new_thick = gaussian_blur(new_thick, int(smooth_radius))
 
-            new_thick[~this_glacier_mask] = np.NaN
+            new_thick[~this_glacier_mask] = np.nan
 
             # Conserve volume
             tmp_vol = np.nansum(new_thick) * dx2
