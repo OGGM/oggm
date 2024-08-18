@@ -3,8 +3,6 @@ import warnings
 
 import matplotlib.pyplot as plt
 import pytest
-salem = pytest.importorskip('salem')
-gpd = pytest.importorskip('geopandas')
 
 import oggm
 import xarray as xr
@@ -14,9 +12,11 @@ import pandas as pd
 from oggm import utils
 from oggm.utils import get_demo_file
 from oggm.shop import its_live, rgitopo, bedtopo, millan22, hugonnet_maps, glathida
-from oggm.core import gis, centerlines, massbalance
+from oggm.core import gis, centerlines
 from oggm import cfg, tasks, workflow
 
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
 pytestmark = pytest.mark.test_env("utils")
 
 DO_PLOT = False
