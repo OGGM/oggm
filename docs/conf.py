@@ -127,8 +127,8 @@ extensions = [
     'IPython.sphinxext.ipython_console_highlighting',
 ]
 
-extlinks = {'issue': ('https://github.com/OGGM/oggm/issues/%s', 'GH'),
-            'pull': ('https://github.com/OGGM/oggm/pull/%s', 'PR'),
+extlinks = {'issue': ('https://github.com/OGGM/oggm/issues/%s', 'GH%s'),
+            'pull': ('https://github.com/OGGM/oggm/pull/%s', 'PR%s'),
             }
 
 redirects = {
@@ -335,6 +335,23 @@ if not os.path.exists(ipython_savefig_dir):
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'OGGMdoc'
+
+# Read the Docs and Analytics
+# Set canonical URL from the Read the Docs Domain
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+
+# Tell Jinja2 templates the build is running on Read the Docs
+if os.environ.get("READTHEDOCS", "") == "True":
+    if "html_context" not in globals():
+        html_context = {}
+    html_context["READTHEDOCS"] = True
+
+# Plausible analytics
+html_js_files = [
+    ('https://plausible.oggm.org/js/script.js',
+     {"data-domain": "docs.oggm.org",
+      "defer": "defer"}),
+]
 
 # -- Options for LaTeX output ---------------------------------------------
 
