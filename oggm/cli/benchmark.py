@@ -9,6 +9,7 @@ import os
 import sys
 import argparse
 import time
+import platform
 import logging
 import pandas as pd
 import geopandas as gpd
@@ -73,7 +74,7 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
     cfg.initialize(logging_level=logging_level, params=override_params)
 
     # Use multiprocessing?
-    cfg.PARAMS['use_multiprocessing'] = True
+    cfg.PARAMS['use_multiprocessing'] = platform.system() != 'Darwin'
 
     # How many grid points around the glacier?
     # Make it large if you expect your glaciers to grow large

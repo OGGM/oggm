@@ -698,7 +698,7 @@ def _make_costgrid(mask, ext, z):
     # arbitrary high to avoid the lines to jump over adjacent boundaries
     cost[np.where(ext)] = np.nanmax(cost[np.where(ext)]) * 50
 
-    return np.where(mask, cost, np.Inf)
+    return np.where(mask, cost, np.inf)
 
 
 def _get_terminus_coord(gdir, ext_yx, zoutline):
@@ -1019,8 +1019,8 @@ def compute_downstream_line(gdir):
     _y = [ymesh[:, 0], ymesh[0, :], ymesh[:, -1], ymesh[-1, :]]
 
     # Find the way out of the domain
-    min_cost = np.Inf
-    min_len = np.Inf
+    min_cost = np.inf
+    min_len = np.inf
     line = None
     for h, x, y in zip(_h, _x, _y):
         ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
