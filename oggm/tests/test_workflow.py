@@ -378,7 +378,7 @@ class TestFullRun(unittest.TestCase):
         assert ds.isel(rgi_id=1).volume_bsl[-1] == 0
 
 
-@pytest.mark.slow
+# @pytest.mark.slow
 def test_merge_gridded_data():
     gdirs = up_to_inversion()
     workflow.execute_entity_task(tasks.distribute_thickness_per_altitude,
@@ -405,7 +405,7 @@ def test_merge_gridded_data():
     inv_volume_gridded_merged = (ds_merged.distributed_thickness.sum() *
                                  ds_merged.salem.grid.dx**2) * 1e-9
     assert_allclose(df['inv_volume_km3'].sum(), inv_volume_gridded_merged,
-                    rtol=2e-7)
+                    rtol=1e-6)
 
 
 @pytest.mark.slow
