@@ -21,7 +21,7 @@ Enhancements
   for merging distributed data from multiple glacier directories, including
   the possibility of adding topography to the merged grid. The latter function
   acts as a wrapper for the first one, specifically designed for merging
-  distributed thickness data from a dynamic model run.
+  distributed thickness data from a dynamic model run (:pull:`1674`, :pull:`1691`, :pull:`1697` and :pull:`1719`).
   By `Alex Fischer <https://github.com/afisc>`_ and
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added a new calving module to the sandbox. The module is based on
