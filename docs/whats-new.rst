@@ -21,7 +21,8 @@ Enhancements
   for merging distributed data from multiple glacier directories, including
   the possibility of adding topography to the merged grid. The latter function
   acts as a wrapper for the first one, specifically designed for merging
-  distributed thickness data from a dynamic model run (:pull:`1674`, :pull:`1691`, :pull:`1697` and :pull:`1719`).
+  distributed thickness data from a dynamic model run (:pull:`1674`,
+  :pull:`1691`, :pull:`1697` and :pull:`1719`).
   By `Alex Fischer <https://github.com/afisc>`_ and
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added a new calving module to the sandbox. The module is based on
@@ -43,10 +44,29 @@ Enhancements
   By `Alex Fischer <https://github.com/afisc>`_
 - Added Cook et al 2023 Alps thickness data to the shop (:pull:`1724`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added support for RGI7 (:pull:`1657`, :pull:`1702` and :pull:`1720`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added GlaThiDa data to the shop (:pull:`1663`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added an installation guide for Windows users (:pull:`1666` and :pull:`1683`).
+  By `Anouk Vlug <https://github.com/fmaussion>`_,
+  `Rebekka Neugebauer <https://github.com/rebneugebauer>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a bug in ``inversion.filter_inversion_output`` that caused an error
+  for small glaciers with fewer than five grid points containing ice
+  (:pull:`1635`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Changed variable name from ``t_bias`` to ``t_spinup`` in
+  ``dynamic_spinup.run_dynamic_spinup``, to avoid confusions with
+  variable names of the massbalance models (:pull:`1671`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a bug in ``dynamic_spinup.run_dynamic_melt_f_calibration`` that allowed
+  the melt_f value to slightly exceed the defined limits (:pull:`1685`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - The binned variables in the elevation band flowlines did not use the
   glacier mask when preserving the total values. This is a bad
   bug that is now fixed (:pull:`1661`).
