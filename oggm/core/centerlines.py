@@ -1680,25 +1680,14 @@ def catchment_intersections(gdir):
 
     # We project them onto the mercator proj before writing. This is a bit
     # inefficient (they'll be projected back later), but it's more sustainable
-    try:
-        # salem for geopandas > 0.7
-        salem.transform_geopandas(gdfc, from_crs=gdir.grid,
-                                  to_crs=gdir.grid.proj, inplace=True)
-        salem.transform_geopandas(gdfi, from_crs=gdir.grid,
-                                  to_crs=gdir.grid.proj, inplace=True)
-    except TypeError:
-        # from_crs not available yet
-        if Version(gpd.__version__) >= Version('0.7.0'):
-            raise ImportError('You have installed geopandas v0.7 or higher. '
-                              'Please also update salem for compatibility.')
-        gdfc.crs = gdir.grid
-        gdfi.crs = gdir.grid
-        salem.transform_geopandas(gdfc, to_crs=gdir.grid.proj, inplace=True)
-        salem.transform_geopandas(gdfi, to_crs=gdir.grid.proj, inplace=True)
+    salem.transform_geopandas(gdfc, from_crs=gdir.grid,
+                              to_crs=gdir.grid.proj, inplace=True)
+    salem.transform_geopandas(gdfi, from_crs=gdir.grid,
+                              to_crs=gdir.grid.proj, inplace=True)
     if hasattr(gdfc.crs, 'srs'):
         # salem uses pyproj
-        gdfc.crs = gdfc.crs.srs
-        gdfi.crs = gdfi.crs.srs
+        gdfc.set_crs(crs=gdfc.crs.srs, inplace=True, allow_override=True)
+        gdfi.set_crs(crs=gdfi.crs.srs, inplace=True, allow_override=True)
     gdir.write_shapefile(gdfc, 'flowline_catchments')
     if len(gdfi) > 0:
         gdir.write_shapefile(gdfi, 'catchments_intersects')

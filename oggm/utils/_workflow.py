@@ -784,7 +784,9 @@ def _write_shape_to_disk(gdf, fpath, to_tar=False):
     if '.shp' not in fpath:
         raise ValueError('File ending should be .shp')
 
-    gdf.to_file(fpath)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
+        gdf.to_file(fpath)
 
     if not to_tar:
         # Done here
@@ -890,9 +892,8 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                                 to_crs=_to_crs)
     # filter for none
     olist = [o for o in olist if o is not None]
-    odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist))
+    odf = gpd.GeoDataFrame(itertools.chain.from_iterable(olist), crs=to_crs)
     odf = odf.sort_values(by=['RGIID', 'SEGMENT_ID'])
-    odf.crs = to_crs
     # Sanity checks to avoid bad surprises
     gtype = np.array([g.geom_type for g in odf.geometry])
     if 'GeometryCollection' in gtype:
@@ -2461,7 +2462,7 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     entity.O1Region = '00'
     entity.O2Region = '0'
     gdir = GlacierDirectory(entity, base_dir=base_dir, reset=reset)
-    gdir.write_shapefile(gpd.GeoDataFrame([entity]), 'outlines')
+    gdir.write_shapefile(gpd.GeoDataFrame([entity], crs='EPSG:4326'), 'outlines')
 
     # Idealized flowline
     coords = np.arange(0, len(surface_h) - 0.5, 1)
@@ -2958,7 +2959,7 @@ class GlacierDirectory(object):
             if type(s) in [np.int32, np.int64]:
                 entity[k] = int(s)
         towrite = gpd.GeoDataFrame(entity).T.set_geometry('geometry')
-        towrite.crs = proj4_str
+        towrite.set_crs(crs=proj4_str, inplace=True, allow_override=True)
 
         # Write shapefile
         self.write_shapefile(towrite, 'outlines')
