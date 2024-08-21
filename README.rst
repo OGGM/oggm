@@ -69,17 +69,9 @@ About
         :target: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
         :alt: Linux build status
 
-    .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
-        :target: https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html
-        :alt: Mass balance cross validation
-
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://docs.oggm.org/en/latest/
         :alt: Documentation status
-
-    .. image:: https://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
-        :target: https://cluster.klima.uni-bremen.de/~github/asv/
-        :alt: Benchmark status
 
 :License:
     .. image:: https://img.shields.io/pypi/l/oggm.svg

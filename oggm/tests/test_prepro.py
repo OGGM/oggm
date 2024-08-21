@@ -755,6 +755,10 @@ class TestCenterlines(unittest.TestCase):
         gdf['Status'] = '0'
         gdf['O1Region'] = '01'
         gdf['O2Region'] = '01'
+        del gdf['GLIMSID']
+        del gdf['CENLAT']
+        del gdf['CENLON']
+
         entity = gdf.iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
