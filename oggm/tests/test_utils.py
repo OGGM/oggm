@@ -14,9 +14,6 @@ import pandas as pd
 import xarray as xr
 from numpy.testing import assert_array_equal, assert_allclose
 
-salem = pytest.importorskip('salem')
-gpd = pytest.importorskip('geopandas')
-
 import oggm
 from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
@@ -29,6 +26,14 @@ from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              InvalidWorkflowError,
                              DownloadVerificationFailedException)
 from oggm.core import flowline
+
+salem = pytest.importorskip('salem')
+gpd = pytest.importorskip('geopandas')
+
+# Python 3.12+ gives a deprecation warning if TarFile.extraction_filter is None.
+# https://docs.python.org/3.12/library/tarfile.html#tarfile-extraction-filter
+if hasattr(tarfile, "fully_trusted_filter"):
+    tarfile.TarFile.extraction_filter = staticmethod(tarfile.fully_trusted_filter)  # type: ignore
 
 
 pytestmark = pytest.mark.test_env("utils")
@@ -1675,7 +1680,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           mb_calibration_strategy='melt_temp',
-                          disable_mp=self.on_mac,
+                          disable_mp=True,  # Until CRU is fixed we just disable mp
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
@@ -2536,7 +2541,6 @@ class TestDataFiles(unittest.TestCase):
 
         # writing file to a tar.gz
         tmp_comp = os.path.join(cfg.PATHS['working_dir'], 'f.nc.tar.gz')
-        import tarfile
         with tarfile.open(tmp_comp, 'w:gz') as zip:
             zip.add(tmp_file, arcname='f.nc')
         of = utils.file_extractor(tmp_comp)
