@@ -55,6 +55,10 @@ try:
 except ImportError:
     pass
 
+# Python 3.12+ gives a deprecation warning if TarFile.extraction_filter is None.
+# https://docs.python.org/3.12/library/tarfile.html#tarfile-extraction-filter
+if hasattr(tarfile, "fully_trusted_filter"):
+    tarfile.TarFile.extraction_filter = staticmethod(tarfile.fully_trusted_filter)  # type: ignores
 
 # Locals
 from oggm import __version__
