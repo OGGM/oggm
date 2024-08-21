@@ -2018,7 +2018,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
 
     # Make a new dataframe of those
     selection = pd.concat(selection)
-    selection.crs = sh.crs  # for geolocalisation
+    selection.set_crs(crs=sh.crs, inplace=True, allow_override=True)  # for geolocalisation
     if len(selection) != len(rgi_ids):
         raise RuntimeError('Could not find all RGI ids')
 
@@ -2226,7 +2226,7 @@ def get_rgi_intersects_entities(rgi_ids, version=None):
 
     # Make a new dataframe of those
     selection = pd.concat(selection)
-    selection.crs = sh.crs  # for geolocalisation
+    selection.set_crs(crs=sh.crs, inplace=True, allow_override=True)  # for geolocalisation
 
     return selection
 

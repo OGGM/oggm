@@ -698,7 +698,7 @@ def _make_costgrid(mask, ext, z):
     # arbitrary high to avoid the lines to jump over adjacent boundaries
     cost[np.where(ext)] = np.nanmax(cost[np.where(ext)]) * 50
 
-    return np.where(mask, cost, np.Inf)
+    return np.where(mask, cost, np.inf)
 
 
 def _get_terminus_coord(gdir, ext_yx, zoutline):
@@ -1019,8 +1019,8 @@ def compute_downstream_line(gdir):
     _y = [ymesh[:, 0], ymesh[0, :], ymesh[:, -1], ymesh[-1, :]]
 
     # Find the way out of the domain
-    min_cost = np.Inf
-    min_len = np.Inf
+    min_cost = np.inf
+    min_len = np.inf
     line = None
     for h, x, y in zip(_h, _x, _y):
         ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
@@ -1680,25 +1680,14 @@ def catchment_intersections(gdir):
 
     # We project them onto the mercator proj before writing. This is a bit
     # inefficient (they'll be projected back later), but it's more sustainable
-    try:
-        # salem for geopandas > 0.7
-        salem.transform_geopandas(gdfc, from_crs=gdir.grid,
-                                  to_crs=gdir.grid.proj, inplace=True)
-        salem.transform_geopandas(gdfi, from_crs=gdir.grid,
-                                  to_crs=gdir.grid.proj, inplace=True)
-    except TypeError:
-        # from_crs not available yet
-        if Version(gpd.__version__) >= Version('0.7.0'):
-            raise ImportError('You have installed geopandas v0.7 or higher. '
-                              'Please also update salem for compatibility.')
-        gdfc.crs = gdir.grid
-        gdfi.crs = gdir.grid
-        salem.transform_geopandas(gdfc, to_crs=gdir.grid.proj, inplace=True)
-        salem.transform_geopandas(gdfi, to_crs=gdir.grid.proj, inplace=True)
+    salem.transform_geopandas(gdfc, from_crs=gdir.grid,
+                              to_crs=gdir.grid.proj, inplace=True)
+    salem.transform_geopandas(gdfi, from_crs=gdir.grid,
+                              to_crs=gdir.grid.proj, inplace=True)
     if hasattr(gdfc.crs, 'srs'):
         # salem uses pyproj
-        gdfc.crs = gdfc.crs.srs
-        gdfi.crs = gdfi.crs.srs
+        gdfc.set_crs(crs=gdfc.crs.srs, inplace=True, allow_override=True)
+        gdfi.set_crs(crs=gdfi.crs.srs, inplace=True, allow_override=True)
     gdir.write_shapefile(gdfc, 'flowline_catchments')
     if len(gdfi) > 0:
         gdir.write_shapefile(gdfi, 'catchments_intersects')

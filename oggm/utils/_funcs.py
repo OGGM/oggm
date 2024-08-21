@@ -532,8 +532,7 @@ def recursive_valid_polygons(geoms, crs):
         try:
             new_geoms.extend(recursive_valid_polygons(list(new_geom.geoms), crs))
         except AttributeError:
-            new_s = gpd.GeoSeries(new_geom)
-            new_s.crs = crs
+            new_s = gpd.GeoSeries(new_geom, crs=crs)
             if new_s.to_crs({'proj': 'cea'}).area.iloc[0] >= 10000:
                 new_geoms.append(new_geom)
     assert np.all([type(geom) == shpg.Polygon for geom in new_geoms])

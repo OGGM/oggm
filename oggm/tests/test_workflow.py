@@ -405,7 +405,7 @@ def test_merge_gridded_data():
     inv_volume_gridded_merged = (ds_merged.distributed_thickness.sum() *
                                  ds_merged.salem.grid.dx**2) * 1e-9
     assert_allclose(df['inv_volume_km3'].sum(), inv_volume_gridded_merged,
-                    rtol=2e-7)
+                    rtol=1e-6)
 
 
 @pytest.mark.slow

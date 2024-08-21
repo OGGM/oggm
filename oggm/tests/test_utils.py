@@ -4,6 +4,7 @@ import shutil
 import time
 import hashlib
 import tarfile
+import platform
 import pytest
 import itertools
 from unittest import mock
@@ -876,6 +877,7 @@ class TestPreproCLI(unittest.TestCase):
         self.monkeypatch = MonkeyPatch()
         self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_levs')
         self.reset_dir()
+        self.on_mac = platform.system() == 'Darwin'
 
     def tearDown(self):
         if os.path.exists(self.testdir):
@@ -1252,6 +1254,7 @@ class TestPreproCLI(unittest.TestCase):
                           mb_calibration_strategy='melt_temp',
                           test_intersects_file=inter,
                           test_topofile=topof,
+                          disable_mp=self.on_mac,
                           centerlines=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
@@ -1577,6 +1580,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           override_params=params,
+                          disable_mp=self.on_mac,
                           mb_calibration_strategy='melt_temp',
                           test_topofile=topof, elev_bands=True)
 
@@ -1671,6 +1675,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           mb_calibration_strategy='melt_temp',
+                          disable_mp=self.on_mac,
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
