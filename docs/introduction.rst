@@ -7,9 +7,8 @@ regularly since 2016. Today, OGGM is continuously discussed and updated by a
 team of international researchers.
 
 Our main aim is to **assist the modelling of the evolution of mountains
-glaciers at the river basin, regional and global scales**.
-
-The OGGM framework offers various solutions to the challenges encountered
+glaciers at large scales**. The OGGM framework offers various solutions
+to the challenges encountered
 when modelling a large number of glaciers. Here is a non-exhaustive list of
 its features:
 
@@ -43,6 +42,10 @@ its features:
       Well tested and well documented codebase, including online tutorials. Regularly
       maintained and freely available container environments for reproducibility
       across platforms and HPCs.
+
+    Standard projections
+      Pre-computed glacier change projections for a wide range of scenarios and use cases.
+      See :doc:`download-projections` for more information.
 
     Community
       Welcoming community of users and developers: :ref:`get in touch <contact>` and join us!
@@ -90,7 +93,7 @@ Ice thickness inversion
   Using the mass balance data computed above and relying on mass-conservation
   considerations, an estimate of the ice flux along each glacier grid point cross-section
   is computed by making assumptions about the shape of the cross-section
-  (parabolic, rectangular or trapezoid). Using the physics of ice flow and the shallow ice approximation, 
+  (parabolic, rectangular or trapezoid). Using the physics of ice flow and the shallow ice approximation,
   the model then computes the thickness of the glacier along the flowlines and the total
   volume of the glacier (**Fig. e**).
 

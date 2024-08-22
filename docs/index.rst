@@ -5,29 +5,27 @@ A modular and open source glacier model
 **OGGM is a cutting-edge open source modelling framework** designed to simulate
 the past and future mass balance, volume, and geometry of glaciers worldwide.
 
-The model features several glacier evolution models, including an explicit ice
+The model features several glacier evolution models, including an flowline ice
 dynamics module accounting for glacier geometry and frontal ablation.
-**With an unwavering commitment to using publicly available data for calibration
-and validation, OGGM is a reliable and readily applicable tool for studying glaciers**.
+**WOGGM is a reliable and readily applicable tool for studying glaciers**.
 
 OGGM is also a modular platform that supports novel modelling workflows,
-**encouraging researchers to create unique models and analyses for their research**.
+**encouraging researchers to create unique model chains and analyses for their research**.
 Our framework is designed to be flexible and adaptable, making it an
 ideal tool for a wide range of applications in glaciology and related fields.
 
-.. warning::
-
-   OGGM v1.6 is a substantial change to v1.5.3. Among other developments,
-   the mass balance calibration has substantially improved. In order to
-   allow easier and faster developments from the community in the future,
-   several variable names have changed and older workflows are not available
-   anymore. **We recommend our users to switch to 1.6 as soon as
-   possible, but only if they are at the development stage of a study.**
-   Older versions of OGGM will always be available via github and Zenodo,
-   and older documentation pages can be accessed via the interface below.
-
 **This webpage is for the software documentation: for general information about the
 OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
+
+.. admonition:: A note for new users
+
+    OGGM is well established and well documented, but it is a complex model requiring
+    background knowledge in glacier modelling and programming.
+    In our experience, many research projects can actually be completed *without*
+    running OGGM yourself: we provide a range of pre-computed glacier change projections
+    covering a wide range of scenarios and use cases. Checkout :doc:`download-projections`
+    and see if this fits your needs before diving into the model itself.
+
 
 Video presentation
 ^^^^^^^^^^^^^^^^^^

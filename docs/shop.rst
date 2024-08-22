@@ -77,7 +77,7 @@ There are six available levels of pre-processing:
   the processing chain can be re-run from them.
 - **Level 4**: includes a historical simulation from
   the RGI date to the last possible date of the baseline climate file
-  (currently January 1<sup>st</sup> 2020 at 00H for most datasets), stored with the file suffix
+  (currently January 1st 2020 at 00H for most datasets), stored with the file suffix
   ``_historical``. Moreover, some configurations (called ``spinup``) may include
   a simulation running a spinup from 1979 to the last possible date of the baseline climate file,
   stored with the file suffix ``_spinup_historical``. This spinup attempts to conduct a

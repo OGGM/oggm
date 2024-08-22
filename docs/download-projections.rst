@@ -15,6 +15,8 @@ A detailed description of the experimental-setup, information on the data
 structure, analysis of the data and a brief comparison to `Rounce et al. (2023) <https://www.science.org/doi/10.1126/science.abo1324>`_
 together with the analysis jupyter notebooks can be found in the
 `OGGM/oggm-standard-projections-csv-files repository <https://github.com/OGGM/oggm-standard-projections-csv-files>`_.
+Data for the CMIP6 GCMs until 2100 is also described in
+`Zekollari et al. (2024) <https://doi.org/10.5194/egusphere-2024-1013>`_.
 
 These projections use :ref:`eb-flowlines`, make use of the :ref:`dynamic-spinup`,
 the new "informed 3-step" :ref:`mb-calib` method for each glacier with geodetic data,
@@ -56,6 +58,7 @@ If you use these data (either aggregated csv or the per-glacier netcdf files), p
 *Lilian Schuster, Patrick Schmitt, Anouk Vlug, & Fabien Maussion. (2023). OGGM/oggm-standard-projections-csv-files: v1.0 (v1.0). Zenodo. https://doi.org/10.5281/zenodo.8286065*
 
 In addition, please cite OGGM (Maussion et al., 2019) and the specific OGGM version as
-specified in the OGGM documentation: :ref:`citing-oggm`.
+specified in the OGGM documentation: :ref:`citing-oggm`. The data for the CMIP6 GCMs
+until 2100 is also described in `Zekollari et al. (2024) <https://doi.org/10.5194/egusphere-2024-1013>`_.
 
 We also recommend to refer to the CMIP option that you are using (references are listed in the data repository).
