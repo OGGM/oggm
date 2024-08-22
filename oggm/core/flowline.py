@@ -2415,7 +2415,7 @@ class SemiImplicitModel(FlowlineModel):
         b_corr = - d_stag * self.dbed_h_exp_dx
 
         # prepare rhs
-        smb = self.get_mb(surface_h, self.yr, fl_id=0)
+        smb = self.get_mb(surface_h, self.yr, fl_id=0, fls=self.fls)
         rhs = thick + smb * dt + dt / width * (b_corr[:-1] - b_corr[1:]) / dx
 
         # solve matrix and update flowline thickness
