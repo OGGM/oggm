@@ -10,6 +10,11 @@ Shapefiles of glacier centerlines, flowlines and widths
 These variables are a standard output of OGGM, and can be useful to many.
 You will find the files here: https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/centerlines/RGI62/b_010/L2/summary
 
+.. note::
+
+  Note that centerlines computed by OGGM are now a standard product for
+  RGI version 7! Check out the `RGI User Guide <https://www.glims.org/rgi_user_guide>`_
+
 The following files are available:
 
 - ``centerlines``: the geometrical centerlines

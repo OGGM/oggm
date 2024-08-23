@@ -451,6 +451,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
 
                     else:
                         rgi_version = rgi_ids[0].split('-')[0][-2:]
+                        if rgi_version == '60':
+                            rgi_version = '62'
                         fp = utils.get_rgi_intersects_entities(rgi_ids,
                                                                version=rgi_version)
                     cfg.set_intersects_db(fp)
@@ -460,6 +462,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                         rgi_ids = np.unique(np.sort([entity.RGIId for entity in
                                                      entities]))
                         rgi_version = rgi_ids[0].split('-')[0][-2:]
+                        if rgi_version == '60':
+                            rgi_version = '62'
                         fp = utils.get_rgi_intersects_entities(rgi_ids,
                                                                version=rgi_version)
                         cfg.set_intersects_db(fp)

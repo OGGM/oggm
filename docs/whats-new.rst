@@ -420,7 +420,7 @@ v1.5.0
 This a new update of the OGGM model. It should be largely compatible with
 OGGM v1.4.0. **The main addition in this release is the computation of
 hydrological diagnostics.** Check-out the new tutorial at
-https://oggm.org/tutorials !
+https://tutorials.oggm.org !
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

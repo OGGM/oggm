@@ -13,6 +13,10 @@ from packaging.version import Version
 # External libs
 import pandas as pd
 import numpy as np
+try:
+    from numpy._core import umath
+except ImportError:
+    from numpy.core import umath
 import xarray as xr
 from scipy.ndimage import convolve1d
 try:
@@ -388,14 +392,14 @@ if Version(np.__version__) < Version('1.17'):
 else:
     # TODO: reassess this when https://github.com/numpy/numpy/issues/14281
     # is solved
-    clip_array = np.core.umath.clip
+    clip_array = umath.clip
 
 
 # A faster numpy.clip when only one value is clipped (here: min).
-clip_min = np.core.umath.maximum
+clip_min = umath.maximum
 
 # A faster numpy.clip when only one value is clipped (here: max).
-clip_max = np.core.umath.minimum
+clip_max = umath.minimum
 
 
 def nicenumber(number, binsize, lower=False):

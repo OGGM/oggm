@@ -50,7 +50,7 @@ set to the values of your choice. This will fetch the desired directories:
 there are more options to these, which we explain in detail below.
 If you like to start using the pre-processed directories right away, with out
 reading about all the different options and details first, you can go to the
-[10 minutes to… a preprocessed directory](https://oggm.org/tutorials/stable/notebooks/10minutes/preprocessed_directories.html)
+`10 minutes to… a preprocessed directory <https://tutorials.oggm.org/stable/notebooks/10minutes/preprocessed_directories.html>`_
 tutorial.
 
 Processing levels
@@ -77,7 +77,7 @@ There are six available levels of pre-processing:
   the processing chain can be re-run from them.
 - **Level 4**: includes a historical simulation from
   the RGI date to the last possible date of the baseline climate file
-  (currently January 1<sup>st</sup> 2020 at 00H for most datasets), stored with the file suffix
+  (currently January 1st 2020 at 00H for most datasets), stored with the file suffix
   ``_historical``. Moreover, some configurations (called ``spinup``) may include
   a simulation running a spinup from 1979 to the last possible date of the baseline climate file,
   stored with the file suffix ``_spinup_historical``. This spinup attempts to conduct a
@@ -228,7 +228,7 @@ The basic set-up is following:
 - "informed three-step" mass balance model calibration (see :ref:`mb-calib`)
 - :ref:`dynamic-spinup` with dynamic melt factor calibration
 
-There are however multiple options to choose from. Our `tutorials <https://oggm.org/tutorials>`_
+There are however multiple options to choose from. Our `tutorials <https://tutorials.oggm.org>`_
 showcase example of applications for some of them. One can explore
 `cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_
 for more options. Here follows a brief guide through the folder structure:
@@ -391,7 +391,8 @@ Additional available data
 -------------------------
 
 Here follows a description of the additional data that can be added to the
-pre-processed glacier directories, by choosing the 'w_data' option.
+pre-processed glacier directories, by choosing the 'w_data' option or in code.
+See also: :ref:`apientitytasks`.
 
 ITS_LIVE
 ~~~~~~~~
@@ -414,8 +415,8 @@ Currently the only data downloaded is the 120m composite for both
 If you want more velocity products, feel free to open a new topic
 on the OGGM issue tracker!
 
-Ice thickness
-~~~~~~~~~~~~~
+Gridded ice thickness
+~~~~~~~~~~~~~~~~~~~~~
 
 The `Farinotti et al., 2019 <https://www.nature.com/articles/s41561-019-0300-3>`_
 ice thickness products can be downloaded and reprojected to the glacier directory
@@ -428,6 +429,21 @@ ice thickness products can be downloaded and reprojected to the glacier director
     Example of the reprojected ice thickness products at Malaspina glacier
 
 
+Ice thickness observations
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can now add observations from the Glacier Thickness Database
+(`GlaThiDa <https://www.gtn-g.ch/data_catalogue_glathida/>`_) to your
+glacier directory with:
+
+.. code-block:: python
+
+    from oggm.shop import glathida
+    glathida.glathida_to_gdir(gdir)
+
+Checkout :py:func:`shop.glathida.glathida_to_gdir`.
+
+
 Millan et al. (2022) ice velocity and thickness products
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -435,6 +451,18 @@ Similarly, we provide data from the recent
 `Millan et al. (2022) <https://www.nature.com/articles/s41561-021-00885-z>`_
 global study (visit our `tutorials`_ if you are interested!).
 
+Cook et al. (2023) thickness products for the Alps
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+`Cook et al. (2023) <https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2023GL105029>`_
+provided a new ice thickness dataset for the Alps. This is now also in the shop,
+with :py:func:`shop.cook23.cook23_to_gdir`.
+
+.. code-block:: python
+
+    from oggm.shop import cook23
+    cook23.cook23_to_gdir(gdir)
 
 Raw data sources
 ----------------

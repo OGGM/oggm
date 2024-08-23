@@ -205,7 +205,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         ssp scenario to process (only 'ssp126', 'ssp370' or 'ssp585' are available)
     year_range : tuple of str
         the year range for which the anomalies are computed
-        (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')
+        (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')`
     apply_bias_correction : bool
         whether the bias correction is applied (default is False) or not. As
         we use already internally bias-corrected GCMs, it is default set

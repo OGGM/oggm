@@ -69,6 +69,23 @@ and Implications for Our Perception of the Land Surface. Bulletin of the America
    https://doi:10.5194/gmd-12-3055-2019
 
 
+GCM data
+~~~~~~~~
+
+On of the main applications is to use climate model output to drive the mass balance model. In
+this case we still rely on gridded observations (e.g. W5E5) for the reference
+climatology and apply the GCM anomalies computed from a preselected reference
+period. This method is often called the
+`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
+
+Visit our online tutorials to see how this can be done
+(`OGGM run with GCM tutorial <https://tutorials.oggm.org/master/notebooks/10minutes/run_with_gcm.html>`_).
+
+Paleo data
+~~~~~~~~~~
+
+Check out :ref:`apishop` for the latest fancy datasets.
+
 CRU
 ~~~
 
@@ -174,15 +191,3 @@ Any other climate dataset
 It is fairly easy to force OGGM with other datasets too. Recent publications have used
 plenty of options, from ERA5-Land to regional reanalyses or more.
 
-
-GCM data
-~~~~~~~~
-
-OGGM can also use climate model output to drive the mass balance model. In
-this case we still rely on gridded observations (e.g. W5E5) for the reference
-climatology and apply the GCM anomalies computed from a preselected reference
-period. This method is often called the
-`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
-
-Visit our online tutorials to see how this can be done
-(`OGGM run with GCM tutorial <https://oggm.org/tutorials/master/notebooks/run_with_gcm.html>`_).

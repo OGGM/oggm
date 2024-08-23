@@ -56,8 +56,8 @@ About
         :target: https://www.geosci-model-dev.net/12/909/2019/
         :alt: GMD Paper
 
-    .. image:: https://zenodo.org/badge/43965645.svg
-        :target: https://zenodo.org/badge/latestdoi/43965645
+    .. image:: https://img.shields.io/badge/DOI-10.5281%2Fzenodo.597193-blue.svg
+        :target: https://zenodo.org/doi/10.5281/zenodo.597193
         :alt: Zenodo
 
 :Tests:
