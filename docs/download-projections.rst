@@ -1,8 +1,8 @@
 OGGM global glacier projections
 ===============================
 
-.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.8286065.svg
-   :target: https://doi.org/10.5281/zenodo.8286065
+.. image:: https://img.shields.io/badge/DOI-10.5281%2Fzenodo.8286064-blue.svg
+   :target: https://doi.org/10.5281/zenodo.8286064
 
 |
 

@@ -6,6 +6,10 @@ Installing OGGM
    Did you know that you can try OGGM in your browser before installing it
    on your computer? Visit :doc:`cloud` for more information.
 
+   Did you know that we provide standard projections for all glaciers in the
+   world, and that you may not have to run OGGM for your use case?
+   Visit :doc:`download-projections` for more information.
+
 OGGM itself is a pure python package, but it has several dependencies which
 are not trivial to install. The instructions below provide all the required
 details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`

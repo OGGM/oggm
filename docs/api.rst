@@ -1,6 +1,6 @@
-################################
-List of OGGM functions and tasks
-################################
+######################
+List of OGGM functions
+######################
 
 .. currentmodule:: oggm
 
@@ -73,6 +73,8 @@ Input/Output
     global_tasks.compile_climate_statistics
     global_tasks.compile_ela
 
+.. _apishop:
+
 OGGM Shop
 =========
 
@@ -80,6 +82,10 @@ OGGM Shop
     :toctree: generated/
     :nosignatures:
 
+    shop.bedtopo.add_consensus_thickness
+    shop.bedtopo.compile_consensus_statistics
+    shop.cook23.cook23_to_gdir
+    shop.cook23.compile_cook23_statistics
     shop.cru.get_cru_file
     shop.cru.process_cru_data
     shop.cru.process_dummy_cru_file
@@ -87,14 +93,22 @@ OGGM Shop
     shop.ecmwf.process_ecmwf_data
     shop.histalp.get_histalp_file
     shop.histalp.process_histalp_data
-    shop.gcm_climate.process_gcm_data
-    shop.gcm_climate.process_cesm_data
-    shop.gcm_climate.process_cmip_data
-    shop.bedtopo.add_consensus_thickness
+    shop.hugonnet_maps.hugonnet_to_gdir
+    shop.hugonnet_maps.compile_hugonnet_statistics
     shop.its_live.velocity_to_gdir
+    shop.its_live.compile_itslive_statistics
+    shop.millan22.thickness_to_gdir
+    shop.millan22.velocity_to_gdir
+    shop.millan22.compile_millan_statistics
     shop.rgitopo.init_glacier_directories_from_rgitopo
     shop.rgitopo.select_dem_from_dir
     shop.rgitopo.dem_quality_check
+    shop.gcm_climate.process_gcm_data
+    shop.gcm_climate.process_monthly_isimip_data
+    shop.gcm_climate.process_cesm_data
+    shop.gcm_climate.process_cmip_data
+    shop.gcm_climate.process_lmr_data
+    shop.gcm_climate.process_modera_data
 
 .. _apientitytasks:
 
@@ -305,7 +319,7 @@ folder won't erase its content:
     os.listdir(gdir.dir)  # the directory still contains the data
 
 For more information about how to use GlacierDirectories, visit our
-`tutorial on the topic <https://oggm.org/tutorials/master/notebooks/store_and_compress_glacierdirs.html>`_.
+`tutorial on the topic <https://tutorials.oggm.org/master/notebooks/tutorials/store_and_compress_glacierdirs.html>`_.
 
 
 .. include:: _generated/basenames.txt

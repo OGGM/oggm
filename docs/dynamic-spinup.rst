@@ -29,10 +29,10 @@ following schematic for a description of the standard steps in the spinup.
    Default dynamic calibration workflow (adapted from Aguayo et al. 2023, in prep.)
 
 We offer pre-processed directories including a dynamic spinup run. You can
-check out this `10 minute tutorial <https://oggm.org/tutorials/stable/notebooks/10minutes/dynamical_spinup.html>`_
+check out this `10 minute tutorial <https://tutorials.oggm.org/stable/notebooks/10minutes/dynamical_spinup.html>`_
 for a short introduction to the spinup functions and how to use the
 pre-processed directories.
 
 If you are looking for an in-depth explanation of the dynamic functions you
 should check out this
-`advanced tutorial <https://oggm.org/tutorials/stable/notebooks/advanced/dynamical_spinup.html>`_.
+`advanced tutorial <https://tutorials.oggm.org/master/notebooks/tutorials/dynamical_spinup.html>`_.

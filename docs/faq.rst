@@ -78,11 +78,11 @@ progress.
 I have a question about OGGM, can we talk about it per email/phone?
 -------------------------------------------------------------------
 
-Thanks for your interest in OGGM! Usually, we prefer to keep 
+Thanks for your interest in OGGM! Usually, we prefer to keep
 usage questions on `github issues <https://github.com/OGGM/oggm/issues>`_
 so that everybody can learn from all questions and their answers.
-You can also join our Slack discussion channel if you want a 
-more interactive forum. Keep in touch with us per email if you'd 
+You can also join our Slack discussion channel if you want a
+more interactive forum. Keep in touch with us per email if you'd
 like to join, we are a very open community!
 
 
@@ -227,7 +227,7 @@ We recommend to increase the glacier map in this case, by setting
 `cfg.PARAMS['border']` to a larger value, e.g. 100 or 200. The larger this
 value, the larger the glacier can grow (the drawback is that simulations
 become slower and hungrier in memory because the number of grid points
-increases as well). We do not recommend to go larger than 250. However, 
+increases as well). We do not recommend to go larger than 250. However,
 for these cases it is likely that something else is wrong in your workflow
 or OGGM itself.
 
@@ -256,7 +256,7 @@ encourage you to contact the `GLIMS core team <https://www.glims.org/maps/contac
 to let them know how your inventory improves the glacier digitalization compared to the
 current RGI version. If you want to see an example on how to give OGGM a different shapefile than RGI,
 have a look to this
-`tutorial <https://oggm.org/tutorials/stable/notebooks/use_your_own_inventory.html>`_!
+`tutorial <https://tutorials.oggm.org/master/notebooks/tutorials/use_your_own_inventory.html>`_!
 
 .. _pitfalls.numerics:
 

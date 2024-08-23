@@ -79,7 +79,7 @@ How to use the model, with concrete code examples and links to the tutorials.
 * :doc:`cloud`
 * :doc:`installing-oggm`
 * :doc:`getting-started`
-* `Tutorials <https://oggm.org/tutorials/stable>`_
+* `Tutorials <https://tutorials.oggm.org/stable>`_
 * :doc:`api`
 * :doc:`practicalities`
 * :doc:`faq`
@@ -92,7 +92,7 @@ How to use the model, with concrete code examples and links to the tutorials.
     cloud.rst
     installing-oggm.rst
     getting-started.rst
-    Tutorials <https://oggm.org/tutorials/stable>
+    Tutorials <https://tutorials.oggm.org/stable>
     api.rst
     practicalities.rst
     faq.rst
@@ -207,8 +207,8 @@ About
         :target: https://www.geosci-model-dev.net/12/909/2019/
         :alt: GMD Paper
 
-    .. image:: https://zenodo.org/badge/43965645.svg
-        :target: https://zenodo.org/badge/latestdoi/43965645
+    .. image:: https://img.shields.io/badge/DOI-10.5281%2Fzenodo.597193-blue.svg
+        :target: https://zenodo.org/doi/10.5281/zenodo.597193
         :alt: Zenodo
 
 :Tests:

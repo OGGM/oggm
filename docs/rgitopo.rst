@@ -3,7 +3,7 @@ RGI-TOPO (New! also for RGI 7.0)
 
 The RGI-TOPO dataset provides a local topography map for each single glacier in the RGI.
 It was generated with OGGM, and can be downloaded very easily with OGGM from the :doc:`shop` (visit
-our `tutorials <https://oggm.org/tutorials>`_ if you want to learn how to do this!).
+our `tutorials <https://tutorials.oggm.org>`_ if you want to learn how to do this!).
 
 **Non-OGGM users can access the data by themselves at the following links**:
 

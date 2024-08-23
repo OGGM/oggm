@@ -114,7 +114,7 @@ The installation procedure explained in :doc:`installing-oggm` should also
 work in cluster environments. If you don't have admin rights,
 installing with conda in your ``$HOME`` probably is the easiest option.
 Once OGGM is installed, you can use your scripts (like the ones provided in the
-`tutorials <https://oggm.org/tutorials>`_). But you probably want to check if the tests pass and our
+`tutorials <https://tutorials.oggm.org>`_). But you probably want to check if the tests pass and our
 `Data storage`_ section below first!
 
 
@@ -164,7 +164,7 @@ for your own purposes. Use ``base``
 if you want to install your own OGGM version (don't forget to test it
 afterwards!), and use ``oggm`` if you know which OGGM version you want.
 
-As an example, here is how we run a given fixed version of OGGM on our 
+As an example, here is how we run a given fixed version of OGGM on our
 own cluster. First we pull the image we want to run from GitHub somewhere
 on your system::
 
@@ -208,7 +208,7 @@ Some explanations:
   simply is taken from our Docker container base (singularity
   `can run docker containers <https://www.sylabs.io/guides/3.1/user-guide/singularity_and_docker.html>`_).
   Singularity is preferred over Docker in cluster
-  environments, mostly for security and performance reasons. 
+  environments, mostly for security and performance reasons.
   On our cluster, we use the SLURM manager to run a number of glaciers (an RGI region
   for example), and the script above is then run on a node. You can also
   use and run singularity with ``srun -n 1 -c X singularity exec ...``:
@@ -218,18 +218,18 @@ Some explanations:
   guaranteed to always use the same software versions across runs.
 - it follows a number of commands to make sure we don't mess around with
   the system settings. Here we use an ``$OGGM_WORKDIR`` variable which is
-  probably not available in your case: it points to a directory you can 
-  write to, and where OGGM will work (for example, it might also be the 
+  probably not available in your case: it points to a directory you can
+  write to, and where OGGM will work (for example, it might also be the
   directory you are working on with OGGM (``cfg.PATHS['working_dir']``).
   We suggest to replace this variable with what works for you.
 - the ``oggm`` docker images ship with an OGGM version guaranteed to work on this container.
-  Sometimes, you may want to use another OGGM version, for example with newer developments 
-  on it. You might also add your own flavor or parameterization to OGGM into the environment. 
-  For this you can use pip and install the version you want. Here we show an example 
+  Sometimes, you may want to use another OGGM version, for example with newer developments
+  on it. You might also add your own flavor or parameterization to OGGM into the environment.
+  For this you can use pip and install the version you want. Here we show an example
   where we install a specific OGGM version, here specified by its
   git hash (you can use a
   `git tag <https://stackoverflow.com/questions/13685920/install-specific-git-commit-with-pip>`_
-  as well). If you do that, you might want to run the tests once first to make sure 
+  as well). If you do that, you might want to run the tests once first to make sure
   that it works as expected. You can do that by replacing ``YOUR_RUN_SCRIPT_HERE``
   with ``pytest.oggm --run-slow``!
 - finally, the `YOUR_RUN_SCRIPT_HERE` is the actual command you want to run
@@ -286,7 +286,7 @@ you have to deal with:
   to create compressed, aggregated files of your directories. You can
   later initialize new directories from these tar files with the `from_tar`
   keyword argument in :py:func:`workflow.init_glacier_directories`. See our
-  dedicated `tutorials on the topic <https://oggm.org/tutorials/master/notebooks/store_and_compress_glacierdirs.html>`_.
+  dedicated `tutorials on the topic <https://tutorials.oggm.org/master/notebooks/tutorials/store_and_compress_glacierdirs.html>`_.
 
 
 Run per RGI region, not globally

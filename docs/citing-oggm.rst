@@ -52,7 +52,7 @@ the `Zenodo citation`_ for this purpose. An example BibTeX entry::
     url          = {https://doi.org/10.5281/zenodo.5327634}
     }
 
-.. _Zenodo citation: https://zenodo.org/badge/latestdoi/43965645
+.. _Zenodo citation: https://zenodo.org/doi/10.5281/zenodo.597193
 
 Logo
 ----

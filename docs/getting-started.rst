@@ -19,6 +19,10 @@ through several examples to get you started.
    Did you know that you can try OGGM in your browser before installing it
    on your computer? Visit :doc:`cloud` for more information.
 
+   Did you know that we provide standard projections for all glaciers in the
+   world, and that you may not have to run OGGM for your use case?
+   Visit :doc:`download-projections` for more information.
+
 .. _system-settings:
 
 First step: system settings for input data
@@ -144,4 +148,4 @@ OGGM tutorials
 
 Refer to our `tutorials`_ for real-world applications!
 
-.. _tutorials: https://oggm.org/tutorials
+.. _tutorials: https://tutorials.oggm.org

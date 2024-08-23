@@ -51,12 +51,17 @@ def cook23_to_gdir(gdir, vars=['thk', 'divflux']):
 
     """
 
+    # Very easy case: no cook file for this glacier
+    if gdir.rgi_region != '11' and gdir.rgi_subregion != '01':
+        raise InvalidWorkflowError(f'Cook23 data is only for the Alps: '
+                                   f'{gdir.rgi_id}')
+
     # Find out which file(s) we need
     gdf = _get_lookup_thickness()
     cp = shpg.Point(gdir.cenlon, gdir.cenlat)
     sel = gdf.loc[gdf.contains(cp)]
     if len(sel) == 0:
-        raise InvalidWorkflowError(f'There seems to be no Cook file for this '
+        raise InvalidWorkflowError(f'There seems to be no Cook23 file for this '
                                    f'glacier: {gdir.rgi_id}')
 
     if len(sel) > 1:
