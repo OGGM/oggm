@@ -484,6 +484,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if add_glathida:
             from oggm.shop.glathida import glathida_to_gdir
             workflow.execute_entity_task(glathida_to_gdir, gdirs)
+        if rgi_version == '70C':
+            # Some additional data for the 70C glaciers
+            workflow.execute_entity_task(tasks.rgi7g_to_complex, gdirs)
 
         if bin_variables and gdirs_band:
             workflow.execute_entity_task(tasks.elevation_band_flowline,
