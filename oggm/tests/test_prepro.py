@@ -424,12 +424,11 @@ class TestGIS(unittest.TestCase):
                         reason='requires rasterio >= 1.0')
     def test_rasterio_glacier_masks(self):
 
-        cfg.PARAMS['map_proj'] = 'tmerc'
-
         # The GIS was double checked externally with IDL.
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
+        cfg.PARAMS['map_proj'] = 'tmerc'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
 
