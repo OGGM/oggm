@@ -1504,7 +1504,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
     filesuffix: str
-        add a filesuffix to mb_params.json. This could be useful for sensitivity
+        add a filesuffix to mb_calib.json. This could be useful for sensitivity
         analyses with MB models, if they need to fetch other sets of params for
         example.
 
@@ -1729,7 +1729,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         the maximum accepted value for the temperature bias during optimisation.
         Defaults to cfg.PARAMS['temp_bias_max'].
     filesuffix: str
-        add a filesuffix to mb_params.json. This could be useful for sensitivity
+        add a filesuffix to mb_calib.json. This could be useful for sensitivity
         analyses with MB models, if they need to fetch other sets of params for
         example.
     """
