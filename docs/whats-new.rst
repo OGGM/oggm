@@ -66,6 +66,9 @@ Enhancements
   instead of glacier-per-glacier values. This is useful to trick
   RGI7 into being calibrated or other things (:pull:`1692`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added the rgi7g_to_complex task which adds a mask of glacier
+  entities in the glacier complex glacier dirs (:pull:`1736`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
