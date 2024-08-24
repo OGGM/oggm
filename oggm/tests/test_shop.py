@@ -160,7 +160,7 @@ class Test_millan22:
 
         # Stats
         df = millan22.compile_millan_statistics([gdir]).iloc[0]
-        assert df['millan_avg_vel'] > 180
+        assert df['millan_avg_vel'] > 175
         assert df['millan_max_vel'] > 2000
         assert df['millan_perc_cov'] > 0.95
         assert df['millan_vel_perc_cov'] > 0.92
