@@ -52,6 +52,20 @@ Enhancements
   By `Anouk Vlug <https://github.com/fmaussion>`_,
   `Rebekka Neugebauer <https://github.com/rebneugebauer>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
+- Made it easier to run parameter perturbation experiments by
+  allowing more than one mb_calib.json file in the
+  working directory (:pull:`1678`) and by adding a new
+  `perturbate_mb_params` task (:pull:`1669`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Preprocessed directories can now have categorical resolution
+  classes like GloGEM does (did it for IGM), where users can choose
+  bins where a given dx is used (:pull:`1664`). It looks nicer
+  to the eye but I still think the continue dx approach is better.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The mass-balance model can now be calibrated on regional averages
+  instead of glacier-per-glacier values. This is useful to trick
+  RGI7 into being calibrated or other things (:pull:`1692`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
