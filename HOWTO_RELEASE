@@ -20,6 +20,7 @@ How to issue an OGGM release.
       twine upload dist/oggm-1.X.Y*
     You will need to be listed as a package owner at
     https://pypi.python.org/pypi/oggm for this to work.
+    You'll need a token for this - it is in your password manager.
  8. Push your changes to master:
       git push origin master
       git push origin --tags
@@ -32,6 +33,7 @@ How to issue an OGGM release.
     We also update the stable branch with `git cherrypick` for documentation
     only fixes that apply the current released version.
 10. Add a section for the next release (v.X.(Y+1)) to doc/whats-new.rst.
+    Add the section to index that it is not yet released.
 11. Commit your changes and push to master again:
       git commit -a -m 'Revert to dev version'
       git push origin master
