@@ -6,6 +6,16 @@ Version history
 v1.6.2 (unreleased)
 -------------------
 
+A new minor release of the OGGM with several improvements and bug fixes.
+The changes and additions are important, but not fundamental.
+Most users should switch to this version if they don't care about
+full reproducibility of existing results. The previous 1.6 preprocessed
+directories are still compatible and can be used with this version.
+Some bugs have been fixed however (see below), and if they matter to you,
+you may have to reprocess the data yourself or be patient (we aim to
+publish a "final" 1.6.X release before the end of the year, which will comprise
+updated processed datasets, including a working version of RGI7 repositories).
+
 Enhancements
 ~~~~~~~~~~~~
 
@@ -27,7 +37,7 @@ Enhancements
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added a new calving module to the sandbox. The module is based on
   Malles et al., 2023, but is currently still in development and
-  cannot be used operational yet. In general, calving is not
+  cannot be used operationally yet. In general, calving is not
   operational in the v1.6 series, it can only be used on a glacier
   by glacier basis and is not yet fully integrated in the workflow
   (:pull:`1615`).
@@ -49,22 +59,21 @@ Enhancements
 - Added GlaThiDa data to the shop (:pull:`1663`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added an installation guide for Windows users (:pull:`1666` and :pull:`1683`).
-  By `Anouk Vlug <https://github.com/fmaussion>`_,
-  `Rebekka Neugebauer <https://github.com/rebneugebauer>`_ and
-  `Fabien Maussion <https://github.com/fmaussion>`_
+  By `Anouk Vlug <https://github.com/anoukvlug>`_ and
+  `Rebekka Neugebauer <https://github.com/rebneugebauer>`_
 - Made it easier to run parameter perturbation experiments by
-  allowing more than one mb_calib.json file in the
+  allowing more than one ``mb_calib.json`` file in the
   working directory (:pull:`1678`) and by adding a new
-  `perturbate_mb_params` task (:pull:`1669`).
+  ``perturbate_mb_params`` task (:pull:`1669`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Preprocessed directories can now have categorical resolution
-  classes like GloGEM does (did it for IGM), where users can choose
+  classes like GloGEM does, where users can choose
   bins where a given dx is used (:pull:`1664`). It looks nicer
-  to the eye but I still think the continue dx approach is better.
+  to the eye, but I still think the continuous ``dx`` approach is better.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The mass-balance model can now be calibrated on regional averages
   instead of glacier-per-glacier values. This is useful to trick
-  RGI7 into being calibrated or other things (:pull:`1692`).
+  RGI7 into being calibrated (:pull:`1692`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the rgi7g_to_complex task which adds a mask of glacier
   entities in the glacier complex glacier dirs (:pull:`1736`).
