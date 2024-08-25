@@ -3,8 +3,8 @@
 Version history
 ===============
 
-v1.6.2 (unreleased)
--------------------
+v1.6.2 (August 25, 2024)
+------------------------
 
 A new minor release of the OGGM with several improvements and bug fixes.
 The changes and additions are important, but not fundamental.
@@ -14,7 +14,8 @@ directories are still compatible and can be used with this version.
 Some bugs have been fixed however (see below), and if they matter to you,
 you may have to reprocess the data yourself or be patient (we aim to
 publish a "final" 1.6.X release before the end of the year, which will comprise
-updated processed datasets, including a working version of RGI7 repositories).
+updated preprocessed repositories, including a working version of RGI7
+repositories).
 
 Enhancements
 ~~~~~~~~~~~~

@@ -631,7 +631,7 @@ def get_inversion_volume(gdir):
 
 @entity_task(log, writes=['inversion_output'])
 def compute_velocities(*args, **kwargs):
-    """Deprecated. Use compute_inversion_velocities instead."""
+    """Deprecated - use compute_inversion_velocities instead."""
     warnings.warn("`compute_velocities` has been renamed to "
                   "`compute_inversion_velocities`. Prefer to use the new"
                   "name from now on.")

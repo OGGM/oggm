@@ -5,7 +5,7 @@ How to issue an OGGM release.
        git pull
  2. Look over whats-new.rst and the docs. Make sure "What's New" is complete
     (check the date!) and add a brief summary note describing the release at the
-    top.
+    top. Check index.rst to update the version here as well.
  3. If you have any doubts, run the full test suite one final time!
       pytest --run-slow --mpl .
  4. On the master branch, commit the release in git:
@@ -14,7 +14,7 @@ How to issue an OGGM release.
       git tag -a v1.X.Y -m 'v1.X.Y'
  6. Build source and binary wheels for pypi:
       git clean -xdf  # this deletes all uncommitted changes!
-      python setup.py bdist_wheel sdist
+      python -m build
  7. Use twine to register and upload the release on pypi. Be careful, you can't
     take this back!
       twine upload dist/oggm-1.X.Y*
@@ -44,6 +44,6 @@ How to issue an OGGM release.
     It should now build automatically.
 14. Now the containers: run CI on https://github.com/OGGM/r2d to get the correct
     on https://github.com/OGGM/r2d/pkgs/container/r2d. Then update the tag on
-    https://github.com/OGGM/binder, in the master and stable branch. 
+    https://github.com/OGGM/binder, in the master and stable branch.
     On https://hub.oggm.org, create a new environment as well.
 15. Issue the release announcement!
