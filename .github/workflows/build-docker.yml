@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - '*'
   repository_dispatch:
     types: [build-docker-image]
 
@@ -27,7 +29,11 @@ jobs:
       run: |
         echo "name=ghcr.io/oggm/oggm" >> $GITHUB_OUTPUT
         echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
-        echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
+        if [ "$GITHUB_REF" = refs/tags/* ]; then
+          echo "sha=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+        else
+          echo "sha=$GITHUB_SHA" >> $GITHUB_OUTPUT
+        fi
     - name: Stop Commands
       run: T="$(echo -n ${{ github.token }} | sha256sum | head -c 64)" && echo -e "::add-mask::${T}\n::stop-commands::${T}"
     - name: Build image
@@ -38,7 +44,7 @@ jobs:
         load: true
         provenance: false
         build-args: |
-          GITHUB_SHA=${{ github.sha }}
+          GITHUB_SHA=${{ steps.names.outputs.sha }}
           GITHUB_REPOSITORY=${{ github.repository }}
         tags: |
           ${{ steps.names.outputs.name }}:test
@@ -52,7 +58,7 @@ jobs:
         push: true
         provenance: false
         build-args: |
-          GITHUB_SHA=${{ github.sha }}
+          GITHUB_SHA=${{ steps.names.outputs.sha }}
           GITHUB_REPOSITORY=${{ github.repository }}
         tags: |
           ${{ steps.names.outputs.name }}:latest
