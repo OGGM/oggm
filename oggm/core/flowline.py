@@ -1262,7 +1262,7 @@ class FlowlineModel(object):
 
         # First deal with spinup (we compute volume change only)
         if do_fixed_spinup:
-            spinup_vol = monthly_time * 0
+            spinup_vol = monthly_time * 0.
             for fl_id, fl in enumerate(self.fls):
 
                 h = fl.surface_h

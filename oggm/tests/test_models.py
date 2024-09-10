@@ -5713,8 +5713,10 @@ class TestDistribute2D:
         fl_diag = fl_diag.isel(dis_along_flowline=slice(0, band_ids.max()+1))
         for bid in band_ids:
             thick_band = thick.where(ds.band_index == bid)
-            fl_diag['volume_m3_dis'].data[:, bid] = thick_band.sum(dim=['x', 'y']) * dx2
-            fl_diag['area_m2_dis'].data[:, bid] = (thick_band > 1).sum(dim=['x', 'y']) * dx2
+            fl_diag['volume_m3_dis'].data[:, bid] = (
+                    thick_band.sum(dim=['x', 'y']).values * dx2)
+            fl_diag['area_m2_dis'].data[:, bid] = (
+                    (thick_band > 1).sum(dim=['x', 'y']).values * dx2)
 
         for yr in [2003]:
             # All the other years have larger errors but they somehow still look

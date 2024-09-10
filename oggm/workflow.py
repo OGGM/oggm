@@ -1068,7 +1068,7 @@ def merge_gridded_data(gdirs, output_folder=None,
                                     if slice_of_var is not None:
                                         if dim in slice_of_var:
                                             coord_val = ds_templ[coord].sel(
-                                                {dim: slice_of_var[dim]})
+                                                {dim: slice_of_var[dim]}).values
                                         else:
                                             coord_val = ds_templ[coord].values
                                     else:
