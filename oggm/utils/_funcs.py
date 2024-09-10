@@ -687,7 +687,7 @@ def floatyear_to_date(yr):
         The floating year
     """
 
-    if isinstance(yr,  xr.DataArray):
+    if isinstance(yr, xr.DataArray):
         yr = yr.values
 
     out_y, remainder = np.divmod(yr, 1)
