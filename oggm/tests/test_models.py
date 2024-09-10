@@ -3858,9 +3858,9 @@ class TestDynamicSpinup:
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
         sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]
-        ref_dmdtda = float(sel['dmdtda'])
+        ref_dmdtda = float(sel['dmdtda'].iloc[0])
         ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda = float(sel['err_dmdtda'])
+        err_ref_dmdtda = float(sel['err_dmdtda'].iloc[0])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
         melt_f_max = 1000 * 12 / 365
