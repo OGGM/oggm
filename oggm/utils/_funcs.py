@@ -687,6 +687,9 @@ def floatyear_to_date(yr):
         The floating year
     """
 
+    if isinstance(yr, xr.DataArray):
+        yr = yr.values
+
     out_y, remainder = np.divmod(yr, 1)
     out_y = out_y.astype(int)
 
@@ -700,9 +703,6 @@ def floatyear_to_date(yr):
     if (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
         out_y = out_y.item()
         out_m = out_m.item()
-    elif isinstance(yr, xr.DataArray):
-        out_y = np.array(out_y)
-        out_m = np.array(out_m)
 
     return out_y, out_m
 
@@ -769,6 +769,11 @@ def calendardate_to_hydrodate(y, m, start_month=None):
         the first month of the hydrological year
     """
 
+    if isinstance(y, xr.DataArray):
+        y = y.values
+    if isinstance(m, xr.DataArray):
+        m = m.values
+
     if start_month is None:
         raise InvalidParamsError('In order to avoid confusion, we now force '
                                  'callers of this function to specify the '
@@ -792,6 +797,11 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     Parameters
     ----------
     """
+
+    if isinstance(y0, xr.DataArray):
+        y0 = y0.values
+    if isinstance(y1, xr.DataArray):
+        y1 = y1.values
 
     if y1 is not None:
         years = np.arange(np.floor(y0), np.floor(y1) + 1)

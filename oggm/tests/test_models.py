@@ -3858,9 +3858,9 @@ class TestDynamicSpinup:
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
         sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]
-        ref_dmdtda = float(sel['dmdtda'])
+        ref_dmdtda = float(sel['dmdtda'].iloc[0])
         ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda = float(sel['err_dmdtda'])
+        err_ref_dmdtda = float(sel['err_dmdtda'].iloc[0])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
         melt_f_max = 1000 * 12 / 365
@@ -5713,8 +5713,10 @@ class TestDistribute2D:
         fl_diag = fl_diag.isel(dis_along_flowline=slice(0, band_ids.max()+1))
         for bid in band_ids:
             thick_band = thick.where(ds.band_index == bid)
-            fl_diag['volume_m3_dis'].data[:, bid] = thick_band.sum(dim=['x', 'y']) * dx2
-            fl_diag['area_m2_dis'].data[:, bid] = (thick_band > 1).sum(dim=['x', 'y']) * dx2
+            fl_diag['volume_m3_dis'].data[:, bid] = thick_band.sum(dim=['x', 'y']
+                                                                   ).values * dx2
+            fl_diag['area_m2_dis'].data[:, bid] = (thick_band > 1).sum(dim=['x', 'y']
+                                                                       ).values * dx2
 
         for yr in [2003]:
             # All the other years have larger errors but they somehow still look
