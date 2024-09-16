@@ -1154,6 +1154,12 @@ class TestGeometry(unittest.TestCase):
         np.testing.assert_allclose(area * 10**-6, float(tdf['Area']),
                                    rtol=1e-4)
 
+        area_attr = 0
+        for cl in cls:
+            area_attr += cl.area_km2
+        np.testing.assert_allclose(area_attr, float(tdf['Area']),
+                                   rtol=1e-4)
+
         # Check for area distrib
         bins = np.arange(utils.nicenumber(np.min(hgt), 50, lower=True),
                          utils.nicenumber(np.max(hgt), 50)+1,
