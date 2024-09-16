@@ -247,6 +247,19 @@ class Centerline(object, metaclass=SuperclassMeta):
     def widths_m(self):
         return self.widths * self.map_dx
 
+    @property
+    def bin_area_m2(self):
+        # area of the grid point
+        return self.widths_m * self.dx_meter
+
+    @property
+    def area_m2(self):
+        return np.sum(self.bin_area_m2)
+
+    @property
+    def area_km2(self):
+        return self.area_m2 * 1e-6
+
     @widths.setter
     def widths(self, value):
         self._widths = value
