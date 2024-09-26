@@ -4599,7 +4599,7 @@ def compute_fl_diagnostics_quantiles(gdir,
                                      input_filesuffixes,
                                      quantiles=0.5,
                                      output_filesuffix='_median',
-                                    ):
+                                     ):
     """Compute quantile fl_diagnostics (e.g. median flowline of projections)
 
     This function takes a number of fl_diagnostic files and compute out of them
@@ -4629,7 +4629,7 @@ def compute_fl_diagnostics_quantiles(gdir,
             quantiles = quantiles[0]
 
     # get filepath of all fl_diagnostic files
-    all_fl_diag_paths= []
+    all_fl_diag_paths = []
     for filesuffix in input_filesuffixes:
         all_fl_diag_paths.append(gdir.get_filepath('fl_diagnostics',
                                                    filesuffix=filesuffix))
