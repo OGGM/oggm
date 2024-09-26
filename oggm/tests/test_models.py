@@ -3198,6 +3198,80 @@ class TestHEF:
             plt.legend()
             plt.show()
 
+    @pytest.mark.slow
+    def test_fl_diag_quantiles(self, hef_gdir):
+        cfg.PARAMS['store_fl_diagnostics'] = True
+
+        # conduct three runs from which to calculate the quantiles
+        output_suffixes = ['_run1', '_run2', '_run3']
+        for i, output_suffix in enumerate(output_suffixes):
+            run_random_climate(hef_gdir, y0=1985-i*5, nyears=10,
+                               output_filesuffix=output_suffix, seed=i)
+
+        # only calculate the median
+        workflow.execute_entity_task(tasks.compute_fl_diagnostics_quantiles,
+                                     hef_gdir,
+                                     input_filesuffixes=output_suffixes,
+                                     quantiles=0.5,
+                                     output_filesuffix='_median'
+                                     )
+
+        # calculate 5th and 95th quantiles together
+        workflow.execute_entity_task(tasks.compute_fl_diagnostics_quantiles,
+                                     hef_gdir,
+                                     input_filesuffixes=output_suffixes,
+                                     quantiles=[0.05, 0.95],
+                                     output_filesuffix='_iqr'
+                                     )
+
+        ft = 'fl_diagnostics'
+        with xr.open_dataset(
+                hef_gdir.get_filepath(ft, filesuffix=output_suffixes[0])) as ds:
+            fl_ids = ds.flowlines.data
+
+        for fl_id in fl_ids:
+            # open data of current flowline
+            ds_runs = []
+            for output_suffix in output_suffixes:
+                fp = hef_gdir.get_filepath(ft, filesuffix=output_suffix)
+                with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
+                    ds_runs.append(ds.load())
+            fp = hef_gdir.get_filepath(ft, filesuffix='_median')
+            with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
+                ds_median = ds.load()
+            fp = hef_gdir.get_filepath(ft, filesuffix='_iqr')
+            with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
+                ds_iqr = ds.load()
+
+            # the median flowline should never be the smallest or largest
+            # value, compared to the values of the runs (as we have three runs)
+            variables_to_check = ['volume_m3', 'area_m2', 'thickness_m']
+            for var in variables_to_check:
+                var_das = []
+                for ds_run in ds_runs:
+                    var_das.append(ds_run[var])
+                var_stack = xr.concat(var_das, dim='runs')
+
+                var_min = var_stack.min(dim='runs')
+                var_max = var_stack.max(dim='runs')
+
+                var_median = ds_median[var]
+                is_median_equal_to_min = (var_median == var_min).any()
+                is_median_equal_to_max = (var_median == var_max).any()
+
+                assert is_median_equal_to_min
+                assert is_median_equal_to_max
+
+                # median should be larger/smaller than 5th/95th quantile
+                var_5th = ds_iqr.loc[{'quantile': 0.05}][var]
+                var_95th = ds_iqr.loc[{'quantile': 0.95}][var]
+
+                is_median_larger_than_5th_q = (var_median >= var_5th).all()
+                is_median_smaller_than_95th_q = (var_median <= var_95th).all()
+
+                assert is_median_larger_than_5th_q
+                assert is_median_smaller_than_95th_q
+
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestDynamicSpinup:

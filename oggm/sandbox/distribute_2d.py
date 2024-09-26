@@ -99,7 +99,9 @@ def add_smoothed_glacier_topo(gdir, outline_offset=-40,
 
 @entity_task(log, writes=['gridded_data'])
 def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
-                          elevation_weight=1.003):
+                          ranking_variables=None,
+                          ranking_variables_weights=None,
+                          ):
     """Assigns glacier grid points to flowline elevation bands and ranks them.
 
     Creates two variables in gridded_data.nc:
@@ -123,18 +125,25 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
     topo_variable : str
         the topography to read from `gridded_data.nc` (could be smoothed, or
         smoothed differently).
-    elevation_weight : float
-        how much weight to give to the elevation of the grid point versus the
-        thickness. Arbitrary number, might be tuned differently.
+    ranking_variables : list
+        A list of distributed variables used for ranking pixels of each
+        elevation band. All variables inside of 'gridded_data' can be used (e.g.
+        'topo_smoothed', 'slope', 'dis_from_border', 'distributed_thickness',
+        'aspect'). Default is 'distributed_thickness'.
+    ranking_variables_weights : list
+        A list of weights, corresponding to the ranking_variables. Larger values
+        assign more weight to the corresponding ranking_variable. Must be in the
+        same order as ranking_variables! Default is [1].
     """
     # We need quite a few data from the gridded dataset
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        ds_grid = ds.load()
         topo_data = ds[topo_variable].data.copy()
         glacier_mask = ds.glacier_mask.data == 1
         topo_data_flat = topo_data[glacier_mask]
         band_index = topo_data * np.nan  # container
         per_band_rank = topo_data * np.nan  # container
-        distrib_thick = ds.distributed_thickness.data
+        weighting_per_pixel = topo_data * 0.  # container
 
     # For the flowline we need the model flowlines only
     fls = gdir.read_pickle('model_flowlines')
@@ -173,15 +182,36 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
     # assert np.nanmin(band_index) == 0
     assert np.all(np.isfinite(band_index[glacier_mask]))
 
-    # Ok now assign within band using ice thickness weighted by elevation
-    # We rank the pixels within one band by elevation, but also add
-    # a penalty is added to higher elevation grid points
-    min_alt = np.nanmin(topo_data)
-    weighted_thick = ((topo_data - min_alt + 1) * elevation_weight) * distrib_thick
+    # Ok now we rank the pixels within each band, which variables are considered
+    # can be defined by the user. All variables are normalized (between 0 and 1)
+    # and multiplied by a weight and summed up. If the weight is negative the
+    # normalized variable will be inverted (0 becomes 1 and vice versa).
+    if ranking_variables is None:
+        # the default variables to use
+        ranking_variables = ['distributed_thickness']
+    if ranking_variables_weights is None:
+        # the default weights to use
+        ranking_variables_weights = [1]
+    assert len(ranking_variables) == len(ranking_variables_weights)
+
+    # normalize all values to the range of 0 to 1
+    def min_max_normalization(data):
+        data = np.where(glacier_mask, data, np.nan)
+        return (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
+
+    for var, var_weight in zip(ranking_variables,
+                               ranking_variables_weights):
+        normalized_var = min_max_normalization(ds_grid[var].data)
+        # for negative weights we invert the normalized variable
+        # (smallest becomes largest and vice versa)
+        if var_weight < 0:
+            normalized_var = 1 - normalized_var
+        weighting_per_pixel += normalized_var * np.abs(var_weight)
+
+    # now rank the pixel of each band individually
     for band_id in np.unique(np.sort(band_index[glacier_mask])):
-        # We work per band here
         is_band = band_index == band_id
-        per_band_rank[is_band] = mstats.rankdata(weighted_thick[is_band])
+        per_band_rank[is_band] = mstats.rankdata(weighting_per_pixel[is_band])
 
     with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
         vn = 'band_index'
