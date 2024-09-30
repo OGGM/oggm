@@ -690,6 +690,19 @@ def floatyear_to_date(yr):
     if isinstance(yr, xr.DataArray):
         yr = yr.values
 
+    if isinstance(yr, (int, float)):
+        yr = np.array([yr], dtype=np.float64)
+
+    # check if year is inside machine precision to next higher int
+    yr = np.where(np.isclose(yr,
+                             np.ceil(yr),
+                             # larger numbers have a smaller precision
+                             rtol=np.finfo(np.float64).eps * np.max(yr),
+                             atol=0
+                             ),
+                  np.ceil(yr),
+                  yr)
+
     out_y, remainder = np.divmod(yr, 1)
     out_y = out_y.astype(int)
 

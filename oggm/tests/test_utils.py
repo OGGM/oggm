@@ -123,6 +123,10 @@ class TestFuncs(object):
         r = utils.floatyear_to_date(yr)
         assert r == (1998, 2)
 
+        yr = 1 + 1/12 - 1/12
+        r = utils.floatyear_to_date(yr)
+        assert r == (1, 1)
+
     def test_date_to_floatyear(self):
 
         r = utils.date_to_floatyear(0, 1)
