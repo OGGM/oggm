@@ -693,6 +693,10 @@ def floatyear_to_date(yr):
     if isinstance(yr, (int, float)):
         yr = np.array([yr], dtype=np.float64)
 
+    if ((isinstance(yr, np.ndarray) or
+         isinstance(yr, np.generic)) and yr.size == 1):
+        yr = np.array([yr], dtype=np.float64)
+
     # check if year is inside machine precision to next higher int
     yr_ceil = np.ceil(yr)
     yr = np.where(np.isclose(yr,
