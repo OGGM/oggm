@@ -690,12 +690,8 @@ def floatyear_to_date(yr):
     if isinstance(yr, xr.DataArray):
         yr = yr.values
 
-    if isinstance(yr, (int, float)):
-        yr = np.array([yr], dtype=np.float64)
-
-    if ((isinstance(yr, np.ndarray) or
-         isinstance(yr, np.generic)) and yr.size == 1):
-        yr = np.array([yr], dtype=np.float64)
+    # Ensure yr is a np.array, even for scalar values
+    yr = np.atleast_1d(yr).astype(np.float64)
 
     # check if year is inside machine precision to next higher int
     yr_ceil = np.ceil(yr)
@@ -717,7 +713,7 @@ def floatyear_to_date(yr):
                                 np.round(month_exact),
                                 np.floor(month_exact)).astype(int))
 
-    if (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
+    if yr.size == 1:
         out_y = out_y.item()
         out_m = out_m.item()
 
