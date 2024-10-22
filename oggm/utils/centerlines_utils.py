@@ -447,4 +447,3 @@ def normalize(n):
     n1 = np.array([-nn[1], nn[0]])
     n2 = np.array([nn[1], -nn[0]])
     return n1, n2
-
