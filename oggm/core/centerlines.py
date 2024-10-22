@@ -654,9 +654,6 @@ def compute_downstream_bedshape(gdir):
     gdir.write_pickle(out, 'downstream_line')
 
 
-
-
-
 @entity_task(log, writes=['geometries'])
 def catchment_area(gdir):
     """Compute the catchment areas of each tributary line.
@@ -1665,6 +1662,7 @@ def _join_lines(lines, heads):
             break
 
     return olines[::-1]
+
 
 def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
                            glacier_mask, topo, geom, poly_pix):
