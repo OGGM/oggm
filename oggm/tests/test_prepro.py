@@ -867,7 +867,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
-        centerlines_utils.elevation_band_flowline(gdir)
+        centerlines.elevation_band_flowline(gdir)
 
         df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
 
@@ -889,7 +889,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
-        centerlines_utils.elevation_band_flowline(gdir)
+        centerlines.elevation_band_flowline(gdir)
         centerlines.fixed_dx_elevation_band_flowline(gdir)
 
         # The tests below are overkill but copied from another test
@@ -942,8 +942,8 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
-        centerlines_utils.elevation_band_flowline(gdir)
-        centerlines_utils.fixed_dx_elevation_band_flowline(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
         climate.process_custom_climate_data(gdir)
         massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))

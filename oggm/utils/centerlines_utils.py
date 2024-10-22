@@ -1,3 +1,13 @@
+"""
+centerlines_utils is a utility class that aims to separate/abstract the clutter of the helper functions that aid
+the main CenterLines class. This is a first attempt at potentially doing similar things to other components of this
+project in order to make the basic functionality easier to expand upon in the future by separating the public functionality
+of Centerlines away from the utilities that it needs. There is also potential for these more universal funcs to apply to other
+components, making for easier reuse later as they are not coupled as private functions within CenterLines.
+
+@Author: hbbaker
+"""
+
 # Built ins
 import copy
 
@@ -471,7 +481,7 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
     # OK. Filter and see.
     log.debug('(%s) number of heads before radius filter: %d',
               gdir.rgi_id, len(heads))
-    heads, heads_z = centerlines_utils.filter_heads(heads, heads_z, radius, poly_pix)
+    heads, heads_z = filter_heads(heads, heads_z, radius, poly_pix)
     log.debug('(%s) number of heads after radius filter: %d',
               gdir.rgi_id, len(heads))
 
