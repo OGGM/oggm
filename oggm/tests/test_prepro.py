@@ -22,7 +22,7 @@ from oggm.core import (gis, inversion, climate, centerlines,
 from oggm.shop import gcm_climate
 import oggm.cfg as cfg
 from oggm import utils, tasks
-from oggm.utils import get_demo_file, tuple2int
+from oggm.utils import get_demo_file, tuple2int, centerlines_utils
 from oggm.tests.funcs import get_test_dir
 from oggm import workflow
 from oggm.exceptions import InvalidWorkflowError
@@ -579,9 +579,9 @@ class TestCenterlines(unittest.TestCase):
         heads_height = np.array([200, 210, 1000., 900, 1200, 1400, 1300, 250])
         radius = 25
 
-        _heads, _ = centerlines._filter_heads(heads, heads_height, radius,
+        _heads, _ = centerlines_utils.filter_heads(heads, heads_height, radius,
                                               polygon)
-        _headsi, _ = centerlines._filter_heads(heads[::-1],
+        _headsi, _ = centerlines_utils.filter_heads(heads[::-1],
                                                heads_height[::-1],
                                                radius, polygon)
 
