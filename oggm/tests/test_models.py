@@ -39,7 +39,8 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_with_hydro, SemiImplicitModel, elevation_band_flowline, fixed_dx_elevation_band_flowline)
+                                run_with_hydro, SemiImplicitModel, elevation_band_flowline,
+                                fixed_dx_elevation_band_flowline)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_melt_f_calibration,
     dynamic_melt_f_run_with_dynamic_spinup,

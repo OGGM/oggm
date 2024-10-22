@@ -1,15 +1,18 @@
 """
-centerlines_utils is a utility class that aims to separate/abstract the clutter of the helper functions that aid
-the main CenterLines class. This is a first attempt at potentially doing similar things to other components of this
-project in order to make the basic functionality easier to expand upon in the future by separating the public functionality
-of Centerlines away from the utilities that it needs. There is also potential for these more universal funcs to apply to other
-components, making for easier reuse later as they are not coupled as private functions within CenterLines.
+centerlines_utils is a utility class that aims to separate/abstract the clutter of the helper
+functions that aid the main CenterLines class. This is a first attempt at potentially doing
+similar things to other components of this project in order to make the basic functionality
+easier to expand upon in the future by separating the public functionality
+of Centerlines away from the utilities that it needs. There is also potential for these more
+universal funcs to apply to other components, making for easier reuse later as they are not
+coupled as private functions within CenterLines.
 
 @Author: hbbaker
 """
 
 # Built ins
 import copy
+import logging
 
 from itertools import groupby
 
@@ -254,6 +257,7 @@ def width_change_factor(widths):
     fac = widths[:-1] / widths[1:]
     return fac
 
+
 def filter_grouplen(arr, minsize=3):
     """Filter out the groups of grid points smaller than minsize
 
@@ -278,6 +282,7 @@ def filter_grouplen(arr, minsize=3):
     arr = ~ np.asarray([ri in nr for ri in r])
 
     return arr
+
 
 def line_extend(uline, dline, dx):
     """Adds a downstream line to a flowline
@@ -385,6 +390,7 @@ def make_costgrid(mask, ext, z):
 
     return np.where(mask, cost, np.inf)
 
+
 def get_terminus_coord(gdir, ext_yx, zoutline):
     """This finds the terminus coordinate of the glacier.
 
@@ -442,47 +448,3 @@ def normalize(n):
     n2 = np.array([nn[1], -nn[0]])
     return n1, n2
 
-
-def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
-                           glacier_mask, topo, geom, poly_pix):
-
-    # Size of the half window to use to look for local maximas
-    maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
-    maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
-    heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
-                                       order=int(maxorder))
-    if single_fl or len(heads_idx[0]) <= 1:
-        # small glaciers with one or less heads: take the absolute max
-        heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
-
-    # Remove the heads that are too low
-    zglacier = topo[np.where(glacier_mask)]
-    head_threshold = np.percentile(zglacier, (1./3.)*100)
-    _heads_idx = heads_idx[0][np.where(zoutline[heads_idx] > head_threshold)]
-    if len(_heads_idx) == 0:
-        # this is for baaad ice caps where the outline is far off in altitude
-        _heads_idx = [heads_idx[0][np.argmax(zoutline[heads_idx])]]
-    heads_idx = _heads_idx
-    heads = np.asarray(ext_yx)[:, heads_idx]
-    heads_z = zoutline[heads_idx]
-    # careful, the coords are in y, x order!
-    heads = [shpg.Point(x, y) for y, x in zip(heads[0, :],
-                                              heads[1, :])]
-
-    # get radius of the buffer according to Kienholz eq. (1)
-    radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
-    radius = utils.clip_scalar(radius, 0, cfg.PARAMS['rmax'])
-    radius /= gdir.grid.dx  # in raster coordinates
-    # Plus our criteria, quite useful to remove short lines:
-    radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
-    log.debug('(%s) radius in raster coordinates: %.2f',
-              gdir.rgi_id, radius)
-
-    # OK. Filter and see.
-    log.debug('(%s) number of heads before radius filter: %d',
-              gdir.rgi_id, len(heads))
-    heads, heads_z = filter_heads(heads, heads_z, radius, poly_pix)
-    log.debug('(%s) number of heads after radius filter: %d',
-              gdir.rgi_id, len(heads))
-
-    return heads
