@@ -22,7 +22,7 @@ from oggm.core import (gis, inversion, climate, centerlines,
 from oggm.shop import gcm_climate
 import oggm.cfg as cfg
 from oggm import utils, tasks
-from oggm.utils import get_demo_file, tuple2int
+from oggm.utils import get_demo_file, tuple2int, centerlines_utils
 from oggm.tests.funcs import get_test_dir
 from oggm import workflow
 from oggm.exceptions import InvalidWorkflowError
@@ -579,9 +579,9 @@ class TestCenterlines(unittest.TestCase):
         heads_height = np.array([200, 210, 1000., 900, 1200, 1400, 1300, 250])
         radius = 25
 
-        _heads, _ = centerlines._filter_heads(heads, heads_height, radius,
+        _heads, _ = centerlines_utils.filter_heads(heads, heads_height, radius,
                                               polygon)
-        _headsi, _ = centerlines._filter_heads(heads[::-1],
+        _headsi, _ = centerlines_utils.filter_heads(heads[::-1],
                                                heads_height[::-1],
                                                radius, polygon)
 
@@ -867,7 +867,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
-        centerlines.elevation_band_flowline(gdir)
+        centerlines_utils.elevation_band_flowline(gdir)
 
         df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
 
@@ -889,7 +889,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
-        centerlines.elevation_band_flowline(gdir)
+        centerlines_utils.elevation_band_flowline(gdir)
         centerlines.fixed_dx_elevation_band_flowline(gdir)
 
         # The tests below are overkill but copied from another test
@@ -942,8 +942,8 @@ class TestElevationBandFlowlines(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
-        centerlines.elevation_band_flowline(gdir)
-        centerlines.fixed_dx_elevation_band_flowline(gdir)
+        centerlines_utils.elevation_band_flowline(gdir)
+        centerlines_utils.fixed_dx_elevation_band_flowline(gdir)
         climate.process_custom_climate_data(gdir)
         massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
