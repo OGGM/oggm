@@ -20,7 +20,6 @@ import logging
 import copy
 from itertools import groupby
 from collections import Counter
-from packaging.version import Version
 
 # External libs
 import numpy as np
@@ -52,10 +51,10 @@ import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
 from oggm import utils
 from oggm.utils import (tuple2int, line_interpol, interp_nans, lazy_property,
-                        SuperclassMeta)
+                        SuperclassMeta, centerlines_utils)
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
-                             GeometryError, InvalidDEMError)
+                             GeometryError)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -117,6 +116,7 @@ class Centerline(object, metaclass=SuperclassMeta):
         except TypeError:
             # For backwards compatibility we allow this for now
             self.dx_meter = None
+
         self._surface_h = surface_h
         self._widths = None
         self.is_rectangular = None
@@ -158,7 +158,7 @@ class Centerline(object, metaclass=SuperclassMeta):
             self.flows_to_point = other.head
         else:
             # just the closest
-            self.flows_to_point = _projection_point(other, self.tail)
+            self.flows_to_point = centerlines_utils.projection_point(other, self.tail)
         other.inflow_points.append(self.flows_to_point)
         other.inflows.append(self)
 
@@ -217,10 +217,10 @@ class Centerline(object, metaclass=SuperclassMeta):
         normals = []
         # First
         normal = np.array(pcoords[1, :] - pcoords[0, :])
-        normals.append(_normalize(normal))
+        normals.append(centerlines_utils.normalize(normal))
         # Second
         normal = np.array(pcoords[2, :] - pcoords[0, :])
-        normals.append(_normalize(normal))
+        normals.append(centerlines_utils.normalize(normal))
         # Others
         for (bbef, bef, cur, aft, aaft) in zip(pcoords[:-4, :],
                                                pcoords[1:-3, :],
@@ -228,13 +228,13 @@ class Centerline(object, metaclass=SuperclassMeta):
                                                pcoords[3:-1, :],
                                                pcoords[4:, :]):
             normal = np.array(aaft + 2*aft - 2*bef - bbef)
-            normals.append(_normalize(normal))
+            normals.append(centerlines_utils.normalize(normal))
         # One before last
         normal = np.array(pcoords[-1, :] - pcoords[-3, :])
-        normals.append(_normalize(normal))
+        normals.append(centerlines_utils.normalize(normal))
         # Last
         normal = np.array(pcoords[-1, :] - pcoords[-2, :])
-        normals.append(_normalize(normal))
+        normals.append(centerlines_utils.normalize(normal))
 
         return normals
 
@@ -342,299 +342,9 @@ class Centerline(object, metaclass=SuperclassMeta):
                 self.flows_to.flux[ide-2:ide+3] += gk * flux[-1]
 
 
-def _filter_heads(heads, heads_height, radius, polygon):
-    """Filter the head candidates following Kienholz et al. (2014), Ch. 4.1.2
-
-    Parameters
-    ----------
-    heads : list of shapely.geometry.Point instances
-        The heads to filter out (in raster coordinates).
-    heads_height : list
-        The heads altitudes.
-    radius : float
-        The radius around each head to search for potential challengers
-    polygon : shapely.geometry.Polygon class instance
-        The glacier geometry (in raster coordinates).
-
-    Returns
-    -------
-    a list of shapely.geometry.Point instances with the "bad ones" removed
-    """
-
-    heads = copy.copy(heads)
-    heads_height = copy.copy(heads_height)
-
-    i = 0
-    # I think a "while" here is ok: we remove the heads forwards only
-    while i < len(heads):
-        head = heads[i]
-        pbuffer = head.buffer(radius)
-        inter_poly = pbuffer.intersection(polygon.exterior)
-        if inter_poly.geom_type in ['MultiPolygon',
-                                    'GeometryCollection',
-                                    'MultiLineString']:
-            #  In the case of a junction point, we have to do a check
-            # http://lists.gispython.org/pipermail/community/
-            # 2015-January/003357.html
-            if inter_poly.geom_type == 'MultiLineString':
-                inter_poly = shapely.ops.linemerge(inter_poly)
-
-            if inter_poly.geom_type != 'LineString':
-                # keep the local polygon only
-                for sub_poly in inter_poly.geoms:
-                    if sub_poly.intersects(head):
-                        inter_poly = sub_poly
-                        break
-        elif inter_poly.geom_type == 'LineString':
-            inter_poly = shpg.Polygon(np.asarray(inter_poly.xy).T)
-        elif inter_poly.geom_type == 'Polygon':
-            pass
-        else:
-            extext = ('Geometry collection not expected: '
-                      '{}'.format(inter_poly.geom_type))
-            raise InvalidGeometryError(extext)
-
-        # Find other points in radius and in polygon
-        _heads = [head]
-        _z = [heads_height[i]]
-        for op, z in zip(heads[i+1:], heads_height[i+1:]):
-            if inter_poly.intersects(op):
-                _heads.append(op)
-                _z.append(z)
-
-        # If alone, go to the next point
-        if len(_heads) == 1:
-            i += 1
-            continue
-
-        # If not, keep the highest
-        _w = np.argmax(_z)
-
-        for head in _heads:
-            if not (head is _heads[_w]):
-                heads_height = np.delete(heads_height, heads.index(head))
-                heads.remove(head)
-
-    return heads, heads_height
-
-
-def _filter_lines(lines, heads, k, r):
-    """Filter the centerline candidates by length.
-
-    Kienholz et al. (2014), Ch. 4.3.1
-
-    Parameters
-    ----------
-    lines : list of shapely.geometry.LineString instances
-        The lines to filter out (in raster coordinates).
-    heads :  list of shapely.geometry.Point instances
-        The heads corresponding to the lines.
-    k : float
-        A buffer (in raster coordinates) to cut around the selected lines
-    r : float
-        The lines shorter than r will be filtered out.
-
-    Returns
-    -------
-    (lines, heads) a list of the new lines and corresponding heads
-    """
-
-    olines = []
-    oheads = []
-    ilines = copy.copy(lines)
-
-    lastline = None
-    while len(ilines) > 0:  # loop as long as we haven't filtered all lines
-        if len(olines) > 0:  # enter this after the first step only
-
-            toremove = lastline.buffer(k)  # buffer centerlines the last line
-            tokeep = []
-            for l in ilines:
-                # loop over all remaining lines and compute their diff
-                # to the last longest line
-                diff = l.difference(toremove)
-                if diff.geom_type == 'MultiLineString':
-                    # Remove the lines that have no head
-                    diff = list(diff.geoms)
-                    for il in diff:
-                        hashead = False
-                        for h in heads:
-                            if il.intersects(h):
-                                hashead = True
-                                diff = il
-                                break
-                        if hashead:
-                            break
-                        else:
-                            diff = None
-                # keep this head line only if it's long enough
-                if diff is not None and diff.length > r:
-                    # Fun fact. The heads can be cut by the buffer too
-                    diff = shpg.LineString(l.coords[0:2] + diff.coords[2:])
-                    tokeep.append(diff)
-            ilines = tokeep
-
-        # it could happen that we're done at this point
-        if len(ilines) == 0:
-            break
-
-        # Otherwise keep the longest one and continue
-        lengths = np.array([])
-        for l in ilines:
-            lengths = np.append(lengths, l.length)
-        ll = ilines[np.argmax(lengths)]
-
-        ilines.remove(ll)
-        if len(olines) > 0:
-            # the cut line's last point is not guaranteed
-            # to on straight coordinates. Remove it
-            olines.append(shpg.LineString(np.asarray(ll.xy)[:, 0:-1].T))
-        else:
-            olines.append(ll)
-        lastline = ll
-
-    # add the corresponding head to each line
-    for l in olines:
-        for h in heads:
-            if l.intersects(h):
-                oheads.append(h)
-                break
-
-    return olines, oheads
-
-
-def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
-    """Filter the centerline candidates by slope: if they go up, remove
-
-    Kienholz et al. (2014), Ch. 4.3.1
-
-    Parameters
-    ----------
-    lines : list of shapely.geometry.LineString instances
-        The lines to filter out (in raster coordinates).
-    topo : the glacier topography
-    gdir : the glacier directory for simplicity
-    min_slope: rad
-
-    Returns
-    -------
-    (lines, heads) a list of the new lines and corresponding heads
-    """
-
-    dx_cls = cfg.PARAMS['flowline_dx']
-    lid = int(cfg.PARAMS['flowline_junction_pix'])
-    sw = cfg.PARAMS['flowline_height_smooth']
-
-    # Bilinear interpolation
-    # Geometries coordinates are in "pixel centered" convention, i.e
-    # (0, 0) is also located in the center of the pixel
-    xy = (np.arange(0, gdir.grid.ny-0.1, 1),
-          np.arange(0, gdir.grid.nx-0.1, 1))
-    interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
-
-    olines = [lines[0]]
-    oheads = [heads[0]]
-    for line, head in zip(lines[1:], heads[1:]):
-
-        # The code below mimics what initialize_flowlines will do
-        # this is a bit smelly but necessary
-        points = line_interpol(line, dx_cls)
-
-        # For tributaries, remove the tail
-        points = points[0:-lid]
-
-        new_line = shpg.LineString(points)
-
-        # Interpolate heights
-        x, y = new_line.xy
-        hgts = interpolator((np.array(y), np.array(x)))
-
-        # If smoothing, this is the moment
-        hgts = gaussian_filter1d(hgts, sw)
-
-        # Finally slope
-        slope = np.arctan(-np.gradient(hgts, dx_cls*gdir.grid.dx))
-
-        # And altitude range
-        z_range = np.max(hgts) - np.min(hgts)
-
-        # arbitrary threshold with which we filter the lines, otherwise bye bye
-        if np.sum(slope >= min_slope) >= 5 and z_range > 10:
-            olines.append(line)
-            oheads.append(head)
-
-    return olines, oheads
-
-
-def _projection_point(centerline, point):
-    """Projects a point on a line and returns the closest integer point
-    guaranteed to be on the line, and guaranteed to be far enough from the
-    head and tail.
-
-    Parameters
-    ----------
-    centerline : Centerline instance
-    point : Shapely Point geometry
-
-    Returns
-    -------
-    (flow_point, ind_closest): Shapely Point and indice in the line
-    """
-    prdis = centerline.line.project(point, normalized=False)
-    ind_closest = np.argmin(np.abs(centerline.dis_on_line - prdis)).item()
-    flow_point = shpg.Point(centerline.line.coords[int(ind_closest)])
-    return flow_point
-
-
-def _join_lines(lines, heads):
-    """Re-joins the lines that have been cut by _filter_lines
-
-     Compute the rooting scheme.
-
-    Parameters
-    ----------
-    lines: list of shapely lines instances
-
-    Returns
-    -------
-    Centerline instances, updated with flow routing properties
-     """
-
-    olines = [Centerline(l, orig_head=h) for l, h
-              in zip(lines[::-1], heads[::-1])]
-    nl = len(olines)
-    if nl == 1:
-        return olines
-
-    # per construction the line cannot flow in a line placed before in the list
-    for i, l in enumerate(olines):
-
-        last_point = shpg.Point(*l.line.coords[-1])
-
-        totest = olines[i+1:]
-        dis = [last_point.distance(t.line) for t in totest]
-        flow_to = totest[np.argmin(dis)]
-
-        flow_point = _projection_point(flow_to, last_point)
-
-        # Interpolate to finish the line, bute force:
-        # we interpolate 20 points, round them, remove consecutive duplicates
-        endline = shpg.LineString([last_point, flow_point])
-        endline = shpg.LineString([endline.interpolate(x, normalized=True)
-                                   for x in np.linspace(0., 1., num=20)])
-        # we keep all coords without the first AND the last
-        grouped = groupby(map(tuple, np.rint(endline.coords)))
-        endline = [x[0] for x in grouped][1:-1]
-
-        # We're done
-        l.set_line(shpg.LineString(l.line.coords[:] + endline))
-        l.set_flows_to(flow_to, check_tail=False)
-
-        # The last one has nowhere to flow
-        if i+2 == nl:
-            break
-
-    return olines[::-1]
+class HashablePoint(shpg.Point):
+    def __hash__(self):
+        return hash(tuple((self.x, self.y)))
 
 
 def line_order(line):
@@ -679,196 +389,6 @@ def line_inflows(line, keep=True):
     if not keep:
         out.remove(line)
     return out
-
-
-def _make_costgrid(mask, ext, z):
-    """Computes a costgrid following Kienholz et al. (2014) Eq. (2)
-
-    Parameters
-    ----------
-    mask : numpy.array
-        The glacier mask.
-    ext : numpy.array
-        The glacier boundaries' mask.
-    z : numpy.array
-        The terrain height.
-
-    Returns
-    -------
-    numpy.array of the costgrid
-    """
-
-    dis = np.where(mask, distance_transform_edt(mask), np.nan)
-    z = np.where(mask, z, np.nan)
-
-    dmax = np.nanmax(dis)
-    zmax = np.nanmax(z)
-    zmin = np.nanmin(z)
-    cost = ((dmax - dis) / dmax * cfg.PARAMS['f1']) ** cfg.PARAMS['a'] + \
-           ((z - zmin) / (zmax - zmin) * cfg.PARAMS['f2']) ** cfg.PARAMS['b']
-
-    # This is new: we make the cost to go over boundaries
-    # arbitrary high to avoid the lines to jump over adjacent boundaries
-    cost[np.where(ext)] = np.nanmax(cost[np.where(ext)]) * 50
-
-    return np.where(mask, cost, np.inf)
-
-
-def _get_terminus_coord(gdir, ext_yx, zoutline):
-    """This finds the terminus coordinate of the glacier.
-
-     There is a special case for marine terminating glaciers/
-     """
-
-    perc = cfg.PARAMS['terminus_search_percentile']
-    deltah = cfg.PARAMS['terminus_search_altitude_range']
-
-    if gdir.is_tidewater and (perc > 0):
-        # There is calving
-
-        # find the lowest percentile
-        plow = np.percentile(zoutline, perc).astype(np.int64)
-
-        # the minimum altitude in the glacier
-        mini = np.min(zoutline)
-
-        # indices of where in the outline the altitude is lower than the qth
-        # percentile and lower than 100m higher, than the minimum altitude
-        ind = np.where((zoutline < plow) & (zoutline < (mini + deltah)))[0]
-
-        # We take the middle of this area
-        try:
-            ind_term = ind[np.round(len(ind) / 2.).astype(int)]
-        except IndexError:
-            # Sometimes the default perc is not large enough
-            try:
-                # Repeat
-                perc *= 2
-                plow = np.percentile(zoutline, perc).astype(np.int64)
-                mini = np.min(zoutline)
-                ind = np.where((zoutline < plow) &
-                               (zoutline < (mini + deltah)))[0]
-                ind_term = ind[np.round(len(ind) / 2.).astype(int)]
-            except IndexError:
-                # Last resort
-                ind_term = np.argmin(zoutline)
-    else:
-        # easy: just the minimum
-        ind_term = np.argmin(zoutline)
-
-    return np.asarray(ext_yx)[:, ind_term].astype(np.int64)
-
-
-def _normalize(n):
-    """Computes the normals of a vector n.
-
-    Returns
-    -------
-    the two normals (n1, n2)
-    """
-    nn = n / np.sqrt(np.sum(n*n))
-    n1 = np.array([-nn[1], nn[0]])
-    n2 = np.array([nn[1], -nn[0]])
-    return n1, n2
-
-
-def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
-                           glacier_mask, topo, geom, poly_pix):
-
-    # Size of the half window to use to look for local maximas
-    maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
-    maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
-    heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
-                                       order=int(maxorder))
-    if single_fl or len(heads_idx[0]) <= 1:
-        # small glaciers with one or less heads: take the absolute max
-        heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
-
-    # Remove the heads that are too low
-    zglacier = topo[np.where(glacier_mask)]
-    head_threshold = np.percentile(zglacier, (1./3.)*100)
-    _heads_idx = heads_idx[0][np.where(zoutline[heads_idx] > head_threshold)]
-    if len(_heads_idx) == 0:
-        # this is for baaad ice caps where the outline is far off in altitude
-        _heads_idx = [heads_idx[0][np.argmax(zoutline[heads_idx])]]
-    heads_idx = _heads_idx
-    heads = np.asarray(ext_yx)[:, heads_idx]
-    heads_z = zoutline[heads_idx]
-    # careful, the coords are in y, x order!
-    heads = [shpg.Point(x, y) for y, x in zip(heads[0, :],
-                                              heads[1, :])]
-
-    # get radius of the buffer according to Kienholz eq. (1)
-    radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
-    radius = utils.clip_scalar(radius, 0, cfg.PARAMS['rmax'])
-    radius /= gdir.grid.dx  # in raster coordinates
-    # Plus our criteria, quite useful to remove short lines:
-    radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
-    log.debug('(%s) radius in raster coordinates: %.2f',
-              gdir.rgi_id, radius)
-
-    # OK. Filter and see.
-    log.debug('(%s) number of heads before radius filter: %d',
-              gdir.rgi_id, len(heads))
-    heads, heads_z = _filter_heads(heads, heads_z, radius, poly_pix)
-    log.debug('(%s) number of heads after radius filter: %d',
-              gdir.rgi_id, len(heads))
-
-    return heads
-
-
-def _line_extend(uline, dline, dx):
-    """Adds a downstream line to a flowline
-
-    Parameters
-    ----------
-    uline: a shapely.geometry.LineString instance
-    dline: a shapely.geometry.LineString instance
-    dx: the spacing
-
-    Returns
-    -------
-    (line, line) : two shapely.geometry.LineString instances. The first
-    contains the newly created (long) line, the second only the interpolated
-    downstream part (useful for other analyses)
-    """
-
-    # First points is easy
-    points = [shpg.Point(c) for c in uline.coords]
-
-    if len(points) == 0:
-        # eb flowline
-        dpoints = [shpg.Point(dline.coords[0])]
-        points = [shpg.Point(dline.coords[0])]
-    else:
-        dpoints = []
-
-    # Continue as long as line is not finished
-    while True:
-        pref = points[-1]
-        pbs = pref.buffer(dx).boundary.intersection(dline)
-        if pbs.geom_type in ['LineString', 'GeometryCollection']:
-            # Very rare
-            pbs = pref.buffer(dx+1e-12).boundary.intersection(dline)
-        if pbs.geom_type == 'Point':
-            pbs = [pbs]
-
-        try:
-            # Shapely v2 compat
-            pbs = pbs.geoms
-        except AttributeError:
-            pass
-
-        # Out of the point(s) that we get, take the one farthest from the top
-        refdis = dline.project(pref)
-        tdis = np.array([dline.project(pb) for pb in pbs])
-        p = np.where(tdis > refdis)[0]
-        if len(p) == 0:
-            break
-        points.append(pbs[int(p[0])])
-        dpoints.append(pbs[int(p[0])])
-
-    return shpg.LineString(points), shpg.LineString(dpoints)
 
 
 @entity_task(log, writes=['centerlines', 'gridded_data'])
@@ -928,10 +448,10 @@ def compute_centerlines(gdir, heads=None):
                                        glacier_mask, topo, geom, poly_pix)
 
     # Cost array
-    costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)
+    costgrid = centerlines_utils.make_costgrid(glacier_mask, glacier_ext, topo)
 
     # Terminus
-    t_coord = _get_terminus_coord(gdir, ext_yx, zoutline)
+    t_coord = centerlines_utils.get_terminus_coord(gdir, ext_yx, zoutline)
 
     # Compute the routes
     lines = []
@@ -945,14 +465,14 @@ def compute_centerlines(gdir, heads=None):
     dx_cls = cfg.PARAMS['flowline_dx']
     radius = cfg.PARAMS['flowline_junction_pix'] * dx_cls
     radius += 6 * dx_cls
-    olines, oheads = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
+    olines, oheads = centerlines_utils.filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
     log.debug('(%s) number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
 
     # Filter the lines which are going up instead of down
     if do_filter_slope:
-        olines, oheads = _filter_lines_slope(olines, oheads, topo,
-                                             gdir, min_slope)
+        olines, oheads = centerlines_utils.filter_lines_slope(olines, oheads, topo,
+                                                              gdir, min_slope)
         log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
@@ -1053,212 +573,23 @@ def compute_downstream_line(gdir):
     cl = gdir.read_pickle('inversion_flowlines')[-1]
     if cl.line is not None:
         # normal OGGM lines
-        lline, dline = _line_extend(cl.line, line, cl.dx)
+        lline, dline = centerlines_utils.line_extend(cl.line, line, cl.dx)
         out = dict(full_line=lline, downstream_line=dline)
     else:
         # Eb flowlines - we trick
-        _, dline = _line_extend(shpg.LineString(), line, cl.dx)
+        _, dline = centerlines_utils.line_extend(shpg.LineString(), line, cl.dx)
         out = dict(full_line=None, downstream_line=dline)
 
     gdir.write_pickle(out, 'downstream_line')
 
 
-def _approx_parabola(x, y, y0=0):
-    """Fit a parabola to the equation y = a x**2 + y0
-
-    Parameters
-    ----------
-    x : array
-       the x axis variabls
-    y : array
-       the dependent variable
-    y0 : float, optional
-       the intercept
-
-    Returns
-    -------
-    [a, 0, y0]
-    """
-    # y=ax**2+y0
-    x, y = np.array(x), np.array(y)
-    a = np.sum(x ** 2 * (y - y0)) / np.sum(x ** 4)
-    return np.array([a, 0, y0])
 
 
-def _parabola_error(x, y, f):
-    # f is an array represents polynom
-    x, y = np.array(x), np.array(y)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        out = sum(abs((np.polyval(f, x) - y) / y)) / len(x)
-    return out
 
 
-class HashablePoint(shpg.Point):
-    def __hash__(self):
-        return hash(tuple((self.x, self.y)))
 
 
-def _parabolic_bed_from_topo(gdir, idl, interpolator):
-    """this returns the parabolic bedshape for all points on idl"""
 
-    # Volume area scaling formula for the probable ice thickness
-    h_mean = 0.034 * gdir.rgi_area_km2**0.375 * 1000
-    gnx, gny = gdir.grid.nx, gdir.grid.ny
-
-    # Far Factor
-    r = 40
-    # number of points
-    cs_n = 20
-
-    # normals
-    ns = [i[0] for i in idl.normals]
-    cs = []
-    donot_compute = []
-
-    for pcoords, n in zip(idl.line.coords, ns):
-        xi, yi = pcoords
-        vx, vy = n
-        modul = np.sqrt(vx ** 2 + vy ** 2)
-        ci = []
-        _isborder = False
-        for ro in np.linspace(0, r / 2.0, cs_n):
-            t = ro / modul
-            cp1 = HashablePoint(xi + t * vx, yi + t * vy)
-            cp2 = HashablePoint(xi - t * vx, yi - t * vy)
-
-            # check if out of the frame
-            if not (0 < cp2.y < gny - 1) or \
-                    not (0 < cp2.x < gnx - 1) or \
-                    not (0 < cp1.y < gny - 1) or \
-                    not (0 < cp1.x < gnx - 1):
-                _isborder = True
-
-            ci.append((cp1, ro))
-            ci.append((cp2, -ro))
-
-        ci = list(set(ci))
-        cs.append(ci)
-        donot_compute.append(_isborder)
-
-    bed = []
-    terrain_heights = []
-    for ic, (cc, dontcomp) in enumerate(zip(cs, donot_compute)):
-
-        if dontcomp:
-            bed.append(np.nan)
-            terrain_heights.append(np.nan)
-            continue
-
-        z = []
-        ro = []
-        for i in cc:
-            z.append(interpolator((i[0].y, i[0].x)))
-            ro.append(i[1])
-        aso = np.argsort(ro)
-        ro, z = np.array(ro)[aso], np.array(z)[aso]
-
-        # find top of parabola
-        roHead = ro[np.argmin(z)]
-        zero = np.argmin(z)  # it is index of roHead/zHead
-        zHead = np.amin(z)
-
-        dsts = abs(h_mean + zHead - z)
-
-        # find local minima in set of distances
-        extr = scipy.signal.argrelextrema(dsts, np.less, mode='wrap')
-        if len(extr[0]) == 0:
-            bed.append(np.nan)
-            terrain_heights.append(np.nan)
-            continue
-
-        # from local minima find that with the minimum |x|
-        idx = extr[0][np.argmin(abs(ro[extr]))]
-
-        # x<0 => x=0
-        # (|x|+x)/2
-        roN = ro[int((abs(zero - abs(zero - idx)) + zero - abs(
-            zero - idx)) / 2):zero + abs(zero - idx) + 1]
-        zN = z[int((abs(zero - abs(zero - idx)) + zero - abs(
-            zero - idx)) / 2):zero + abs(zero - idx) + 1]
-        roNx = roN - roHead
-        # zN=zN-zHead#
-
-        with warnings.catch_warnings():
-            # This can trigger a divide by zero Warning
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            p = _approx_parabola(roNx, zN, y0=zHead)
-
-        # define terrain height as the maximum height difference of points used
-        # for the parabolic fitting and the bottom height
-        terrain_heights.append(float(np.max(zN - zHead)))
-
-        # shift parabola to the ds-line
-        p2 = np.copy(p)
-        p2[2] = z[ro == 0][0]
-
-        err = _parabola_error(roN, zN, p2) * 100
-
-        # The original implementation of @anton-ub stored all three parabola
-        # params. We just keep the one important here for now
-        if err < 1.5:
-            bed.append(p2[0])
-        else:
-            bed.append(np.nan)
-
-    terrain_heights = np.asarray(terrain_heights)
-    assert len(terrain_heights) == idl.nx, 'len(terrain_heights) == idl.nx'
-
-    bed = np.asarray(bed)
-    assert len(bed) == idl.nx, 'len(bed) == idl.nx'
-    pvalid = np.sum(np.isfinite(bed)) / len(bed) * 100
-    log.debug('(%s) percentage of valid parabolas in downstream: %d',
-              gdir.rgi_id, int(pvalid))
-
-    # Scale for dx (we worked in grid coords but need meters)
-    bed = bed / gdir.grid.dx**2
-
-    # interpolation, filling the gaps
-    default = cfg.PARAMS['default_parabolic_bedshape']
-    bed_int = interp_nans(bed, default=default)
-    default = 100.  # assume a default terrain height of 100 m if all nan
-    terrain_heights = interp_nans(terrain_heights, default=default)
-
-    # We forbid super small shapes (important! This can lead to huge volumes)
-    # Sometimes the parabola fits in flat areas are very good, implying very
-    # flat parabolas.
-    bed_int = utils.clip_min(bed_int, cfg.PARAMS['downstream_min_shape'])
-
-    # Smoothing
-    bed_ma = pd.Series(bed_int)
-    bed_ma = bed_ma.rolling(window=5, center=True, min_periods=1).mean()
-    return bed_ma.values, terrain_heights
-
-
-def _trapezoidal_bottom_width_from_terrain_cross_section_area(
-        terrain_heights, Ps, lambdas, w0_min):
-    """This function calculates a bottom width for a trapezoidal downstream
-    line in a way that the terrain cross section area is preserved. The area to
-    preserve is defined by the fitted parabolic shape and the terrain height.
-
-    Parabolic formulas involved (Ap = area, h = terrain_height,
-    w = surface width, Ps = bed-shape parameter):
-        Ap = 2 / 3 * h * w
-        Ps = 4 * h / w^2
-
-    Trapezoidal formulas involved (At = area, h = terrain_height,
-    w = surface width, w0 = bottom width, lambda = defines angle of wall):
-        At = (w + w0) * h / 2
-        w = w0 + lambda * h
-
-    Putting all formulas together and setting Ap = At we get:
-        w0 = 4 / 3 * sqrt(h / Ps) - 1 / 2 * lambda * h
-    """
-
-    w0s = utils.clip_min(4 / 3 * np.sqrt(terrain_heights / Ps) -
-                         1 / 2 * lambdas * terrain_heights,
-                         w0_min)
-
-    return w0s
 
 
 @entity_task(log, writes=['downstream_line'])
@@ -1323,227 +654,7 @@ def compute_downstream_bedshape(gdir):
     gdir.write_pickle(out, 'downstream_line')
 
 
-def _mask_to_polygon(mask, gdir=None):
-    """Converts a mask to a single polygon.
 
-    The mask should be a single entity with nunataks: I didn't test for more
-    than one "blob".
-
-    Parameters
-    ----------
-    mask: 2d array with ones and zeros
-        the mask to convert
-    gdir: GlacierDirectory
-        for logging
-
-    Returns
-    -------
-    (poly, poly_no_nunataks) Shapely polygons
-    """
-
-    regions, nregions = label(mask, structure=LABEL_STRUCT)
-    if nregions > 1:
-        rid = ''
-        if gdir is not None:
-            rid = gdir.rgi_id
-        log.debug('(%s) we had to cut a blob from the catchment', rid)
-        # Check the size of those
-        region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
-        am = np.argmax(region_sizes)
-        # Check not a strange glacier
-        sr = region_sizes.pop(am)
-        for ss in region_sizes:
-            if (ss / sr) > 0.2:
-                log.info('(%s) this blob was unusually large', rid)
-        mask[:] = 0
-        mask[np.where(regions == (am+1))] = 1
-
-    nlist = measure.find_contours(mask, 0.5)
-    # First is the exterior, the rest are nunataks
-    e_line = shpg.LinearRing(nlist[0][:, ::-1])
-    i_lines = [shpg.LinearRing(ipoly[:, ::-1]) for ipoly in nlist[1:]]
-
-    poly = shpg.Polygon(e_line, i_lines).buffer(0)
-    if not poly.is_valid:
-        raise GeometryError('Mask to polygon conversion error.')
-    poly_no = shpg.Polygon(e_line).buffer(0)
-    if not poly_no.is_valid:
-        raise GeometryError('Mask to polygon conversion error.')
-    return poly, poly_no
-
-
-def _point_width(normals, point, centerline, poly, poly_no_nunataks):
-    """ Compute the geometrical width on a specific point.
-
-    Called by catchment_width_geom.
-
-    Parameters
-    ----------
-    normals: normals of the current point, before, and after
-    point: the centerline's point
-    centerline: Centerline object
-    poly, poly_no_nuntaks: subcatchment polygons
-
-    Returns
-    -------
-    (width, MultiLineString)
-    """
-
-    # How far should the normal vector reach? (make it large)
-    far_factor = 150.
-
-    normal = shpg.LineString([shpg.Point(point + normals[0] * far_factor),
-                              shpg.Point(point + normals[1] * far_factor)])
-
-    # First use the external boundaries only
-    line = normal.intersection(poly_no_nunataks)
-    if line.geom_type == 'LineString':
-        pass  # Nothing to be done
-    elif line.geom_type in ['MultiLineString', 'GeometryCollection']:
-        # Take the one that contains the centerline
-        oline = None
-        for l in line.geoms:
-            if l.geom_type != 'LineString':
-                continue
-            if l.intersects(centerline.line):
-                oline = l
-                break
-        if oline is None:
-            return np.nan, shpg.MultiLineString()
-        line = oline
-    else:
-        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
-        raise InvalidGeometryError(extext)
-
-    # Then take the nunataks into account
-    # Make sure we are always returning a MultiLineString for later
-    line = line.intersection(poly)
-    if line.geom_type == 'LineString':
-        try:
-            line = shpg.MultiLineString([line])
-        except shapely.errors.EmptyPartError:
-            return np.nan, shpg.MultiLineString()
-    elif line.geom_type == 'MultiLineString':
-        pass  # nothing to be done
-    elif line.geom_type == 'GeometryCollection':
-        oline = []
-        for l in line:
-            if l.geom_type != 'LineString':
-                continue
-            oline.append(l)
-        if len(oline) == 0:
-            return np.nan, shpg.MultiLineString()
-        line = shpg.MultiLineString(oline)
-    else:
-        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
-        raise InvalidGeometryError(extext)
-
-    assert line.geom_type == 'MultiLineString', 'Should be MultiLineString'
-    width = np.sum([l.length for l in line.geoms])
-
-    return width, line
-
-
-def _filter_small_slopes(hgt, dx, min_slope):
-    """Masks out slopes with nan until the slope if all valid points is at
-    least min_slope (in radians).
-    """
-
-    slope = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
-    # slope at the end always OK
-    slope[-1] = min_slope
-
-    # Find the locs where it doesn't work and expand till we got everything
-    slope_mask = np.where(slope >= min_slope, slope, np.nan)
-    r, nr = label(~np.isfinite(slope_mask))
-    for objs in find_objects(r):
-        obj = objs[0]
-        i = 0
-        while True:
-            i += 1
-            i0 = objs[0].start-i
-            if i0 < 0:
-                break
-            ngap = obj.stop - i0 - 1
-            nhgt = hgt[[i0, obj.stop]]
-            current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
-            if i0 <= 0 or current_slope[0] >= min_slope:
-                break
-        slope_mask[i0:obj.stop] = np.nan
-    out = hgt.copy()
-    out[~np.isfinite(slope_mask)] = np.nan
-    return out
-
-
-def _filter_for_altitude_range(widths, wlines, topo):
-    """Some width lines have unrealistic length and go over the whole
-    glacier. Filter them out."""
-
-    # altitude range threshold (if range over the line > threshold, filter it)
-    alt_range_th = cfg.PARAMS['width_alt_range_thres']
-
-    while True:
-        out_width = widths.copy()
-        for i, (wi, wl) in enumerate(zip(widths, wlines)):
-            if np.isnan(wi):
-                continue
-            xc = []
-            yc = []
-            for dwl in wl.geoms:
-                # we interpolate at high res and take the int coords
-                dwl = shpg.LineString([dwl.interpolate(x, normalized=True)
-                                       for x in np.linspace(0., 1., num=100)])
-                grouped = groupby(map(tuple, np.rint(dwl.coords)))
-                dwl = np.array([x[0] for x in grouped], dtype=int)
-                xc.extend(dwl[:, 0])
-                yc.extend(dwl[:, 1])
-
-            altrange = topo[yc, xc]
-            if len(np.where(np.isfinite(altrange))[0]) != 0:
-                if (np.nanmax(altrange) - np.nanmin(altrange)) > alt_range_th:
-                    out_width[i] = np.nan
-
-        valid = np.where(np.isfinite(out_width))
-        if len(valid[0]) > 0:
-            break
-        else:
-            alt_range_th += 20
-            log.debug('Set altitude threshold to {}'.format(alt_range_th))
-        if alt_range_th > 2000:
-            raise GeometryError('Problem by altitude filter.')
-
-    return out_width
-
-
-def _filter_grouplen(arr, minsize=3):
-    """Filter out the groups of grid points smaller than minsize
-
-    Parameters
-    ----------
-    arr : the array to filter (should be False and Trues)
-    minsize : the minimum size of the group
-
-    Returns
-    -------
-    the array, with small groups removed
-    """
-
-    # Do it with trues
-    r, nr = label(arr)
-    nr = [i+1 for i, o in enumerate(find_objects(r)) if (len(r[o]) >= minsize)]
-    arr = np.asarray([ri in nr for ri in r])
-
-    # and with Falses
-    r, nr = label(~ arr)
-    nr = [i+1 for i, o in enumerate(find_objects(r)) if (len(r[o]) >= minsize)]
-    arr = ~ np.asarray([ri in nr for ri in r])
-
-    return arr
-
-
-def _width_change_factor(widths):
-    fac = widths[:-1] / widths[1:]
-    return fac
 
 
 @entity_task(log, writes=['geometries'])
@@ -1580,7 +691,7 @@ def catchment_area(gdir):
         return
 
     # Cost array
-    costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)
+    costgrid = centerlines_utils.make_costgrid(glacier_mask, glacier_ext, topo)
 
     # Initialise costgrid and the "catching" dict
     cost_factor = 0.  # Make it cheap
@@ -1899,7 +1010,7 @@ def catchment_width_geom(gdir):
                 warnings.simplefilter('ignore', category=RuntimeWarning)
                 inter = gdfi.intersects(wg)
             is_rectangular.append(np.any(inter))
-        is_rectangular = _filter_grouplen(is_rectangular, minsize=5)
+        is_rectangular = centerlines_utils.filter_grouplen(is_rectangular, minsize=5)
 
         # we filter the lines which have a large altitude range
         fil_widths = _filter_for_altitude_range(widths, wlines, topo)
@@ -2178,276 +1289,487 @@ def intersect_downstream_lines(gdir, candidates=None):
     return tributaries
 
 
-@entity_task(log, writes=['elevation_band_flowline'])
-def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
-    """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
+# Private Functions that don't need to exist in CenterLines Utils
 
-    This writes out a table of along glacier bins, strictly following the
-    method described in Werder, M. A., Huss, M., Paul, F., Dehecq, A. and
-    Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
-    applications, J. Glaciol., 1–16, doi:10.1017/jog.2019.93, 2019.
 
-    The only parameter is cfg.PARAMS['elevation_band_flowline_binsize'],
-    which is 30m in Werder et al and 10m in Huss&Farinotti2012.
+def _mask_to_polygon(mask, gdir=None):
+    """Converts a mask to a single polygon.
 
-    Currently the bands are assumed to have a rectangular bed.
-
-    Before calling this task you should run `tasks.define_glacier_region`
-    and `gis.simple_glacier_masks`. The logical following task is
-    `fixed_dx_elevation_band_flowline` to convert this to an OGGM flowline.
+    The mask should be a single entity with nunataks: I didn't test for more
+    than one "blob".
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        where to write the data
-    bin_variables : str or list of str
-        variables to add to the binned flowline
-    preserve_totals : bool or list of bool
-        whether or not to preserve the variables totals (e.g. volume)
+    mask: 2d array with ones and zeros
+        the mask to convert
+    gdir: GlacierDirectory
+        for logging
+
+    Returns
+    -------
+    (poly, poly_no_nunataks) Shapely polygons
     """
 
-    # Variables
-    bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
-    out_vars = []
-    out_totals = []
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:] == 1
-        topo = nc.variables['topo_smoothed'][:]
+    regions, nregions = label(mask, structure=LABEL_STRUCT)
+    if nregions > 1:
+        rid = ''
+        if gdir is not None:
+            rid = gdir.rgi_id
+        log.debug('(%s) we had to cut a blob from the catchment', rid)
+        # Check the size of those
+        region_sizes = [np.sum(regions == r) for r in np.arange(1, nregions+1)]
+        am = np.argmax(region_sizes)
+        # Check not a strange glacier
+        sr = region_sizes.pop(am)
+        for ss in region_sizes:
+            if (ss / sr) > 0.2:
+                log.info('(%s) this blob was unusually large', rid)
+        mask[:] = 0
+        mask[np.where(regions == (am+1))] = 1
 
-        # Check if there and do not raise when not available
-        keep = []
-        for var in bin_variables:
-            if var in nc.variables:
-                keep.append(var)
-            else:
-                log.warning('{}: var `{}` not found in gridded_data.'
-                            ''.format(gdir.rgi_id, var))
-        bin_variables = keep
-        for var in bin_variables:
-            data = nc.variables[var][:]
-            if var == 'consensus_ice_thickness':
-                # individual handling for consensus thickness as they use a
-                # different glacier mask than oggm (which was already applied)
-                data_sum = np.nansum(data)
-            else:
-                # use oggm glacier mask for all other data
-                data_sum = np.nansum(data[glacier_mask])
-            out_totals.append(data_sum * gdir.grid.dx ** 2)
-            out_vars.append(data[glacier_mask])
+    nlist = measure.find_contours(mask, 0.5)
+    # First is the exterior, the rest are nunataks
+    e_line = shpg.LinearRing(nlist[0][:, ::-1])
+    i_lines = [shpg.LinearRing(ipoly[:, ::-1]) for ipoly in nlist[1:]]
 
-    preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
+    poly = shpg.Polygon(e_line, i_lines).buffer(0)
+    if not poly.is_valid:
+        raise GeometryError('Mask to polygon conversion error.')
+    poly_no = shpg.Polygon(e_line).buffer(0)
+    if not poly_no.is_valid:
+        raise GeometryError('Mask to polygon conversion error.')
+    return poly, poly_no
 
-    # Slope
-    sy, sx = np.gradient(topo, gdir.grid.dx)
-    slope = np.arctan(np.sqrt(sx ** 2 + sy ** 2))
 
-    # Clip following Werder et al 2019
-    slope = utils.clip_array(slope, np.deg2rad(0.4), np.deg2rad(60))
+def _join_lines(lines, heads):
+    """Re-joins the lines that have been cut by _filter_lines
 
-    topo = topo[glacier_mask]
-    slope = slope[glacier_mask]
+     Compute the rooting scheme.
 
-    bsize = cfg.PARAMS['elevation_band_flowline_binsize']
+    Parameters
+    ----------
+    lines: list of shapely lines instances
 
-    # Make nice bins ensuring to cover the full range with the given bin size
-    maxb = utils.nicenumber(np.max(topo), bsize)
-    minb = utils.nicenumber(np.min(topo), bsize, lower=True)
-    bins = np.arange(minb, maxb + 0.01, bsize)
+    Returns
+    -------
+    Centerline instances, updated with flow routing properties
+     """
 
-    # Some useful constants
-    min_alpha = np.deg2rad(0.4)
-    max_alpha = np.deg2rad(60)
+    olines = [Centerline(l, orig_head=h) for l, h
+              in zip(lines[::-1], heads[::-1])]
+    nl = len(olines)
+    if nl == 1:
+        return olines
 
-    if len(bins) < 3:
-        # Very low elevation range
-        bsize = cfg.PARAMS['elevation_band_flowline_binsize'] / 3
-        maxb = utils.nicenumber(np.max(topo), bsize)
-        minb = utils.nicenumber(np.min(topo), bsize, lower=True)
-        bins = np.arange(minb, maxb + 0.01, bsize)
-        if len(bins) < 3:
-            # Ok this just not gonna work
-            raise InvalidDEMError('({}) DEM altidude range too small.'
-                                  .format(gdir.rgi_id))
+    # per construction the line cannot flow in a line placed before in the list
+    for i, l in enumerate(olines):
 
-    # Go - binning
-    df = pd.DataFrame()
-    topo_digi = np.digitize(topo, bins) - 1  # I prefer the left
-    for bi in range(len(bins) - 1):
-        # The coordinates of the current bin
-        bin_coords = topo_digi == bi
+        last_point = shpg.Point(*l.line.coords[-1])
 
-        # Bin area
-        bin_area = np.sum(bin_coords) * gdir.grid.dx ** 2
-        if bin_area == 0:
-            # Ignored in this case - which I believe is strange because deltaH
-            # should be larger for the previous bin, but this is what they do
-            # according to Zekollari 2019 review
-            df.loc[bi, 'area'] = np.nan
-            continue
-        df.loc[bi, 'area'] = bin_area
+        totest = olines[i+1:]
+        dis = [last_point.distance(t.line) for t in totest]
+        flow_to = totest[np.argmin(dis)]
 
-        # Bin average elevation
-        df.loc[bi, 'mean_elevation'] = np.mean(topo[bin_coords])
+        flow_point = centerlines_utils.projection_point(flow_to, last_point)
 
-        # Bin averge slope
-        # there are a few more shenanigans here described in Werder et al 2019
-        s_bin = slope[bin_coords]
-        # between the 5% percentile and the x% percentile where x is some magic
-        qmin = np.quantile(s_bin, 0.05)
-        x = max(2 * np.quantile(s_bin, 0.2) / np.quantile(s_bin, 0.8), 0.55)
-        x = min(x, 0.95)
-        qmax = np.quantile(s_bin, x)
-        sel_s_bin = s_bin[(s_bin >= qmin) & (s_bin <= qmax)]
-        if len(sel_s_bin) == 0:
-            # This can happen when n pix is small. In this case we just avg
-            avg_s = np.mean(s_bin)
-        else:
-            avg_s = np.mean(sel_s_bin)
+        # Interpolate to finish the line, bute force:
+        # we interpolate 20 points, round them, remove consecutive duplicates
+        endline = shpg.LineString([last_point, flow_point])
+        endline = shpg.LineString([endline.interpolate(x, normalized=True)
+                                   for x in np.linspace(0., 1., num=20)])
+        # we keep all coords without the first AND the last
+        grouped = groupby(map(tuple, np.rint(endline.coords)))
+        endline = [x[0] for x in grouped][1:-1]
 
-        # Final clip as in Werder et al 2019
-        df.loc[bi, 'slope'] = utils.clip_scalar(avg_s, min_alpha, max_alpha)
+        # We're done
+        l.set_line(shpg.LineString(l.line.coords[:] + endline))
+        l.set_flows_to(flow_to, check_tail=False)
 
-        # Binned variables
-        with warnings.catch_warnings():
-            # This can trigger an empty mean warning
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            for var, data in zip(bin_variables, out_vars):
-                df.loc[bi, var] = np.nanmean(data[bin_coords])
+        # The last one has nowhere to flow
+        if i+2 == nl:
+            break
 
-    # The grid point's grid spacing and widths
-    df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
-    df['dx'] = bsize / np.tan(df['slope'])
-    df['width'] = df['area'] / df['dx']
+    return olines[::-1]
 
-    # Remove possible nans from above
-    if not bin_variables:
-        df = df.dropna()
+def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
+                           glacier_mask, topo, geom, poly_pix):
+
+    # Size of the half window to use to look for local maximas
+    maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
+    maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
+    heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
+                                       order=int(maxorder))
+    if single_fl or len(heads_idx[0]) <= 1:
+        # small glaciers with one or less heads: take the absolute max
+        heads_idx = (np.atleast_1d(np.argmax(zoutline)),)
+
+    # Remove the heads that are too low
+    zglacier = topo[np.where(glacier_mask)]
+    head_threshold = np.percentile(zglacier, (1./3.)*100)
+    _heads_idx = heads_idx[0][np.where(zoutline[heads_idx] > head_threshold)]
+    if len(_heads_idx) == 0:
+        # this is for baaad ice caps where the outline is far off in altitude
+        _heads_idx = [heads_idx[0][np.argmax(zoutline[heads_idx])]]
+    heads_idx = _heads_idx
+    heads = np.asarray(ext_yx)[:, heads_idx]
+    heads_z = zoutline[heads_idx]
+    # careful, the coords are in y, x order!
+    heads = [shpg.Point(x, y) for y, x in zip(heads[0, :],
+                                              heads[1, :])]
+
+    # get radius of the buffer according to Kienholz eq. (1)
+    radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
+    radius = utils.clip_scalar(radius, 0, cfg.PARAMS['rmax'])
+    radius /= gdir.grid.dx  # in raster coordinates
+    # Plus our criteria, quite useful to remove short lines:
+    radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
+    log.debug('(%s) radius in raster coordinates: %.2f',
+              gdir.rgi_id, radius)
+
+    # OK. Filter and see.
+    log.debug('(%s) number of heads before radius filter: %d',
+              gdir.rgi_id, len(heads))
+    heads, heads_z = centerlines_utils.filter_heads(heads, heads_z, radius, poly_pix)
+    log.debug('(%s) number of heads after radius filter: %d',
+              gdir.rgi_id, len(heads))
+
+    return heads
+
+
+def _point_width(normals, point, centerline, poly, poly_no_nunataks):
+    """ Compute the geometrical width on a specific point.
+
+    Called by catchment_width_geom.
+
+    Parameters
+    ----------
+    normals: normals of the current point, before, and after
+    point: the centerline's point
+    centerline: Centerline object
+    poly, poly_no_nuntaks: subcatchment polygons
+
+    Returns
+    -------
+    (width, MultiLineString)
+    """
+
+    # How far should the normal vector reach? (make it large)
+    far_factor = 150.
+
+    normal = shpg.LineString([shpg.Point(point + normals[0] * far_factor),
+                              shpg.Point(point + normals[1] * far_factor)])
+
+    # First use the external boundaries only
+    line = normal.intersection(poly_no_nunataks)
+    if line.geom_type == 'LineString':
+        pass  # Nothing to be done
+    elif line.geom_type in ['MultiLineString', 'GeometryCollection']:
+        # Take the one that contains the centerline
+        oline = None
+        for l in line.geoms:
+            if l.geom_type != 'LineString':
+                continue
+            if l.intersects(centerline.line):
+                oline = l
+                break
+        if oline is None:
+            return np.nan, shpg.MultiLineString()
+        line = oline
     else:
-        # only remove if all bin_variables are nan
-        df = df.dropna(how='all', subset=bin_variables)
+        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
+        raise InvalidGeometryError(extext)
 
-    # Check for binned vars
-    with warnings.catch_warnings():
-        # This can trigger an invalid value
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
-        for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
-                                             preserve_totals):
-            if do_p:
-                out_total = np.nansum(df[var] * df['area'])
-                if out_total > 0:
-                    df[var] *= in_total / out_total
+    # Then take the nunataks into account
+    # Make sure we are always returning a MultiLineString for later
+    line = line.intersection(poly)
+    if line.geom_type == 'LineString':
+        try:
+            line = shpg.MultiLineString([line])
+        except shapely.errors.EmptyPartError:
+            return np.nan, shpg.MultiLineString()
+    elif line.geom_type == 'MultiLineString':
+        pass  # nothing to be done
+    elif line.geom_type == 'GeometryCollection':
+        oline = []
+        for l in line:
+            if l.geom_type != 'LineString':
+                continue
+            oline.append(l)
+        if len(oline) == 0:
+            return np.nan, shpg.MultiLineString()
+        line = shpg.MultiLineString(oline)
+    else:
+        extext = 'Geometry collection not expected: {}'.format(line.geom_type)
+        raise InvalidGeometryError(extext)
 
-    # In OGGM we go from top to bottom
-    df = df[::-1]
+    assert line.geom_type == 'MultiLineString', 'Should be MultiLineString'
+    width = np.sum([l.length for l in line.geoms])
 
-    # The x coordinate in meter - this is a bit arbitrary but we put it at the
-    # center of the irregular grid (better for interpolation later
-    dx = df['dx'].values
-    dx_points = np.append(dx[0]/2, (dx[:-1] + dx[1:]) / 2)
-    df.index = np.cumsum(dx_points)
-    df.index.name = 'dis_along_flowline'
-
-    # Store and return
-    df.to_csv(gdir.get_filepath('elevation_band_flowline'))
+    return width, line
 
 
-@entity_task(log, writes=['inversion_flowlines'])
-def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
-                                     preserve_totals=True):
-    """Converts the "collapsed" flowline into a regular "inversion flowline".
+def _filter_small_slopes(hgt, dx, min_slope):
+    """Masks out slopes with nan until the slope if all valid points is at
+    least min_slope (in radians).
+    """
 
-    You need to run `tasks.elevation_band_flowline` first. It then interpolates
-    onto a regular grid with the same dx as the one that OGGM would choose
-    (cfg.PARAMS['flowline_dx'] * map_dx).
+    slope = np.arctan(-np.gradient(hgt, dx))  # beware the minus sign
+    # slope at the end always OK
+    slope[-1] = min_slope
+
+    # Find the locs where it doesn't work and expand till we got everything
+    slope_mask = np.where(slope >= min_slope, slope, np.nan)
+    r, nr = label(~np.isfinite(slope_mask))
+    for objs in find_objects(r):
+        obj = objs[0]
+        i = 0
+        while True:
+            i += 1
+            i0 = objs[0].start-i
+            if i0 < 0:
+                break
+            ngap = obj.stop - i0 - 1
+            nhgt = hgt[[i0, obj.stop]]
+            current_slope = np.arctan(-np.gradient(nhgt, ngap * dx))
+            if i0 <= 0 or current_slope[0] >= min_slope:
+                break
+        slope_mask[i0:obj.stop] = np.nan
+    out = hgt.copy()
+    out[~np.isfinite(slope_mask)] = np.nan
+    return out
+
+
+def _filter_for_altitude_range(widths, wlines, topo):
+    """Some width lines have unrealistic length and go over the whole
+    glacier. Filter them out."""
+
+    # altitude range threshold (if range over the line > threshold, filter it)
+    alt_range_th = cfg.PARAMS['width_alt_range_thres']
+
+    while True:
+        out_width = widths.copy()
+        for i, (wi, wl) in enumerate(zip(widths, wlines)):
+            if np.isnan(wi):
+                continue
+            xc = []
+            yc = []
+            for dwl in wl.geoms:
+                # we interpolate at high res and take the int coords
+                dwl = shpg.LineString([dwl.interpolate(x, normalized=True)
+                                       for x in np.linspace(0., 1., num=100)])
+                grouped = groupby(map(tuple, np.rint(dwl.coords)))
+                dwl = np.array([x[0] for x in grouped], dtype=int)
+                xc.extend(dwl[:, 0])
+                yc.extend(dwl[:, 1])
+
+            altrange = topo[yc, xc]
+            if len(np.where(np.isfinite(altrange))[0]) != 0:
+                if (np.nanmax(altrange) - np.nanmin(altrange)) > alt_range_th:
+                    out_width[i] = np.nan
+
+        valid = np.where(np.isfinite(out_width))
+        if len(valid[0]) > 0:
+            break
+        else:
+            alt_range_th += 20
+            log.debug('Set altitude threshold to {}'.format(alt_range_th))
+        if alt_range_th > 2000:
+            raise GeometryError('Problem by altitude filter.')
+
+    return out_width
+
+
+# Private Math Funcs that don't need to be in CenterLinesUtils
+
+
+def _parabolic_bed_from_topo(gdir, idl, interpolator):
+    """this returns the parabolic bedshape for all points on idl"""
+
+    # Volume area scaling formula for the probable ice thickness
+    h_mean = 0.034 * gdir.rgi_area_km2**0.375 * 1000
+    gnx, gny = gdir.grid.nx, gdir.grid.ny
+
+    # Far Factor
+    r = 40
+    # number of points
+    cs_n = 20
+
+    # normals
+    ns = [i[0] for i in idl.normals]
+    cs = []
+    donot_compute = []
+
+    for pcoords, n in zip(idl.line.coords, ns):
+        xi, yi = pcoords
+        vx, vy = n
+        modul = np.sqrt(vx ** 2 + vy ** 2)
+        ci = []
+        _isborder = False
+        for ro in np.linspace(0, r / 2.0, cs_n):
+            t = ro / modul
+            cp1 = HashablePoint(xi + t * vx, yi + t * vy)
+            cp2 = HashablePoint(xi - t * vx, yi - t * vy)
+
+            # check if out of the frame
+            if not (0 < cp2.y < gny - 1) or \
+                    not (0 < cp2.x < gnx - 1) or \
+                    not (0 < cp1.y < gny - 1) or \
+                    not (0 < cp1.x < gnx - 1):
+                _isborder = True
+
+            ci.append((cp1, ro))
+            ci.append((cp2, -ro))
+
+        ci = list(set(ci))
+        cs.append(ci)
+        donot_compute.append(_isborder)
+
+    bed = []
+    terrain_heights = []
+    for ic, (cc, dontcomp) in enumerate(zip(cs, donot_compute)):
+
+        if dontcomp:
+            bed.append(np.nan)
+            terrain_heights.append(np.nan)
+            continue
+
+        z = []
+        ro = []
+        for i in cc:
+            z.append(interpolator((i[0].y, i[0].x)))
+            ro.append(i[1])
+        aso = np.argsort(ro)
+        ro, z = np.array(ro)[aso], np.array(z)[aso]
+
+        # find top of parabola
+        roHead = ro[np.argmin(z)]
+        zero = np.argmin(z)  # it is index of roHead/zHead
+        zHead = np.amin(z)
+
+        dsts = abs(h_mean + zHead - z)
+
+        # find local minima in set of distances
+        extr = scipy.signal.argrelextrema(dsts, np.less, mode='wrap')
+        if len(extr[0]) == 0:
+            bed.append(np.nan)
+            terrain_heights.append(np.nan)
+            continue
+
+        # from local minima find that with the minimum |x|
+        idx = extr[0][np.argmin(abs(ro[extr]))]
+
+        # x<0 => x=0
+        # (|x|+x)/2
+        roN = ro[int((abs(zero - abs(zero - idx)) + zero - abs(
+            zero - idx)) / 2):zero + abs(zero - idx) + 1]
+        zN = z[int((abs(zero - abs(zero - idx)) + zero - abs(
+            zero - idx)) / 2):zero + abs(zero - idx) + 1]
+        roNx = roN - roHead
+        # zN=zN-zHead#
+
+        with warnings.catch_warnings():
+            # This can trigger a divide by zero Warning
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            p = _approx_parabola(roNx, zN, y0=zHead)
+
+        # define terrain height as the maximum height difference of points used
+        # for the parabolic fitting and the bottom height
+        terrain_heights.append(float(np.max(zN - zHead)))
+
+        # shift parabola to the ds-line
+        p2 = np.copy(p)
+        p2[2] = z[ro == 0][0]
+
+        err = _parabola_error(roN, zN, p2) * 100
+
+        # The original implementation of @anton-ub stored all three parabola
+        # params. We just keep the one important here for now
+        if err < 1.5:
+            bed.append(p2[0])
+        else:
+            bed.append(np.nan)
+
+    terrain_heights = np.asarray(terrain_heights)
+    assert len(terrain_heights) == idl.nx, 'len(terrain_heights) == idl.nx'
+
+    bed = np.asarray(bed)
+    assert len(bed) == idl.nx, 'len(bed) == idl.nx'
+    pvalid = np.sum(np.isfinite(bed)) / len(bed) * 100
+    log.debug('(%s) percentage of valid parabolas in downstream: %d',
+              gdir.rgi_id, int(pvalid))
+
+    # Scale for dx (we worked in grid coords but need meters)
+    bed = bed / gdir.grid.dx**2
+
+    # interpolation, filling the gaps
+    default = cfg.PARAMS['default_parabolic_bedshape']
+    bed_int = interp_nans(bed, default=default)
+    default = 100.  # assume a default terrain height of 100 m if all nan
+    terrain_heights = interp_nans(terrain_heights, default=default)
+
+    # We forbid super small shapes (important! This can lead to huge volumes)
+    # Sometimes the parabola fits in flat areas are very good, implying very
+    # flat parabolas.
+    bed_int = utils.clip_min(bed_int, cfg.PARAMS['downstream_min_shape'])
+
+    # Smoothing
+    bed_ma = pd.Series(bed_int)
+    bed_ma = bed_ma.rolling(window=5, center=True, min_periods=1).mean()
+    return bed_ma.values, terrain_heights
+
+
+def _trapezoidal_bottom_width_from_terrain_cross_section_area(
+        terrain_heights, Ps, lambdas, w0_min):
+    """This function calculates a bottom width for a trapezoidal downstream
+    line in a way that the terrain cross section area is preserved. The area to
+    preserve is defined by the fitted parabolic shape and the terrain height.
+
+    Parabolic formulas involved (Ap = area, h = terrain_height,
+    w = surface width, Ps = bed-shape parameter):
+        Ap = 2 / 3 * h * w
+        Ps = 4 * h / w^2
+
+    Trapezoidal formulas involved (At = area, h = terrain_height,
+    w = surface width, w0 = bottom width, lambda = defines angle of wall):
+        At = (w + w0) * h / 2
+        w = w0 + lambda * h
+
+    Putting all formulas together and setting Ap = At we get:
+        w0 = 4 / 3 * sqrt(h / Ps) - 1 / 2 * lambda * h
+    """
+
+    w0s = utils.clip_min(4 / 3 * np.sqrt(terrain_heights / Ps) -
+                         1 / 2 * lambdas * terrain_heights,
+                         w0_min)
+
+    return w0s
+
+
+def _approx_parabola(x, y, y0=0):
+    """Fit a parabola to the equation y = a x**2 + y0
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        where to write the data
-    bin_variables : str or list of str
-        variables to add to the interpolated flowline (will be stored in a new
-        csv file: gdir.get_filepath('elevation_band_flowline',
-        filesuffix='_fixed_dx').
-    preserve_totals : bool or list of bool
-        whether or not to preserve the variables totals (e.g. volume)
+    x : array
+       the x axis variabls
+    y : array
+       the dependent variable
+    y0 : float, optional
+       the intercept
+
+    Returns
+    -------
+    [a, 0, y0]
     """
+    # y=ax**2+y0
+    x, y = np.array(x), np.array(y)
+    a = np.sum(x ** 2 * (y - y0)) / np.sum(x ** 4)
+    return np.array([a, 0, y0])
 
-    df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
 
-    map_dx = gdir.grid.dx
-    dx = cfg.PARAMS['flowline_dx']
-    dx_meter = dx * map_dx
-    nx = int(df.dx.sum() / dx_meter)
-    dis_along_flowline = dx_meter / 2 + np.arange(nx) * dx_meter
-
-    while dis_along_flowline[-1] > df.index[-1]:
-        # do not extrapolate
-        dis_along_flowline = dis_along_flowline[:-1]
-
-    while dis_along_flowline[0] < df.index[0]:
-        # do not extrapolate
-        dis_along_flowline = dis_along_flowline[1:]
-
-    nx = len(dis_along_flowline)
-
-    # Interpolate the data we need
-    hgts = np.interp(dis_along_flowline, df.index, df['mean_elevation'])
-    widths_m = np.interp(dis_along_flowline, df.index, df['width'])
-
-    # Correct the widths - area preserving
-    area = np.sum(widths_m * dx_meter)
-    fac = gdir.rgi_area_m2 / area
-    log.debug('(%s) corrected widths with a factor %.2f', gdir.rgi_id, fac)
-    widths_m *= fac
-
-    # Additional vars
-    if bin_variables is not None:
-        bin_variables = utils.tolist(bin_variables)
-
-        # Check if there and do not raise when not available
-        keep = []
-        for var in bin_variables:
-            if var in df:
-                keep.append(var)
-            else:
-                log.warning('{}: var `{}` not found in gridded_data.'
-                            ''.format(gdir.rgi_id, var))
-        bin_variables = keep
-
-        preserve_totals = utils.tolist(preserve_totals,
-                                       length=len(bin_variables))
-        odf = pd.DataFrame(index=dis_along_flowline)
-        odf.index.name = 'dis_along_flowline'
-        odf['widths_m'] = widths_m
-        odf['area_m2'] = widths_m * dx_meter
-        for var, do_p in zip(bin_variables, preserve_totals):
-            interp = np.interp(dis_along_flowline, df.index, df[var])
-            if do_p:
-                in_total = np.nansum(df[var] * df['area'])
-                out_total = np.nansum(interp * widths_m * dx_meter)
-                if out_total > 0:
-                    with warnings.catch_warnings():
-                        # This can trigger a double error
-                        warnings.filterwarnings("ignore", category=RuntimeWarning)
-                        interp *= in_total / out_total
-            odf[var] = interp
-        # Match how OGGM computes distance along flowline
-        odf.index = np.arange(nx) * dx_meter
-        odf.to_csv(gdir.get_filepath('elevation_band_flowline',
-                                     filesuffix='_fixed_dx'))
-
-    # Write as a Centerline object
-    fl = Centerline(None, dx=dx, surface_h=hgts, rgi_id=gdir.rgi_id,
-                    map_dx=map_dx)
-    fl.order = 0
-    fl.widths = widths_m / map_dx
-    fl.is_rectangular = np.zeros(nx, dtype=bool)
-    fl.is_trapezoid = np.ones(nx, dtype=bool)
-
-    if gdir.is_tidewater:
-        fl.is_rectangular[-5:] = True
-        fl.is_trapezoid[-5:] = False
-
-    gdir.write_pickle([fl], 'inversion_flowlines')
-    gdir.add_to_diagnostics('flowline_type', 'elevation_band')
+def _parabola_error(x, y, f):
+    # f is an array represents polynom
+    x, y = np.array(x), np.array(y)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out = sum(abs((np.polyval(f, x) - y) / y)) / len(x)
+    return out

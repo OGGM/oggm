@@ -39,7 +39,7 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_with_hydro, SemiImplicitModel)
+                                run_with_hydro, SemiImplicitModel, elevation_band_flowline, fixed_dx_elevation_band_flowline)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_melt_f_calibration,
     dynamic_melt_f_run_with_dynamic_spinup,
@@ -168,8 +168,8 @@ class TestInitPresentDayFlowline:
         monkeypatch.setattr(utils, 'file_downloader', lambda x: ft)
         bedtopo.add_consensus_thickness(gdir)
         vn = 'consensus_ice_thickness'
-        centerlines.elevation_band_flowline(gdir, bin_variables=[vn])
-        centerlines.fixed_dx_elevation_band_flowline(gdir,
+        elevation_band_flowline(gdir, bin_variables=[vn])
+        fixed_dx_elevation_band_flowline(gdir,
                                                      bin_variables=[vn])
 
         tasks.init_present_time_glacier(gdir, filesuffix='_consensus',
