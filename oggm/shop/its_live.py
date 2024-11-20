@@ -26,15 +26,6 @@ base_url = ('https://its-live-data.s3.amazonaws.com/'
 
 regions = [f'RGI{reg:02d}A' for reg in range(1, 20)]
 
-region_files = {}
-for reg in regions:
-    d = {}
-    for var in ['v', 'vx', 'vy', 'v_error', 'vx_error', 'vy_error']:
-        d[var] = base_url + f'{reg}_0000_v02_{var}.tif'
-    region_files[reg] = d
-
-region_grids = {}
-
 rgi_region_links = {'01': 'RGI01A',
                     '02': ['RGI01A', 'RGI02A'],
                     '03': 'RGI03A',
@@ -54,14 +45,24 @@ rgi_region_links = {'01': 'RGI01A',
                     }
 
 
-def find_region(gdir):
+def _find_region(gdir):
     return rgi_region_links.get(gdir.rgi_region, None)
+
+
+def _region_files():
+    region_files = {}
+    for reg in regions:
+        d = {}
+        for var in ['v', 'vx', 'vy', 'v_error', 'vx_error', 'vy_error']:
+            d[var] = base_url + f'{reg}_0000_v02_{var}.tif'
+        region_files[reg] = d
+    return region_files
 
 
 def _reproject_and_scale(gdir, do_error=False):
     """Reproject and scale itslive data, avoid code duplication for error"""
 
-    reg = find_region(gdir)
+    reg = _find_region(gdir)
     if reg is None:
         raise InvalidWorkflowError('There does not seem to be its_live data '
                                    'available for this glacier')
@@ -75,9 +76,10 @@ def _reproject_and_scale(gdir, do_error=False):
         vny += '_error'
 
     with utils.get_lock():
-        fv = utils.file_downloader(region_files[reg][vn])
-        fx = utils.file_downloader(region_files[reg][vnx])
-        fy = utils.file_downloader(region_files[reg][vny])
+        reg_files = _region_files()
+        fv = utils.file_downloader(reg_files[reg][vn])
+        fx = utils.file_downloader(reg_files[reg][vnx])
+        fy = utils.file_downloader(reg_files[reg][vny])
 
     # Open the files
     dsv = salem.GeoTiff(fv)
@@ -136,12 +138,13 @@ def _reproject_and_scale(gdir, do_error=False):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         new_vel = np.sqrt(vx**2 + vy**2)
-        p_ok = new_vel > 0  # avoid div by zero
-        vx[p_ok] = vx[p_ok] * vel[p_ok] / new_vel[p_ok]
-        vy[p_ok] = vy[p_ok] * vel[p_ok] / new_vel[p_ok]
+        p_ok = np.isfinite(new_vel) & (new_vel > 0)  # avoid div by zero
+        scaler = vel[p_ok] / new_vel[p_ok]
+        vx[p_ok] = vx[p_ok] * scaler
+        vy[p_ok] = vy[p_ok] * scaler
 
     # And transform to local map
-    v = grid_gla.map_gridded_data(vel, grid=grid_vel, interp='linear')
+    vv = grid_gla.map_gridded_data(vel, grid=grid_vel, interp='linear')
     vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
     vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
 
@@ -149,6 +152,8 @@ def _reproject_and_scale(gdir, do_error=False):
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
 
         vn = 'itslive_v'
+        if do_error:
+            vn += '_error'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -158,11 +163,11 @@ def _reproject_and_scale(gdir, do_error=False):
         if do_error:
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
-        v[:] = v.filled(np.nan)
+        v[:] = vv.filled(np.nan)
 
         vn = 'itslive_vx'
         if do_error:
-            vn += '_err'
+            vn += '_error'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -176,7 +181,7 @@ def _reproject_and_scale(gdir, do_error=False):
 
         vn = 'itslive_vy'
         if do_error:
-            vn += '_err'
+            vn += '_error'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -252,8 +257,8 @@ def itslive_statistics(gdir):
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 d['itslive_avg_vel'] = np.nanmean(v)
                 d['itslive_max_vel'] = np.nanmax(v)
-                d['itslive_perc_cov'] = (float((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
-                                         gridded_area)
+                d['itslive_perc_cov'] = float(((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
+                                              gridded_area)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 

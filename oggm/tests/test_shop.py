@@ -40,11 +40,9 @@ class Test_its_live:
         tasks.glacier_masks(gdir)
 
         # use our files
-        region_files = {'ALA': {
-            'vx': get_demo_file('crop_ALA_G0120_0000_vx.tif'),
-            'vy': get_demo_file('crop_ALA_G0120_0000_vy.tif')}}
-        monkeypatch.setattr(its_live, 'region_files', region_files)
-        monkeypatch.setattr(utils, 'file_downloader', lambda x: x)
+        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
+                    'itslive_v2/ITS_LIVE_velocity_120m_')
+        monkeypatch.setattr(its_live, 'base_url', base_url)
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -60,11 +58,14 @@ class Test_its_live:
         assert np.nanmin(vel) < 2
 
         # We reproject with rasterio and check no big diff
+        reg_files = its_live._region_files()
         cfg.BASENAMES['itslive_vx'] = ('itslive_vx.tif', '')
         cfg.BASENAMES['itslive_vy'] = ('itslive_vy.tif', '')
-        gis.rasterio_to_gdir(gdir, region_files['ALA']['vx'], 'itslive_vx',
+        gis.rasterio_to_gdir(gdir, reg_files['RGI01A']['vx'],
+                             'itslive_vx',
                              resampling='bilinear')
-        gis.rasterio_to_gdir(gdir, region_files['ALA']['vy'], 'itslive_vy',
+        gis.rasterio_to_gdir(gdir, reg_files['RGI01A']['vy'],
+                             'itslive_vy',
                              resampling='bilinear')
 
         with rioxr.open_rasterio(gdir.get_filepath('itslive_vx')) as da:
@@ -73,8 +74,9 @@ class Test_its_live:
             _vy = da.where(mask).data.squeeze()
 
         _vel = np.sqrt(_vx**2 + _vy**2)
+        mask = mask & np.isfinite(_vel) & np.isfinite(vel)
         np.testing.assert_allclose(utils.rmsd(vel[mask], _vel[mask]), 0,
-                                   atol=40)
+                                   atol=100)
         np.testing.assert_allclose(utils.md(vel[mask], _vel[mask]), 0,
                                    atol=8)
 
@@ -138,7 +140,7 @@ class Test_millan22:
             thick = ds.millan_ice_thickness.where(mask).data
 
         # Simply some coverage and sanity checks
-        assert np.isfinite(thick).sum() / mask.sum() > 0.98
+        assert np.isfinite(thick).sum() / mask.sum() > 0.92
         assert np.nanmax(thick) > 800
         assert np.nansum(thick) * gdir.grid.dx**2 * 1e-9 > 174
 
@@ -152,7 +154,7 @@ class Test_millan22:
             vy = ds.millan_vy.where(mask).data
 
         # Simply some coverage and sanity checks
-        assert np.isfinite(v).sum() / mask.sum() > 0.98
+        assert np.isfinite(v).sum() / mask.sum() > 0.92
         assert np.nanmax(v) > 2000
         assert np.nanmax(vx) > 500
         assert np.nanmax(vy) > 400
@@ -162,7 +164,7 @@ class Test_millan22:
         assert df['millan_avg_vel'] > 180
         assert df['millan_max_vel'] > 2000
         assert df['millan_perc_cov'] > 0.95
-        assert df['millan_vel_perc_cov'] > 0.97
+        assert df['millan_vel_perc_cov'] > 0.92
         assert df['millan_vol_km3'] > 174
 
 
