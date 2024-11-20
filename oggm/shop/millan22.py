@@ -17,6 +17,11 @@ try:
 except ImportError:
     pass
 
+try:
+    import rasterio
+except ImportError:
+    pass
+
 from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
 
@@ -48,17 +53,22 @@ def _get_lookup_velocity():
 def _filter(ds):
     # Read the data and prevent bad surprises
     data = ds.get_vardata().astype(np.float64)
-    # Nans with 0
-    data[~ np.isfinite(data)] = 0
-    nmax = np.nanmax(data)
-    if nmax == np.inf:
-        # Replace inf with 0
-        data[data == nmax] = 0
 
+    with rasterio.Env():
+        with rasterio.open(ds.file) as src:
+            try:
+                nodata = src.nodatavals[0]
+                data[data == nodata] = np.nan
+                print(nodata, ds.file)
+            except AttributeError:
+                pass
+
+    # NaNs
+    data[~ np.isfinite(data)] = np.nan
     return data
 
 
-def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
+def _filter_and_reproj(gdir, var, gdf):
     """ Same code for thickness and error
 
     Parameters
@@ -68,7 +78,7 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
     """
 
     # We may have more than one file
-    total_data = 0
+    total_data = None
     grids_used = []
     files_used = []
     for i, s in gdf.iterrows():
@@ -88,9 +98,6 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
                            margin=5)
 
         data = _filter(dsb)
-        if not allow_neg:
-            # Replace negative values with 0
-            data[data < 0] = 0
 
         if np.nansum(data) == 0:
             # No need to continue
@@ -102,7 +109,14 @@ def _filter_and_reproj(gdir, var, gdf, allow_neg=True):
             warnings.filterwarnings("ignore", category=RuntimeWarning,
                                     message='.*out of bounds.*')
             r_data = gdir.grid.map_gridded_data(data, dsb.grid, interp='linear')
-        total_data += r_data.filled(0)
+
+        if total_data is None:
+            total_data = r_data.filled(np.nan)
+        else:
+            r_data = r_data.filled(np.nan)
+            pok = np.isfinite(r_data)
+            total_data[pok] = r_data[pok]
+
         grids_used.append(dsb)
         files_used.append(s.file_id)
 
@@ -129,17 +143,11 @@ def thickness_to_gdir(gdir, add_error=False):
         raise InvalidWorkflowError(f'There seems to be no Millan file for this '
                                    f'glacier: {gdir.rgi_id}')
 
-    total_thick, files_used, _ = _filter_and_reproj(gdir, 'thickness', sel,
-                                                    allow_neg=False)
-
-    # We mask zero ice as nodata
-    total_thick = np.where(total_thick == 0, np.nan, total_thick)
+    total_thick, files_used, _ = _filter_and_reproj(gdir, 'thickness', sel)
 
     if add_error:
-        total_err, _, _ = _filter_and_reproj(gdir, 'err', sel, allow_neg=False)
+        total_err, _, _ = _filter_and_reproj(gdir, 'err', sel)
         total_err[~ np.isfinite(total_thick)] = np.nan
-        # Error cannot be larger than ice thickness itself
-        total_err = utils.clip_max(total_err, total_thick)
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
@@ -194,60 +202,81 @@ def velocity_to_gdir(gdir, add_error=False):
         raise InvalidWorkflowError(f'There seems to be no Millan file for this '
                                    f'glacier: {gdir.rgi_id}')
 
-    vel, files, grids = _filter_and_reproj(gdir, 'v', sel, allow_neg=False)
+    vel, files, grids = _filter_and_reproj(gdir, 'v', sel)
     if len(grids) == 0:
         raise RuntimeError('There is no velocity data for this glacier')
-    if len(grids) > 1:
-        raise RuntimeError('Multiple velocity grids - dont know what to do.')
 
-    sel = sel.loc[sel.file_id == files[0]]
-    vx, _, gridsx = _filter_and_reproj(gdir, 'vx', sel)
-    vy, _, gridsy = _filter_and_reproj(gdir, 'vy', sel)
+    all_vx = None
+    all_vy = None
+    all_err_vx = None
+    all_err_vy = None
+    for i, _ in sel.iterrows():
+        subsel = sel.loc[[i]]
+        vx, _, gridsx = _filter_and_reproj(gdir, 'vx', subsel)
+        vy, _, gridsy = _filter_and_reproj(gdir, 'vy', subsel)
 
-    dsx = gridsx[0]
-    dsy = gridsy[0]
-    grid_vel = dsx.grid
-    proj_vel = grid_vel.proj
-    grid_gla = gdir.grid
+        if len(gridsx) == 0:
+            continue
 
-    # Get the coords at t0
-    xx0, yy0 = grid_vel.center_grid.xy_coordinates
+        dsx = gridsx[0]
+        dsy = gridsy[0]
+        grid_vel = dsx.grid
+        proj_vel = grid_vel.proj
+        grid_gla = gdir.grid
 
-    # Compute coords at t1
-    xx1 = _filter(dsx)
-    yy1 = _filter(dsy)
-    xx1 += xx0
-    yy1 += yy0
+        # Get the coords at t0
+        xx0, yy0 = grid_vel.center_grid.xy_coordinates
 
-    # Transform both to glacier proj
-    xx0, yy0 = salem.transform_proj(proj_vel, grid_gla.proj, xx0, yy0)
-    xx1, yy1 = salem.transform_proj(proj_vel, grid_gla.proj, xx1, yy1)
+        # Compute coords at t1
+        xx1 = _filter(dsx)
+        yy1 = _filter(dsy)
+        xx1 += xx0
+        yy1 += yy0
 
-    # Compute velocities from there
-    vx = xx1 - xx0
-    vy = yy1 - yy0
+        # Transform both to glacier proj
+        xx0, yy0 = salem.transform_proj(proj_vel, grid_gla.proj, xx0, yy0)
+        xx1, yy1 = salem.transform_proj(proj_vel, grid_gla.proj, xx1, yy1)
 
-    # And transform to local map
-    vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
-    vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
+        # Compute velocities from there
+        vx = xx1 - xx0
+        vy = yy1 - yy0
 
-    # Scale back to match velocity
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
-        new_vel = np.sqrt(vx**2 + vy**2)
-        p_ok = np.isfinite(new_vel) & (new_vel > 1)  # avoid div by zero
-        scaler = vel[p_ok] / new_vel[p_ok]
-        vx[p_ok] = vx[p_ok] * scaler
-        vy[p_ok] = vy[p_ok] * scaler
+        # And transform to local map
+        vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
+        vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
 
-    vx = vx.filled(np.nan)
-    vy = vy.filled(np.nan)
+        # Scale back to match velocity
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            new_vel = np.sqrt(vx**2 + vy**2)
+            p_ok = np.isfinite(new_vel) & (new_vel > 0)  # avoid div by zero
+            scaler = vel[p_ok] / new_vel[p_ok]
+            vx[p_ok] = vx[p_ok] * scaler
+            vy[p_ok] = vy[p_ok] * scaler
 
-    if add_error:
-        err_vx, _, _ = _filter_and_reproj(gdir, 'err_vx', sel, allow_neg=False)
-        err_vy, _, _ = _filter_and_reproj(gdir, 'err_vy', sel, allow_neg=False)
-        err_vx[p_ok] = err_vx[p_ok] * scaler
-        err_vy[p_ok] = err_vy[p_ok] * scaler
+        if all_vx is None:
+            all_vx = vx.filled(np.nan)
+            all_vy = vy.filled(np.nan)
+        else:
+            vx = vx.filled(np.nan)
+            vy = vy.filled(np.nan)
+            locuptate = np.isfinite(vx)
+            all_vx[locuptate] = vx[locuptate]
+            all_vy[locuptate] = vy[locuptate]
+
+        if add_error:
+            err_vx, _, _ = _filter_and_reproj(gdir, 'err_vx', subsel)
+            err_vy, _, _ = _filter_and_reproj(gdir, 'err_vy', subsel)
+            err_vx[p_ok] = err_vx[p_ok] * scaler
+            err_vy[p_ok] = err_vy[p_ok] * scaler
+            if all_err_vx is None:
+                all_err_vx = err_vx.filled(np.nan)
+                all_err_vy = err_vy.filled(np.nan)
+            else:
+                err_vx = err_vx.filled(np.nan)
+                err_vy = err_vy.filled(np.nan)
+                all_err_vx[locuptate] = err_vx[locuptate]
+                all_err_vy[locuptate] = err_vy[locuptate]
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
@@ -272,7 +301,7 @@ def velocity_to_gdir(gdir, add_error=False):
         ln = 'Ice velocity in map x direction from Millan et al. 2022'
         v.long_name = ln
         v.data_source = files[0]
-        v[:] = vx
+        v[:] = all_vx
 
         vn = 'millan_vy'
         if vn in nc.variables:
@@ -283,7 +312,7 @@ def velocity_to_gdir(gdir, add_error=False):
         ln = 'Ice velocity in map y direction from Millan et al. 2022'
         v.long_name = ln
         v.data_source = files[0]
-        v[:] = vy
+        v[:] = all_vy
 
         if add_error:
             vn = 'millan_err_vx'
@@ -295,7 +324,7 @@ def velocity_to_gdir(gdir, add_error=False):
             ln = 'Ice velocity error in map x direction from Millan et al. 2022'
             v.long_name = ln
             v.data_source = files[0]
-            v[:] = err_vx
+            v[:] = all_err_vx
 
             vn = 'millan_err_vy'
             if vn in nc.variables:
@@ -306,7 +335,7 @@ def velocity_to_gdir(gdir, add_error=False):
             ln = 'Ice velocity error in map y direction from Millan et al. 2022'
             v.long_name = ln
             v.data_source = files[0]
-            v[:] = err_vy
+            v[:] = all_err_vy
 
 
 @utils.entity_task(log)
@@ -328,12 +357,13 @@ def millan_statistics(gdir):
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             thick = ds['millan_ice_thickness'].where(ds['glacier_mask'], np.nan).load()
+            gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             with warnings.catch_warnings():
                 # For operational runs we ignore the warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 d['millan_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
                 d['millan_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
-                d['millan_perc_cov'] = float(d['millan_area_km2'] / gdir.rgi_area_km2)
+                d['millan_perc_cov'] = float(d['millan_area_km2'] / gridded_area)
 
                 if 'millan_ice_thickness_err' in ds:
                     err = ds['millan_ice_thickness_err'].where(ds['glacier_mask'], np.nan).load()
@@ -344,14 +374,14 @@ def millan_statistics(gdir):
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             v = ds['millan_v'].where(ds['glacier_mask'], np.nan).load()
+            gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             with warnings.catch_warnings():
                 # For operational runs we ignore the warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 d['millan_avg_vel'] = np.nanmean(v)
                 d['millan_max_vel'] = np.nanmax(v)
-                d['millan_vel_perc_cov'] = (float((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
-                                            gdir.rgi_area_km2)
-
+                d['millan_vel_perc_cov'] = float(((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
+                                                 gridded_area)
                 if 'millan_err_vx' in ds:
                     err_vx = ds['millan_err_vx'].where(ds['glacier_mask'], np.nan).load()
                     err_vy = ds['millan_err_vy'].where(ds['glacier_mask'], np.nan).load()
