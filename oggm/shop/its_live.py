@@ -27,7 +27,7 @@ base_url = ('https://its-live-data.s3.amazonaws.com/'
 regions = [f'RGI{reg:02d}A' for reg in range(1, 20)]
 
 rgi_region_links = {'01': 'RGI01A',
-                    '02': ['RGI01A', 'RGI02A'],
+                    '02': 'RGI02A',
                     '03': 'RGI03A',
                     '04': 'RGI04A',
                     '05': 'RGI05A',
@@ -46,7 +46,12 @@ rgi_region_links = {'01': 'RGI01A',
 
 
 def _find_region(gdir):
-    return rgi_region_links.get(gdir.rgi_region, None)
+    reg_n = gdir.rgi_region
+    if reg_n == '02':
+        # Northermost glaciers are in reg 1 file
+        if gdir.cenlat > 55:
+            reg_n = '01'
+    return rgi_region_links.get(reg_n, None)
 
 
 def _region_files():

@@ -100,6 +100,8 @@ OGGM Shop
     shop.millan22.thickness_to_gdir
     shop.millan22.velocity_to_gdir
     shop.millan22.compile_millan_statistics
+    shop.bedmachine.bedmachine_to_gdir
+    shop.bedmachine.compile_bedmachine_statistics
     shop.rgitopo.init_glacier_directories_from_rgitopo
     shop.rgitopo.select_dem_from_dir
     shop.rgitopo.dem_quality_check

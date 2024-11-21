@@ -68,7 +68,7 @@ def bedmachine_to_gdir(gdir):
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
 
-        vn = 'bedmachine_thickness'
+        vn = 'bedmachine_ice_thickness'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -98,7 +98,7 @@ def bedmachine_statistics(gdir):
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            thick = ds['bedmachine_thickness'].where(ds['glacier_mask'], np.nan).load()
+            thick = ds['bedmachine_ice_thickness'].where(ds['glacier_mask'], np.nan).load()
             gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             d['bedmachine_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
             d['bedmachine_perc_cov'] = float(d['bedmachine_area_km2'] / gridded_area)
