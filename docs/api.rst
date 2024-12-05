@@ -95,10 +95,10 @@ OGGM Shop
     shop.histalp.process_histalp_data
     shop.hugonnet_maps.hugonnet_to_gdir
     shop.hugonnet_maps.compile_hugonnet_statistics
-    shop.its_live.velocity_to_gdir
+    shop.its_live.itslive_velocity_to_gdir
     shop.its_live.compile_itslive_statistics
-    shop.millan22.thickness_to_gdir
-    shop.millan22.velocity_to_gdir
+    shop.millan22.millan_thickness_to_gdir
+    shop.millan22.millan_velocity_to_gdir
     shop.millan22.compile_millan_statistics
     shop.bedmachine.bedmachine_to_gdir
     shop.bedmachine.compile_bedmachine_statistics

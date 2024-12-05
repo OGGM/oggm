@@ -470,16 +470,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(add_consensus_thickness, gdirs)
             bin_variables.append('consensus_ice_thickness')
         if add_itslive_velocity:
-            from oggm.shop.its_live import velocity_to_gdir
-            workflow.execute_entity_task(velocity_to_gdir, gdirs)
+            from oggm.shop.its_live import itslive_velocity_to_gdir
+            workflow.execute_entity_task(itslive_velocity_to_gdir, gdirs)
             bin_variables.append('itslive_v')
         if add_millan_thickness:
-            from oggm.shop.millan22 import thickness_to_gdir
-            workflow.execute_entity_task(thickness_to_gdir, gdirs)
+            from oggm.shop.millan22 import millan_thickness_to_gdir
+            workflow.execute_entity_task(millan_thickness_to_gdir, gdirs)
             bin_variables.append('millan_ice_thickness')
         if add_millan_velocity:
-            from oggm.shop.millan22 import velocity_to_gdir
-            workflow.execute_entity_task(velocity_to_gdir, gdirs)
+            from oggm.shop.millan22 import millan_velocity_to_gdir
+            workflow.execute_entity_task(millan_velocity_to_gdir, gdirs)
             bin_variables.append('millan_v')
         if add_hugonnet_dhdt:
             from oggm.shop.hugonnet_maps import hugonnet_to_gdir

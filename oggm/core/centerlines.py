@@ -2213,7 +2213,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
         glacier_mask = nc.variables['glacier_mask'][:] == 1
-        topo = nc.variables['topo_smoothed'][:]
+        topo = nc.variables['topo_smoothed'][:].astype(np.float64)
 
         # Check if there and do not raise when not available
         keep = []
@@ -2225,7 +2225,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
                             ''.format(gdir.rgi_id, var))
         bin_variables = keep
         for var in bin_variables:
-            data = nc.variables[var][:]
+            data = nc.variables[var][:].astype(np.float64)
             if var == 'consensus_ice_thickness':
                 # individual handling for consensus thickness as they use a
                 # different glacier mask than oggm (which was already applied)

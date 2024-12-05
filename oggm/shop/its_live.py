@@ -51,6 +51,9 @@ def _find_region(gdir):
         # Northermost glaciers are in reg 1 file
         if gdir.cenlat > 55:
             reg_n = '01'
+    if reg_n in ['RGI02A', 'RGI10A', 'RGI11A', 'RGI12A', 'RGI14A', 'RGI17A', 'RGI18A']:
+        raise InvalidWorkflowError('At the time of writing (05.12.24), there are no '
+                                   'its_live data available for this region')
     return rgi_region_links.get(reg_n, None)
 
 
@@ -200,7 +203,7 @@ def _reproject_and_scale(gdir, do_error=False):
 
 
 @utils.entity_task(log, writes=['gridded_data'])
-def velocity_to_gdir(gdir, add_error=False):
+def itslive_velocity_to_gdir(gdir, add_error=False):
     """Reproject the its_live files to the given glacier directory.
 
     The data source used is https://its-live.jpl.nasa.gov/#data

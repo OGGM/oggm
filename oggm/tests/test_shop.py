@@ -46,7 +46,7 @@ class Test_its_live:
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
-            its_live.velocity_to_gdir(gdir)
+            its_live.itslive_velocity_to_gdir(gdir)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             mask = ds.glacier_mask.data.astype(bool)
@@ -133,7 +133,7 @@ class Test_millan22:
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/millan22/'
         monkeypatch.setattr(millan22, 'default_base_url', base_url)
 
-        millan22.thickness_to_gdir(gdir)
+        millan22.millan_thickness_to_gdir(gdir)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             mask = ds.glacier_mask.data.astype(bool)
@@ -145,7 +145,7 @@ class Test_millan22:
         assert np.nansum(thick) * gdir.grid.dx**2 * 1e-9 > 174
 
         # Velocity
-        millan22.velocity_to_gdir(gdir)
+        millan22.millan_velocity_to_gdir(gdir)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             mask = ds.glacier_mask.data.astype(bool)
