@@ -23,8 +23,7 @@ log = logging.getLogger(__name__)
 
 base_url = ('https://its-live-data.s3.amazonaws.com/'
             'velocity_mosaic/v2/static/cog/ITS_LIVE_velocity_120m_')
-
-regions = [f'RGI{reg:02d}A' for reg in range(1, 20)]
+region_files = {}
 
 rgi_region_links = {'01': 'RGI01A',
                     '02': 'RGI02A',
@@ -46,25 +45,26 @@ rgi_region_links = {'01': 'RGI01A',
 
 
 def _find_region(gdir):
+
     reg_n = gdir.rgi_region
+    if reg_n in ['02', '10', '11', '12', '13', '14', '15', '16', '17', '18']:
+        raise InvalidWorkflowError('At the time of writing (05.12.24), there are no '
+                                   'its_live data available for this region.')
     if reg_n == '02':
         # Northermost glaciers are in reg 1 file
         if gdir.cenlat > 55:
             reg_n = '01'
-    if reg_n in ['RGI02A', 'RGI10A', 'RGI11A', 'RGI12A', 'RGI14A', 'RGI17A', 'RGI18A']:
-        raise InvalidWorkflowError('At the time of writing (05.12.24), there are no '
-                                   'its_live data available for this region')
     return rgi_region_links.get(reg_n, None)
 
 
-def _region_files():
-    region_files = {}
-    for reg in regions:
+def _init_region_files():
+    global region_files
+    for reg in range(1, 20):
+        reg = f'RGI{reg:02d}A'
         d = {}
-        for var in ['v', 'vx', 'vy', 'v_error', 'vx_error', 'vy_error']:
+        for var in ['v', 'vx', 'vy']:
             d[var] = base_url + f'{reg}_0000_v02_{var}.tif'
         region_files[reg] = d
-    return region_files
 
 
 def _reproject_and_scale(gdir, do_error=False):
@@ -83,11 +83,13 @@ def _reproject_and_scale(gdir, do_error=False):
         vnx += '_error'
         vny += '_error'
 
+    if not region_files:
+        _init_region_files()
+
     with utils.get_lock():
-        reg_files = _region_files()
-        fv = utils.file_downloader(reg_files[reg][vn])
-        fx = utils.file_downloader(reg_files[reg][vnx])
-        fy = utils.file_downloader(reg_files[reg][vny])
+        fv = utils.file_downloader(region_files[reg][vn])
+        fx = utils.file_downloader(region_files[reg][vnx])
+        fy = utils.file_downloader(region_files[reg][vny])
 
     # Open the files
     dsv = salem.GeoTiff(fv)
@@ -237,7 +239,8 @@ def itslive_velocity_to_gdir(gdir, add_error=False):
     if not gdir.has_file('gridded_data'):
         raise InvalidWorkflowError('Please run `glacier_masks` before running '
                                    'this task')
-
+    if add_error:
+        raise NotImplementedError('Error data is not yet available yet')
     _reproject_and_scale(gdir, do_error=False)
     if add_error:
         _reproject_and_scale(gdir, do_error=True)
