@@ -59,7 +59,6 @@ def _filter(ds):
             try:
                 nodata = src.nodatavals[0]
                 data[data == nodata] = np.nan
-                print(nodata, ds.file)
             except AttributeError:
                 pass
 
