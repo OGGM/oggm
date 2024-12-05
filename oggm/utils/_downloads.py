@@ -774,8 +774,6 @@ def file_extractor(file_path):
 def download_with_authentication(wwwfile, key):
     """ Uses credentials from a local .netrc file to download files
 
-    This is function is currently used for TanDEM-X and ASTER
-
     Parameters
     ----------
     wwwfile : str

@@ -97,9 +97,10 @@ def consensus_statistics(gdir):
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             thick = ds['consensus_ice_thickness'].where(ds['glacier_mask'], np.nan).load()
+            gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             d['consensus_vol_km3'] = float(thick.sum() * gdir.grid.dx ** 2 * 1e-9)
             d['consensus_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
-            d['consensus_perc_cov'] = float(d['consensus_area_km2'] / gdir.rgi_area_km2)
+            d['consensus_perc_cov'] = float(d['consensus_area_km2'] / gridded_area)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 
