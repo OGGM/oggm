@@ -1296,7 +1296,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return heights, widths, mbs
 
     def get_specific_mb(self, heights=None, widths=None, fls=None,
-                        year=None):
+                        year=None, reset_state=False):
 
         if heights is not None or widths is not None:
             raise ValueError('`heights` and `widths` kwargs do not work with '
@@ -1306,7 +1306,11 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             fls = self.fls
 
         if len(np.atleast_1d(year)) > 1:
-            out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
+            if (reset_state):
+                out = [self.get_specific_mb(fls=fls, year=year[0], reset_state=True)]
+                out = out.append([self.get_specific_mb(fls=fls, year=yr) for yr in year[1:]])
+            else:
+                out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
             return np.asarray(out)
 
         mbs = []
@@ -1319,7 +1323,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             except AttributeError:
                 pass
             widths = np.append(widths, _widths)
-            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i,\
+                    reset_state=reset_state, **kwargs)
             mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
 
         return weighted_average_1d(mbs, widths)
@@ -2059,7 +2064,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
     def to_minimize(ela_h):
         mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
-        smb = mbmod.get_specific_mb(heights=h, widths=w)
+        smb = mbmod.get_specific_mb(heights=h, widths=w, reset_state=True)
         return smb - cmb
 
     if ela_h is None:
@@ -2074,7 +2079,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     # Flowlines in order to be sure
     mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
     for fl in fls:
-        mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
+        mbz = mbmod.get_annual_mb(fl.surface_h, reset_state=True) * cfg.SEC_IN_YEAR * rho
         fl.set_apparent_mb(mbz, is_calving=is_calving)
 
     # Check and write
@@ -2134,7 +2139,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
-    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
+    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years, reset_state=True))
 
     def to_minimize(residual_to_opt):
         return o_smb + residual_to_opt - cmb
