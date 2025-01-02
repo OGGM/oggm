@@ -25,6 +25,7 @@ import platform
 import struct
 import importlib
 import re as regexp
+import yaml
 
 # External libs
 import pandas as pd
@@ -3256,7 +3257,7 @@ class GlacierDirectory(object):
         return out
 
     def write_json(self, var, filename, filesuffix=''):
-        """ Writes a variable to a pickle on disk.
+        """ Writes a variable to a JSON file on disk.
 
         Parameters
         ----------
@@ -3276,6 +3277,52 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with open(fp, 'w') as f:
             json.dump(var, f, default=np_convert)
+
+    def read_yml(self, filename, filesuffix='', allow_empty=False):
+        """Reads a yml file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
+
+        Returns
+        -------
+        A dictionary read from the yml file
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = yaml.safe_load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = yaml.safe_load(f)
+        return out
+
+    def write_yml(self, var, filename, filesuffix=''):
+        """ Writes a variable to a yml file on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to yml (must be a dictionary)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'w') as f:
+            yaml.dump(var, f)
 
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
@@ -4132,3 +4179,120 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
+
+
+def get_params(setting, gdir=None, filename=None, filesuffix=''):
+    param = cfg.PARAMS.get(setting, None)
+
+    if not filename:
+        return param
+
+    run_settings = gdir.read_yml(filename, filesuffix=filesuffix)
+    return run_settings.get(setting, param)
+
+
+def get_params_wrapper(gdir=None, filename=None, filesuffix=''):
+    return partial(get_params, gdir=gdir, filename=filename,
+                   filesuffix=filesuffix)
+
+
+@entity_task(log)
+def add_setting_to_run_settings(gdir, settings, filename='run_settings',
+                                filesuffix='', overwrite=False):
+    """Adds specific settings to a run settings file.
+
+    If the file does not exist it will be created, otherwise the settings just
+    will be added. All parameters of params.cfg can be added.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        the glacier directory
+    settings : dict
+        Settings to save in the run_settings yml file
+    filename : str
+        Filename of the run_settings yml file. Default is 'run_settings'.
+    filesuffix : str
+        Filesuffix of the run_settings yml file. Default is ''.
+    overwrite : bool
+        if a provided setting already exists in the run_settings yml file, this
+        task won't overwrite it per default. Set this to True to enforce
+        overwriting (i.e. with consequences for the future workflow).
+    """
+
+    # open current file, returns empty dict if the file does not exist
+    run_settings = gdir.read_yml(filename=filename, filesuffix=filesuffix,
+                                 allow_empty=True)
+
+    for setting in settings:
+        if setting in run_settings and not overwrite:
+            raise InvalidWorkflowError(
+                f'`{filename}{filesuffix}.yml` already contains {setting}. '
+                'Set `overwrite` to True if you want to overwrite.')
+
+        run_settings[setting] = settings[setting]
+
+    gdir.write_yml(run_settings, filename=filename, filesuffix=filesuffix)
+
+
+@entity_task(log)
+def add_observation_to_run_settings(gdir, name, value, unit, timestamp,
+                                    type=None, error=None,
+                                    filename='run_settings', filesuffix='',
+                                    overwrite=False):
+    """Adds an observation to a run settings file.
+
+    If the file does not exist it will be created, otherwise the observation
+    just will be added.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        the glacier directory
+    name : str
+        a unique name of the observation, this name is later on used for
+        selecting an observation during calibration
+    value : float
+        the actual value of the observation
+    unit : str
+        the unit of the observation, this will be checked during calibration.
+        The default units are volume 'm3', area 'm2, geodetic mb 'kg m-2 yr-1'.
+    timestamp : str
+        timestamp of observation, could be a single date or a period
+        (e.g. '2000-01-01_2020-01-01') or 'rgi_date' will use the rgi date of
+        the current gdir
+    type : str
+        define which kind of observation it is (e.g. volume, area or geodetic mb)
+    error : float
+        the observational error
+    filename : str
+        Filename of the run_settings yml file. Default is 'run_settings'.
+    filesuffix : str
+        Filesuffix of the run_settings yml file. Default is ''.
+    overwrite : bool
+        if the observation already exists in the run_settings yml file, this
+        task won't overwrite it per default. Set this to True to enforce
+        overwriting.
+    """
+
+    # open current file, returns empty dict if the file does not exist
+    run_settings = gdir.read_yml(filename=filename, filesuffix=filesuffix,
+                                 allow_empty=True)
+
+    observations = run_settings.get('observations', {})
+    if name in observations and not overwrite:
+        raise InvalidWorkflowError(
+            f'`{filename}{filesuffix}.yml` already contains the observation'
+            f'{name}. Set `overwrite` to True if you want to overwrite.')
+
+    observations[name] = {
+        'value': float(value),
+        'unit': unit,
+        'timestamp': timestamp,
+        'type': type,
+        'error': float(error),
+    }
+
+    run_settings['observations'] = observations
+
+    gdir.write_yml(run_settings, filename=filename, filesuffix=filesuffix)

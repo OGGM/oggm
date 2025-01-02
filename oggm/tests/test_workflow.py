@@ -16,13 +16,18 @@ gpd = pytest.importorskip('geopandas')
 # Locals
 import oggm.cfg as cfg
 from oggm import workflow
-from oggm.utils import get_demo_file, write_centerlines_to_shape
+from oggm.utils import (get_demo_file, write_centerlines_to_shape,
+                        add_setting_to_run_settings,
+                        add_observation_to_run_settings)
+from oggm.core.flowline import run_from_climate_data
+from oggm.core.massbalance import MonthlyTIModel, MultipleFlowlineMassBalance
 from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
 from oggm.shop import cru
 from oggm.core import flowline
 from oggm import tasks
 from oggm import utils
+from oggm.exceptions import InvalidWorkflowError
 
 # Globals
 pytestmark = pytest.mark.test_env("workflow")
@@ -35,7 +40,7 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-def up_to_climate(reset=False, use_mp=None):
+def up_to_climate(reset=False, use_mp=None, params_file=None):
     """Run the tasks you want."""
 
     # test directory
@@ -49,7 +54,7 @@ def up_to_climate(reset=False, use_mp=None):
             pickle.dump('none', f)
 
     # Init
-    cfg.initialize()
+    cfg.initialize(file=params_file)
 
     # Use multiprocessing
     use_mp = False
@@ -119,10 +124,10 @@ def up_to_climate(reset=False, use_mp=None):
     return gdirs
 
 
-def up_to_inversion(reset=False):
+def up_to_inversion(reset=False, params_file=None):
     """Run the tasks you want."""
 
-    gdirs = up_to_climate(reset=reset)
+    gdirs = up_to_climate(reset=reset, params_file=params_file)
 
     with open(CLI_LOGF, 'rb') as f:
         clilog = pickle.load(f)
@@ -196,7 +201,11 @@ class TestFullRun(unittest.TestCase):
     @pytest.mark.slow
     def test_calibrate_inversion_from_consensus(self):
 
-        gdirs = up_to_inversion()
+        gdirs = up_to_inversion(params_file='mini_params_for_test.cfg')
+
+        # check if mini params file is used as expected
+        assert cfg.PARAMS['lru_maxsize'] == 123
+
         df = workflow.calibrate_inversion_from_consensus(gdirs,
                                                          ignore_missing=True)
         df = df.dropna()
@@ -538,3 +547,82 @@ def test_rgi7_complex_glacier_dirs():
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
+
+
+@pytest.fixture(scope='class')
+def with_class_wd(request, test_dir, hef_gdir):
+    # dependency on hef_gdir to ensure proper initialization order
+    prev_wd = cfg.PATHS['working_dir']
+    cfg.PATHS['working_dir'] = os.path.join(
+        test_dir, request.cls.__name__ + '_wd')
+    utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+    yield
+    # teardown
+    cfg.PATHS['working_dir'] = prev_wd
+
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestRunSettings:
+
+    @pytest.mark.slow
+    def test_run_settings_massbalance(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # test calibration with provided geodetic mb
+        ref_mb_df = utils.get_geodetic_mb_dataframe().loc[gdirs[0].rgi_id]
+        ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == '2000-01-01_2020-01-01']
+        ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
+        custom_obs = dict(
+            name='custom_geodetic_mb',
+            value=ref_mb * 1.1,
+            unit='kg m-2 yr-1',
+            timestamp='2000-01-01_2020-01-01',
+            type='geodetic_mb',
+            error=(ref_mb_df['err_dmdtda'].iloc[0] *
+                   1000),
+        )
+        add_observation_to_run_settings(gdir, **custom_obs)
+        assert gdir.has_file('run_settings')
+
+        # test overwriting raises an error
+        with pytest.raises(InvalidWorkflowError):
+            add_observation_to_run_settings(gdir, **custom_obs)
+
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     )
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     use_mb_calib=False,
+                                     use_run_settings=True,
+                                     run_setting_geodetic_mb='custom_geodetic_mb',
+                                     overwrite_gdir=True,
+                                     )
+
+        mb_calib_orig = gdirs[0].read_json('mb_calib')
+        mb_calib_custom = gdirs[0].read_yml('run_settings')
+        # custom geodetic mb more negative -> calibrated melt_f should be larger
+        assert mb_calib_orig['melt_f'] < mb_calib_custom['melt_f']
+
+        # test MassBalance run settings during dynamic run
+        workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
+        mb_model_orig = MultipleFlowlineMassBalance(
+            gdir,
+            mb_model_class=MonthlyTIModel,
+            use_run_settings=False)
+        model_orig = run_from_climate_data(gdir, ys=2000, ye=2020)
+        mb_model_custom = MultipleFlowlineMassBalance(
+            gdir,
+            mb_model_class=MonthlyTIModel,
+            use_run_settings=True)
+
+        model_custom = run_from_climate_data(gdir, ys=2000, ye=2020,
+                                             mb_model=mb_model_custom)
+        # original volume should be larger due to smaller melt_f
+        assert model_orig.volume_m3 > model_custom.volume_m3

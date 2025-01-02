@@ -301,6 +301,11 @@ BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 _doc = "The outlines of this glacier complex sub-entities (for RGI7C only!)."
 BASENAMES['complex_sub_entities'] = ('complex_sub_entities.shp', _doc)
 
+_doc = ("A dict containing optional settings for a model run. Could contain "
+        "mass balance parameters, dynamic parameters or observations. If a "
+        "required parameter is not included, the default value will be used.")
+BASENAMES['run_settings'] = ('run_settings.yml', _doc)
+
 
 def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.
