@@ -12,6 +12,7 @@ from scipy.interpolate import interp1d
 from scipy import optimize
 # Locals
 import oggm.cfg as cfg
+from IPython import embed
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
@@ -126,7 +127,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         raise NotImplementedError()
 
     def get_specific_mb(self, heights=None, widths=None, fls=None,
-                        year=None):
+                        year=None, reset_state=False):
         """Specific mb for this year and a specific glacier geometry.
 
          Units: [mm w.e. yr-1], or millimeter water equivalent per year
@@ -151,9 +152,12 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
 
         if len(np.atleast_1d(year)) > 1:
-            out = [self.get_specific_mb(heights=heights, widths=widths,
-                                        fls=fls, year=yr)
-                   for yr in year]
+            if (reset_state):
+                out1 = self.get_specific_mb(heights=heights, widths=widths,
+                    fls=fls, year=year[0], reset_state=True)
+                out = [self.get_specific_mb(heights=heights, widths=widths,
+                    fls=fls, year=yr) for yr in year[1:]]
+                out.insert(0,out1)
             return np.asarray(out)
 
         if fls is not None:
@@ -169,7 +173,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
                                                         fls=fls, fl_id=i,
-                                                        year=year))
+                                                        year=year, reset_state=reset_state))
         else:
             mbs = self.get_annual_mb(heights, year=year)
 
@@ -1307,8 +1311,9 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         if len(np.atleast_1d(year)) > 1:
             if (reset_state):
-                out = [self.get_specific_mb(fls=fls, year=year[0], reset_state=True)]
+                out1 = self.get_specific_mb(fls=fls, year=year[0], reset_state=True)
                 out = out.append([self.get_specific_mb(fls=fls, year=yr) for yr in year[1:]])
+                out.insert(0,out1)
             else:
                 out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
             return np.asarray(out)
@@ -2064,7 +2069,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
     def to_minimize(ela_h):
         mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
-        smb = mbmod.get_specific_mb(heights=h, widths=w, reset_state=True)
+        smb = mbmod.get_specific_mb(heights=h, widths=w)
         return smb - cmb
 
     if ela_h is None:
@@ -2079,7 +2084,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     # Flowlines in order to be sure
     mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
     for fl in fls:
-        mbz = mbmod.get_annual_mb(fl.surface_h, reset_state=True) * cfg.SEC_IN_YEAR * rho
+        mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
         fl.set_apparent_mb(mbz, is_calving=is_calving)
 
     # Check and write
@@ -2140,7 +2145,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
 
     # Unchanged SMB
     o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years, reset_state=True))
-
+ 
     def to_minimize(residual_to_opt):
         return o_smb + residual_to_opt - cmb
 
@@ -2155,8 +2160,13 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     for fl_id, fl in enumerate(fls):
         mbz = 0
         for yr in mb_years:
-            mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
+            if yr==mb_years[0]:
+                mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
+                                          fls=fls, fl_id=fl_id, reset_state=True)
+            else:
+                mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
                                           fls=fls, fl_id=fl_id)
+               
         mbz = mbz / len(mb_years)
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual,
                            is_calving=is_calving)
