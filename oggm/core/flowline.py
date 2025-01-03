@@ -52,7 +52,8 @@ class Flowline(Centerline):
 
     def __init__(self, line=None, dx=1, map_dx=None,
                  surface_h=None, bed_h=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, use_run_settings=False,
+                 run_settings_filesuffix=''):
         """ Initialize a Flowline
 
         Parameters
@@ -71,6 +72,10 @@ class Flowline(Centerline):
             The glacier's RGI identifier
         water_level : float
             The water level (to compute volume below sea-level)
+        use_run_settings : bool
+            if parameters of a run_settings file should be used
+        run_settings_filesuffix : str
+            potential filesuffix of a run_settings file
         """
 
         # This is do add flexibility for testing
@@ -81,6 +86,11 @@ class Flowline(Centerline):
             line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
 
         super(Flowline, self).__init__(line, dx, surface_h)
+
+        run_settings_filename = 'run_settings' if use_run_settings else None
+        self.params_use = utils.get_params_wrapper(
+            gdir=gdir, filename=run_settings_filename,
+            filesuffix=run_settings_filesuffix)
 
         self._thick = utils.clip_min(surface_h - bed_h, 0.)
         self.map_dx = map_dx
@@ -138,8 +148,15 @@ class Flowline(Centerline):
     @property
     def length_m(self):
         # TODO: take calving bucket into account for fine tuned length?
-        lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
-        if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
+        # try for backwards compatibility with old preprocessed gdirs, before
+        # run_settings were introduced
+        try:
+            lt = self.params_use('min_ice_thick_for_length', default=0)
+            length_method = self.params_use('glacier_length_method')
+        except AttributeError:
+            lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
+            length_method = cfg.PARAMS.get('glacier_length_method')
+        if length_method == 'consecutive':
             if (self.thick > lt).all():
                 nx = len(self.thick)
             else:
@@ -152,8 +169,15 @@ class Flowline(Centerline):
     def terminus_index(self):
         # the index of the last point with ice thickness above
         # min_ice_thick_for_length and consistent with length
-        lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
-        if cfg.PARAMS.get('glacier_length_method') == 'consecutive':
+        # try for backwards compatibility with old preprocessed gdirs, before
+        # run_settings were introduced
+        try:
+            lt = self.params_use('min_ice_thick_for_length', default=0)
+            length_method = self.params_use('glacier_length_method')
+        except AttributeError:
+            lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
+            length_method = cfg.PARAMS.get('glacier_length_method')
+        if length_method == 'consecutive':
             if (self.thick > lt).all():
                 ix = len(self.thick) - 1
             else:
@@ -304,7 +328,8 @@ class ParabolicBedFlowline(Flowline):
 
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, bed_shape=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, use_run_settings=False,
+                 run_settings_filesuffix=''):
         """ Instantiate.
 
         Parameters
@@ -312,11 +337,11 @@ class ParabolicBedFlowline(Flowline):
         line : :py:class:`shapely.geometry.LineString`
             the geometrical line of a :py:class:`oggm.Centerline`
         """
-        super(ParabolicBedFlowline, self).__init__(line, dx, map_dx,
-                                                   surface_h, bed_h,
-                                                   rgi_id=rgi_id,
-                                                   water_level=water_level,
-                                                   gdir=gdir)
+        super(ParabolicBedFlowline, self).__init__(
+            line, dx, map_dx, surface_h, bed_h, rgi_id=rgi_id,
+            water_level=water_level, gdir=gdir,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix)
 
         assert np.all(np.isfinite(bed_shape))
         self.bed_shape = bed_shape
@@ -351,7 +376,8 @@ class RectangularBedFlowline(Flowline):
 
     def __init__(self, line=None, dx=None, map_dx=None,
                  surface_h=None, bed_h=None, widths=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, use_run_settings=False,
+                 run_settings_filesuffix=''):
         """ Instantiate.
 
         Parameters
@@ -360,11 +386,11 @@ class RectangularBedFlowline(Flowline):
             the geometrical line of a :py:class:`oggm.Centerline`
 
         """
-        super(RectangularBedFlowline, self).__init__(line, dx, map_dx,
-                                                     surface_h, bed_h,
-                                                     rgi_id=rgi_id,
-                                                     water_level=water_level,
-                                                     gdir=gdir)
+        super(RectangularBedFlowline, self).__init__(
+            line, dx, map_dx, surface_h, bed_h, rgi_id=rgi_id,
+            water_level=water_level, gdir=gdir,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix)
 
         self._widths = widths
 
@@ -397,7 +423,8 @@ class TrapezoidalBedFlowline(Flowline):
 
     def __init__(self, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, widths=None, lambdas=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, use_run_settings=False,
+                 run_settings_filesuffix=''):
         """ Instantiate.
 
         Parameters
@@ -405,11 +432,11 @@ class TrapezoidalBedFlowline(Flowline):
         line : :py:class:`shapely.geometry.LineString`
             the geometrical line of a :py:class:`oggm.Centerline`
         """
-        super(TrapezoidalBedFlowline, self).__init__(line, dx, map_dx,
-                                                     surface_h, bed_h,
-                                                     rgi_id=rgi_id,
-                                                     water_level=water_level,
-                                                     gdir=gdir)
+        super(TrapezoidalBedFlowline, self).__init__(
+            line, dx, map_dx, surface_h, bed_h, rgi_id=rgi_id,
+            water_level=water_level, gdir=gdir,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix)
 
         self._w0_m = widths * self.map_dx - lambdas * self.thick
 
@@ -458,7 +485,8 @@ class MixedBedFlowline(Flowline):
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, section=None, bed_shape=None,
                  is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, use_run_settings=False,
+                 run_settings_filesuffix=''):
         """ Instantiate.
 
         Parameters
@@ -467,12 +495,11 @@ class MixedBedFlowline(Flowline):
             the geometrical line of a :py:class:`oggm.Centerline`
         """
 
-        super(MixedBedFlowline, self).__init__(line=line, dx=dx, map_dx=map_dx,
-                                               surface_h=surface_h.copy(),
-                                               bed_h=bed_h.copy(),
-                                               rgi_id=rgi_id,
-                                               water_level=water_level,
-                                               gdir=gdir)
+        super(MixedBedFlowline, self).__init__(
+            line=line, dx=dx, map_dx=map_dx, surface_h=surface_h.copy(),
+            bed_h=bed_h.copy(), rgi_id=rgi_id, water_level=water_level,
+            gdir=gdir, use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix)
 
         # To speedup calculations if no trapezoid bed is present
         self._do_trapeze = np.any(is_trapezoid)
@@ -575,7 +602,8 @@ class FlowlineModel(object):
                  fs=None, inplace=False, smooth_trib_influx=True,
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
-                 water_level=None, required_model_steps='monthly'):
+                 water_level=None, required_model_steps='monthly', gdir=None,
+                 use_run_settings=False, run_settings_filesuffix=''):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -620,7 +648,16 @@ class FlowlineModel(object):
             only annual updates are required. You may want to change this
             for optimisation reasons for models that don't require adaptive
             steps (for example the deltaH method).
+        use_run_settings : bool
+            if parameters of a run_settings file should be used
+        run_settings_filesuffix : str
+            potential filesuffix of a run_settings file
         """
+
+        run_settings_filename = 'run_settings' if use_run_settings else None
+        self.params_use = utils.get_params_wrapper(
+            gdir=gdir, filename=run_settings_filename,
+            filesuffix=run_settings_filesuffix)
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
@@ -637,20 +674,20 @@ class FlowlineModel(object):
 
         # Defaults
         if glen_a is None:
-            glen_a = cfg.PARAMS['glen_a']
+            glen_a = self.params_use('glen_a')
         if fs is None:
-            fs = cfg.PARAMS['fs']
+            fs = self.params_use('fs')
         self.glen_a = glen_a
         self.fs = fs
-        self.glen_n = cfg.PARAMS['glen_n']
-        self.rho = cfg.PARAMS['ice_density']
+        self.glen_n = self.params_use('glen_n')
+        self.rho = self.params_use('ice_density')
         if check_for_boundaries is None:
-            check_for_boundaries = cfg.PARAMS[('error_when_glacier_reaches_'
-                                               'boundaries')]
+            check_for_boundaries = self.params_use(('error_when_glacier_reaches_'
+                                                    'boundaries'))
         self.check_for_boundaries = check_for_boundaries
 
         # we keep glen_a as input, but for optimisation we stick to "fd"
-        self._fd = 2. / (cfg.PARAMS['glen_n']+2) * self.glen_a
+        self._fd = 2. / (self.params_use('glen_n') + 2) * self.glen_a
 
         # Calving shenanigans
         self.calving_m3_since_y0 = 0.  # total calving since time y0
@@ -1027,7 +1064,7 @@ class FlowlineModel(object):
             monthly_time = np.arange(np.floor(y0), np.floor(y1)+1)
 
         yrs, months = utils.floatyear_to_date(monthly_time)
-        sm = cfg.PARAMS['hydro_month_' + self.mb_model.hemisphere]
+        sm = self.params_use('hydro_month_' + self.mb_model.hemisphere)
         hyrs, hmonths = utils.calendardate_to_hydrodate(yrs, months,
                                                         start_month=sm)
 
@@ -1081,7 +1118,7 @@ class FlowlineModel(object):
         diag_ds['hydro_month'].attrs['description'] = 'Hydrological month'
 
         # Variables and attributes
-        ovars = cfg.PARAMS['store_diagnostic_variables']
+        ovars = self.params_use('store_diagnostic_variables')
 
         if 'volume' in ovars:
             diag_ds['volume_m3'] = ('time', np.zeros(nm) * np.nan)
@@ -1108,7 +1145,7 @@ class FlowlineModel(object):
             diag_ds['area_m2'].attrs['unit'] = 'm 2'
 
         if dynamic_spinup_min_ice_thick is None:
-            dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+            dynamic_spinup_min_ice_thick = self.params_use('dynamic_spinup_min_ice_thick')
 
         if 'area_min_h' in ovars:
             # filled with a value if dynamic_spinup_min_ice_thick is not None
@@ -1177,7 +1214,7 @@ class FlowlineModel(object):
                 ds['time'].attrs['description'] = 'Floating hydrological year'
 
             # Variables and attributes
-            ovars_fl = cfg.PARAMS['store_fl_diagnostic_variables']
+            ovars_fl = self.params_use('store_fl_diagnostic_variables')
             if 'volume' not in ovars_fl or 'area' not in ovars_fl:
                 raise InvalidParamsError('Flowline diagnostics need at least '
                                          'volume and area as output.')
@@ -1673,25 +1710,25 @@ class FluxBasedModel(FlowlineModel):
 
         self.fixed_dt = fixed_dt
         if min_dt is None:
-            min_dt = cfg.PARAMS['cfl_min_dt']
+            min_dt = self.params_use('cfl_min_dt')
         if cfl_number is None:
-            cfl_number = cfg.PARAMS['cfl_number']
+            cfl_number = self.params_use('cfl_number')
         self.min_dt = min_dt
         self.cfl_number = cfl_number
 
         # Calving params
         if do_kcalving is None:
-            do_kcalving = cfg.PARAMS['use_kcalving_for_run']
+            do_kcalving = self.params_use('use_kcalving_for_run')
         self.calving_law = calving_law
         self.do_calving = do_kcalving and self.is_tidewater
         if calving_k is None:
-            calving_k = cfg.PARAMS['calving_k']
+            calving_k = self.params_use('calving_k')
         self.calving_k = calving_k / cfg.SEC_IN_YEAR
         if calving_use_limiter is None:
-            calving_use_limiter = cfg.PARAMS['calving_use_limiter']
+            calving_use_limiter = self.params_use('calving_use_limiter')
         self.calving_use_limiter = calving_use_limiter
         if calving_limiter_frac is None:
-            calving_limiter_frac = cfg.PARAMS['calving_limiter_frac']
+            calving_limiter_frac = self.params_use('calving_limiter_frac')
         if calving_limiter_frac > 0:
             raise NotImplementedError('calving limiter other than 0 not '
                                       'implemented yet')
@@ -2230,7 +2267,7 @@ class SemiImplicitModel(FlowlineModel):
                              'along the flowline possible (lambda=0 is'
                              'rectangular).')
 
-        if cfg.PARAMS['use_kcalving_for_run']:
+        if self.params_use('use_kcalving_for_run'):
             raise NotImplementedError("Calving is not implemented in the"
                                       "SemiImplicitModel! Set "
                                       "cfg.PARAMS['use_kcalving_for_run'] = "
@@ -2238,11 +2275,11 @@ class SemiImplicitModel(FlowlineModel):
 
         self.fixed_dt = fixed_dt
         if min_dt is None:
-            min_dt = cfg.PARAMS['cfl_min_dt']
+            min_dt = self.params_use('cfl_min_dt')
         self.min_dt = min_dt
 
         if cfl_number is None:
-            cfl_number = cfg.PARAMS['cfl_number']
+            cfl_number = self.params_use('cfl_number')
         if cfl_number < 0.1:
             raise InvalidParamsError("For the SemiImplicitModel you can use "
                                      "cfl numbers in the order of 0.1 - 0.5 "
@@ -2677,10 +2714,10 @@ class MassRedistributionCurveModel(FlowlineModel):
 
         # Frontal ablation shenanigans
         if do_kcalving is None:
-            do_kcalving = cfg.PARAMS['use_kcalving_for_run']
+            do_kcalving = self.params_use('use_kcalving_for_run')
         self.do_calving = do_kcalving and self.is_tidewater
         if calving_k is None:
-            calving_k = cfg.PARAMS['calving_k']
+            calving_k = self.params_use('calving_k')
 
         self.is_tidewater = is_tidewater
         self.calving_k = calving_k
@@ -3003,7 +3040,7 @@ def calving_glacier_downstream_line(line, n_points):
 
 
 @entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir, filesuffix='',
+def init_present_time_glacier(gdir, use_run_settings=False, filesuffix='',
                               use_binned_thickness_data=False):
     """Merges data from preprocessing tasks. First task after inversion!
 
@@ -3014,8 +3051,11 @@ def init_present_time_glacier(gdir, filesuffix='',
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
     filesuffix : str
-        append a suffix to the model_flowlines filename (e.g. useful for
+        potential filesuffix of a run_settings file, will also be appended as a
+        suffix to the model_flowlines filename (e.g. useful for
         dynamic melt_f calibration including an inversion, so the original
         model_flowlines are not changed).
     use_binned_thickness_data : bool or str
@@ -3025,11 +3065,15 @@ def init_present_time_glacier(gdir, filesuffix='',
         data here to create a flowline for a dynamic model run
     """
 
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename, filesuffix=filesuffix)
+
     # Some vars
     invs = gdir.read_pickle('inversion_output')
 
     map_dx = gdir.grid.dx
-    def_lambda = cfg.PARAMS['trapezoid_lambdas']
+    def_lambda = params_use('trapezoid_lambdas')
     cls = gdir.read_pickle('inversion_flowlines')
 
     # Fill the tributaries
@@ -3091,11 +3135,11 @@ def init_present_time_glacier(gdir, filesuffix='',
             # for valley glaciers, simply add the downstream line, depending on
             # selected shape parabola or trapezoidal
             dic_ds = gdir.read_pickle('downstream_line')
-            if cfg.PARAMS['downstream_line_shape'] == 'parabola':
+            if params_use('downstream_line_shape') == 'parabola':
                 bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
                 lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.nan)
                 widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
-            elif cfg.PARAMS['downstream_line_shape'] == 'trapezoidal':
+            elif params_use('downstream_line_shape') == 'trapezoidal':
                 bed_shape = np.append(bed_shape, dic_ds['bedshapes'] * np.nan)
                 lambdas = np.append(lambdas, np.ones(len(dic_ds['w0s'])) *
                                     def_lambda)
@@ -3103,7 +3147,7 @@ def init_present_time_glacier(gdir, filesuffix='',
             else:
                 raise InvalidParamsError(
                     f"Unknown cfg.PARAMS['downstream_line_shape'] = "
-                    f"{cfg.PARAMS['downstream_line_shape']} (options are "
+                    f"{params_use('downstream_line_shape')} (options are "
                     f"'parabola' and 'trapezoidal').")
             section = np.append(section, dic_ds['bedshapes'] * 0.)
             surface_h = np.append(surface_h, dic_ds['surface_h'])
@@ -3112,8 +3156,8 @@ def init_present_time_glacier(gdir, filesuffix='',
 
         if gdir.is_tidewater and inv['is_last']:
             # Continue the bed a little
-            n_points = cfg.PARAMS['calving_line_extension']
-            cf_slope = cfg.PARAMS['calving_front_slope']
+            n_points = params_use('calving_line_extension')
+            cf_slope = params_use('calving_front_slope')
             deepening = n_points * cl.dx * map_dx * cf_slope
 
             line = calving_glacier_downstream_line(line, n_points=n_points)
@@ -3134,7 +3178,10 @@ def init_present_time_glacier(gdir, filesuffix='',
                                lambdas=lambdas,
                                widths_m=widths_m,
                                rgi_id=cl.rgi_id,
-                               gdir=gdir)
+                               gdir=gdir,
+                               use_run_settings=use_run_settings,
+                               run_settings_filesuffix=filesuffix,
+                               )
 
         # Update attrs
         if cl.flows_to:
@@ -3157,13 +3204,20 @@ def init_present_time_glacier(gdir, filesuffix='',
     gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
-def decide_evolution_model(evolution_model=None):
-    """Simple utility to check and apply user choices in cfg.PARAMS"""
+def decide_evolution_model(evolution_model=None, gdir=None,
+                           use_run_settings=False, run_settings_filesuffix=''):
+    """Simple utility to check and apply user choices in cfg.PARAMS or a
+    run_settings file."""
 
     if evolution_model is not None:
         return evolution_model
 
-    from_cfg = cfg.PARAMS['evolution_model'].lower()
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    from_cfg = params_use('evolution_model').lower()
     if from_cfg == 'SemiImplicit'.lower():
         evolution_model = SemiImplicitModel
     elif from_cfg == 'FluxBased'.lower():
@@ -3187,6 +3241,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        water_level=None,
                        evolution_model=None, stop_criterion=None,
                        init_model_filesuffix=None, init_model_yr=None,
+                       use_run_settings=False, run_settings_filesuffix='',
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -3252,7 +3307,16 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         starting from the chosen year. The only output affected are the
         glacier wide diagnostic files - all other outputs are set
         to constants during "spinup"
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
      """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
@@ -3277,13 +3341,24 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                       "though: for monthly MB applications, we recommend to "
                       "use the `run_with_hydro` task.")
 
-    if cfg.PARAMS['use_inversion_params_for_run']:
+    if params_use('use_inversion_params_for_run'):
         diag = gdir.get_diagnostics()
-        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
-        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
+        fs = diag.get('inversion_fs', params_use('fs'))
+        glen_a = diag.get('inversion_glen_a', params_use('glen_a'))
+
+        if use_run_settings:
+            # this is ugly, but needed because a first guess value of the
+            # inversion parameters is present in params.cfg, if this would be
+            # removed the option with using 'default' would be enough
+            run_settings = gdir.read_yml(run_settings_filename,
+                                         filesuffix=run_settings_filesuffix)
+            if 'inversion_fs' in run_settings:
+                fs = params_use('inversion_fs', default=fs)
+            if 'inversion_glen_a' in run_settings:
+                glen_a = params_use('inversion_glen_a', default=glen_a)
     else:
-        fs = cfg.PARAMS['fs']
-        glen_a = cfg.PARAMS['glen_a']
+        fs = params_use('fs')
+        glen_a = params_use('glen_a')
 
     if glen_a_fac is not None:
         glen_a *= glen_a_fac
@@ -3294,10 +3369,10 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     kwargs.setdefault('glen_a', glen_a)
 
     if store_model_geometry is None:
-        store_model_geometry = cfg.PARAMS['store_model_geometry']
+        store_model_geometry = params_use('store_model_geometry')
 
     if store_fl_diagnostics is None:
-        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
+        store_fl_diagnostics = params_use('store_fl_diagnostics')
 
     if store_model_geometry:
         geom_path = gdir.get_filepath('model_geometry',
@@ -3325,12 +3400,16 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         for fl in fls:
             fl.thick = fl.thick * 0.
 
-    evolution_model = decide_evolution_model(evolution_model)
+    evolution_model = decide_evolution_model(
+        evolution_model, gdir=gdir, use_run_settings=use_run_settings,
+        run_settings_filesuffix=run_settings_filesuffix)
 
-    if (cfg.PARAMS['use_kcalving_for_run'] and gdir.is_tidewater and
+    if (params_use('use_kcalving_for_run') and gdir.is_tidewater and
             water_level is None):
         # check for water level
         water_level = gdir.get_diagnostics().get('calving_water_level', None)
+        if use_run_settings:
+            water_level = params_use('calving_water_level', default=water_level)
         if water_level is None:
             raise InvalidWorkflowError('This tidewater glacier seems to not '
                                        'have been inverted with the '
@@ -3344,6 +3423,9 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                             is_tidewater=gdir.is_tidewater,
                             is_lake_terminating=gdir.is_lake_terminating,
                             water_level=water_level,
+                            gdir=gdir,
+                            use_run_settings=use_run_settings,
+                            run_settings_filesuffix=run_settings_filesuffix,
                             **kwargs)
 
     with warnings.catch_warnings():
@@ -3375,7 +3457,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                        init_model_filesuffix=None,
                        init_model_yr=None,
                        zero_initial_glacier=False,
-                       unique_samples=False, **kwargs):
+                       unique_samples=False, use_run_settings=False,
+                       run_settings_filesuffix='', **kwargs):
     """Runs the random mass balance model for a given number of years.
 
     This will initialize a
@@ -3448,19 +3531,28 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
         per random climate period-length
         if false, every model year will be chosen from the random climate
         period with the same probability
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     kwargs : dict
         kwargs to pass to the flowline_model_run task
     """
 
-    mb_model = MultipleFlowlineMassBalance(gdir,
-                                           mb_model_class=partial(
-                                               RandomMassBalance,
-                                               mb_model_class=mb_model_class),
-                                           y0=y0, halfsize=halfsize,
-                                           bias=bias, seed=seed,
-                                           filename=climate_filename,
-                                           input_filesuffix=climate_input_filesuffix,
-                                           unique_samples=unique_samples)
+    mb_model = MultipleFlowlineMassBalance(
+        gdir,
+        mb_model_class=partial(
+            RandomMassBalance,
+            mb_model_class=mb_model_class,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        ),
+        y0=y0, halfsize=halfsize,
+        bias=bias, seed=seed,
+        filename=climate_filename,
+        input_filesuffix=climate_input_filesuffix,
+        unique_samples=unique_samples
+    )
 
     if temperature_bias is not None:
         mb_model.temp_bias += temperature_bias
@@ -3481,6 +3573,8 @@ def run_random_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,
                               **kwargs)
 
 
@@ -3500,6 +3594,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                          climate_input_filesuffix='',
                          init_model_fls=None,
                          zero_initial_glacier=False,
+                         use_run_settings=False,
+                         run_settings_filesuffix='',
                          **kwargs):
     """Runs the constant mass balance model for a given number of years.
 
@@ -3565,18 +3661,27 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
     init_model_fls : []
         list of flowlines to use to initialize the model (the default is the
         present_time_glacier file from the glacier directory)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     kwargs : dict
         kwargs to pass to the flowline_model_run task
     """
 
-    mb_model = MultipleFlowlineMassBalance(gdir,
-                                           mb_model_class=partial(
-                                               ConstantMassBalance,
-                                               mb_model_class=mb_model_class),
-                                           y0=y0, halfsize=halfsize,
-                                           bias=bias,
-                                           filename=climate_filename,
-                                           input_filesuffix=climate_input_filesuffix)
+    mb_model = MultipleFlowlineMassBalance(
+        gdir,
+        mb_model_class=partial(
+            ConstantMassBalance,
+            mb_model_class=mb_model_class,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        ),
+        y0=y0, halfsize=halfsize,
+        bias=bias,
+        filename=climate_filename,
+        input_filesuffix=climate_input_filesuffix
+    )
 
     if temperature_bias is not None:
         mb_model.temp_bias += temperature_bias
@@ -3597,6 +3702,8 @@ def run_constant_climate(gdir, nyears=1000, y0=None, halfsize=15,
                               init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,
                               **kwargs)
 
 
@@ -3613,7 +3720,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
                           bias=0, temperature_bias=None,
-                          precipitation_factor=None, **kwargs):
+                          precipitation_factor=None,
+                          use_run_settings=False,
+                          run_settings_filesuffix='',
+                          **kwargs):
     """ Runs a glacier with climate input from e.g. CRU or a GCM.
 
     This will initialize a
@@ -3687,6 +3797,10 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         starting from the chosen year. The only output affected are the
         glacier wide diagnostic files - all other outputs are set
         to constants during "spinup"
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     kwargs : dict
         kwargs to pass to the flowline_model_run task
     """
@@ -3727,11 +3841,15 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
         ys = ys if ys < max_ys else max_ys
 
     if mb_model is None:
-        mb_model = MultipleFlowlineMassBalance(gdir,
-                                               mb_model_class=mb_model_class,
-                                               filename=climate_filename,
-                                               bias=bias,
-                                               input_filesuffix=climate_input_filesuffix)
+        mb_model = MultipleFlowlineMassBalance(
+            gdir,
+            mb_model_class=mb_model_class,
+            filename=climate_filename,
+            bias=bias,
+            input_filesuffix=climate_input_filesuffix,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        )
 
     if temperature_bias is not None:
         mb_model.temp_bias += temperature_bias
@@ -3750,6 +3868,8 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
                               fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,
                               **kwargs)
 
 
@@ -3757,6 +3877,7 @@ def run_from_climate_data(gdir, ys=None, ye=None, min_ys=None, max_ys=None,
 def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                    fixed_geometry_spinup_yr=None, ref_area_from_y0=False,
                    ref_area_yr=None, ref_geometry_filesuffix=None,
+                   use_run_settings=False, run_settings_filesuffix='',
                    **kwargs):
     """Run the flowline model and add hydro diagnostics.
 
@@ -3793,8 +3914,17 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         starting from the chosen year. The only output affected are the
         glacier wide diagnostic files - all other outputs are set
         to constants during "spinup"
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     **kwargs : all valid kwargs for ``run_task``
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # Make sure it'll return something
     kwargs['return_value'] = True
@@ -3807,13 +3937,16 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         raise InvalidParamsError('run_with_hydro only compatible with '
                                  "mb_elev_feedback='annual' (yes, even "
                                  "when asked for monthly hydro output).")
-    if not cfg.PARAMS['store_model_geometry']:
+    if not params_use('store_model_geometry'):
         raise InvalidParamsError('run_with_hydro only works with '
                                  "PARAMS['store_model_geometry'] = True "
                                  "for now.")
 
     if fixed_geometry_spinup_yr is not None:
         kwargs['fixed_geometry_spinup_yr'] = fixed_geometry_spinup_yr
+
+    kwargs['use_run_settings'] = use_run_settings
+    kwargs['run_settings_filesuffix'] = run_settings_filesuffix
 
     out = run_task(gdir, **kwargs)
 
@@ -4011,7 +4144,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
                     raise
 
                 # Here we use mass (kg yr-1) not ice volume
-                mb *= seconds * cfg.PARAMS['ice_density']
+                mb *= seconds * params_use('ice_density')
 
                 # Bias of the mb model is a fake melt term that we need to deal with
                 # This is here for correction purposes later
@@ -4104,7 +4237,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         else:
             # Correct for mass-conservation and match the ice-dynamics model
             fmod.run_until(yr + 1)
-            model_mb = (fmod.volume_m3 - prev_model_vol) * cfg.PARAMS['ice_density']
+            model_mb = (fmod.volume_m3 - prev_model_vol) * params_use('ice_density')
             prev_model_vol = fmod.volume_m3
 
             reconstructed_mb = (out['snowfall_on_glacier']['data'][i, :].sum() -
@@ -4147,13 +4280,13 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
         out['residual_mb']['data'][i] = residual_mb
 
     # Convert to xarray
-    out_vars = cfg.PARAMS['store_diagnostic_variables']
+    out_vars = params_use('store_diagnostic_variables')
     ods = xr.Dataset()
     ods.coords['time'] = fmod.years
     if store_monthly_hydro:
         ods.coords['month_2d'] = ('month_2d', np.arange(1, 13))
         # For the user later
-        sm = cfg.PARAMS['hydro_month_' + mb_mod.hemisphere]
+        sm = params_use('hydro_month_' + mb_mod.hemisphere)
         ods.coords['hydro_month_2d'] = ('month_2d', (np.arange(12) + 12 - sm + 1) % 12 + 1)
         ods.coords['calendar_month_2d'] = ('month_2d', np.arange(1, 13))
     for varname, d in out.items():
@@ -4263,7 +4396,7 @@ def spec_mb_stop_criterion(model, state, spec_mb_threshold=50, n_years=60):
     if area < 1 or len(state['volume_m3']) == 0:
         spec_mb = np.nan
     else:
-        spec_mb = (volume - state['volume_m3'][-1]) / area * cfg.PARAMS['ice_density']
+        spec_mb = (volume - state['volume_m3'][-1]) / area * model.params_use('ice_density')
 
     state['spec_mb'] = np.append(state['spec_mb'], [spec_mb])
     state['volume_m3'] = np.append(state['volume_m3'], [volume])
@@ -4410,7 +4543,8 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
     main.write_pickle(fls, 'model_flowlines')
 
 
-def clean_merged_flowlines(gdir, buffer=None):
+def clean_merged_flowlines(gdir, buffer=None, use_run_settings=False,
+                           run_settings_filesuffix='',):
     """Order and cut merged flowlines to size.
 
     After matching flowlines were found and merged to one glacier directory
@@ -4424,14 +4558,23 @@ def clean_merged_flowlines(gdir, buffer=None):
         The GDir of the glacier of interest
     buffer: float
         Buffer around the flowlines to find overlaps
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # No buffer does not work
     if buffer is None:
-        buffer = cfg.PARAMS['kbuffer']
+        buffer = params_use('kbuffer')
 
     # Number of pixels to arbitrarily remove at junctions
-    lid = int(cfg.PARAMS['flowline_junction_pix'])
+    lid = int(params_use('flowline_junction_pix'))
 
     fls = gdir.read_pickle('model_flowlines')
 

@@ -19,7 +19,8 @@ from oggm import workflow
 from oggm.utils import (get_demo_file, write_centerlines_to_shape,
                         add_setting_to_run_settings,
                         add_observation_to_run_settings)
-from oggm.core.flowline import run_from_climate_data
+from oggm.core.flowline import (run_from_climate_data, run_random_climate,
+                                init_present_time_glacier, run_constant_climate)
 from oggm.core.massbalance import MonthlyTIModel, MultipleFlowlineMassBalance
 from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
@@ -572,6 +573,7 @@ class TestRunSettings:
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
         gdir = gdirs[0]
+        mb_calib_cluster = gdirs[0].read_json('mb_calib')
 
         # test calibration with provided geodetic mb
         ref_mb_df = utils.get_geodetic_mb_dataframe().loc[gdirs[0].rgi_id]
@@ -602,27 +604,135 @@ class TestRunSettings:
                                      use_mb_calib=False,
                                      use_run_settings=True,
                                      run_setting_geodetic_mb='custom_geodetic_mb',
-                                     overwrite_gdir=True,
                                      )
+        # calibrating again, without overwriting should raise an error
+        with pytest.raises(InvalidWorkflowError):
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs,
+                                         use_mb_calib=False,
+                                         use_run_settings=True,
+                                         run_setting_geodetic_mb='custom_geodetic_mb',
+                                         )
 
         mb_calib_orig = gdirs[0].read_json('mb_calib')
         mb_calib_custom = gdirs[0].read_yml('run_settings')
         # custom geodetic mb more negative -> calibrated melt_f should be larger
         assert mb_calib_orig['melt_f'] < mb_calib_custom['melt_f']
 
-        # test MassBalance run settings during dynamic run
-        workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
-        mb_model_orig = MultipleFlowlineMassBalance(
-            gdir,
-            mb_model_class=MonthlyTIModel,
-            use_run_settings=False)
-        model_orig = run_from_climate_data(gdir, ys=2000, ye=2020)
+        # test usage of special run_settings file for the informed threestep,
+        # should result in the same parameters as on the cluster
+        add_setting_to_run_settings(gdir, filesuffix='_informed_threestep',
+                                    settings={
+                                        'use_temp_bias_from_file': True,
+                                        'use_winter_prcp_fac': True,
+                                        'baseline_climate': 'W5E5',
+                                    })
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     informed_threestep=True,
+                                     use_run_settings=True,
+                                     use_mb_calib=False,
+                                     filesuffix='_informed_threestep',
+                                     )
+        mb_calib_threestep = gdirs[0].read_yml('run_settings',
+                                               '_informed_threestep')
+        assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        np.testing.assert_allclose(mb_calib_cluster['prcp_fac'],
+                                   mb_calib_threestep['prcp_fac'],
+                                   atol=1e-3)
+        np.testing.assert_allclose(mb_calib_cluster['temp_bias'],
+                                   mb_calib_threestep['temp_bias'],
+                                   atol=1e-3)
+
+        # test MassBalance run_settings during dynamic run
+        workflow.execute_entity_task(init_present_time_glacier, gdirs)
+        model_orig = run_from_climate_data(gdir, ye=2020)
         mb_model_custom = MultipleFlowlineMassBalance(
             gdir,
             mb_model_class=MonthlyTIModel,
             use_run_settings=True)
 
-        model_custom = run_from_climate_data(gdir, ys=2000, ye=2020,
-                                             mb_model=mb_model_custom)
+        model_custom = run_from_climate_data(gdir, ye=2020,
+                                             mb_model=mb_model_custom,
+                                             output_filesuffix='_custom')
         # original volume should be larger due to smaller melt_f
         assert model_orig.volume_m3 > model_custom.volume_m3
+
+        # should also work with just providing the run_settings to run-task
+        model_custom_2 = run_from_climate_data(gdir, ye=2020,
+                                               use_run_settings=True,
+                                               output_filesuffix='_custom_2')
+        assert model_custom.volume_m3 == model_custom_2.volume_m3
+
+        # test run_random_climate
+        random_orig = run_random_climate(gdir, nyears=100, y0=2000, seed=0)
+        random_custom = run_random_climate(gdir, nyears=100, y0=2000, seed=0,
+                                           use_run_settings=True)
+        assert random_custom.volume_m3 < random_orig.volume_m3
+
+        # test run_constant_climate
+        const_orig = run_constant_climate(gdir, nyears=100, y0=2000)
+        const_custom = run_constant_climate(gdir, nyears=100, y0=2000,
+                                            use_run_settings=True)
+        assert const_custom.volume_m3 < const_orig.volume_m3
+
+    @pytest.mark.slow
+    def test_run_settings_dynamics(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # create a test run_settings file with a larger glen a parameter
+        big_glen_a = gdir.get_diagnostics()['inversion_glen_a'] * 10
+        add_setting_to_run_settings(gdir,
+                                    settings={'inversion_glen_a': big_glen_a})
+        # test overwriting raises an error
+        with pytest.raises(InvalidWorkflowError):
+            add_setting_to_run_settings(gdir,
+                                        settings={'inversion_glen_a': big_glen_a})
+
+        # test run_random_climate
+        random_orig = run_random_climate(gdir, nyears=100, y0=2000, seed=0)
+        random_big = run_random_climate(gdir, nyears=100, y0=2000, seed=0,
+                                        use_run_settings=True)
+        assert random_big.volume_m3 < random_orig.volume_m3
+
+        # test run_constant_climate
+        const_orig = run_constant_climate(gdir, nyears=100, y0=2000)
+        const_big = run_constant_climate(gdir, nyears=100, y0=2000,
+                                         use_run_settings=True)
+        assert const_big.volume_m3 < const_orig.volume_m3
+
+        # test run_from_climate_data
+        clim_orig = run_from_climate_data(gdir, ye=2020)
+        clim_big = run_from_climate_data(gdir, ye=2020,
+                                         use_run_settings=True)
+        assert clim_big.volume_m3 < clim_orig.volume_m3
+
+        # test run_with_hydro
+        cfg.PARAMS['store_model_geometry'] = True
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data, ye=2020,
+                             output_filesuffix='_hydro_orig')
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data, ye=2020,
+                             use_run_settings=True,
+                             output_filesuffix='_hydro_big')
+        ds_hydro_orig = utils.compile_run_output(gdir,
+                                                 input_filesuffix='_hydro_orig')
+        ds_hydro_big = utils.compile_run_output(gdir,
+                                                input_filesuffix='_hydro_big')
+        assert ds_hydro_big.volume.values[-1] < ds_hydro_orig.volume.values[-1]
+
+        # test for cfl error with small cfl number in run_settings
+        add_setting_to_run_settings(gdir, settings={'cfl_number': 1e-6})
+        with pytest.raises(RuntimeError):
+            run_from_climate_data(gdir, ys=2000, ye=2020,
+                                  use_run_settings=True)
+        # SemiImplicit model does not use the cfl_number as it is fixed
+        add_setting_to_run_settings(gdir, settings={
+            'evolution_model': 'SemiImplicit'})
+        run_from_climate_data(gdir, ys=2000, ye=2020,
+                              use_run_settings=True)

@@ -17,7 +17,8 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, lazy_property, get_params_wrapper)
+                        weighted_average_1d, lazy_property, get_params_wrapper,
+                        add_setting_to_run_settings)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -393,6 +394,10 @@ class MonthlyTIModel(MassBalanceModel):
             by checking the global parameters used during calibration and
             the ones you are using at run time. If they don't match, it will
             raise an error. Set to "False" to suppress this check.
+        use_run_settings : bool
+            if parameters of a run_settings file should be used
+        run_settings_filesuffix : str
+            potential filesuffix of a run_settings file
         """
 
         super(MonthlyTIModel, self).__init__(
@@ -406,16 +411,16 @@ class MonthlyTIModel(MassBalanceModel):
         self.gdir = gdir
 
         if melt_f is None:
-            melt_f = (self.params_use('melt_f') if self.use_run_settings
-                      else self.calib_params['melt_f'])
+            melt_f = self.params_use('melt_f',
+                                     default=self.calib_params['melt_f'])
 
         if temp_bias is None:
-            temp_bias = (self.params_use('temp_bias') if self.use_run_settings
-                         else self.calib_params['temp_bias'])
+            temp_bias = self.params_use('temp_bias',
+                                        default=self.calib_params['temp_bias'])
 
         if prcp_fac is None:
-            prcp_fac = (self.params_use('prcp_fac') if self.use_run_settings
-                        else self.calib_params['prcp_fac'])
+            prcp_fac = self.params_use('prcp_fac',
+                                       default=self.calib_params['prcp_fac'])
 
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
@@ -1529,10 +1534,16 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
+    use_mb_calib: bool
+        if the results should be stored in the mb_calib structure. Only one of
+        use_mb_calib and use_run_settings can be selected.
+    use_run_settings : bool
+        if the result should be stored in the run_settings structure. Only one
+        of use_mb_calib and use_run_settings can be selected.
     filesuffix: str
-        add a filesuffix to mb_calib.json. This could be useful for sensitivity
-        analyses with MB models, if they need to fetch other sets of params for
-        example.
+        add a filesuffix to mb_calib.json or run_settings.yml. This could be
+        useful for sensitivity analyses with MB models, if they need to fetch
+        other sets of params for example.
 
     Returns
     -------
@@ -1875,7 +1886,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
                             melt_f=melt_f,
                             temp_bias=temp_bias,
                             prcp_fac=prcp_fac,
-                            check_calib_params=False)
+                            check_calib_params=False,
+                            use_run_settings=use_run_settings,
+                            run_settings_filesuffix=filesuffix,
+                            )
 
     # Check that the years are available
     for y in years:
@@ -1988,8 +2002,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Store parameters
     if use_run_settings:
-        df = gdir.read_yml('run_settings', filesuffix=filesuffix,
-                           allow_empty=True)
+        df = {}
     else:
         df = gdir.read_json('mb_calib', filesuffix=filesuffix,
                             allow_empty=True)
@@ -2017,13 +2030,17 @@ def mb_calibration_from_scalar_mb(gdir, *,
         gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
 
     if write_to_gdir and use_run_settings:
-        if gdir.has_file('run_settings',
-                         filesuffix=filesuffix) and not overwrite_gdir:
-            raise InvalidWorkflowError('`run_settings.yml` already exists for '
-                                       'this repository. Set `overwrite_gdir` '
-                                       'to True if you want to overwrite '
-                                       'a previous calibration.')
-        gdir.write_yml(df, 'run_settings', filesuffix=filesuffix)
+        try:
+            add_setting_to_run_settings(gdir, settings=df,
+                                        filename='run_settings',
+                                        filesuffix=filesuffix,
+                                        overwrite=overwrite_gdir)
+        except InvalidWorkflowError as e:
+            raise InvalidWorkflowError('`run_settings.yml` already contains '
+                                       'mb_calibration parameters. Set'
+                                       '`overwrite_gdir` to True if you want to '
+                                       'overwrite a previous calibration. '
+                                       f'(Message: {e})')
     return df
 
 
@@ -2142,7 +2159,9 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None,
     from oggm.core.massbalance import LinearMassBalance
 
     def to_minimize(ela_h):
-        mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
+        mbmod = LinearMassBalance(ela_h, grad=mb_gradient,
+                                  use_run_settings=use_run_settings,
+                                  run_settings_filesuffix=run_settings_filesuffix)
         smb = mbmod.get_specific_mb(heights=h, widths=w)
         return smb - cmb
 
@@ -2156,7 +2175,9 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None,
     for fl in fls:
         fl.flux = np.zeros(len(fl.surface_h))
     # Flowlines in order to be sure
-    mbmod = LinearMassBalance(ela_h, grad=mb_gradient)
+    mbmod = LinearMassBalance(ela_h, grad=mb_gradient,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix)
     for fl in fls:
         mbz = mbmod.get_annual_mb(fl.surface_h) * cfg.SEC_IN_YEAR * rho
         fl.set_apparent_mb(mbz, is_calving=is_calving)
@@ -2220,7 +2241,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     fls = gdir.read_pickle('inversion_flowlines')
 
     if mb_model is None:
-        mb_model = mb_model_class(gdir)
+        mb_model = mb_model_class(gdir,
+                                  use_run_settings=use_run_settings,
+                                  run_settings_filesuffix=run_settings_filesuffix,
+                                  )
 
     if mb_years is None:
         if run_setting_geodetic_mb is not None:
@@ -2267,6 +2291,12 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     # Check and write
     _check_terminus_mass_flux(gdir, fls, params_use)
     gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
+    if use_run_settings:
+        add_setting_to_run_settings(
+            gdir, filesuffix=run_settings_filesuffix,
+            settings={
+                'apparent_mb_from_any_mb_residual': residual,
+            })
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
@@ -2278,7 +2308,9 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
                                 climate_input_filesuffix='',
                                 temperature_bias=None,
                                 precipitation_factor=None,
-                                mb_model_class=MonthlyTIModel):
+                                mb_model_class=MonthlyTIModel,
+                                use_run_settings=False,
+                                run_settings_filesuffix='',):
     """Computes the mass balance with climate input from e.g. CRU or a GCM.
 
     Parameters
@@ -2310,6 +2342,10 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
         calibration is applied which is cfg.PARAMS['prcp_fac']
     mb_model_class : MassBalanceModel class
         the MassBalanceModel class to use, default is MonthlyTIModel
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     if monthly_step:
@@ -2318,7 +2354,10 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model_class,
                                         filename=climate_filename,
                                         use_inversion_flowlines=use_inversion_flowlines,
-                                        input_filesuffix=climate_input_filesuffix)
+                                        input_filesuffix=climate_input_filesuffix,
+                                        use_run_settings=use_run_settings,
+                                        run_settings_filesuffix=run_settings_filesuffix,
+                                        )
 
     if temperature_bias is not None:
         mbmod.temp_bias = temperature_bias
@@ -2338,9 +2377,11 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
 
 
 @entity_task(log)
-def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_historical',
-                temperature_bias=None, precipitation_factor=None, climate_input_filesuffix='',
-                mb_model_class=MonthlyTIModel):
+def compute_ela(gdir, ys=None, ye=None, years=None,
+                climate_filename='climate_historical', temperature_bias=None,
+                precipitation_factor=None, climate_input_filesuffix='',
+                mb_model_class=MonthlyTIModel, use_run_settings=False,
+                run_settings_filesuffix='',):
 
     """Computes the ELA of a glacier for a for given years and climate.
 
@@ -2367,10 +2408,17 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
         calibration is applied which is cfg.PARAMS['prcp_fac']
     mb_model_class : MassBalanceModel class
         the MassBalanceModel class to use, default is MonthlyTIModel
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     mbmod = mb_model_class(gdir, filename=climate_filename,
-                           input_filesuffix=climate_input_filesuffix)
+                           input_filesuffix=climate_input_filesuffix,
+                           use_run_settings=use_run_settings,
+                           run_settings_filesuffix=run_settings_filesuffix,
+                           )
 
     if temperature_bias is not None:
         mbmod.temp_bias = temperature_bias
