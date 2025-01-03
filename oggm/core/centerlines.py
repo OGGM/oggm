@@ -503,7 +503,7 @@ def _filter_lines(lines, heads, k, r):
     return olines, oheads
 
 
-def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
+def _filter_lines_slope(lines, heads, topo, gdir, min_slope, params_use):
     """Filter the centerline candidates by slope: if they go up, remove
 
     Kienholz et al. (2014), Ch. 4.3.1
@@ -521,9 +521,9 @@ def _filter_lines_slope(lines, heads, topo, gdir, min_slope):
     (lines, heads) a list of the new lines and corresponding heads
     """
 
-    dx_cls = cfg.PARAMS['flowline_dx']
-    lid = int(cfg.PARAMS['flowline_junction_pix'])
-    sw = cfg.PARAMS['flowline_height_smooth']
+    dx_cls = params_use('flowline_dx')
+    lid = int(params_use('flowline_junction_pix'))
+    sw = params_use('flowline_height_smooth')
 
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e
@@ -681,7 +681,7 @@ def line_inflows(line, keep=True):
     return out
 
 
-def _make_costgrid(mask, ext, z):
+def _make_costgrid(mask, ext, z, params_use):
     """Computes a costgrid following Kienholz et al. (2014) Eq. (2)
 
     Parameters
@@ -704,8 +704,8 @@ def _make_costgrid(mask, ext, z):
     dmax = np.nanmax(dis)
     zmax = np.nanmax(z)
     zmin = np.nanmin(z)
-    cost = ((dmax - dis) / dmax * cfg.PARAMS['f1']) ** cfg.PARAMS['a'] + \
-           ((z - zmin) / (zmax - zmin) * cfg.PARAMS['f2']) ** cfg.PARAMS['b']
+    cost = ((dmax - dis) / dmax * params_use('f1')) ** params_use('a') + \
+           ((z - zmin) / (zmax - zmin) * params_use('f2')) ** params_use('b')
 
     # This is new: we make the cost to go over boundaries
     # arbitrary high to avoid the lines to jump over adjacent boundaries
@@ -714,14 +714,14 @@ def _make_costgrid(mask, ext, z):
     return np.where(mask, cost, np.inf)
 
 
-def _get_terminus_coord(gdir, ext_yx, zoutline):
+def _get_terminus_coord(gdir, ext_yx, zoutline, params_use):
     """This finds the terminus coordinate of the glacier.
 
      There is a special case for marine terminating glaciers/
      """
 
-    perc = cfg.PARAMS['terminus_search_percentile']
-    deltah = cfg.PARAMS['terminus_search_altitude_range']
+    perc = params_use('terminus_search_percentile')
+    deltah = params_use('terminus_search_altitude_range')
 
     if gdir.is_tidewater and (perc > 0):
         # There is calving
@@ -773,10 +773,10 @@ def _normalize(n):
 
 
 def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
-                           glacier_mask, topo, geom, poly_pix):
+                           glacier_mask, topo, geom, poly_pix, params_use):
 
     # Size of the half window to use to look for local maximas
-    maxorder = np.rint(cfg.PARAMS['localmax_window'] / gdir.grid.dx)
+    maxorder = np.rint(params_use('localmax_window') / gdir.grid.dx)
     maxorder = utils.clip_scalar(maxorder, 5., np.rint((len(zoutline) / 5.)))
     heads_idx = scipy.signal.argrelmax(zoutline, mode='wrap',
                                        order=int(maxorder))
@@ -799,11 +799,11 @@ def _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
                                               heads[1, :])]
 
     # get radius of the buffer according to Kienholz eq. (1)
-    radius = cfg.PARAMS['q1'] * geom['polygon_area'] + cfg.PARAMS['q2']
-    radius = utils.clip_scalar(radius, 0, cfg.PARAMS['rmax'])
+    radius = params_use('q1') * geom['polygon_area'] + params_use('q2')
+    radius = utils.clip_scalar(radius, 0, params_use('rmax'))
     radius /= gdir.grid.dx  # in raster coordinates
     # Plus our criteria, quite useful to remove short lines:
-    radius += cfg.PARAMS['flowline_junction_pix'] * cfg.PARAMS['flowline_dx']
+    radius += params_use('flowline_junction_pix') * params_use('flowline_dx')
     log.debug('(%s) radius in raster coordinates: %.2f',
               gdir.rgi_id, radius)
 
@@ -872,7 +872,8 @@ def _line_extend(uline, dline, dx):
 
 
 @entity_task(log, writes=['centerlines', 'gridded_data'])
-def compute_centerlines(gdir, heads=None):
+def compute_centerlines(gdir, heads=None, use_run_settings=False,
+                        run_settings_filesuffix='',):
     """Compute the centerlines following Kienholz et al., (2014).
 
     They are then sorted according to the modified Strahler number:
@@ -889,19 +890,27 @@ def compute_centerlines(gdir, heads=None):
     heads : list, optional
         list of shapely.geometry.Points to use as line heads (default is to
         compute them like Kienholz did)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     # Params
-    single_fl = not cfg.PARAMS['use_multiple_flowlines']
-    do_filter_slope = cfg.PARAMS['filter_min_slope']
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+    single_fl = not params_use('use_multiple_flowlines')
+    do_filter_slope = params_use('filter_min_slope')
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
-    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+    min_slope = np.deg2rad(params_use(min_slope))
 
     # Force single flowline for ice caps
     if gdir.is_icecap:
         single_fl = True
 
-    if 'force_one_flowline' in cfg.PARAMS:
+    if params_use('force_one_flowline'):
         raise InvalidParamsError('`force_one_flowline` is deprecated')
 
     # open
@@ -925,13 +934,14 @@ def compute_centerlines(gdir, heads=None):
         # This is the default for when no filter is yet applied
         is_first_call = True
         heads = _get_centerlines_heads(gdir, ext_yx, zoutline, single_fl,
-                                       glacier_mask, topo, geom, poly_pix)
+                                       glacier_mask, topo, geom, poly_pix,
+                                       params_use)
 
     # Cost array
-    costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)
+    costgrid = _make_costgrid(glacier_mask, glacier_ext, topo, params_use)
 
     # Terminus
-    t_coord = _get_terminus_coord(gdir, ext_yx, zoutline)
+    t_coord = _get_terminus_coord(gdir, ext_yx, zoutline, params_use)
 
     # Compute the routes
     lines = []
@@ -942,17 +952,17 @@ def compute_centerlines(gdir, heads=None):
     log.debug('(%s) computed the routes', gdir.rgi_id)
 
     # Filter the shortest lines out
-    dx_cls = cfg.PARAMS['flowline_dx']
-    radius = cfg.PARAMS['flowline_junction_pix'] * dx_cls
+    dx_cls = params_use('flowline_dx')
+    radius = params_use('flowline_junction_pix') * dx_cls
     radius += 6 * dx_cls
-    olines, oheads = _filter_lines(lines, heads, cfg.PARAMS['kbuffer'], radius)
+    olines, oheads = _filter_lines(lines, heads, params_use('kbuffer'), radius)
     log.debug('(%s) number of heads after lines filter: %d',
               gdir.rgi_id, len(olines))
 
     # Filter the lines which are going up instead of down
     if do_filter_slope:
         olines, oheads = _filter_lines_slope(olines, oheads, topo,
-                                             gdir, min_slope)
+                                             gdir, min_slope, params_use)
         log.debug('(%s) number of heads after slope filter: %d',
                   gdir.rgi_id, len(olines))
 
@@ -1098,7 +1108,7 @@ class HashablePoint(shpg.Point):
         return hash(tuple((self.x, self.y)))
 
 
-def _parabolic_bed_from_topo(gdir, idl, interpolator):
+def _parabolic_bed_from_topo(gdir, idl, interpolator, params_use):
     """this returns the parabolic bedshape for all points on idl"""
 
     # Volume area scaling formula for the probable ice thickness
@@ -1218,7 +1228,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     bed = bed / gdir.grid.dx**2
 
     # interpolation, filling the gaps
-    default = cfg.PARAMS['default_parabolic_bedshape']
+    default = params_use('default_parabolic_bedshape')
     bed_int = interp_nans(bed, default=default)
     default = 100.  # assume a default terrain height of 100 m if all nan
     terrain_heights = interp_nans(terrain_heights, default=default)
@@ -1226,7 +1236,7 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     # We forbid super small shapes (important! This can lead to huge volumes)
     # Sometimes the parabola fits in flat areas are very good, implying very
     # flat parabolas.
-    bed_int = utils.clip_min(bed_int, cfg.PARAMS['downstream_min_shape'])
+    bed_int = utils.clip_min(bed_int, params_use('downstream_min_shape'))
 
     # Smoothing
     bed_ma = pd.Series(bed_int)
@@ -1262,7 +1272,8 @@ def _trapezoidal_bottom_width_from_terrain_cross_section_area(
 
 
 @entity_task(log, writes=['downstream_line'])
-def compute_downstream_bedshape(gdir):
+def compute_downstream_bedshape(gdir, use_run_settings=False,
+                                run_settings_filesuffix='',):
     """The bedshape obtained by fitting a parabola to the line's normals.
     Further a trapezoidal shape is fitted to match the cross section area of
     the valley. Which downstream shape (parabola or trapezoidal) is used
@@ -1275,7 +1286,16 @@ def compute_downstream_bedshape(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # For tidewater glaciers no need for all this
     if gdir.is_tidewater:
@@ -1294,7 +1314,8 @@ def compute_downstream_bedshape(gdir):
     xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
     interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
-    bs, terrain_heights = _parabolic_bed_from_topo(gdir, cl, interpolator)
+    bs, terrain_heights = _parabolic_bed_from_topo(gdir, cl, interpolator,
+                                                   params_use)
     assert len(bs) == cl.nx, 'len(bs) == cl.nx'
     assert np.all(np.isfinite(bs)), 'np.all(np.isfinite(bs))'
 
@@ -1304,11 +1325,11 @@ def compute_downstream_bedshape(gdir):
     assert len(hgts) >= 5, 'len(hgts) >= 5'
 
     # If smoothing, this is the moment
-    hgts = gaussian_filter1d(hgts, cfg.PARAMS['flowline_height_smooth'])
+    hgts = gaussian_filter1d(hgts, params_use('flowline_height_smooth'))
 
     # calculate bottom width of trapezoidal shapes
-    lambdas = np.ones(len(bs)) * cfg.PARAMS['trapezoid_lambdas']
-    w0_min = cfg.PARAMS['trapezoid_min_bottom_width']
+    lambdas = np.ones(len(bs)) * params_use('trapezoid_lambdas')
+    w0_min = params_use('trapezoid_min_bottom_width')
     w0s = _trapezoidal_bottom_width_from_terrain_cross_section_area(
         terrain_heights, bs, lambdas, w0_min)
     assert len(w0s) == cl.nx, 'len(w0s) == cl.nx'
@@ -1475,12 +1496,12 @@ def _filter_small_slopes(hgt, dx, min_slope):
     return out
 
 
-def _filter_for_altitude_range(widths, wlines, topo):
+def _filter_for_altitude_range(widths, wlines, topo, params_use):
     """Some width lines have unrealistic length and go over the whole
     glacier. Filter them out."""
 
     # altitude range threshold (if range over the line > threshold, filter it)
-    alt_range_th = cfg.PARAMS['width_alt_range_thres']
+    alt_range_th = params_use('width_alt_range_thres')
 
     while True:
         out_width = widths.copy()
@@ -1547,7 +1568,7 @@ def _width_change_factor(widths):
 
 
 @entity_task(log, writes=['geometries'])
-def catchment_area(gdir):
+def catchment_area(gdir, use_run_settings=False, run_settings_filesuffix='',):
     """Compute the catchment areas of each tributary line.
 
     The idea is to compute the route of lowest cost for any point on the
@@ -1559,7 +1580,17 @@ def catchment_area(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # Variables
     cls = gdir.read_pickle('centerlines')
@@ -1580,7 +1611,7 @@ def catchment_area(gdir):
         return
 
     # Cost array
-    costgrid = _make_costgrid(glacier_mask, glacier_ext, topo)
+    costgrid = _make_costgrid(glacier_mask, glacier_ext, topo, params_use)
 
     # Initialise costgrid and the "catching" dict
     cost_factor = 0.  # Make it cheap
@@ -1707,7 +1738,8 @@ def catchment_intersections(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def initialize_flowlines(gdir):
+def initialize_flowlines(gdir, use_run_settings=False,
+                         run_settings_filesuffix='',):
     """ Computes more physical Inversion Flowlines from geometrical Centerlines
 
     This interpolates the centerlines on a regular spacing (i.e. not the
@@ -1719,17 +1751,27 @@ def initialize_flowlines(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # variables
     cls = gdir.read_pickle('centerlines')
 
     # Initialise the flowlines
-    dx = cfg.PARAMS['flowline_dx']
-    do_filter = cfg.PARAMS['filter_min_slope']
-    min_slope = np.deg2rad(cfg.PARAMS['min_slope_flowline_filter'])
+    dx = params_use('flowline_dx')
+    do_filter = params_use('filter_min_slope')
+    min_slope = np.deg2rad(params_use('min_slope_flowline_filter'))
 
-    lid = int(cfg.PARAMS['flowline_junction_pix'])
+    lid = int(params_use('flowline_junction_pix'))
     fls = []
 
     # Topo for heights
@@ -1745,7 +1787,7 @@ def initialize_flowlines(gdir):
     interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
     # Smooth window
-    sw = cfg.PARAMS['flowline_height_smooth']
+    sw = params_use('flowline_height_smooth')
     diag_n_bad_slopes = 0
     diag_n_pix = 0
     for ic, cl in enumerate(cls):
@@ -1819,7 +1861,8 @@ def initialize_flowlines(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def catchment_width_geom(gdir):
+def catchment_width_geom(gdir, use_run_settings=False,
+                         run_settings_filesuffix='',):
     """Compute geometrical catchment widths for each point of the flowlines.
 
     Updates the 'inversion_flowlines' save file.
@@ -1828,7 +1871,17 @@ def catchment_width_geom(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # variables
     flowlines = gdir.read_pickle('inversion_flowlines')
@@ -1863,7 +1916,7 @@ def catchment_width_geom(gdir):
 
     # Filter parameters
     # Number of pixels to arbitrarily remove at junctions
-    jpix = int(cfg.PARAMS['flowline_junction_pix'])
+    jpix = int(params_use('flowline_junction_pix'))
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -1902,7 +1955,8 @@ def catchment_width_geom(gdir):
         is_rectangular = _filter_grouplen(is_rectangular, minsize=5)
 
         # we filter the lines which have a large altitude range
-        fil_widths = _filter_for_altitude_range(widths, wlines, topo)
+        fil_widths = _filter_for_altitude_range(widths, wlines, topo,
+                                                params_use)
 
         # Filter +- widths at junction points
         for fid in fl.inflow_indices:
@@ -1933,7 +1987,8 @@ def catchment_width_geom(gdir):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def catchment_width_correction(gdir):
+def catchment_width_correction(gdir, use_run_settings=False,
+                               run_settings_filesuffix='',):
     """Corrects for nans and inconsistencies in the geometrical widths.
 
     Interpolates missing values, ensures consistency of the
@@ -1946,7 +2001,17 @@ def catchment_width_correction(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
@@ -1961,8 +2026,8 @@ def catchment_width_correction(gdir):
     topo[np.where(ext == 1)] = np.nan
 
     # Param
-    nmin = int(cfg.PARAMS['min_n_per_bin'])
-    smooth_ws = int(cfg.PARAMS['smooth_widths_window_size'])
+    nmin = int(params_use('min_n_per_bin'))
+    smooth_ws = int(params_use('smooth_widths_window_size'))
 
     # Per flowline (important so that later, the indices can be moved)
     catchment_heights = []
@@ -1993,7 +2058,7 @@ def catchment_width_correction(gdir):
             catch_h = utils.clip_min(catch_h, minh)
 
         # Now decide on a binsize which ensures at least N element per bin
-        bsize = cfg.PARAMS['base_binsize']
+        bsize = params_use('base_binsize')
         while True:
             maxb = utils.nicenumber(maxh, 1)
             minb = utils.nicenumber(minh, 1, lower=True)
@@ -2032,7 +2097,7 @@ def catchment_width_correction(gdir):
             # Add a security for infinite loops
             if bsize > 600:
                 nmin -= 1
-                bsize = cfg.PARAMS['base_binsize']
+                bsize = params_use('base_binsize')
                 log.info('(%s) reduced min n per bin to %d', gdir.rgi_id,
                          nmin)
                 if nmin == 0:
@@ -2124,7 +2189,8 @@ def terminus_width_correction(gdir, new_width=None):
     gdir.write_pickle(fls, 'inversion_flowlines')
 
 
-def intersect_downstream_lines(gdir, candidates=None):
+def intersect_downstream_lines(gdir, candidates=None, use_run_settings=False,
+                               run_settings_filesuffix='',):
     """Find tributaries to a main glacier by intersecting downstream lines
 
     The GlacierDirectories must at least contain a `downstream_line`.
@@ -2138,6 +2204,10 @@ def intersect_downstream_lines(gdir, candidates=None):
         The main glacier of interest
     candidates: list of oggm.GlacierDirectory
         Possible tributary glaciers to the main glacier
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
 
     Returns
     -------
@@ -2145,11 +2215,16 @@ def intersect_downstream_lines(gdir, candidates=None):
         list of tributary rgi_ids
     """
 
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     # make sure tributaries are iterable
     candidates = utils.tolist(candidates)
 
     # Buffer in pixels around the flowline
-    buffer = cfg.PARAMS['kbuffer']
+    buffer = params_use('kbuffer')
 
     # get main glacier downstream line and CRS
     dline = gdir.read_pickle('downstream_line')['full_line']
@@ -2179,7 +2254,9 @@ def intersect_downstream_lines(gdir, candidates=None):
 
 
 @entity_task(log, writes=['elevation_band_flowline'])
-def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
+def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True,
+                            use_run_settings=False, run_settings_filesuffix='',
+                            ):
     """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
 
     This writes out a table of along glacier bins, strictly following the
@@ -2204,7 +2281,17 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         variables to add to the binned flowline
     preserve_totals : bool or list of bool
         whether or not to preserve the variables totals (e.g. volume)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # Variables
     bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
@@ -2248,7 +2335,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     topo = topo[glacier_mask]
     slope = slope[glacier_mask]
 
-    bsize = cfg.PARAMS['elevation_band_flowline_binsize']
+    bsize = params_use('elevation_band_flowline_binsize')
 
     # Make nice bins ensuring to cover the full range with the given bin size
     maxb = utils.nicenumber(np.max(topo), bsize)
@@ -2261,7 +2348,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
 
     if len(bins) < 3:
         # Very low elevation range
-        bsize = cfg.PARAMS['elevation_band_flowline_binsize'] / 3
+        bsize = params_use('elevation_band_flowline_binsize') / 3
         maxb = utils.nicenumber(np.max(topo), bsize)
         minb = utils.nicenumber(np.min(topo), bsize, lower=True)
         bins = np.arange(minb, maxb + 0.01, bsize)
@@ -2354,7 +2441,10 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
 
 @entity_task(log, writes=['inversion_flowlines'])
 def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
-                                     preserve_totals=True):
+                                     preserve_totals=True,
+                                     use_run_settings=False,
+                                     run_settings_filesuffix='',
+                                     ):
     """Converts the "collapsed" flowline into a regular "inversion flowline".
 
     You need to run `tasks.elevation_band_flowline` first. It then interpolates
@@ -2371,12 +2461,21 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
         filesuffix='_fixed_dx').
     preserve_totals : bool or list of bool
         whether or not to preserve the variables totals (e.g. volume)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
 
     map_dx = gdir.grid.dx
-    dx = cfg.PARAMS['flowline_dx']
+    dx = params_use('flowline_dx')
     dx_meter = dx * map_dx
     nx = int(df.dx.sum() / dx_meter)
     dis_along_flowline = dx_meter / 2 + np.arange(nx) * dx_meter

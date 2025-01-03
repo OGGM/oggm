@@ -6,6 +6,7 @@ import pytest
 import json
 import numpy as np
 import xarray as xr
+import pandas as pd
 from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
 from oggm import graphics
@@ -210,10 +211,8 @@ class TestFullRun(unittest.TestCase):
         df = workflow.calibrate_inversion_from_consensus(gdirs,
                                                          ignore_missing=True)
         df = df.dropna()
-        np.testing.assert_allclose(df.vol_itmix_m3.sum(),
-                                   df.vol_oggm_m3.sum(),
-                                   rtol=0.01)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
+        assert_allclose(df.vol_itmix_m3.sum(), df.vol_oggm_m3.sum(), rtol=0.01)
+        assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
@@ -222,9 +221,8 @@ class TestFullRun(unittest.TestCase):
             gdirs, ignore_missing=True,
             volume_m3_reference=user_provided_volume_m3)
 
-        np.testing.assert_allclose(user_provided_volume_m3,
-                                   df.vol_oggm_m3.sum(),
-                                   rtol=0.01)
+        assert_allclose(user_provided_volume_m3, df.vol_oggm_m3.sum(),
+                        rtol=0.01)
 
     @pytest.mark.slow
     def test_shapefile_output(self):
@@ -638,12 +636,12 @@ class TestRunSettings:
         mb_calib_threestep = gdirs[0].read_yml('run_settings',
                                                '_informed_threestep')
         assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
-        np.testing.assert_allclose(mb_calib_cluster['prcp_fac'],
-                                   mb_calib_threestep['prcp_fac'],
-                                   atol=1e-3)
-        np.testing.assert_allclose(mb_calib_cluster['temp_bias'],
-                                   mb_calib_threestep['temp_bias'],
-                                   atol=1e-3)
+        assert_allclose(mb_calib_cluster['prcp_fac'],
+                        mb_calib_threestep['prcp_fac'],
+                        atol=1e-3)
+        assert_allclose(mb_calib_cluster['temp_bias'],
+                        mb_calib_threestep['temp_bias'],
+                        atol=1e-3)
 
         # test MassBalance run_settings during dynamic run
         workflow.execute_entity_task(init_present_time_glacier, gdirs)
@@ -736,3 +734,50 @@ class TestRunSettings:
             'evolution_model': 'SemiImplicit'})
         run_from_climate_data(gdir, ys=2000, ye=2020,
                               use_run_settings=True)
+
+    def test_run_settings_centerline(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # test elevation_band_flowline
+        elevation_band_fl_orig = pd.read_csv(
+            gdir.get_filepath('elevation_band_flowline'))
+        inversion_flowlines_orig = gdir.read_pickle('inversion_flowlines')
+        add_setting_to_run_settings(gdir, settings={
+            'elevation_band_flowline_binsize': 100.,
+            'flowline_dx': 4.,
+        })
+        workflow.execute_entity_task(tasks.elevation_band_flowline,
+                                     gdir,
+                                     use_run_settings=True)
+        workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
+                                     gdir,
+                                     use_run_settings=True)
+        elevation_band_fl_new = pd.read_csv(
+            gdir.get_filepath('elevation_band_flowline'))
+        inversion_flowlines_new = gdir.read_pickle('inversion_flowlines')
+        assert np.all(
+            np.abs(
+                elevation_band_fl_new.bin_elevation.diff().values[1:]) == 100.)
+        assert (len(elevation_band_fl_new.bin_elevation) <
+                len(elevation_band_fl_orig.bin_elevation))
+        assert inversion_flowlines_new[0].dx == 4.
+        assert inversion_flowlines_new[0].dx > inversion_flowlines_orig[0].dx
+
+        # test gis_prepro_tasks once implemented
+        # compute_centerlines
+        # initialize_flowlines
+        # compute_downstream_line
+        # compute_downstream_bedshape
+        # catchment_area
+        # catchment_width_geom
+        # catchment_width_correction
+        raise NotImplementedError
+
+    def test_run_settings_workflow(self):
+        # test merge_glacier_tasks
+        raise NotImplementedError
