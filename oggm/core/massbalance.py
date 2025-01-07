@@ -157,6 +157,9 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 out = [self.get_specific_mb(heights=heights, widths=widths,
                     fls=fls, year=yr) for yr in year[1:]]
                 out.insert(0,out1)
+            else:
+                out = [self.get_specific_mb(heights=heights, widths=widths,
+                    fls=fls, year=yr) for yr in year]
             return np.asarray(out)
 
         if fls is not None:
@@ -1311,7 +1314,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         if len(np.atleast_1d(year)) > 1:
             if (reset_state):
                 out1 = self.get_specific_mb(fls=fls, year=year[0], reset_state=True)
-                out = out.append([self.get_specific_mb(fls=fls, year=yr) for yr in year[1:]])
+                out = [self.get_specific_mb(fls=fls, year=yr) for yr in year[1:]]
                 out.insert(0,out1)
             else:
                 out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
@@ -1328,7 +1331,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 pass
             widths = np.append(widths, _widths)
             mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i,\
-                    reset_state=reset_state, **kwargs)
+                    reset_state=reset_state)
             mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
 
         return weighted_average_1d(mbs, widths)
