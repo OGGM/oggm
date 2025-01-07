@@ -1755,7 +1755,8 @@ class FluxBasedModel(FlowlineModel):
                                                     fgt,
                                                     shape=fl.shape_str[0],
                                                     glen_a=self.glen_a,
-                                                    fs=self.fs)
+                                                    fs=self.fs,
+                                                    params_use=self.params_use)
                 self.flux_gate.append(flux)
 
         # convert the floats to function calls

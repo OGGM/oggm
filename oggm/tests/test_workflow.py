@@ -804,6 +804,29 @@ class TestRunSettings:
         assert grid_orig['x0y0'][0] < grid_adapted['x0y0'][0]
         assert grid_orig['x0y0'][1] > grid_adapted['x0y0'][1]
 
+    def test_run_settings_inversion(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        inv_volume_orig = tasks.get_inversion_volume(gdir)
+        glen_a_orig = gdir.get_diagnostics()['inversion_glen_a']
+        add_setting_to_run_settings(gdir, settings={
+            'inversion_glen_a': glen_a_orig * 2,
+        })
+        workflow.execute_entity_task(tasks.mass_conservation_inversion,
+                                     gdir,
+                                     use_run_settings=True)
+        inv_volume_adapted = tasks.get_inversion_volume(gdir)
+        glen_a_adapted = gdir.get_diagnostics()['inversion_glen_a']
+
+        assert glen_a_adapted == gdir.read_yml('run_settings')['inversion_glen_a']
+        # with larger glen_a the flux is larger -> need smaller thickness
+        assert inv_volume_orig > inv_volume_adapted
+
     def test_run_settings_workflow(self):
         # test merge_glacier_tasks
         raise NotImplementedError
