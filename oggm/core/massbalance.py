@@ -12,7 +12,6 @@ from scipy.interpolate import interp1d
 from scipy import optimize
 # Locals
 import oggm.cfg as cfg
-from IPython import embed
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
