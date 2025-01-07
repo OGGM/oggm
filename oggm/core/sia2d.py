@@ -21,7 +21,9 @@ class Model2D(object):
 
     def __init__(self, bed_topo, init_ice_thick=None, dx=None, dy=None,
                  mb_model=None, y0=0., glen_a=None, mb_elev_feedback='annual',
-                 ice_thick_filter=filter_ice_border, mb_filter=None):
+                 ice_thick_filter=filter_ice_border, mb_filter=None,
+                 gdir=None, use_run_settings=False, run_settings_filesuffix='',
+                 ):
         """Create a new 2D model from gridded data.
 
         Parameters
@@ -49,7 +51,17 @@ class Model2D(object):
         mb_filter : ndarray
             2d array indicating the mask where positive mb is allowed
             (useful to allow only specific glaciers to grow)
+        use_run_settings : bool
+            if parameters of a run_settings file should be used
+        run_settings_filesuffix : str
+            potential filesuffix of a run_settings file
         """
+
+        # Params
+        run_settings_filename = 'run_settings' if use_run_settings else None
+        self.params_use = utils.get_params_wrapper(
+            gdir=gdir, filename=run_settings_filename,
+            filesuffix=run_settings_filesuffix)
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback
@@ -58,7 +70,7 @@ class Model2D(object):
 
         # Defaults
         if glen_a is None:
-            glen_a = cfg.PARAMS['glen_a']
+            glen_a = self.params_use('glen_a')
         self.glen_a = glen_a
 
         if dy is None:
@@ -294,8 +306,8 @@ class Upstream2D(Model2D):
                                          mb_filter=mb_filter)
 
         # We introduce Gamma to shorten the equations
-        self.rho = cfg.PARAMS['ice_density']
-        self.glen_n = cfg.PARAMS['glen_n']
+        self.rho = self.params_use('ice_density')
+        self.glen_n = self.params_use('glen_n')
         self.gamma = (2. * self.glen_a * (self.rho * G) ** self.glen_n
                       / (self.glen_n + 2))
 
