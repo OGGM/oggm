@@ -223,8 +223,12 @@ def _polygon_to_pix(polygon):
     return tmp
 
 
-def glacier_grid_params(gdir):
+def glacier_grid_params(gdir, params_use=None):
     """Define the glacier grid map based on the user params."""
+    if params_use is None:
+        def cfg_params(param):
+            return cfg.PARAMS[param]
+        params_use = cfg_params
 
     # Get the local map proj params and glacier extent
     gdf = gdir.read_shapefile('outlines')
@@ -237,7 +241,7 @@ def glacier_grid_params(gdir):
         xx, yy = gdf.iloc[0]['geometry'].exterior.xy
     # special treatment for Multipolygons
     except AttributeError:
-        if not cfg.PARAMS['keep_multipolygon_outlines']:
+        if not params_use('keep_multipolygon_outlines'):
             raise
         parts = []
         for p in gdf.iloc[0]['geometry'].geoms:
@@ -255,16 +259,16 @@ def glacier_grid_params(gdir):
     area = gdir.rgi_area_km2
 
     # Choose a spatial resolution with respect to the glacier area
-    dxmethod = cfg.PARAMS['grid_dx_method']
+    dxmethod = params_use('grid_dx_method')
     if dxmethod == 'linear':
-        dx = np.rint(cfg.PARAMS['d1'] * area + cfg.PARAMS['d2'])
+        dx = np.rint(params_use('d1') * area + params_use('d2'))
     elif dxmethod == 'square':
-        dx = np.rint(cfg.PARAMS['d1'] * np.sqrt(area) + cfg.PARAMS['d2'])
+        dx = np.rint(params_use('d1') * np.sqrt(area) + params_use('d2'))
     elif dxmethod == 'fixed':
-        dx = np.rint(cfg.PARAMS['fixed_dx'])
+        dx = np.rint(params_use('fixed_dx'))
     elif dxmethod == 'by_bin':
-        bins = cfg.PARAMS['by_bin_bins']
-        bin_dx = cfg.PARAMS['by_bin_dx']
+        bins = params_use('by_bin_bins')
+        bin_dx = params_use('by_bin_dx')
         for i, (b1, b2) in enumerate(zip(bins[:-1], bins[1:])):
             if b1 < area <= b2:
                 dx = np.rint(bin_dx[i])
@@ -274,20 +278,20 @@ def glacier_grid_params(gdir):
                                  .format(dxmethod))
     # Additional trick for varying dx
     if dxmethod in ['linear', 'square']:
-        dx = utils.clip_scalar(dx, cfg.PARAMS['d2'], cfg.PARAMS['dmax'])
+        dx = utils.clip_scalar(dx, params_use('d2'), params_use('dmax'))
 
     log.debug('(%s) area %.2f km, dx=%.1f', gdir.rgi_id, area, dx)
 
     # Safety check
-    border = cfg.PARAMS['border']
+    border = params_use('border')
     if border > 1000:
         raise InvalidParamsError("You have set a cfg.PARAMS['border'] value "
-                                 "of {}. ".format(cfg.PARAMS['border']) +
+                                 "of {}. ".format(params_use('border')) +
                                  'This a very large value, which is '
                                  'currently not supported in OGGM.')
 
     # For tidewater glaciers we force border to 10
-    if gdir.is_tidewater and cfg.PARAMS['clip_tidewater_border']:
+    if gdir.is_tidewater and params_use('clip_tidewater_border'):
         border = 10
 
     # Corners, incl. a buffer of N pix
@@ -302,7 +306,7 @@ def glacier_grid_params(gdir):
     return utm_proj, nx, ny, ulx, uly, dx
 
 
-def check_dem_source(source, extent_ll, rgi_id=None):
+def check_dem_source(source, extent_ll, rgi_id=None, params_use=None):
     """
     This function can check for multiple DEM sources and is in charge of the
     error handling if a requested source is not available for the given
@@ -341,13 +345,13 @@ def check_dem_source(source, extent_ll, rgi_id=None):
                              f"and latitudes {extent_ll[1]}")
         else:
             extent_string = (f"the glacier {rgi_id} with border "
-                             f"{cfg.PARAMS['border']}")
+                             f"{params_use('border')}")
         raise InvalidWorkflowError(f"Source: {source} is not available for "
                                    f"{extent_string}")
     return source
 
 
-def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
+def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path, params_use):
     """
     This function reprojects a provided DEM to the destination grid and saves
     the result to disk.
@@ -409,13 +413,13 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
     profile.pop('compress', None)
 
     # Could be extended so that the cfg file takes all Resampling.* methods
-    if cfg.PARAMS['topo_interp'] == 'bilinear':
+    if params_use('topo_interp') == 'bilinear':
         resampling = Resampling.bilinear
-    elif cfg.PARAMS['topo_interp'] == 'cubic':
+    elif params_use('topo_interp') == 'cubic':
         resampling = Resampling.cubic
     else:
         raise InvalidParamsError('{} interpolation not understood'
-                                 .format(cfg.PARAMS['topo_interp']))
+                                 .format(params_use('topo_interp')))
 
     with rasterio.open(output_path, 'w', **profile) as dest:
         dst_array = np.empty((dst_grid_prop['ny'], dst_grid_prop['nx']),
@@ -439,7 +443,7 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
         dem_ds.close()
 
 
-def get_dem_for_grid(grid, fpath, source=None, gdir=None):
+def get_dem_for_grid(grid, fpath, source=None, gdir=None, params_use=None):
     """
     Fetch a DEM from source, reproject it to the extent defined by grid and
     saves it to disk.
@@ -477,7 +481,8 @@ def get_dem_for_grid(grid, fpath, source=None, gdir=None):
         'ny': grid.ny
     }
 
-    source = check_dem_source(source, extent_ll, rgi_id=rgi_id)
+    source = check_dem_source(source, extent_ll, rgi_id=rgi_id,
+                              params_use=params_use)
 
     dem_list, dem_source = get_topo_file((minlon, maxlon), (minlat, maxlat),
                                          gdir=gdir,
@@ -495,13 +500,15 @@ def get_dem_for_grid(grid, fpath, source=None, gdir=None):
 
     reproject_dem(dem_list=dem_list, dem_source=dem_source,
                   dst_grid_prop=grid_prop,
-                  output_path=fpath)
+                  output_path=fpath,
+                  params_use=params_use)
 
     return dem_list, dem_source
 
 
 @entity_task(log, writes=['glacier_grid', 'dem', 'outlines'])
-def define_glacier_region(gdir, entity=None, source=None):
+def define_glacier_region(gdir, entity=None, source=None,
+                          use_run_settings=False, run_settings_filesuffix='',):
     """Very first task after initialization: define the glacier's local grid.
 
     Defines the local projection (Transverse Mercator or UTM depending on
@@ -539,9 +546,18 @@ def define_glacier_region(gdir, entity=None, source=None):
           - 'COPDEM30' : Copernicus DEM GLO30 https://spacedata.copernicus.eu/web/cscda/cop-dem-faq
           - 'COPDEM90' : Copernicus DEM GLO90 https://spacedata.copernicus.eu/web/cscda/cop-dem-faq
           - 'NASADEM':  https://doi.org/10.5069/G93T9FD9
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
-    utm_proj, nx, ny, ulx, uly, dx = glacier_grid_params(gdir)
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    utm_proj, nx, ny, ulx, uly, dx = glacier_grid_params(gdir, params_use)
 
     # Back to lon, lat for DEM download/preparation
     tmp_grid = salem.Grid(proj=utm_proj, nxny=(nx, ny), x0y0=(ulx, uly),
@@ -549,7 +565,8 @@ def define_glacier_region(gdir, entity=None, source=None):
 
     dem_list, dem_source = get_dem_for_grid(grid=tmp_grid,
                                             fpath=gdir.get_filepath('dem'),
-                                            source=source, gdir=gdir)
+                                            source=source, gdir=gdir,
+                                            params_use=params_use)
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
@@ -743,7 +760,8 @@ class GriddedNcdfFile(object):
 
 
 @entity_task(log, writes=['gridded_data'])
-def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
+def process_dem(gdir=None, grid=None, fpath=None, output_filename=None,
+                use_run_settings=False, run_settings_filesuffix='',):
     """Reads the DEM from the tiff, attempts to fill voids and apply smooth.
 
     The data is then written to `gridded_data.nc`.
@@ -758,7 +776,17 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
         The filepath of the DEM file. Needed if gdir is not provided.
     output_filename : str
         The filename of the nc file to add the DEM to. Defaults to gridded_data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     if gdir is not None:
         # open srtm tif-file:
         dem = read_geotiff_dem(gdir)
@@ -834,18 +862,18 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
                               .format(grid_name))
 
     # Clip topography to 0 m a.s.l.
-    if cfg.PARAMS['clip_dem_to_zero']:
+    if params_use('clip_dem_to_zero'):
         utils.clip_min(dem, 0, out=dem)
 
     # Smooth DEM?
-    if cfg.PARAMS['smooth_window'] > 0.:
-        gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
+    if params_use('smooth_window') > 0.:
+        gsize = np.rint(params_use('smooth_window') / dx)
         smoothed_dem = gaussian_blur(dem, int(gsize))
     else:
         smoothed_dem = dem.copy()
 
     # Clip topography to 0 m a.s.l.
-    if cfg.PARAMS['clip_dem_to_zero']:
+    if params_use('clip_dem_to_zero'):
         utils.clip_min(smoothed_dem, 0, out=smoothed_dem)
 
     if gdir is None:
@@ -864,7 +892,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
         v = nc.createVariable('topo_smoothed', 'f4', ('y', 'x',), zlib=True)
         v.units = 'm'
         v.long_name = ('DEM topography smoothed with radius: '
-                       '{:.1} m'.format(cfg.PARAMS['smooth_window']))
+                       '{:.1} m'.format(params_use('smooth_window')))
         v[:] = smoothed_dem
 
         # If there was some invalid data store this as well
@@ -879,7 +907,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
 
 
 @entity_task(log, writes=['gridded_data', 'geometries'])
-def glacier_masks(gdir):
+def glacier_masks(gdir, use_run_settings=False, run_settings_filesuffix='',):
     """Makes a gridded mask of the glacier outlines that can be used by OGGM.
 
     For a more robust solution (not OGGM compatible) see simple_glacier_masks.
@@ -888,6 +916,10 @@ def glacier_masks(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     # In case nominal, just raise
@@ -897,7 +929,8 @@ def glacier_masks(gdir):
     if not os.path.exists(gdir.get_filepath('gridded_data')):
         # In a possible future, we might actually want to raise a
         # deprecation warning here
-        process_dem(gdir)
+        process_dem(gdir, use_run_settings=use_run_settings,
+                    run_settings_filesuffix=run_settings_filesuffix,)
 
     # Geometries
     geometry = gdir.read_shapefile('outlines').geometry[0]
@@ -1011,7 +1044,8 @@ def glacier_masks(gdir):
 
 
 @entity_task(log, writes=['gridded_data'])
-def simple_glacier_masks(gdir):
+def simple_glacier_masks(gdir, use_run_settings=False,
+                         run_settings_filesuffix='',):
     """Compute glacier masks based on much simpler rules than OGGM's default.
 
     This is therefore more robust: we use this task in a elev_bands workflow.
@@ -1020,7 +1054,16 @@ def simple_glacier_masks(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # In case nominal, just raise
     if gdir.is_nominal:
@@ -1029,7 +1072,8 @@ def simple_glacier_masks(gdir):
     if not os.path.exists(gdir.get_filepath('gridded_data')):
         # In a possible future, we might actually want to raise a
         # deprecation warning here
-        process_dem(gdir)
+        process_dem(gdir, use_run_settings=use_run_settings,
+                    run_settings_filesuffix=run_settings_filesuffix,)
 
     # Geometries
     geometry = gdir.read_shapefile('outlines').geometry[0]
@@ -1066,7 +1110,7 @@ def simple_glacier_masks(gdir):
         try:
             poly = [shpg.mapping(shpg.Polygon(geometry.exterior))]
         except AttributeError:
-            if not cfg.PARAMS['keep_multipolygon_outlines']:
+            if not params_use('keep_multipolygon_outlines'):
                 raise
             # special treatment for MultiPolygons
             parts = []
@@ -1370,7 +1414,8 @@ def rasterio_glacier_exterior_mask(gdir, overwrite=True):
 
 
 @entity_task(log, writes=['gridded_data'])
-def gridded_attributes(gdir):
+def gridded_attributes(gdir, use_run_settings=False,
+                       run_settings_filesuffix='',):
     """Adds attributes to the gridded file, useful for thickness interpolation.
 
     This could be useful for distributed ice thickness models.
@@ -1380,7 +1425,17 @@ def gridded_attributes(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
@@ -1420,10 +1475,10 @@ def gridded_attributes(gdir):
     dis_from_border = distance_transform_edt(dis_from_border) * dx
 
     # Slope
-    glen_n = cfg.PARAMS['glen_n']
+    glen_n = params_use('glen_n')
     sy, sx = np.gradient(topo_smoothed, dx, dx)
     slope = np.arctan(np.sqrt(sy**2 + sx**2))
-    min_slope = np.deg2rad(cfg.PARAMS['distributed_inversion_min_slope'])
+    min_slope = np.deg2rad(params_use('distributed_inversion_min_slope'))
     slope_factor = utils.clip_array(slope, min_slope, np.pi/2)
     slope_factor = 1 / slope_factor**(glen_n / (glen_n+2))
 
@@ -1509,7 +1564,8 @@ def _all_inflows(cls, cl):
 
 
 @entity_task(log)
-def gridded_mb_attributes(gdir):
+def gridded_mb_attributes(gdir, use_run_settings=False,
+                          run_settings_filesuffix='',):
     """Adds mass balance related attributes to the gridded data file.
 
     This could be useful for distributed ice thickness models.
@@ -1519,9 +1575,18 @@ def gridded_mb_attributes(gdir):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
     from oggm.core.massbalance import LinearMassBalance, ConstantMassBalance
     from oggm.core.centerlines import line_inflows
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # Get the input data
     with ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -1533,7 +1598,7 @@ def gridded_mb_attributes(gdir):
     topo = topo_2d[glacier_mask_2d]
 
     # Prepare the distributed mass balance data
-    rho = cfg.PARAMS['ice_density']
+    rho = params_use('ice_density')
     dx2 = gdir.grid.dx ** 2
 
     # Linear
@@ -1897,7 +1962,10 @@ def reproject_gridded_data_variable_to_grid(gdir,
                                             interp='nearest',
                                             preserve_totals=True,
                                             smooth_radius=None,
-                                            slice_of_variable=None):
+                                            slice_of_variable=None,
+                                            use_run_settings=False,
+                                            run_settings_filesuffix='',
+                                            ):
     """
     Function for reprojecting a gridded data variable to a different grid.
     Useful when combining gridded data from different gdirs (see
@@ -1935,6 +2003,10 @@ def reproject_gridded_data_variable_to_grid(gdir,
         Can provide dimensions with values as a dictionary for extracting only
         a slice of the data before reprojecting. This can be useful for large
         datasets or if only part of the data is of interest. Default is None.
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
 
     Returns
     -------
@@ -1942,6 +2014,12 @@ def reproject_gridded_data_variable_to_grid(gdir,
         The reprojected data as a np.array with spatial-dimensions defined by
         target_grid.
     """
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     with xr.open_dataset(gdir.get_filepath(filename,
                                            filesuffix=filesuffix)) as ds:
         if use_glacier_mask:
@@ -1978,7 +2056,7 @@ def reproject_gridded_data_variable_to_grid(gdir,
 
             if smooth_radius != 0:
                 if smooth_radius is None:
-                    smooth_radius = np.rint(cfg.PARAMS['smooth_window'] /
+                    smooth_radius = np.rint(params_use('smooth_window') /
                                             target_grid.dx)
                 # use data_mask to not expand the extent of the data
                 data_mask = ~np.isclose(r_data, 0, atol=1e-6)

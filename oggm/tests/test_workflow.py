@@ -768,7 +768,7 @@ class TestRunSettings:
         assert inversion_flowlines_new[0].dx == 4.
         assert inversion_flowlines_new[0].dx > inversion_flowlines_orig[0].dx
 
-        # test gis_prepro_tasks once implemented
+        # TODO: test gis_prepro_tasks once implemented
         # compute_centerlines
         # initialize_flowlines
         # compute_downstream_line
@@ -777,6 +777,32 @@ class TestRunSettings:
         # catchment_width_geom
         # catchment_width_correction
         raise NotImplementedError
+
+    def test_run_settings_gis(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        grid_orig = gdir.read_json('glacier_grid')
+        add_setting_to_run_settings(gdir, settings={
+            'grid_dx_method': 'fixed',
+            'fixed_dx': 10.,
+            'border': cfg.PARAMS['border'] * 2,
+        })
+        workflow.execute_entity_task(tasks.define_glacier_region,
+                                     gdir,
+                                     use_run_settings=True)
+
+        grid_adapted = gdir.read_json('glacier_grid')
+
+        assert grid_orig['dxdy'][0] == 50.
+        assert grid_adapted['dxdy'][0] == 10.
+        # with larger border the adapted grid start point should be different
+        assert grid_orig['x0y0'][0] < grid_adapted['x0y0'][0]
+        assert grid_orig['x0y0'][1] > grid_adapted['x0y0'][1]
 
     def test_run_settings_workflow(self):
         # test merge_glacier_tasks
