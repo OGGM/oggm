@@ -43,7 +43,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_spinup_best=False, ye=None,
                        model_flowline_filesuffix='',
-                       add_fixed_geometry_spinup=False, **kwargs):
+                       add_fixed_geometry_spinup=False,
+                       use_run_settings=False, run_settings_filesuffix='',
+                       **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -195,6 +197,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         defined start year (could be defined through spinup_period or
         spinup_start_yr). Only has an effect if store_model_evolution is True.
         Default is False
+    use_run_settings : bool
+            if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -205,7 +211,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         evolution_model.
     """
 
-    evolution_model = decide_evolution_model(evolution_model)
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    evolution_model = decide_evolution_model(
+        evolution_model, gdir=gdir, use_run_settings=use_run_settings,
+        run_settings_filesuffix=run_settings_filesuffix)
 
     if target_yr is None:
         # Even in calendar dates, we prefer to set rgi_year in the next year
@@ -222,7 +235,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
-        min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+        min_ice_thickness = params_use('dynamic_spinup_min_ice_thick')
 
     # check provided maximum start year here, and change min_spinup_period
     if spinup_start_yr_max is not None:
@@ -260,7 +273,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         mb_model_historical = MultipleFlowlineMassBalance(
             gdir, mb_model_class=MonthlyTIModel,
             filename='climate_historical',
-            input_filesuffix=climate_input_filesuffix)
+            input_filesuffix=climate_input_filesuffix,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        )
 
     # here we define the file-paths for the output
     if store_model_geometry:
@@ -271,7 +287,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         geom_path = False
 
     if store_fl_diagnostics is None:
-        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
+        store_fl_diagnostics = params_use('store_fl_diagnostics')
 
     if store_fl_diagnostics:
         fl_diag_path = gdir.get_filepath('fl_diagnostics',
@@ -284,31 +300,49 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
-    if cfg.PARAMS['use_inversion_params_for_run']:
+    if params_use('use_inversion_params_for_run'):
         diag = gdir.get_diagnostics()
-        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
-        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
+        fs = diag.get('inversion_fs', params_use('fs'))
+        glen_a = diag.get('inversion_glen_a', params_use('glen_a'))
+
+        if use_run_settings:
+            # this is ugly, but needed because a first guess value of the
+            # inversion parameters is present in params.cfg, if this would be
+            # removed the option with using 'default' would be enough
+            run_settings = gdir.read_yml(run_settings_filename,
+                                         filesuffix=run_settings_filesuffix)
+            if 'inversion_fs' in run_settings:
+                fs = params_use('inversion_fs', default=fs)
+            if 'inversion_glen_a' in run_settings:
+                glen_a = params_use('inversion_glen_a', default=glen_a)
     else:
-        fs = cfg.PARAMS['fs']
-        glen_a = cfg.PARAMS['glen_a']
+        fs = params_use('fs')
+        glen_a = params_use('glen_a')
 
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
+    kwargs.setdefault('gdir', gdir)
+    kwargs.setdefault('use_run_settings', use_run_settings)
+    kwargs.setdefault('run_settings_filesuffix', run_settings_filesuffix)
 
     mb_elev_feedback = kwargs.get('mb_elev_feedback', 'annual')
     if mb_elev_feedback != 'annual':
         raise InvalidParamsError('Only use annual mb_elev_feedback with the '
                                  'dynamic spinup function!')
 
-    if cfg.PARAMS['use_kcalving_for_run']:
+    if params_use('use_kcalving_for_run'):
         raise InvalidParamsError('Dynamic spinup not tested with '
-                                 "cfg.PARAMS['use_kcalving_for_run'] is `True`!")
+                                 "PARAMS['use_kcalving_for_run'] is `True`!")
 
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if target_yr < yr_min + 10 or if the dynamic spinup failed.
     def save_model_without_dynamic_spinup():
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'run_dynamic_spinup_success': False,
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
         yr_use = np.clip(target_yr, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_model_historical,
@@ -416,7 +450,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         if store_model_evolution:
             # check if we need to add the min_h variable (done inplace)
             delete_area_min_h = False
-            ovars = cfg.PARAMS['store_diagnostic_variables']
+            ovars = params_use('store_diagnostic_variables')
             if 'area_min_h' not in ovars:
                 ovars += ['area_min_h']
                 delete_area_min_h = True
@@ -759,9 +793,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                        'unknown, need to check by hand! Best '
                                        'mismatch '
                                        f'{np.min(np.abs(mismatch))}%')
-            new_mismatch, new_t_spinup = get_mismatch(float(interpolate.splev(0,
-                                                                            tck)
-                                                          ))
+            new_mismatch, new_t_spinup = get_mismatch(
+                float(interpolate.splev(0, tck)))
             t_spinup_guess.append(new_t_spinup)
             mismatch.append(new_mismatch)
 
@@ -822,7 +855,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 gdir, mb_model_class=ConstantMassBalance,
                 filename='climate_historical',
                 input_filesuffix=climate_input_filesuffix, y0=y0_spinup,
-                halfsize=halfsize_spinup)
+                halfsize=halfsize_spinup,
+                use_run_settings=use_run_settings,
+                run_settings_filesuffix=run_settings_filesuffix,
+            )
 
         # try to conduct minimisation, if an error occurred try shorter spinup
         # period
@@ -859,26 +895,27 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     raise RuntimeError(e)
 
     # hurray, dynamic spinup successfully
-    gdir.add_to_diagnostics('run_dynamic_spinup_success', True)
+    diag_dict = {
+        'run_dynamic_spinup_success': True,
+        'temp_bias_dynamic_spinup': float(final_t_spinup_guess[-1]),
+        'dynamic_spinup_target_year': int(target_yr),
+        'dynamic_spinup_period': int(spinup_period),
+        'dynamic_spinup_forward_model_iterations': int(forward_model_runs[-1]),
+        f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent':
+            float(final_mismatch[-1]),
+        f'reference_{minimise_for}_dynamic_spinup_{unit}':
+            float(reference_value),
+        'dynamic_spinup_other_variable_reference': float(other_reference_value),
+        'dynamic_spinup_mismatch_other_variable_percent':
+            float(other_variable_mismatch[-1]),
+    }
 
-    # also save some other stuff
-    gdir.add_to_diagnostics('temp_bias_dynamic_spinup',
-                            float(final_t_spinup_guess[-1]))
-    gdir.add_to_diagnostics('dynamic_spinup_target_year',
-                            int(target_yr))
-    gdir.add_to_diagnostics('dynamic_spinup_period',
-                            int(spinup_period))
-    gdir.add_to_diagnostics('dynamic_spinup_forward_model_iterations',
-                            int(forward_model_runs[-1]))
-    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_'
-                            f'percent',
-                            float(final_mismatch[-1]))
-    gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
-                            float(reference_value))
-    gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
-                            float(other_reference_value))
-    gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
-                            float(other_variable_mismatch[-1]))
+    for k, v in diag_dict.items():
+        gdir.add_to_diagnostics(k, v)
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                k: v
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
     # here only save the final model state if store_model_evolution = False
     if not store_model_evolution:
@@ -897,7 +934,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         return model_dynamic_spinup_end[-1]
 
 
-def define_new_melt_f_in_gdir(gdir, new_melt_f):
+def define_new_melt_f_in_gdir(gdir, new_melt_f, use_run_settings=False,
+                              run_settings_filesuffix='',):
     """
     Helper function to define a new melt_f in a gdir. Is used inside the run
     functions of the dynamic melt_f calibration.
@@ -908,20 +946,39 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f):
         the glacier directory to change the melt_f
     new_melt_f : float
         the new melt_f to save in the gdir
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
 
     Returns
     -------
 
     """
-    try:
-        df = gdir.read_json('mb_calib')
-    except FileNotFoundError:
-        raise InvalidWorkflowError('`mb_calib.json` does not exist in gdir. '
-                                   'You first need to calibrate the whole '
-                                   'MassBalanceModel before changing melt_f '
-                                   'alone!')
-    df['melt_f'] = new_melt_f
-    gdir.write_json(df, 'mb_calib')
+    if use_run_settings:
+        run_settings_filename = 'run_settings' if use_run_settings else None
+        run_settings = gdir.read_yml(run_settings_filename,
+                                     filesuffix=run_settings_filesuffix)
+
+        if 'melt_f' not in run_settings:
+            raise InvalidWorkflowError(f'`melt_f` not in '
+                                       f'run_settings{run_settings_filesuffix}.'
+                                       f'yml. You first need to calibrate the '
+                                       f'whole MassBalanceModel before changing '
+                                       f'melt_f alone!')
+        utils.add_setting_to_run_settings(gdir, settings={'melt_f': new_melt_f},
+                                          filesuffix=run_settings_filesuffix,
+                                          overwrite=True)
+    else:
+        try:
+            df = gdir.read_json('mb_calib')
+        except FileNotFoundError:
+            raise InvalidWorkflowError('`mb_calib.json` does not exist in gdir. '
+                                       'You first need to calibrate the whole '
+                                       'MassBalanceModel before changing melt_f '
+                                       'alone!')
+        df['melt_f'] = new_melt_f
+        gdir.write_json(df, 'mb_calib')
 
 
 def dynamic_melt_f_run_with_dynamic_spinup(
@@ -935,6 +992,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
         spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
+        use_run_settings=False, run_settings_filesuffix='',
+        run_settings_geodetic_mb=None, run_settings_volume=None,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1074,6 +1133,16 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_geodetic_mb : str
+        if a custom geodetic mb should be used during calibration, provide the
+        name as it is stored in the run_settings file
+    run_settings_volume : str
+        if a custom volume should be used during calibration, provide the name
+        as it is stored in the run_settings file
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1082,8 +1151,6 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     :py:class:`oggm.core.flowline.evolution_model`, float
         The final model after the run and the calculated geodetic mass balance
     """
-
-    evolution_model = decide_evolution_model(evolution_model)
 
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
@@ -1097,11 +1164,23 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         # ATTENTION: it is assumed that the flowlines in gdir have the volume
         # we want to match during calibrate_inversion_from_consensus when we
         # set_local_variables
-        fls_ref = gdir.read_pickle('model_flowlines')
-        local_variables['vol_m3_ref'] = np.sum([f.volume_m3 for f in fls_ref])
+        if not run_settings_volume:
+            fls_ref = gdir.read_pickle('model_flowlines')
+            local_variables['vol_m3_ref'] = np.sum([f.volume_m3 for f in fls_ref])
+        else:
+            local_variables['vol_m3_ref'] = None
 
         # we are done with preparing the local_variables for the upcoming iterations
         return None
+
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    evolution_model = decide_evolution_model(
+        evolution_model, gdir=gdir, use_run_settings=use_run_settings,
+        run_settings_filesuffix=run_settings_filesuffix)
 
     if target_yr is None:
         target_yr = gdir.rgi_date + 1  # + 1 converted to hydro years
@@ -1138,28 +1217,44 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                        'the original model_flowlines)')
 
     # Here we start with the actual model run
-    if melt_f == gdir.read_json('mb_calib')['melt_f']:
+    if use_run_settings:
+        melt_f_current = gdir.read_yml('run_settings',
+                                       filesuffix=run_settings_filesuffix
+                                       )['melt_f']
+    else:
+        melt_f_current = gdir.read_json('mb_calib')['melt_f']
+    if melt_f == melt_f_current:
         # we do not need to define a new melt_f or do an inversion
         do_inversion = False
     else:
-        define_new_melt_f_in_gdir(gdir, melt_f)
+        define_new_melt_f_in_gdir(gdir, melt_f,
+                                  use_run_settings=use_run_settings,
+                                  run_settings_filesuffix=run_settings_filesuffix,
+                                  )
 
     if do_inversion:
         with utils.DisableLogger():
             apparent_mb_from_any_mb(gdir,
                                     add_to_log_file=False,  # dont write to log
+                                    use_run_settings=use_run_settings,
+                                    run_settings_filesuffix=run_settings_filesuffix,
+                                    run_settings_geodetic_mb=run_settings_geodetic_mb,
                                     )
             # do inversion with A calibration to current volume
             calibrate_inversion_from_consensus(
                 [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
                 filter_inversion_output=True,
                 volume_m3_reference=local_variables['vol_m3_ref'],
+                run_settings_filesuffix=run_settings_filesuffix,
+                run_settings_volume=run_settings_volume,
                 add_to_log_file=False)
 
     # this is used to keep the original model_flowline unchanged (-> to be able
     # to conduct different dynamic calibration runs in the same gdir)
     model_flowline_filesuffix = '_dyn_melt_f_calib'
     init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,
                               add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
@@ -1193,6 +1288,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             store_fl_diagnostics=store_fl_diagnostics,
             model_flowline_filesuffix=model_flowline_filesuffix,
             add_fixed_geometry_spinup=add_fixed_geometry_spinup,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
             **kwargs)
         # save the temperature bias which was successful in the last iteration
         # as we expect we are not so far away in the next iteration (only
@@ -1210,7 +1307,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                    ds.volume.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
-                  cfg.PARAMS['ice_density'])
+                  params_use('ice_density'))
 
     return model, dmdtda_mdl
 
@@ -1225,7 +1322,10 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
-        add_fixed_geometry_spinup=True, **kwargs):
+        add_fixed_geometry_spinup=True,
+        use_run_settings=False, run_settings_filesuffix='',
+        run_settings_geodetic_mb=None, run_settings_volume=None,
+        **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run_with_dynamic_spinup', which are provided
@@ -1346,6 +1446,16 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_geodetic_mb : str
+        if a custom geodetic mb should be used during calibration, provide the
+        name as it is stored in the run_settings file
+    run_settings_volume : str
+        if a custom volume should be used during calibration, provide the name
+        as it is stored in the run_settings file
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1356,7 +1466,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     """
     from oggm.workflow import calibrate_inversion_from_consensus
 
-    evolution_model = decide_evolution_model(evolution_model)
+    evolution_model = decide_evolution_model(
+        evolution_model, gdir=gdir, use_run_settings=use_run_settings,
+        run_settings_filesuffix=run_settings_filesuffix)
 
     if local_variables is None:
         raise RuntimeError('Need the volume to do'
@@ -1364,16 +1476,31 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                            'local_variables!')
 
     # revert gdir to original state if necessary
-    if melt_f != gdir.read_json('mb_calib')['melt_f']:
-        define_new_melt_f_in_gdir(gdir, melt_f)
+    if use_run_settings:
+        melt_f_current = gdir.read_yml('run_settings',
+                                       filesuffix=run_settings_filesuffix
+                                       )['melt_f']
+    else:
+        melt_f_current = gdir.read_json('mb_calib')['melt_f']
+    if melt_f != melt_f_current:
+        define_new_melt_f_in_gdir(gdir, melt_f,
+                                  use_run_settings=use_run_settings,
+                                  run_settings_filesuffix=run_settings_filesuffix,
+                                  )
         if do_inversion:
             with utils.DisableLogger():
                 apparent_mb_from_any_mb(gdir,
-                                        add_to_log_file=False)
+                                        add_to_log_file=False,
+                                        use_run_settings=use_run_settings,
+                                        run_settings_filesuffix=run_settings_filesuffix,
+                                        run_settings_geodetic_mb=run_settings_geodetic_mb,
+                                        )
                 calibrate_inversion_from_consensus(
                     [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
                     filter_inversion_output=True,
                     volume_m3_reference=local_variables['vol_m3_ref'],
+                    run_settings_filesuffix=run_settings_filesuffix,
+                    run_settings_volume=run_settings_volume,
                     add_to_log_file=False)
     if os.path.isfile(os.path.join(gdir.dir,
                                    'model_flowlines_dyn_melt_f_calib.pkl')):
@@ -1419,9 +1546,15 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             ignore_errors=False,
             ye=ye,
             add_fixed_geometry_spinup=add_fixed_geometry_spinup,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
             **kwargs)
 
         gdir.add_to_diagnostics('used_spinup_option', 'dynamic spinup only')
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'used_spinup_option': 'dynamic spinup only',
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
     except RuntimeError:
         log.warning('No dynamic spinup could be conducted by using the '
@@ -1446,8 +1579,16 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                     'dynamic_spinup_mismatch_other_variable_percent']:
             if key in diag:
                 gdir.add_to_diagnostics(key, None)
+                if use_run_settings:
+                    utils.add_setting_to_run_settings(gdir, settings={
+                        key: None
+                    }, filesuffix=run_settings_filesuffix, overwrite=True)
 
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'run_dynamic_spinup_success': False,
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
         # try to make a fixed geometry spinup
         model_end = run_from_climate_data(
@@ -1460,9 +1601,16 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             init_model_fls=fls_init, evolution_model=evolution_model,
-            fixed_geometry_spinup_yr=ys)
+            fixed_geometry_spinup_yr=ys,
+            use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        )
 
         gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'used_spinup_option': 'fixed geometry spinup',
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
     return model_end
 
@@ -1471,6 +1619,7 @@ def dynamic_melt_f_run(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=None,
         local_variables=None, set_local_variables=False, target_yr=None,
+        use_run_settings=False, run_settings_filesuffix='',
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1511,6 +1660,10 @@ def dynamic_melt_f_run(
     target_yr : int or None
         The target year for a potential dynamic spinup (not needed here).
         Default is None
+    use_run_settings : bool
+            if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1520,14 +1673,25 @@ def dynamic_melt_f_run(
         The final model after the run and the calculated geodetic mass balance
     """
 
-    evolution_model = decide_evolution_model(evolution_model)
-
     if set_local_variables:
         # No local variables needed in this function
         return None
 
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    evolution_model = decide_evolution_model(
+        evolution_model, gdir=gdir, use_run_settings=use_run_settings,
+        run_settings_filesuffix=run_settings_filesuffix
+    )
+
     # Here we start with the actual model run
-    define_new_melt_f_in_gdir(gdir, melt_f)
+    define_new_melt_f_in_gdir(gdir, melt_f,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,
+                              )
 
     # conduct model run
     try:
@@ -1539,6 +1703,8 @@ def dynamic_melt_f_run(
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
+                                      use_run_settings=use_run_settings,
+                                      run_settings_filesuffix=run_settings_filesuffix,
                                       **kwargs)
     except RuntimeError as e:
         raise RuntimeError(f'run_from_climate_data raised error! '
@@ -1552,14 +1718,15 @@ def dynamic_melt_f_run(
                    ds.volume.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
-                  cfg.PARAMS['ice_density'])
+                  params_use('ice_density'))
 
     return model, dmdtda_mdl
 
 
 def dynamic_melt_f_run_fallback(
         gdir, melt_f, fls_init, ys, ye, local_variables, output_filesuffix='',
-        evolution_model=None, target_yr=None, **kwargs):
+        evolution_model=None, target_yr=None, use_run_settings=False,
+        run_settings_filesuffix='', **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run', which are provided to
@@ -1591,6 +1758,10 @@ def dynamic_melt_f_run_fallback(
     target_yr : int or None
         The target year for a potential dynamic spinup (not needed here).
         Default is None
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1600,9 +1771,15 @@ def dynamic_melt_f_run_fallback(
         The final model after the run.
     """
 
-    evolution_model = decide_evolution_model(evolution_model)
+    evolution_model = decide_evolution_model(
+        evolution_model, gdir=gdir, use_run_settings=use_run_settings,
+        run_settings_filesuffix=run_settings_filesuffix
+    )
 
-    define_new_melt_f_in_gdir(gdir, melt_f)
+    define_new_melt_f_in_gdir(gdir, melt_f,
+                              use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,
+                              )
 
     # conduct model run
     try:
@@ -1614,8 +1791,14 @@ def dynamic_melt_f_run_fallback(
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
+                                      use_run_settings=use_run_settings,
+                                      run_settings_filesuffix=run_settings_filesuffix,
                                       **kwargs)
         gdir.add_to_diagnostics('used_spinup_option', 'no spinup')
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'used_spinup_option': 'no spinup',
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
     except RuntimeError as e:
         raise RuntimeError(f'In fallback function run_from_climate_data '
                            f'raised error! (Message: {e})')
@@ -1635,7 +1818,10 @@ def run_dynamic_melt_f_calibration(
         fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
         kwargs_fallback_function=None, init_model_filesuffix=None,
         init_model_yr=None, init_model_fls=None,
-        first_guess_diagnostic_msg='dynamic spinup only'):
+        first_guess_diagnostic_msg='dynamic spinup only',
+        use_run_settings=False, run_settings_filesuffix='',
+        run_settings_geodetic_mb=None, run_settings_volume=None,
+):
     """Calibrate melt_f to match a geodetic mass balance incorporating a
     dynamic model run.
 
@@ -1758,6 +1944,16 @@ def run_dynamic_melt_f_calibration(
         This message will be added to the glacier diagnostics if only the
         default melt_f resulted in a successful 'run_function' run.
         Default is 'dynamic spinup only'
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_geodetic_mb : str
+        if a custom geodetic mb should be used during calibration, provide the
+        name as it is stored in the run_settings file
+    run_settings_volume : str
+        if a custom volume should be used during calibration, provide the name
+        as it is stored in the run_settings file
 
     Returns
     -------
@@ -1765,20 +1961,33 @@ def run_dynamic_melt_f_calibration(
         The final dynamically spined-up model. Type depends on the selected
         evolution_model.
     """
+    # params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     # melt_f constraints
     if melt_f_min is None:
-        melt_f_min = cfg.PARAMS['melt_f_min']
+        melt_f_min = params_use('melt_f_min')
     if melt_f_max is None:
-        melt_f_max = cfg.PARAMS['melt_f_max']
+        melt_f_max = params_use('melt_f_max')
 
     if kwargs_run_function is None:
         kwargs_run_function = {}
     if kwargs_fallback_function is None:
         kwargs_fallback_function = {}
 
+    if run_settings_volume:
+        kwargs_run_function['run_settings_volume'] = run_settings_volume
+        kwargs_fallback_function['run_settings_volume'] = run_settings_volume
+    if run_settings_geodetic_mb:
+        kwargs_run_function['run_settings_geodetic_mb'] = run_settings_geodetic_mb
+        kwargs_fallback_function['run_settings_geodetic_mb'] = run_settings_geodetic_mb
+
     # geodetic mb stuff
     if not ref_period:
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_period = params_use('geodetic_mb_period')
     # if a reference geodetic mb is specified also the error of it must be
     # specified, and vice versa
     if ((ref_dmdtda is None and err_ref_dmdtda is not None) or
@@ -1786,8 +1995,17 @@ def run_dynamic_melt_f_calibration(
         raise RuntimeError('If you provide a reference geodetic mass balance '
                            '(ref_dmdtda) you must also provide an error for it '
                            '(err_ref_dmdtda), and vice versa!')
+
+    if run_settings_geodetic_mb:
+        geodetic_mb = params_use('observations')[run_settings_geodetic_mb]
+        if geodetic_mb['unit'] != 'kg m-2 yr-1':
+            raise ValueError('Geodetic mass balance must be in kg m-2 yr-1! '
+                             f'Provided unit: {geodetic_mb["unit"]}')
+        ref_dmdtda = geodetic_mb['value']
+        err_ref_dmdtda = geodetic_mb['error']
+        ref_period = geodetic_mb['timestamp']
     # Get the reference geodetic mb and error if not given
-    if ref_dmdtda is None:
+    elif ref_dmdtda is None:
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
         sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
         # reference geodetic mass balance from Hugonnet 2021
@@ -1855,7 +2073,12 @@ def run_dynamic_melt_f_calibration(
 
     # save original melt_f for later to be able to recreate original gdir
     # (using the fallback function) if an error occurs
-    melt_f_initial = gdir.read_json('mb_calib')['melt_f']
+    if use_run_settings:
+        melt_f_initial = gdir.read_yml(run_settings_filename,
+                                       filesuffix=run_settings_filesuffix
+                                       )['melt_f']
+    else:
+        melt_f_initial = gdir.read_json('mb_calib')['melt_f']
 
     # define maximum allowed change of melt_f between two iterations. Is needed
     # to avoid to large changes (=likely lead to an error). It is defined in a
@@ -1877,11 +2100,17 @@ def run_dynamic_melt_f_calibration(
 
             # this diagnostics should be overwritten inside the fallback_function
             gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
+            if use_run_settings:
+                utils.add_setting_to_run_settings(gdir, settings={
+                    'used_spinup_option': 'fallback_function',
+                }, filesuffix=run_settings_filesuffix, overwrite=True)
 
             model = fallback_function(gdir=gdir, melt_f=melt_f,
                                       fls_init=fls_init, ys=ys, ye=ye,
                                       local_variables=local_variables_run_function,
                                       output_filesuffix=output_filesuffix,
+                                      use_run_settings=use_run_settings,
+                                      run_settings_filesuffix=run_settings_filesuffix,
                                       **kwargs_fallback_function)
         else:
             # we were not able to reach the desired precision during the
@@ -1891,10 +2120,19 @@ def run_dynamic_melt_f_calibration(
             if only_first_guess:
                 gdir.add_to_diagnostics('used_spinup_option',
                                         first_guess_diagnostic_msg)
+                if use_run_settings:
+                    utils.add_setting_to_run_settings(gdir, settings={
+                        'used_spinup_option': first_guess_diagnostic_msg,
+                    }, filesuffix=run_settings_filesuffix, overwrite=True)
             else:
                 gdir.add_to_diagnostics('used_spinup_option',
                                         'dynamic melt_f calibration (part '
                                         'success)')
+                if use_run_settings:
+                    utils.add_setting_to_run_settings(gdir, settings={
+                        'used_spinup_option':
+                            'dynamic melt_f calibration (part success)',
+                    }, filesuffix=run_settings_filesuffix, overwrite=True)
             model, dmdtda_mdl = run_function(gdir=gdir, melt_f=melt_f,
                                              yr0_ref_mb=yr0_ref_mb,
                                              yr1_ref_mb=yr1_ref_mb,
@@ -1903,26 +2141,26 @@ def run_dynamic_melt_f_calibration(
                                              local_variables=local_variables_run_function,
                                              **kwargs_run_function)
 
-            gdir.add_to_diagnostics(
-                'dmdtda_mismatch_dynamic_calibration_reference',
-                float(ref_dmdtda))
-            gdir.add_to_diagnostics(
-                'dmdtda_dynamic_calibration_given_error',
-                float(err_ref_dmdtda))
-            gdir.add_to_diagnostics('dmdtda_dynamic_calibration_error_scaling_factor',
-                                    float(err_dmdtda_scaling_factor))
-            gdir.add_to_diagnostics(
-                'dmdtda_mismatch_dynamic_calibration',
-                float(best_mismatch))
-            gdir.add_to_diagnostics(
-                'dmdtda_mismatch_with_initial_melt_f',
-                float(initial_mismatch))
-            gdir.add_to_diagnostics('melt_f_dynamic_calibration',
-                                    float(melt_f))
-            gdir.add_to_diagnostics('melt_f_before_dynamic_calibration',
-                                    float(melt_f_initial))
-            gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
-                                    int(dynamic_melt_f_calibration_runs[-1]))
+            diag_dict = {
+                'dmdtda_mismatch_dynamic_calibration_reference':
+                    float(ref_dmdtda),
+                'dmdtda_dynamic_calibration_given_error': float(err_ref_dmdtda),
+                'dmdtda_dynamic_calibration_error_scaling_factor':
+                    float(err_dmdtda_scaling_factor),
+                'dmdtda_mismatch_dynamic_calibration': float(best_mismatch),
+                'dmdtda_mismatch_with_initial_melt_f': float(initial_mismatch),
+                'melt_f_dynamic_calibration': float(melt_f),
+                'melt_f_before_dynamic_calibration': float(melt_f_initial),
+                'run_dynamic_melt_f_calibration_iterations':
+                    int(dynamic_melt_f_calibration_runs[-1]),
+            }
+
+            for k, v in diag_dict.items():
+                gdir.add_to_diagnostics(k, v)
+                if use_run_settings:
+                    utils.add_setting_to_run_settings(gdir, settings={
+                        k: v
+                    }, filesuffix=run_settings_filesuffix, overwrite=True)
 
         return model
 
@@ -1933,7 +2171,9 @@ def run_dynamic_melt_f_calibration(
     run_function(gdir=gdir, melt_f=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
                  local_variables=local_variables_run_function,
-                 set_local_variables=True, **kwargs_run_function)
+                 set_local_variables=True, use_run_settings=use_run_settings,
+                 run_settings_filesuffix=run_settings_filesuffix,
+                 **kwargs_run_function)
 
     # this is the actual model run which is executed each iteration in order to
     # minimise the mismatch of dmdtda of model and observation
@@ -1948,6 +2188,8 @@ def run_dynamic_melt_f_calibration(
                                          fls_init=fls_init, ys=ys, ye=ye,
                                          output_filesuffix=output_filesuffix,
                                          local_variables=local_variables_run_function,
+                                         use_run_settings=use_run_settings,
+                                         run_settings_filesuffix=run_settings_filesuffix,
                                          **kwargs_run_function)
         return model, dmdtda_mdl
 
@@ -2261,26 +2503,34 @@ def run_dynamic_melt_f_calibration(
                                    f'Error message: {e}')
 
     # check that new melt_f is correctly saved in gdir
-    assert final_melt_f == gdir.read_json('mb_calib')['melt_f']
+    if use_run_settings:
+        melt_f_saved = gdir.read_yml(run_settings_filename,
+                                     filesuffix=run_settings_filesuffix
+                                     )['melt_f']
+    else:
+        melt_f_saved = gdir.read_json('mb_calib')['melt_f']
+    assert final_melt_f == melt_f_saved
 
     # hurray, dynamic melt_f calibration successful
-    gdir.add_to_diagnostics('used_spinup_option',
-                            'dynamic melt_f calibration (full success)')
-    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_reference',
-                            float(ref_dmdtda))
-    gdir.add_to_diagnostics('dmdtda_dynamic_calibration_given_error',
-                            float(err_ref_dmdtda))
-    gdir.add_to_diagnostics('dmdtda_dynamic_calibration_error_scaling_factor',
-                            float(err_dmdtda_scaling_factor))
-    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration',
-                            float(final_mismatch))
-    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_melt_f',
-                            float(mismatch_dmdtda[0]))
-    gdir.add_to_diagnostics('melt_f_dynamic_calibration', float(final_melt_f))
-    gdir.add_to_diagnostics('melt_f_before_dynamic_calibration',
-                            float(melt_f_initial))
-    gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
-                            int(dynamic_melt_f_calibration_runs[-1]))
+    diag_dict = {
+        'used_spinup_option': 'dynamic melt_f calibration (full success)',
+        'dmdtda_mismatch_dynamic_calibration_reference': float(ref_dmdtda),
+        'dmdtda_dynamic_calibration_given_error': float(err_ref_dmdtda),
+        'dmdtda_dynamic_calibration_error_scaling_factor':
+            float(err_dmdtda_scaling_factor),
+        'dmdtda_mismatch_dynamic_calibration': float(final_mismatch),
+        'dmdtda_mismatch_with_initial_melt_f': float(mismatch_dmdtda[0]),
+        'melt_f_dynamic_calibration': float(final_melt_f),
+        'melt_f_before_dynamic_calibration': float(melt_f_initial),
+        'run_dynamic_melt_f_calibration_iterations':
+            int(dynamic_melt_f_calibration_runs[-1]),
+    }
+    for k, v in diag_dict.items():
+        gdir.add_to_diagnostics(k, v)
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                k: v
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
     log.info(f'Dynamic melt_f calibration worked for {gdir.rgi_id}!')
 

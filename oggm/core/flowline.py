@@ -3041,7 +3041,8 @@ def calving_glacier_downstream_line(line, n_points):
 
 
 @entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir, use_run_settings=False, filesuffix='',
+def init_present_time_glacier(gdir, filesuffix='', use_run_settings=False,
+                              run_settings_filesuffix='',
                               use_binned_thickness_data=False):
     """Merges data from preprocessing tasks. First task after inversion!
 
@@ -3052,13 +3053,14 @@ def init_present_time_glacier(gdir, use_run_settings=False, filesuffix='',
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
-    use_run_settings : bool
-        if parameters of a run_settings file should be used
     filesuffix : str
-        potential filesuffix of a run_settings file, will also be appended as a
-        suffix to the model_flowlines filename (e.g. useful for
+        append a suffix to the model_flowlines filename (e.g. useful for
         dynamic melt_f calibration including an inversion, so the original
         model_flowlines are not changed).
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     use_binned_thickness_data : bool or str
         if you want to use thickness data, which was binned to the elevation
         band flowlines with tasks.elevation_band_flowine and
@@ -3068,7 +3070,8 @@ def init_present_time_glacier(gdir, use_run_settings=False, filesuffix='',
 
     run_settings_filename = 'run_settings' if use_run_settings else None
     params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename, filesuffix=filesuffix)
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # Some vars
     invs = gdir.read_pickle('inversion_output')

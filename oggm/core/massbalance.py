@@ -411,20 +411,29 @@ class MonthlyTIModel(MassBalanceModel):
         self.gdir = gdir
 
         if melt_f is None:
-            melt_f = self.params_use('melt_f',
-                                     default=self.calib_params['melt_f'])
+            if self.use_run_settings:
+                melt_f = self.params_use('melt_f')
+            else:
+                melt_f = self.calib_params['melt_f']
 
         if temp_bias is None:
-            temp_bias = self.params_use('temp_bias',
-                                        default=self.calib_params['temp_bias'])
+            if self.use_run_settings:
+                temp_bias = self.params_use('temp_bias')
+            else:
+                temp_bias = self.calib_params['temp_bias']
 
         if prcp_fac is None:
-            prcp_fac = self.params_use('prcp_fac',
-                                       default=self.calib_params['prcp_fac'])
+            if self.use_run_settings:
+                prcp_fac = self.params_use('prcp_fac')
+            else:
+                prcp_fac = self.calib_params['prcp_fac']
 
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
-            mb_calib = self.calib_params['mb_global_params']
+            if self.use_run_settings:
+                mb_calib = self.params_use('mb_global_params')
+            else:
+                mb_calib = self.calib_params['mb_global_params']
             for k, v in mb_calib.items():
                 if v != self.params_use(k):
                     msg = ('You seem to use different mass balance parameters '
@@ -434,7 +443,10 @@ class MonthlyTIModel(MassBalanceModel):
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
-            src = self.calib_params['baseline_climate_source']
+            if self.use_run_settings:
+                src = self.params_use('baseline_climate_source')
+            else:
+                src = self.calib_params['baseline_climate_source']
             src_calib = gdir.get_climate_info()['baseline_climate_source']
             if src != src_calib:
                 msg = (f'You seem to have calibrated with the {src} '
@@ -1469,7 +1481,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     mb_model_class=MonthlyTIModel,
                                     use_mb_calib=True,
                                     use_run_settings=False,
-                                    run_setting_geodetic_mb=None,
+                                    run_settings_geodetic_mb=None,
                                     filesuffix='',
                                     ):
     """Calibrate for geodetic MB data from Hugonnet et al., 2021.
@@ -1540,6 +1552,9 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     use_run_settings : bool
         if the result should be stored in the run_settings structure. Only one
         of use_mb_calib and use_run_settings can be selected.
+    run_settings_geodetic_mb : str
+        if a custom geodetic mb should be used during calibration, provide the
+        name as it is stored in the run_settings file
     filesuffix: str
         add a filesuffix to mb_calib.json or run_settings.yml. This could be
         useful for sensitivity analyses with MB models, if they need to fetch
@@ -1560,13 +1575,13 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
     # Get the reference data
     ref_mb_err = np.nan
-    if run_setting_geodetic_mb:
-        geodetic_mb = params_use('observations')[run_setting_geodetic_mb]
+    if run_settings_geodetic_mb:
+        geodetic_mb = params_use('observations')[run_settings_geodetic_mb]
         if geodetic_mb['unit'] != 'kg m-2 yr-1':
             raise ValueError('Geodetic mass balance must be in kg m-2 yr-1! '
                              f'Provided unit: {geodetic_mb["unit"]}')
         ref_mb = geodetic_mb['value']
-        ref_mb_err = geodetic_mb['value']
+        ref_mb_err = geodetic_mb['error']
         ref_period = geodetic_mb['timestamp']
     elif use_regional_avg:
         ref_mb_df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
@@ -2195,7 +2210,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
                             mb_years=None,
                             use_run_settings=False,
                             run_settings_filesuffix='',
-                            run_setting_geodetic_mb=None,
+                            run_settings_geodetic_mb=None,
                             ):
     """Compute apparent mb from an arbitrary mass balance profile.
 
@@ -2223,7 +2238,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         if parameters of a run_settings file should be used
     run_settings_filesuffix : str
         filesuffix for a run_settings file
-    run_setting_geodetic_mb : str
+    run_settings_geodetic_mb : str
         if a custom geodetic mb is used during calibration you can use the same
         period by providing the name of the observation here
     """
@@ -2247,9 +2262,9 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
                                   )
 
     if mb_years is None:
-        if run_setting_geodetic_mb is not None:
+        if run_settings_geodetic_mb:
             mb_years = params_use('observations'
-                                  )[run_setting_geodetic_mb]['timestamp']
+                                  )[run_settings_geodetic_mb]['timestamp']
         else:
             mb_years = params_use('geodetic_mb_period')
         y0, y1 = mb_years.split('_')

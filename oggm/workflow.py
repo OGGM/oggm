@@ -529,7 +529,8 @@ def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
 
 @global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
-                    add_to_log_file=True):
+                    add_to_log_file=True, use_run_settings=False,
+                    run_settings_filesuffix='',):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -540,9 +541,19 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
         the glacier directories to process
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
-    if cfg.PARAMS['use_kcalving_for_inversion']:
+    # Use params of first gdir, it is assumed all use the same settings
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdirs[0], filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    if params_use('use_kcalving_for_inversion'):
         # Differentiate between calving and non-calving glaciers
         gdirs_nc = []
         gdirs_c = []
@@ -558,27 +569,44 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
 
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc,
-                                add_to_log_file=add_to_log_file)
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
+                                add_to_log_file=add_to_log_file,
+                                )
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
                                 glen_a=glen_a, fs=fs,
-                                add_to_log_file=add_to_log_file)
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
+                                add_to_log_file=add_to_log_file,
+                                )
             if filter_inversion_output:
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc,
-                                    add_to_log_file=add_to_log_file)
+                                    use_run_settings=use_run_settings,
+                                    run_settings_filesuffix=run_settings_filesuffix,
+                                    add_to_log_file=add_to_log_file,
+                                    )
 
         if gdirs_c:
             execute_entity_task(tasks.find_inversion_calving_from_any_mb,
                                 gdirs_c,
                                 glen_a=glen_a, fs=fs,
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
                                 add_to_log_file=add_to_log_file)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs,
+                            use_run_settings=use_run_settings,
+                            run_settings_filesuffix=run_settings_filesuffix,
                             add_to_log_file=add_to_log_file)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                             glen_a=glen_a, fs=fs,
+                            use_run_settings=use_run_settings,
+                            run_settings_filesuffix=run_settings_filesuffix,
                             add_to_log_file=add_to_log_file)
         if filter_inversion_output:
             execute_entity_task(tasks.filter_inversion_output, gdirs,
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
                                 add_to_log_file=add_to_log_file)
 
 
@@ -589,7 +617,11 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
                                        volume_m3_reference=None,
-                                       add_to_log_file=True):
+                                       add_to_log_file=True,
+                                       use_run_settings=False,
+                                       run_settings_filesuffix='',
+                                       run_settings_volume=None,
+                                       ):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -620,6 +652,12 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         Option to give an own total glacier volume to match to
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_volume : str
+        if you want to use a user provided volume during calibration
 
     Returns
     -------
@@ -627,6 +665,34 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     """
 
     gdirs = utils.tolist(gdirs)
+
+    # take a potential run_settings file from the first gdir
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdirs[0], filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    if run_settings_volume:
+        if volume_m3_reference:
+            raise InvalidWorkflowError('You either can provide a volume using '
+                                       'the kwarg volume_m3_reference or a '
+                                       'volume within the run_settings, but '
+                                       'not both.')
+
+        volume_m3_reference = 0
+        for gdir in gdirs:
+            volume_m3_gdir = gdir.read_yml('run_settings',
+                                           filesuffix=run_settings_filesuffix
+                                           )['observations'][run_settings_volume]
+            if volume_m3_gdir['unit'] != 'm3':
+                raise InvalidWorkflowError('Please provide the volume in m3 '
+                                           'in the run_settings file. Currently '
+                                           'provided in '
+                                           f"{volume_m3_gdir['unit']}.")
+            volume_m3_reference += volume_m3_gdir['value']
+
+        # set to None because of recursive call
+        run_settings_volume = None
 
     # Get the ref data for the glaciers we have
     df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
@@ -642,12 +708,15 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     df = df.reindex(rids)
 
     # Optimize the diff to ref
-    def_a = cfg.PARAMS['inversion_glen_a']
+    def_a = params_use('inversion_glen_a')
 
     def compute_vol(x):
         inversion_tasks(gdirs, glen_a=x*def_a, fs=fs,
                         filter_inversion_output=filter_inversion_output,
-                        add_to_log_file=add_to_log_file)
+                        add_to_log_file=add_to_log_file,
+                        use_run_settings=use_run_settings,
+                        run_settings_filesuffix=run_settings_filesuffix,
+                        )
         odf = df.copy()
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                           add_to_log_file=add_to_log_file)
@@ -695,14 +764,16 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                          ref_vol_2, odf2.oggm, a_bounds[1]))
         if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
             do_filter = filter_inversion_output
-            return calibrate_inversion_from_consensus(gdirs,
-                                                      ignore_missing=ignore_missing,
-                                                      fs=5.7e-20, a_bounds=a_bounds,
-                                                      apply_fs_on_mismatch=False,
-                                                      error_on_mismatch=error_on_mismatch,
-                                                      volume_m3_reference=volume_m3_reference,
-                                                      filter_inversion_output=do_filter,
-                                                      add_to_log_file=add_to_log_file)
+            return calibrate_inversion_from_consensus(
+                gdirs, ignore_missing=ignore_missing, fs=5.7e-20,
+                a_bounds=a_bounds, apply_fs_on_mismatch=False,
+                error_on_mismatch=error_on_mismatch,
+                volume_m3_reference=volume_m3_reference,
+                filter_inversion_output=do_filter,
+                add_to_log_file=add_to_log_file,
+                use_run_settings=use_run_settings,
+                run_settings_filesuffix=run_settings_filesuffix,
+                run_settings_volume=run_settings_volume,)
         if error_on_mismatch:
             raise ValueError(msg)
 
@@ -715,7 +786,10 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     # Compute the final volume with the correct A
     inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs,
                     filter_inversion_output=filter_inversion_output,
-                    add_to_log_file=add_to_log_file)
+                    add_to_log_file=add_to_log_file,
+                    use_run_settings=use_run_settings,
+                    run_settings_filesuffix=run_settings_filesuffix,
+                    )
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             add_to_log_file=add_to_log_file)
     return df

@@ -10,6 +10,7 @@ import pandas as pd
 from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
 from oggm import graphics
+from oggm.workflow import calibrate_inversion_from_consensus
 
 salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
@@ -22,7 +23,8 @@ from oggm.utils import (get_demo_file, write_centerlines_to_shape,
                         add_observation_to_run_settings)
 from oggm.core.flowline import (run_from_climate_data, run_random_climate,
                                 init_present_time_glacier, run_constant_climate)
-from oggm.core.massbalance import MonthlyTIModel, MultipleFlowlineMassBalance
+from oggm.core.massbalance import (MonthlyTIModel, MultipleFlowlineMassBalance,
+                                   apparent_mb_from_any_mb)
 from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
 from oggm.shop import cru
@@ -573,6 +575,11 @@ class TestRunSettings:
         gdir = gdirs[0]
         mb_calib_cluster = gdirs[0].read_json('mb_calib')
 
+        mb_model_cluster = MonthlyTIModel(gdir)
+        assert mb_model_cluster.melt_f == mb_calib_cluster['melt_f']
+        assert mb_model_cluster.prcp_fac == mb_calib_cluster['prcp_fac']
+        assert mb_model_cluster.temp_bias == mb_calib_cluster['temp_bias']
+
         # test calibration with provided geodetic mb
         ref_mb_df = utils.get_geodetic_mb_dataframe().loc[gdirs[0].rgi_id]
         ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == '2000-01-01_2020-01-01']
@@ -601,7 +608,7 @@ class TestRunSettings:
                                      gdirs,
                                      use_mb_calib=False,
                                      use_run_settings=True,
-                                     run_setting_geodetic_mb='custom_geodetic_mb',
+                                     run_settings_geodetic_mb='custom_geodetic_mb',
                                      )
         # calibrating again, without overwriting should raise an error
         with pytest.raises(InvalidWorkflowError):
@@ -609,7 +616,7 @@ class TestRunSettings:
                                          gdirs,
                                          use_mb_calib=False,
                                          use_run_settings=True,
-                                         run_setting_geodetic_mb='custom_geodetic_mb',
+                                         run_settings_geodetic_mb='custom_geodetic_mb',
                                          )
 
         mb_calib_orig = gdirs[0].read_json('mb_calib')
@@ -735,6 +742,7 @@ class TestRunSettings:
         run_from_climate_data(gdir, ys=2000, ye=2020,
                               use_run_settings=True)
 
+    @pytest.mark.slow
     def test_run_settings_centerline(self):
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
@@ -778,6 +786,7 @@ class TestRunSettings:
         # catchment_width_correction
         raise NotImplementedError
 
+    @pytest.mark.slow
     def test_run_settings_gis(self):
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
@@ -804,6 +813,7 @@ class TestRunSettings:
         assert grid_orig['x0y0'][0] < grid_adapted['x0y0'][0]
         assert grid_orig['x0y0'][1] > grid_adapted['x0y0'][1]
 
+    @pytest.mark.slow
     def test_run_settings_inversion(self):
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
@@ -827,6 +837,124 @@ class TestRunSettings:
         # with larger glen_a the flux is larger -> need smaller thickness
         assert inv_volume_orig > inv_volume_adapted
 
+        # test calibrate inversion from consensus with custom volume
+        df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        rids = [gdir.rgi_id for gdir in gdirs]
+        df_consensus = df.reindex(rids)
+        custom_obs = dict(
+            name='custom_volume',
+            value=df_consensus['vol_itmix_m3'] * 0.9,
+            unit='m3',
+            timestamp='rgi_date',
+            type='volume',
+            error=df_consensus['vol_itmix_m3'] * 0.9 * 0.1,
+        )
+        add_observation_to_run_settings(gdir, **custom_obs)
+
+        df_orig = calibrate_inversion_from_consensus(gdir)
+        glen_a_orig = gdir.get_diagnostics()['inversion_glen_a']
+        df_adapted = calibrate_inversion_from_consensus(
+            gdir, use_run_settings=True, run_settings_volume='custom_volume')
+
+        assert_allclose(df_orig['vol_oggm_m3'],
+                        df_consensus['vol_itmix_m3'],
+                        rtol=1e-2)
+        assert_allclose(df_adapted['vol_oggm_m3'],
+                        df_consensus['vol_itmix_m3'] * 0.9,
+                        rtol=1e-2)
+        # with a smaller target volume, we need to increase the flux with a
+        # larger glen_a value
+        assert gdir.read_yml('run_settings')['inversion_glen_a'] > glen_a_orig
+
+    @pytest.mark.slow
+    def test_run_settings_dynamic_spinup(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # default oggm workflow
+        apparent_mb_from_any_mb(gdir)
+        calibrate_inversion_from_consensus(gdir)
+        workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
+        workflow.execute_entity_task(tasks.run_dynamic_melt_f_calibration,
+                                     gdir,
+                                     ys=1980,
+                                     output_filesuffix='_default_dyn_calib')
+
+        # get default values for checking
+        glen_a_default = gdir.get_diagnostics()['inversion_glen_a']
+        melt_f_default = gdir.get_diagnostics()['melt_f_dynamic_calibration']
+
+        # add custom observations
+        df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        rids = [gdir.rgi_id for gdir in gdirs]
+        df_consensus = df.reindex(rids)
+        custom_volume = dict(
+            name='custom_volume',
+            value=df_consensus['vol_itmix_m3'] * 0.9,
+            unit='m3',
+            timestamp='rgi_date',
+            type='volume',
+            error=df_consensus['vol_itmix_m3'] * 0.9 * 0.1,
+        )
+        add_observation_to_run_settings(gdir, **custom_volume)
+
+        ref_mb_df = utils.get_geodetic_mb_dataframe().loc[gdirs[0].rgi_id]
+        ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == '2000-01-01_2020-01-01']
+        ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
+        custom_mb = dict(
+            name='custom_geodetic_mb',
+            value=ref_mb * 1.1,
+            unit='kg m-2 yr-1',
+            timestamp='2000-01-01_2020-01-01',
+            type='geodetic_mb',
+            error=(ref_mb_df['err_dmdtda'].iloc[0] *
+                   1000),
+        )
+        add_observation_to_run_settings(gdir, **custom_mb)
+
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     use_mb_calib=False,
+                                     use_run_settings=True,
+                                     run_settings_geodetic_mb='custom_geodetic_mb',
+                                     )
+        apparent_mb_from_any_mb(gdir,
+                                use_run_settings=True,
+                                run_settings_geodetic_mb='custom_geodetic_mb',
+                                )
+        calibrate_inversion_from_consensus(
+            gdir, use_run_settings=True, run_settings_volume='custom_volume')
+        workflow.execute_entity_task(tasks.init_present_time_glacier,
+                                     gdirs, use_run_settings=True,)
+        workflow.execute_entity_task(tasks.run_dynamic_melt_f_calibration,
+                                     gdir,
+                                     output_filesuffix='_run_settings_dyn_calib',
+                                     use_run_settings=True,
+                                     run_settings_volume='custom_volume',
+                                     run_settings_geodetic_mb='custom_geodetic_mb',
+                                     )
+
+        glen_a_adapted = gdir.read_yml('run_settings')['inversion_glen_a']
+        melt_f_adapted = gdir.read_yml('run_settings')['melt_f_dynamic_calibration']
+
+        assert glen_a_adapted == gdir.get_diagnostics()['inversion_glen_a']
+        assert melt_f_adapted == gdir.get_diagnostics()['melt_f_dynamic_calibration']
+
+        assert gdir.read_yml('run_settings')['run_dynamic_spinup_success']
+
+        # with more negative geodetic mass balance melt_f should be larger
+        assert melt_f_adapted > melt_f_default
+
+        # with more negative geodeic mass balance the apperent mb forces a
+        # larger flux during inversion -> larger glen_a, additionally smaller
+        # target volume -> larger glen_a
+        assert glen_a_adapted > glen_a_default
+
+    @pytest.mark.slow
     def test_run_settings_workflow(self):
         # test merge_glacier_tasks
         raise NotImplementedError
