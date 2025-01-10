@@ -590,6 +590,10 @@ def define_glacier_region(gdir, entity=None, source=None,
 
     # Write DEM source info
     gdir.add_to_diagnostics('dem_source', dem_source)
+    if use_run_settings:
+        utils.add_setting_to_run_settings(gdir, settings={
+            'dem_source': dem_source
+        }, filesuffix=run_settings_filesuffix, overwrite=True)
     source_txt = DEM_SOURCE_INFO.get(dem_source, dem_source)
     with open(gdir.get_filepath('dem_source'), 'w') as fw:
         fw.write(source_txt)
@@ -845,6 +849,11 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None,
             gdir.add_to_diagnostics('dem_needed_interpolation', True)
             gdir.add_to_diagnostics('dem_invalid_perc',
                                     len(pnan[0]) / (nx * ny))
+            if use_run_settings:
+                utils.add_setting_to_run_settings(gdir, settings={
+                    'dem_needed_interpolation': True,
+                    'dem_invalid_perc': len(pnan[0]) / (nx * ny),
+                }, filesuffix=run_settings_filesuffix, overwrite=True)
         else:
             diagnostics_dict['dem_needed_interpolation'] = True
             diagnostics_dict['dem_invalid_perc'] = len(pnan[0]) / (nx * ny)
@@ -867,6 +876,11 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None,
             gdir.add_to_diagnostics('dem_needed_extrapolation', True)
             gdir.add_to_diagnostics('dem_extrapol_perc',
                                     len(pnan[0]) / (nx * ny))
+            if use_run_settings:
+                utils.add_setting_to_run_settings(gdir, settings={
+                    'dem_needed_extrapolation': True,
+                    'dem_extrapol_perc': len(pnan[0]) / (nx * ny),
+                }, filesuffix=run_settings_filesuffix, overwrite=True)
         else:
             diagnostics_dict['dem_needed_extrapolation'] = True
             diagnostics_dict['dem_extrapol_perc'] = len(pnan[0]) / (nx * ny)
@@ -1050,6 +1064,11 @@ def glacier_masks(gdir, use_run_settings=False, run_settings_filesuffix='',):
             pnan = (valid_mask == 0) & glacier_mask
             gdir.add_to_diagnostics('dem_invalid_perc_in_mask',
                                     np.sum(pnan) / np.sum(glacier_mask))
+            if use_run_settings:
+                utils.add_setting_to_run_settings(gdir, settings={
+                    'dem_invalid_perc_in_mask':
+                        np.sum(pnan) / np.sum(glacier_mask),
+                }, filesuffix=run_settings_filesuffix, overwrite=True)
 
         # add some meta stats and close
         dem_on_g = dem[np.where(glacier_mask)]
@@ -1185,6 +1204,11 @@ def simple_glacier_masks(gdir, use_run_settings=False,
             pnan = (valid_mask == 0) & glacier_mask
             gdir.add_to_diagnostics('dem_invalid_perc_in_mask',
                                     np.sum(pnan) / np.sum(glacier_mask))
+            if use_run_settings:
+                utils.add_setting_to_run_settings(gdir, settings={
+                    'dem_invalid_perc_in_mask':
+                        np.sum(pnan) / np.sum(glacier_mask),
+                }, filesuffix=run_settings_filesuffix, overwrite=True)
 
         # add some meta stats and close
         nc.max_h_dem = np.nanmax(dem)

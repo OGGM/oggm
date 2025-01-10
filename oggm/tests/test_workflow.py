@@ -797,10 +797,13 @@ class TestRunSettings:
 
         # test gis_prepro_tasks (tests all centerline tasks)
         inv_fl_before = gdir.read_pickle('inversion_flowlines')
+        assert gdir.get_diagnostics()['flowline_type'] == 'elevation_band'
         workflow.gis_prepro_tasks(gdirs, use_run_settings=True)
         inv_fl_after = gdir.read_pickle('inversion_flowlines')
         # before the inversion flowlines where an elevation band fl, afterwards
         # it is a centerline flowline
+        assert gdir.get_diagnostics()['flowline_type'] == 'centerlines'
+        assert gdir.read_yml('run_settings')['flowline_type'] == 'centerlines'
         assert np.all(inv_fl_before[0].is_trapezoid)
         assert inv_fl_after[0].is_trapezoid is None
 

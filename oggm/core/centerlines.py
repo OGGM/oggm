@@ -989,7 +989,10 @@ def compute_centerlines(gdir, heads=None, use_run_settings=False,
     if is_first_call:
         # For diagnostics of filtered centerlines
         gdir.add_to_diagnostics('n_orig_centerlines', len(cls))
-
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'n_orig_centerlines': len(cls)
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_line(gdir):
@@ -1855,9 +1858,17 @@ def initialize_flowlines(gdir, use_run_settings=False,
     # Write the data
     gdir.write_pickle(fls, 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'centerlines')
+    if use_run_settings:
+        utils.add_setting_to_run_settings(gdir, settings={
+            'flowline_type': 'centerlines'
+        }, filesuffix=run_settings_filesuffix, overwrite=True)
     if do_filter:
         out = diag_n_bad_slopes/diag_n_pix
         gdir.add_to_diagnostics('perc_invalid_flowline', out)
+        if use_run_settings:
+            utils.add_setting_to_run_settings(gdir, settings={
+                'perc_invalid_flowline': out
+            }, filesuffix=run_settings_filesuffix, overwrite=True)
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -2550,3 +2561,7 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
 
     gdir.write_pickle([fl], 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'elevation_band')
+    if use_run_settings:
+        utils.add_setting_to_run_settings(gdir, settings={
+            'flowline_type': 'elevation_band'
+        }, filesuffix=run_settings_filesuffix, overwrite=True)
