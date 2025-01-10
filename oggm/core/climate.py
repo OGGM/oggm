@@ -33,7 +33,9 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
+def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
+                                use_run_settings=False,
+                                run_settings_filesuffix='',):
     """Processes and writes the climate data from a user-defined climate file.
 
     The input file must have a specific format
@@ -58,13 +60,23 @@ def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
     output_filesuffix : str
         this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     if not (('climate_file' in cfg.PATHS) and
             os.path.exists(cfg.PATHS['climate_file'])):
         raise InvalidParamsError('Custom climate file not found')
 
-    if cfg.PARAMS['baseline_climate'] not in ['', 'CUSTOM']:
+    if params_use('baseline_climate') not in ['', 'CUSTOM']:
         raise InvalidParamsError("When using custom climate data please set "
                                  "PARAMS['baseline_climate'] to an empty "
                                  "string or `CUSTOM`. Note also that you can "
@@ -137,11 +149,12 @@ def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
 @entity_task(log)
 def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
+                         use_run_settings=False, run_settings_filesuffix='',
                          **kwargs):
     """Adds the selected climate data to this glacier directory.
 
     Short wrapper deciding on which task to run based on
-    `cfg.PARAMS['baseline_climate']`.
+    `PARAMS['baseline_climate']`.
 
     If you want to make it explicit, simply call the relevant task
     (e.g. oggm.shop.cru.process_cru_data).
@@ -161,18 +174,32 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
     output_filesuffix : str
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     **kwargs :
         any other argument relevant to the task that will be called.
     """
 
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     # Which climate should we use?
-    baseline = cfg.PARAMS['baseline_climate']
+    baseline = params_use('baseline_climate')
     if baseline == 'CRU':
         from oggm.shop.cru import process_cru_data
+        kwargs['use_run_settings'] = use_run_settings
+        kwargs['run_settings_filesuffix'] = run_settings_filesuffix
         process_cru_data(gdir, output_filesuffix=output_filesuffix,
                          y0=y0, y1=y1, **kwargs)
     elif baseline == 'HISTALP':
         from oggm.shop.histalp import process_histalp_data
+        kwargs['use_run_settings'] = use_run_settings
+        kwargs['run_settings_filesuffix'] = run_settings_filesuffix
         process_histalp_data(gdir, output_filesuffix=output_filesuffix,
                              y0=y0, y1=y1, **kwargs)
     elif baseline == 'W5E5':
@@ -185,12 +212,16 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                                 y0=y0, y1=y1, **kwargs)
     elif baseline in ['ERA5', 'ERA5L', 'CERA', 'ERA5dr', 'ERA5L-HMA']:
         from oggm.shop.ecmwf import process_ecmwf_data
+        kwargs['use_run_settings'] = use_run_settings
+        kwargs['run_settings_filesuffix'] = run_settings_filesuffix
         process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
                            dataset=baseline, y0=y0, y1=y1, **kwargs)
     elif '+' in baseline:
         # This bit below assumes ECMWF only datasets, but it should be
         # quite easy to extend for HISTALP+ERA5L for example
         from oggm.shop.ecmwf import process_ecmwf_data
+        kwargs['use_run_settings'] = use_run_settings
+        kwargs['run_settings_filesuffix'] = run_settings_filesuffix
         his, ref = baseline.split('+')
         s = 'tmp_'
         process_ecmwf_data(gdir, output_filesuffix=s+his, dataset=his,
@@ -203,6 +234,8 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                                 output_filesuffix=output_filesuffix)
     elif '|' in baseline:
         from oggm.shop.ecmwf import process_ecmwf_data
+        kwargs['use_run_settings'] = use_run_settings
+        kwargs['run_settings_filesuffix'] = run_settings_filesuffix
         his, ref = baseline.split('|')
         s = 'tmp_'
         process_ecmwf_data(gdir, output_filesuffix=s+his, dataset=his,
@@ -219,7 +252,7 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
                                     output_filesuffix=output_filesuffix,
                                     **kwargs)
     else:
-        raise ValueError("cfg.PARAMS['baseline_climate'] not understood")
+        raise ValueError("PARAMS['baseline_climate'] not understood")
 
 
 @entity_task(log, writes=['climate_historical'])

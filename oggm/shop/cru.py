@@ -73,7 +73,8 @@ def get_cru_file(var=None):
 
 @entity_task(log, writes=['climate_historical'])
 def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
-                     output_filesuffix=None):
+                     output_filesuffix=None, use_run_settings=False,
+                     run_settings_filesuffix='',):
     """Processes and writes the CRU baseline climate data for this glacier.
 
     Interpolates the CRU TS data to the high-resolution CL2 climatologies
@@ -100,10 +101,20 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     output_filesuffix : str
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
-    if cfg.PARAMS['baseline_climate'] != 'CRU':
-        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
+    if params_use('baseline_climate') != 'CRU':
+        raise InvalidParamsError("PARAMS['baseline_climate'] should be "
                                  "set to CRU")
 
     # read the climatology

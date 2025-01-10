@@ -105,7 +105,9 @@ def _check_ds_validity(ds):
 
 @entity_task(log, writes=['climate_historical'])
 def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
-                       y0=None, y1=None, output_filesuffix=None):
+                       y0=None, y1=None, output_filesuffix=None,
+                       use_run_settings=False, run_settings_filesuffix='',
+                       ):
     """Processes and writes the ECMWF baseline climate data for this glacier.
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
@@ -114,7 +116,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     ----------
     dataset : str
         'ERA5', 'ERA5L', 'CERA', 'ERA5L-HMA', 'ERA5dr'.
-        Defaults to cfg.PARAMS['baseline_climate']
+        Defaults to PARAMS['baseline_climate']
     ensemble_member : int
         for CERA, pick an ensemble member number (0-9). We might make this
         more of a clever pick later.
@@ -129,10 +131,20 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     output_filesuffix : str
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     if dataset is None:
-        dataset = cfg.PARAMS['baseline_climate']
+        dataset = params_use('baseline_climate')
 
     # Use xarray to read the data
     lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon

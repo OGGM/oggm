@@ -484,47 +484,79 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
 
 
 @global_task(log)
-def gis_prepro_tasks(gdirs):
+def gis_prepro_tasks(gdirs, use_run_settings=False,
+                     run_settings_filesuffix='',):
     """Run all flowline preprocessing tasks on a list of glaciers.
 
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
-    task_list = [
-        tasks.define_glacier_region,
-        tasks.glacier_masks,
-        tasks.compute_centerlines,
-        tasks.initialize_flowlines,
-        tasks.compute_downstream_line,
-        tasks.compute_downstream_bedshape,
-        tasks.catchment_area,
-        tasks.catchment_intersections,
-        tasks.catchment_width_geom,
-        tasks.catchment_width_correction
-    ]
+    kwarg_run_settings = {'use_run_settings': use_run_settings,
+                          'run_settings_filesuffix': run_settings_filesuffix,
+                          }
+    task_list = {
+        tasks.define_glacier_region: kwarg_run_settings,
+        tasks.glacier_masks: kwarg_run_settings,
+        tasks.compute_centerlines: kwarg_run_settings,
+        tasks.initialize_flowlines: kwarg_run_settings,
+        tasks.compute_downstream_line: {},
+        tasks.compute_downstream_bedshape: kwarg_run_settings,
+        tasks.catchment_area: kwarg_run_settings,
+        tasks.catchment_intersections: {},
+        tasks.catchment_width_geom: kwarg_run_settings,
+        tasks.catchment_width_correction: kwarg_run_settings,
+    }
     for task in task_list:
-        execute_entity_task(task, gdirs)
+        execute_entity_task(task, gdirs,
+                            **task_list[task]
+                            )
 
 
 @global_task(log)
-def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
+def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None,
+                  use_run_settings=False, run_settings_filesuffix='',
+                  run_settings_geodetic_mb=None,
+                  ):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_geodetic_mb : str
+        if a custom geodetic mb should be used during calibration, provide the
+        name as it is stored in the run_settings file
     """
 
     # Process climate data
-    execute_entity_task(tasks.process_climate_data, gdirs)
+    execute_entity_task(tasks.process_climate_data, gdirs,
+                        use_run_settings=use_run_settings,
+                        run_settings_filesuffix=run_settings_filesuffix,
+                        )
     # mass balance and the apparent mass balance
     execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
                         override_missing=override_missing,
-                        overwrite_gdir=overwrite_gdir)
-    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+                        overwrite_gdir=overwrite_gdir,
+                        use_mb_calib=not use_run_settings,
+                        use_run_settings=use_run_settings,
+                        filesuffix=run_settings_filesuffix,
+                        run_settings_geodetic_mb=run_settings_geodetic_mb,
+                        )
+    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                        use_run_settings=use_run_settings,
+                        run_settings_filesuffix=run_settings_filesuffix,
+                        run_settings_geodetic_mb=run_settings_geodetic_mb,
+                        )
 
 
 @global_task(log)
@@ -797,6 +829,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 @global_task(log)
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
+                        use_run_settings=False, run_settings_filesuffix='',
                         **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
 
@@ -847,7 +880,10 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     # now we have gdirs which contain all the necessary flowlines,
     # time to clean them up
     for gdir in merged_gdirs:
-        flowline.clean_merged_flowlines(gdir, buffer=buffer)
+        flowline.clean_merged_flowlines(
+            gdir, buffer=buffer, use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        )
 
     if main_rgi_id is not None and return_all is False:
         return [gd for gd in merged_gdirs if main_rgi_id in gd.rgi_id][0]
@@ -933,7 +969,10 @@ def merge_gridded_data(gdirs, output_folder=None,
                        interp='nearest',
                        use_multiprocessing=True,
                        return_dataset=True,
-                       reset=False):
+                       reset=False,
+                       use_run_settings=False,
+                       run_settings_filesuffix='',
+                       ):
     """ This function takes a list of glacier directories and combines their
     gridded_data into a new NetCDF file and saves it into the output_folder. It
     also could merge data from different source files if you provide a list
@@ -1009,6 +1048,10 @@ def merge_gridded_data(gdirs, output_folder=None,
         If the file defined in output_filename already exists and reset is
         False an error is raised. If reset is True and the file exists it is
         deleted before merging. Default is False.
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     # check if output_folder exists, otherwise creates it
@@ -1057,7 +1100,10 @@ def merge_gridded_data(gdirs, output_folder=None,
             dem_source = None
             dem_gdir = gdirs[0]
         gis.get_dem_for_grid(combined_grid, output_folder,
-                             source=dem_source, gdir=dem_gdir)
+                             source=dem_source, gdir=dem_gdir,
+                             use_run_settings=use_run_settings,
+                             run_settings_filesuffix=run_settings_filesuffix,
+                             )
         # unwrapped is needed to execute process_dem without the entity_task
         # overhead (this would need a valid gdir)
         gis.process_dem.unwrapped(gdir=None, grid=combined_grid,

@@ -443,7 +443,8 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path, params_use):
         dem_ds.close()
 
 
-def get_dem_for_grid(grid, fpath, source=None, gdir=None, params_use=None):
+def get_dem_for_grid(grid, fpath, source=None, gdir=None,
+                     use_run_settings=False, run_settings_filesuffix='',):
     """
     Fetch a DEM from source, reproject it to the extent defined by grid and
     saves it to disk.
@@ -460,11 +461,22 @@ def get_dem_for_grid(grid, fpath, source=None, gdir=None, params_use=None):
         check docstring of oggm.core.gis.define_glacier_region.
     gdir: py:class:`oggm.GlacierDirectory`
         If source is None, gdir is used to decide on the source
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
 
     Returns
     -------
     tuple: (list with path(s) to the DEM file(s), data source str)
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = utils.get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     minlon, maxlon, minlat, maxlat = grid.extent_in_crs(crs=salem.wgs84)
     extent_ll = [[minlon, maxlon], [minlat, maxlat]]
     if gdir is not None:
@@ -566,7 +578,9 @@ def define_glacier_region(gdir, entity=None, source=None,
     dem_list, dem_source = get_dem_for_grid(grid=tmp_grid,
                                             fpath=gdir.get_filepath('dem'),
                                             source=source, gdir=gdir,
-                                            params_use=params_use)
+                                            use_run_settings=use_run_settings,
+                                            run_settings_filesuffix=run_settings_filesuffix,
+                                            )
 
     # Glacier grid
     x0y0 = (ulx+dx/2, uly-dx/2)  # To pixel center coordinates
