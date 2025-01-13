@@ -14,6 +14,7 @@ except ImportError:
 # Locals
 from oggm import cfg
 from oggm import utils
+from oggm.utils import get_params_use
 from oggm import entity_task
 from oggm.exceptions import InvalidParamsError
 

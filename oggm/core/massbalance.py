@@ -17,7 +17,7 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, lazy_property, get_params_wrapper,
+                        weighted_average_1d, lazy_property,
                         add_setting_to_run_settings, get_params_use, )
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
@@ -439,8 +439,8 @@ class MonthlyTIModel(MassBalanceModel):
                 if v != self.params_use(k):
                     msg = ('You seem to use different mass balance parameters '
                            'than used for the calibration: '
-                           f"you use cfg.PARAMS['{k}']={self.params_use(k)} while "
-                           f"it was calibrated with cfg.PARAMS['{k}']={v}. "
+                           f"you use PARAMS['{k}']={self.params_use(k)} while "
+                           f"it was calibrated with PARAMS['{k}']={v}. "
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)

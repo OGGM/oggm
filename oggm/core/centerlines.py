@@ -992,6 +992,7 @@ def compute_centerlines(gdir, heads=None, use_run_settings=False,
                 'n_orig_centerlines': len(cls)
             }, filesuffix=run_settings_filesuffix, overwrite=True)
 
+
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_line(gdir):
     """Computes the Flowline along the unglaciated downstream topography
