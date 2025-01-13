@@ -54,7 +54,8 @@ from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              InvalidDEMError, GeometryError,
                              InvalidWorkflowError)
 from oggm.utils import (tuple2int, get_topo_file, is_dem_source_available,
-                        nicenumber, ncDataset, tolist)
+                        nicenumber, ncDataset, tolist, get_params_use,
+                        check_for_none_params_use)
 
 
 # Module logger
@@ -225,10 +226,7 @@ def _polygon_to_pix(polygon):
 
 def glacier_grid_params(gdir, params_use=None):
     """Define the glacier grid map based on the user params."""
-    if params_use is None:
-        def cfg_params(param):
-            return cfg.PARAMS[param]
-        params_use = cfg_params
+    params_use = check_for_none_params_use(params_use)
 
     # Get the local map proj params and glacier extent
     gdf = gdir.read_shapefile('outlines')
@@ -329,6 +327,8 @@ def check_dem_source(source, extent_ll, rgi_id=None, params_use=None):
     -------
     String of the working DEM source.
     """
+
+    params_use = check_for_none_params_use(params_use)
 
     # when multiple sources are provided, try them sequentially
     if isinstance(source, list):
@@ -472,10 +472,7 @@ def get_dem_for_grid(grid, fpath, source=None, gdir=None,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     minlon, maxlon, minlat, maxlat = grid.extent_in_crs(crs=salem.wgs84)
     extent_ll = [[minlon, maxlon], [minlat, maxlat]]
@@ -564,10 +561,8 @@ def define_glacier_region(gdir, entity=None, source=None,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     utm_proj, nx, ny, ulx, uly, dx = glacier_grid_params(gdir, params_use)
 
@@ -800,10 +795,8 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if gdir is not None:
         # open srtm tif-file:
@@ -1093,10 +1086,8 @@ def simple_glacier_masks(gdir, use_run_settings=False,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # In case nominal, just raise
     if gdir.is_nominal:
@@ -1470,10 +1461,7 @@ def gridded_attributes(gdir, use_run_settings=False,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
@@ -1621,10 +1609,8 @@ def gridded_mb_attributes(gdir, use_run_settings=False,
     from oggm.core.massbalance import LinearMassBalance, ConstantMassBalance
     from oggm.core.centerlines import line_inflows
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Get the input data
     with ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -2053,10 +2039,8 @@ def reproject_gridded_data_variable_to_grid(gdir,
         target_grid.
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     with xr.open_dataset(gdir.get_filepath(filename,
                                            filesuffix=filesuffix)) as ds:

@@ -138,10 +138,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if dataset is None:
         dataset = params_use('baseline_climate')

@@ -29,6 +29,7 @@ import pandas as pd
 from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
+from oggm.utils import get_params_use
 from oggm import entity_task
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
@@ -87,10 +88,9 @@ class Flowline(Centerline):
 
         super(Flowline, self).__init__(line, dx, surface_h)
 
-        run_settings_filename = 'run_settings' if use_run_settings else None
-        self.params_use = utils.get_params_wrapper(
-            gdir=gdir, filename=run_settings_filename,
-            filesuffix=run_settings_filesuffix)
+        # Params
+        self.params_use = get_params_use(gdir, use_run_settings,
+                                         run_settings_filesuffix)
 
         self._thick = utils.clip_min(surface_h - bed_h, 0.)
         self.map_dx = map_dx
@@ -654,10 +654,9 @@ class FlowlineModel(object):
             potential filesuffix of a run_settings file
         """
 
-        run_settings_filename = 'run_settings' if use_run_settings else None
-        self.params_use = utils.get_params_wrapper(
-            gdir=gdir, filename=run_settings_filename,
-            filesuffix=run_settings_filesuffix)
+        # Params
+        self.params_use = get_params_use(gdir, use_run_settings,
+                                         run_settings_filesuffix)
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
@@ -3068,10 +3067,8 @@ def init_present_time_glacier(gdir, filesuffix='', use_run_settings=False,
         data here to create a flowline for a dynamic model run
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Some vars
     invs = gdir.read_pickle('inversion_output')
@@ -3216,10 +3213,8 @@ def decide_evolution_model(evolution_model=None, gdir=None,
     if evolution_model is not None:
         return evolution_model
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     from_cfg = params_use('evolution_model').lower()
     if from_cfg == 'SemiImplicit'.lower():
@@ -3317,10 +3312,8 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
         potential filesuffix of a run_settings file
      """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if init_model_filesuffix is not None:
         fp = gdir.get_filepath('model_geometry',
@@ -3354,7 +3347,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
             # this is ugly, but needed because a first guess value of the
             # inversion parameters is present in params.cfg, if this would be
             # removed the option with using 'default' would be enough
-            run_settings = gdir.read_yml(run_settings_filename,
+            run_settings = gdir.read_yml('run_settings',
                                          filesuffix=run_settings_filesuffix)
             if 'inversion_fs' in run_settings:
                 fs = params_use('inversion_fs', default=fs)
@@ -3925,10 +3918,8 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     **kwargs : all valid kwargs for ``run_task``
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Make sure it'll return something
     kwargs['return_value'] = True
@@ -4568,10 +4559,8 @@ def clean_merged_flowlines(gdir, buffer=None, use_run_settings=False,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # No buffer does not work
     if buffer is None:

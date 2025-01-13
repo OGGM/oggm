@@ -23,6 +23,7 @@ except ImportError:
 # Locals
 from oggm import cfg
 from oggm import utils
+from oggm.utils import get_params_use
 from oggm.core import centerlines
 from oggm import entity_task, global_task
 from oggm.exceptions import (MassBalanceCalibrationError, InvalidParamsError,
@@ -67,10 +68,7 @@ def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if not (('climate_file' in cfg.PATHS) and
             os.path.exists(cfg.PATHS['climate_file'])):
@@ -183,10 +181,7 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Which climate should we use?
     baseline = params_use('baseline_climate')

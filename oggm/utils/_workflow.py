@@ -2081,10 +2081,8 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
     from oggm.core.massbalance import (ConstantMassBalance,
                                        MultipleFlowlineMassBalance)
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     d = OrderedDict()
 
@@ -4233,6 +4231,22 @@ def get_params(setting, gdir=None, filename=None, filesuffix='', default=None):
 def get_params_wrapper(gdir=None, filename=None, filesuffix=''):
     return partial(get_params, gdir=gdir, filename=filename,
                    filesuffix=filesuffix)
+
+
+def get_params_use(gdir, use_run_settings, run_settings_filesuffix):
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    return get_params_wrapper(gdir=gdir,
+                              filename=run_settings_filename,
+                              filesuffix=run_settings_filesuffix)
+
+
+def check_for_none_params_use(params_use):
+    if params_use is None:
+        def cfg_params(param):
+            return cfg.PARAMS[param]
+
+        params_use = cfg_params
+    return params_use
 
 
 @entity_task(log)

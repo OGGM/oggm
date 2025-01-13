@@ -42,6 +42,7 @@ from oggm import utils, cfg
 from oggm import entity_task
 from oggm.core.gis import gaussian_blur
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.utils import get_params_use, check_for_none_params_use
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -74,11 +75,8 @@ def prepare_for_inversion(gdir,
         potential filesuffix of a run_settings file
     """
 
-    # params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
@@ -227,11 +225,7 @@ def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
     the ice thickness (in m)
     """
 
-    if params_use is None:
-        def cfg_params(param):
-            return cfg.PARAMS[param]
-
-        params_use = cfg_params
+    params_use = check_for_none_params_use(params_use)
 
     if len(np.atleast_1d(slope)) > 1:
         shape = utils.tolist(shape, len(slope))
@@ -306,10 +300,7 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     the ice thickness (in m)
     """
 
-    if params_use is None:
-        def cfg_params(param):
-            return cfg.PARAMS[param]
-        params_use = cfg_params
+    params_use = check_for_none_params_use(params_use)
 
     if glen_a is None:
         glen_a = params_use('inversion_glen_a')
@@ -350,10 +341,7 @@ def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
     This can be done analytically but I'm lazy and use optimisation instead.
     """
 
-    if params_use is None:
-        def cfg_params(param):
-            return cfg.PARAMS[param]
-        params_use = cfg_params
+    params_use = check_for_none_params_use(params_use)
 
     def to_minimize(x):
         h = sia_thickness(slope, width, x[0], glen_a=glen_a, fs=fs,
@@ -423,11 +411,8 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         potential filesuffix of a run_settings file
     """
 
-    # params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Defaults
     if glen_a is None:
@@ -586,10 +571,8 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if gdir.is_tidewater:
         # No need for filter in tidewater case
@@ -740,10 +723,8 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Defaults
     if glen_a is None:
@@ -845,10 +826,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
@@ -979,10 +957,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Variables
     grids_file = gdir.get_filepath('gridded_data')
@@ -1108,10 +1083,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Defaults
     if k is None:
@@ -1187,10 +1159,8 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     """
     from oggm.core import massbalance
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if not gdir.is_tidewater or not params_use('use_kcalving_for_inversion'):
         # Do nothing

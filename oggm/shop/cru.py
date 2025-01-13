@@ -108,10 +108,7 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if params_use('baseline_climate') != 'CRU':
         raise InvalidParamsError("PARAMS['baseline_climate'] should be "

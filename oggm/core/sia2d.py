@@ -5,6 +5,7 @@ import os
 
 from oggm import cfg, utils
 from oggm.cfg import G, SEC_IN_YEAR, SEC_IN_DAY
+from oggm.utils import get_params_use
 
 
 def filter_ice_border(ice_thick):
@@ -58,10 +59,8 @@ class Model2D(object):
         """
 
         # Params
-        run_settings_filename = 'run_settings' if use_run_settings else None
-        self.params_use = utils.get_params_wrapper(
-            gdir=gdir, filename=run_settings_filename,
-            filesuffix=run_settings_filesuffix)
+        self.params_use = get_params_use(gdir, use_run_settings,
+                                         run_settings_filesuffix)
 
         # Mass balance
         self.mb_elev_feedback = mb_elev_feedback

@@ -12,6 +12,7 @@ from scipy import interpolate
 # Locals
 import oggm.cfg as cfg
 from oggm import utils
+from oggm.utils import get_params_use
 from oggm import entity_task
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
@@ -211,10 +212,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         evolution_model.
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     evolution_model = decide_evolution_model(
         evolution_model, gdir=gdir, use_run_settings=use_run_settings,
@@ -309,7 +308,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
             # this is ugly, but needed because a first guess value of the
             # inversion parameters is present in params.cfg, if this would be
             # removed the option with using 'default' would be enough
-            run_settings = gdir.read_yml(run_settings_filename,
+            run_settings = gdir.read_yml('run_settings',
                                          filesuffix=run_settings_filesuffix)
             if 'inversion_fs' in run_settings:
                 fs = params_use('inversion_fs', default=fs)
@@ -956,8 +955,7 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f, use_run_settings=False,
 
     """
     if use_run_settings:
-        run_settings_filename = 'run_settings' if use_run_settings else None
-        run_settings = gdir.read_yml(run_settings_filename,
+        run_settings = gdir.read_yml('run_settings',
                                      filesuffix=run_settings_filesuffix)
 
         if 'melt_f' not in run_settings:
@@ -1173,10 +1171,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         # we are done with preparing the local_variables for the upcoming iterations
         return None
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     evolution_model = decide_evolution_model(
         evolution_model, gdir=gdir, use_run_settings=use_run_settings,
@@ -1677,10 +1673,8 @@ def dynamic_melt_f_run(
         # No local variables needed in this function
         return None
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     evolution_model = decide_evolution_model(
         evolution_model, gdir=gdir, use_run_settings=use_run_settings,
@@ -1961,11 +1955,9 @@ def run_dynamic_melt_f_calibration(
         The final dynamically spined-up model. Type depends on the selected
         evolution_model.
     """
-    # params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # melt_f constraints
     if melt_f_min is None:
@@ -2074,7 +2066,7 @@ def run_dynamic_melt_f_calibration(
     # save original melt_f for later to be able to recreate original gdir
     # (using the fallback function) if an error occurs
     if use_run_settings:
-        melt_f_initial = gdir.read_yml(run_settings_filename,
+        melt_f_initial = gdir.read_yml('run_settings',
                                        filesuffix=run_settings_filesuffix
                                        )['melt_f']
     else:
@@ -2504,7 +2496,7 @@ def run_dynamic_melt_f_calibration(
 
     # check that new melt_f is correctly saved in gdir
     if use_run_settings:
-        melt_f_saved = gdir.read_yml(run_settings_filename,
+        melt_f_saved = gdir.read_yml('run_settings',
                                      filesuffix=run_settings_filesuffix
                                      )['melt_f']
     else:

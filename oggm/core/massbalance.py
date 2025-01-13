@@ -18,7 +18,7 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
                         weighted_average_1d, lazy_property, get_params_wrapper,
-                        add_setting_to_run_settings,)
+                        add_setting_to_run_settings, get_params_use, )
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -55,10 +55,11 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         self.valid_bounds = None
         self.hemisphere = None
         self.gdir = gdir
-        run_settings_filename = 'run_settings' if use_run_settings else None
-        self.params_use = get_params_wrapper(gdir=gdir,
-                                             filename=run_settings_filename,
-                                             filesuffix=run_settings_filesuffix)
+
+        # Params
+        self.params_use = get_params_use(gdir, use_run_settings,
+                                         run_settings_filesuffix)
+
         self.rho = self.params_use('ice_density')
 
     def __repr__(self):
@@ -1390,10 +1391,7 @@ def calving_mb(gdir, use_run_settings=False, run_settings_filesuffix='',):
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     if not gdir.is_tidewater:
         return 0.
@@ -1410,10 +1408,7 @@ def decide_winter_precip_factor(gdir,
     """Utility function to decide on a precip factor based on winter precip."""
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # We have to decide on a precip factor
     if 'W5E5' not in params_use('baseline_climate'):
@@ -1579,10 +1574,8 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     the calibrated parameters as dict
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(gdir=gdir,
-                                    filename=run_settings_filename,
-                                    filesuffix=filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, filesuffix)
 
     if not ref_period:
         ref_period = params_use('geodetic_mb_period')
@@ -1834,10 +1827,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                  'mb_calib.json OR run_settings.yml. Either set '
                                  'use_mb_calib or use_run_settings to False.')
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(gdir=gdir,
-                                    filename=run_settings_filename,
-                                    filesuffix=filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, filesuffix)
 
     # Param constraints
     if melt_f_min is None:
@@ -2143,12 +2134,8 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
 
 def _check_terminus_mass_flux(gdir, fls, use_run_settings=False,
                               run_settings_filesuffix='',):
-
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Check that we have done this correctly
     rho = params_use('ice_density')
@@ -2191,10 +2178,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(gdir=gdir,
-                                    filename=run_settings_filename,
-                                    filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir, use_run_settings=use_run_settings,
@@ -2278,10 +2263,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         period by providing the name of the observation here
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = get_params_wrapper(gdir=gdir,
-                                    filename=run_settings_filename,
-                                    filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir, use_run_settings=use_run_settings,

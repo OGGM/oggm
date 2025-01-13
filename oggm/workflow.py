@@ -16,7 +16,7 @@ import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate, gis
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-from oggm.utils import global_task
+from oggm.utils import global_task, get_params_use
 
 # MPI
 try:
@@ -580,10 +580,8 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
     """
 
     # Use params of first gdir, it is assumed all use the same settings
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdirs[0], filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdirs[0], use_run_settings,
+                                run_settings_filesuffix)
 
     if params_use('use_kcalving_for_inversion'):
         # Differentiate between calving and non-calving glaciers
@@ -699,10 +697,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     gdirs = utils.tolist(gdirs)
 
     # take a potential run_settings file from the first gdir
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdirs[0], filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdirs[0], use_run_settings,
+                                run_settings_filesuffix)
 
     if run_settings_volume:
         if volume_m3_reference:

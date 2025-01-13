@@ -52,7 +52,7 @@ import oggm.cfg as cfg
 from oggm.cfg import GAUSSIAN_KERNEL
 from oggm import utils
 from oggm.utils import (tuple2int, line_interpol, interp_nans, lazy_property,
-                        SuperclassMeta)
+                        SuperclassMeta, get_params_use)
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
                              GeometryError, InvalidDEMError)
@@ -897,10 +897,8 @@ def compute_centerlines(gdir, heads=None, use_run_settings=False,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
+
     single_fl = not params_use('use_multiple_flowlines')
     do_filter_slope = params_use('filter_min_slope')
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
@@ -1295,10 +1293,8 @@ def compute_downstream_bedshape(gdir, use_run_settings=False,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # For tidewater glaciers no need for all this
     if gdir.is_tidewater:
@@ -1590,10 +1586,7 @@ def catchment_area(gdir, use_run_settings=False, run_settings_filesuffix='',):
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Variables
     cls = gdir.read_pickle('centerlines')
@@ -1761,10 +1754,7 @@ def initialize_flowlines(gdir, use_run_settings=False,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # variables
     cls = gdir.read_pickle('centerlines')
@@ -1889,10 +1879,7 @@ def catchment_width_geom(gdir, use_run_settings=False,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # variables
     flowlines = gdir.read_pickle('inversion_flowlines')
@@ -2019,10 +2006,7 @@ def catchment_width_correction(gdir, use_run_settings=False,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # variables
     fls = gdir.read_pickle('inversion_flowlines')
@@ -2226,10 +2210,8 @@ def intersect_downstream_lines(gdir, candidates=None, use_run_settings=False,
         list of tributary rgi_ids
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # make sure tributaries are iterable
     candidates = utils.tolist(candidates)
@@ -2299,10 +2281,7 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True,
     """
 
     # Params
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     # Variables
     bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
@@ -2478,10 +2457,8 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
         potential filesuffix of a run_settings file
     """
 
-    run_settings_filename = 'run_settings' if use_run_settings else None
-    params_use = utils.get_params_wrapper(
-        gdir=gdir, filename=run_settings_filename,
-        filesuffix=run_settings_filesuffix)
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'), index_col=0)
 
