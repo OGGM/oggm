@@ -18,7 +18,7 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
                         weighted_average_1d, lazy_property, get_params_wrapper,
-                        add_setting_to_run_settings)
+                        add_setting_to_run_settings,)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -1383,11 +1383,17 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return weighted_average_1d(elas, areas)
 
 
-def calving_mb(gdir, params_use):
+def calving_mb(gdir, use_run_settings=False, run_settings_filesuffix='',):
     """Calving mass-loss in specific MB equivalent.
 
     This is necessary to calibrate the mass balance.
     """
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     if not gdir.is_tidewater:
         return 0.
@@ -1398,8 +1404,16 @@ def calving_mb(gdir, params_use):
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
-def decide_winter_precip_factor(gdir, params_use):
+def decide_winter_precip_factor(gdir,
+                                use_run_settings=False,
+                                run_settings_filesuffix='',):
     """Utility function to decide on a precip factor based on winter precip."""
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
 
     # We have to decide on a precip factor
     if 'W5E5' not in params_use('baseline_climate'):
@@ -1633,7 +1647,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
         # We use the precip factor but allow it to vary between 0.8, 1.2 of
         # the previous value (uncertainty).
-        prcp_fac = decide_winter_precip_factor(gdir, params_use=params_use)
+        prcp_fac = decide_winter_precip_factor(
+            gdir, use_run_settings=use_run_settings,
+            run_settings_filesuffix=filesuffix,
+        )
         mi, ma = params_use('prcp_fac_min'), params_use('prcp_fac_max')
         prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
         prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
@@ -1870,7 +1887,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                  'is required for calibration.')
 
     # Do we have a calving glacier?
-    cmb = calving_mb(gdir, params_use=params_use)
+    cmb = calving_mb(gdir, use_run_settings=use_run_settings,
+                     run_settings_filesuffix=filesuffix,)
     if cmb != 0:
         raise NotImplementedError('Calving with geodetic MB is not implemented '
                                   'yet, but it should actually work. Well keep '
@@ -1886,7 +1904,9 @@ def mb_calibration_from_scalar_mb(gdir, *,
             if params_use('prcp_fac') is not None:
                 raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
                                            "if using PARAMS['winter_prcp_factor'].")
-            prcp_fac = decide_winter_precip_factor(gdir, params_use=params_use)
+            prcp_fac = decide_winter_precip_factor(
+                gdir,  use_run_settings=use_run_settings,
+                run_settings_filesuffix=filesuffix,)
         else:
             prcp_fac = params_use('prcp_fac')
             if prcp_fac is None:
@@ -2121,10 +2141,19 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
     return df
 
 
-def _check_terminus_mass_flux(gdir, fls, params_use):
+def _check_terminus_mass_flux(gdir, fls, use_run_settings=False,
+                              run_settings_filesuffix='',):
+
+    # Params
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    params_use = get_params_wrapper(
+        gdir=gdir, filename=run_settings_filename,
+        filesuffix=run_settings_filesuffix)
+
     # Check that we have done this correctly
     rho = params_use('ice_density')
-    cmb = calving_mb(gdir, params_use=params_use)
+    cmb = calving_mb(gdir, use_run_settings=use_run_settings,
+                     run_settings_filesuffix=run_settings_filesuffix,)
 
     # This variable is in "sensible" units normalized by width
     flux = fls[-1].flux_out
@@ -2156,6 +2185,10 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     run_settings_filename = 'run_settings' if use_run_settings else None
@@ -2164,7 +2197,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None,
                                     filesuffix=run_settings_filesuffix)
 
     # Do we have a calving glacier?
-    cmb = calving_mb(gdir, params_use=params_use)
+    cmb = calving_mb(gdir, use_run_settings=use_run_settings,
+                     run_settings_filesuffix=run_settings_filesuffix,)
     is_calving = cmb != 0.
 
     # Get the height and widths along the fls
@@ -2198,7 +2232,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None,
         fl.set_apparent_mb(mbz, is_calving=is_calving)
 
     # Check and write
-    _check_terminus_mass_flux(gdir, fls, params_use=params_use)
+    _check_terminus_mass_flux(gdir, fls, use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,)
     gdir.write_pickle(fls, 'inversion_flowlines')
     gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
                       'linear_mb_params')
@@ -2249,7 +2284,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
                                     filesuffix=run_settings_filesuffix)
 
     # Do we have a calving glacier?
-    cmb = calving_mb(gdir, params_use=params_use)
+    cmb = calving_mb(gdir, use_run_settings=use_run_settings,
+                     run_settings_filesuffix=run_settings_filesuffix,)
     is_calving = cmb != 0
 
     # For each flowline compute the apparent MB
@@ -2304,7 +2340,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
                         'questionable.'.format(gdir.rgi_id))
 
     # Check and write
-    _check_terminus_mass_flux(gdir, fls, params_use)
+    _check_terminus_mass_flux(gdir, fls, use_run_settings=use_run_settings,
+                              run_settings_filesuffix=run_settings_filesuffix,)
     gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
     if use_run_settings:
         add_setting_to_run_settings(
