@@ -2141,6 +2141,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
 
     residual = optimize.brentq(to_minimize, -1e5, 1e5)
 
+    # re-instantiate the class, in case there is any state dependence
+    # in the mass balance model
+    mb_model = mb_model_class(gdir)
+
     # Reset flux
     for fl in fls:
         fl.reset_flux()
