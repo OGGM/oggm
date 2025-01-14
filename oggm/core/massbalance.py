@@ -153,13 +153,13 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         if len(np.atleast_1d(year)) > 1:
             if (reset_state):
                 out1 = self.get_specific_mb(heights=heights, widths=widths,
-                    fls=fls, year=year[0], reset_state=True)
+                                            fls=fls, year=year[0], reset_state=True)
                 out = [self.get_specific_mb(heights=heights, widths=widths,
-                    fls=fls, year=yr) for yr in year[1:]]
-                out.insert(0,out1)
+                       fls=fls, year=yr) for yr in year[1:]]
+                out.insert(0, out1)
             else:
                 out = [self.get_specific_mb(heights=heights, widths=widths,
-                    fls=fls, year=yr) for yr in year]
+                       fls=fls, year=yr) for yr in year]
             return np.asarray(out)
 
         if fls is not None:
@@ -1315,7 +1315,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             if (reset_state):
                 out1 = self.get_specific_mb(fls=fls, year=year[0], reset_state=True)
                 out = [self.get_specific_mb(fls=fls, year=yr) for yr in year[1:]]
-                out.insert(0,out1)
+                out.insert(0, out1)
             else:
                 out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
             return np.asarray(out)
@@ -1330,8 +1330,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             except AttributeError:
                 pass
             widths = np.append(widths, _widths)
-            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i,\
-                    reset_state=reset_state)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i,
+                                      reset_state=reset_state)
             mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
 
         return weighted_average_1d(mbs, widths)
@@ -2147,7 +2147,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
 
     # Unchanged SMB
     o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years, reset_state=True))
- 
+
     def to_minimize(residual_to_opt):
         return o_smb + residual_to_opt - cmb
 
@@ -2162,13 +2162,13 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     for fl_id, fl in enumerate(fls):
         mbz = 0
         for yr in mb_years:
-            if yr==mb_years[0]:
+            if yr == mb_years[0]:
                 mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
-                                          fls=fls, fl_id=fl_id, reset_state=True)
+                                              fls=fls, fl_id=fl_id, reset_state=True)
             else:
                 mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
                                           fls=fls, fl_id=fl_id)
-               
+
         mbz = mbz / len(mb_years)
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual,
                            is_calving=is_calving)
