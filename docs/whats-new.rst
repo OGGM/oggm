@@ -21,6 +21,10 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added line in `massbalance.apparent_mb_from_any_mb()` to reinstantiate mass balance
+  model. This should have no effect for any existing mass balance model but could
+  help with future mass balance models that are state dependent
+  By `Dan Goldberg <<https://github.com/dngoldberg>`_
 
 Bug fixes
 ~~~~~~~~~
