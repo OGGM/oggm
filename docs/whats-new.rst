@@ -21,6 +21,11 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added "reset_state" functionality to MassBalanceModel.get_specific_mb() to 
+  signal any state-dependent mass balance model to "reset its state" at the start
+  of the period. This is because apparent_mb_from_any_mb() calls get_specific_mb()
+  twice -- apparent_mb_from_any_mb() also changed accordingly. Similar change also 
+  made to MultipleFlowlineMassBalanceModel
 
 Bug fixes
 ~~~~~~~~~
