@@ -66,6 +66,15 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
 
+    def reset_state(self):
+        """Reset any internal state of the model.
+
+        This might not be needed by most models, but some models have an
+        internal state (e.g. a snow cover history) which can be reset
+        this way.
+        """
+        pass
+
     def get_monthly_mb(self, heights, year=None, fl_id=None, fls=None):
         """Monthly mass balance at given altitude(s) for a moment in time.
 
@@ -144,23 +153,26 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             provided.
         year: float, optional
             the time (in the "floating year" convention)
-
+        reset_state: bool, optional
+            if True, call mb_model.reset_state() before computing the
+            mass balance each year. This is useful for models that have
+            an internal state (in which case they need to implement the
+            reset_state() method).
         Returns
         -------
         the specific mass balance (units: mm w.e. yr-1)
         """
 
         if len(np.atleast_1d(year)) > 1:
-            if (reset_state):
-                out1 = self.get_specific_mb(heights=heights, widths=widths,
-                                            fls=fls, year=year[0], reset_state=True)
-                out = [self.get_specific_mb(heights=heights, widths=widths,
-                       fls=fls, year=yr) for yr in year[1:]]
-                out.insert(0, out1)
-            else:
-                out = [self.get_specific_mb(heights=heights, widths=widths,
-                       fls=fls, year=yr) for yr in year]
+            out = [self.get_specific_mb(heights=heights, widths=widths,
+                                        fls=fls, year=yr,
+                                        reset_state=reset_state) for yr in year]
             return np.asarray(out)
+
+        # The code above is a recursive call to the below, which is
+        # why we reset only now, if annual spec MB is needed.
+        if reset_state:
+            self.reset_state()
 
         if fls is not None:
             mbs = []
@@ -174,8 +186,9 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                     pass
                 widths = np.append(widths, _widths)
                 mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
-                                                        fls=fls, fl_id=i,
-                                                        year=year, reset_state=reset_state))
+                                                        fls=fls,
+                                                        fl_id=i,
+                                                        year=year))
         else:
             mbs = self.get_annual_mb(heights, year=year)
 
@@ -1312,13 +1325,12 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             fls = self.fls
 
         if len(np.atleast_1d(year)) > 1:
-            if (reset_state):
-                out1 = self.get_specific_mb(fls=fls, year=year[0], reset_state=True)
-                out = [self.get_specific_mb(fls=fls, year=yr) for yr in year[1:]]
-                out.insert(0, out1)
-            else:
-                out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
+            out = [self.get_specific_mb(fls=fls, year=yr, reset_state=reset_state)
+                   for yr in year]
             return np.asarray(out)
+
+        if reset_state:
+            self.reset_state()
 
         mbs = []
         widths = []
@@ -1330,8 +1342,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             except AttributeError:
                 pass
             widths = np.append(widths, _widths)
-            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i,
-                                      reset_state=reset_state)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
             mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
 
         return weighted_average_1d(mbs, widths)
@@ -2099,7 +2110,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 @entity_task(log, writes=['inversion_flowlines'])
 def apparent_mb_from_any_mb(gdir, mb_model=None,
                             mb_model_class=MonthlyTIModel,
-                            mb_years=None):
+                            mb_years=None,
+                            reset_state=False):
     """Compute apparent mb from an arbitrary mass balance profile.
 
     This searches for a mass balance residual to add to the mass balance
@@ -2122,6 +2134,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         geodetic MB period, i.e. PARAMS['geodetic_mb_period'].
         It does not matter much for the final result, but it should be a
         period long enough to have a representative MB gradient.
+    reset_state : bool
+        if True, the mass balance model will be reset at each mass-balance year.
+        This is useful if the model has an internal state that might
+        affect the results.
     """
 
     # Do we have a calving glacier?
@@ -2146,7 +2162,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
-    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years, reset_state=True))
+    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years,
+                                             reset_state=reset_state))
 
     def to_minimize(residual_to_opt):
         return o_smb + residual_to_opt - cmb
@@ -2162,12 +2179,14 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     for fl_id, fl in enumerate(fls):
         mbz = 0
         for yr in mb_years:
+            if reset_state:
+                mb_model.reset_state()
             if yr == mb_years[0]:
                 mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
-                                              fls=fls, fl_id=fl_id, reset_state=True)
+                                              fls=fls, fl_id=fl_id)
             else:
                 mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
-                                          fls=fls, fl_id=fl_id)
+                                              fls=fls, fl_id=fl_id)
 
         mbz = mbz / len(mb_years)
         fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual,
