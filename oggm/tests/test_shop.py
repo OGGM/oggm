@@ -58,13 +58,12 @@ class Test_its_live:
         assert np.nanmin(vel) < 2
 
         # We reproject with rasterio and check no big diff
-        reg_files = its_live._region_files()
         cfg.BASENAMES['itslive_vx'] = ('itslive_vx.tif', '')
         cfg.BASENAMES['itslive_vy'] = ('itslive_vy.tif', '')
-        gis.rasterio_to_gdir(gdir, reg_files['RGI01A']['vx'],
+        gis.rasterio_to_gdir(gdir, its_live.region_files['RGI01A']['vx'],
                              'itslive_vx',
                              resampling='bilinear')
-        gis.rasterio_to_gdir(gdir, reg_files['RGI01A']['vy'],
+        gis.rasterio_to_gdir(gdir, its_live.region_files['RGI01A']['vy'],
                              'itslive_vy',
                              resampling='bilinear')
 
