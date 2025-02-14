@@ -21,9 +21,17 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added BedMachine products to the shop (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Updated itslive velocity products to v2 (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
+
+- Fixed a bug where Millan velocities would be assigned 0
+  instead of NaN in grid points without velocity (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 

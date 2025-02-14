@@ -2087,7 +2087,7 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'i2', ('y', 'x', ))
+            v = nc.createVariable(vn, 'i4', ('y', 'x', ))
         v.units = '-'
         v.long_name = 'Sub-entities glacier mask (number is index)'
         v[:] = mask
