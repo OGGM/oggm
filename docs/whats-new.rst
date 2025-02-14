@@ -9,6 +9,18 @@ v1.6.x (not released)
 Enhancements
 ~~~~~~~~~~~~
 
+- Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
+  calculate quantiles from multiple fl_diagnostic files. It enables users to
+  compute metrics such as the median flowline across various GCM projections
+  (:pull:`1746`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New ranking options for the ``distribute.assign_points_to_band`` task, which
+  determines the order in which pixels "melt away" when redistributing flowline
+  model runs into 2D for visualization purposes. It is now possible to combine
+  different variables from ``gridded_data`` (e.g. ``slope``,
+  ``dis_from_border``, ...) to define this ranking, providing greater flexibility
+  and control over how the melting sequence is visualized (:pull:`1746`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added BedMachine products to the shop (:pull:`1753`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Updated itslive velocity products to v2 (:pull:`1753`).
