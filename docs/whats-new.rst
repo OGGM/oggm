@@ -9,9 +9,17 @@ v1.6.x (not released)
 Enhancements
 ~~~~~~~~~~~~
 
+- Added BedMachine products to the shop (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Updated itslive velocity products to v2 (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
+
+- Fixed a bug where Millan velocities would be assigned 0
+  instead of NaN in grid points without velocity (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 

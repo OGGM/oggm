@@ -47,9 +47,6 @@ rgi_region_links = {'01': 'RGI01A',
 def _find_region(gdir):
 
     reg_n = gdir.rgi_region
-    if reg_n in ['02', '10', '11', '12', '13', '14', '15', '16', '17', '18']:
-        raise InvalidWorkflowError('At the time of writing (05.12.24), there are no '
-                                   'its_live data available for this region.')
     if reg_n == '02':
         # Northermost glaciers are in reg 1 file
         if gdir.cenlat > 55:
