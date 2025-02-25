@@ -719,6 +719,13 @@ class TestRunSettings:
             add_setting_to_run_settings(gdir,
                                         settings={'inversion_glen_a': big_glen_a})
 
+        # need to recalibrate mb, for adding the parameters to the run_settings,
+        # as this is checked when initializing the mb_model using run_settings
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     use_mb_calib=False,
+                                     use_run_settings=True,)
+
         # test run_random_climate
         random_orig = run_random_climate(gdir, nyears=100, y0=2000, seed=0)
         random_big = run_random_climate(gdir, nyears=100, y0=2000, seed=0,
