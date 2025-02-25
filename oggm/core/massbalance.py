@@ -1896,7 +1896,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                 raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
                                            "if using PARAMS['winter_prcp_factor'].")
             prcp_fac = decide_winter_precip_factor(
-                gdir,  use_run_settings=use_run_settings,
+                gdir, use_run_settings=use_run_settings,
                 run_settings_filesuffix=filesuffix,)
         else:
             prcp_fac = params_use('prcp_fac')
