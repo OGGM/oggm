@@ -500,6 +500,7 @@ class TestMassBalanceModels:
             - temp_bias: 0.00
             - bias: 0.00
             - rho: 900.0
+            - use_run_settings: False
             - t_solid: 0.0
             - t_liq: 2.0
             - t_melt: -1.0
