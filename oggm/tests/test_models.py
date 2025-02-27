@@ -222,12 +222,13 @@ class TestInitPresentDayFlowline:
         np.testing.assert_allclose(fl_consensus_rect.volume_m3, ref_vol_rect)
         assert np.sum(fl_consensus_rect.is_rectangular) == 10
 
-    def test_present_time_glacier_massbalance(self, hef_gdir):
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel, massbalance.DailyTIModel])
+    def test_present_time_glacier_massbalance(self, hef_gdir, cl):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.MonthlyTIModel(gdir)
+        mb_mod = cl(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
         glacier = FlowlineModel(fls)
@@ -459,8 +460,7 @@ class TestMassBalanceModels:
         assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
 
         # Repeat
-        mb_mod = massbalance.MonthlyTIModel(gdir, repeat=True,
-                                             ys=1901, ye=1950)
+        mb_mod = massbalance.MonthlyTIModel(gdir, repeat=True, ys=1901, ye=1950)
         yrs = np.arange(100) + 1901
         mb = mb_mod.get_specific_mb(h, w, year=yrs)
         assert_allclose(mb[50], mb[-50])
@@ -511,12 +511,39 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MonthlyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
-    def test_prcp_fac_temp_bias_update(self, hef_gdir):
+    def test_repr_daily(self, hef_gdir):
+        from textwrap import dedent
+
+        expected = dedent("""\
+        <oggm.MassBalanceModel>
+          Class: DailyTIModel
+          Attributes:
+            - hemisphere: nh
+            - climate_source: histalp_merged_hef.nc
+            - melt_f: 6.59
+            - prcp_fac: 2.50
+            - temp_bias: 0.00
+            - bias: 0.00
+            - rho: 900.0
+            - t_solid: 0.0
+            - t_liq: 2.0
+            - t_melt: -1.0
+            - repeat: False
+            - ref_hgt: 3160.0
+            - ys: 1802
+            - ye: 2002
+            - upscale_factor: 30.4375
+        """)
+        mb_mod = massbalance.DailyTIModel(hef_gdir, bias=0)
+        assert mb_mod.__repr__() == expected
+
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel, massbalance.DailyTIModel])
+    def test_prcp_fac_temp_bias_update(self, hef_gdir, cl):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
+        mb_mod = cl(gdir, bias=0)
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
@@ -563,6 +590,7 @@ class TestMassBalanceModels:
             mb_mod.prcp_fac = -100
 
     @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
+                                    massbalance.DailyTIModel,
                                     massbalance.ConstantMassBalance,
                                     massbalance.RandomMassBalance])
     def test_glacierwide_mb_model(self, hef_gdir, cl):
