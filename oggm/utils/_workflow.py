@@ -54,6 +54,10 @@ try:
     import pyproj
 except ImportError:
     pass
+try:
+    import yaml
+except ImportError:
+    pass
 
 # Python 3.12+ gives a deprecation warning if TarFile.extraction_filter is None.
 # https://docs.python.org/3.12/library/tarfile.html#tarfile-extraction-filter
@@ -1876,7 +1880,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                         climate_filename='climate_historical',
                                         climate_input_filesuffix='',
                                         temperature_bias=None,
-                                        precipitation_factor=None):
+                                        precipitation_factor=None,
+                                        use_run_settings=False,
+                                        run_settings_filesuffix='',
+                                        ):
 
     """Compiles a table of specific mass balance timeseries for all glaciers.
 
@@ -1915,6 +1922,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_fac']
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     from oggm.workflow import execute_entity_task
@@ -1925,7 +1936,10 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                  ys=ys, ye=ye, years=years, climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
-                                 precipitation_factor=precipitation_factor)
+                                 precipitation_factor=precipitation_factor,
+                                 use_run_settings=use_run_settings,
+                                 run_settings_filesuffix=run_settings_filesuffix,
+                                 )
 
     for idx, s in enumerate(out_df):
         if s is None:
@@ -1955,7 +1969,8 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
                 years=None, climate_filename='climate_historical', temperature_bias=None,
                 precipitation_factor=None, climate_input_filesuffix='',
-                mb_model_class=None):
+                mb_model_class=None, use_run_settings=False,
+                run_settings_filesuffix='',):
     """Compiles a table of ELA timeseries for all glaciers for a given years,
     using the mb_model_class (default MonthlyTIModel).
 
@@ -1993,6 +2008,10 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
         calibration is applied which is cfg.PARAMS['prcp_fac']
     mb_model_class : MassBalanceModel class
         the MassBalanceModel class to use, default is MonthlyTIModel
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import compute_ela, MonthlyTIModel
@@ -2005,7 +2024,10 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
                                  precipitation_factor=precipitation_factor,
-                                 mb_model_class=mb_model_class)
+                                 mb_model_class=mb_model_class,
+                                 use_run_settings=use_run_settings,
+                                 run_settings_filesuffix=run_settings_filesuffix,
+                                 )
 
     for idx, s in enumerate(out_df):
         if s is None:
@@ -2033,7 +2055,8 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
 
 @entity_task(log)
 def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
-                       input_filesuffix=''):
+                       input_filesuffix='', use_run_settings=False,
+                       run_settings_filesuffix='',):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -2053,9 +2076,16 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
         around the selected date.
     halfsize : int
         the half size of the window
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
     from oggm.core.massbalance import (ConstantMassBalance,
                                        MultipleFlowlineMassBalance)
+
+    # Params
+    params_use = get_params_use(gdir, use_run_settings, run_settings_filesuffix)
 
     d = OrderedDict()
 
@@ -2096,12 +2126,15 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             try:
                 fs = '{}-{}'.format(y0 - halfsize, y0 + halfsize)
                 mbcl = ConstantMassBalance
-                mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mbcl,
-                                                    y0=y0, halfsize=halfsize,
-                                                    use_inversion_flowlines=True,
-                                                    input_filesuffix=input_filesuffix)
+                mbmod = MultipleFlowlineMassBalance(
+                    gdir, mb_model_class=mbcl, y0=y0, halfsize=halfsize,
+                    use_inversion_flowlines=True,
+                    input_filesuffix=input_filesuffix,
+                    use_run_settings=use_run_settings,
+                    run_settings_filesuffix=run_settings_filesuffix,
+                )
                 h, w, mbh = mbmod.get_annual_mb_on_flowlines()
-                mbh = mbh * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
+                mbh = mbh * cfg.SEC_IN_YEAR * params_use('ice_density')
                 pacc = np.where(mbh >= 0)
                 pab = np.where(mbh < 0)
                 d[fs + '_aar'] = np.sum(w[pacc]) / np.sum(w)
@@ -2199,7 +2232,8 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
                                add_climate_period=1995,
                                halfsize=15,
                                add_raw_climate_statistics=False,
-                               input_filesuffix=''):
+                               input_filesuffix='', use_run_settings=False,
+                               run_settings_filesuffix='',):
     """Gather as much statistics as possible about a list of glaciers.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -2219,13 +2253,20 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
         date.
     input_filesuffix : str
         filesuffix of the used climate_historical file, default is no filesuffix
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
     from oggm.workflow import execute_entity_task
 
     out_df = execute_entity_task(climate_statistics, gdirs,
                                  add_climate_period=add_climate_period,
                                  halfsize=halfsize,
-                                 input_filesuffix=input_filesuffix)
+                                 input_filesuffix=input_filesuffix,
+                                 use_run_settings=use_run_settings,
+                                 run_settings_filesuffix=run_settings_filesuffix,
+                                 )
     out = pd.DataFrame(out_df).set_index('rgi_id')
 
     if add_raw_climate_statistics:
@@ -3256,7 +3297,7 @@ class GlacierDirectory(object):
         return out
 
     def write_json(self, var, filename, filesuffix=''):
-        """ Writes a variable to a pickle on disk.
+        """ Writes a variable to a JSON file on disk.
 
         Parameters
         ----------
@@ -3276,6 +3317,52 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with open(fp, 'w') as f:
             json.dump(var, f, default=np_convert)
+
+    def read_yml(self, filename, filesuffix='', allow_empty=False):
+        """Reads a yml file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
+
+        Returns
+        -------
+        A dictionary read from the yml file
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = yaml.safe_load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = yaml.safe_load(f)
+        return out
+
+    def write_yml(self, var, filename, filesuffix=''):
+        """ Writes a variable to a yml file on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to yml (must be a dictionary)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'w') as f:
+            yaml.dump(var, f)
 
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
@@ -4132,3 +4219,139 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
+
+
+def get_params(setting, gdir=None, filename=None, filesuffix='', default=None):
+    param = cfg.PARAMS.get(setting, default)
+
+    if not filename:
+        return param
+
+    run_settings = gdir.read_yml(filename, filesuffix=filesuffix)
+    return run_settings.get(setting, param)
+
+
+def get_params_wrapper(gdir=None, filename=None, filesuffix=''):
+    return partial(get_params, gdir=gdir, filename=filename,
+                   filesuffix=filesuffix)
+
+
+def get_params_use(gdir, use_run_settings, run_settings_filesuffix):
+    run_settings_filename = 'run_settings' if use_run_settings else None
+    return get_params_wrapper(gdir=gdir,
+                              filename=run_settings_filename,
+                              filesuffix=run_settings_filesuffix)
+
+
+def check_for_none_params_use(params_use):
+    if params_use is None:
+        def cfg_params(param):
+            return cfg.PARAMS[param]
+
+        params_use = cfg_params
+    return params_use
+
+
+@entity_task(log)
+def add_setting_to_run_settings(gdir, settings, filename='run_settings',
+                                filesuffix='', overwrite=False):
+    """Adds specific settings to a run settings file.
+
+    If the file does not exist it will be created, otherwise the settings just
+    will be added. All parameters of params.cfg can be added.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        the glacier directory
+    settings : dict
+        Settings to save in the run_settings yml file
+    filename : str
+        Filename of the run_settings yml file. Default is 'run_settings'.
+    filesuffix : str
+        Filesuffix of the run_settings yml file. Default is ''.
+    overwrite : bool
+        if a provided setting already exists in the run_settings yml file, this
+        task won't overwrite it per default. Set this to True to enforce
+        overwriting (i.e. with consequences for the future workflow).
+    """
+
+    # open current file, returns empty dict if the file does not exist
+    run_settings = gdir.read_yml(filename=filename, filesuffix=filesuffix,
+                                 allow_empty=True)
+
+    for setting in settings:
+        if setting in run_settings and not overwrite:
+            raise InvalidWorkflowError(
+                f'`{filename}{filesuffix}.yml` already contains {setting}. '
+                'Set `overwrite` to True if you want to overwrite.')
+
+        if isinstance(settings[setting], (np.ndarray, np.generic)):
+            run_settings[setting] = float(settings[setting])
+        else:
+            run_settings[setting] = settings[setting]
+
+    gdir.write_yml(run_settings, filename=filename, filesuffix=filesuffix)
+
+
+@entity_task(log)
+def add_observation_to_run_settings(gdir, name, value, unit, timestamp,
+                                    type=None, error=None,
+                                    filename='run_settings', filesuffix='',
+                                    overwrite=False):
+    """Adds an observation to a run settings file.
+
+    If the file does not exist it will be created, otherwise the observation
+    just will be added.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        the glacier directory
+    name : str
+        a unique name of the observation, this name is later on used for
+        selecting an observation during calibration
+    value : float
+        the actual value of the observation
+    unit : str
+        the unit of the observation, this will be checked during calibration.
+        The default units are volume 'm3', area 'm2, geodetic mb 'kg m-2 yr-1'.
+    timestamp : str
+        timestamp of observation, could be a single date or a period
+        (e.g. '2000-01-01_2020-01-01') or 'rgi_date' will use the rgi date of
+        the current gdir
+    type : str
+        define which kind of observation it is (e.g. volume, area or geodetic mb)
+    error : float
+        the observational error
+    filename : str
+        Filename of the run_settings yml file. Default is 'run_settings'.
+    filesuffix : str
+        Filesuffix of the run_settings yml file. Default is ''.
+    overwrite : bool
+        if the observation already exists in the run_settings yml file, this
+        task won't overwrite it per default. Set this to True to enforce
+        overwriting.
+    """
+
+    # open current file, returns empty dict if the file does not exist
+    run_settings = gdir.read_yml(filename=filename, filesuffix=filesuffix,
+                                 allow_empty=True)
+
+    observations = run_settings.get('observations', {})
+    if name in observations and not overwrite:
+        raise InvalidWorkflowError(
+            f'`{filename}{filesuffix}.yml` already contains the observation'
+            f'{name}. Set `overwrite` to True if you want to overwrite.')
+
+    observations[name] = {
+        'value': float(value),
+        'unit': unit,
+        'timestamp': timestamp,
+        'type': type,
+        'error': float(error),
+    }
+
+    run_settings['observations'] = observations
+
+    gdir.write_yml(run_settings, filename=filename, filesuffix=filesuffix)

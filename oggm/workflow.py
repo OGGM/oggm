@@ -16,7 +16,7 @@ import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate, gis
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-from oggm.utils import global_task
+from oggm.utils import global_task, get_params_use
 
 # MPI
 try:
@@ -484,52 +484,85 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
 
 
 @global_task(log)
-def gis_prepro_tasks(gdirs):
+def gis_prepro_tasks(gdirs, use_run_settings=False,
+                     run_settings_filesuffix='',):
     """Run all flowline preprocessing tasks on a list of glaciers.
 
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
-    task_list = [
-        tasks.define_glacier_region,
-        tasks.glacier_masks,
-        tasks.compute_centerlines,
-        tasks.initialize_flowlines,
-        tasks.compute_downstream_line,
-        tasks.compute_downstream_bedshape,
-        tasks.catchment_area,
-        tasks.catchment_intersections,
-        tasks.catchment_width_geom,
-        tasks.catchment_width_correction
-    ]
+    kwarg_run_settings = {'use_run_settings': use_run_settings,
+                          'run_settings_filesuffix': run_settings_filesuffix,
+                          }
+    task_list = {
+        tasks.define_glacier_region: kwarg_run_settings,
+        tasks.glacier_masks: kwarg_run_settings,
+        tasks.compute_centerlines: kwarg_run_settings,
+        tasks.initialize_flowlines: kwarg_run_settings,
+        tasks.compute_downstream_line: {},
+        tasks.compute_downstream_bedshape: kwarg_run_settings,
+        tasks.catchment_area: kwarg_run_settings,
+        tasks.catchment_intersections: {},
+        tasks.catchment_width_geom: kwarg_run_settings,
+        tasks.catchment_width_correction: kwarg_run_settings,
+    }
     for task in task_list:
-        execute_entity_task(task, gdirs)
+        execute_entity_task(task, gdirs,
+                            **task_list[task]
+                            )
 
 
 @global_task(log)
-def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
+def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None,
+                  use_run_settings=False, run_settings_filesuffix='',
+                  run_settings_geodetic_mb=None,
+                  ):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_geodetic_mb : str
+        if a custom geodetic mb should be used during calibration, provide the
+        name as it is stored in the run_settings file
     """
 
     # Process climate data
-    execute_entity_task(tasks.process_climate_data, gdirs)
+    execute_entity_task(tasks.process_climate_data, gdirs,
+                        use_run_settings=use_run_settings,
+                        run_settings_filesuffix=run_settings_filesuffix,
+                        )
     # mass balance and the apparent mass balance
     execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
                         override_missing=override_missing,
-                        overwrite_gdir=overwrite_gdir)
-    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+                        overwrite_gdir=overwrite_gdir,
+                        use_mb_calib=not use_run_settings,
+                        use_run_settings=use_run_settings,
+                        filesuffix=run_settings_filesuffix,
+                        run_settings_geodetic_mb=run_settings_geodetic_mb,
+                        )
+    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                        use_run_settings=use_run_settings,
+                        run_settings_filesuffix=run_settings_filesuffix,
+                        run_settings_geodetic_mb=run_settings_geodetic_mb,
+                        )
 
 
 @global_task(log)
 def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
-                    add_to_log_file=True):
+                    add_to_log_file=True, use_run_settings=False,
+                    run_settings_filesuffix='',):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
     Quite useful to deal with calving glaciers as well.
@@ -540,9 +573,17 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
         the glacier directories to process
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
-    if cfg.PARAMS['use_kcalving_for_inversion']:
+    # Use params of first gdir, it is assumed all use the same settings
+    params_use = get_params_use(gdirs[0], use_run_settings,
+                                run_settings_filesuffix)
+
+    if params_use('use_kcalving_for_inversion'):
         # Differentiate between calving and non-calving glaciers
         gdirs_nc = []
         gdirs_c = []
@@ -558,27 +599,44 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
 
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc,
-                                add_to_log_file=add_to_log_file)
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
+                                add_to_log_file=add_to_log_file,
+                                )
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
                                 glen_a=glen_a, fs=fs,
-                                add_to_log_file=add_to_log_file)
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
+                                add_to_log_file=add_to_log_file,
+                                )
             if filter_inversion_output:
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc,
-                                    add_to_log_file=add_to_log_file)
+                                    use_run_settings=use_run_settings,
+                                    run_settings_filesuffix=run_settings_filesuffix,
+                                    add_to_log_file=add_to_log_file,
+                                    )
 
         if gdirs_c:
             execute_entity_task(tasks.find_inversion_calving_from_any_mb,
                                 gdirs_c,
                                 glen_a=glen_a, fs=fs,
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
                                 add_to_log_file=add_to_log_file)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs,
+                            use_run_settings=use_run_settings,
+                            run_settings_filesuffix=run_settings_filesuffix,
                             add_to_log_file=add_to_log_file)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                             glen_a=glen_a, fs=fs,
+                            use_run_settings=use_run_settings,
+                            run_settings_filesuffix=run_settings_filesuffix,
                             add_to_log_file=add_to_log_file)
         if filter_inversion_output:
             execute_entity_task(tasks.filter_inversion_output, gdirs,
+                                use_run_settings=use_run_settings,
+                                run_settings_filesuffix=run_settings_filesuffix,
                                 add_to_log_file=add_to_log_file)
 
 
@@ -589,7 +647,11 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
                                        volume_m3_reference=None,
-                                       add_to_log_file=True):
+                                       add_to_log_file=True,
+                                       use_run_settings=False,
+                                       run_settings_filesuffix='',
+                                       run_settings_volume=None,
+                                       ):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
@@ -620,6 +682,12 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         Option to give an own total glacier volume to match to
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
+    run_settings_volume : str
+        if you want to use a user provided volume during calibration
 
     Returns
     -------
@@ -627,6 +695,32 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     """
 
     gdirs = utils.tolist(gdirs)
+
+    # take a potential run_settings file from the first gdir
+    params_use = get_params_use(gdirs[0], use_run_settings,
+                                run_settings_filesuffix)
+
+    if run_settings_volume:
+        if volume_m3_reference:
+            raise InvalidWorkflowError('You either can provide a volume using '
+                                       'the kwarg volume_m3_reference or a '
+                                       'volume within the run_settings, but '
+                                       'not both.')
+
+        volume_m3_reference = 0
+        for gdir in gdirs:
+            volume_m3_gdir = gdir.read_yml('run_settings',
+                                           filesuffix=run_settings_filesuffix
+                                           )['observations'][run_settings_volume]
+            if volume_m3_gdir['unit'] != 'm3':
+                raise InvalidWorkflowError('Please provide the volume in m3 '
+                                           'in the run_settings file. Currently '
+                                           'provided in '
+                                           f"{volume_m3_gdir['unit']}.")
+            volume_m3_reference += volume_m3_gdir['value']
+
+        # set to None because of recursive call
+        run_settings_volume = None
 
     # Get the ref data for the glaciers we have
     df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
@@ -642,12 +736,15 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     df = df.reindex(rids)
 
     # Optimize the diff to ref
-    def_a = cfg.PARAMS['inversion_glen_a']
+    def_a = params_use('inversion_glen_a')
 
     def compute_vol(x):
         inversion_tasks(gdirs, glen_a=x*def_a, fs=fs,
                         filter_inversion_output=filter_inversion_output,
-                        add_to_log_file=add_to_log_file)
+                        add_to_log_file=add_to_log_file,
+                        use_run_settings=use_run_settings,
+                        run_settings_filesuffix=run_settings_filesuffix,
+                        )
         odf = df.copy()
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                           add_to_log_file=add_to_log_file)
@@ -695,14 +792,16 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                          ref_vol_2, odf2.oggm, a_bounds[1]))
         if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
             do_filter = filter_inversion_output
-            return calibrate_inversion_from_consensus(gdirs,
-                                                      ignore_missing=ignore_missing,
-                                                      fs=5.7e-20, a_bounds=a_bounds,
-                                                      apply_fs_on_mismatch=False,
-                                                      error_on_mismatch=error_on_mismatch,
-                                                      volume_m3_reference=volume_m3_reference,
-                                                      filter_inversion_output=do_filter,
-                                                      add_to_log_file=add_to_log_file)
+            return calibrate_inversion_from_consensus(
+                gdirs, ignore_missing=ignore_missing, fs=5.7e-20,
+                a_bounds=a_bounds, apply_fs_on_mismatch=False,
+                error_on_mismatch=error_on_mismatch,
+                volume_m3_reference=volume_m3_reference,
+                filter_inversion_output=do_filter,
+                add_to_log_file=add_to_log_file,
+                use_run_settings=use_run_settings,
+                run_settings_filesuffix=run_settings_filesuffix,
+                run_settings_volume=run_settings_volume,)
         if error_on_mismatch:
             raise ValueError(msg)
 
@@ -715,7 +814,10 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     # Compute the final volume with the correct A
     inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs,
                     filter_inversion_output=filter_inversion_output,
-                    add_to_log_file=add_to_log_file)
+                    add_to_log_file=add_to_log_file,
+                    use_run_settings=use_run_settings,
+                    run_settings_filesuffix=run_settings_filesuffix,
+                    )
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             add_to_log_file=add_to_log_file)
     return df
@@ -723,6 +825,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 @global_task(log)
 def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
+                        use_run_settings=False, run_settings_filesuffix='',
                         **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
 
@@ -773,7 +876,10 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     # now we have gdirs which contain all the necessary flowlines,
     # time to clean them up
     for gdir in merged_gdirs:
-        flowline.clean_merged_flowlines(gdir, buffer=buffer)
+        flowline.clean_merged_flowlines(
+            gdir, buffer=buffer, use_run_settings=use_run_settings,
+            run_settings_filesuffix=run_settings_filesuffix,
+        )
 
     if main_rgi_id is not None and return_all is False:
         return [gd for gd in merged_gdirs if main_rgi_id in gd.rgi_id][0]
@@ -859,7 +965,10 @@ def merge_gridded_data(gdirs, output_folder=None,
                        interp='nearest',
                        use_multiprocessing=True,
                        return_dataset=True,
-                       reset=False):
+                       reset=False,
+                       use_run_settings=False,
+                       run_settings_filesuffix='',
+                       ):
     """ This function takes a list of glacier directories and combines their
     gridded_data into a new NetCDF file and saves it into the output_folder. It
     also could merge data from different source files if you provide a list
@@ -935,6 +1044,10 @@ def merge_gridded_data(gdirs, output_folder=None,
         If the file defined in output_filename already exists and reset is
         False an error is raised. If reset is True and the file exists it is
         deleted before merging. Default is False.
+    use_run_settings : bool
+        if parameters of a run_settings file should be used
+    run_settings_filesuffix : str
+        potential filesuffix of a run_settings file
     """
 
     # check if output_folder exists, otherwise creates it
@@ -983,7 +1096,10 @@ def merge_gridded_data(gdirs, output_folder=None,
             dem_source = None
             dem_gdir = gdirs[0]
         gis.get_dem_for_grid(combined_grid, output_folder,
-                             source=dem_source, gdir=dem_gdir)
+                             source=dem_source, gdir=dem_gdir,
+                             use_run_settings=use_run_settings,
+                             run_settings_filesuffix=run_settings_filesuffix,
+                             )
         # unwrapped is needed to execute process_dem without the entity_task
         # overhead (this would need a valid gdir)
         gis.process_dem.unwrapped(gdir=None, grid=combined_grid,
