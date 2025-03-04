@@ -25,7 +25,6 @@ import platform
 import struct
 import importlib
 import re as regexp
-import yaml
 
 # External libs
 import pandas as pd
@@ -53,6 +52,10 @@ except ImportError:
     pass
 try:
     import pyproj
+except ImportError:
+    pass
+try:
+    import yaml
 except ImportError:
     pass
 
