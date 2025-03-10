@@ -183,6 +183,12 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         from oggm.shop.w5e5 import process_gswp3_w5e5_data
         process_gswp3_w5e5_data(gdir, output_filesuffix=output_filesuffix,
                                 y0=y0, y1=y1, **kwargs)
+    elif baseline == "W5E5_daily":
+        from oggm.shop.w5e5 import process_gswp3_w5e5_data_daily
+        process_gswp3_w5e5_data_daily(
+            gdir, output_filesuffix=output_filesuffix,
+            y0=y0, y1=y1, **kwargs,
+        )
     elif baseline in ['ERA5', 'ERA5L', 'CERA', 'ERA5dr', 'ERA5L-HMA']:
         from oggm.shop.ecmwf import process_ecmwf_data
         process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,

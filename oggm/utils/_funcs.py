@@ -1003,3 +1003,21 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
             cooked_rgidf[val] = gi_gdf[key].values
 
     return cooked_rgidf
+
+
+def get_cropped_dataset(
+    dataset: xr.Dataset, latitude: float, longitude: float
+) -> xr.Dataset:
+    """Get dataset cropped to glacier extents."""
+    try:
+        c = (dataset.longitude - longitude) ** 2 + (
+            dataset.latitude - latitude
+        ) ** 2
+        dataset = dataset.isel(points=np.argmin(c.data))
+    except ValueError:
+        # this should not occur for flattened data
+        dataset = dataset.sel(
+            longitude=longitude, latitude=latitude, method="nearest"
+        )
+
+    return dataset

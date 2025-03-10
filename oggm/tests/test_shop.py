@@ -286,64 +286,87 @@ class Test_rgitopo:
 
 
 class Test_w5e5:
+    """Test GSWP3/W5E5 support at various temporal resolutions."""
 
     def test_get_gswp3_w5e5_file(self):
         from oggm.shop import w5e5
-        d = 'GSWP3_W5E5'
-        for vars, _ in w5e5.BASENAMES[d].items():
-            assert os.path.isfile(w5e5.get_gswp3_w5e5_file(d, vars))
-        with pytest.raises(ValueError):
-            w5e5.get_gswp3_w5e5_file(d, 'zoup')
 
-    def test_glacier_gridpoint_selection(self):
+        d = "GSWP3_W5E5"
+        for variables, _ in w5e5.BASENAMES[d].items():
+            assert os.path.isfile(w5e5.get_gswp3_w5e5_file(d, variables))
+        with pytest.raises(ValueError):
+            w5e5.get_gswp3_w5e5_file(d, "zoup")
+
+    @pytest.mark.parametrize("dataset", ["GSWP3_W5E5", "W5E5_daily"])
+    @pytest.mark.parametrize(
+        "coord",
+        [
+            (10.7584, 46.8003),
+            pytest.param(
+                (-70.8931 + 360, -72.4474),
+                marks=pytest.mark.skipif(
+                    dataset="W5E5_daily", reason="Glacier not in daily data."
+                ),
+            ),
+            pytest.param(
+                (51.495, 30.9010),
+                marks=pytest.mark.skipif(
+                    dataset="W5E5_daily", reason="Glacier not in daily data."
+                ),
+            ),
+            (0, 0),
+        ],
+    )
+    def test_glacier_gridpoint_selection(self, dataset, coord):
 
         from oggm.shop import w5e5
-        d = 'GSWP3_W5E5'
-        # test is only done for the `inv` file, as the other files are only
-        # downloaded for the HEF gridpoints as they would be too large otherwise.
-        # However, the same test and other tests are done for all files
-        # (also ISIMIP3b) and all glaciers in this notebook:
-        # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/
-        # ~lschuster/example_ipynb/flatten_glacier_gridpoint_tests.ipynb
-        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
+        d = dataset
+        """
+        Test is only done for the `inv` file, as the other files are only
+        downloaded for the HEF gridpoints as they would be too large otherwise.
+        However, the same test and other tests are done for all files
+        (also ISIMIP3b) and all glaciers in this notebook:
+        https://nbviewer.org/urls/cluster.klima.uni-bremen.de/
+        ~lschuster/example_ipynb/flatten_glacier_gridpoint_tests.ipynb"
+        """
+        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, "inv")) as dinv:
             dinv = dinv.load()
 
-        # select three glaciers where two failed in the
-        # previous gswp3_w5e5 version
-        for coord in [(10.7584, 46.8003),  # HEF
-                      (-70.8931 + 360, -72.4474),  # RGI60-19.00124
-                      (51.495, 30.9010),  # RGI60-12.01691
-                      (0, 0)  # random gridpoint not near to a glacier
-                      ]:
-            lon, lat = coord
-            # get the distances to the glacier coordinate
-            c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
-            c = c.to_dataframe('distance').sort_values('distance')
-            # select the nearest climate point from the flattened glacier gridpoint
-            lat_near, lon_near, dist = c.iloc[0]
-            # for a randomly chosen gridpoint, the next climate gridpoint is far away
-            if coord == (0, 0):
-                with pytest.raises(AssertionError):
-                    assert np.abs(lat_near - lat) <= 0.25
-                    assert np.abs(lon_near - lon) <= 0.25
-                    assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
-            # for glaciers the next gridpoint should be the nearest
-            # (GSWP3-W5E5 resolution is 0.5°)
-            else:
+        # select three glaciers where two failed in previous gswp3_w5e5 version
+        lon, lat = coord
+        # get the distances to the glacier coordinate
+        c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
+        c = c.to_dataframe("distance").sort_values("distance")
+        # select the nearest climate point from the flattened glacier gridpoint
+        lat_near, lon_near, dist = c.iloc[0]
+        # for a randomly chosen gridpoint, the next climate gridpoint is far away
+        if coord == (0, 0):
+            with pytest.raises(AssertionError):
                 assert np.abs(lat_near - lat) <= 0.25
                 assert np.abs(lon_near - lon) <= 0.25
-                assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
+                assert dist <= (0.25**2 + 0.25**2) ** 0.5
+        # for glaciers the next gridpoint should be the nearest
+        # (GSWP3-W5E5 resolution is 0.5°)
+        else:
+            assert np.abs(lat_near - lat) <= 0.25
+            assert np.abs(lon_near - lon) <= 0.25
+            assert dist <= (0.25**2 + 0.25**2) ** 0.5
 
-        # this only contains data for two glaciers, let's still check some basics
-        # both glaciers are not at latitude or longitude 0
-        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
-            assert np.all(dtemp_std.latitude != 0)
-            assert np.all(dtemp_std.longitude != 0)
-            assert dtemp_std.isel(time=0).temp_std.std() > 0
-            assert dtemp_std.longitude.std() > 0
-            assert dtemp_std.latitude.std() > 0
+        if dataset not in ["W5E5_daily"]:  # daily files are too large
+            # this only contains data for two glaciers, let's still check some basics
+            # both glaciers are not at latitude or longitude 0
+            with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, "temp_std")) as dtemp_std:
+                assert np.all(dtemp_std.latitude != 0)
+                assert np.all(dtemp_std.longitude != 0)
+                assert dtemp_std.isel(time=0).temp_std.std() > 0
+                assert dtemp_std.longitude.std() > 0
+                assert dtemp_std.latitude.std() > 0
 
-    def test_process_w5e5_data(self, class_case_dir):
+    @pytest.mark.parametrize(
+        "daily,filepath",
+        [(True, "climate_historical_daily"), (False, "climate_historical")],
+    )
+    def test_process_w5e5_data(self, class_case_dir, daily, filepath):
 
         # Init
         cfg.initialize()
@@ -354,24 +377,28 @@ class Test_w5e5:
         cfg.PARAMS['hydro_month_nh'] = 1
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
         from oggm.shop import w5e5
-        w5e5.process_w5e5_data(gdir)
-        path_clim = gdir.get_filepath('climate_historical')
+        w5e5.process_w5e5_data(gdir, daily=daily)
+        path_clim = gdir.get_filepath(filepath)
+        assert os.path.exists(path_clim)
 
         ds_clim = xr.open_dataset(path_clim)
         assert ds_clim.time[0]['time.year'] == 1979
         assert ds_clim.time[-1]['time.year'] == 2019
         assert ds_clim.time[0]['time.month'] == 1
         assert ds_clim.time[-1]['time.month'] == 12
+        if daily:
+            assert ds_clim.time[0]['time.day'] == 1
+            assert ds_clim.time['time.day'].max() < 32
+        else:
+            assert np.all(ds_clim.temp_std > 0)
+            assert np.all(ds_clim.temp_std <= 10)
         assert (ds_clim.ref_hgt > 2000) and (ds_clim.ref_hgt < 3000)
         assert (ds_clim.temp.mean() < 5) and (ds_clim.temp.mean() > -5)
         assert ds_clim.temp.min() > -30  # °C
         assert ds_clim.temp.max() < 30
-        # temp_std
-        assert np.all(ds_clim.temp_std > 0)
-        assert np.all(ds_clim.temp_std <= 10)
 
         # prcp
-        assert ds_clim.prcp.min() > 0  # kg/m2/month
+        assert ds_clim.prcp.min() >= 0  # values can be zero with daily data
         annual_prcp_sum = ds_clim.prcp.groupby('time.year').sum().values
         assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
         assert np.all(annual_prcp_sum > 500)  # kg /m2/year
@@ -390,6 +417,10 @@ class Test_w5e5:
         from oggm.shop import w5e5
         w5e5.process_gswp3_w5e5_data(gdir)
         path_clim = gdir.get_filepath('climate_historical')
+        assert os.path.exists(path_clim)
+        assert not os.path.exists(
+            gdir.get_filepath('climate_historical_daily')
+        )
 
         ds_clim = xr.open_dataset(path_clim)
         assert ds_clim.time[0]['time.year'] == 1901

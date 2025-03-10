@@ -126,7 +126,8 @@ def restore_oggm_class_cfg():
 def patch_data_urls(monkeypatch):
     """This makes sure we never download the big files with our tests"""
     url = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
-    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url)
+    url_dtcg = 'https://cluster.klima.uni-bremen.de/~dtcg/test_climate/'
+    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url_dtcg)
     monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
     monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
     monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
@@ -178,21 +179,25 @@ def secure_url_retrieve(url, *args, **kwargs):
                         'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
                         'no_match/RGI62/b_040/{}/RGI60-15/RGI60-15.13.tar')
 
-    assert ('github' in url or
-            'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
-            'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
-            'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
-            # this URL might be removed again after the final integration of RGI7 OGGM
-            '~fmaussion/misc/rgi7_data/00_rgi70_regions/' in url or
-            base_extra_v14.format('L1') in url or
-            base_extra_v14.format('L2') in url or
-            base_extra_v14l3.format('L3') in url or
-            base_extra_l3 in url
-            )
+    valid_urls = {
+        'github',
+        'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/',
+        'cluster.klima.uni-bremen.de/~oggm/test_gdirs/',
+        'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/',
+        'cluster.klima.uni-bremen.de/~oggm/test_climate/',
+        'cluster.klima.uni-bremen.de/~oggm/test_files/',
+        'cluster.klima.uni-bremen.de/~dtcg/test_climate/',
+        'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
+        'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
+        # this URL might be removed again after the final integration of RGI7 OGGM
+        '~fmaussion/misc/rgi7_data/00_rgi70_regions/',
+        base_extra_v14.format('L1'),
+        base_extra_v14.format('L2'),
+        base_extra_v14l3.format('L3'),
+        base_extra_l3,
+    }
+    assert any(substring in url for substring in valid_urls)
+
     return oggm_urlretrieve(url, *args, **kwargs)
 
 
