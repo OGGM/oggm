@@ -25,6 +25,7 @@ except AttributeError:
     # Old scipy
     from scipy.signal import gaussian
 from scipy.interpolate import interp1d
+import cftime
 import shapely.geometry as shpg
 from shapely.ops import linemerge
 from shapely.validation import make_valid
@@ -802,6 +803,103 @@ def calendardate_to_hydrodate(y, m, start_month=None):
     out_m = m - start_month + np.where(m >= start_month, 1, 13)
     out_y = y + np.where(m >= start_month, 1, 0)
     return out_y, out_m
+
+
+def calendardate_to_hydrodate_cftime(
+    dates: np.ndarray, start_month: int
+) -> np.ndarray:
+    """Converts an array of Julian datetimes to hydrological dates.
+
+    The offset is calculated based on days, so cftime automatically
+    adjusts for different month/year lengths. Beware that a converted
+    time series may not necessarily end on the last day of a month.
+
+    Parameters
+    ----------
+    dates : np.ndarray[cftime.datetime]
+        Julian datetimes.
+    start_month : int
+        The first month of the hydrological/water year.
+
+    Returns
+    -------
+    np.ndarray[cftime.datetime]
+        Dates following the hydrological/water calendar.
+    """
+
+    julian_year_start = int(dates[0].year)
+    julian_month_start = int(dates[0].month)
+
+    if start_month == 1:
+        return dates  # no need to convert if year matches
+
+    if not start_month:
+        raise InvalidParamsError(
+            "Specify the hydrological convention using the start month."
+        )
+    else:
+        hydro_year_start = julian_year_start
+        month_difference = julian_month_start - start_month
+        if month_difference >= 0:
+            hydro_month_start = 1 + month_difference
+        else:
+            hydro_year_start = julian_year_start - 1
+            hydro_month_start = 13 + month_difference
+
+    if start_month != 1:  # no need to convert if year start matches.
+        offset = cftime.datetime(hydro_year_start, hydro_month_start, 1)
+        timedelta = dates[0] - offset
+        dates = np.vectorize(lambda x: x - timedelta)(dates)
+
+    return dates
+
+
+def hydrodate_to_calendardate_cftime(
+    dates: np.ndarray, start_month: int
+) -> np.ndarray:
+    """Converts an array of hydrological datetimes to Julian dates.
+
+    The offset is calculated based on days, so cftime automatically
+    adjusts for different month/year lengths. Beware that a converted
+    time series may not necessarily end on the last day of a month.
+
+    Parameters
+    ----------
+    dates : np.ndarray[cftime.datetime]
+        Hydrological dates.
+    start_month : int
+        The first month of the hydrological/water year.
+
+    Returns
+    -------
+    np.ndarray[cftime.datetime]
+        Dates following the Julian calendar.
+    """
+
+    hydro_year_start = int(dates[0].year)
+    hydro_month_start = int(dates[0].month)
+
+    if not start_month:
+        raise InvalidParamsError(
+            "Specify the hydrological convention using the start month."
+        )
+    elif start_month == 1:
+        return dates  # no need to convert if year matches
+    else:
+        julian_year_start = hydro_year_start
+        month_difference = start_month + hydro_month_start
+        if month_difference > 13:
+            julian_year_start = hydro_year_start + 1
+            julian_month_start = month_difference - 13
+        else:
+            julian_month_start = month_difference - 1
+
+    if start_month != 1:  # no need to convert if year start matches.
+        offset = cftime.datetime(julian_year_start, julian_month_start, 1)
+        timedelta = offset - dates[0]
+        dates = np.vectorize(lambda x: x + timedelta)(dates)
+
+    return dates
 
 
 def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
