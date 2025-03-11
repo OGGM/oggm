@@ -18,7 +18,8 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, lazy_property)
+                        weighted_average_1d, lazy_property,
+                        calendardate_to_hydrodate_cftime)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -443,43 +444,7 @@ class MonthlyTIModel(MassBalanceModel):
         # Read climate file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
-            # time
-            time = nc.variables['time']
-            time = cftime.num2date(time[:], time.units, calendar=time.calendar)
-            ny, r = divmod(len(time), 12)
-            if r != 0:
-                raise ValueError('Climate data should be N full years')
-
-            # We check for calendar years
-            if (time[0].month != 1) or (time[-1].month != 12):
-                raise InvalidWorkflowError('We now work exclusively with '
-                                           'calendar years.')
-
-            # Quick trick because we know the size of our array
-            years = np.repeat(np.arange(time[-1].year - ny + 1,
-                                        time[-1].year + 1), 12)
-            pok = slice(None)  # take all is default (optim)
-            if ys is not None:
-                pok = years >= ys
-            if ye is not None:
-                try:
-                    pok = pok & (years <= ye)
-                except TypeError:
-                    pok = years <= ye
-
-            self.years = years[pok]
-            self.months = np.tile(np.arange(1, 13), ny)[pok]
-
-            # Read timeseries and correct it
-            self.temp = nc.variables['temp'][pok].astype(np.float64) + self._temp_bias
-            self.prcp = nc.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
-
-            grad = self.prcp * 0 + default_grad
-            self.grad = grad
-            self.ref_hgt = nc.ref_hgt
-            self.climate_source = nc.climate_source
-            self.ys = self.years[0]
-            self.ye = self.years[-1]
+            self.set_temporal_bounds(nc_data=nc, ys=ys, ye=ye, default_grad=default_grad)
 
     def __repr__(self):
         """String Representation of the mass balance model"""
@@ -559,6 +524,45 @@ class MonthlyTIModel(MassBalanceModel):
                 return out
             except FileNotFoundError:
                 return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
+
+    def set_temporal_bounds(self, nc_data: xr.DataArray, ys, ye, default_grad):
+        # time
+        time = nc_data.variables['time']
+        time = cftime.num2date(time[:], time.units, calendar=time.calendar)
+        ny, r = divmod(len(time), 12)
+        if r:
+            raise ValueError('Climate data should be N full years')
+
+        # We check for calendar years
+        if (time[0].month != 1) or (time[-1].month != 12):
+            raise InvalidWorkflowError('We now work exclusively with '
+                                       'calendar years.')
+
+        # Quick trick because we know the size of our array
+        years = np.repeat(np.arange(time[-1].year - ny + 1,
+                                    time[-1].year + 1), 12)
+        pok = slice(None)  # take all is default (optim)
+        if ys is not None:
+            pok = years >= ys
+        if ye is not None:
+            try:
+                pok = pok & (years <= ye)
+            except TypeError:
+                pok = years <= ye
+
+        self.years = years[pok]
+        self.months = np.tile(np.arange(1, 13), ny)[pok]
+
+        # Read timeseries and correct it
+        self.temp = nc_data.variables['temp'][pok].astype(np.float64) + self._temp_bias
+        self.prcp = nc_data.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
+
+        grad = self.prcp * 0 + default_grad
+        self.grad = grad
+        self.ref_hgt = nc_data.ref_hgt
+        self.climate_source = nc_data.climate_source
+        self.ys = self.years[0]
+        self.ye = self.years[-1]
 
     def is_year_valid(self, year):
         return self.ys <= year <= self.ye
@@ -957,9 +961,45 @@ class DailyTIModel(MonthlyTIModel):
             match, it will raise an error. Set to "False" to suppress
             this check.
         """
+
+        # TODO: Replace with less hacky default
+        # Ensure filepath does not overwrite "climate_historical"
+        filename = kwargs.get("filename", "climate_historical_daily")
+        kwargs.update({"filename": filename})
+
         super().__init__(*args, **kwargs)
         # self.upscale_factor = 12 / 365.25  # Schuster
         self.upscale_factor = 365.25 / 12  # conforms with monthly_melt_f
+
+    def set_temporal_bounds(self, nc_data: xr.DataArray, ys, ye, default_grad):
+        time = nc_data.variables["time"]
+        time = cftime.num2date(time[:], time.units, calendar=time.calendar)
+        time = calendardate_to_hydrodate_cftime(dates=time, start_month=int(time[0].month))
+
+        years = np.vectorize(lambda x: x.year)(time)
+        pok = slice(None)  # take all is default (optim)
+        if ys is not None:
+            pok = years >= ys
+        if ye is not None:
+            try:
+                pok = pok & (years <= ye)
+            except TypeError:
+                pok = years <= ye
+
+        self.years = years[pok]
+        self.months = np.vectorize(lambda x: x.month)(time)[pok]
+
+        self.temp = nc_data.variables['temp'][pok].astype(np.float64) + self._temp_bias
+        # this is prcp computed by instantiation, which changes if
+        # prcp_fac is updated (see @property)
+        self.prcp = nc_data.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
+
+        grad = self.prcp * 0 + default_grad
+        self.grad = grad
+        self.ref_hgt = nc_data.ref_hgt
+        self.climate_source = nc_data.climate_source
+        self.ys = self.years[0]
+        self.ye = self.years[-1]
 
     def get_time_index(self, year: int, month: int) -> np.ndarray:
         """Get time index for a particular year and month.
@@ -1805,6 +1845,12 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def is_year_valid(self, year):
         return self.flowline_mb_models[0].is_year_valid(year)
+
+    def get_daily_mb(self, heights, year=None, fl_id=None, **kwargs):
+        if fl_id is None:
+            raise ValueError("`fl_id` is required for MultipleFlowlineMassBalance.")
+
+        return self.flowline_mb_models[fl_id].get_daily_mb(heights, year=year, **kwargs)
 
     def get_monthly_mb(self, heights, year=None, fl_id=None, **kwargs):
 

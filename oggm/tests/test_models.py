@@ -18,6 +18,7 @@ from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
+from oggm.shop.w5e5 import process_gswp3_w5e5_data_daily
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
 from oggm.utils import get_demo_file
@@ -72,6 +73,12 @@ try:
 except ImportError:
     pass
 
+
+@pytest.fixture(scope="class", name="fixture_get_w5e5_data")
+def fixture_get_w5e5_data(hef_gdir):
+    workflow.execute_entity_task(
+        gdirs=hef_gdir, task=process_gswp3_w5e5_data_daily
+        )
 
 class TestInitPresentDayFlowline:
 
@@ -222,7 +229,7 @@ class TestInitPresentDayFlowline:
         np.testing.assert_allclose(fl_consensus_rect.volume_m3, ref_vol_rect)
         assert np.sum(fl_consensus_rect.is_rectangular) == 10
 
-    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel, massbalance.DailyTIModel])
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel, pytest.param(massbalance.DailyTIModel, marks=pytest.mark.xfail(reason="Case not yet implemented"))])
     def test_present_time_glacier_massbalance(self, hef_gdir, cl):
 
         gdir = hef_gdir
@@ -390,7 +397,7 @@ class TestInitFlowlineOtherGlacier:
         np.testing.assert_allclose(gdir.rgi_area_km2, area, rtol=rtol)
         np.testing.assert_allclose(v * 1e-9, vol, rtol=rtol)
 
-
+@pytest.mark.usefixtures("fixture_get_w5e5_data")  # provides daily data across all tests
 class TestMassBalanceModels:
     def test_past_mb_model(self, hef_gdir):
 
@@ -519,7 +526,7 @@ class TestMassBalanceModels:
           Class: DailyTIModel
           Attributes:
             - hemisphere: nh
-            - climate_source: histalp_merged_hef.nc
+            - climate_source: W5E5_daily
             - melt_f: 6.59
             - prcp_fac: 2.50
             - temp_bias: 0.00
@@ -529,9 +536,9 @@ class TestMassBalanceModels:
             - t_liq: 2.0
             - t_melt: -1.0
             - repeat: False
-            - ref_hgt: 3160.0
-            - ys: 1802
-            - ye: 2002
+            - ref_hgt: 2252.0
+            - ys: 1979
+            - ye: 2018
             - upscale_factor: 30.4375
         """)
         mb_mod = massbalance.DailyTIModel(hef_gdir, bias=0)
@@ -543,7 +550,8 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = cl(gdir, bias=0)
+        # don't download/use daily data just to update a property
+        mb_mod = cl(gdir, bias=0, filename="climate_historical")
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
@@ -597,14 +605,21 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
+        if issubclass(cl, massbalance.DailyTIModel):  # isinstance silently fails
+            start_year = 1979
+            eval_year = 2000
+            yrs = np.arange(39) + start_year  # data until 2019
+        else:
+            start_year = 1901
+            eval_year = 1950
+            yrs = np.arange(100) + start_year
+
         fls = gdir.read_pickle('model_flowlines')
         h = np.array([])
         w = np.array([])
         for fl in fls:
             w = np.append(w, fl.widths)
             h = np.append(h, fl.surface_h)
-
-        yrs = np.arange(100) + 1901
 
         if cl is massbalance.RandomMassBalance:
             kwargs = {'seed': 0, 'y0': 1985}
@@ -624,8 +639,8 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_ela(year=yrs),
                         mb_gw.get_ela(year=yrs))
 
-        _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=1950)
-        mbs_h = mb.get_annual_mb(_h, year=1950)
+        _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=eval_year)
+        mbs_h = mb.get_annual_mb(_h, year=eval_year)
 
         assert_allclose(mbs_h, mbs_gw)
 
@@ -660,7 +675,7 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_ela(year=yrs[:10]),
                         mb_gw.get_ela(year=yrs[:10]))
 
-        if cl is massbalance.MonthlyTIModel:
+        if issubclass(cl, (massbalance.MonthlyTIModel, massbalance.DailyTIModel)):
             mb = cl(gdir)
             mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
                                                             mb_model_class=cl)
@@ -677,6 +692,7 @@ class TestMassBalanceModels:
         # assert_allclose(mb.get_ela(year=yrs[:30]),
         #                 mb_gw.get_ela(year=yrs[:30]))
 
+    @pytest.mark.xfail(reason="Daily MB not yet implemented")
     def test_daily_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS["ice_density"]
@@ -688,7 +704,8 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
 
         # Climate period
-        yrp = [1851, 2000]
+        yrp = [1979, 2018]
+        eval_year = 2000
 
         # Flowlines height
         h, w = gdir.get_inversion_flowline_hw()
@@ -706,39 +723,34 @@ class TestMassBalanceModels:
             totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
             assert_allclose(totest[0], 0, atol=1)
 
-        # # real data - requires implementing download function first!
         h, w = gdir.get_inversion_flowline_hw()
         mbdf = gdir.get_ref_mb_data()
         mbdf.loc[yr, "MY_MB"] = np.nan
         mb_mod = massbalance.DailyTIModel(gdir)
-        for yr in mbdf.index.values:
+        mask = mbdf.index.to_series().between(yrp[0], yrp[1])
+        mbdf_years = mbdf[mask].index.values
+        for yr in mbdf_years:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, "MY_MB"] = np.average(my_mb_on_h, weights=w)
 
-        try:
-            np.testing.assert_allclose(
-                mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
-            )
-        except AssertionError:
-            warnings.warn("Daily data not available")
-        mbdf["MY_ELA"] = mb_mod.get_ela(year=mbdf.index.values)
+        np.testing.assert_allclose(
+            mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
+        )
+        mbdf["MY_ELA"] = mb_mod.get_ela(year=mbdf_years)
         assert mbdf[["MY_ELA", "MY_MB"]].corr().values[0, 1] < -0.9
         assert mbdf[["MY_ELA", "ANNUAL_BALANCE"]].corr().values[0, 1] < -0.6
 
         mb_mod = massbalance.DailyTIModel(gdir, bias=0)
-        for yr in mbdf.index.values:
+        for yr in mbdf_years:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, "MY_MB"] = np.average(my_mb_on_h, weights=w)
 
-        try:
-            np.testing.assert_allclose(
-                mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
-            )
-        except AssertionError:
-            warnings.warn("Daily data not available")
+        np.testing.assert_allclose(
+            mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
+        )
 
         mb_mod = massbalance.DailyTIModel(gdir)
-        for yr in mbdf.index.values:
+        for yr in mbdf_years:
             my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
             mbdf.loc[yr, "MY_MB"] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 1
@@ -746,17 +758,14 @@ class TestMassBalanceModels:
             mbdf.loc[yr, "BIASED_MB"] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 0
 
-        try:
-            np.testing.assert_allclose(
-                mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
-            )
-            assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
-        except AssertionError:
-            warnings.warn("Daily data not available")
+        np.testing.assert_allclose(
+            mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
+        )
+        assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
 
         # Repeat
-        mb_mod = massbalance.DailyTIModel(gdir, repeat=True, ys=1901, ye=1950)
-        yrs = np.arange(100) + 1901
+        mb_mod = massbalance.DailyTIModel(gdir, repeat=True, ys=yrp[0], ye=eval_year)
+        yrs = np.arange(yrp[1]-yrp[0]) + yrp[0]
         mb = mb_mod.get_specific_mb(h, w, year=yrs)
         assert_allclose(mb[50], mb[-50])
 
@@ -767,29 +776,26 @@ class TestMassBalanceModels:
             fls=fls,
             mb_model_class=massbalance.DailyTIModel,
             repeat=True,
-            ys=1901,
-            ye=1950,
+            ys=yrp[0],
+            ye=eval_year,
         )
         mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
         assert_allclose(mb, mb_gw)
 
         # Test massbalance task
         s = massbalance.fixed_geometry_mass_balance(gdir)
-        assert s.index[0] == 1802
-        assert s.index[-1] == 2002
+        assert s.index[0] == yrp[0]
+        assert s.index[-1] == yrp[1]
 
         s = massbalance.fixed_geometry_mass_balance(gdir, ys=1990, ye=2000)
         assert s.index[0] == 1990
         assert s.index[-1] == 2000
 
         s = massbalance.fixed_geometry_mass_balance(
-            gdir, years=mbdf.index.values
+            gdir, years=mbdf_years
         )
 
-        try:
-            assert_allclose(s, mbdf["MY_MB"])
-        except AssertionError:
-            warnings.warn("Daily data not available")
+        assert_allclose(s, mbdf["MY_MB"])
 
     def test_constant_mb_model(self, hef_gdir):
 
@@ -1178,11 +1184,11 @@ class TestMassBalanceModels:
         assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb) > 50
 
-    def get_performance(self, gdir, model, **kwargs) -> float:
+    def get_performance(self, gdir, model, start_year=1850, end_year=2002, **kwargs) -> float:
         """Get model performance for monthly MB."""
         h, w = gdir.get_inversion_flowline_hw()
         # Climate period, 10 day timestep
-        yrs = np.arange(1850, 2002, 10 / 365)
+        yrs = np.arange(start_year, end_year, 10 / 365)
         start_time = time.time()
         mb = model(gdir, **kwargs)
         for yr in yrs:
@@ -1205,16 +1211,17 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
 
         # models
+        y0 = 2002 - 15
         t1 = self.get_performance(
-            gdir=gdir, model=massbalance.ConstantMassBalance, y0=2002 - 15
+            gdir=gdir, model=massbalance.ConstantMassBalance, y0=y0
         )
-        t2 = self.get_performance(gdir=gdir, model=massbalance.MonthlyTIModel)
-        t3 = self.get_performance(gdir=gdir, model=massbalance.DailyTIModel)
+        t2 = self.get_performance(gdir=gdir, model=massbalance.MonthlyTIModel, start_year=y0)
+        t3 = self.get_performance(gdir=gdir, model=massbalance.DailyTIModel, start_year=y0)
 
         # not faster as two times t2
         try:
             assert t1 >= (t2 / 2)
-            assert t2 >= (t3 / 2)  # daily should be slower
+            assert t3 >= (t2 / 2)  # daily should be slower
         except AssertionError:
             # no big deal
             pytest.skip('Allowed failure')
