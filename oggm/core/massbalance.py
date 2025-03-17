@@ -2095,7 +2095,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 @entity_task(log, writes=['inversion_flowlines'])
 def apparent_mb_from_any_mb(gdir, mb_model=None,
                             mb_model_class=MonthlyTIModel,
-                            mb_years=None, reset_state=False):
+                            mb_years=None):
     """Compute apparent mb from an arbitrary mass balance profile.
 
     This searches for a mass balance residual to add to the mass balance
@@ -2118,10 +2118,6 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         geodetic MB period, i.e. PARAMS['geodetic_mb_period'].
         It does not matter much for the final result, but it should be a
         period long enough to have a representative MB gradient.
-    reset_state : bool
-        if True, the mass balance model will be reset at each mass-balance year.
-        This is useful if the model has an internal state that might
-        affect the results.
     """
 
     # Do we have a calving glacier?
@@ -2146,30 +2142,44 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
-    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
+    mb_on_fl = []
+    spec_mb = []
+    area_smb = []
+    for fl_id, fl in enumerate(fls):
+        widths = fl.widths
+        try:
+            # For rect and parabola don't compute spec mb
+            widths = np.where(fl.thick > 0, widths, 0)
+        except AttributeError:
+            pass
+        mbz = 0
+        smb = 0
+        for yr in mb_years:
+            amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr)
+            amb *= cfg.SEC_IN_YEAR * mb_model.rho
+            mbz += amb
+            smb += weighted_average_1d(amb, widths)
+        mb_on_fl.append(mbz / len(mb_years))
+        spec_mb.append(smb / len(mb_years))
+        area_smb.append(np.sum(widths))
+
+    if len(mb_on_fl) == 1:
+        o_smb = spec_mb[0]
+    else:
+        o_smb = weighted_average_1d(spec_mb, area_smb)
 
     def to_minimize(residual_to_opt):
         return o_smb + residual_to_opt - cmb
 
     residual = optimize.brentq(to_minimize, -1e5, 1e5)
 
-    if (reset_state):
-        mb_model.reset_state()
-
     # Reset flux
     for fl in fls:
         fl.reset_flux()
 
     # Flowlines in order to be sure
-    rho = cfg.PARAMS['ice_density']
-    for fl_id, fl in enumerate(fls):
-        mbz = 0
-        for yr in mb_years:
-            mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
-                                          fls=fls, fl_id=fl_id)
-        mbz = mbz / len(mb_years)
-        fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual,
-                           is_calving=is_calving)
+    for fl_id, (fl, mbz) in enumerate(zip(fls, mb_on_fl)):
+        fl.set_apparent_mb(mbz + residual, is_calving=is_calving)
         if fl_id < len(fls) and fl.flux_out < -1e3:
             log.warning('({}) a tributary has a strongly negative flux. '
                         'Inversion works but is physically quite '
