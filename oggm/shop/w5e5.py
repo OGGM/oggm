@@ -56,13 +56,15 @@ def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None, server=None):
         Dataset name. (could also just use 'W5E5_monthly', but this is
         the same for a shorter time period, and we only use it for
         testing).
+    server : str, default None
+        Override server URL. May be deprecated before release.
     """
     if var not in BASENAMES[dataset].keys():  # check if input makes sense
         raise InvalidParamsError(
-            f"GSWP3-W5E5 variable {var} ", f"not in {BASENAMES[dataset].keys()}"
+            f"{dataset} variable {var} ", f"not in {BASENAMES[dataset].keys()}"
         )
 
-    if not server:
+    if not server:  # This never gets used - deprecate?
         server = GSWP3_W5E5_SERVER
     # File to look for
     return utils.file_downloader(server + BASENAMES[dataset][var])
@@ -115,7 +117,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         y1 = yrs[-1] if y1 is None else y1
 
         if y1 > 2019 or y0 < 1901:
-            text = 'The climate files only go from 1901--2019'
+            text = 'GSWP3 climate data are only available from 1901-2019.'
             raise InvalidParamsError(text)
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         ds = utils.get_cropped_dataset(dataset=ds, latitude=lat, longitude=lon)
@@ -212,20 +214,21 @@ def process_gswp3_w5e5_data_daily(gdir, y0=None, y1=None, output_filesuffix="_W5
         y1 = yrs[-1] if y1 is None else y1
 
         if y1 > 2019 or y0 < 1979:
-            text = "W5E5 daily data is only available from 1979--2019."
+            text = "W5E5 data are only available at daily resolution from 1979-2019."
             raise InvalidParamsError(text)
 
-        # set temporal subset for the ts data (hydro years)
-        if gdir.hemisphere == "nh":
-            month_start = cfg.PARAMS["hydro_month_nh"]
-        elif gdir.hemisphere == "sh":
-            month_start = cfg.PARAMS["hydro_month_sh"]
-        month_end = month_start - 1 if (month_start > 1) else 12
-        time_format = f"{y1}-{month_end:02d}"
-        end_day = int(ds.sel(time=time_format).time.dt.daysinmonth[-1].values)
-        time_slice = (f"{y0}-{month_start:02d}-01", f"{y1}-{month_end:02d}-{end_day}")
+        # # set temporal subset for the ts data (hydro years)
+        # if gdir.hemisphere == "nh":
+        #     month_start = cfg.PARAMS["hydro_month_nh"]
+        # elif gdir.hemisphere == "sh":
+        #     month_start = cfg.PARAMS["hydro_month_sh"]
+        # month_end = month_start - 1 if (month_start > 1) else 12
+        # time_format = f"{y1}-{month_end:02d}"
+        # end_day = int(ds.sel(time=time_format).time.dt.daysinmonth[-1].values)
+        # time_slice = (f"{y0}-{month_start:02d}-01", f"{y1}-{month_end:02d}-{end_day}")
+        # ds = ds.sel(time=slice(time_slice[0], time_slice[1]))
 
-        ds = ds.sel(time=slice(time_slice[0], time_slice[1]))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         ds = utils.get_cropped_dataset(dataset=ds, latitude=lat, longitude=lon)
 
         # no time dependence for lon and lat because of flattening
@@ -243,7 +246,7 @@ def process_gswp3_w5e5_data_daily(gdir, y0=None, y1=None, output_filesuffix="_W5
     with xr.open_dataset(path_prcp) as ds:  # precipitation: similar as temperature
         assert ds.longitude.min() >= 0
         # same y0 and y1 as temperature
-        ds = ds.sel(time=slice(time_slice[0], time_slice[1]))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         ds = utils.get_cropped_dataset(dataset=ds, latitude=lat, longitude=lon)
 
         # convert kg m-2 s-1 into kg m-2 day-1
@@ -260,7 +263,7 @@ def process_gswp3_w5e5_data_daily(gdir, y0=None, y1=None, output_filesuffix="_W5
     # Gradient isn't used, and temp_std doesn't exist.
     temp_std = None
 
-    # Despite the name, this supports daily data - maybe deprecate?
+    # Despite the name, this supports daily data - maybe deprecate name?
     gdir.write_monthly_climate_file(
         time,
         prcp,
@@ -308,10 +311,10 @@ def process_w5e5_data(
     y0 = 1979 if y0 is None else y0
     y1 = 2019 if y1 is None else y1
 
-    if y0 < 1979:
-        text = (
-            "W5E5 climate is only available from 1979-2019. "
-            "If you want older climate data, "
+    if y0 < 1979 or y1 > 2019:
+        text = " ".join(
+            "W5E5 climate data are only available from 1979-2019.",
+            "If you want older climate data,"
             "use 'process_gswp3_w5e5_data()'"
         )
         raise InvalidParamsError(text)
