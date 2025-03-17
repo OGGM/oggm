@@ -21,16 +21,21 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Added "reset_state()" function to ``MassBalanceModel`` to signal any state-dependent 
+- Added "reset_state()" function to ``MassBalanceModel`` to signal any state-dependent
   mass balance model to "reset its state" at the start of the period. This function
   does nothing in the parent class and would only be implemented by a state-ful
-  mass balance model. Done mainly to address that ``apparent_mb_from_any_mb()`` calls 
-  ``get_specific_mb()``  twice, leading to nonzero terminal flux (potentially) with a 
-  state-dependent mass balance model. `apparent_mb_from_any_mb()` also changed 
-  accordingly. 
+  mass balance model. There might be a use for this in the future, but for now
+  it's just a placeholder (:pull:`1757`).
+  By `Dan Goldberg <https://github.com/dngoldberg>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 Bug fixes
 ~~~~~~~~~
+
+- `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
+  By `Dan Goldberg <https://github.com/dngoldberg>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 

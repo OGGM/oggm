@@ -2142,6 +2142,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
+    rho = cfg.PARAMS['ice_density']
     mb_on_fl = []
     spec_mb = []
     area_smb = []
@@ -2156,7 +2157,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         smb = 0
         for yr in mb_years:
             amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr)
-            amb *= cfg.SEC_IN_YEAR * mb_model.rho
+            amb *= cfg.SEC_IN_YEAR * rho
             mbz += amb
             smb += weighted_average_1d(amb, widths)
         mb_on_fl.append(mbz / len(mb_years))
