@@ -66,6 +66,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
 
+    def reset_state(self):
+        """Reset any internal state of the model.
+        This might not be needed by most models, but some models have an
+        internal state (e.g. a snow cover history) which can be reset
+        this way.
+        """
+        pass
+
     def get_monthly_mb(self, heights, year=None, fl_id=None, fls=None):
         """Monthly mass balance at given altitude(s) for a moment in time.
 
@@ -2134,7 +2142,32 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
-    o_smb = np.mean(mb_model.get_specific_mb(fls=fls, year=mb_years))
+    rho = cfg.PARAMS['ice_density']
+    mb_on_fl = []
+    spec_mb = []
+    area_smb = []
+    for fl_id, fl in enumerate(fls):
+        widths = fl.widths
+        try:
+            # For rect and parabola don't compute spec mb
+            widths = np.where(fl.thick > 0, widths, 0)
+        except AttributeError:
+            pass
+        mbz = 0
+        smb = 0
+        for yr in mb_years:
+            amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr)
+            amb *= cfg.SEC_IN_YEAR * rho
+            mbz += amb
+            smb += weighted_average_1d(amb, widths)
+        mb_on_fl.append(mbz / len(mb_years))
+        spec_mb.append(smb / len(mb_years))
+        area_smb.append(np.sum(widths))
+
+    if len(mb_on_fl) == 1:
+        o_smb = spec_mb[0]
+    else:
+        o_smb = weighted_average_1d(spec_mb, area_smb)
 
     def to_minimize(residual_to_opt):
         return o_smb + residual_to_opt - cmb
@@ -2146,15 +2179,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         fl.reset_flux()
 
     # Flowlines in order to be sure
-    rho = cfg.PARAMS['ice_density']
-    for fl_id, fl in enumerate(fls):
-        mbz = 0
-        for yr in mb_years:
-            mbz += mb_model.get_annual_mb(fl.surface_h, year=yr,
-                                          fls=fls, fl_id=fl_id)
-        mbz = mbz / len(mb_years)
-        fl.set_apparent_mb(mbz * cfg.SEC_IN_YEAR * rho + residual,
-                           is_calving=is_calving)
+    for fl_id, (fl, mbz) in enumerate(zip(fls, mb_on_fl)):
+        fl.set_apparent_mb(mbz + residual, is_calving=is_calving)
         if fl_id < len(fls) and fl.flux_out < -1e3:
             log.warning('({}) a tributary has a strongly negative flux. '
                         'Inversion works but is physically quite '
