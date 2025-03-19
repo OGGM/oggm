@@ -521,7 +521,7 @@ class TestMassBalanceModels:
     def test_repr_daily(self, hef_gdir):
         from textwrap import dedent
 
-        expected = dedent("""\
+        expected = dedent(f"""\
         <oggm.MassBalanceModel>
           Class: DailyTIModel
           Attributes:
@@ -538,8 +538,8 @@ class TestMassBalanceModels:
             - repeat: False
             - ref_hgt: 2252.0
             - ys: 1979
-            - ye: 2018
-            - upscale_factor: 30.4375
+            - ye: 2019
+            - upscale_factor: {12/365.25}
         """)
         mb_mod = massbalance.DailyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
@@ -704,7 +704,7 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
 
         # Climate period
-        yrp = [1979, 2018]
+        yrp = [1979, 2019]
         eval_year = 2000
 
         # Flowlines height

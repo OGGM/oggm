@@ -387,7 +387,7 @@ class MonthlyTIModel(MassBalanceModel):
         self._mb_params_filesuffix = mb_params_filesuffix  # which mb params?
         self.gdir = gdir
 
-        if melt_f is None:
+        if melt_f is None:  # This prevents class methods
             melt_f = self.calib_params['melt_f']
 
         if temp_bias is None:
@@ -526,6 +526,7 @@ class MonthlyTIModel(MassBalanceModel):
                 return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
 
     def set_temporal_bounds(self, nc_data: xr.DataArray, ys, ye, default_grad):
+        """Constrain data to a start and end year."""
         # time
         time = nc_data.variables['time']
         time = cftime.num2date(time[:], time.units, calendar=time.calendar)
@@ -968,13 +969,14 @@ class DailyTIModel(MonthlyTIModel):
         kwargs.update({"filename": filename})
 
         super().__init__(*args, **kwargs)
-        # self.upscale_factor = 12 / 365.25  # Schuster
-        self.upscale_factor = 365.25 / 12  # conforms with monthly_melt_f
+        self.upscale_factor = 12 / 365.25  # Schuster
+        # self.upscale_factor = 365.25 / 12  # conforms with monthly_melt_f
 
     def set_temporal_bounds(self, nc_data: xr.DataArray, ys, ye, default_grad):
         time = nc_data.variables["time"]
         time = cftime.num2date(time[:], time.units, calendar=time.calendar)
-        time = calendardate_to_hydrodate_cftime(dates=time, start_month=int(time[0].month))
+        # data are no longer in hydro years
+        # time = calendardate_to_hydrodate_cftime(dates=time, start_month=int(time[0].month))
 
         years = np.vectorize(lambda x: x.year)(time)
         pok = slice(None)  # take all is default (optim)
@@ -988,6 +990,7 @@ class DailyTIModel(MonthlyTIModel):
 
         self.years = years[pok]
         self.months = np.vectorize(lambda x: x.month)(time)[pok]
+        self.days = np.vectorize(lambda x: x.day)(time)[pok]
 
         self.temp = nc_data.variables['temp'][pok].astype(np.float64) + self._temp_bias
         # this is prcp computed by instantiation, which changes if
@@ -1057,7 +1060,7 @@ class DailyTIModel(MonthlyTIModel):
             Temperature, melt temperatures, total precipitation, and
             solid precipitation for each height pixel."""
 
-        pok: np.ndarray = kwargs.get("pok", None)  # get time index
+        pok: np.ndarray = kwargs.get("pok", itemp)  # get time index
         npix = len(heights)
         temperature = self.get_2d_temperature(
             heights=heights,
@@ -1073,6 +1076,60 @@ class DailyTIModel(MonthlyTIModel):
             precipitation=iprcp, temperature=temperature, npix=npix
         )
 
+        return temperature, melt_temperature, prcp, prcpsol
+
+    def get_daily_climate_data(
+        self,
+        heights: ArrayLike,
+        itemp: np.ndarray,
+        igrad: np.ndarray,
+        iprcp: np.ndarray,
+        **kwargs,
+    ) -> tuple:
+        """Get climate data for each height pixel.
+
+        Parameters
+        ----------
+        heights : array_like
+            Flowline heights [m].
+        itemp : np.ndarray[np.float64]
+            Temperatures during a given time period.
+        igrad : np.ndarray[np.float64]
+            Slope gradient during a given time period.
+        iprcp : np.ndarray[np.float64]
+            Precipitation during a given time period.
+        **kwargs
+            Extra arguments passed to ``get_2d_temperature``.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Temperature, melt temperatures, total precipitation, and
+            solid precipitation for each height pixel."""
+
+        pok: np.ndarray = kwargs.get("pok", itemp)  # get time index
+        npix = len(heights)
+        temperature = self.get_2d_temperature(
+            heights=heights,
+            temperatures=itemp,
+            gradients=igrad,
+            npix=npix,
+            timesteps=len(pok),
+        )
+        melt_temperature = self.get_melt_temperature(
+            temperature=temperature
+        )
+        prcp, prcpsol = self.get_2d_precipitation(
+            precipitation=iprcp, temperature=temperature, npix=npix
+        )
+        # temperature = np.ones(npix) * itemp + igrad * (heights - self.ref_hgt)
+        # melt_temperature = self.get_melt_temperature(temperature=temperature)
+        # prcp, prcpsol = self.get_2d_precipitation(
+        #     precipitation=iprcp, temperature=temperature, npix=npix
+        # )
+        # prcp, prcpsol = self.get_precipitation(
+        #     precipitation=iprcp, temperature=temperature, npix=npix
+        # )
         return temperature, melt_temperature, prcp, prcpsol
 
     def get_annual_climate_data(
@@ -1155,20 +1212,21 @@ class DailyTIModel(MonthlyTIModel):
         )
         # more accurate than using mean days per month
         mb_month = np.sum(
-            prcpsol - self.melt_f * melt_temperature * self.upscale_factor,
+            prcpsol - self.melt_f * melt_temperature,
             axis=1,
         )
-        mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+        # mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+        mb_month = (mb_month - self.bias) / SEC_IN_MONTH / self.rho
         if add_climate:
             return (
-                mb_month / SEC_IN_MONTH / self.rho,
+                mb_month,
                 temperature.mean(axis=1),
                 melt_temperature.sum(axis=1),
                 prcp.sum(axis=1),
                 prcpsol.sum(axis=1),
             )
 
-        return mb_month / SEC_IN_MONTH / self.rho
+        return mb_month
 
     def get_annual_mb(
         self,
@@ -1203,8 +1261,7 @@ class DailyTIModel(MonthlyTIModel):
             self._get_2d_annual_climate(heights, year)
         )
         mb_annual = np.sum(
-            prcpsol - self.melt_f * melt_temperature * self.upscale_factor,
-            axis=1,
+            prcpsol - self.melt_f * melt_temperature, axis=1,
         )
         mb_annual = (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
         if add_climate:
@@ -1218,7 +1275,7 @@ class DailyTIModel(MonthlyTIModel):
         return mb_annual
 
     def get_daily_mb(
-        self, heights: np.ndarray, year: int = None, add_climate: bool = False
+        self, heights: np.ndarray, year: int = None, add_climate: bool = False, **kwargs
     ) -> np.ndarray:
         """Get daily mass balance.
 
@@ -1246,19 +1303,33 @@ class DailyTIModel(MonthlyTIModel):
             solid precipitation.
         """
         if isinstance(year, float):
-            raise TypeError("Year must be an integer year.")
+            raise TypeError("Year must be an integer.")
 
-        temperature, melt_temperature, prcp, prcpsol = self.get_monthly_climate(
+        # temperature, melt_temperature, prcp, prcpsol = self._get_2d_daily_climate(
+        #     heights=heights, year=year
+        # )
+        temperature, melt_temperature, prcp, prcpsol = self._get_2d_daily_climate(
             heights=heights, year=year
         )
-        doy = len(prcpsol.T)  # 365.25
+        # log.info(len(prcpsol))
+        # doy = len(prcpsol.T)  # 365.25
+        doy = prcpsol.shape[1]
+        log.info(f"DOY: {doy}")
+        # assert doy >=365
         # Normalise units with melt_f, the monthly temperature
         # sensitivity (kg /m² / mth / K)
         # Schuster uses 12/doy instead of the upscale factor
+
+        upscale_factor = (12 *365.25 / doy)
         melt_f_daily = self.melt_f * self.upscale_factor
+        log.info(f"melt f: {self.melt_f}")
+        log.info(f"melt f_daily: {melt_f_daily}")
+
         mb_daily = prcpsol - melt_f_daily * melt_temperature
+
         # bias is in mm w.e per year (SEC_IN_MONTH), but mb_daily is per day
-        mb_daily -= self.bias * doy
+        log.info(f"Bias: {self.bias}")
+        mb_daily -= self.bias * self.upscale_factor #* SEC_IN_DAY / SEC_IN_YEAR# * self.upscale_factor# * doy
         if add_climate:
             return (
                 mb_daily / SEC_IN_DAY / self.rho,
@@ -1267,8 +1338,29 @@ class DailyTIModel(MonthlyTIModel):
                 prcp,
                 prcpsol,
             )
-        return mb_daily / SEC_IN_DAY / self.rho
+        return mb_daily / (upscale_factor) / SEC_IN_DAY / self.rho
 
+    def _get_2d_daily_climate(self, heights, year):
+        year = np.floor(year)
+        year = self.get_valid_year(year=year)
+        pok = np.where(self.years == year)[0]
+        # y, m = floatyear_to_date(year)
+        # y = self.get_valid_year(year=y)
+        # pok = self.get_time_index(year=y, month=m)
+        log.info(f"Days: {self.days}")
+        # log.info(y, m)
+        # d=30
+        # pok = np.where((self.years == y) & (self.months == m) & (self.days == d))[0]
+        # log.info(f"POK: {pok}")
+        # if len(pok) < 1:
+        #     raise ValueError(f'Year {int(year)} not in record')
+
+        itemp, iprcp, igrad = self.get_indexed_climate_data(index=pok)
+        temp2d, temp2dformelt, prcp, prcpsol = self.get_daily_climate_data(
+            heights, itemp, igrad, iprcp, pok=pok
+        )
+
+        return temp2d, temp2dformelt, prcp, prcpsol
 
 class ConstantMassBalance(MassBalanceModel):
     """Constant mass balance during a chosen period.
