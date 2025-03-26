@@ -228,7 +228,7 @@ def process_gswp3_w5e5_data_daily(gdir, y0=None, y1=None, output_filesuffix="_W5
         # time_slice = (f"{y0}-{month_start:02d}-01", f"{y1}-{month_end:02d}-{end_day}")
         # ds = ds.sel(time=slice(time_slice[0], time_slice[1]))
 
-        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-31'))
         ds = utils.get_cropped_dataset(dataset=ds, latitude=lat, longitude=lon)
 
         # no time dependence for lon and lat because of flattening
@@ -246,7 +246,7 @@ def process_gswp3_w5e5_data_daily(gdir, y0=None, y1=None, output_filesuffix="_W5
     with xr.open_dataset(path_prcp) as ds:  # precipitation: similar as temperature
         assert ds.longitude.min() >= 0
         # same y0 and y1 as temperature
-        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-31'))
         ds = utils.get_cropped_dataset(dataset=ds, latitude=lat, longitude=lon)
 
         # convert kg m-2 s-1 into kg m-2 day-1

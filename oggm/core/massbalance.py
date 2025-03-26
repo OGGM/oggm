@@ -1248,9 +1248,6 @@ class DailyTIModel(MonthlyTIModel):
     ) -> np.ndarray:
         """Get annual mass balance.
 
-        BUG: Indexing is not picking up the last 30 days of available
-        data, so annual mass balance is lower than expected.
-
         Parameters
         ----------
         heights : array_like

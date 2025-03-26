@@ -22,7 +22,7 @@ from oggm.core import climate, inversion, centerlines
 from oggm.shop.w5e5 import process_gswp3_w5e5_data_daily
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, ncDataset
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 from oggm.tests.funcs import get_test_dir
@@ -1361,6 +1361,63 @@ class TestMassBalanceModels:
         except AssertionError:
             # no big deal
             pytest.skip('Allowed failure')
+
+
+# provides daily data across all tests
+@pytest.mark.usefixtures("fixture_get_w5e5_data")
+class TestDailyMassBalanceModels:
+    """In-depth testing of DailyTIModels.
+
+    Separated from TestMassBalanceModels to avoid clutter.
+    """
+
+    @pytest.fixture(name="DailyTIModel", scope="class")
+    def get_dailyTIModel(self):
+        """Override imports"""
+        yield massbalance.DailyTIModel
+
+    @pytest.fixture(name="MonthlyTIModel", scope="class")
+    def get_monthlyTIModel(self):
+        """Override imports"""
+        yield massbalance.MonthlyTIModel
+
+    def get_daily_data_path(self, gdir) -> bool:
+        file_path = gdir.get_filepath("climate_historical_daily")
+        assert os.path.exists(file_path)
+        return file_path
+
+    def test_set_temporal_bounds(self, DailyTIModel, hef_gdir):
+        import cftime
+
+        gdir = hef_gdir
+        file_path = self.get_daily_data_path(gdir)
+        model = DailyTIModel(gdir)
+
+        ys = 1979
+        ye = 2019
+        total_days = 0
+        for yr in np.arange(ys, ye+1):
+            total_days += 365
+            if calendar.isleap(yr):
+                total_days += 1
+
+        with ncDataset(file_path, mode="r") as nc_data:
+            time = nc_data.variables["time"]
+            assert time.size == total_days
+            time_index = cftime.num2date(time[:], time.units, calendar=time.calendar)
+
+        assert time_index.shape == (total_days, )
+        assert hasattr(model, "days")
+        assert len(model.days) == total_days
+        assert len(model.years) == len(model.months)
+        assert len(model.years) == len(model.days)
+        assert model.ys == ys
+        assert model.ye == ye
+        assert model.years[-1] == ye
+        assert model.months[-1] == 12
+        assert model.days[-1] == 31
+        assert np.datetime64(time_index[0]) == np.datetime64(f"{ys}-01-01")
+        assert np.datetime64(time_index[-1]) == np.datetime64(f"{ye}-12-31")
 
 
 class TestModelFlowlines():
