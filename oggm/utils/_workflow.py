@@ -2192,6 +2192,7 @@ def raw_climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                                                                f'{fs[-4:]}-12-01'))
                     # check if we have the full time period
                     n_years = int(fs[-4:]) - int(fs[:4]) + 1
+                    # BUG: fails with daily data
                     assert len(ds_pr_winter.time) == n_years * 7, 'chosen time-span invalid'
                     ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
                     d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
