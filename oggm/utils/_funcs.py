@@ -387,6 +387,24 @@ def weighted_average_1d(data, weights):
         raise ZeroDivisionError("Weights sum to zero, can't be normalized")
     return np.multiply(data, weights).sum() / scl
 
+def weighted_average_2d(data, weights):
+    """A faster weighted average without dimension checks.
+
+    Parameters
+    ----------
+    data : ArrayLike
+        Must be of shape (n, m).
+    weights : ArrayLike
+        Must be of shape (n, ).
+
+    We use it because it turned out to be quite a bottleneck in calibration.
+    """
+    scl = np.sum(weights, axis=0)
+    if scl == 0:
+        raise ZeroDivisionError(
+            "Weights sum to zero, can't be normalized")
+    # can't broadcast operands unless transposed
+    return np.multiply(np.transpose(data), weights).sum(axis=1) / scl
 
 if Version(np.__version__) < Version('1.17'):
     clip_array = np.clip

@@ -811,9 +811,7 @@ class TestMassBalanceModels:
             np.testing.assert_allclose(test_mb.mean(axis=1), annual_mb)
         else:
             assert test_mb.shape[1] == 366
-            np.testing.assert_allclose(
-                test_mb.mean(axis=1) * (1 + 1 / 365), annual_mb
-            )
+            np.testing.assert_allclose(test_mb.mean(axis=1), annual_mb)
 
     @pytest.mark.xfail(reason="Leap years not yet fully implemented")
     @pytest.mark.parametrize(
@@ -1395,11 +1393,7 @@ class TestDailyMassBalanceModels:
 
         ys = 1979
         ye = 2019
-        total_days = 0
-        for yr in np.arange(ys, ye+1):
-            total_days += 365
-            if calendar.isleap(yr):
-                total_days += 1
+        total_days = ((1 + ye - ys) * 365) + calendar.leapdays(ys, ye + 1)
 
         with ncDataset(file_path, mode="r") as nc_data:
             time = nc_data.variables["time"]
@@ -5564,27 +5558,31 @@ class TestHydro:
 
 class TestMassRedis:
 
-    def test_hef_retreat(self, class_case_dir):
+    @pytest.mark.parametrize(
+            "model",
+            [
+                massbalance.MonthlyTIModel,
+                pytest.param(
+                    massbalance.DailyTIModel,
+                    marks=pytest.mark.xfail(reason="wrong mb_calib gets read"),
+                ),
+                pytest.param(
+                    massbalance.DailySfcTIModel,
+                    marks=pytest.mark.xfail(reason="wrong mb_calib gets read"),
+                ),
+            ]
+        )
+    def test_hef_retreat(self, hef_gdir, model):
 
-        import geopandas as gpd
+        gdir = hef_gdir
+        if assert_daily_model(model):
+            workflow.execute_entity_task(
+                gdirs=gdir, task=process_gswp3_w5e5_data_daily
+            )
+            start_year = 1979
+        else:
+            start_year = 1953
 
-        cfg.initialize()
-        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
-        cfg.PATHS['working_dir'] = class_case_dir
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-        cfg.PARAMS['border'] = 40
-        cfg.PARAMS['baseline_climate'] = ''
-        cfg.PARAMS['use_multiprocessing'] = False
-        cfg.PARAMS['min_ice_thick_for_length'] = 5
-        cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
-        cfg.PARAMS['prcp_fac'] = 2.5
-
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        entity = gpd.read_file(hef_file).iloc[0]
-
-        gdir = oggm.GlacierDirectory(entity, base_dir=class_case_dir)
         tasks.define_glacier_region(gdir)
         tasks.simple_glacier_masks(gdir)
         tasks.elevation_band_flowline(gdir)
@@ -5596,9 +5594,17 @@ class TestMassRedis:
         mbdf = gdir.get_ref_mb_data()
         cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
-        tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
-                                            ref_period='1953-01-01_2003-01-01')
-        tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+        # Do not overwrite mb_calib when using Daily variants
+        filesuffix = model.__name__
+        tasks.mb_calibration_from_scalar_mb(
+            gdir,
+            ref_mb=ref_mb,
+            ref_period=f'{start_year}-01-01_2003-01-01',
+            mb_model_class=model,
+            filesuffix=filesuffix,
+            overwrite_gdir=False
+        )
+        tasks.apparent_mb_from_any_mb(gdir, mb_years=[start_year, 2003], mb_model_class=model)
         workflow.calibrate_inversion_from_consensus([gdir])
         tasks.init_present_time_glacier(gdir)
 

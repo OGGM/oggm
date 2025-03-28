@@ -19,8 +19,8 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, lazy_property,
-                        calendardate_to_hydrodate_cftime)
+                        weighted_average_1d, weighted_average_2d,
+                        lazy_property)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -987,7 +987,8 @@ class DailyTIModel(MonthlyTIModel):
         # data are no longer in hydro years
         # time = calendardate_to_hydrodate_cftime(dates=time, start_month=int(time[0].month))
 
-        years = np.vectorize(lambda x: x.year)(time)
+        # 1.5x faster than np.vectorize
+        years = np.array(list(map(lambda x: x.year, time)))
         pok = slice(None)  # take all is default (optim)
         if ys is not None:
             pok = years >= ys
@@ -998,8 +999,8 @@ class DailyTIModel(MonthlyTIModel):
                 pok = years <= ye
 
         self.years = years[pok]
-        self.months = np.vectorize(lambda x: x.month)(time)[pok]
-        self.days = np.vectorize(lambda x: x.day)(time)[pok]
+        self.months = np.array(list(map(lambda x: x.month, time)))[pok]
+        self.days = np.array(list(map(lambda x: x.day, time)))[pok]
 
         self.temp = (
             nc_data.variables["temp"][pok].astype(np.float64) + self._temp_bias
@@ -1222,12 +1223,13 @@ class DailyTIModel(MonthlyTIModel):
             heights, year=year
         )
         # more accurate than using mean days per month
+        days_in_month = prcpsol.shape[1]
         mb_month = np.sum(
-            prcpsol - self.melt_f * melt_temperature,
-            axis=1,
+            prcpsol - self.melt_f * days_in_month * melt_temperature, axis=1
         )
-        # mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
-        mb_month = (mb_month - self.bias) / SEC_IN_MONTH / self.rho
+        mb_month = (
+            (mb_month - self.bias) / (SEC_IN_DAY * days_in_month) / self.rho
+        )
         if add_climate:
             return (
                 mb_month,
@@ -1281,11 +1283,9 @@ class DailyTIModel(MonthlyTIModel):
               between DailyTI and MonthlyTI.
             - keep daily melt rate constant, and avoid using monthly_melt_f.
         """
-        doy = prcp.shape[1]
-        year_length = self.get_year_length(doy)
-        melt_f_daily = self.melt_f * self.upscale_factor
+        year_length = prcp.shape[1] * SEC_IN_DAY
         mb_annual = np.sum(
-            prcpsol - melt_f_daily * melt_temperature,
+            prcpsol - self.melt_f * self.upscale_factor * melt_temperature,
             axis=1,
         )
 
@@ -1303,9 +1303,6 @@ class DailyTIModel(MonthlyTIModel):
                 prcpsol.sum(axis=1),
             )
         return mb_annual
-
-    def get_year_length(self, doy: int) -> float:
-        return SEC_IN_DAY * doy
 
     def get_daily_mb(
         self,
@@ -1386,13 +1383,8 @@ class DailyTIModel(MonthlyTIModel):
         year = np.floor(year)
         year = self.get_valid_year(year=year)
         pok = np.where(self.years == year)[0]
-        # y, m = floatyear_to_date(year)
-        # y = self.get_valid_year(year=y)
-        # pok = self.get_time_index(year=y, month=m)
-        # d=30
-        # pok = np.where((self.years == y) & (self.months == m) & (self.days == d))[0]
-        # if len(pok) < 1:
-        #     raise ValueError(f'Year {int(year)} not in record')
+        if len(pok) < 1:
+            raise ValueError(f'Year {int(year)} not in record')
 
         itemp, iprcp, igrad = self.get_indexed_climate_data(index=pok)
         temp2d, temp2dformelt, prcp, prcpsol = self.get_daily_climate_data(
@@ -1400,6 +1392,80 @@ class DailyTIModel(MonthlyTIModel):
         )
 
         return temp2d, temp2dformelt, prcp, prcpsol
+    
+    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
+        """Specific mb for this year and a specific glacier geometry.
+
+        Units: [mm w.e. yr-1], or millimeter water equivalent per year
+
+        Parameters
+        ----------
+        heights: ArrayLike, default None
+            Altitudes at which the mass balance will be computed.
+            Overridden by ``fls`` if provided.
+        widths: ArrayLike, default None
+            Widths of the flowline (necessary for the weighted average).
+            Overridden by ``fls`` if provided.
+        fls: list, optional
+            List of flowline instances. Alternative to heights and
+            widths, and overrides them if provided.
+        year: float, optional
+            Time in "floating year" convention.
+
+        Returns
+        -------
+        np.ndarray
+            Specific mass balance (units: mm w.e. yr-1).
+        """
+
+        if len(np.atleast_1d(year)) > 1:
+            out = [
+                self.get_specific_mb(
+                    heights=heights, widths=widths, fls=fls, year=yr
+                )
+                for yr in year
+            ]
+            return np.asarray(out)
+
+        if fls is not None:
+            mbs = []
+            widths = []
+            for i, fl in enumerate(fls):
+                _widths = fl.widths
+                try:
+                    # For rect and parabola don't compute spec mb
+                    _widths = np.where(fl.thick > 0, _widths, 0)
+                except AttributeError:
+                    pass
+                widths = np.append(widths, _widths)
+                mbs = np.append(
+                    mbs,
+                    self.get_annual_mb(
+                        fl.surface_h, fls=fls, fl_id=i, year=year
+                    ),
+                )
+        else:
+            mbs = self.get_annual_mb(heights, year=year)
+
+        if calendar.isleap(year):
+            year_length = SEC_IN_DAY * 366
+        else:
+            year_length = SEC_IN_YEAR
+
+        # TODO: Refactor wrt to MassBalanceModel
+        # smb = super().get_specific_mb(
+        #     heights=heights, widths=widths, fls=fls, year=year
+        # )
+        # # if len(np.atleast_1d(year)) > 1:
+        # if len(np.atleast_1d(year)) > 1:
+        #     mask = np.vectorize(calendar.isleap, year) # faster than map
+        #     smb = np.where(mask, smb * 366 / 365, smb)
+        # else:
+        #     if calendar.isleap(year):
+        #         smb = smb * 366 / 365
+
+        return weighted_average_1d(mbs, widths) * year_length * self.rho
+
 
 class ConstantMassBalance(MassBalanceModel):
     """Constant mass balance during a chosen period.
@@ -2057,7 +2123,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 pass
             widths = np.append(widths, _widths)
             mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
-            if calendar.isleap(year):
+            if calendar.isleap(year) and issubclass(type(mb_mod), DailyTIModel):
                 year_length = SEC_IN_DAY * 366
             else:
                 year_length = SEC_IN_YEAR
@@ -2092,6 +2158,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 out = np.append(out, smb)
             return np.asarray(out)
 
+        # with leap years we don't know the size of the final array
         mbs = []
         widths = []
         for i, (fl, mb_mod) in enumerate(zip(fls, self.flowline_mb_models)):
@@ -2101,15 +2168,14 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 _widths = np.where(fl.thick > 0, _widths, 0)
             except AttributeError:
                 pass
-            mb = mb_mod.get_daily_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
             widths.append(_widths)
-            mb = np.average(
-                mb * SEC_IN_DAY * mb_mod.rho, weights=_widths, axis=0
-            )
-            mbs.append(mb)
-        mbs = np.mean(mbs, axis=0)
+            mb = mb_mod.get_daily_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
+            mbs.append(mb * SEC_IN_DAY * mb_mod.rho)
 
-        return mbs
+        mbs = np.vstack(mbs)
+        widths = np.hstack(widths)
+
+        return weighted_average_2d(mbs, widths)
 
     def get_ela(self, year=None, **kwargs):
 

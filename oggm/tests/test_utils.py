@@ -203,6 +203,25 @@ class TestFuncs(object):
         with pytest.raises(ZeroDivisionError):
             utils.weighted_average_1d(d, weights=w)
 
+    @pytest.mark.parametrize("d,w", [
+        (np.arange(10), np.arange(10)),
+        (np.arange(10)-5, np.arange(10)-5),
+        (np.random.random(1000), np.random.random(1000)),
+        ([[2, 1]], [1]),
+        ([[0, 1]], [1]),
+    ])
+    def test_weighted_avg_2d(self, d, w):
+        if not isinstance(d, list):
+            d = d[:, None] + d
+        r1 = utils.weighted_average_2d(d, weights=w)
+        r2 = np.average(d, weights=w, axis=0)
+        assert_allclose(r1, r2)
+
+    def test_weighted_avg_2d_fail(self):
+        d, w = ([0, 0], [0])
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_average_2d(d, weights=w)
+
     def test_hydro_convertion(self):
 
         # October
