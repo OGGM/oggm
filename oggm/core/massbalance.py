@@ -17,7 +17,7 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, lazy_property)
+                        weighted_average_1d, lazy_property, set_array_type)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -194,8 +194,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 mbs = weighted_average_1d(mbs, widths)
             out.append(mbs)
 
-        # Convert units here to maintain backwards compatibility
-        return np.asarray(out) * SEC_IN_YEAR * self.rho
+        return set_array_type(out) * SEC_IN_YEAR * self.rho
 
     def get_ela(self, year=None, **kwargs):
         """Compute the equilibrium line altitude for a given year.
@@ -1390,7 +1389,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for mb_yr in year:
             mbs = self.get_weighted_mb_from_flowlines(fls=fls, year=mb_yr)
             out.append(mbs)
-        return np.asarray(out)
+
+        return set_array_type(out)
 
     def get_ela(self, year=None, **kwargs):
 

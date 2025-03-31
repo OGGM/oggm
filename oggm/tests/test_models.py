@@ -687,6 +687,32 @@ class TestMassBalanceModels:
 
         assert test_mbs == ref_mbs
 
+    def test_get_specific_mb(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        ys = 1979
+        ye = 2019
+        years = np.arange(ys, ye + 1)
+
+        fls = gdir.read_pickle("inversion_flowlines")
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir,
+            fls=fls,
+            mb_model_class=massbalance.MonthlyTIModel,
+            repeat=True,
+            ys=ys,
+            ye=ye,
+        )
+        smb_iter = mb_mod.get_specific_mb(year=years)
+        assert isinstance(smb_iter, np.ndarray)
+        assert smb_iter.shape == (1 + (ye - ys),)
+
+        smb_iter_single = mb_mod.get_specific_mb(year=ys)
+        assert isinstance(smb_iter_single, float)
+
+        assert smb_iter_single == smb_iter[0]
+
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
@@ -830,6 +856,7 @@ class TestMassBalanceModels:
         mbts = yrs * 0.
         for i, yr in enumerate(yrs):
             mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
+            assert isinstance(mbts[i], float)
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)

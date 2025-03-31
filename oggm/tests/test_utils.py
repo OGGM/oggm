@@ -202,6 +202,19 @@ class TestFuncs(object):
         with pytest.raises(ZeroDivisionError):
             utils.weighted_average_1d(d, weights=w)
 
+    @pytest.mark.parametrize(
+            "in_data,out_type",
+            [
+                (np.empty(1), float),
+                (np.empty(5,), np.ndarray),
+                ([1.0], float),
+                ([1.0, 2.0], np.ndarray),
+            ]
+        )
+    def test_set_array_type(self, in_data, out_type):
+        out_data = utils.set_array_type(in_data)
+        assert isinstance(out_data, out_type)
+
     def test_hydro_convertion(self):
 
         # October
