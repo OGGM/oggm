@@ -708,9 +708,22 @@ class TestMassBalanceModels:
         assert isinstance(smb, np.ndarray)
         assert smb.shape == (1 + (ye - ys),)
 
+        # Rough non-weighted bounds
+        ref_smb_lo = (
+            mb_mod.get_annual_mb(fls[-1].surface_h, year=ys, fls=fls, fl_id=-1)
+            * cfg.SEC_IN_YEAR
+            * cfg.PARAMS["ice_density"]
+        )
+        ref_smb_hi = (
+            mb_mod.get_annual_mb(fls[0].surface_h, year=ys, fls=fls, fl_id=0)
+            * cfg.SEC_IN_YEAR
+            * cfg.PARAMS["ice_density"]
+        )
+
         smb_single = mb_mod.get_specific_mb(year=ys)
         assert isinstance(smb_single, float)
         assert smb_single == smb[0]
+        assert ref_smb_lo.mean() < smb_single < ref_smb_hi.mean()
 
     def test_get_ela(self, hef_gdir):
 
@@ -718,7 +731,7 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
         ys = 1979
         ye = 2019
-        years = np.arange(ys, ye+1)
+        years = np.arange(ys, ye + 1)
 
         fls = gdir.read_pickle("inversion_flowlines")
         mb_mod = massbalance.MultipleFlowlineMassBalance(
@@ -736,6 +749,7 @@ class TestMassBalanceModels:
         ela_single = mb_mod.get_ela(year=ys)
         assert isinstance(ela_single, float)
         assert ela_single == ela[0]
+        assert fls[-1].surface_h.min() < ela_single < fls[0].surface_h.max()
 
     def test_constant_mb_model(self, hef_gdir):
 
