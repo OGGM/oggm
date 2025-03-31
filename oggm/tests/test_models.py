@@ -660,7 +660,7 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
         )
-        test_mbs = mb_mod.get_mass_balance_from_flowlines(
+        test_mbs = mb_mod.get_weighted_mb_from_flowlines(
             fls=test_fls, year=ref_year
         )
         assert isinstance(test_mbs, np.float64)
