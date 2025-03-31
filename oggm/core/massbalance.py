@@ -201,33 +201,37 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        year: float, optional
-            the time (in the "floating year" convention)
-        **kwargs: any other keyword argument accepted by self.get_annual_mb
+        year: float, default None
+            The time in the "floating year" convention.
+        **kwargs: any other keyword argument accepted by
+        ``self.get_annual_mb``.
+
         Returns
         -------
-        the equilibrium line altitude (ELA, units: m)
+        float | np.ndarray:
+            The equilibrium line altitude (ELA, units: m).
         """
+        out = []
+        year = np.atleast_1d(year)
+        for mb_year in year:
+            if self.valid_bounds is None:
+                raise ValueError('attribute `valid_bounds` needs to be '
+                                'set for the ELA computation.')
 
-        if len(np.atleast_1d(year)) > 1:
-            return np.asarray([self.get_ela(year=yr, **kwargs) for yr in year])
-
-        if self.valid_bounds is None:
-            raise ValueError('attribute `valid_bounds` needs to be '
-                             'set for the ELA computation.')
-
-        # Check for invalid ELAs
-        b0, b1 = self.valid_bounds
-        if (np.any(~np.isfinite(
-                self.get_annual_mb([b0, b1], year=year, **kwargs))) or
-                (self.get_annual_mb([b0], year=year, **kwargs)[0] > 0) or
-                (self.get_annual_mb([b1], year=year, **kwargs)[0] < 0)):
-            return np.nan
-
-        def to_minimize(x):
-            return (self.get_annual_mb([x], year=year, **kwargs)[0] *
+            # Check for invalid ELAs
+            b0, b1 = self.valid_bounds
+            if (np.any(~np.isfinite(
+                    self.get_annual_mb([b0, b1], year=mb_year, **kwargs))) or
+                    (self.get_annual_mb([b0], year=mb_year, **kwargs)[0] > 0) or
+                    (self.get_annual_mb([b1], year=mb_year, **kwargs)[0] < 0)):
+                out.append(np.nan)
+            else:
+                def to_minimize(x):
+                    return (self.get_annual_mb([x], year=mb_year, **kwargs)[0] *
                     SEC_IN_YEAR * self.rho)
-        return optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
+                out.append(optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1))
+
+        return set_array_type(out)
 
     def is_year_valid(self, year):
         """Checks if a given date year be simulated by this model.
@@ -1393,22 +1397,31 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return set_array_type(out)
 
     def get_ela(self, year=None, **kwargs):
+        """Get the equlibrium line altitude.
 
-        # ELA here is not without ambiguity.
-        # We compute a mean weighted by area.
+        The ELA here is not without ambiguity: we compute a mean
+        weighted by area.
 
-        if len(np.atleast_1d(year)) > 1:
-            return np.asarray([self.get_ela(year=yr) for yr in year])
+        Returns
+        -------
+        float | np.ndarray
+            The equilibrium line altitude (ELA) in m.
+        """
+        out = []
+        year = np.atleast_1d(year)
+        for mb_yr in year:
+            elas = []
+            areas = []
+            for fl_id, (fl, mb_mod) in enumerate(
+                zip(self.fls, self.flowline_mb_models)
+            ):
+                elas.append(
+                    mb_mod.get_ela(year=mb_yr, fl_id=fl_id, fls=self.fls)
+                )
+                areas.append(np.sum(fl.widths))
+            out.append(weighted_average_1d(elas, areas))
 
-        elas = []
-        areas = []
-        for fl_id, (fl, mb_mod) in enumerate(zip(self.fls,
-                                                 self.flowline_mb_models)):
-            elas = np.append(elas, mb_mod.get_ela(year=year, fl_id=fl_id,
-                                                  fls=self.fls))
-            areas = np.append(areas, np.sum(fl.widths))
-
-        return weighted_average_1d(elas, areas)
+        return set_array_type(out)
 
 
 def calving_mb(gdir):
