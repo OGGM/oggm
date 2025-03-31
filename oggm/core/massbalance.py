@@ -125,55 +125,77 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
-    def get_specific_mb(self, heights=None, widths=None, fls=None,
-                        year=None):
-        """Specific mb for this year and a specific glacier geometry.
-
-         Units: [mm w.e. yr-1], or millimeter water equivalent per year
+    def get_weighted_mb_from_flowlines(self, fls: list, year: float) -> tuple:
+        """Get mean annual mass balance weighted for flowline widths.
 
         Parameters
         ----------
-        heights: ndarray
-            the altitudes at which the mass balance will be computed.
-            Overridden by ``fls`` if provided
-        widths: ndarray
-            the widths of the flowline (necessary for the weighted average).
-            Overridden by ``fls`` if provided
-        fls: list of flowline instances, optional
-            Another way to get heights and widths - overrides them if
-            provided.
-        year: float, optional
-            the time (in the "floating year" convention)
+        fls : list
+            Flowline instances.
+        year: float
+            Time in "floating year" convention.
 
         Returns
         -------
-        the specific mass balance (units: mm w.e. yr-1)
+        float
+            Mean annual mass balance weighted for multiple flowline
+            widths.
         """
+        mbs = []
+        widths = []
+        for i, fl in enumerate(fls):
+            _widths = fl.widths
+            try:
+                # For rect and parabola don't compute spec mb
+                _widths = np.where(fl.thick > 0, _widths, 0)
+            except AttributeError:
+                pass
+            widths.append(_widths)
+            mbs.append(
+                self.get_annual_mb(fl.surface_h, fls=fls, fl_id=i, year=year)
+            )
+        widths = np.concatenate(widths, axis=0)  # 2x faster than np.append
+        mbs = np.concatenate(mbs, axis=0)
+        mbs = weighted_average_1d(mbs, widths)
 
-        if len(np.atleast_1d(year)) > 1:
-            out = [self.get_specific_mb(heights=heights, widths=widths,
-                                        fls=fls, year=yr)
-                   for yr in year]
-            return np.asarray(out)
+        return mbs
 
-        if fls is not None:
-            mbs = []
-            widths = []
-            for i, fl in enumerate(fls):
-                _widths = fl.widths
-                try:
-                    # For rect and parabola don't compute spec mb
-                    _widths = np.where(fl.thick > 0, _widths, 0)
-                except AttributeError:
-                    pass
-                widths = np.append(widths, _widths)
-                mbs = np.append(mbs, self.get_annual_mb(fl.surface_h,
-                                                        fls=fls, fl_id=i,
-                                                        year=year))
-        else:
-            mbs = self.get_annual_mb(heights, year=year)
+    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
+        """Specific mb for this year and a specific glacier geometry.
 
-        return weighted_average_1d(mbs, widths) * SEC_IN_YEAR * self.rho
+        Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+
+        Parameters
+        ----------
+        heights: ArrayLike, default None
+            Altitudes at which the mass balance will be computed.
+            Overridden by ``fls`` if provided.
+        widths: ArrayLike, default None
+            Widths of the flowline (necessary for the weighted average).
+            Overridden by ``fls`` if provided.
+        fls: list, optional
+            List of flowline instances. Alternative to heights and
+            widths, and overrides them if provided.
+        year: float, optional
+            Time in "floating year" convention.
+
+        Returns
+        -------
+        np.ndarray
+            Specific mass balance (units: mm w.e. yr-1).
+        """
+        out = []
+        year = np.atleast_1d(year)
+        for mb_yr in year:
+            if fls is not None:
+                mbs = self.get_weighted_mb_from_flowlines(fls=fls, year=mb_yr)
+            else:
+                mbs = self.get_annual_mb(heights, year=mb_yr)
+                mbs = weighted_average_1d(mbs, widths)
+            out.append(mbs)
+
+        # Convert units here to maintain backwards compatibility
+        return np.asarray(out) * SEC_IN_YEAR * self.rho
 
     def get_ela(self, year=None, **kwargs):
         """Compute the equilibrium line altitude for a given year.
@@ -1295,20 +1317,22 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         return heights, widths, mbs
 
-    def get_specific_mb(self, heights=None, widths=None, fls=None,
-                        year=None):
+    def get_weighted_mb_from_flowlines(self, fls: list, year: float):
+        """Get mean annual mass balance weighted for flowline widths.
 
-        if heights is not None or widths is not None:
-            raise ValueError('`heights` and `widths` kwargs do not work with '
-                             'MultipleFlowlineMassBalance!')
+        Parameters
+        ----------
+        fls : list
+            Flowline instances.
+        year: float
+            Time in "floating year" convention.
 
-        if fls is None:
-            fls = self.fls
-
-        if len(np.atleast_1d(year)) > 1:
-            out = [self.get_specific_mb(fls=fls, year=yr) for yr in year]
-            return np.asarray(out)
-
+        Returns
+        -------
+        float
+            Mean annual mass balance weighted for multiple flowline
+            widths.
+        """
         mbs = []
         widths = []
         for i, (fl, mb_mod) in enumerate(zip(fls, self.flowline_mb_models)):
@@ -1318,11 +1342,55 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 _widths = np.where(fl.thick > 0, _widths, 0)
             except AttributeError:
                 pass
-            widths = np.append(widths, _widths)
+            widths.append(_widths)
             mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
-            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
+            mbs.append(mb * SEC_IN_YEAR * mb_mod.rho)
+        widths = np.concatenate(widths, axis=0)  # 2x faster than np.append
+        mbs = np.concatenate(mbs, axis=0)
+        mbs = weighted_average_1d(mbs, widths)
 
-        return weighted_average_1d(mbs, widths)
+        return mbs
+
+    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
+        """Specific mb for this year and a specific glacier geometry.
+
+        Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+
+        Parameters
+        ----------
+        heights: ArrayLike, default None
+            Altitudes at which the mass balance will be computed.
+            Overridden by ``fls`` if provided.
+        widths: ArrayLike, default None
+            Widths of the flowline (necessary for the weighted average).
+            Overridden by ``fls`` if provided.
+        fls: list, optional
+            List of flowline instances. Alternative to heights and
+            widths, and overrides them if provided.
+        year: float, optional
+            Time in "floating year" convention.
+
+        Returns
+        -------
+        np.ndarray
+            Specific mass balance (units: mm w.e. yr-1).
+        """
+
+        if heights is not None or widths is not None:
+            raise ValueError(
+                "`heights` and `widths` kwargs do not work with "
+                "MultipleFlowlineMassBalance!"
+            )
+
+        if fls is None:
+            fls = self.fls
+
+        out = []
+        year = np.atleast_1d(year)
+        for mb_yr in year:
+            mbs = self.get_weighted_mb_from_flowlines(fls=fls, year=mb_yr)
+            out.append(mbs)
+        return np.asarray(out)
 
     def get_ela(self, year=None, **kwargs):
 

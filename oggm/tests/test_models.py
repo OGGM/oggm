@@ -649,6 +649,44 @@ class TestMassBalanceModels:
         # assert_allclose(mb.get_ela(year=yrs[:30]),
         #                 mb_gw.get_ela(year=yrs[:30]))
 
+    @pytest.mark.parametrize("ref_year", [1979, 1980])
+    def test_get_mass_balance_from_flowlines(self, hef_gdir, ref_year):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        test_fls = gdir.read_pickle("model_flowlines")
+        assert len(test_fls) > 1
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
+        )
+        test_mbs = mb_mod.get_mass_balance_from_flowlines(
+            fls=test_fls, year=ref_year
+        )
+        assert isinstance(test_mbs, np.float64)
+
+        # Compare to old function
+        flowline_models = mb_mod.flowline_mb_models
+        fls = gdir.read_pickle("model_flowlines")
+        year = ref_year
+        mbs = []
+        widths = []
+        for i, (fl, mb_mod) in enumerate(zip(fls, flowline_models)):
+            _widths = fl.widths
+            try:
+                # For rect and parabola don't compute spec mb
+                _widths = np.where(fl.thick > 0, _widths, 0)
+            except AttributeError:
+                pass
+            assert isinstance(_widths, np.ndarray)
+            widths = np.append(widths, _widths)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
+            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
+        assert widths.shape == mbs.shape
+        ref_mbs = utils.weighted_average_1d(mbs, widths)
+
+        assert test_mbs == ref_mbs
+
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
