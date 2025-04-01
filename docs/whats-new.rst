@@ -21,12 +21,24 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added "reset_state()" function to ``MassBalanceModel`` to signal any state-dependent
+  mass balance model to "reset its state" at the start of the period. This function
+  does nothing in the parent class and would only be implemented by a state-ful
+  mass balance model. There might be a use for this in the future, but for now
+  it's just a placeholder (:pull:`1757`).
+  By `Dan Goldberg <https://github.com/dngoldberg>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_.
 - Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
   are no longer recursive and have been optimised for performance.
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+
 
 Bug fixes
 ~~~~~~~~~
+
+- `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
+  By `Dan Goldberg <https://github.com/dngoldberg>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_.
 
 
 
