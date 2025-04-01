@@ -28,6 +28,9 @@ Enhancements
   it's just a placeholder (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
+- Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
+  are no longer recursive and have been optimised for performance.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 
 Bug fixes
