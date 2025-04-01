@@ -650,7 +650,7 @@ class TestMassBalanceModels:
         #                 mb_gw.get_ela(year=yrs[:30]))
 
     @pytest.mark.parametrize("ref_year", [1979, 1980])
-    def test_get_mass_balance_from_flowlines(self, hef_gdir, ref_year):
+    def test_get_annual_specific_mass_balance(self, hef_gdir, ref_year):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
@@ -660,7 +660,7 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
         )
-        test_mbs = mb_mod.get_weighted_mb_from_flowlines(
+        test_mbs = mb_mod.get_annual_specific_mass_balance(
             fls=test_fls, year=ref_year
         )
         assert isinstance(test_mbs, np.float64)

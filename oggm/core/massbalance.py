@@ -125,12 +125,12 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
-    def get_weighted_mb_from_flowlines(self, fls: list, year: float) -> tuple:
-        """Get mean annual mass balance weighted for flowline widths.
+    def get_annual_specific_mass_balance(self, fls: list, year: float) -> float:
+        """Get annual specific mass balance from multiple flowlines.
 
         Parameters
         ----------
-        fls : list
+        fls : list[oggm.Flowline]
             Flowline instances.
         year: float
             Time in "floating year" convention.
@@ -138,8 +138,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Returns
         -------
         float
-            Mean annual mass balance weighted for multiple flowline
-            widths.
+            Annual specific mass balance from multiple flowlines.
         """
         mbs = []
         widths = []
@@ -161,57 +160,57 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         return mbs
 
     def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
-        """Specific mb for this year and a specific glacier geometry.
+        """Specific mass balance for a given glacier geometry.
 
         Units: [mm w.e. yr-1], or millimeter water equivalent per year.
 
         Parameters
         ----------
-        heights: ArrayLike, default None
+        heights : ArrayLike, default None
             Altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided.
-        widths: ArrayLike, default None
+        widths : ArrayLike, default None
             Widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided.
-        fls: list, optional
+        fls : list[oggm.Flowline], default None
             List of flowline instances. Alternative to heights and
             widths, and overrides them if provided.
-        year: float, optional
-            Time in "floating year" convention.
+        year : ArrayLike[float] or float, default None
+            Year, or a range of years in "floating year" convention.
 
         Returns
         -------
         np.ndarray
             Specific mass balance (units: mm w.e. yr-1).
         """
-        out = []
+        stack = []
         year = np.atleast_1d(year)
         for mb_yr in year:
             if fls is not None:
-                mbs = self.get_weighted_mb_from_flowlines(fls=fls, year=mb_yr)
+                mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
             else:
                 mbs = self.get_annual_mb(heights, year=mb_yr)
                 mbs = weighted_average_1d(mbs, widths)
-            out.append(mbs)
+            stack.append(mbs)
 
-        return set_array_type(out) * SEC_IN_YEAR * self.rho
+        return set_array_type(stack) * SEC_IN_YEAR * self.rho
 
     def get_ela(self, year=None, **kwargs):
-        """Compute the equilibrium line altitude for a given year.
+        """Get the equilibrium line altitude for a given year.
 
         Parameters
         ----------
-        year: float, default None
-            The time in the "floating year" convention.
-        **kwargs: any other keyword argument accepted by
-        ``self.get_annual_mb``.
+        year : ArrayLike[float] or float, default None
+            Year, or a range of years in "floating year" convention.
+        **kwargs
+            Any other keyword argument accepted by ``self.get_annual_mb``.
 
         Returns
         -------
-        float | np.ndarray:
-            The equilibrium line altitude (ELA, units: m).
+        float or np.ndarray:
+            The equilibrium line altitude (ELA) in m.
         """
-        out = []
+        stack = []
         year = np.atleast_1d(year)
         for mb_year in year:
             if self.valid_bounds is None:
@@ -224,21 +223,21 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                     self.get_annual_mb([b0, b1], year=mb_year, **kwargs))) or
                     (self.get_annual_mb([b0], year=mb_year, **kwargs)[0] > 0) or
                     (self.get_annual_mb([b1], year=mb_year, **kwargs)[0] < 0)):
-                out.append(np.nan)
+                stack.append(np.nan)
             else:
                 def to_minimize(x):
                     return (self.get_annual_mb([x], year=mb_year, **kwargs)[0] *
                     SEC_IN_YEAR * self.rho)
-                out.append(optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1))
+                stack.append(optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1))
 
-        return set_array_type(out)
+        return set_array_type(stack)
 
     def is_year_valid(self, year):
         """Checks if a given date year be simulated by this model.
 
         Parameters
         ----------
-        year: float, optional
+        year : float, optional
             the time (in the "floating year" convention)
 
         Returns
@@ -1320,21 +1319,20 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         return heights, widths, mbs
 
-    def get_weighted_mb_from_flowlines(self, fls: list, year: float):
-        """Get mean annual mass balance weighted for flowline widths.
+    def get_annual_specific_mass_balance(self, fls: list, year: float) -> float:
+        """Get annual specific mass balance from multiple flowlines.
 
         Parameters
         ----------
-        fls : list
+        fls : list[oggm.Flowline]
             Flowline instances.
-        year: float
+        year : float
             Time in "floating year" convention.
 
         Returns
         -------
         float
-            Mean annual mass balance weighted for multiple flowline
-            widths.
+            Annual specific mass balance from multiple flowlines.
         """
         mbs = []
         widths = []
@@ -1355,30 +1353,29 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         return mbs
 
     def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
-        """Specific mb for this year and a specific glacier geometry.
+        """Specific mass balance for a given glacier geometry.
 
         Units: [mm w.e. yr-1], or millimeter water equivalent per year.
 
         Parameters
         ----------
-        heights: ArrayLike, default None
+        heights : ArrayLike, default None
             Altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided.
-        widths: ArrayLike, default None
+        widths : ArrayLike, default None
             Widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided.
-        fls: list, optional
+        fls : list[oggm.Flowline], default None
             List of flowline instances. Alternative to heights and
             widths, and overrides them if provided.
-        year: float, optional
-            Time in "floating year" convention.
+        year : ArrayLike[float] or float, default None
+            Year, or a range of years in "floating year" convention.
 
         Returns
         -------
         np.ndarray
             Specific mass balance (units: mm w.e. yr-1).
         """
-
         if heights is not None or widths is not None:
             raise ValueError(
                 "`heights` and `widths` kwargs do not work with "
@@ -1388,26 +1385,31 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         if fls is None:
             fls = self.fls
 
-        out = []
+        stack = []
         year = np.atleast_1d(year)
         for mb_yr in year:
-            mbs = self.get_weighted_mb_from_flowlines(fls=fls, year=mb_yr)
-            out.append(mbs)
+            mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
+            stack.append(mbs)
 
-        return set_array_type(out)
+        return set_array_type(stack)
 
     def get_ela(self, year=None, **kwargs):
-        """Get the equlibrium line altitude.
+        """Get the equilibrium line altitude for a given year.
 
-        The ELA here is not without ambiguity: we compute a mean
+        The ELA here is not without ambiguity: it computes a mean
         weighted by area.
+
+        Parameters
+        ----------
+        year : ArrayLike[float] or float, default None
+            Year, or a range of years in "floating year" convention.
 
         Returns
         -------
-        float | np.ndarray
+        float or np.ndarray
             The equilibrium line altitude (ELA) in m.
         """
-        out = []
+        stack = []
         year = np.atleast_1d(year)
         for mb_yr in year:
             elas = []
@@ -1419,9 +1421,9 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                     mb_mod.get_ela(year=mb_yr, fl_id=fl_id, fls=self.fls)
                 )
                 areas.append(np.sum(fl.widths))
-            out.append(weighted_average_1d(elas, areas))
+            stack.append(weighted_average_1d(elas, areas))
 
-        return set_array_type(out)
+        return set_array_type(stack)
 
 
 def calving_mb(gdir):
