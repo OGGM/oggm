@@ -21,83 +21,75 @@ from oggm.exceptions import InvalidWorkflowError
 # Module logger
 log = logging.getLogger(__name__)
 
-base_url = ('http://its-live-data.jpl.nasa.gov.s3.amazonaws.com/'
-            'velocity_mosaic/landsat/v00.0/static/cog/')
-regions = ['HMA', 'ANT', 'PAT', 'ALA', 'CAN', 'GRE', 'ICE', 'SRA']
-
+base_url = ('https://its-live-data.s3.amazonaws.com/'
+            'velocity_mosaic/v2/static/cog/ITS_LIVE_velocity_120m_')
 region_files = {}
-for reg in regions:
-    d = {}
-    for var in ['vx', 'vy', 'vy_err', 'vx_err']:
-        d[var] = base_url + '{}_G0120_0000_{}.tif'.format(reg, var)
-    region_files[reg] = d
 
-region_grids = {}
-
-rgi_region_links = {'01': 'ALA', '02': 'ALA',
-                    '03': 'CAN', '04': 'CAN',
-                    '05': 'GRE',
-                    '06': 'ICE',
-                    '07': 'SRA', '09': 'SRA',
-                    '13': 'HMA', '14': 'HMA', '15': 'HMA',
-                    '17': 'PAT',
-                    '19': 'ANT',
+rgi_region_links = {'01': 'RGI01A',
+                    '02': 'RGI02A',
+                    '03': 'RGI03A',
+                    '04': 'RGI04A',
+                    '05': 'RGI05A',
+                    '06': 'RGI06A',
+                    '07': 'RGI07A',
+                    '08': 'RGI08A',
+                    '09': 'RGI09A',
+                    '10': 'RGI10A',
+                    '11': 'RGI11A',
+                    '12': 'RGI12A',
+                    '13': 'RGI14A', '14': 'RGI14A', '15': 'RGI14A',
+                    '17': 'RGI17A',
+                    '18': 'RGI18A',
+                    '19': 'RGI19A',
                     }
 
 
-def region_grid(reg):
+def _find_region(gdir):
 
-    global region_grids
-
-    if reg not in region_grids:
-        with utils.get_lock():
-            fp = utils.file_downloader(region_files[reg]['vx'])
-            ds = salem.GeoTiff(fp)
-            region_grids[reg] = ds.grid
-
-    return region_grids[reg]
+    reg_n = gdir.rgi_region
+    if reg_n == '02':
+        # Northermost glaciers are in reg 1 file
+        if gdir.cenlat > 55:
+            reg_n = '01'
+    return rgi_region_links.get(reg_n, None)
 
 
-def _in_grid(grid, lon, lat):
-
-    i, j = grid.transform([lon], [lat], maskout=True)
-    return np.all(~ (i.mask | j.mask))
-
-
-def find_region(gdir):
-
-    reg = rgi_region_links.get(gdir.rgi_region, None)
-
-    if reg is None:
-        return None
-
-    grid = region_grid(reg)
-
-    if _in_grid(grid, gdir.cenlon, gdir.cenlat):
-        return reg
-    else:
-        return None
+def _init_region_files():
+    global region_files
+    for reg in range(1, 20):
+        reg = f'RGI{reg:02d}A'
+        d = {}
+        for var in ['v', 'vx', 'vy']:
+            d[var] = base_url + f'{reg}_0000_v02_{var}.tif'
+        region_files[reg] = d
 
 
 def _reproject_and_scale(gdir, do_error=False):
     """Reproject and scale itslive data, avoid code duplication for error"""
 
-    reg = find_region(gdir)
+    reg = _find_region(gdir)
     if reg is None:
         raise InvalidWorkflowError('There does not seem to be its_live data '
                                    'available for this glacier')
 
+    vn = 'v'
     vnx = 'vx'
     vny = 'vy'
     if do_error:
-        vnx += '_err'
-        vny += '_err'
+        vn += '_error'
+        vnx += '_error'
+        vny += '_error'
+
+    if not region_files:
+        _init_region_files()
 
     with utils.get_lock():
+        fv = utils.file_downloader(region_files[reg][vn])
         fx = utils.file_downloader(region_files[reg][vnx])
         fy = utils.file_downloader(region_files[reg][vny])
 
     # Open the files
+    dsv = salem.GeoTiff(fv)
     dsx = salem.GeoTiff(fx)
     dsy = salem.GeoTiff(fy)
     # subset them to our map
@@ -108,6 +100,7 @@ def _reproject_and_scale(gdir, do_error=False):
         # This can trigger an out-of-bounds warning
         warnings.filterwarnings("ignore", category=RuntimeWarning,
                                 message='.*out of bounds.*')
+        dsv.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
         dsx.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
         dsy.set_subset(corners=((x0, y0), (x1, y1)), crs=proj_vel, margin=4)
     grid_vel = dsx.grid.center_grid
@@ -126,12 +119,13 @@ def _reproject_and_scale(gdir, do_error=False):
     xx0, yy0 = grid_vel.center_grid.xy_coordinates
 
     # Compute coords at t1
+    vel = dsv.get_vardata()
     xx1 = dsx.get_vardata()
     yy1 = dsy.get_vardata()
-    non_valid = (xx1 == nodata) | (yy1 == nodata)
+    non_valid = (xx1 == nodata) | (yy1 == nodata) | (vel == nodata)
+    vel[non_valid] = np.nan
     xx1[non_valid] = np.nan
     yy1[non_valid] = np.nan
-    orig_vel = np.sqrt(xx1**2 + yy1**2)
     xx1 += xx0
     yy1 += yy0
 
@@ -148,20 +142,39 @@ def _reproject_and_scale(gdir, do_error=False):
     vy = yy1 - yy0
 
     # Scale back velocities - https://github.com/OGGM/oggm/issues/1014
-    new_vel = np.sqrt(vx**2 + vy**2)
-    p_ok = new_vel > 1  # avoid div by zero
-    vx[p_ok] = vx[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
-    vy[p_ok] = vy[p_ok] * orig_vel[p_ok] / new_vel[p_ok]
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        new_vel = np.sqrt(vx**2 + vy**2)
+        p_ok = np.isfinite(new_vel) & (new_vel > 0)  # avoid div by zero
+        scaler = vel[p_ok] / new_vel[p_ok]
+        vx[p_ok] = vx[p_ok] * scaler
+        vy[p_ok] = vy[p_ok] * scaler
 
     # And transform to local map
+    vv = grid_gla.map_gridded_data(vel, grid=grid_vel, interp='linear')
     vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
     vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+
+        vn = 'itslive_v'
+        if do_error:
+            vn += '_error'
+        if vn in nc.variables:
+            v = nc.variables[vn]
+        else:
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+        v.units = 'm yr-1'
+        ln = 'ITS LIVE velocity data'
+        if do_error:
+            ln = 'Uncertainty of ' + ln
+        v.long_name = ln
+        v[:] = vv.filled(np.nan)
+
         vn = 'itslive_vx'
         if do_error:
-            vn += '_err'
+            vn += '_error'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -175,7 +188,7 @@ def _reproject_and_scale(gdir, do_error=False):
 
         vn = 'itslive_vy'
         if do_error:
-            vn += '_err'
+            vn += '_error'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
@@ -187,21 +200,9 @@ def _reproject_and_scale(gdir, do_error=False):
         v.long_name = ln
         v[:] = vy.filled(np.nan)
 
-        if not do_error:
-            vel = np.sqrt(vx ** 2 + vy ** 2)
-            vn = 'itslive_v'
-            if vn in nc.variables:
-                v = nc.variables[vn]
-            else:
-                v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
-            v.units = 'm yr-1'
-            ln = 'ITS LIVE velocity data'
-            v.long_name = ln
-            v[:] = vel.filled(np.nan)
-
 
 @utils.entity_task(log, writes=['gridded_data'])
-def velocity_to_gdir(gdir, add_error=False):
+def itslive_velocity_to_gdir(gdir, add_error=False):
     """Reproject the its_live files to the given glacier directory.
 
     The data source used is https://its-live.jpl.nasa.gov/#data
@@ -235,7 +236,8 @@ def velocity_to_gdir(gdir, add_error=False):
     if not gdir.has_file('gridded_data'):
         raise InvalidWorkflowError('Please run `glacier_masks` before running '
                                    'this task')
-
+    if add_error:
+        raise NotImplementedError('Error data is not yet available yet')
     _reproject_and_scale(gdir, do_error=False)
     if add_error:
         _reproject_and_scale(gdir, do_error=True)
@@ -257,13 +259,14 @@ def itslive_statistics(gdir):
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             v = ds['itslive_v'].where(ds['glacier_mask'], np.nan).load()
+            gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             with warnings.catch_warnings():
                 # For operational runs we ignore the warnings
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 d['itslive_avg_vel'] = np.nanmean(v)
                 d['itslive_max_vel'] = np.nanmax(v)
-                d['itslive_perc_cov'] = (float((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
-                                         gdir.rgi_area_km2)
+                d['itslive_perc_cov'] = float(((~v.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6) /
+                                              gridded_area)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
 
