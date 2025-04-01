@@ -173,6 +173,31 @@ def tolist(arg, length=None):
     return arg
 
 
+def set_array_type(array):
+    """Convert array to scalar if it contains a single value.
+
+    Converting arrays with ndim > 0 to scalar is deprecated in numpy
+    1.25+. Some OGGM functions expect arrays with a single value to be returned as scalars.
+
+    Parameters
+    ----------
+    array : ArrayLike
+        A numpy array or list.
+
+    Returns
+    -------
+    float or np.ndarray
+        Scalar if the array contains a single value, otherwise a numpy
+        array.
+    """
+    if len(array) > 1:
+        output = np.asanyarray(array)
+    else:
+        output = array[0]
+
+    return output
+
+
 def haversine(lon1, lat1, lon2, lat2):
     """Great circle distance between two (or more) points on Earth
 

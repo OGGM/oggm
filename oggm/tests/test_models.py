@@ -773,6 +773,108 @@ class TestMassBalanceModels:
         # assert_allclose(mb.get_ela(year=yrs[:30]),
         #                 mb_gw.get_ela(year=yrs[:30]))
 
+    @pytest.mark.parametrize("ref_year", [1979, 1980])
+    def test_get_annual_specific_mass_balance(self, hef_gdir, ref_year):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        test_fls = gdir.read_pickle("model_flowlines")
+        assert len(test_fls) > 1
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
+        )
+        test_mbs = mb_mod.get_annual_specific_mass_balance(
+            fls=test_fls, year=ref_year
+        )
+        assert isinstance(test_mbs, np.float64)
+
+        # Compare to old function
+        flowline_models = mb_mod.flowline_mb_models
+        fls = gdir.read_pickle("model_flowlines")
+        year = ref_year
+        mbs = []
+        widths = []
+        for i, (fl, mb_mod) in enumerate(zip(fls, flowline_models)):
+            _widths = fl.widths
+            try:
+                # For rect and parabola don't compute spec mb
+                _widths = np.where(fl.thick > 0, _widths, 0)
+            except AttributeError:
+                pass
+            assert isinstance(_widths, np.ndarray)
+            widths = np.append(widths, _widths)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
+            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
+        assert widths.shape == mbs.shape
+        ref_mbs = utils.weighted_average_1d(mbs, widths)
+
+        assert test_mbs == ref_mbs
+
+    def test_get_specific_mb(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        ys = 1979
+        ye = 2019
+        years = np.arange(ys, ye + 1)
+
+        fls = gdir.read_pickle("inversion_flowlines")
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir,
+            fls=fls,
+            mb_model_class=massbalance.MonthlyTIModel,
+            repeat=True,
+            ys=ys,
+            ye=ye,
+        )
+        smb = mb_mod.get_specific_mb(year=years)
+        assert isinstance(smb, np.ndarray)
+        assert smb.shape == (1 + (ye - ys),)
+
+        # Rough non-weighted bounds
+        ref_smb_lo = (
+            mb_mod.get_annual_mb(fls[-1].surface_h, year=ys, fls=fls, fl_id=-1)
+            * cfg.SEC_IN_YEAR
+            * cfg.PARAMS["ice_density"]
+        )
+        ref_smb_hi = (
+            mb_mod.get_annual_mb(fls[0].surface_h, year=ys, fls=fls, fl_id=0)
+            * cfg.SEC_IN_YEAR
+            * cfg.PARAMS["ice_density"]
+        )
+
+        smb_single = mb_mod.get_specific_mb(year=ys)
+        assert isinstance(smb_single, float)
+        assert smb_single == smb[0]
+        assert ref_smb_lo.mean() < smb_single < ref_smb_hi.mean()
+
+    def test_get_ela(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        ys = 1979
+        ye = 2019
+        years = np.arange(ys, ye + 1)
+
+        fls = gdir.read_pickle("inversion_flowlines")
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir,
+            fls=fls,
+            mb_model_class=massbalance.MonthlyTIModel,
+            repeat=True,
+            ys=ys,
+            ye=ye,
+        )
+        ela = mb_mod.get_ela(year=years)
+        assert isinstance(ela, np.ndarray)
+        assert ela.shape == (1 + (ye - ys),)
+
+        ela_single = mb_mod.get_ela(year=ys)
+        assert isinstance(ela_single, float)
+        assert ela_single == ela[0]
+        assert fls[-1].surface_h.min() < ela_single < fls[0].surface_h.max()
+
     """Daily MB Models"""
 
     @pytest.fixture(name="DailyTIModel", scope="class", autouse=True)
@@ -1074,6 +1176,7 @@ class TestMassBalanceModels:
         mbts = yrs * 0.
         for i, yr in enumerate(yrs):
             mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
+            assert isinstance(mbts[i], float)
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
