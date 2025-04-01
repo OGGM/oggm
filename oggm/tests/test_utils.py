@@ -3205,6 +3205,10 @@ class TestELAComputation(unittest.TestCase):
         assert ([ELA1 < ELA2])
         assert_allclose(np.mean(mb * SEC_IN_YEAR), 0, atol=1e-3)
 
+        for ela in (ELA1, ELA2):
+            assert isinstance(ela, pd.Series)
+            assert ela.shape == (1 + (ye - ys),)
+
     def test_compile(self):
         gdir = init_hef()
 

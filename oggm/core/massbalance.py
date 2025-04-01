@@ -2389,7 +2389,7 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
 
     ela = []
     for yr in years:
-        ela = np.append(ela, mbmod.get_ela(year=yr))
+        ela.append(mbmod.get_ela(year=yr))
 
     odf = pd.Series(data=ela, index=years)
     return odf
