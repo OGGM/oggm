@@ -21,6 +21,10 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added BedMachine products to the shop (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Updated itslive velocity products to v2 (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added "reset_state()" function to ``MassBalanceModel`` to signal any state-dependent
   mass balance model to "reset its state" at the start of the period. This function
   does nothing in the parent class and would only be implemented by a state-ful
@@ -28,16 +32,19 @@ Enhancements
   it's just a placeholder (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
-
+- Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
+  are no longer recursive and have been optimised for performance.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a bug where Millan velocities would be assigned 0
+  instead of NaN in grid points without velocity (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
-
-
 
 v1.6.2 (August 25, 2024)
 ------------------------
