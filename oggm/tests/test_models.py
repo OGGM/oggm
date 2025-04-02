@@ -21,7 +21,7 @@ from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
 from oggm.shop.w5e5 import process_gswp3_w5e5_data_daily
 from oggm.shop import gcm_climate, bedtopo
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH, SEC_IN_DAY
 from oggm.utils import get_demo_file, ncDataset
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -84,7 +84,7 @@ def fixture_get_w5e5_data(hef_gdir):
 def assert_daily_model(model):
     # isinstance silently fails
     return issubclass(
-        model, (massbalance.DailyTIModel, massbalance.DailySfcTIModel)
+        model, (massbalance.DailyTIModel)
     )
 
 
@@ -243,11 +243,8 @@ class TestInitPresentDayFlowline:
             massbalance.MonthlyTIModel,
             pytest.param(
                 massbalance.DailyTIModel,
-                marks=pytest.mark.xfail(reason="Case not yet implemented"),
-            ),
-            pytest.param(
-                massbalance.DailySfcTIModel,
-                marks=pytest.mark.xfail(reason="Case not yet implemented"),
+                marks=pytest.mark.xfail(
+                    reason="Test doesn't yet support leap years"),
             ),
         ],
     )
@@ -572,45 +569,12 @@ class TestMassBalanceModels:
             )
         assert mb_mod.__repr__() == expected
 
-    @pytest.mark.parametrize("upscale,out", [(None, 1.0), (0.8, 0.8)])
-    def test_repr_daily_sfc(self, hef_gdir, upscale, out):
-        from textwrap import dedent
-
-        expected = dedent(f"""\
-        <oggm.MassBalanceModel>
-          Class: DailySfcTIModel
-          Attributes:
-            - hemisphere: nh
-            - climate_source: W5E5_daily
-            - melt_f: 6.59
-            - prcp_fac: 2.50
-            - temp_bias: 0.00
-            - bias: 0.00
-            - rho: 900.0
-            - t_solid: 0.0
-            - t_liq: 2.0
-            - t_melt: -1.0
-            - repeat: False
-            - ref_hgt: 2252.0
-            - ys: 1979
-            - ye: 2019
-            - upscale_factor: {out}
-        """
-        )
-        if not upscale:
-            mb_mod = massbalance.DailySfcTIModel(hef_gdir, bias=0)
-        else:
-            mb_mod = massbalance.DailySfcTIModel(
-                hef_gdir, bias=0, upscale_factor=upscale
-            )
-        assert mb_mod.__repr__() == expected
 
     @pytest.mark.parametrize(
         "cl",
         [
             massbalance.MonthlyTIModel,
             massbalance.DailyTIModel,
-            massbalance.DailySfcTIModel,
         ],
     )
     def test_prcp_fac_temp_bias_update(self, hef_gdir, cl):
@@ -670,7 +634,6 @@ class TestMassBalanceModels:
         [
             massbalance.MonthlyTIModel,
             massbalance.DailyTIModel,
-            massbalance.DailySfcTIModel,
             massbalance.ConstantMassBalance,
             massbalance.RandomMassBalance,
         ],
@@ -754,7 +717,6 @@ class TestMassBalanceModels:
             (
                 massbalance.MonthlyTIModel,
                 massbalance.DailyTIModel,
-                massbalance.DailySfcTIModel,
             ),
         ):
             mb = cl(gdir)
@@ -774,7 +736,10 @@ class TestMassBalanceModels:
         #                 mb_gw.get_ela(year=yrs[:30]))
 
     @pytest.mark.parametrize("ref_year", [1979, 1980])
-    def test_get_annual_specific_mass_balance(self, hef_gdir, ref_year):
+    @pytest.mark.parametrize(
+        "model", [massbalance.MonthlyTIModel, massbalance.DailyTIModel]
+    )
+    def test_get_annual_specific_mass_balance(self, hef_gdir, ref_year, model):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
@@ -782,7 +747,7 @@ class TestMassBalanceModels:
         test_fls = gdir.read_pickle("model_flowlines")
         assert len(test_fls) > 1
         mb_mod = massbalance.MultipleFlowlineMassBalance(
-            gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
+            gdir, fls=test_fls, mb_model_class=model
         )
         test_mbs = mb_mod.get_annual_specific_mass_balance(
             fls=test_fls, year=ref_year
@@ -793,6 +758,10 @@ class TestMassBalanceModels:
         flowline_models = mb_mod.flowline_mb_models
         fls = gdir.read_pickle("model_flowlines")
         year = ref_year
+        if calendar.isleap(year) and assert_daily_model(model):
+            year_length = 366 * SEC_IN_DAY
+        else:
+            year_length = SEC_IN_YEAR
         mbs = []
         widths = []
         for i, (fl, mb_mod) in enumerate(zip(fls, flowline_models)):
@@ -805,13 +774,16 @@ class TestMassBalanceModels:
             assert isinstance(_widths, np.ndarray)
             widths = np.append(widths, _widths)
             mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
-            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
+            mbs = np.append(mbs, mb * year_length * mb_mod.rho)
         assert widths.shape == mbs.shape
         ref_mbs = utils.weighted_average_1d(mbs, widths)
 
         assert test_mbs == ref_mbs
 
-    def test_get_specific_mb(self, hef_gdir):
+    @pytest.mark.parametrize(
+            "model", [massbalance.MonthlyTIModel, massbalance.DailyTIModel]
+    )
+    def test_get_specific_mb(self, hef_gdir, model):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
@@ -823,7 +795,7 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir,
             fls=fls,
-            mb_model_class=massbalance.MonthlyTIModel,
+            mb_model_class=model,
             repeat=True,
             ys=ys,
             ye=ye,
@@ -889,10 +861,42 @@ class TestMassBalanceModels:
             value = value + (value / 365)
         return value
 
-    @pytest.mark.parametrize(
-        "model",
-        [massbalance.DailyTIModel, massbalance.DailySfcTIModel],
-    )
+    @pytest.mark.parametrize("with_fls", (True, False))
+    @pytest.mark.parametrize("year_range", (np.arange(1979, 2019), 1979, 1980))
+    def test_specific_mb_inheritance(self, hef_gdir, DailyTIModel, with_fls, year_range):
+        """Ensure inherited function is scaled correctly."""
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        mb_mod = DailyTIModel(gdir, bias=0)
+
+        stack = []
+        year = np.atleast_1d(year_range)
+        fls = gdir.read_pickle("model_flowlines")
+        if not with_fls:
+            heights = np.concatenate([i.surface_h for i in fls], axis=0)
+            widths = np.concatenate([i.widths for i in fls], axis=0)
+            fls = None
+        else:
+            heights = None
+            widths = None
+
+        for mb_yr in year:
+            if fls is not None:
+                mbs = mb_mod.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
+            else:
+                mbs = mb_mod.get_annual_mb(heights, year=mb_yr)
+                mbs = utils.weighted_average_1d(mbs, widths)
+
+            year_length = mb_mod.get_year_length(mb_yr)
+            stack.append(mbs * year_length * mb_mod.rho)
+        ref_mbs = utils.set_array_type(stack)
+
+        test_mbs = mb_mod.get_specific_mb(heights=heights, widths=widths, fls=fls, year=year)
+
+        np.testing.assert_allclose(test_mbs, ref_mbs)
+
+
+    @pytest.mark.parametrize("model", [massbalance.DailyTIModel])
     @pytest.mark.parametrize("arg_year", [1979, 1980])
     def test_get_daily_mb(self, hef_gdir, model, arg_year):
 
@@ -915,11 +919,8 @@ class TestMassBalanceModels:
             assert test_mb.shape[1] == 366
             np.testing.assert_allclose(test_mb.mean(axis=1), annual_mb)
 
-    @pytest.mark.xfail(reason="Leap years not yet fully implemented")
-    @pytest.mark.parametrize(
-        "model",
-        [massbalance.DailyTIModel, massbalance.DailySfcTIModel],
-    )
+    # @pytest.mark.xfail(reason="Leap years not yet fully implemented")
+    @pytest.mark.parametrize("model", [massbalance.DailyTIModel])
     @pytest.mark.parametrize("arg_bias", [True, False])
     def test_daily_mb_model(self, hef_gdir, model, arg_bias):
 
@@ -981,7 +982,7 @@ class TestMassBalanceModels:
             mbdf.loc[yr, "BIASED_MB"] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 0
 
-        # assert -1000 < mbdf["MY_MB"].mean() < 0
+        assert -1000 < mbdf["MY_MB"].mean() < 0
         # np.testing.assert_allclose(
         #     mbdf["ANNUAL_BALANCE"].mean(), mbdf["MY_MB"].mean(), atol=1e-2
         # )
@@ -5667,10 +5668,6 @@ class TestMassRedis:
                 massbalance.MonthlyTIModel,
                 pytest.param(
                     massbalance.DailyTIModel,
-                    marks=pytest.mark.xfail(reason="wrong mb_calib gets read"),
-                ),
-                pytest.param(
-                    massbalance.DailySfcTIModel,
                     marks=pytest.mark.xfail(reason="wrong mb_calib gets read"),
                 ),
             ]
