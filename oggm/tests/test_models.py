@@ -244,21 +244,42 @@ class TestInitPresentDayFlowline:
             pytest.param(
                 massbalance.DailyTIModel,
                 marks=pytest.mark.xfail(
-                    reason="Test doesn't yet support leap years"),
+                    reason="Default calibration doesn't work for daily data."),
             ),
         ],
     )
-    def test_present_time_glacier_massbalance(self, hef_gdir, cl):
+    def test_present_time_glacier_massbalance(self, hef_gdir, cl, fixture_get_w5e5_data):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         mb_mod = cl(gdir)
+        if assert_daily_model(cl):
+            fixture_get_w5e5_data
+            start_year = 1979
+            mbdf = gdir.get_ref_mb_data()
+            ref_mb = mbdf.ANNUAL_BALANCE.mean()
+            tasks.mb_calibration_from_scalar_mb(
+                gdir,
+                ref_mb=ref_mb,
+                ref_period=f'{start_year}-01-01_2020-01-01',
+                mb_model_class=cl,
+                filesuffix="daily",
+                overwrite_gdir=False
+            )
+            cl._mb_params_filesuffix = "daily"
+            cl.filename = "climate_historical_daily"
+
+        else:
+            start_year = 1953
+        init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
-        glacier = FlowlineModel(fls)
+        glacier = FlowlineModel(fls, mb_model=cl)
 
         mbdf = gdir.get_ref_mb_data()
+        mask = mbdf.index.to_series().ge(start_year)
+        mbdf = mbdf[mask]
 
         hgts = np.array([])
         widths = np.array([])
@@ -267,11 +288,14 @@ class TestInitPresentDayFlowline:
             widths = np.concatenate((widths, fl.widths_m))
         tot_mb = []
         refmb = []
-        grads = hgts * 0
+        grads = np.zeros_like(hgts)
         for yr, mb in mbdf.iterrows():
             refmb.append(mb['ANNUAL_BALANCE'])
-            mbh = (mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR *
-                   cfg.PARAMS['ice_density'])
+            mbh = (
+                mb_mod.get_annual_mb(hgts, yr)
+                * mb_mod.get_year_length(yr)
+                * cfg.PARAMS['ice_density']
+            )
             grads += mbh
             tot_mb.append(np.average(mbh, weights=widths))
         grads /= len(tot_mb)
@@ -919,7 +943,6 @@ class TestMassBalanceModels:
             assert test_mb.shape[1] == 366
             np.testing.assert_allclose(test_mb.mean(axis=1), annual_mb)
 
-    # @pytest.mark.xfail(reason="Leap years not yet fully implemented")
     @pytest.mark.parametrize("model", [massbalance.DailyTIModel])
     @pytest.mark.parametrize("arg_bias", [True, False])
     def test_daily_mb_model(self, hef_gdir, model, arg_bias):
@@ -5668,7 +5691,6 @@ class TestMassRedis:
                 massbalance.MonthlyTIModel,
                 pytest.param(
                     massbalance.DailyTIModel,
-                    marks=pytest.mark.xfail(reason="wrong mb_calib gets read"),
                 ),
             ]
         )
@@ -5680,8 +5702,10 @@ class TestMassRedis:
                 gdirs=gdir, task=process_gswp3_w5e5_data_daily
             )
             start_year = 1979
+            climate_file = "climate_historical_daily"
         else:
             start_year = 1953
+            climate_file = "climate_historical"
 
         tasks.define_glacier_region(gdir)
         tasks.simple_glacier_masks(gdir)
@@ -5704,6 +5728,8 @@ class TestMassRedis:
             filesuffix=filesuffix,
             overwrite_gdir=False
         )
+        model._mb_params_filesuffix = filesuffix  # apply calibration to model
+
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[start_year, 2003], mb_model_class=model)
         workflow.calibrate_inversion_from_consensus([gdir])
         tasks.init_present_time_glacier(gdir)
@@ -5714,10 +5740,14 @@ class TestMassRedis:
         odf_v = pd.DataFrame()
         biases = [-0.6, -0.3, 0]
         for bias in biases:
-            tasks.run_random_climate(gdir, nyears=500, y0=1990, halfsize=10,
-                                     temperature_bias=bias,
-                                     seed=seed,
-                                     output_filesuffix='_fl')
+            tasks.run_random_climate(
+                gdir, nyears=500, y0=1990, halfsize=10,
+                temperature_bias=bias,
+                seed=seed,
+                mb_model_class=model,
+                climate_filename=climate_file,
+                output_filesuffix='_fl'
+            )
             with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                    filesuffix='_fl')) as ds:
                 df_fl = ds.to_dataframe()
@@ -5728,11 +5758,15 @@ class TestMassRedis:
             for advance_method in [0, 1, 2]:
                 MethodCurveModel = partial(MassRedistributionCurveModel,
                                            advance_method=advance_method)
-                tasks.run_random_climate(gdir, nyears=500, y0=1990, halfsize=10,
-                                         temperature_bias=bias,
-                                         seed=seed,
-                                         evolution_model=MethodCurveModel,
-                                         output_filesuffix='_mr')
+                tasks.run_random_climate(
+                    gdir, nyears=500, y0=1990, halfsize=10,
+                    temperature_bias=bias,
+                    seed=seed,
+                    mb_model_class=model,
+                    climate_filename=climate_file,
+                    evolution_model=MethodCurveModel,
+                    output_filesuffix='_mr'
+                )
                 with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                        filesuffix='_mr')) as ds:
                     df_mr = ds.to_dataframe()
