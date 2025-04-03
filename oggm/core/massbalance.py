@@ -574,23 +574,38 @@ class MonthlyTIModel(MassBalanceModel):
             except FileNotFoundError:
                 return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
 
-    def set_temporal_bounds(self, nc_data: xr.DataArray, ys, ye, default_grad):
-        """Constrain data to a start and end year."""
-        # time
-        time = nc_data.variables['time']
+    def set_temporal_bounds(
+        self, nc_data: xr.DataArray, ys: int, ye: int, default_grad: float
+    ) -> None:
+        """Constrain data to a start and end year.
+
+        Parameters
+        ----------
+        nc_data : xr.DataArray
+            Climate data.
+        ys : int or float
+            Desired first year of data period.
+        ye : int or float
+            Desired last year of data period.
+        default_grad : float
+            Default temperature gradient.
+        """
+        time = nc_data.variables["time"]
         time = cftime.num2date(time[:], time.units, calendar=time.calendar)
         ny, r = divmod(len(time), 12)
         if r:
-            raise ValueError('Climate data should be N full years')
+            raise ValueError("Climate data should be N full years")
 
         # We check for calendar years
         if (time[0].month != 1) or (time[-1].month != 12):
-            raise InvalidWorkflowError('We now work exclusively with '
-                                       'calendar years.')
+            raise InvalidWorkflowError(
+                "We now work exclusively with " "calendar years."
+            )
 
         # Quick trick because we know the size of our array
-        years = np.repeat(np.arange(time[-1].year - ny + 1,
-                                    time[-1].year + 1), 12)
+        years = np.repeat(
+            np.arange(time[-1].year - ny + 1, time[-1].year + 1), 12
+        )
         pok = slice(None)  # take all is default (optim)
         if ys is not None:
             pok = years >= ys
@@ -604,8 +619,12 @@ class MonthlyTIModel(MassBalanceModel):
         self.months = np.tile(np.arange(1, 13), ny)[pok]
 
         # Read timeseries and correct it
-        self.temp = nc_data.variables['temp'][pok].astype(np.float64) + self._temp_bias
-        self.prcp = nc_data.variables['prcp'][pok].astype(np.float64) * self._prcp_fac
+        self.temp = (
+            nc_data.variables["temp"][pok].astype(np.float64) + self._temp_bias
+        )
+        self.prcp = (
+            nc_data.variables["prcp"][pok].astype(np.float64) * self._prcp_fac
+        )
 
         grad = self.prcp * 0 + default_grad
         self.grad = grad
@@ -614,14 +633,27 @@ class MonthlyTIModel(MassBalanceModel):
         self.ys = self.years[0]
         self.ye = self.years[-1]
 
-    def is_year_valid(self, year):
+    def is_year_valid(self, year: int) -> bool:
+        """Check if a year is within the climate period.
+
+        Returns
+        -------
+        bool
+            True if the year is within the climate period.
+        """
         return self.ys <= year <= self.ye
 
     def get_valid_year(self, year: int) -> int:
-        """Get and validate a year is within the data's time range."""
+        """Get and validate if a year is outside the data's time range.
+
+        Raises
+        ------
+        ValueError
+            If the year is outside of the data's climate period.
+        """
         if self.repeat:
             year = self.ys + (year - self.ys) % (self.ye - self.ys + 1)
-        if not self.is_year_valid(year):
+        if not self.is_year_valid(year):  # this is overloaded by subclasses
             raise ValueError(
                 f'year {year} out of the valid time bounds: '
                 f'[{self.ys}, {self.ye}]'
@@ -629,7 +661,20 @@ class MonthlyTIModel(MassBalanceModel):
         return year
 
     def get_time_index(self, year: int, month: int) -> np.ndarray:
-        """Get time index for a particular year and month."""
+        """Get time index for a particular year and month.
+        
+        Parameters
+        ----------
+        year : int
+            Integer year.
+        month : int
+            Integer month.
+
+        Returns
+        -------
+        np.ndarray
+            Time index (months).
+        """
         time_index = np.where((self.years == year) & (self.months == month))[0][0]
 
         return time_index
@@ -1098,7 +1143,7 @@ class DailyTIModel(MonthlyTIModel):
         Returns
         -------
         np.ndarray
-            Time index (days in month).
+            Time index (days).
         """
         time_index = np.where((self.years == year) & (self.months == month))[0]
 
@@ -1257,6 +1302,8 @@ class DailyTIModel(MonthlyTIModel):
         **kwargs,
     ) -> np.ndarray:
         """Get annual mass balance.
+
+        This is equivalent to taking the sum of ``get_daily_mb``.
 
         Parameters
         ----------
