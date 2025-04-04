@@ -126,8 +126,7 @@ def restore_oggm_class_cfg():
 def patch_data_urls(monkeypatch):
     """This makes sure we never download the big files with our tests"""
     url = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
-    url_dtcg = 'https://cluster.klima.uni-bremen.de/~dtcg/test_climate/'
-    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url_dtcg)
+    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url)
     monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
     monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
     monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
@@ -186,7 +185,6 @@ def secure_url_retrieve(url, *args, **kwargs):
         'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/',
         'cluster.klima.uni-bremen.de/~oggm/test_climate/',
         'cluster.klima.uni-bremen.de/~oggm/test_files/',
-        'cluster.klima.uni-bremen.de/~dtcg/test_climate/',
         'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
         'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
         # this URL might be removed again after the final integration of RGI7 OGGM

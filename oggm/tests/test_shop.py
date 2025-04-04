@@ -306,26 +306,20 @@ class Test_w5e5:
         assert not cfg.PARAMS["use_intersects"]
         assert cfg.PARAMS["hydro_month_nh"] == 1
 
-    @pytest.mark.parametrize("dataset", ["GSWP3_W5E5", "W5E5_daily"])
-    @pytest.mark.parametrize(
-        "server",
-        [None, "https://cluster.klima.uni-bremen.de/~dtcg/test_climate/"],
-    )
-    def test_get_gswp3_w5e5_file(self, dataset, server):
+    @pytest.mark.parametrize("dataset", ["", "_daily"])
+    def test_get_gswp3_w5e5_file(self, dataset):
 
         from oggm.shop import w5e5
 
-        d = dataset
+        d = f"GSWP3_W5E5{dataset}"
         for variables, _ in w5e5.BASENAMES[d].items():
-            assert os.path.isfile(
-                w5e5.get_gswp3_w5e5_file(
-                    dataset=d, var=variables, server=server
-                )
-            )
+            cache_path = w5e5.get_gswp3_w5e5_file(dataset=d, var=variables)
+            assert cache_path is not None
+            assert os.path.isfile(cache_path)
         with pytest.raises(ValueError):
             w5e5.get_gswp3_w5e5_file(d, "zoup")
 
-    @pytest.mark.parametrize("dataset", ["GSWP3_W5E5", "W5E5_daily"])
+    @pytest.mark.parametrize("dataset", ["", "_daily"])
     @pytest.mark.parametrize(
         "coord",
         [
@@ -333,13 +327,13 @@ class Test_w5e5:
             pytest.param(
                 (-70.8931 + 360, -72.4474),
                 marks=pytest.mark.skipif(
-                    dataset="W5E5_daily", reason="Glacier not in daily data."
+                    dataset="_daily", reason="Glacier not in daily data."
                 ),
             ),
             pytest.param(
                 (51.495, 30.9010),
                 marks=pytest.mark.skipif(
-                    dataset="W5E5_daily", reason="Glacier not in daily data."
+                    dataset="_daily", reason="Glacier not in daily data."
                 ),
             ),
             (0, 0),
@@ -356,7 +350,7 @@ class Test_w5e5:
         """
         
         from oggm.shop import w5e5
-        d = dataset
+        d = f"GSWP3_W5E5{dataset}"
 
         with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, "inv")) as dinv:
             dinv = dinv.load()
@@ -381,7 +375,7 @@ class Test_w5e5:
             assert np.abs(lon_near - lon) <= 0.25
             assert dist <= (0.25**2 + 0.25**2) ** 0.5
 
-        if dataset not in ["W5E5_daily"]:  # daily files are too large
+        if d not in ["GSWP3_W5E5_daily"]:  # daily files are too large
             # this only contains data for two glaciers, let's still check some basics
             # both glaciers are not at latitude or longitude 0
             with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, "temp_std")) as dtemp_std:
@@ -491,7 +485,7 @@ class Test_w5e5:
         assert os.path.exists(path_clim)
 
         with xr.open_dataset(path_clim) as ds_clim:
-            self.assert_data_bounds(dataset=ds_clim, period=(1979, 2019))
+            self.assert_data_bounds(dataset=ds_clim, period=(1901, 2019))
 
         # TODO: test climate statistics with winter_daily_mean_prcp
         # Currently this doesn't support daily data

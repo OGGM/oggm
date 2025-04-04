@@ -569,7 +569,7 @@ class TestMassBalanceModels:
           Class: DailyTIModel
           Attributes:
             - hemisphere: nh
-            - climate_source: W5E5_daily
+            - climate_source: GSWP3_W5E5_daily
             - melt_f: 6.59
             - prcp_fac: 2.50
             - temp_bias: 0.00
@@ -580,7 +580,7 @@ class TestMassBalanceModels:
             - t_melt: -1.0
             - repeat: False
             - ref_hgt: 2252.0
-            - ys: 1979
+            - ys: 1901
             - ye: 2019
             - upscale_factor: {out}
         """
@@ -955,7 +955,7 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
 
         # Climate period
-        yrp = [1979, 2019]
+        yrp = [1901, 2019]
         eval_year = 2000
 
         # Flowlines height
@@ -1039,7 +1039,7 @@ class TestMassBalanceModels:
             }
 
         s = massbalance.fixed_geometry_mass_balance(gdir, **daily_kwargs)
-        assert s.index[0] == 1979
+        assert s.index[0] == 1901
         assert s.index[-1] == 2019
 
         s = massbalance.fixed_geometry_mass_balance(
@@ -1511,21 +1511,26 @@ class TestDailyMassBalanceModels:
         assert os.path.exists(file_path)
         return file_path
 
-    def test_set_temporal_bounds(self, DailyTIModel, hef_gdir):
+    @pytest.mark.parametrize("start_year", [None, 1979])
+    def test_set_temporal_bounds(self, DailyTIModel, hef_gdir, start_year):
         import cftime
 
         gdir = hef_gdir
         file_path = self.get_daily_data_path(gdir)
-        model = DailyTIModel(gdir)
+        model = DailyTIModel(gdir, ys=start_year)
 
-        ys = 1979
+        ys = model.ys
+        if start_year is not None:
+            assert ys == start_year
+        else:
+            assert ys == 1901
         ye = 2019
         total_days = ((1 + ye - ys) * 365) + calendar.leapdays(ys, ye + 1)
 
         with ncDataset(file_path, mode="r") as nc_data:
             time = nc_data.variables["time"]
-            assert time.size == total_days
-            time_index = cftime.num2date(time[:], time.units, calendar=time.calendar)
+            time_index = cftime.num2date(time[-total_days:], time.units, calendar=time.calendar)
+            assert time_index.size == total_days
 
         assert time_index.shape == (total_days, )
         assert hasattr(model, "days")
