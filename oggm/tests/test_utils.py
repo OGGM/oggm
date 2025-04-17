@@ -949,6 +949,11 @@ class TestPreproCLI(unittest.TestCase):
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
 
+        kwargs = prepro_levels.parse_args(['--rgi-id-file', 'bla.json',
+                                           ])
+
+        assert kwargs['--rgi-id-file'] == 'bla.json'
+
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
