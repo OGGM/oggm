@@ -2734,32 +2734,30 @@ class TestDataFiles(unittest.TestCase):
     def test_copdemzone(self):
         z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM90')
         self.assertTrue(len(z) == 1)
-        eurl = ('https://copernicus-dem-90m.s3.amazonaws.com/'
-                'Copernicus_DSM_COG_30_S10_00_W078_00_DEM/'
-                'Copernicus_DSM_COG_30_S10_00_W078_00_DEM.tif')
+        eurl = ('https://opentopography.s3.sdsc.edu/raster/COP90/COP90_hh/'
+                'Copernicus_DSM_30_S10_00_W078_00_DEM.tif')
         self.assertEqual(eurl, z[0][0])
-        self.assertEqual('Copernicus_DSM_COG_30_S10_00_W078_00_DEM', z[0][1])
+        self.assertEqual('Copernicus_DSM_30_S10_00_W078_00_DEM', z[0][1])
 
         z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM30')
         self.assertTrue(len(z) == 1)
-        eurl = ('https://copernicus-dem-30m.s3.amazonaws.com/'
-                'Copernicus_DSM_COG_10_S10_00_W078_00_DEM/'
-                'Copernicus_DSM_COG_10_S10_00_W078_00_DEM.tif')
+        eurl = ('https://opentopography.s3.sdsc.edu/raster/COP30/COP30_hh/'
+                'Copernicus_DSM_10_S10_00_W078_00_DEM.tif')
         self.assertEqual(eurl, z[0][0])
-        self.assertEqual('Copernicus_DSM_COG_10_S10_00_W078_00_DEM', z[0][1])
+        self.assertEqual('Copernicus_DSM_10_S10_00_W078_00_DEM', z[0][1])
 
         z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM90')
         self.assertTrue(len(z) == 2)
-        self.assertTrue('Copernicus_DSM_COG_30_N46_00_E008_00_DEM' in
+        self.assertTrue('Copernicus_DSM_30_N46_00_E008_00_DEM' in
                         [z[0][1], z[1][1]])
-        self.assertTrue('Copernicus_DSM_COG_30_N46_00_E007_00_DEM' in
+        self.assertTrue('Copernicus_DSM_30_N46_00_E007_00_DEM' in
                         [z[0][1], z[1][1]])
 
         z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM30')
         self.assertTrue(len(z) == 2)
-        self.assertTrue('Copernicus_DSM_COG_10_N46_00_E008_00_DEM' in
+        self.assertTrue('Copernicus_DSM_10_N46_00_E008_00_DEM' in
                         [z[0][1], z[1][1]])
-        self.assertTrue('Copernicus_DSM_COG_10_N46_00_E007_00_DEM' in
+        self.assertTrue('Copernicus_DSM_10_N46_00_E007_00_DEM' in
                         [z[0][1], z[1][1]])
 
     def test_is_dem_source_available(self):

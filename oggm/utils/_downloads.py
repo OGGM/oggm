@@ -9,6 +9,7 @@ import hashlib
 import shutil
 import zipfile
 import sys
+import csv
 import math
 import logging
 from functools import partial, wraps
@@ -1528,22 +1529,25 @@ def alaska_dem_zone(lon_ex, lat_ex):
     return gdf.tile.values if len(gdf) > 0 else []
 
 
-def _copdem_tilelist(res):
-    """Fetches the list of tiles for a given resolution."""
+def _copdem_tilelist():
+    """Fetches the list of tiles."""
 
-    key = f'copdem_{res}_tilelist'
+    key = 'copdem_tilelist'
 
     # Did we open it yet?
     if key in cfg.DATA:
         return cfg.DATA[key]
 
     # If not let's go
-    list_url = file_downloader(f'https://copernicus-dem-{res}m.s3.amazonaws.com/tileList.txt')
-    with open(list_url, 'r') as file:
-        tile_list = [line.strip() for line in file]
+    list_url = ('https://cluster.klima.uni-bremen.de/~oggm/'
+                'test_files/copdem/copdem_tiles_202504.csv')
+    with open(file_downloader(list_url), 'r') as f:
+        reader = csv.reader(f)
+        next(reader)  # skip header
+        coord_set = set(tuple(row) for row in reader)
 
-    cfg.DATA[key] = tile_list
-    return tile_list
+    cfg.DATA[key] = coord_set
+    return coord_set
 
 
 def copdem_zone(lon_ex, lat_ex, source):
@@ -1551,25 +1555,26 @@ def copdem_zone(lon_ex, lat_ex, source):
 
     None if url is not available.
 
-    New: we now go for the AWS bucket here: https://registry.opendata.aws/copernicus-dem/
+    New: we now go for the AWS bucket from OpenTopography: https://doi.org/10.5069/G9028PQB
     """
 
     # because we use both meters and arc secs in our filenames...
-    if source[-2:] == '90':
+    dxm = source[-2:]
+    if dxm == '90':
         asec = '30'
-    elif source[-2:] == '30':
+    elif dxm == '30':
         asec = '10'
     else:
         raise InvalidDEMError('COPDEM Version not valid.')
 
     # Available tiles
-    tile_list = _copdem_tilelist(source[-2:])
+    tile_list = _copdem_tilelist()
 
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0
     lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
     lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
 
-    base_url = f'https://copernicus-dem-{source[-2:]}m.s3.amazonaws.com'
+    base_url = f'https://opentopography.s3.sdsc.edu/raster/COP{dxm}/COP{dxm}_hh'
 
     flist = []
     for lat in lats:
@@ -1580,10 +1585,9 @@ def copdem_zone(lon_ex, lat_ex, source):
             ew = 'W' if lon < 0 else 'E'
             lat_str = '{}{:02.0f}'.format(ns, abs(lat))
             lon_str = '{}{:03.0f}'.format(ew, abs(lon))
-
-            tilename = f'Copernicus_DSM_COG_{asec}_{lat_str}_00_{lon_str}_00_DEM'
-            if tilename in tile_list:
-                out = (f'{base_url}/{tilename}/{tilename}.tif', tilename)
+            tilename = f'Copernicus_DSM_{asec}_{lat_str}_00_{lon_str}_00_DEM'
+            if (lat_str, lon_str) in tile_list:
+                out = (f'{base_url}/{tilename}.tif', tilename)
             else:
                 out = (None, tilename)
             flist.append(out)
