@@ -73,7 +73,7 @@ def _rename_dem_folder(gdir, source=''):
     gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source))
 
 
-def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
+def run_prepro_levels(rgi_version=None, rgi_reg=None, rgi_id_file=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, demo=False, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
@@ -99,6 +99,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the RGI version to use (defaults to cfg.PARAMS)
     rgi_reg : str
         the RGI region to process
+    rgi_id_file : str
+        path to a json file with a list of RGI ids to process.
+        Overrides rgi_reg.
     border : int
         the number of pixels at the maps border
     output_folder : str
@@ -287,8 +290,25 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if demo:
         rgidf = utils.get_rgi_glacier_entities(cfg.DATA['demo_glaciers'].index)
-    elif test_rgidf is None:
-
+    elif test_rgidf:
+        rgidf = test_rgidf
+        cfg.set_intersects_db(test_intersects_file)
+    elif rgi_id_file:
+        # Read the RGI ids from the yaml file
+        with open(rgi_id_file, 'r') as f:
+            rgi_ids = json.load(f)
+        rgidf = utils.get_rgi_glacier_entities(rgi_ids, version=rgi_version)
+        rgi_regs = [s.split('-')[1].split('.')[0] for s in rgi_ids]
+        if len(np.unique(rgi_regs)) > 1:
+            raise InvalidParamsError('rgi_id_file should contain RGI ids '
+                                     'from the same region')
+        rgi_reg = np.unique(rgi_regs)[0]
+        # We use intersects
+        if rgi_version != '70C':
+            rgif = utils.get_rgi_intersects_region_file(rgi_reg,
+                                                        version=rgi_version)
+            cfg.set_intersects_db(rgif)
+    else:
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
@@ -318,9 +338,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             # For greenland we omit connectivity level 2
             if rgi_reg == '05':
                 rgidf = rgidf.loc[rgidf['Connect'] != 2]
-    else:
-        rgidf = test_rgidf
-        cfg.set_intersects_db(test_intersects_file)
 
     if is_test:
         if test_ids is not None:
@@ -827,6 +844,9 @@ def parse_args(args):
     parser.add_argument('--rgi-reg', type=str,
                         help='the rgi region to process. Is required if '
                              '$OGGM_RGI_REG is not set.')
+    parser.add_argument('--rgi-id-file', type=str,
+                        help='path to a json file with a list of RGI ids to process. '
+                             'Overrides rgi_reg.')
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
@@ -962,7 +982,7 @@ def parse_args(args):
     rgi_reg = args.rgi_reg
     if args.demo:
         rgi_reg = 0
-    if not rgi_reg and not args.demo:
+    if not rgi_reg and (not args.demo or not args.rgi_id_file):
         rgi_reg = os.environ.get('OGGM_RGI_REG', None)
         if rgi_reg is None:
             raise InvalidParamsError('--rgi-reg is required!')
@@ -995,6 +1015,7 @@ def parse_args(args):
 
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
+                rgi_id_file=args.rgi_id_file,
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_ids=args.test_ids,
