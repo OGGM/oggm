@@ -186,6 +186,7 @@ def secure_url_retrieve(url, *args, **kwargs):
             'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
             'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
             'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
+            's3.amazonaws.com/tileList.txt' in url or
             # this URL might be removed again after the final integration of RGI7 OGGM
             '~fmaussion/misc/rgi7_data/00_rgi70_regions/' in url or
             base_extra_v14.format('L1') in url or

@@ -1140,55 +1140,21 @@ def _download_topo_file_from_cluster_unlocked(fname):
     return outpath
 
 
-def _download_copdem_file(tilename, source):
+def _download_copdem_file(tileurl):
     with get_lock():
-        return _download_copdem_file_unlocked(tilename, source)
+        return _download_copdem_file_unlocked(tileurl)
 
 
-def _download_copdem_file_unlocked(tilename, source):
+def _download_copdem_file_unlocked(tileurl):
     """Checks if Copernicus DEM file is in the directory, if not download it.
-
-    cppfile : name of the tarfile to download
-    tilename : name of folder and tif file within the cppfile
-    source : either 'COPDEM90' or 'COPDEM30'
-
     """
-
-    # extract directory
-    tmpdir = cfg.PATHS['tmp_dir']
-    mkdir(tmpdir)
-
-    # tarfiles are extracted in directories per each tile
-    fpath = '{0}_DEM.tif'.format(tilename)
-    demfile = os.path.join(tmpdir, fpath)
-
-    # check if extracted file exists already
-    if os.path.exists(demfile):
-        return demfile
-
-    # Did we download it yet?
-    url = (f"https://prism-dem-open.copernicus.eu/pd-desk-open-access/prismDownload"
-           f"/COP-DEM_GLO-{source[-2:]}-DGED__2023_1/{tilename}.tar")
-    dest_file = file_downloader(url)
-
+    if not tileurl:
+        return None
+    dest_file = file_downloader(tileurl)
     # None means we tried hard but we couldn't find it
     if not dest_file:
         return None
-
-    # ok we have to extract it
-    if not os.path.exists(demfile):
-        tiffile = os.path.join(tilename, 'DEM', fpath)
-        with tarfile.open(dest_file) as tf:
-            tmember = tf.getmember(tiffile)
-            # do not extract the full path of the file
-            tmember.name = os.path.basename(tf.getmember(tiffile).name)
-            tf.extract(tmember, tmpdir)
-
-    # See if we're good, don't overfill the tmp directory
-    assert os.path.exists(demfile)
-    cfg.get_lru_handler(tmpdir).append(demfile)
-
-    return demfile
+    return dest_file
 
 
 def _download_aw3d30_file(zone):
@@ -1562,22 +1528,30 @@ def alaska_dem_zone(lon_ex, lat_ex):
     return gdf.tile.values if len(gdf) > 0 else []
 
 
+def _copdem_tilelist(res):
+    """Fetches the list of tiles for a given resolution."""
+
+    key = f'copdem_{res}_tilelist'
+
+    # Did we open it yet?
+    if key in cfg.DATA:
+        return cfg.DATA[key]
+
+    # If not let's go
+    list_url = file_downloader(f'https://copernicus-dem-{res}m.s3.amazonaws.com/tileList.txt')
+    with open(list_url, 'r') as file:
+        tile_list = [line.strip() for line in file]
+
+    cfg.DATA[key] = tile_list
+    return tile_list
+
+
 def copdem_zone(lon_ex, lat_ex, source):
-    """Returns a list of Copernicus DEM tilenames.
+    """Returns a list of Copernicus DEM urls and tilenames.
 
-    New:
-    We now go for the PRISM server download, which has a slightly different
-    API.
+    None if url is not available.
 
-    Parse available datasets:
-    curl -k -H "accept: csv" https://prism-dem-open.copernicus.eu/pd-desk-open-access/publicDemURLs
-
-    Parse available tiles:
-    curl -k -H "accept: csv" https://prism-dem-open.copernicus.eu/pd-desk-open-access/publicDemURLs/COP-DEM_GLO-30-DGED__2023_1
-
-    But I'm not sure why parsing the tiles is necessary, we can just use the
-    tilename as is and try to download it. If it doesn't exist, it's probably
-    OK to skip it.
+    New: we now go for the AWS bucket here: https://registry.opendata.aws/copernicus-dem/
     """
 
     # because we use both meters and arc secs in our filenames...
@@ -1588,9 +1562,14 @@ def copdem_zone(lon_ex, lat_ex, source):
     else:
         raise InvalidDEMError('COPDEM Version not valid.')
 
+    # Available tiles
+    tile_list = _copdem_tilelist(source[-2:])
+
     # adding small buffer for unlikely case where one lon/lat_ex == xx.0
     lons = np.arange(np.floor(lon_ex[0]-1e-9), np.ceil(lon_ex[1]+1e-9))
     lats = np.arange(np.floor(lat_ex[0]-1e-9), np.ceil(lat_ex[1]+1e-9))
+
+    base_url = f'https://copernicus-dem-{source[-2:]}m.s3.amazonaws.com'
 
     flist = []
     for lat in lats:
@@ -1601,7 +1580,14 @@ def copdem_zone(lon_ex, lat_ex, source):
             ew = 'W' if lon < 0 else 'E'
             lat_str = '{}{:02.0f}'.format(ns, abs(lat))
             lon_str = '{}{:03.0f}'.format(ew, abs(lon))
-            flist.append('Copernicus_DSM_{}_{}_00_{}_00'.format(asec, lat_str, lon_str))
+
+            tilename = f'Copernicus_DSM_COG_{asec}_{lat_str}_00_{lon_str}_00_DEM'
+            if tilename in tile_list:
+                out = (f'{base_url}/{tilename}/{tilename}.tif', tilename)
+            else:
+                out = (None, tilename)
+            flist.append(out)
+
     return flist
 
 
@@ -2483,8 +2469,8 @@ def get_topo_file(lon_ex=None, lat_ex=None, gdir=None, *,
 
     if source in ['COPDEM30', 'COPDEM90']:
         tilenames = copdem_zone(lon_ex, lat_ex, source)
-        for tilename in tilenames:
-            files.append(_download_copdem_file(tilename, source))
+        for tile_url, _ in tilenames:
+            files.append(_download_copdem_file(tile_url))
 
     if source == 'NASADEM':
         zones = nasadem_zone(lon_ex, lat_ex)
