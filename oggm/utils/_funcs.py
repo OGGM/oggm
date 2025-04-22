@@ -172,6 +172,31 @@ def tolist(arg, length=None):
     return arg
 
 
+def set_array_type(array):
+    """Convert array to scalar if it contains a single value.
+
+    Converting arrays with ndim > 0 to scalar is deprecated in numpy
+    1.25+. Some OGGM functions expect arrays with a single value to be returned as scalars.
+
+    Parameters
+    ----------
+    array : ArrayLike
+        A numpy array or list.
+
+    Returns
+    -------
+    float or np.ndarray
+        Scalar if the array contains a single value, otherwise a numpy
+        array.
+    """
+    if len(array) > 1:
+        output = np.asanyarray(array)
+    else:
+        output = array[0]
+
+    return output
+
+
 def haversine(lon1, lat1, lon2, lat2):
     """Great circle distance between two (or more) points on Earth
 
@@ -687,6 +712,22 @@ def floatyear_to_date(yr):
         The floating year
     """
 
+    if isinstance(yr, xr.DataArray):
+        yr = yr.values
+
+    # Ensure yr is a np.array, even for scalar values
+    yr = np.atleast_1d(yr).astype(np.float64)
+
+    # check if year is inside machine precision to next higher int
+    yr_ceil = np.ceil(yr)
+    yr = np.where(np.isclose(yr,
+                             yr_ceil,
+                             rtol=np.finfo(np.float64).eps,
+                             atol=0
+                             ),
+                  yr_ceil,
+                  yr)
+
     out_y, remainder = np.divmod(yr, 1)
     out_y = out_y.astype(int)
 
@@ -697,12 +738,9 @@ def floatyear_to_date(yr):
                                 np.round(month_exact),
                                 np.floor(month_exact)).astype(int))
 
-    if (isinstance(yr, list) or isinstance(yr, np.ndarray)) and len(yr) == 1:
+    if yr.size == 1:
         out_y = out_y.item()
         out_m = out_m.item()
-    elif isinstance(yr, xr.DataArray):
-        out_y = np.array(out_y)
-        out_m = np.array(out_m)
 
     return out_y, out_m
 
@@ -769,6 +807,11 @@ def calendardate_to_hydrodate(y, m, start_month=None):
         the first month of the hydrological year
     """
 
+    if isinstance(y, xr.DataArray):
+        y = y.values
+    if isinstance(m, xr.DataArray):
+        m = m.values
+
     if start_month is None:
         raise InvalidParamsError('In order to avoid confusion, we now force '
                                  'callers of this function to specify the '
@@ -792,6 +835,11 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     Parameters
     ----------
     """
+
+    if isinstance(y0, xr.DataArray):
+        y0 = y0.values
+    if isinstance(y1, xr.DataArray):
+        y1 = y1.values
 
     if y1 is not None:
         years = np.arange(np.floor(y0), np.floor(y1) + 1)

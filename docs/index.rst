@@ -2,20 +2,25 @@
 A modular and open source glacier model
 ---------------------------------------
 
-**OGGM is a cutting-edge open source modelling framework** designed to simulate
-the past and future mass balance, volume, and geometry of glaciers worldwide.
+**OGGM is an open source modelling framework** designed to simulate
+the past and future mass balance, volume, and geometry of all glaciers worldwide.
 
-The model features several glacier evolution models, including an flowline ice
-dynamics module accounting for glacier geometry and frontal ablation.
-**WOGGM is a reliable and readily applicable tool for studying glaciers**.
+The model framework features several glacier evolution models, including an flowline ice
+dynamics module accounting for frontal ablation, and several mass-balance models, including
+a pre-calibrated temperature-index model.
 
-OGGM is also a modular platform that supports novel modelling workflows,
-**encouraging researchers to create unique model chains and analyses for their research**.
+OGGM is above all a modular platform that supports novel modelling workflows,
+**encouraging researchers to create unique model chains for their research**.
 Our framework is designed to be flexible and adaptable, making it an
 ideal tool for a wide range of applications in glaciology and related fields.
 
-**This webpage is for the software documentation: for general information about the
-OGGM project and related news, visit** `oggm.org <http://oggm.org>`_.
+**This webpage is for the software documentation for version 1.6.x (unreleased)**:
+
+- check-out :doc:`whats-new` to read about the updates in this version
+- check-out `docs.oggm.org/en/stable <https://docs.oggm.org/en/stable>`_ for the stable version
+- visit `oggm.org <http://oggm.org>`_ for general news
+- visit `tutorials.oggm.org <http://tutorials.oggm.org>`_ for the interactive tutorials
+- visit `edu.oggm.org <http://edu.oggm.org>`_ for the educational platform
 
 .. admonition:: A note for new users
 
@@ -148,7 +153,6 @@ Get in touch
 - Report bugs or share your ideas on the `issue tracker`_, and improve
   the model by submitting a `pull request`_.
 - Chat with us on `Slack`_! (just send us an `e-mail`_ so we can add you)
-- Follow us on `Twitter`_.
 - Participate to our regular `meeting`_. (`reach out`_  if you want to join in)
 - Or you can always send us an `e-mail`_ the good old way.
 
@@ -157,7 +161,6 @@ Get in touch
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
-.. _Twitter: https://twitter.com/OGGM_org
 .. _meeting: https://oggm.org/meetings/
 .. _reach out: info@oggm.org
 

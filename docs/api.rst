@@ -95,11 +95,13 @@ OGGM Shop
     shop.histalp.process_histalp_data
     shop.hugonnet_maps.hugonnet_to_gdir
     shop.hugonnet_maps.compile_hugonnet_statistics
-    shop.its_live.velocity_to_gdir
+    shop.its_live.itslive_velocity_to_gdir
     shop.its_live.compile_itslive_statistics
-    shop.millan22.thickness_to_gdir
-    shop.millan22.velocity_to_gdir
+    shop.millan22.millan_thickness_to_gdir
+    shop.millan22.millan_velocity_to_gdir
     shop.millan22.compile_millan_statistics
+    shop.bedmachine.bedmachine_to_gdir
+    shop.bedmachine.compile_bedmachine_statistics
     shop.rgitopo.init_glacier_directories_from_rgitopo
     shop.rgitopo.select_dem_from_dir
     shop.rgitopo.dem_quality_check
@@ -129,9 +131,12 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.glacier_masks
     tasks.simple_glacier_masks
     tasks.rasterio_glacier_mask
+    tasks.rasterio_glacier_exterior_mask
+    tasks.compute_hypsometry_attributes
     tasks.gridded_attributes
     tasks.gridded_mb_attributes
     tasks.gridded_data_var_to_geotiff
+    tasks.rgi7g_to_complex
     tasks.compute_centerlines
     tasks.compute_downstream_line
     tasks.compute_downstream_bedshape
@@ -145,25 +150,31 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.fixed_dx_elevation_band_flowline
     tasks.process_climate_data
     tasks.process_custom_climate_data
+    tasks.historical_delta_method
     tasks.mb_calibration_from_scalar_mb
     tasks.mb_calibration_from_geodetic_mb
     tasks.mb_calibration_from_wgms_mb
     tasks.apparent_mb_from_linear_mb
     tasks.apparent_mb_from_any_mb
+    tasks.perturbate_mb_params
     tasks.fixed_geometry_mass_balance
     tasks.compute_ela
+    tasks.process_w5e5_data
     tasks.process_cru_data
     tasks.process_dummy_cru_file
     tasks.process_histalp_data
     tasks.process_ecmwf_data
     tasks.process_gcm_data
     tasks.process_cesm_data
+    tasks.process_monthly_isimip_data
     tasks.process_cmip_data
-    tasks.historical_delta_method
+    tasks.process_lmr_data
+    tasks.process_modera_data
     tasks.prepare_for_inversion
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
     tasks.get_inversion_volume
+    tasks.compute_velocities
     tasks.compute_inversion_velocities
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp
@@ -173,11 +184,12 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.run_random_climate
     tasks.run_from_climate_data
     tasks.run_constant_climate
-    tasks.merge_consecutive_run_outputs
+    tasks.run_with_hydro
     tasks.run_dynamic_spinup
     tasks.run_dynamic_melt_f_calibration
     tasks.copy_to_basedir
     tasks.gdir_to_tar
+    tasks.merge_consecutive_run_outputs
 
 .. _apiglobaltasks:
 

@@ -3,8 +3,62 @@
 Version history
 ===============
 
-v1.6.2 (unreleased)
--------------------
+v1.6.x (not released)
+---------------------
+
+Enhancements
+~~~~~~~~~~~~
+
+- Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
+  calculate quantiles from multiple fl_diagnostic files. It enables users to
+  compute metrics such as the median flowline across various GCM projections
+  (:pull:`1746`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New ranking options for the ``distribute.assign_points_to_band`` task, which
+  determines the order in which pixels "melt away" when redistributing flowline
+  model runs into 2D for visualization purposes. It is now possible to combine
+  different variables from ``gridded_data`` (e.g. ``slope``,
+  ``dis_from_border``, ...) to define this ranking, providing greater flexibility
+  and control over how the melting sequence is visualized (:pull:`1746`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added BedMachine products to the shop (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Updated itslive velocity products to v2 (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added "reset_state()" function to ``MassBalanceModel`` to signal any state-dependent
+  mass balance model to "reset its state" at the start of the period. This function
+  does nothing in the parent class and would only be implemented by a state-ful
+  mass balance model. There might be a use for this in the future, but for now
+  it's just a placeholder (:pull:`1757`).
+  By `Dan Goldberg <https://github.com/dngoldberg>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_.
+- Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
+  are no longer recursive and have been optimised for performance.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed a bug where Millan velocities would be assigned 0
+  instead of NaN in grid points without velocity (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
+  By `Dan Goldberg <https://github.com/dngoldberg>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_.
+
+v1.6.2 (August 25, 2024)
+------------------------
+
+A new minor release of the OGGM with several improvements and bug fixes.
+The changes and additions are important, but not fundamental.
+Most users should switch to this version if they don't care about
+full reproducibility of existing results. The previous 1.6 preprocessed
+directories are still compatible and can be used with this version.
+Some bugs have been fixed however (see below), and if they matter to you,
+you may have to reprocess the data yourself or be patient (we aim to
+publish a "final" 1.6.X release before the end of the year, which will comprise
+updated preprocessed repositories, including a working version of RGI7
+repositories).
 
 Enhancements
 ~~~~~~~~~~~~
@@ -21,12 +75,13 @@ Enhancements
   for merging distributed data from multiple glacier directories, including
   the possibility of adding topography to the merged grid. The latter function
   acts as a wrapper for the first one, specifically designed for merging
-  distributed thickness data from a dynamic model run.
+  distributed thickness data from a dynamic model run (:pull:`1674`,
+  :pull:`1691`, :pull:`1697` and :pull:`1719`).
   By `Alex Fischer <https://github.com/afisc>`_ and
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added a new calving module to the sandbox. The module is based on
   Malles et al., 2023, but is currently still in development and
-  cannot be used operational yet. In general, calving is not
+  cannot be used operationally yet. In general, calving is not
   operational in the v1.6 series, it can only be used on a glacier
   by glacier basis and is not yet fully integrated in the workflow
   (:pull:`1615`).
@@ -43,10 +98,45 @@ Enhancements
   By `Alex Fischer <https://github.com/afisc>`_
 - Added Cook et al 2023 Alps thickness data to the shop (:pull:`1724`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added support for RGI7 (:pull:`1657`, :pull:`1702` and :pull:`1720`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added GlaThiDa data to the shop (:pull:`1663`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added an installation guide for Windows users (:pull:`1666` and :pull:`1683`).
+  By `Anouk Vlug <https://github.com/anoukvlug>`_ and
+  `Rebekka Neugebauer <https://github.com/rebneugebauer>`_
+- Made it easier to run parameter perturbation experiments by
+  allowing more than one ``mb_calib.json`` file in the
+  working directory (:pull:`1678`) and by adding a new
+  ``perturbate_mb_params`` task (:pull:`1669`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Preprocessed directories can now have categorical resolution
+  classes like GloGEM does, where users can choose
+  bins where a given dx is used (:pull:`1664`). It looks nicer
+  to the eye, but I still think the continuous ``dx`` approach is better.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The mass-balance model can now be calibrated on regional averages
+  instead of glacier-per-glacier values. This is useful to trick
+  RGI7 into being calibrated (:pull:`1692`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added the rgi7g_to_complex task which adds a mask of glacier
+  entities in the glacier complex glacier dirs (:pull:`1736`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a bug in ``inversion.filter_inversion_output`` that caused an error
+  for small glaciers with fewer than five grid points containing ice
+  (:pull:`1635`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Changed variable name from ``t_bias`` to ``t_spinup`` in
+  ``dynamic_spinup.run_dynamic_spinup``, to avoid confusions with
+  variable names of the massbalance models (:pull:`1671`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a bug in ``dynamic_spinup.run_dynamic_melt_f_calibration`` that allowed
+  the melt_f value to slightly exceed the defined limits (:pull:`1685`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - The binned variables in the elevation band flowlines did not use the
   glacier mask when preserving the total values. This is a bad
   bug that is now fixed (:pull:`1661`).

@@ -123,6 +123,16 @@ class TestFuncs(object):
         r = utils.floatyear_to_date(yr)
         assert r == (1998, 2)
 
+        # tests for floating point precision
+        yr = 1 + 1/12 - 1/12
+        r = utils.floatyear_to_date(yr)
+        assert r == (1, 1)
+
+        for i in range(12):
+            yr = 2000
+            r = utils.floatyear_to_date(yr + i / 12)
+            assert r == (yr, i + 1)
+
     def test_date_to_floatyear(self):
 
         r = utils.date_to_floatyear(0, 1)
@@ -191,6 +201,19 @@ class TestFuncs(object):
         d, w = ([0], [0])
         with pytest.raises(ZeroDivisionError):
             utils.weighted_average_1d(d, weights=w)
+
+    @pytest.mark.parametrize(
+            "in_data,out_type",
+            [
+                (np.empty(1), float),
+                (np.empty(5,), np.ndarray),
+                ([1.0], float),
+                ([1.0, 2.0], np.ndarray),
+            ]
+        )
+    def test_set_array_type(self, in_data, out_type):
+        out_data = utils.set_array_type(in_data)
+        assert isinstance(out_data, out_type)
 
     def test_hydro_convertion(self):
 
@@ -3182,6 +3205,10 @@ class TestELAComputation(unittest.TestCase):
         assert (np.all(np.isfinite(ELA1)))
         assert ([ELA1 < ELA2])
         assert_allclose(np.mean(mb * SEC_IN_YEAR), 0, atol=1e-3)
+
+        for ela in (ELA1, ELA2):
+            assert isinstance(ela, pd.Series)
+            assert ela.shape == (1 + (ye - ys),)
 
     def test_compile(self):
         gdir = init_hef()

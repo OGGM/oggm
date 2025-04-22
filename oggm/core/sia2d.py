@@ -161,7 +161,7 @@ class Model2D(object):
         if self._mb_current_date != date or (self._mb_current_out is None):
             # We need to reset all
             self._mb_current_date = date
-            _mb = self._mb_call(self.surface_h.flatten(), year=year)
+            _mb = self._mb_call(self.surface_h.flatten(), year=year, fl_id=0)
             _mb = _mb.reshape((self.ny, self.nx))
             if self.mb_filter is not None:
                 _mb[~ self.mb_filter & (_mb > 0)] = 0

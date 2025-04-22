@@ -19,15 +19,6 @@ try:
 except ImportError:
     pass
 
-try:
-    import salem
-except ImportError:
-    pass
-
-try:
-    import geopandas as gpd
-except ImportError:
-    pass
 
 from oggm import utils, cfg
 
@@ -224,8 +215,9 @@ def hugonnet_statistics(gdir):
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             dhdt = ds['hugonnet_dhdt'].where(ds['glacier_mask'], np.nan).load()
+            gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             d['hugonnet_area_km2'] = float((~dhdt.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)
-            d['hugonnet_perc_cov'] = float(d['hugonnet_area_km2'] / gdir.rgi_area_km2)
+            d['hugonnet_perc_cov'] = float(d['hugonnet_area_km2'] / gridded_area)
             with warnings.catch_warnings():
                 # This can trigger an empty mean warning
                 warnings.filterwarnings("ignore", category=RuntimeWarning)

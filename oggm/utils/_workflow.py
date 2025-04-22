@@ -2313,9 +2313,9 @@ def extend_past_climate_run(past_run_file=None,
 
         # Time
         ods['hydro_year'].data[:] = years
-        ods['hydro_month'].data[:] = ods['hydro_month'][-1]
+        ods['hydro_month'].data[:] = ods['hydro_month'][-1].item()
         ods['calendar_year'].data[:] = years
-        ods['calendar_month'].data[:] = ods['calendar_month'][-1]
+        ods['calendar_month'].data[:] = ods['calendar_month'][-1].item()
         for vn in ['hydro_year', 'hydro_month', 'calendar_year', 'calendar_month']:
             ods[vn] = ods[vn].astype(int)
 
@@ -3423,6 +3423,12 @@ class GlacierDirectory(object):
             Apply a suffix to the file
         """
 
+        if isinstance(prcp, xr.DataArray):
+            prcp = prcp.values
+        if isinstance(temp, xr.DataArray):
+            temp = temp.values
+        if isinstance(temp_std, xr.DataArray):
+            temp_std = temp_std.values
         # overwrite as default
         fpath = self.get_filepath(file_name, filesuffix=filesuffix)
         if os.path.exists(fpath):

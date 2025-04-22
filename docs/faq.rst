@@ -82,7 +82,7 @@ Thanks for your interest in OGGM! Usually, we prefer to keep
 usage questions on `github issues <https://github.com/OGGM/oggm/issues>`_
 so that everybody can learn from all questions and their answers.
 You can also join our Slack discussion channel if you want a
-more interactive forum. Keep in touch with us per email if you'd
+more interactive forum. Keep in touch with us if you'd
 like to join, we are a very open community!
 
 

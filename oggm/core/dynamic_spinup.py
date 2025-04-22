@@ -1548,8 +1548,8 @@ def dynamic_melt_f_run(
     with utils.DisableLogger():
         ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
                                       path=False)
-    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values -
-                   ds.volume.loc[yr0_ref_mb].values) /
+    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values[0] -
+                   ds.volume.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
                   cfg.PARAMS['ice_density'])
@@ -1960,10 +1960,8 @@ def run_dynamic_melt_f_calibration(
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         # calculate the mismatch of dmdtda
-        try:
-            cost = float(dmdtda_mdl - ref_dmdtda)
-        except:
-            t = 1
+        cost = float(dmdtda_mdl - ref_dmdtda)
+
         return cost
 
     def init_cost_fun():
