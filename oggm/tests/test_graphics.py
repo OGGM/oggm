@@ -182,6 +182,7 @@ def test_multiple_inversion():
     cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
+    cfg.PARAMS['map_proj'] = 'tmerc'
     cfg.PATHS['working_dir'] = testdir
 
     # Get the RGI ID
@@ -269,6 +270,7 @@ def test_multiple_models():
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['border'] = 40
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     # Get the RGI ID
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
@@ -379,6 +381,7 @@ def test_chhota_shigri():
     cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     hef_file = get_demo_file('divides_RGI50-14.15990.shp')
     df = gpd.read_file(hef_file)
@@ -424,6 +427,7 @@ def test_ice_cap():
     cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     df = gpd.read_file(get_demo_file('divides_RGI50-05.08389.shp'))
     df['Area'] = df.Area * 1e-6  # cause it was in m2
@@ -467,6 +471,7 @@ def test_coxe():
     cfg.PARAMS['use_winter_prcp_fac'] = False
     cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
     entity = gpd.read_file(hef_file).iloc[0]
