@@ -409,21 +409,21 @@ class MonthlyTIModel(MassBalanceModel):
         prcp_fac : float, optional
             set to the value of the precipitation factor you want to use
             (the default is to use the calibrated value).
-        bias : float, optional
+        bias : float, default 0.0
             set to the alternative value of the calibration bias [mm we yr-1]
             you want to use (the default is to use the calibrated value)
             Note that this bias is *substracted* from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
-        ys : int
+        ys : int, optional
             The start of the climate period where the MB model is valid
             (default: the period with available data)
-        ye : int
+        ye : int, optional
             The end of the climate period where the MB model is valid
             (default: the period with available data)
-        repeat : bool
+        repeat : bool, default False
             Whether the climate period given by [ys, ye] should be repeated
             indefinitely in a circular way
-        check_calib_params : bool
+        check_calib_params : bool, default True
             OGGM will try hard not to use wrongly calibrated parameters
             by checking the global parameters used during calibration and
             the ones you are using at run time. If they don't match, it will
@@ -1017,8 +1017,17 @@ class DailyTIModel(MonthlyTIModel):
         self,
         gdir,
         filename: str = "climate_historical_daily",
-        upscale_factor: float = 1.0,
-        **kwargs,
+        input_filesuffix : str = "",
+        mb_params_filesuffix : str = "",
+        fl_id : int = None,
+        melt_f : float = None,
+        temp_bias : float = None,
+        prcp_fac : float = None,
+        bias : float = 0.0,
+        ys : int = None,
+        ye : int = None,
+        repeat : bool = False,
+        check_calib_params : bool = True,
     ):
         """Inherits from MonthlyTIModel.
 
@@ -1029,10 +1038,6 @@ class DailyTIModel(MonthlyTIModel):
         filename : str, default "climate_historical_daily"
             Set to a different BASENAME if you want to use alternative
             climate data.
-        upscale_factor : float, default 1.0
-            Factor for upscaling to different temporal resolution.
-            ``melt_f`` is for a Julian year of 365 days even when
-            calibrated for leap years.
         input_filesuffix : str, optional
             Append a suffix to the climate input filename (useful for
             GCM runs).
@@ -1075,8 +1080,23 @@ class DailyTIModel(MonthlyTIModel):
             this check.
         """
 
-        super().__init__(gdir=gdir, filename=filename, **kwargs)
-        self.upscale_factor = upscale_factor
+        # Do not pass kwargs to prevent subclasses of DailyTIModel from
+        # passing illegal args to MonthlyTIModel.
+        super().__init__(
+            gdir=gdir,
+            filename=filename,
+            input_filesuffix=input_filesuffix,
+            mb_params_filesuffix=mb_params_filesuffix,
+            fl_id=fl_id,
+            melt_f=melt_f,
+            temp_bias=temp_bias,
+            prcp_fac=prcp_fac,
+            bias=bias,
+            ys=ys,
+            ye=ye,
+            repeat=repeat,
+            check_calib_params=check_calib_params,
+        )
 
     def set_temporal_bounds(
         self, nc_data: xr.DataArray, ys: int, ye: int, default_grad: float
@@ -1330,14 +1350,14 @@ class DailyTIModel(MonthlyTIModel):
         )
 
         year_length = self.get_year_length(year)
-        self.upscale_factor = prcpsol.shape[1] / 365
+        upscale_factor = prcpsol.shape[1] / 365
         mb_annual = np.sum(
-            prcpsol - self.melt_f * self.upscale_factor * melt_temperature,
+            prcpsol - self.melt_f * upscale_factor * melt_temperature,
             axis=1,
         )
 
         mb_annual = (
-            (mb_annual - self.bias * self.upscale_factor)
+            (mb_annual - self.bias * upscale_factor)
             / year_length
             / self.rho
         )
@@ -1388,13 +1408,13 @@ class DailyTIModel(MonthlyTIModel):
         temperature, melt_temperature, prcp, prcpsol = (
             self._get_2d_daily_climate(heights=heights, year=year)
         )
-        self.upscale_factor = prcpsol.shape[1] / 365
+        upscale_factor = prcpsol.shape[1] / 365
         mb_daily = (
-            prcpsol - self.melt_f * self.upscale_factor * melt_temperature
+            prcpsol - self.melt_f * upscale_factor * melt_temperature
         )
 
         mb_daily = (
-            (mb_daily - self.bias * self.upscale_factor) / SEC_IN_DAY / self.rho
+            (mb_daily - self.bias * upscale_factor) / SEC_IN_DAY / self.rho
         )
         if add_climate:
             return (
@@ -1464,6 +1484,23 @@ class DailyTIModel(MonthlyTIModel):
         smb = np.where(mask, smb * 366 / 365, smb)
 
         return smb
+
+    def get_specific_mb_daily(self, heights=None, widths=None, year=None):
+        """ returns specific daily mass balance in kg m-2 day
+
+        (implemented in order that Sarah Hanus can use daily input and also gets daily output)
+        """
+        if len(np.atleast_1d(year)) > 1:
+            stack = []
+            for yr in year:
+                out = self.get_specific_mb_daily(heights=heights, widths=widths, year=yr)
+                stack = np.append(stack, out)
+            return np.asarray(stack)
+
+        mb = self.get_daily_mb(heights, year=year)
+        spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
+        assert len(spec_mb) > 360
+        return spec_mb
 
     def get_year_length(self, year: float = None) -> float:
         """Get the number of seconds in a year.

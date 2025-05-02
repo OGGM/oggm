@@ -560,8 +560,7 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MonthlyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
-    @pytest.mark.parametrize("upscale,out", [(None, 1.0), (0.8, 0.8)])
-    def test_repr_daily(self, hef_gdir, upscale, out):
+    def test_repr_daily(self, hef_gdir):
         from textwrap import dedent
 
         expected = dedent(f"""\
@@ -582,15 +581,9 @@ class TestMassBalanceModels:
             - ref_hgt: 2252.0
             - ys: 1901
             - ye: 2019
-            - upscale_factor: {out}
         """
         )
-        if not upscale:
-            mb_mod = massbalance.DailyTIModel(hef_gdir, bias=0)
-        else:
-            mb_mod = massbalance.DailyTIModel(
-                hef_gdir, bias=0, upscale_factor=0.8
-            )
+        mb_mod = massbalance.DailyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
 
