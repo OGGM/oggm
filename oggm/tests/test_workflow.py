@@ -196,7 +196,10 @@ class TestFullRun(unittest.TestCase):
     @pytest.mark.slow
     def test_calibrate_inversion_from_consensus(self):
 
-        gdirs = up_to_inversion(params_file='mini_params_for_test.cfg')
+        # test mini params file, define path relative to file location
+        fp_mini_params = os.path.join(os.path.dirname(__file__),
+                                      'mini_params_for_test.cfg')
+        gdirs = up_to_inversion(params_file=fp_mini_params)
 
         # check if mini params file is used as expected
         assert cfg.PARAMS['lru_maxsize'] == 123
