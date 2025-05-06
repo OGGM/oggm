@@ -649,6 +649,108 @@ class TestMassBalanceModels:
         # assert_allclose(mb.get_ela(year=yrs[:30]),
         #                 mb_gw.get_ela(year=yrs[:30]))
 
+    @pytest.mark.parametrize("ref_year", [1979, 1980])
+    def test_get_annual_specific_mass_balance(self, hef_gdir, ref_year):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        test_fls = gdir.read_pickle("model_flowlines")
+        assert len(test_fls) > 1
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
+        )
+        test_mbs = mb_mod.get_annual_specific_mass_balance(
+            fls=test_fls, year=ref_year
+        )
+        assert isinstance(test_mbs, np.float64)
+
+        # Compare to old function
+        flowline_models = mb_mod.flowline_mb_models
+        fls = gdir.read_pickle("model_flowlines")
+        year = ref_year
+        mbs = []
+        widths = []
+        for i, (fl, mb_mod) in enumerate(zip(fls, flowline_models)):
+            _widths = fl.widths
+            try:
+                # For rect and parabola don't compute spec mb
+                _widths = np.where(fl.thick > 0, _widths, 0)
+            except AttributeError:
+                pass
+            assert isinstance(_widths, np.ndarray)
+            widths = np.append(widths, _widths)
+            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
+            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
+        assert widths.shape == mbs.shape
+        ref_mbs = utils.weighted_average_1d(mbs, widths)
+
+        assert test_mbs == ref_mbs
+
+    def test_get_specific_mb(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        ys = 1979
+        ye = 2019
+        years = np.arange(ys, ye + 1)
+
+        fls = gdir.read_pickle("inversion_flowlines")
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir,
+            fls=fls,
+            mb_model_class=massbalance.MonthlyTIModel,
+            repeat=True,
+            ys=ys,
+            ye=ye,
+        )
+        smb = mb_mod.get_specific_mb(year=years)
+        assert isinstance(smb, np.ndarray)
+        assert smb.shape == (1 + (ye - ys),)
+
+        # Rough non-weighted bounds
+        ref_smb_lo = (
+            mb_mod.get_annual_mb(fls[-1].surface_h, year=ys, fls=fls, fl_id=-1)
+            * cfg.SEC_IN_YEAR
+            * cfg.PARAMS["ice_density"]
+        )
+        ref_smb_hi = (
+            mb_mod.get_annual_mb(fls[0].surface_h, year=ys, fls=fls, fl_id=0)
+            * cfg.SEC_IN_YEAR
+            * cfg.PARAMS["ice_density"]
+        )
+
+        smb_single = mb_mod.get_specific_mb(year=ys)
+        assert isinstance(smb_single, float)
+        assert smb_single == smb[0]
+        assert ref_smb_lo.mean() < smb_single < ref_smb_hi.mean()
+
+    def test_get_ela(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        ys = 1979
+        ye = 2019
+        years = np.arange(ys, ye + 1)
+
+        fls = gdir.read_pickle("inversion_flowlines")
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir,
+            fls=fls,
+            mb_model_class=massbalance.MonthlyTIModel,
+            repeat=True,
+            ys=ys,
+            ye=ye,
+        )
+        ela = mb_mod.get_ela(year=years)
+        assert isinstance(ela, np.ndarray)
+        assert ela.shape == (1 + (ye - ys),)
+
+        ela_single = mb_mod.get_ela(year=ys)
+        assert isinstance(ela_single, float)
+        assert ela_single == ela[0]
+        assert fls[-1].surface_h.min() < ela_single < fls[0].surface_h.max()
+
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
@@ -792,6 +894,7 @@ class TestMassBalanceModels:
         mbts = yrs * 0.
         for i, yr in enumerate(yrs):
             mbts[i] = mb_mod.get_specific_mb(h, w, year=yr)
+            assert isinstance(mbts[i], float)
             r_mbh += mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR
         r_mbh /= ny
         np.testing.assert_allclose(ref_mbh, r_mbh, atol=0.2)
@@ -3197,6 +3300,80 @@ class TestHEF:
             plt.xlabel('Vol (km3)')
             plt.legend()
             plt.show()
+
+    @pytest.mark.slow
+    def test_fl_diag_quantiles(self, hef_gdir):
+        cfg.PARAMS['store_fl_diagnostics'] = True
+
+        # conduct three runs from which to calculate the quantiles
+        output_suffixes = ['_run1', '_run2', '_run3']
+        for i, output_suffix in enumerate(output_suffixes):
+            run_random_climate(hef_gdir, y0=1985-i*5, nyears=10,
+                               output_filesuffix=output_suffix, seed=i)
+
+        # only calculate the median
+        workflow.execute_entity_task(tasks.compute_fl_diagnostics_quantiles,
+                                     hef_gdir,
+                                     input_filesuffixes=output_suffixes,
+                                     quantiles=0.5,
+                                     output_filesuffix='_median'
+                                     )
+
+        # calculate 5th and 95th quantiles together
+        workflow.execute_entity_task(tasks.compute_fl_diagnostics_quantiles,
+                                     hef_gdir,
+                                     input_filesuffixes=output_suffixes,
+                                     quantiles=[0.05, 0.95],
+                                     output_filesuffix='_iqr'
+                                     )
+
+        ft = 'fl_diagnostics'
+        with xr.open_dataset(
+                hef_gdir.get_filepath(ft, filesuffix=output_suffixes[0])) as ds:
+            fl_ids = ds.flowlines.data
+
+        for fl_id in fl_ids:
+            # open data of current flowline
+            ds_runs = []
+            for output_suffix in output_suffixes:
+                fp = hef_gdir.get_filepath(ft, filesuffix=output_suffix)
+                with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
+                    ds_runs.append(ds.load())
+            fp = hef_gdir.get_filepath(ft, filesuffix='_median')
+            with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
+                ds_median = ds.load()
+            fp = hef_gdir.get_filepath(ft, filesuffix='_iqr')
+            with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
+                ds_iqr = ds.load()
+
+            # the median flowline should never be the smallest or largest
+            # value, compared to the values of the runs (as we have three runs)
+            variables_to_check = ['volume_m3', 'area_m2', 'thickness_m']
+            for var in variables_to_check:
+                var_das = []
+                for ds_run in ds_runs:
+                    var_das.append(ds_run[var])
+                var_stack = xr.concat(var_das, dim='runs')
+
+                var_min = var_stack.min(dim='runs')
+                var_max = var_stack.max(dim='runs')
+
+                var_median = ds_median[var]
+                is_median_equal_to_min = (var_median == var_min).any()
+                is_median_equal_to_max = (var_median == var_max).any()
+
+                assert is_median_equal_to_min
+                assert is_median_equal_to_max
+
+                # median should be larger/smaller than 5th/95th quantile
+                var_5th = ds_iqr.loc[{'quantile': 0.05}][var]
+                var_95th = ds_iqr.loc[{'quantile': 0.95}][var]
+
+                is_median_larger_than_5th_q = (var_median >= var_5th).all()
+                is_median_smaller_than_95th_q = (var_median <= var_95th).all()
+
+                assert is_median_larger_than_5th_q
+                assert is_median_smaller_than_95th_q
 
 
 @pytest.mark.usefixtures('with_class_wd')
