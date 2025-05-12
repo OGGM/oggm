@@ -104,7 +104,7 @@ def _check_ds_validity(ds):
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
+def process_ecmwf_data(gdir, settings_filesuffix='', dataset=None, ensemble_member=0,
                        y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the ECMWF baseline climate data for this glacier.
 
@@ -112,6 +112,12 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     dataset : str
         'ERA5', 'ERA5L', 'CERA', 'ERA5L-HMA', 'ERA5dr'.
         Defaults to cfg.PARAMS['baseline_climate']
@@ -132,7 +138,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     """
 
     if dataset is None:
-        dataset = cfg.PARAMS['baseline_climate']
+        dataset = gdir.settings['baseline_climate']
 
     # Use xarray to read the data
     lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon

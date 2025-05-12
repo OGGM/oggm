@@ -510,7 +510,8 @@ def gis_prepro_tasks(gdirs):
 
 
 @global_task(log)
-def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
+def climate_tasks(gdirs, settings_filesuffix='',
+                  overwrite_gdir=False, override_missing=None):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
@@ -519,12 +520,15 @@ def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
     """
 
     # Process climate data
-    execute_entity_task(tasks.process_climate_data, gdirs)
+    execute_entity_task(tasks.process_climate_data, gdirs,
+                        settings_filesuffix=settings_filesuffix)
     # mass balance and the apparent mass balance
     execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                        settings_filesuffix=settings_filesuffix,
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir)
-    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                        settings_filesuffix=settings_filesuffix)
 
 
 @global_task(log)
@@ -722,7 +726,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 
 @global_task(log)
-def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
+def merge_glacier_tasks(gdirs, settings_filesuffix='',
+                        main_rgi_id=None, return_all=False, buffer=None,
                         **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
 
@@ -773,7 +778,8 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     # now we have gdirs which contain all the necessary flowlines,
     # time to clean them up
     for gdir in merged_gdirs:
-        flowline.clean_merged_flowlines(gdir, buffer=buffer)
+        flowline.clean_merged_flowlines(
+            gdir, settings_filesuffix=settings_filesuffix, buffer=buffer)
 
     if main_rgi_id is not None and return_all is False:
         return [gd for gd in merged_gdirs if main_rgi_id in gd.rgi_id][0]
