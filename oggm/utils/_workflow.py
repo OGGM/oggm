@@ -1866,9 +1866,9 @@ def compile_fl_diagnostics(gdirs, *,
     # Welcome ds
     ds = xr.Dataset()
     ds.attrs['description'] = ('OGGM model output on flowlines. '
-                               'Check groups for actual data.')
-    ds.attrs['groups'] = rgi_ids
-
+                               'This is a nested NetCDF file. '
+                               'Groups are the RGI IDs')
+    ds['groups'] = ('groups', rgi_ids)
     ds.to_netcdf(path, 'w')
 
     for rgi_id, flds in zip(rgi_ids, ok_diags):
