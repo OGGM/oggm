@@ -150,9 +150,12 @@ class TestInitPresentDayFlowline:
         init_present_time_glacier(gdir, filesuffix='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
+        gdir.settings_filesuffix = '_dummy_downstream'
         gdir.settings['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
-            init_present_time_glacier(gdir)
+            init_present_time_glacier(gdir,
+                                      settings_filesuffix='_dummy_downstream')
+        gdir.settings_filesuffix = ''
 
     def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
                                                  monkeypatch):
@@ -225,6 +228,7 @@ class TestInitPresentDayFlowline:
     def test_present_time_glacier_massbalance(self, hef_gdir):
 
         gdir = hef_gdir
+        gdir.settings['downstream_line_shape'] = cfg.PARAMS['downstream_line_shape']
         init_present_time_glacier(gdir)
 
         mb_mod = massbalance.MonthlyTIModel(gdir)
@@ -4401,6 +4405,7 @@ class TestDynamicSpinup:
             mb_calib = gdir.read_json('mb_calib')
             mb_calib['melt_f'] = melt_f_orig
             gdir.write_json(mb_calib, 'mb_calib')
+            gdir.settings['melt_f'] = melt_f_orig
 
         # value we want to match after dynamic melt_f calibration
         ref_period = cfg.PARAMS['geodetic_mb_period']
@@ -4573,7 +4578,7 @@ class TestDynamicSpinup:
                 ys=yr0_ref_dmdtda + 1)
 
         # test initialisation from an previous glacier geometry
-        cfg.PARAMS['store_model_geometry'] = True
+        gdir.settings['store_model_geometry'] = True
         workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
                                      ys=yr_rgi, ye=yr_rgi + 1,
                                      output_filesuffix='_one_yr')

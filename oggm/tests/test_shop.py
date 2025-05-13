@@ -672,7 +672,7 @@ class Test_climate_datasets:
         files = []
         ref_hgts = []
         for base in exps:
-            cfg.PARAMS['baseline_climate'] = base
+            gdir.settings['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
             files.append(gdir.get_filepath('climate_historical',
                                            filesuffix=base))

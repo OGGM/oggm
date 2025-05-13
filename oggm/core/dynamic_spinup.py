@@ -432,6 +432,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
             ovars = gdir.settings['store_diagnostic_variables']
             if 'area_min_h' not in ovars:
                 ovars += ['area_min_h']
+                gdir.settings['store_diagnostic_variables'] = ovars
                 delete_area_min_h = True
 
             ds = model_historical.run_until_and_store(
@@ -446,6 +447,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
             # included before (inplace)
             if delete_area_min_h:
                 ovars.remove('area_min_h')
+                gdir.settings['store_diagnostic_variables'] = ovars
 
             if type(ds) == tuple:
                 ds = ds[0]
