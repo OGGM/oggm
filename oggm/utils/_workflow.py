@@ -1811,6 +1811,73 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
 
 @entity_task(log)
+def _get_fl_diagnostics(gdir, input_filesuffix=''):
+    """Get the flowline diagnostics.
+
+    Only works with one flowline.
+    """
+
+    try:
+        fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
+        ds = xr.open_dataset(fp, group='fl_0')
+    except FileNotFoundError:
+        ds = None
+    return ds
+
+
+@global_task(log)
+def compile_fl_diagnostics(gdirs, *,
+                           path=True,
+                           input_filesuffix=''):
+    """Write the flowline diagnostics to a single NetCDF file.
+
+    Note that this works only for single flowlines (elev bands flowlines),
+    otherwise the data model would be even more nested.
+
+    Parameters
+    ----------
+    gdirs:
+        the list of GlacierDir to process.
+    path: str or bool
+        Set to "True" in order  to store the shape in the working directory
+        Set to a str path to store the file to your chosen location
+    input_filesuffix : str
+        the input filesuffix to use for the fl_diagnostics files (e.g. '_historical')
+    """
+    from oggm.workflow import execute_entity_task
+
+    if path is True:
+        path = os.path.join(cfg.PATHS['working_dir'],
+                            'fl_diagnostics' + input_filesuffix + '.nc')
+
+    log.workflow('write_fl_diagnostics_to_file on {} ...'.format(path))
+
+    odiags = execute_entity_task(_get_fl_diagnostics, gdirs,
+                                 input_filesuffix=input_filesuffix)
+
+    # Available rgi_ids
+    rgi_ids = []
+    ok_diags = []
+    for gdir, odiag in zip(gdirs, odiags):
+        if odiag:
+            rgi_ids.append(gdir.rgi_id)
+            ok_diags.append(odiag)
+
+    # Welcome ds
+    ds = xr.Dataset()
+    ds.attrs['description'] = ('OGGM model output on flowlines. '
+                               'Check groups for actual data.')
+    ds.attrs['groups'] = rgi_ids
+
+    ds.to_netcdf(path, 'w')
+
+    for rgi_id, flds in zip(rgi_ids, ok_diags):
+        flds.to_netcdf(path, 'a', group=rgi_id)
+
+    return ds
+
+
+@entity_task(log)
 def read_glacier_hypsometry(gdir):
     """Utility function to read the glacier hypsometry in the folder.
 
