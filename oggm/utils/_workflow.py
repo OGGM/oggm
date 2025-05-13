@@ -1819,7 +1819,8 @@ def _get_fl_diagnostics(gdir, input_filesuffix=''):
 
     try:
         fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
-        ds = xr.open_dataset(fp, group='fl_0')
+        with xr.open_dataset(fp, group='fl_0') as ds:
+            ds = ds.load()
     except FileNotFoundError:
         ds = None
     return ds
