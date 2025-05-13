@@ -1847,14 +1847,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
         Defaults to gdir.settings['temp_bias_max'].
     """
 
-    # First check if there are already some mass balance parameters available
-    if any(key in gdir.settings.data
-           for key in ['melt_f', 'prcp_fac', 'temp_bias']) and not overwrite_gdir:
-        raise InvalidWorkflowError('Their are already mass balance parameters '
-                                   'stored in the settings file. Set '
-                                   '`overwrite_gdir` to True if you want to '
-                                   'overwrite a previous calibration.')
-
     # Param constraints
     if melt_f_min is None:
         melt_f_min = gdir.settings['melt_f_min']
@@ -1911,7 +1903,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Ok, regardless on how we want to calibrate, we start with defaults
     if melt_f is None:
-        melt_f = gdir.settings['melt_f']
+        melt_f = gdir.settings.defaults['melt_f']
 
     if prcp_fac is None:
         if gdir.settings['use_winter_prcp_fac']:
@@ -1921,7 +1913,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                            "if using PARAMS['winter_prcp_factor'].")
             prcp_fac = decide_winter_precip_factor(gdir)
         else:
-            prcp_fac = gdir.settings['prcp_fac']
+            prcp_fac = gdir.settings.defaults['prcp_fac']
             if prcp_fac is None:
                 raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
                                            "or PARAMS['winter_prcp_factor'].")
@@ -2047,25 +2039,36 @@ def mb_calibration_from_scalar_mb(gdir, *,
         temp_bias = optim_param1
 
     # Store parameters
-    gdir.settings['rgi_id'] = gdir.rgi_id
-    gdir.settings['bias'] = 0
-    gdir.settings['melt_f'] = melt_f
-    gdir.settings['prcp_fac'] = prcp_fac
-    gdir.settings['temp_bias'] = temp_bias
+    df = {}
+    df['rgi_id'] = gdir.rgi_id
+    df['bias'] = 0
+    df['melt_f'] = melt_f
+    df['prcp_fac'] = prcp_fac
+    df['temp_bias'] = temp_bias
     # What did we try to match?
-    gdir.settings['reference_mb'] = ref_mb
-    gdir.settings['reference_mb_err'] = ref_mb_err
-    gdir.settings['reference_period'] = ref_period
+    df['reference_mb'] = ref_mb
+    df['reference_mb_err'] = ref_mb_err
+    df['reference_period'] = ref_period
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    gdir.settings['mb_global_params'] = {k: gdir.settings[k] for k in MB_GLOBAL_PARAMS}
-    gdir.settings['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
+    df['mb_global_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
+    df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
 
-    return {key: gdir.settings[key]
-            for key in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
-                        'reference_mb', 'reference_mb_err', 'reference_period',
-                        'mb_global_params', 'baseline_climate_source']}
+    # Write
+    if write_to_gdir:
+        if any(key in gdir.settings.data
+               for key in ['melt_f', 'prcp_fac', 'temp_bias']) and not overwrite_gdir:
+            raise InvalidWorkflowError('Their are already mass balance parameters '
+                                       'stored in the settings file. Set '
+                                       '`overwrite_gdir` to True if you want to '
+                                       'overwrite a previous calibration.')
+        for key in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                    'reference_mb', 'reference_mb_err', 'reference_period',
+                    'mb_global_params', 'baseline_climate_source']:
+            gdir.settings[key] = df[key]
+
+    return df
 
 
 @entity_task(log, writes=['mb_calib'])
@@ -2105,7 +2108,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
         Note that it's always the default, precalibrated params
         file which is read to start with.
     """
-    df = gdir.read_json('mb_calib')
+    df = gdir.read_yml('settings')
 
     # Save original params if not there
     if 'bias_orig' not in df:
@@ -2115,7 +2118,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
     if reset_default:
         for k in ['bias', 'melt_f', 'prcp_fac', 'temp_bias']:
             df[k] = df[k + '_orig']
-        gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
+        gdir.write_yml(df, 'settings', filesuffix=filesuffix)
         return df
 
     for k, v in perturbation.items():
@@ -2126,7 +2129,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
         else:
             raise InvalidParamsError(f'Perturbation not valid: {k}')
 
-    gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
+    gdir.write_yml(df, 'settings', filesuffix=filesuffix)
     return df
 
 

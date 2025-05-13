@@ -1573,7 +1573,8 @@ def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
 
 
 @entity_task(log)
-def glacier_statistics(gdir, inversion_only=False, apply_func=None):
+def glacier_statistics(gdir, settings_filesuffix='',
+                       inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1753,8 +1754,10 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # MB calib
-            mb_calib = gdir.read_json('mb_calib')
-            for k, v in mb_calib.items():
+            for k in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                      'reference_mb', 'reference_mb_err', 'reference_period',
+                      'mb_global_params', 'baseline_climate_source']:
+                v = gdir.settings[k]
                 if np.isscalar(v):
                     d[k] = v
                 else:
@@ -3975,7 +3978,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -3983,14 +3986,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
-                 'mb_calib', 'climate_historical', 'gridded_data',
+                 'settings', 'climate_historical', 'gridded_data',
                  'gcm_data', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
@@ -4254,12 +4257,16 @@ class YAMLFileObject(object):
         return value
 
     def get(self, key):
+        # to be always synced, if several objects work on the same file
+        self.data = self._load()
         if key in self.data:
             return self.data[key]
         else:
             raise KeyError(f"Key '{key}' not found!")
 
     def set(self, key, value):
+        # to be always synced, if several objects work on the same file
+        self.data = self._load()
         value = self._to_native_type(value)
         self._check_yaml_serializable(value)
         self.data[key] = value
@@ -4298,7 +4305,7 @@ class ModelSettings(YAMLFileObject):
 
         self.filesuffix = filesuffix
         if self.data['parent_filesuffix'] == 'cfg.PARAMS':
-            self.defaults = cfg.PARAMS
+            self.defaults = cfg.PARAMS.copy()
         else:
             self.defaults = ModelSettings(gdir,
                                           filesuffix=self.data['parent_filesuffix'],

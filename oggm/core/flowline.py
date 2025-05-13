@@ -96,7 +96,7 @@ class Flowline(Centerline):
             self.settings = gdir.settings
             self.map_trafo = partial(gdir.grid.ij_to_crs, crs=salem.wgs84)
         else:
-            self.settings = cfg.PARAMS
+            self.settings = cfg.PARAMS.copy()
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
@@ -664,7 +664,7 @@ class FlowlineModel(object):
             gdir.settings_filesuffix = settings_filesuffix
             self.settings = gdir.settings
         else:
-            self.settings = cfg.PARAMS
+            self.settings = cfg.PARAMS.copy()
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
@@ -3232,22 +3232,22 @@ def init_present_time_glacier(gdir, settings_filesuffix='', filesuffix='',
     gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
-def decide_evolution_model(gdir, evolution_model=None):
+def decide_evolution_model(gdir=None, evolution_model=None):
     """Simple utility to check and apply user choices in gdir.settings"""
 
     if evolution_model is not None:
         return evolution_model
 
-    from_cfg = gdir.settings['evolution_model'].lower()
-    if from_cfg == 'SemiImplicit'.lower():
+    from_settings = gdir.settings['evolution_model'].lower()
+    if from_settings == 'SemiImplicit'.lower():
         evolution_model = SemiImplicitModel
-    elif from_cfg == 'FluxBased'.lower():
+    elif from_settings == 'FluxBased'.lower():
         evolution_model = FluxBasedModel
-    elif from_cfg == 'MassRedistributionCurve'.lower():
+    elif from_settings == 'MassRedistributionCurve'.lower():
         evolution_model = MassRedistributionCurveModel
     else:
-        raise InvalidParamsError("PARAMS['evolution_model'] not recognized"
-                                 f": {from_cfg}.")
+        raise InvalidParamsError("gdir.settings['evolution_model'] not recognized"
+                                 f": {from_settings}.")
     return evolution_model
 
 
@@ -3411,7 +3411,8 @@ def flowline_model_run(gdir, settings_filesuffix='',
         for fl in fls:
             fl.thick = fl.thick * 0.
 
-    evolution_model = decide_evolution_model(gdir, evolution_model)
+    evolution_model = decide_evolution_model(gdir=gdir,
+                                             evolution_model=evolution_model)
 
     # ensure the flowlines are using the right settings
     for fl in fls:
@@ -3434,7 +3435,7 @@ def flowline_model_run(gdir, settings_filesuffix='',
                                        '`False` or set `water_level` '
                                        'to prevent this error.')
 
-    model = evolution_model(fls, mb_model=mb_model, y0=ys,
+    model = evolution_model(flowlines=fls, mb_model=mb_model, y0=ys,
                             inplace=True,
                             is_tidewater=gdir.is_tidewater,
                             is_lake_terminating=gdir.is_lake_terminating,
