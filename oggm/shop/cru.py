@@ -72,7 +72,8 @@ def get_cru_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
+def process_cru_data(gdir, settings_filesuffix='',
+                     tmp_file=None, pre_file=None, y0=None, y1=None,
                      output_filesuffix=None):
     """Processes and writes the CRU baseline climate data for this glacier.
 
@@ -83,6 +84,10 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     tmp_file : str
         path to the CRU temperature file (defaults to the current OGGM chosen
         CRU version)
@@ -102,8 +107,8 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
         previous experiments)
     """
 
-    if cfg.PARAMS['baseline_climate'] != 'CRU':
-        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+    if gdir.settings['baseline_climate'] != 'CRU':
+        raise InvalidParamsError("gdir.settings['baseline_climate'] should be "
                                  "set to CRU")
 
     # read the climatology

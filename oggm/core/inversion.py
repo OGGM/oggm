@@ -1040,7 +1040,8 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
 
 @entity_task(log, writes=['diagnostics'])
-def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
+def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
+                                       mb_model=None, mb_years=None,
                                        water_level=None,
                                        glen_a=None, fs=None):
     """Optimized search for a calving flux compatible with the bed inversion.
@@ -1051,6 +1052,12 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to calibrate
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
         the mass balance model to use
     mb_years : array
@@ -1076,7 +1083,9 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
     with utils.DisableLogger():
-        massbalance.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+        massbalance.apparent_mb_from_any_mb(gdir,
+                                            settings_filesuffix=settings_filesuffix,
+                                            mb_model=mb_model,
                                             mb_years=mb_years)
         prepare_for_inversion(gdir)
         v_ref = mass_conservation_inversion(gdir, water_level=water_level,
@@ -1159,7 +1168,9 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     gdir.inversion_calving_rate = f_calving
 
     with utils.DisableLogger():
-        massbalance.apparent_mb_from_any_mb(gdir, mb_model=mb_model,
+        massbalance.apparent_mb_from_any_mb(gdir,
+                                            settings_filesuffix=settings_filesuffix,
+                                            mb_model=mb_model,
                                             mb_years=mb_years)
         prepare_for_inversion(gdir)
         mass_conservation_inversion(gdir, water_level=water_level,

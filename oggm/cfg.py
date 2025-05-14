@@ -301,6 +301,9 @@ BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 _doc = "The outlines of this glacier complex sub-entities (for RGI7C only!)."
 BASENAMES['complex_sub_entities'] = ('complex_sub_entities.shp', _doc)
 
+_doc = "A dict containing all settings used during the OGGM workflow."
+BASENAMES['settings'] = ('settings.yml', _doc)
+
 
 def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.

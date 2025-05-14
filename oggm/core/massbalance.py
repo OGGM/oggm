@@ -48,11 +48,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Density of ice
     """
 
-    def __init__(self):
+    def __init__(self, gdir=None):
         """ Initialize."""
         self.valid_bounds = None
         self.hemisphere = None
-        self.rho = cfg.PARAMS['ice_density']
+        if gdir is None:
+            self.rho = cfg.PARAMS['ice_density']
+        else:
+            self.rho = gdir.settings['ice_density']
 
     def __repr__(self):
         """String Representation of the mass balance model"""
@@ -352,7 +355,7 @@ class MonthlyTIModel(MassBalanceModel):
     def __init__(self, gdir,
                  filename='climate_historical',
                  input_filesuffix='',
-                 mb_params_filesuffix='',
+                 settings_filesuffix='',
                  fl_id=None,
                  melt_f=None,
                  temp_bias=None,
@@ -374,8 +377,8 @@ class MonthlyTIModel(MassBalanceModel):
             data. Default is 'climate_historical'
         input_filesuffix : str, optional
             append a suffix to the climate input filename (useful for GCM runs).
-        mb_params_filesuffix : str, optional
-            append a suffix to the mb params calibration file (useful for
+        settings_filesuffix : str, optional
+            append a suffix to the settings file (useful for
             sensitivity runs).
         fl_id : int, optional
             if this flowline has been calibrated alone and has specific
@@ -411,10 +414,12 @@ class MonthlyTIModel(MassBalanceModel):
             raise an error. Set to "False" to suppress this check.
         """
 
-        super(MonthlyTIModel, self).__init__()
+        self.settings_filesuffix = settings_filesuffix
+        gdir.settings_filesuffix = settings_filesuffix
+
+        super(MonthlyTIModel, self).__init__(gdir=gdir)
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.fl_id = fl_id  # which flowline are we the model of?
-        self._mb_params_filesuffix = mb_params_filesuffix  # which mb params?
         self.gdir = gdir
 
         if melt_f is None:
@@ -430,11 +435,11 @@ class MonthlyTIModel(MassBalanceModel):
         if check_calib_params:
             mb_calib = self.calib_params['mb_global_params']
             for k, v in mb_calib.items():
-                if v != cfg.PARAMS[k]:
+                if v != self.gdir.settings[k]:
                     msg = ('You seem to use different mass balance parameters '
                            'than used for the calibration: '
-                           f"you use cfg.PARAMS['{k}']={cfg.PARAMS[k]} while "
-                           f"it was calibrated with cfg.PARAMS['{k}']={v}. "
+                           f"you use gdir.settings['{k}']={gdir.settings[k]} while "
+                           f"it was calibrated with gdir.settings['{k}']={v}. "
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
@@ -451,14 +456,14 @@ class MonthlyTIModel(MassBalanceModel):
         self.bias = bias
 
         # Global parameters
-        self.t_solid = cfg.PARAMS['temp_all_solid']
-        self.t_liq = cfg.PARAMS['temp_all_liq']
-        self.t_melt = cfg.PARAMS['temp_melt']
+        self.t_solid = gdir.settings['temp_all_solid']
+        self.t_liq = gdir.settings['temp_all_liq']
+        self.t_melt = gdir.settings['temp_melt']
 
         # check if valid prcp_fac is used
         if prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac has to be above zero!')
-        default_grad = cfg.PARAMS['temp_default_gradient']
+        default_grad = gdir.settings['temp_default_gradient']
 
         # Public attrs
         self.hemisphere = gdir.hemisphere
@@ -542,7 +547,7 @@ class MonthlyTIModel(MassBalanceModel):
     # after instantiation with properly changing the prcp time series
     @property
     def prcp_fac(self):
-        """Precipitation factor (default: cfg.PARAMS['prcp_fac'])
+        """Precipitation factor (default: gdir.settings['prcp_fac'])
 
         Called factor to make clear that it is a multiplicative factor in
         contrast to the additive temperature bias
@@ -580,16 +585,19 @@ class MonthlyTIModel(MassBalanceModel):
     @lazy_property
     def calib_params(self):
         if self.fl_id is None:
-            return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
+            return self.gdir.settings
         else:
-            try:
-                out = self.gdir.read_json('mb_calib', filesuffix=f'_fl{self.fl_id}')
-                if self._mb_params_filesuffix:
-                    raise InvalidWorkflowError('mb_params_filesuffix cannot be '
+            fp_fl_settings = self.gdir.get_filepath('settings',
+                                                    filesuffix=f'_fl{self.fl_id}')
+            if os.path.exists(fp_fl_settings):
+                self.gdir.settings_filesuffix = f'_fl{self.fl_id}'
+                out = self.gdir.settings
+                if self.settings_filesuffix:
+                    raise InvalidWorkflowError('settings_filesuffix cannot be '
                                                'used with multiple flowlines')
                 return out
-            except FileNotFoundError:
-                return self.gdir.read_json('mb_calib', self._mb_params_filesuffix)
+            else:
+                return self.gdir.settings
 
     def is_year_valid(self, year):
         return self.ys <= year <= self.ye
@@ -1191,7 +1199,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     """
 
-    def __init__(self, gdir, fls=None, mb_model_class=MonthlyTIModel,
+    def __init__(self, gdir, settings_filesuffix='',
+                 fls=None, mb_model_class=MonthlyTIModel,
                  use_inversion_flowlines=False,
                  input_filesuffix='',
                  **kwargs):
@@ -1201,6 +1210,9 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         ----------
         gdir : GlacierDirectory
             the glacier directory
+        settings_filesuffix: str
+            You can use a different set of settings by providing a filesuffix.
+            This is useful for sensitivity experiments.
         fls : list, optional
             list of flowline objects to use (defaults to 'model_flowlines')
         mb_model_class : MassBalanceModel class
@@ -1210,6 +1222,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             use 'inversion_flowlines' instead of 'model_flowlines'
         kwargs : kwargs to pass to mb_model_class
         """
+
+        gdir.settings_filesuffix = settings_filesuffix
 
         # Read in the flowlines
         if use_inversion_flowlines:
@@ -1236,7 +1250,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 rgi_filesuffix = input_filesuffix
 
             self.flowline_mb_models.append(
-                mb_model_class(gdir, input_filesuffix=rgi_filesuffix,
+                mb_model_class(gdir, settings_filesuffix=settings_filesuffix,
+                               input_filesuffix=rgi_filesuffix,
                                **kwargs))
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
@@ -1445,7 +1460,7 @@ def calving_mb(gdir):
 
     # Ok. Just take the calving rate from cfg and change its units
     # Original units: km3 a-1, to change to mm a-1 (units of specific MB)
-    rho = cfg.PARAMS['ice_density']
+    rho = gdir.settings['ice_density']
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
@@ -1453,7 +1468,7 @@ def decide_winter_precip_factor(gdir):
     """Utility function to decide on a precip factor based on winter precip."""
 
     # We have to decide on a precip factor
-    if 'W5E5' not in cfg.PARAMS['baseline_climate']:
+    if 'W5E5' not in gdir.settings['baseline_climate']:
         raise InvalidWorkflowError('prcp_fac from_winter_prcp is only '
                                    'compatible with the W5E5 climate '
                                    'dataset!')
@@ -1482,16 +1497,16 @@ def decide_winter_precip_factor(gdir):
 
     # from MB sandbox calibration to winter MB
     # using t_melt=-1, cte lapse rate, monthly resolution
-    a, b = cfg.PARAMS['winter_prcp_fac_ab']
+    a, b = gdir.settings['winter_prcp_fac_ab']
     prcp_fac = a * np.log(w_prcp) + b
     # don't allow extremely low/high prcp. factors!!!
     return clip_scalar(prcp_fac,
-                       cfg.PARAMS['prcp_fac_min'],
-                       cfg.PARAMS['prcp_fac_max'])
+                       gdir.settings['prcp_fac_min'],
+                       gdir.settings['prcp_fac_max'])
 
 
 @entity_task(log, writes=['mb_calib'])
-def mb_calibration_from_wgms_mb(gdir, **kwargs):
+def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='', **kwargs):
     """Calibrate for in-situ, annual MB.
 
     This only works for glaciers which have WGMS data!
@@ -1501,6 +1516,12 @@ def mb_calibration_from_wgms_mb(gdir, **kwargs):
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     **kwargs : any kwarg accepted by mb_calibration_from_scalar_mb
     except `ref_mb` and `ref_mb_years`
     """
@@ -1512,6 +1533,7 @@ def mb_calibration_from_wgms_mb(gdir, **kwargs):
     # Keep only valid values
     mbdf = mbdf.loc[~mbdf['ANNUAL_BALANCE'].isnull()]
     return mb_calibration_from_scalar_mb(gdir,
+                                         settings_filesuffix=settings_filesuffix,
                                          ref_mb=mbdf['ANNUAL_BALANCE'].mean(),
                                          ref_mb_years=mbdf.index.values,
                                          **kwargs)
@@ -1519,6 +1541,7 @@ def mb_calibration_from_wgms_mb(gdir, **kwargs):
 
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_geodetic_mb(gdir, *,
+                                    settings_filesuffix='',
                                     ref_period=None,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
@@ -1530,7 +1553,6 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     calibrate_param2=None,
                                     calibrate_param3=None,
                                     mb_model_class=MonthlyTIModel,
-                                    filesuffix='',
                                     ):
     """Calibrate for geodetic MB data from Hugonnet et al., 2021.
 
@@ -1552,6 +1574,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to calibrate
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     ref_period : str, default: PARAMS['geodetic_mb_period']
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
@@ -1594,17 +1620,13 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
-    filesuffix: str
-        add a filesuffix to mb_calib.json. This could be useful for sensitivity
-        analyses with MB models, if they need to fetch other sets of params for
-        example.
 
     Returns
     -------
     the calibrated parameters as dict
     """
     if not ref_period:
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_period = gdir.settings['geodetic_mb_period']
 
     # Get the reference data
     ref_mb_err = np.nan
@@ -1628,7 +1650,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
             ref_mb = override_missing
 
     temp_bias = 0
-    if cfg.PARAMS['use_temp_bias_from_file']:
+    if gdir.settings['use_temp_bias_from_file']:
         climinfo = gdir.get_climate_info()
         if 'w5e5' not in climinfo['baseline_climate_source'].lower():
             raise InvalidWorkflowError('use_temp_bias_from_file currently '
@@ -1643,10 +1665,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
     if informed_threestep:
-        if not cfg.PARAMS['use_temp_bias_from_file']:
+        if not gdir.settings['use_temp_bias_from_file']:
             raise InvalidParamsError('With `informed_threestep` you need to '
                                      'set `use_temp_bias_from_file`.')
-        if not cfg.PARAMS['use_winter_prcp_fac']:
+        if not gdir.settings['use_winter_prcp_fac']:
             raise InvalidParamsError('With `informed_threestep` you need to '
                                      'set `use_winter_prcp_fac`.')
 
@@ -1659,11 +1681,12 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         # We use the precip factor but allow it to vary between 0.8, 1.2 of
         # the previous value (uncertainty).
         prcp_fac = decide_winter_precip_factor(gdir)
-        mi, ma = cfg.PARAMS['prcp_fac_min'], cfg.PARAMS['prcp_fac_max']
+        mi, ma = gdir.settings['prcp_fac_min'], gdir.settings['prcp_fac_max']
         prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
         prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
 
         return mb_calibration_from_scalar_mb(gdir,
+                                             settings_filesuffix=settings_filesuffix,
                                              ref_mb=ref_mb,
                                              ref_mb_err=ref_mb_err,
                                              ref_period=ref_period,
@@ -1678,11 +1701,11 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              prcp_fac_max=prcp_fac_max,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
-                                             filesuffix=filesuffix,
                                              )
 
     else:
         return mb_calibration_from_scalar_mb(gdir,
+                                             settings_filesuffix=settings_filesuffix,
                                              ref_mb=ref_mb,
                                              ref_mb_err=ref_mb_err,
                                              ref_period=ref_period,
@@ -1694,12 +1717,12 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              calibrate_param3=calibrate_param3,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
-                                             filesuffix=filesuffix,
                                              )
 
 
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_scalar_mb(gdir, *,
+                                  settings_filesuffix='',
                                   ref_mb=None,
                                   ref_mb_err=None,
                                   ref_period=None,
@@ -1720,7 +1743,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_min=None,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
-                                  filesuffix='',
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
@@ -1747,6 +1769,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to calibrate
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     ref_mb : float, required
         the reference mass balance to match (units: kg m-2 yr-1)
         It is required here - if you want to use available observations,
@@ -1768,9 +1794,9 @@ def mb_calibration_from_scalar_mb(gdir, *,
         and be used by the MassBalanceModel class as parameters in subsequent
         tasks.
     overwrite_gdir : bool
-        if a `mb_calib.json` exists, this task won't overwrite it per default.
-        Set this to True to enforce overwriting (i.e. with consequences for the
-        future workflow).
+        if mass balance parameters exists, this task won't overwrite it per
+        default. Set this to True to enforce overwriting (i.e. with consequences
+        for the future workflow).
     use_2d_mb : bool
         Set to True if the mass balance calibration has to be done of the 2D mask
         of the glacier (for fully distributed runs only).
@@ -1793,51 +1819,47 @@ def mb_calibration_from_scalar_mb(gdir, *,
         error.
     melt_f: float
         the default value to use as melt factor (or the starting value when
-        optimizing MB). Defaults to cfg.PARAMS['melt_f'].
+        optimizing MB). Defaults to gdir.settings['melt_f'].
     melt_f_min: float
         the minimum accepted value for the melt factor during optimisation.
-        Defaults to cfg.PARAMS['melt_f_min'].
+        Defaults to gdir.settings['melt_f_min'].
     melt_f_max: float
         the maximum accepted value for the melt factor during optimisation.
-        Defaults to cfg.PARAMS['melt_f_max'].
+        Defaults to gdir.settings['melt_f_max'].
     prcp_fac: float
         the default value to use as precipitation scaling factor
         (or the starting value when optimizing MB). Defaults to the method
         chosen in `params.cfg` (winter prcp or global factor).
     prcp_fac_min: float
         the minimum accepted value for the precipitation scaling factor during
-        optimisation. Defaults to cfg.PARAMS['prcp_fac_min'].
+        optimisation. Defaults to gdir.settings['prcp_fac_min'].
     prcp_fac_max: float
         the maximum accepted value for the precipitation scaling factor during
-        optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
+        optimisation. Defaults to gdir.settings['prcp_fac_max'].
     temp_bias: float
         the default value to use as temperature bias (or the starting value when
         optimizing MB). Defaults to 0.
     temp_bias_min: float
         the minimum accepted value for the temperature bias during optimisation.
-        Defaults to cfg.PARAMS['temp_bias_min'].
+        Defaults to gdir.settings['temp_bias_min'].
     temp_bias_max: float
         the maximum accepted value for the temperature bias during optimisation.
-        Defaults to cfg.PARAMS['temp_bias_max'].
-    filesuffix: str
-        add a filesuffix to mb_calib.json. This could be useful for sensitivity
-        analyses with MB models, if they need to fetch other sets of params for
-        example.
+        Defaults to gdir.settings['temp_bias_max'].
     """
 
     # Param constraints
     if melt_f_min is None:
-        melt_f_min = cfg.PARAMS['melt_f_min']
+        melt_f_min = gdir.settings['melt_f_min']
     if melt_f_max is None:
-        melt_f_max = cfg.PARAMS['melt_f_max']
+        melt_f_max = gdir.settings['melt_f_max']
     if prcp_fac_min is None:
-        prcp_fac_min = cfg.PARAMS['prcp_fac_min']
+        prcp_fac_min = gdir.settings['prcp_fac_min']
     if prcp_fac_max is None:
-        prcp_fac_max = cfg.PARAMS['prcp_fac_max']
+        prcp_fac_max = gdir.settings['prcp_fac_max']
     if temp_bias_min is None:
-        temp_bias_min = cfg.PARAMS['temp_bias_min']
+        temp_bias_min = gdir.settings['temp_bias_min']
     if temp_bias_max is None:
-        temp_bias_max = cfg.PARAMS['temp_bias_max']
+        temp_bias_max = gdir.settings['temp_bias_max']
     if ref_mb_years is not None and ref_period is not None:
         raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_period` '
                                  'at the same time.')
@@ -1881,17 +1903,17 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Ok, regardless on how we want to calibrate, we start with defaults
     if melt_f is None:
-        melt_f = cfg.PARAMS['melt_f']
+        melt_f = gdir.settings.defaults['melt_f']
 
     if prcp_fac is None:
-        if cfg.PARAMS['use_winter_prcp_fac']:
+        if gdir.settings['use_winter_prcp_fac']:
             # Some sanity check
-            if cfg.PARAMS['prcp_fac'] is not None:
+            if gdir.settings['prcp_fac'] is not None:
                 raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
                                            "if using PARAMS['winter_prcp_factor'].")
             prcp_fac = decide_winter_precip_factor(gdir)
         else:
-            prcp_fac = cfg.PARAMS['prcp_fac']
+            prcp_fac = gdir.settings.defaults['prcp_fac']
             if prcp_fac is None:
                 raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
                                            "or PARAMS['winter_prcp_factor'].")
@@ -1904,7 +1926,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
                             melt_f=melt_f,
                             temp_bias=temp_bias,
                             prcp_fac=prcp_fac,
-                            check_calib_params=False)
+                            check_calib_params=False,
+                            settings_filesuffix=settings_filesuffix)
 
     # Check that the years are available
     for y in years:
@@ -2016,7 +2039,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         temp_bias = optim_param1
 
     # Store parameters
-    df = gdir.read_json('mb_calib', allow_empty=True)
+    df = {}
     df['rgi_id'] = gdir.rgi_id
     df['bias'] = 0
     df['melt_f'] = melt_f
@@ -2031,14 +2054,20 @@ def mb_calibration_from_scalar_mb(gdir, *,
     # other tools cannot fool around without re-calibration
     df['mb_global_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
     df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
+
     # Write
     if write_to_gdir:
-        if gdir.has_file('mb_calib', filesuffix=filesuffix) and not overwrite_gdir:
-            raise InvalidWorkflowError('`mb_calib.json` already exists for '
-                                       'this repository. Set `overwrite_gdir` '
-                                       'to True if you want to overwrite '
-                                       'a previous calibration.')
-        gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
+        if any(key in gdir.settings.data
+               for key in ['melt_f', 'prcp_fac', 'temp_bias']) and not overwrite_gdir:
+            raise InvalidWorkflowError('Their are already mass balance parameters '
+                                       'stored in the settings file. Set '
+                                       '`overwrite_gdir` to True if you want to '
+                                       'overwrite a previous calibration.')
+        for key in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                    'reference_mb', 'reference_mb_err', 'reference_period',
+                    'mb_global_params', 'baseline_climate_source']:
+            gdir.settings[key] = df[key]
+
     return df
 
 
@@ -2079,7 +2108,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
         Note that it's always the default, precalibrated params
         file which is read to start with.
     """
-    df = gdir.read_json('mb_calib')
+    df = gdir.read_yml('settings')
 
     # Save original params if not there
     if 'bias_orig' not in df:
@@ -2089,7 +2118,7 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
     if reset_default:
         for k in ['bias', 'melt_f', 'prcp_fac', 'temp_bias']:
             df[k] = df[k + '_orig']
-        gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
+        gdir.write_yml(df, 'settings', filesuffix=filesuffix)
         return df
 
     for k, v in perturbation.items():
@@ -2100,13 +2129,13 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
         else:
             raise InvalidParamsError(f'Perturbation not valid: {k}')
 
-    gdir.write_json(df, 'mb_calib', filesuffix=filesuffix)
+    gdir.write_yml(df, 'settings', filesuffix=filesuffix)
     return df
 
 
 def _check_terminus_mass_flux(gdir, fls):
     # Check that we have done this correctly
-    rho = cfg.PARAMS['ice_density']
+    rho = gdir.settings['ice_density']
     cmb = calving_mb(gdir)
 
     # This variable is in "sensible" units normalized by width
@@ -2126,7 +2155,8 @@ def _check_terminus_mass_flux(gdir, fls):
 
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
-def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
+def apparent_mb_from_linear_mb(gdir, settings_filesuffix='',
+                               mb_gradient=3., ela_h=None):
     """Compute apparent mb from a linear mass balance assumption (for testing).
 
     This is for testing currently, but could be used as alternative method
@@ -2136,6 +2166,10 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     """
 
     # Do we have a calving glacier?
@@ -2157,7 +2191,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
         ela_h = optimize.brentq(to_minimize, -1e5, 1e5)
 
     # For each flowline compute the apparent MB
-    rho = cfg.PARAMS['ice_density']
+    rho = gdir.settings['ice_density']
     fls = gdir.read_pickle('inversion_flowlines')
     # Reset flux
     for fl in fls:
@@ -2176,7 +2210,8 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
 
 @entity_task(log, writes=['inversion_flowlines'])
-def apparent_mb_from_any_mb(gdir, mb_model=None,
+def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
+                            mb_model=None,
                             mb_model_class=MonthlyTIModel,
                             mb_years=None):
     """Compute apparent mb from an arbitrary mass balance profile.
@@ -2188,6 +2223,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
         the mass balance model to use - if None, will use the
         one given by mb_model_class
@@ -2211,10 +2250,10 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     fls = gdir.read_pickle('inversion_flowlines')
 
     if mb_model is None:
-        mb_model = mb_model_class(gdir)
+        mb_model = mb_model_class(gdir, settings_filesuffix=settings_filesuffix)
 
     if mb_years is None:
-        mb_years = cfg.PARAMS['geodetic_mb_period']
+        mb_years = gdir.settings['geodetic_mb_period']
         y0, y1 = mb_years.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
@@ -2225,7 +2264,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
         mb_years = np.arange(*mb_years, 1)
 
     # Unchanged SMB
-    rho = cfg.PARAMS['ice_density']
+    rho = gdir.settings['ice_density']
     mb_on_fl = []
     spec_mb = []
     area_smb = []
@@ -2276,7 +2315,8 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
 
 
 @entity_task(log)
-def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
+def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
+                                ys=None, ye=None, years=None,
                                 monthly_step=False,
                                 use_inversion_flowlines=True,
                                 climate_filename='climate_historical',
@@ -2290,6 +2330,10 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     ys : int
         start year of the model run (default: from the climate file)
         date)
@@ -2323,7 +2367,8 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
     mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model_class,
                                         filename=climate_filename,
                                         use_inversion_flowlines=use_inversion_flowlines,
-                                        input_filesuffix=climate_input_filesuffix)
+                                        input_filesuffix=climate_input_filesuffix,
+                                        settings_filesuffix=settings_filesuffix)
 
     if temperature_bias is not None:
         mbmod.temp_bias = temperature_bias
@@ -2343,7 +2388,8 @@ def fixed_geometry_mass_balance(gdir, ys=None, ye=None, years=None,
 
 
 @entity_task(log)
-def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_historical',
+def compute_ela(gdir, settings_filesuffix='',
+                ys=None, ye=None, years=None, climate_filename='climate_historical',
                 temperature_bias=None, precipitation_factor=None, climate_input_filesuffix='',
                 mb_model_class=MonthlyTIModel):
 
@@ -2353,6 +2399,10 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     ys : int
         start year
     ye : int
@@ -2374,7 +2424,8 @@ def compute_ela(gdir, ys=None, ye=None, years=None, climate_filename='climate_hi
         the MassBalanceModel class to use, default is MonthlyTIModel
     """
 
-    mbmod = mb_model_class(gdir, filename=climate_filename,
+    mbmod = mb_model_class(gdir, settings_filesuffix=settings_filesuffix,
+                           filename=climate_filename,
                            input_filesuffix=climate_input_filesuffix)
 
     if temperature_bias is not None:

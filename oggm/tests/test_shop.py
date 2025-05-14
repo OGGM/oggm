@@ -580,7 +580,7 @@ class Test_ecmwf:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
-        cfg.PARAMS['baseline_climate'] = 'CERA+ERA5L'
+        gdir.settings['baseline_climate'] = 'CERA+ERA5L'
         tasks.process_climate_data(gdir)
         assert gdir.get_filepath('climate_historical')
         # Let's do some basic checks
@@ -589,7 +589,7 @@ class Test_ecmwf:
         assert ci['baseline_yr_0'] == 1901
         assert ci['baseline_yr_1'] == 2018
 
-        cfg.PARAMS['baseline_climate'] = 'CERA|ERA5'
+        gdir.settings['baseline_climate'] = 'CERA|ERA5'
         tasks.process_climate_data(gdir)
         assert gdir.get_filepath('climate_historical')
         # Let's do some basic checks
@@ -618,7 +618,7 @@ class Test_climate_datasets:
         dft = []
         dfp = []
         for base in exps:
-            cfg.PARAMS['baseline_climate'] = base
+            gdir.settings['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
             f = gdir.get_filepath('climate_historical', filesuffix=base)
             with xr.open_dataset(f) as ds:
@@ -672,7 +672,7 @@ class Test_climate_datasets:
         files = []
         ref_hgts = []
         for base in exps:
-            cfg.PARAMS['baseline_climate'] = base
+            gdir.settings['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
             files.append(gdir.get_filepath('climate_historical',
                                            filesuffix=base))
