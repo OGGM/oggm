@@ -1685,16 +1685,16 @@ class TestModelFlowlines():
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        rec.settings['glacier_length_method'] = 'consecutive'
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        rec.settings['min_ice_thick_for_length'] = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
-        cfg.PARAMS['glacier_length_method'] = 'naive'
+        rec.settings['glacier_length_method'] = 'naive'
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
@@ -1704,7 +1704,7 @@ class TestModelFlowlines():
         assert rec.length_m == full_l - map_dx
         assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        rec.settings['glacier_length_method'] = 'consecutive'
         assert rec.length_m == 1000
         assert rec.terminus_index == 9
 
@@ -4950,13 +4950,14 @@ class TestHydro:
         gdir.rgi_date = 1990
 
         # Add debug vars
-        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        gdir.settings['store_diagnostic_variables'] = ALL_DIAGS
         # Needed for this to run
-        cfg.PARAMS['store_model_geometry'] = True
+        gdir.settings['store_model_geometry'] = True
 
         # need to add area min h if I want to merge two runs for compatibility
-        ovars = cfg.PARAMS['store_diagnostic_variables']
+        ovars = gdir.settings['store_diagnostic_variables']
         ovars += ['area_min_h']
+        gdir.settings['store_diagnostic_variables'] = ovars
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_dynamic_spinup,
