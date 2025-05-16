@@ -2679,7 +2679,7 @@ class TestHEFNonPolluted:
             graphics.plot_modeloutput_section_withtrib(model)
             plt.show()
 
-    @pytest.mark.slow
+    #@pytest.mark.slow
     def test_output_management(self, hef_gdir, inversion_params):
 
         gdir = hef_gdir
@@ -2713,7 +2713,7 @@ class TestHEFNonPolluted:
             assert 'volume_bsl_m3' not in ds_fl
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
-        diag_file = os.path.join(cfg.PATHS['working_dir'], 'compiled_diags.nc')
+        diag_dir = os.path.join(cfg.PATHS['working_dir'], 'compiled_diags')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
         stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
         out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
@@ -2727,7 +2727,7 @@ class TestHEFNonPolluted:
         utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
         utils.compile_run_output([gdir], path=past_run_file,
                                  input_filesuffix='_hist')
-        utils.compile_fl_diagnostics([gdir], path=diag_file,
+        utils.compile_fl_diagnostics([gdir], path=diag_dir,
                                      input_filesuffix='_hist')
 
         # Extend
@@ -2736,9 +2736,11 @@ class TestHEFNonPolluted:
                                       glacier_statistics_file=stats_file,
                                       path=out_path)
 
+        diag_file = os.path.join(diag_dir, 'RGI50-11.00',
+                                 'RGI50-11.00897_fl_diagnostics_hist.nc')
         with xr.open_dataset(out_path) as ods, \
                 xr.open_dataset(past_run_file) as ds, \
-                    xr.open_dataset(diag_file, group=gdir.rgi_id) as dds:
+                    xr.open_dataset(diag_file, group='fl_0') as dds:
 
             ref = ds.volume
             new = ods.volume

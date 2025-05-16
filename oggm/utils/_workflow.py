@@ -1811,71 +1811,81 @@ def compile_glacier_statistics(gdirs, filesuffix='', path=True,
 
 
 @entity_task(log)
-def _get_fl_diagnostics(gdir, input_filesuffix=''):
-    """Get the flowline diagnostics.
-
-    Only works with one flowline.
+def _write_fl_diagnostics(gdir, input_filesuffix='', folder_map=None):
+    """Copy the flowline diagnostics file to the folder in folder_map.
     """
-
     try:
-        fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
-        with xr.open_dataset(fp, group='fl_0') as ds:
-            ds = ds.load()
-    except FileNotFoundError:
-        ds = None
-    return ds
+        src_fp = gdir.get_filepath('fl_diagnostics', filesuffix=input_filesuffix)
+        dst_folder = folder_map[gdir.rgi_id]
+        original_name = os.path.basename(src_fp)
+        dst_filename = f"{gdir.rgi_id}_{original_name}"
+        dst_fp = os.path.join(dst_folder, dst_filename)
+        shutil.copy(src_fp, dst_fp)
+    except:
+        pass
 
 
 @global_task(log)
 def compile_fl_diagnostics(gdirs, *,
                            path=True,
-                           input_filesuffix=''):
-    """Write the flowline diagnostics to a single NetCDF file.
+                           group_size=1000,
+                           input_filesuffix='',
+                           compress=True,
+                           delete_folders=False):
+    """Write the flowline diagnostics to batches of tar files.
 
-    Note that this works only for single flowlines (elev bands flowlines),
-    otherwise the data model would be even more nested.
+    This is mostly useful for people not using OGGM.
 
     Parameters
     ----------
     gdirs:
         the list of GlacierDir to process.
     path: str or bool
-        Set to "True" in order  to store the shape in the working directory
-        Set to a str path to store the file to your chosen location
+        Set to "True" in order to store the files in the working directory
+        Set to a str path to store the files to your chosen location
+        Must be a path to a dir
     input_filesuffix : str
-        the input filesuffix to use for the fl_diagnostics files (e.g. '_historical')
+        the input filesuffix to use for the fl_diagnostics files
+        (e.g. '_historical')
+    compress : bool
+        also compress the files in a tar file
+    delete_folders : bool
+        also deletes the folders
     """
     from oggm.workflow import execute_entity_task
 
     if path is True:
         path = os.path.join(cfg.PATHS['working_dir'],
-                            'fl_diagnostics' + input_filesuffix + '.nc')
+                            'fl_diagnostics' + input_filesuffix)
 
-    log.workflow('write_fl_diagnostics_to_file on {} ...'.format(path))
+    # Assign each glacier to a batch folder based on its index
+    mkdir(path)
+    folder_map = {}
+    for idx, gdir in enumerate(gdirs):
+        batch_idx = (idx // group_size) * group_size
+        batch_name = f"RGI{gdir.rgi_version}-{gdir.rgi_region}."
+        batch_name += f'{batch_idx:05d}'[:2]
+        batch_dir = os.path.join(path, batch_name)
+        mkdir(batch_dir)
+        folder_map[gdir.rgi_id] = batch_dir
 
-    odiags = execute_entity_task(_get_fl_diagnostics, gdirs,
-                                 input_filesuffix=input_filesuffix)
+    log.workflow('compile_fl_diagnostics to {} ...'.format(path))
 
-    # Available rgi_ids
-    rgi_ids = []
-    ok_diags = []
-    for gdir, odiag in zip(gdirs, odiags):
-        if odiag:
-            rgi_ids.append(gdir.rgi_id)
-            ok_diags.append(odiag)
+    execute_entity_task(_write_fl_diagnostics, gdirs,
+                        input_filesuffix=input_filesuffix,
+                        folder_map=folder_map)
 
-    # Welcome ds
-    ds = xr.Dataset()
-    ds.attrs['description'] = ('OGGM model output on flowlines. '
-                               'This is a nested NetCDF file. '
-                               'Groups are the RGI IDs')
-    ds['groups'] = ('groups', rgi_ids)
-    ds.to_netcdf(path, 'w')
+    if compress:
+        # Get unique batch folders
+        batch_folders = set(folder_map.values())
+        for batch_folder in sorted(batch_folders):
+            batch_name = os.path.basename(batch_folder)
+            tar_path = os.path.join(path, f"{batch_name}.tar.gz")
+            with tarfile.open(tar_path, "w:gz") as tar:
+                tar.add(batch_folder, arcname=batch_name)
 
-    for rgi_id, flds in zip(rgi_ids, ok_diags):
-        flds.to_netcdf(path, 'a', group=rgi_id)
-
-    return ds
+            if delete_folders:
+                shutil.rmtree(batch_folder)
 
 
 @entity_task(log)
