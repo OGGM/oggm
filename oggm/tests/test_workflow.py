@@ -407,6 +407,28 @@ def test_merge_gridded_data():
     assert_allclose(df['inv_volume_km3'].sum(), inv_volume_gridded_merged,
                     rtol=1e-6)
 
+    # test providing a custom grid
+    default_grid = utils.combine_grids(gdirs)
+    custom_grid_dict = default_grid.to_dict()
+    custom_grid_dict['nxny'] = (custom_grid_dict['nxny'][0] - 2,
+                                custom_grid_dict['nxny'][1] - 2)
+    custom_grid = salem.gis.Grid.from_dict(custom_grid_dict)
+
+    ds_merged_custom = workflow.merge_gridded_data(
+        gdirs,
+        output_grid=custom_grid,
+        included_variables='distributed_thickness',
+        reset=True)
+
+    assert ds_merged_custom.salem.grid.nx < ds_merged.salem.grid.nx
+    assert ds_merged_custom.salem.grid.ny < ds_merged.salem.grid.ny
+
+    # total volume should be the same with a custom grid
+    inv_volume_gridded_merged_custom = (ds_merged_custom.distributed_thickness.sum() *
+                                        ds_merged_custom.salem.grid.dx ** 2) * 1e-9
+    assert_allclose(inv_volume_gridded_merged_custom, inv_volume_gridded_merged,
+                    rtol=1e-6)
+
 
 @pytest.mark.slow
 @pytest.mark.graphic
