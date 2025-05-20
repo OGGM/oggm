@@ -1994,10 +1994,13 @@ def reproject_gridded_data_variable_to_grid(gdir,
 
             total_after = (np.nansum(r_data, axis=sum_axis) *
                            target_grid.dx ** 2)
+            total_after_is_zero = np.isclose(total_after, 0, atol=1e-6)
 
             # if a relatively small grid is reprojected into a larger grid, it
             # could happen that no data is assigned at all
-            if np.isclose(total_after, 0, atol=1e-6) and not total_before_is_zero:
+            no_data_after_but_before = np.logical_and(total_after_is_zero,
+                                                      ~total_before_is_zero)
+            if np.any(no_data_after_but_before):
                 # we just assign the maximum value to one grid point and use the
                 # factor for conserving the total value
                 def _assign_max_value(data_provided, data_target):
@@ -2009,9 +2012,10 @@ def reproject_gridded_data_variable_to_grid(gdir,
                     return data_target
 
                 if r_data.ndim == 3:
-                    r_data = np.array(
-                        [_assign_max_value(data[i, :, :], r_data[i, :, :])
-                         for i in range(r_data.shape[0])])
+                    for i in range(r_data.shape[0]):
+                        if no_data_after_but_before[i]:
+                            r_data[i, :, :] = _assign_max_value(data[i, :, :],
+                                                                r_data[i, :, :])
                 else:
                     r_data = _assign_max_value(data, r_data)
 
