@@ -2402,6 +2402,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     calibrate_param3=None,
                                     mb_model_class=MonthlyTIModel,
                                     filesuffix='',
+                                    extra_model_kwargs: dict = None,
                                     ):
     """Calibrate for geodetic MB data from Hugonnet et al., 2021.
 
@@ -2550,6 +2551,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
                                              filesuffix=filesuffix,
+                                             extra_model_kwargs=extra_model_kwargs,
                                              )
 
     else:
@@ -2566,6 +2568,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
                                              filesuffix=filesuffix,
+                                             extra_model_kwargs=extra_model_kwargs,
                                              )
 
 
@@ -2592,6 +2595,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
                                   filesuffix='',
+                                  extra_model_kwargs: dict = None,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
@@ -2694,6 +2698,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
         add a filesuffix to mb_calib.json. This could be useful for sensitivity
         analyses with MB models, if they need to fetch other sets of params for
         example.
+    extra_model_kwargs: dict
+        Extra model parameters to pass to mb_model_class.
     """
 
     # Param constraints
@@ -2771,11 +2777,21 @@ def mb_calibration_from_scalar_mb(gdir, *,
         temp_bias = 0
 
     # Create the MB model we will calibrate
-    mb_mod = mb_model_class(gdir,
-                            melt_f=melt_f,
-                            temp_bias=temp_bias,
-                            prcp_fac=prcp_fac,
-                            check_calib_params=False)
+    if not extra_model_kwargs:
+        mb_mod = mb_model_class(
+            gdir,
+            melt_f=melt_f,
+            temp_bias=temp_bias,
+            prcp_fac=prcp_fac,
+            check_calib_params=False)
+    else:
+        mb_mod = mb_model_class(
+            gdir,
+            melt_f=melt_f,
+            temp_bias=temp_bias,
+            prcp_fac=prcp_fac,
+            check_calib_params=False,
+            **extra_model_kwargs)
 
     # Check that the years are available
     for y in years:
