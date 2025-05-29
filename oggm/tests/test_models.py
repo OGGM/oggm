@@ -867,7 +867,7 @@ class TestMassBalanceModels:
     """Daily MB Models"""
 
     @pytest.fixture(name="DailyTIModel", scope="class", autouse=True)
-    def get_dailyTIModel(self):
+    def get_daily_TIModel(self):
         """Override imports"""
         yield massbalance.DailyTIModel
 
@@ -1522,7 +1522,8 @@ class TestDailyMassBalanceModels:
 
         with ncDataset(file_path, mode="r") as nc_data:
             time = nc_data.variables["time"]
-            time_index = cftime.num2date(time[-total_days:], time.units, calendar=time.calendar)
+            time_index = cftime.num2date(
+                time[-total_days:], time.units, calendar=time.calendar)
             assert time_index.size == total_days
 
         assert time_index.shape == (total_days, )
