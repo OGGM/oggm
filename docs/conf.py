@@ -438,6 +438,13 @@ texinfo_documents = [
 intersphinx_mapping = {
 }
 
+# -- Autodoc Configuration ------------------------------------------
+
+autodoc_type_aliases = {
+    "GeoDataFrame": "geopandas.GeoDataFrame",
+    "GlacierDirectory": "oggm.GlacierDirectory",
+    "MassBalanceModel": "oggm.core.massbalance.MassBalanceModel",
+}
 
 # -- OGGM Stuffs ----------------------------------------------------
 
