@@ -21,6 +21,8 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Changed COPDEM data source (again) - this comes with good sides (:pull:`1773`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added BedMachine products to the shop (:pull:`1753`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Updated itslive velocity products to v2 (:pull:`1753`).

@@ -1209,12 +1209,20 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     dx2 = gdir.grid.dx**2 * 1e-6
 
     # Terminus loc
-    j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
+    min_ext = np.nanmin(dem[glacier_exterior_mask])
+    if np.isfinite(min_ext):
+        # Find it on exterior
+        j, i = np.nonzero((min_ext == dem) & glacier_exterior_mask)
+    else:
+        # In some bad cases this might be nan - find it inside
+        j, i = np.nonzero((dem[valid_mask].min() == dem) & valid_mask)
+
     if len(j) > 2:
         # We have a situation - take the closest to the euclidian center
         mi, mj = np.mean(i), np.mean(j)
         c = np.argmin((mi - i)**2 + (mj - j)**2)
         j, i = j[[c]], i[[c]]
+
     lon, lat = gdir.grid.ij_to_crs(i[0], j[0], crs=salem.wgs84)
 
     # write
