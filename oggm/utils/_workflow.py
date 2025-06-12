@@ -1844,13 +1844,15 @@ def compile_fl_diagnostics(gdirs, *,
         Set to "True" in order to store the files in the working directory
         Set to a str path to store the files to your chosen location
         Must be a path to a dir
+    group_size : int
+        The number of glaciers per tarfile
     input_filesuffix : str
         the input filesuffix to use for the fl_diagnostics files
         (e.g. '_historical')
     compress : bool
         also compress the files in a tar file
     delete_folders : bool
-        also deletes the folders
+        also deletes the tared folders
     """
     from oggm.workflow import execute_entity_task
 

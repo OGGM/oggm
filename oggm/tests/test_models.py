@@ -2679,7 +2679,7 @@ class TestHEFNonPolluted:
             graphics.plot_modeloutput_section_withtrib(model)
             plt.show()
 
-    #@pytest.mark.slow
+    @pytest.mark.slow
     def test_output_management(self, hef_gdir, inversion_params):
 
         gdir = hef_gdir

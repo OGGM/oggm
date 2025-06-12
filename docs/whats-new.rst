@@ -35,6 +35,8 @@ Enhancements
 - Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
   are no longer recursive and have been optimised for performance.
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added a `compile_fl_diagnostics` (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~
