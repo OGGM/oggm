@@ -657,7 +657,7 @@ def read_geotiff_dem(gdir=None, fpath=None):
         # This is for bad tiffs where the above doesn't work
         topo[topo <= -999.] = np.nan
 
-    if gdir.get_diagnostics()['dem_source'] in ['COPDEM30', 'COPDEM90']:
+    if gdir is not None and gdir.get_diagnostics()['dem_source'] in ['COPDEM30', 'COPDEM90']:
         # Latest COP DEM versions have nodata for ocean pixels
         # I'm not sure nodata is *always* ocean, but hey
         topo[np.isnan(topo)] = 0
