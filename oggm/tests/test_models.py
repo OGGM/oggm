@@ -3180,7 +3180,7 @@ class TestHEF:
         # Climate data
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
+        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm, use_cftime=True) as cesm:
             # Let's do some basic checks
             shist = hist.sel(time=slice('1961', '1990'))
             scesm = cesm.sel(time=slice('1961', '1990'))
