@@ -339,6 +339,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
+    # Add a new default source
+    if dem_source is None:
+        fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
+        if rgi_version == '62':
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20250616.csv')
+            dfs = pd.read_csv(fs, index_col=0)
+            rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
+        if rgi_version == '70G':
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20250616.csv')
+            dfs = pd.read_csv(fs, index_col=0)
+            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+        if rgi_version == '70C':
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20250616.csv')
+            dfs = pd.read_csv(fs, index_col=0)
+            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+
     # L0 - go
     if start_level == 0:
         gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)

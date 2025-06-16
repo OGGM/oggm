@@ -2787,7 +2787,8 @@ class GlacierDirectory(object):
         if is_glacier_complex:
             rgi_entity['glac_name'] = ''
             rgi_entity['src_date'] = '2000-01-01 00:00:00'
-            rgi_entity['dem_source'] = None
+            if 'dem_source' not in rgi_entity:
+                rgi_entity['dem_source'] = None
             rgi_entity['term_type'] = 9
 
         if is_rgi7:
@@ -2843,7 +2844,9 @@ class GlacierDirectory(object):
                 raise RuntimeError('RGI Version not supported: '
                                    '{}'.format(self.rgi_version))
             self.rgi_version = rgi_version
-            self.rgi_dem_source = None
+
+            # Mechanism to pass DEM source via the RGI entity
+            self.rgi_dem_source = rgi_entity.get('dem_source', None)
 
             # Read glacier attrs
             gtkeys = {'0': 'Glacier',
