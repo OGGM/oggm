@@ -332,6 +332,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             rgidf = rgidf.sample(4)
 
+    if len(rgidf) == 0:
+        raise InvalidParamsError('Zero glaciers selected!')
+
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
