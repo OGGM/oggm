@@ -37,6 +37,11 @@ Enhancements
 - Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
   are no longer recursive and have been optimised for performance.
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added the ability to use an incomplete version of the full params.cfg file
+  to override some default parameter values. This can be done by providing the
+  file during initialization with ``cfg.initialize(file=mini_params_filepath)``
+  (:pull:`1776`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added a `compile_fl_diagnostics` (:pull:`1753`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
