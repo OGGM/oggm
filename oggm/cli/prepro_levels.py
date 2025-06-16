@@ -340,7 +340,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
     # Add a new default source
-    if dem_source is None:
+    if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
         if rgi_version == '62':
             fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20250616.csv')
