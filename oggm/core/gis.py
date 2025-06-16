@@ -653,8 +653,15 @@ def read_geotiff_dem(gdir=None, fpath=None):
 
     with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
-        topo[topo <= -999.] = np.nan
         topo[ds.read_masks(1) == 0] = np.nan
+        # This is for bad tiffs where the above doesn't work
+        topo[topo <= -999.] = np.nan
+
+    if gdir.get_diagnostics()['dem_source'] in ['COPDEM30', 'COPDEM90']:
+        # Latest COP DEM versions have nodata for ocean pixels
+        # I'm not sure nodata is *always* ocean, but hey
+        topo[np.isnan(topo)] = 0
+
     return topo
 
 
