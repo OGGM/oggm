@@ -2610,6 +2610,7 @@ class TestGrindelInvert(unittest.TestCase):
     def test_intersections(self):
         cfg.PARAMS['use_multiple_flowlines'] = True
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gdir.add_to_diagnostics('dem_source', 'USER')
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
