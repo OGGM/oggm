@@ -490,6 +490,7 @@ def distribute_thickness_from_simulation(gdir,
 def merge_simulated_thickness(gdirs,
                               output_folder=None,
                               output_filename=None,
+                              output_grid=None,
                               simulation_filesuffix='',
                               years_to_merge=None,
                               keep_dem_file=False,
@@ -514,6 +515,9 @@ def merge_simulated_thickness(gdirs,
     output_folder
     output_filename : str
         Default is gridded_simulation_merged{simulation_filesuffix}.
+    output_grid : salem.gis.Grid
+        You can provide a custom grid on which the distributed data should be
+        merged on.
     simulation_filesuffix : str
         the filesuffix of the gridded_simulation file
     years_to_merge : list | xr.DataArray | None
@@ -559,6 +563,7 @@ def merge_simulated_thickness(gdirs,
             gdirs,
             output_folder=output_folder,
             output_filename=f"{output_filename}_topo_data",
+            output_grid=output_grid,
             input_file='gridded_data',
             input_filesuffix='',
             included_variables=['glacier_ext',
@@ -607,6 +612,7 @@ def merge_simulated_thickness(gdirs,
                 gdirs,
                 output_folder=output_folder,
                 output_filename=f"{output_filename}_{year}_{month:02d}",
+                output_grid=output_grid,
                 input_file='gridded_simulation',
                 input_filesuffix=simulation_filesuffix,
                 included_variables=[('simulated_thickness',
@@ -632,6 +638,7 @@ def merge_simulated_thickness(gdirs,
             gdirs,
             output_folder=output_folder,
             output_filename=output_filename,
+            output_grid=output_grid,
             input_file=['gridded_data', 'gridded_simulation'],
             input_filesuffix=['', simulation_filesuffix],
             included_variables=[['glacier_ext',
