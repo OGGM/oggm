@@ -72,12 +72,12 @@ def bedmachine_to_gdir(gdir):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'Ice thickness from BedMachine'
         v.long_name = ln
         v.data_source = file_url
-        v[:] = thick.data
+        v[:] = thick.data.astype(np.float32)
 
 
 @utils.entity_task(log)
