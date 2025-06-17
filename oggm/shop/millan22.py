@@ -161,25 +161,25 @@ def millan_thickness_to_gdir(gdir, add_error=False):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'Ice thickness from Millan et al. 2022'
         v.long_name = ln
         data_str = ' '.join(files_used) if len(files_used) > 1 else files_used[0]
         v.data_source = data_str
-        v[:] = total_thick
+        v[:] = total_thick.astype(np.float32)
 
         if add_error:
             vn = 'millan_ice_thickness_err'
             if vn in nc.variables:
                 v = nc.variables[vn]
             else:
-                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True)
+                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
             v.units = 'm'
             ln = 'Ice thickness error from Millan et al. 2022'
             v.long_name = ln
             v.data_source = data_str
-            v[:] = total_err
+            v[:] = total_err.astype(np.float32)
 
 
 @utils.entity_task(log, writes=['gridded_data'])
@@ -290,57 +290,57 @@ def millan_velocity_to_gdir(gdir, add_error=False):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'Ice velocity from Millan et al. 2022'
         v.long_name = ln
         v.data_source = files[0]
-        v[:] = vel
+        v[:] = vel.astype(np.float32)
 
         vn = 'millan_vx'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'Ice velocity in map x direction from Millan et al. 2022'
         v.long_name = ln
         v.data_source = files[0]
-        v[:] = all_vx
+        v[:] = all_vx.astype(np.float32)
 
         vn = 'millan_vy'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'Ice velocity in map y direction from Millan et al. 2022'
         v.long_name = ln
         v.data_source = files[0]
-        v[:] = all_vy
+        v[:] = all_vy.astype(np.float32)
 
         if add_error:
             vn = 'millan_err_vx'
             if vn in nc.variables:
                 v = nc.variables[vn]
             else:
-                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True)
+                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
             v.units = 'm'
             ln = 'Ice velocity error in map x direction from Millan et al. 2022'
             v.long_name = ln
             v.data_source = files[0]
-            v[:] = all_err_vx
+            v[:] = all_err_vx.astype(np.float32)
 
             vn = 'millan_err_vy'
             if vn in nc.variables:
                 v = nc.variables[vn]
             else:
-                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True)
+                v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
             v.units = 'm'
             ln = 'Ice velocity error in map y direction from Millan et al. 2022'
             v.long_name = ln
             v.data_source = files[0]
-            v[:] = all_err_vy
+            v[:] = all_err_vy.astype(np.float32)
 
 
 @utils.entity_task(log)
