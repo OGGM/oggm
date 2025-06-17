@@ -105,7 +105,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         path to the output folder (where to put the preprocessed tar files)
     dem_source : str
         which DEM source to use: default, SOURCE_NAME, STANDARD or ALL
-        "standard" is COPDEM + NASADEM
+        ALL is to generate RGITOPO
+        "STANDARD" is doina small RGITOPO using COPDEM + NASADEM
+        default is the current default lookup tables found at
+        https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/
     working_dir : str
         path to the OGGM working directory
     params_file : str
