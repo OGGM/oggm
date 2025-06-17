@@ -64,6 +64,7 @@ def _filter(ds):
 
     # NaNs
     data[~ np.isfinite(data)] = np.nan
+    data[data > 1e5] = np.nan
     return data
 
 
@@ -118,6 +119,11 @@ def _filter_and_reproj(gdir, var, gdf):
 
         grids_used.append(dsb)
         files_used.append(s.file_id)
+
+    if total_data is not None:
+        # Final sanity check (not sure why this is necessary)
+        total_data[total_data > 1e5] = np.nan
+        total_data[total_data < -1e5] = np.nan
 
     return total_data, files_used, grids_used
 

@@ -242,7 +242,6 @@ def compile_glathida_on_grid(gdirs, filesuffix='', path=True,
     out = pd.concat(out_df).reset_index()
     out = out.drop(['index'], axis=1)
 
-
     if glacier_statistics_file:
         vns = {'cenlon': 'glacier_cenlon',
                'cenlat': 'glacier_cenlat',
