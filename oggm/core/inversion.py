@@ -854,10 +854,10 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = '-'
         v.long_name = 'Distributed ice thickness'
-        v[:] = thick
+        v[:] = thick.astype(np.float32)
 
     return thick
 
@@ -958,10 +958,10 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = '-'
         v.long_name = 'Distributed ice thickness'
-        v[:] = thick
+        v[:] = thick.astype(np.float32)
 
     return thick
 

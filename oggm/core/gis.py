@@ -1470,37 +1470,37 @@ def gridded_attributes(gdir):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'rad'
         v.long_name = 'Local slope based on smoothed topography'
-        v[:] = slope
+        v[:] = slope.astype(np.float32)
 
         vn = 'aspect'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'rad'
         v.long_name = 'Local aspect based on smoothed topography'
-        v[:] = aspect
+        v[:] = aspect.astype(np.float32)
 
         vn = 'slope_factor'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = '-'
         v.long_name = 'Slope factor as defined in Farinotti et al 2009'
-        v[:] = slope_factor
+        v[:] = slope_factor.astype(np.float32)
 
         vn = 'dis_from_border'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         v.long_name = 'Distance from glacier boundaries'
-        v[:] = dis_from_border
+        v[:] = dis_from_border.astype(np.float32)
 
 
 def _all_inflows(cls, cl):
@@ -1604,18 +1604,18 @@ def gridded_mb_attributes(gdir):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = 'm^2'
         v.long_name = 'Catchment area above point'
         v.description = ('This is a very crude method: just the area above '
                          'the points elevation on glacier.')
-        v[:] = catch_area_above_z
+        v[:] = catch_area_above_z.astype(np.float32)
 
         vn = 'lin_mb_above_z'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = 'kg/year'
         v.long_name = 'MB above point from linear MB model, without catchments'
         v.description = ('Mass balance cumulated above the altitude of the'
@@ -1623,13 +1623,13 @@ def gridded_mb_attributes(gdir):
                          'a coarse approximation of the real flux. '
                          'The mass balance model is a simple linear function'
                          'of altitude.')
-        v[:] = lin_mb_above_z
+        v[:] = lin_mb_above_z.astype(np.float32)
 
         vn = 'oggm_mb_above_z'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = 'kg/year'
         v.long_name = 'MB above point from OGGM MB model, without catchments'
         v.description = ('Mass balance cumulated above the altitude of the'
@@ -1637,7 +1637,7 @@ def gridded_mb_attributes(gdir):
                          'a coarse approximation of the real flux. '
                          'The mass balance model is a calibrated temperature '
                          'index model like OGGM.')
-        v[:] = oggm_mb_above_z
+        v[:] = oggm_mb_above_z.astype(np.float32)
 
     # Hardest part - MB per catchment
     try:
@@ -1702,19 +1702,19 @@ def gridded_mb_attributes(gdir):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = 'm^2'
         v.long_name = 'Catchment area above point on flowline catchments'
         v.description = ('Uses the catchments masks of the flowlines to '
                          'compute the area above the altitude of the given '
                          'point.')
-        v[:] = catchment_area
+        v[:] = catchment_area.astype(np.float32)
 
         vn = 'lin_mb_above_z_on_catch'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'kg/year'
         v.long_name = 'MB above point from linear MB model, with catchments'
         v.description = ('Mass balance cumulated above the altitude of the'
@@ -1722,13 +1722,13 @@ def gridded_mb_attributes(gdir):
                          'flux. Note that it is a coarse approximation of the '
                          'real flux. The mass balance model is a simple '
                          'linear function of altitude.')
-        v[:] = lin_mb_above_z_on_catch
+        v[:] = lin_mb_above_z_on_catch.astype(np.float32)
 
         vn = 'oggm_mb_above_z_on_catch'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ))
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'kg/year'
         v.long_name = 'MB above point from OGGM MB model, with catchments'
         v.description = ('Mass balance cumulated above the altitude of the'
@@ -1736,7 +1736,7 @@ def gridded_mb_attributes(gdir):
                          'flux. Note that it is a coarse approximation of the '
                          'real flux. The mass balance model is a calibrated '
                          'temperature index model like OGGM.')
-        v[:] = oggm_mb_above_z_on_catch
+        v[:] = oggm_mb_above_z_on_catch.astype(np.float32)
 
 
 def merged_glacier_masks(gdir, geometry):
