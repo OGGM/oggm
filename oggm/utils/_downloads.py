@@ -68,7 +68,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'e6da53aea8438a06d7702769e73fe5df8ab0d669'
+SAMPLE_DATA_COMMIT = '9bfeb6dfea9513f790877819d9a6cbd2c7b61611'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -2309,33 +2309,6 @@ def is_dem_source_available(source, lon_ex, lat_ex):
         return True
 
 
-def default_dem_source(rgi_id):
-    """Current default DEM source at a given location.
-
-    Parameters
-    ----------
-    rgi_id : str
-        the RGI id
-
-    Returns
-    -------
-    the chosen DEM source
-    """
-    rgi_reg = 'RGI{}'.format(rgi_id[6:8])
-    rgi_id = rgi_id[:14]
-    if cfg.DEM_SOURCE_TABLE.get(rgi_reg) is None:
-        fp = get_demo_file('rgi62_dem_frac.h5')
-        cfg.DEM_SOURCE_TABLE[rgi_reg] = pd.read_hdf(fp)
-
-    sel = cfg.DEM_SOURCE_TABLE[rgi_reg].loc[rgi_id]
-    for s in ['NASADEM', 'COPDEM90', 'COPDEM30', 'GIMP', 'REMA',
-              'RAMP', 'TANDEM', 'MAPZEN']:
-        if sel.loc[s] > 0.75:
-            return s
-    # If nothing works, try COPDEM again
-    return 'COPDEM90'
-
-
 def get_topo_file(lon_ex=None, lat_ex=None, gdir=None, *,
                   dx_meter=None, zoom=None, source=None):
     """Path(s) to the DEM file(s) covering the desired extent.
@@ -2397,7 +2370,9 @@ def get_topo_file(lon_ex=None, lat_ex=None, gdir=None, *,
             raise InvalidParamsError('gdir is needed if source=None')
         source = getattr(gdir, 'rgi_dem_source')
         if source is None:
-            source = default_dem_source(gdir.rgi_id)
+            raise InvalidParamsError('DEM source now needs to be specified '
+                                     'explicitly, either via the RGI file '
+                                     'or the `source` kwarg.')
 
     if source not in DEM_SOURCES:
         raise InvalidParamsError('`source` must be one of '

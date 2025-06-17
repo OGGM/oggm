@@ -105,7 +105,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         path to the output folder (where to put the preprocessed tar files)
     dem_source : str
         which DEM source to use: default, SOURCE_NAME, STANDARD or ALL
-        "standard" is COPDEM + NASADEM
+        ALL is to generate RGITOPO
+        "STANDARD" is doina small RGITOPO using COPDEM + NASADEM
+        default is the current default lookup tables found at
+        https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/
     working_dir : str
         path to the OGGM working directory
     params_file : str
@@ -338,6 +341,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
+
+    # Add a new default source
+    if not dem_source:
+        fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
+        if rgi_version == '62':
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20250616.csv')
+            dfs = pd.read_csv(fs, index_col=0)
+            rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
+        if rgi_version == '70G':
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20250616.csv')
+            dfs = pd.read_csv(fs, index_col=0)
+            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+        if rgi_version == '70C':
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20250616.csv')
+            dfs = pd.read_csv(fs, index_col=0)
+            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
     # L0 - go
     if start_level == 0:

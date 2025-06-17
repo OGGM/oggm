@@ -44,6 +44,9 @@ Enhancements
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Added a `compile_fl_diagnostics` (:pull:`1753`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- New standard glacier directories now use a new reference lookup
+  table to decide on the topo data to use (:pull:`1781`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~

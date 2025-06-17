@@ -2772,17 +2772,6 @@ class TestDataFiles(unittest.TestCase):
         for s in ['TANDEM', 'AW3D30', 'MAPZEN', 'DEM3', 'ASTER', 'AW3D30']:
             assert utils.is_dem_source_available(s, [11, 11], [47, 47])
 
-    def test_find_dem_zone(self):
-
-        assert utils.default_dem_source('RGI60-11.00897') == 'NASADEM'
-        assert utils.default_dem_source('RGI60-11.00897_merged') == 'NASADEM'
-        assert utils.default_dem_source('RGI60-19.01251') == 'COPDEM90'
-        assert utils.default_dem_source('RGI60-06.00483') == 'COPDEM90'
-        assert utils.default_dem_source('RGI60-19.01405') == 'COPDEM90'
-        assert utils.default_dem_source('RGI60-19.00970') == 'REMA'
-        assert utils.default_dem_source('RGI60-05.10315') == 'GIMP'
-        assert utils.default_dem_source('RGI60-19.01820') == 'MAPZEN'
-
     def test_lrufilecache(self):
 
         f1 = os.path.join(self.dldir, 'f1.txt')

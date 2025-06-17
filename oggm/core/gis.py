@@ -335,6 +335,7 @@ def check_dem_source(source, extent_ll, rgi_id=None):
                 break
     else:
         source_exists = is_dem_source_available(source, *extent_ll)
+
     if not source_exists:
         if rgi_id is None:
             extent_string = (f"the grid extent of longitudes {extent_ll[0]} "
