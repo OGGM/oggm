@@ -871,6 +871,11 @@ class TestMassBalanceModels:
         """Override imports"""
         yield massbalance.DailyTIModel
 
+    @pytest.fixture(name="DailySfcTIModel", scope="class", autouse=True)
+    def get_daily_sfc_TIModel(self):
+        """Override imports"""
+        yield massbalance.DailySfcTIModel
+
     def get_leap_value(self, value, year: int):
         """Extrapolate annual value to fit a leap year."""
 
@@ -1493,6 +1498,11 @@ class TestDailyMassBalanceModels:
     def get_dailyTIModel(self):
         """Override imports"""
         yield massbalance.DailyTIModel
+
+    @pytest.fixture(name="DailySfcTIModel", scope="function")
+    def get_dailySfcTIModel(self):
+        """Override imports"""
+        yield massbalance.DailySfcTIModel
 
     @pytest.fixture(name="MonthlyTIModel", scope="class")
     def get_monthlyTIModel(self):
