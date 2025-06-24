@@ -47,6 +47,10 @@ Enhancements
 - New standard glacier directories now use a new reference lookup
   table to decide on the topo data to use (:pull:`1781`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added the possibility to provide a custom grid  in 
+  ``workflow.merge_gridded_data``. If no grid is provided, the default is to
+  merge all grids of the provided gdirs (:pull:`1779`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
