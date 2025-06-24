@@ -376,9 +376,9 @@ def process_cesm_data(gdir, fpath_temp=None, fpath_precc=None,
     if Version(xr.__version__) < Version('0.11'):
         raise ImportError('This task needs xarray v0.11 or newer to run.')
 
-    tempds = xr.open_dataset(fpath_temp)
-    precpcds = xr.open_dataset(fpath_precc)
-    preclpds = xr.open_dataset(fpath_precl)
+    tempds = xr.open_dataset(fpath_temp, use_cftime=True)
+    precpcds = xr.open_dataset(fpath_precc, use_cftime=True)
+    preclpds = xr.open_dataset(fpath_precl, use_cftime=True)
 
     # Get the time right - i.e. from time bounds
     # Fix for https://github.com/pydata/xarray/issues/2565
@@ -389,7 +389,7 @@ def process_cesm_data(gdir, fpath_temp=None, fpath_precc=None,
     try:
         # xarray v0.11
         time = netCDF4.num2date(tempds.time_bnds[:, 0], time_unit,
-                                calendar=calendar)
+                                calendar=calendar, use_cftime=True)
     except TypeError:
         # xarray > v0.11
         time = tempds.time_bnds[:, 0].values

@@ -35,7 +35,7 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-def up_to_climate(reset=False, use_mp=None):
+def up_to_climate(reset=False, use_mp=None, params_file=None):
     """Run the tasks you want."""
 
     # test directory
@@ -49,7 +49,7 @@ def up_to_climate(reset=False, use_mp=None):
             pickle.dump('none', f)
 
     # Init
-    cfg.initialize()
+    cfg.initialize(file=params_file)
 
     # Use multiprocessing
     use_mp = False
@@ -119,10 +119,10 @@ def up_to_climate(reset=False, use_mp=None):
     return gdirs
 
 
-def up_to_inversion(reset=False):
+def up_to_inversion(reset=False, params_file=None):
     """Run the tasks you want."""
 
-    gdirs = up_to_climate(reset=reset)
+    gdirs = up_to_climate(reset=reset, params_file=params_file)
 
     with open(CLI_LOGF, 'rb') as f:
         clilog = pickle.load(f)
@@ -196,7 +196,14 @@ class TestFullRun(unittest.TestCase):
     @pytest.mark.slow
     def test_calibrate_inversion_from_consensus(self):
 
-        gdirs = up_to_inversion()
+        # test mini params file, define path relative to file location
+        fp_mini_params = os.path.join(os.path.dirname(__file__),
+                                      'mini_params_for_test.cfg')
+        gdirs = up_to_inversion(params_file=fp_mini_params)
+
+        # check if mini params file is used as expected
+        assert cfg.PARAMS['lru_maxsize'] == 123
+
         df = workflow.calibrate_inversion_from_consensus(gdirs,
                                                          ignore_missing=True)
         df = df.dropna()
