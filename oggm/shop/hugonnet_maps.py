@@ -187,13 +187,13 @@ def hugonnet_to_gdir(gdir, add_error=False):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'dhdt (2000-2020) from Hugonnet et al. 2021'
         v.long_name = ln
         data_str = ' '.join(flist) if len(flist) > 1 else flist[0]
         v.data_source = data_str
-        v[:] = np.squeeze(dst_array)
+        v[:] = np.squeeze(dst_array).astype(np.float32)
 
 
 @utils.entity_task(log)
