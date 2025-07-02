@@ -187,8 +187,7 @@ def secure_url_retrieve(url, *args, **kwargs):
         'cluster.klima.uni-bremen.de/~oggm/test_files/',
         'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
         'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
-        # this URL might be removed again after the final integration of RGI7 OGGM
-        '~fmaussion/misc/rgi7_data/00_rgi70_regions/',
+        'RGI2000-v7.0-regions.zip',
         # GH Actions for DTCG fails if RGI data was never downloaded
         'https://cluster.klima.uni-bremen.de/~oggm/rgi/',
         base_extra_v14.format('L1'),
@@ -197,7 +196,6 @@ def secure_url_retrieve(url, *args, **kwargs):
         base_extra_l3,
     }
     assert any(substring in url for substring in valid_urls)
-
     return oggm_urlretrieve(url, *args, **kwargs)
 
 

@@ -335,6 +335,7 @@ def check_dem_source(source, extent_ll, rgi_id=None):
                 break
     else:
         source_exists = is_dem_source_available(source, *extent_ll)
+
     if not source_exists:
         if rgi_id is None:
             extent_string = (f"the grid extent of longitudes {extent_ll[0]} "
@@ -653,8 +654,15 @@ def read_geotiff_dem(gdir=None, fpath=None):
 
     with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
-        topo[topo <= -999.] = np.nan
         topo[ds.read_masks(1) == 0] = np.nan
+        # This is for bad tiffs where the above doesn't work
+        topo[topo <= -999.] = np.nan
+
+    if gdir is not None and gdir.get_diagnostics()['dem_source'] in ['COPDEM30', 'COPDEM90']:
+        # Latest COP DEM versions have nodata for ocean pixels
+        # I'm not sure nodata is *always* ocean, but hey
+        topo[np.isnan(topo)] = 0
+
     return topo
 
 
@@ -1209,12 +1217,20 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     dx2 = gdir.grid.dx**2 * 1e-6
 
     # Terminus loc
-    j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
+    min_ext = np.nanmin(dem[glacier_exterior_mask])
+    if np.isfinite(min_ext):
+        # Find it on exterior
+        j, i = np.nonzero((min_ext == dem) & glacier_exterior_mask)
+    else:
+        # In some bad cases this might be nan - find it inside
+        j, i = np.nonzero((dem[valid_mask].min() == dem) & valid_mask)
+
     if len(j) > 2:
         # We have a situation - take the closest to the euclidian center
         mi, mj = np.mean(i), np.mean(j)
         c = np.argmin((mi - i)**2 + (mj - j)**2)
         j, i = j[[c]], i[[c]]
+
     lon, lat = gdir.grid.ij_to_crs(i[0], j[0], crs=salem.wgs84)
 
     # write

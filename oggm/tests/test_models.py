@@ -3094,6 +3094,7 @@ class TestHEFNonPolluted:
             assert 'volume_bsl_m3' not in ds_fl
 
         past_run_file = os.path.join(cfg.PATHS['working_dir'], 'compiled.nc')
+        diag_dir = os.path.join(cfg.PATHS['working_dir'], 'compiled_diags')
         mb_file = os.path.join(cfg.PATHS['working_dir'], 'fixed_mb.csv')
         stats_file = os.path.join(cfg.PATHS['working_dir'], 'stats.csv')
         out_path = os.path.join(cfg.PATHS['working_dir'], 'extended.nc')
@@ -3107,6 +3108,8 @@ class TestHEFNonPolluted:
         utils.compile_fixed_geometry_mass_balance([gdir], path=mb_file)
         utils.compile_run_output([gdir], path=past_run_file,
                                  input_filesuffix='_hist')
+        utils.compile_fl_diagnostics([gdir], path=diag_dir,
+                                     input_filesuffix='_hist')
 
         # Extend
         utils.extend_past_climate_run(past_run_file=past_run_file,
@@ -3114,8 +3117,11 @@ class TestHEFNonPolluted:
                                       glacier_statistics_file=stats_file,
                                       path=out_path)
 
+        diag_file = os.path.join(diag_dir, 'RGI50-11.00',
+                                 'RGI50-11.00897_fl_diagnostics_hist.nc')
         with xr.open_dataset(out_path) as ods, \
-                xr.open_dataset(past_run_file) as ds:
+                xr.open_dataset(past_run_file) as ds, \
+                    xr.open_dataset(diag_file, group='fl_0') as dds:
 
             ref = ds.volume
             new = ods.volume
@@ -3151,6 +3157,11 @@ class TestHEFNonPolluted:
                                            ods[vn].sel(time=1990) -
                                            ods[vn].sel(time=1980),
                                            rtol=rtol)
+
+            # The test cant be too quantitative because of multiple flowlines
+            # Here we are testing only fl_0
+            ratio = ds.isel(rgi_id=0)['volume']/dds.volume_m3.sum(dim='dis_along_flowline')
+            np.testing.assert_allclose(ratio, 15, atol=3)
 
 
 @pytest.mark.usefixtures('with_class_wd')
@@ -3550,7 +3561,7 @@ class TestHEF:
         # Climate data
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm) as cesm:
+        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm, use_cftime=True) as cesm:
             # Let's do some basic checks
             shist = hist.sel(time=slice('1961', '1990'))
             scesm = cesm.sel(time=slice('1961', '1990'))
