@@ -1992,6 +1992,8 @@ def reproject_gridded_data_variable_to_grid(gdir,
             total_before = (np.nansum(data.values, axis=sum_axis) *
                             ds.salem.grid.dx ** 2)
 
+            total_before_is_zero = np.isclose(total_before, 0, atol=1e-6)
+
             if smooth_radius != 0:
                 if smooth_radius is None:
                     smooth_radius = np.rint(cfg.PARAMS['smooth_window'] /
@@ -2008,12 +2010,40 @@ def reproject_gridded_data_variable_to_grid(gdir,
 
             total_after = (np.nansum(r_data, axis=sum_axis) *
                            target_grid.dx ** 2)
+            total_after_is_zero = np.isclose(total_after, 0, atol=1e-6)
+
+            # if a relatively small grid is reprojected into a larger grid, it
+            # could happen that no data is assigned at all
+            no_data_after_but_before = np.logical_and(total_after_is_zero,
+                                                      ~total_before_is_zero)
+            if np.any(no_data_after_but_before):
+                # we just assign the maximum value to one grid point and use the
+                # factor for conserving the total value
+                def _assign_max_value(data_provided, data_target):
+                    j_max, i_max = np.unravel_index(
+                        np.nanargmax(data_provided.values), data_provided.shape)
+                    oi_max, oj_max = target_grid.center_grid.transform(
+                        i_max, j_max, crs=gdir.grid.center_grid, nearest=True)
+                    data_target[oj_max, oi_max] = data_provided[j_max, i_max]
+                    return data_target
+
+                if r_data.ndim == 3:
+                    for i in range(r_data.shape[0]):
+                        if no_data_after_but_before[i]:
+                            r_data[i, :, :] = _assign_max_value(data[i, :, :],
+                                                                r_data[i, :, :])
+                else:
+                    r_data = _assign_max_value(data, r_data)
+
+                # and recalculate the total after again
+                total_after = (np.nansum(r_data, axis=sum_axis) *
+                               target_grid.dx ** 2)
 
             # only preserve total if there is some data before
             with warnings.catch_warnings():
                 # Divide by zero is fine
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
-                factor = np.where(np.isclose(total_before, 0, atol=1e-6),
+                factor = np.where(total_before_is_zero,
                                   0., total_before / total_after)
 
             if len(data.dims) == 3:
