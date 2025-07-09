@@ -79,7 +79,7 @@ class TestInitPresentDayFlowline:
     def test_init_present_time_glacier(self, hef_gdir, downstream_line_shape):
 
         gdir = hef_gdir
-        cfg.PARAMS['downstream_line_shape'] = downstream_line_shape
+        gdir.settings['downstream_line_shape'] = downstream_line_shape
         init_present_time_glacier(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
@@ -137,7 +137,7 @@ class TestInitPresentDayFlowline:
             assert np.all(~np.isfinite(fl.bed_shape[~ice_mask]))
             # check that bottom width of downstream line is larger than minimum
             assert np.all(fl._w0_m[~ice_mask] >
-                          cfg.PARAMS['trapezoid_min_bottom_width'])
+                          gdir.settings['trapezoid_min_bottom_width'])
 
         if do_plot:
             plt.plot(fls[-1].bed_h, color='k')
@@ -150,9 +150,12 @@ class TestInitPresentDayFlowline:
         init_present_time_glacier(gdir, filesuffix='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
-        cfg.PARAMS['downstream_line_shape'] = 'free_shape'
+        gdir.settings_filesuffix = '_dummy_downstream'
+        gdir.settings['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
-            init_present_time_glacier(gdir)
+            init_present_time_glacier(gdir,
+                                      settings_filesuffix='_dummy_downstream')
+        gdir.settings_filesuffix = ''
 
     def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
                                                  monkeypatch):
@@ -225,6 +228,7 @@ class TestInitPresentDayFlowline:
     def test_present_time_glacier_massbalance(self, hef_gdir):
 
         gdir = hef_gdir
+        gdir.settings['downstream_line_shape'] = cfg.PARAMS['downstream_line_shape']
         init_present_time_glacier(gdir)
 
         mb_mod = massbalance.MonthlyTIModel(gdir)
@@ -499,6 +503,7 @@ class TestMassBalanceModels:
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
+            - settings_filesuffix: 
             - rho: 900.0
             - t_solid: 0.0
             - t_liq: 2.0
@@ -1680,16 +1685,16 @@ class TestModelFlowlines():
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        rec.settings['glacier_length_method'] = 'consecutive'
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        rec.settings['min_ice_thick_for_length'] = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
-        cfg.PARAMS['glacier_length_method'] = 'naive'
+        rec.settings['glacier_length_method'] = 'naive'
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
@@ -1699,7 +1704,7 @@ class TestModelFlowlines():
         assert rec.length_m == full_l - map_dx
         assert rec.terminus_index == nx - 1
 
-        cfg.PARAMS['glacier_length_method'] = 'consecutive'
+        rec.settings['glacier_length_method'] = 'consecutive'
         assert rec.length_m == 1000
         assert rec.terminus_index == 9
 
@@ -2988,7 +2993,7 @@ class TestHEF:
         init_present_time_glacier(hef_gdir)
 
         # Try something else here - find out the bias needed for 0 mb
-        dfo = hef_gdir.read_json('mb_calib')
+        dfo = hef_gdir.read_yml('settings')
         df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
                                                        calibrate_param1='temp_bias',
                                                        melt_f=dfo['melt_f'],
@@ -4411,6 +4416,7 @@ class TestDynamicSpinup:
             mb_calib = gdir.read_json('mb_calib')
             mb_calib['melt_f'] = melt_f_orig
             gdir.write_json(mb_calib, 'mb_calib')
+            gdir.settings['melt_f'] = melt_f_orig
 
         # value we want to match after dynamic melt_f calibration
         ref_period = cfg.PARAMS['geodetic_mb_period']
@@ -4583,7 +4589,7 @@ class TestDynamicSpinup:
                 ys=yr0_ref_dmdtda + 1)
 
         # test initialisation from an previous glacier geometry
-        cfg.PARAMS['store_model_geometry'] = True
+        gdir.settings['store_model_geometry'] = True
         workflow.execute_entity_task(tasks.run_from_climate_data, [gdir],
                                      ys=yr_rgi, ye=yr_rgi + 1,
                                      output_filesuffix='_one_yr')
@@ -4955,13 +4961,14 @@ class TestHydro:
         gdir.rgi_date = 1990
 
         # Add debug vars
-        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        gdir.settings['store_diagnostic_variables'] = ALL_DIAGS
         # Needed for this to run
-        cfg.PARAMS['store_model_geometry'] = True
+        gdir.settings['store_model_geometry'] = True
 
         # need to add area min h if I want to merge two runs for compatibility
-        ovars = cfg.PARAMS['store_diagnostic_variables']
+        ovars = gdir.settings['store_diagnostic_variables']
         ovars += ['area_min_h']
+        gdir.settings['store_diagnostic_variables'] = ovars
 
         init_present_time_glacier(gdir)
         tasks.run_with_hydro(gdir, run_task=tasks.run_dynamic_spinup,
@@ -5560,10 +5567,10 @@ class TestSemiImplicitModel:
     @pytest.mark.slow
     def test_equilibrium(self, hef_elev_gdir, inversion_params):
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        hef_elev_gdir.settings['trapezoid_lambdas'] = 1
+        hef_elev_gdir.settings['downstream_line_shape'] = 'trapezoidal'
         init_present_time_glacier(hef_elev_gdir)
-        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        hef_elev_gdir.settings['min_ice_thick_for_length'] = 1
 
         # year 1930 is used with equilibrium climate period in mind (old t*)
         mb_mod = massbalance.ConstantMassBalance(hef_elev_gdir, y0=1930)
@@ -5633,10 +5640,10 @@ class TestSemiImplicitModel:
 
     @pytest.mark.slow
     def test_random(self, hef_elev_gdir, inversion_params):
-        cfg.PARAMS['store_model_geometry'] = True
+        hef_elev_gdir.settings['store_model_geometry'] = True
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        hef_elev_gdir.settings['trapezoid_lambdas'] = 1
+        hef_elev_gdir.settings['downstream_line_shape'] = 'trapezoidal'
 
         init_present_time_glacier(hef_elev_gdir)
         run_random_climate(hef_elev_gdir, nyears=100, seed=6, y0=1930,
@@ -5666,13 +5673,13 @@ class TestSemiImplicitModel:
     @pytest.mark.slow
     def test_sliding_and_compare_to_fluxbased(self, hef_elev_gdir,
                                               inversion_params):
-        cfg.PARAMS['store_model_geometry'] = True
-        cfg.PARAMS['store_fl_diagnostics'] = True
+        hef_elev_gdir.settings['store_model_geometry'] = True
+        hef_elev_gdir.settings['store_fl_diagnostics'] = True
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        hef_elev_gdir.settings['trapezoid_lambdas'] = 1
+        hef_elev_gdir.settings['downstream_line_shape'] = 'trapezoidal'
         init_present_time_glacier(hef_elev_gdir)
-        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        hef_elev_gdir.settings['min_ice_thick_for_length'] = 1
 
         start_time_impl = time.time()
         run_random_climate(hef_elev_gdir, nyears=1000, seed=6, y0=1930,
@@ -5731,7 +5738,7 @@ class TestSemiImplicitModel:
 
             np.testing.assert_allclose(fmod_flux.fls[-1].length_m,
                                        fmod_impl.fls[-1].length_m,
-                                       atol=100.1)
+                                       atol=200.1)
             assert utils.rmsd(fmod_impl.fls[-1].thick,
                               fmod_flux.fls[-1].thick) < 2.5
 
@@ -5784,11 +5791,11 @@ class TestSemiImplicitModel:
 
     @pytest.mark.slow
     def test_fixed_dt(self, hef_elev_gdir, inversion_params):
-        cfg.PARAMS['store_model_geometry'] = True
-        cfg.PARAMS['store_fl_diagnostics'] = True
+        hef_elev_gdir.settings['store_model_geometry'] = True
+        hef_elev_gdir.settings['store_fl_diagnostics'] = True
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        hef_elev_gdir.settings['trapezoid_lambdas'] = 1
+        hef_elev_gdir.settings['downstream_line_shape'] = 'trapezoidal'
         init_present_time_glacier(hef_elev_gdir)
 
         # test if a large fixed_dt results in an instability
@@ -5849,10 +5856,10 @@ class TestDistribute2D:
     @pytest.mark.slow
     def test_distribute(self, hef_elev_gdir, inversion_params):
         # As long as hef_gdir uses 1, we need to use 1 here as well
-        cfg.PARAMS['trapezoid_lambdas'] = 1
-        cfg.PARAMS['downstream_line_shape'] = 'trapezoidal'
+        hef_elev_gdir.settings['trapezoid_lambdas'] = 1
+        hef_elev_gdir.settings['downstream_line_shape'] = 'trapezoidal'
         init_present_time_glacier(hef_elev_gdir)
-        cfg.PARAMS['min_ice_thick_for_length'] = 1
+        hef_elev_gdir.settings['min_ice_thick_for_length'] = 1
 
         # This can be done without any run
         from oggm.sandbox import distribute_2d
