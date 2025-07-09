@@ -335,6 +335,7 @@ def check_dem_source(source, extent_ll, rgi_id=None):
                 break
     else:
         source_exists = is_dem_source_available(source, *extent_ll)
+
     if not source_exists:
         if rgi_id is None:
             extent_string = (f"the grid extent of longitudes {extent_ll[0]} "
@@ -653,8 +654,15 @@ def read_geotiff_dem(gdir=None, fpath=None):
 
     with rasterio.open(dem_path, 'r', driver='GTiff') as ds:
         topo = ds.read(1).astype(rasterio.float32)
-        topo[topo <= -999.] = np.nan
         topo[ds.read_masks(1) == 0] = np.nan
+        # This is for bad tiffs where the above doesn't work
+        topo[topo <= -999.] = np.nan
+
+    if gdir is not None and gdir.get_diagnostics()['dem_source'] in ['COPDEM30', 'COPDEM90']:
+        # Latest COP DEM versions have nodata for ocean pixels
+        # I'm not sure nodata is *always* ocean, but hey
+        topo[np.isnan(topo)] = 0
+
     return topo
 
 
@@ -1209,12 +1217,20 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     dx2 = gdir.grid.dx**2 * 1e-6
 
     # Terminus loc
-    j, i = np.nonzero((dem[glacier_exterior_mask].min() == dem) & glacier_exterior_mask)
+    min_ext = np.nanmin(dem[glacier_exterior_mask])
+    if np.isfinite(min_ext):
+        # Find it on exterior
+        j, i = np.nonzero((min_ext == dem) & glacier_exterior_mask)
+    else:
+        # In some bad cases this might be nan - find it inside
+        j, i = np.nonzero((dem[valid_mask].min() == dem) & valid_mask)
+
     if len(j) > 2:
         # We have a situation - take the closest to the euclidian center
         mi, mj = np.mean(i), np.mean(j)
         c = np.argmin((mi - i)**2 + (mj - j)**2)
         j, i = j[[c]], i[[c]]
+
     lon, lat = gdir.grid.ij_to_crs(i[0], j[0], crs=salem.wgs84)
 
     # write
@@ -1976,6 +1992,8 @@ def reproject_gridded_data_variable_to_grid(gdir,
             total_before = (np.nansum(data.values, axis=sum_axis) *
                             ds.salem.grid.dx ** 2)
 
+            total_before_is_zero = np.isclose(total_before, 0, atol=1e-6)
+
             if smooth_radius != 0:
                 if smooth_radius is None:
                     smooth_radius = np.rint(cfg.PARAMS['smooth_window'] /
@@ -1992,12 +2010,40 @@ def reproject_gridded_data_variable_to_grid(gdir,
 
             total_after = (np.nansum(r_data, axis=sum_axis) *
                            target_grid.dx ** 2)
+            total_after_is_zero = np.isclose(total_after, 0, atol=1e-6)
+
+            # if a relatively small grid is reprojected into a larger grid, it
+            # could happen that no data is assigned at all
+            no_data_after_but_before = np.logical_and(total_after_is_zero,
+                                                      ~total_before_is_zero)
+            if np.any(no_data_after_but_before):
+                # we just assign the maximum value to one grid point and use the
+                # factor for conserving the total value
+                def _assign_max_value(data_provided, data_target):
+                    j_max, i_max = np.unravel_index(
+                        np.nanargmax(data_provided.values), data_provided.shape)
+                    oi_max, oj_max = target_grid.center_grid.transform(
+                        i_max, j_max, crs=gdir.grid.center_grid, nearest=True)
+                    data_target[oj_max, oi_max] = data_provided[j_max, i_max]
+                    return data_target
+
+                if r_data.ndim == 3:
+                    for i in range(r_data.shape[0]):
+                        if no_data_after_but_before[i]:
+                            r_data[i, :, :] = _assign_max_value(data[i, :, :],
+                                                                r_data[i, :, :])
+                else:
+                    r_data = _assign_max_value(data, r_data)
+
+                # and recalculate the total after again
+                total_after = (np.nansum(r_data, axis=sum_axis) *
+                               target_grid.dx ** 2)
 
             # only preserve total if there is some data before
             with warnings.catch_warnings():
                 # Divide by zero is fine
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
-                factor = np.where(np.isclose(total_before, 0, atol=1e-6),
+                factor = np.where(total_before_is_zero,
                                   0., total_before / total_after)
 
             if len(data.dims) == 3:

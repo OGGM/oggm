@@ -2610,6 +2610,7 @@ class TestGrindelInvert(unittest.TestCase):
     def test_intersections(self):
         cfg.PARAMS['use_multiple_flowlines'] = True
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gdir.add_to_diagnostics('dem_source', 'USER')
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2852,7 +2853,7 @@ class TestGCMClimate(unittest.TestCase):
 
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, use_cftime=True) as cesm:
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
