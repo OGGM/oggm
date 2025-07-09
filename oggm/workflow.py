@@ -510,7 +510,8 @@ def gis_prepro_tasks(gdirs):
 
 
 @global_task(log)
-def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
+def climate_tasks(gdirs, settings_filesuffix='',
+                  overwrite_gdir=False, override_missing=None):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
@@ -519,12 +520,15 @@ def climate_tasks(gdirs, overwrite_gdir=False, override_missing=None):
     """
 
     # Process climate data
-    execute_entity_task(tasks.process_climate_data, gdirs)
+    execute_entity_task(tasks.process_climate_data, gdirs,
+                        settings_filesuffix=settings_filesuffix)
     # mass balance and the apparent mass balance
     execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+                        settings_filesuffix=settings_filesuffix,
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir)
-    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+    execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                        settings_filesuffix=settings_filesuffix)
 
 
 @global_task(log)
@@ -722,7 +726,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 
 @global_task(log)
-def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
+def merge_glacier_tasks(gdirs, settings_filesuffix='',
+                        main_rgi_id=None, return_all=False, buffer=None,
                         **kwargs):
     """Shortcut function: run all tasks to merge tributaries to a main glacier
 
@@ -773,7 +778,8 @@ def merge_glacier_tasks(gdirs, main_rgi_id=None, return_all=False, buffer=None,
     # now we have gdirs which contain all the necessary flowlines,
     # time to clean them up
     for gdir in merged_gdirs:
-        flowline.clean_merged_flowlines(gdir, buffer=buffer)
+        flowline.clean_merged_flowlines(
+            gdir, settings_filesuffix=settings_filesuffix, buffer=buffer)
 
     if main_rgi_id is not None and return_all is False:
         return [gd for gd in merged_gdirs if main_rgi_id in gd.rgi_id][0]
@@ -848,6 +854,7 @@ def _recursive_merging(gdirs, gdir_main, glcdf=None, dem_source=None,
 @global_task(log)
 def merge_gridded_data(gdirs, output_folder=None,
                        output_filename='gridded_data_merged',
+                       output_grid=None,
                        input_file='gridded_data',
                        input_filesuffix='',
                        included_variables='all',
@@ -884,6 +891,10 @@ def merge_gridded_data(gdirs, output_folder=None,
         should be stored. Default is cfg.PATHS['working_dir']
     output_filename : str
         The name for the resulting file. Default is 'gridded_data_merged'.
+    output_grid : salem.gis.Grid
+        You can provide a custom grid on which the gridded data should be
+        merged on. If None, a combined grid of all gdirs will be constructed.
+        Default is None.
     input_file : str or list
         The file(s) which should be merged. If a list is provided the data of
         all files is merged into the same dataset. Default is 'gridded_data'.
@@ -970,9 +981,10 @@ def merge_gridded_data(gdirs, output_folder=None,
         # into a list of lists
         included_variables = [included_variables]
 
-    # create a combined salem.Grid object, which serves as canvas/boundaries of
-    # the combined glacier region
-    combined_grid = utils.combine_grids(gdirs)
+    if output_grid is None:
+        # create a combined salem.Grid object, which serves as canvas/boundaries of
+        # the combined glacier region
+        output_grid = utils.combine_grids(gdirs)
 
     if add_topography:
         # ok, lets get a DEM and add it to the final file
@@ -982,11 +994,11 @@ def merge_gridded_data(gdirs, output_folder=None,
         else:
             dem_source = None
             dem_gdir = gdirs[0]
-        gis.get_dem_for_grid(combined_grid, output_folder,
+        gis.get_dem_for_grid(output_grid, output_folder,
                              source=dem_source, gdir=dem_gdir)
         # unwrapped is needed to execute process_dem without the entity_task
         # overhead (this would need a valid gdir)
-        gis.process_dem.unwrapped(gdir=None, grid=combined_grid,
+        gis.process_dem.unwrapped(gdir=None, grid=output_grid,
                                   fpath=output_folder,
                                   output_filename=output_filename)
         if not keep_dem_file:
@@ -999,7 +1011,7 @@ def merge_gridded_data(gdirs, output_folder=None,
             if os.path.exists(fpath):
                 os.remove(fpath)
 
-    with gis.GriddedNcdfFile(grid=combined_grid, fpath=output_folder,
+    with gis.GriddedNcdfFile(grid=output_grid, fpath=output_folder,
                              basename=output_filename) as nc:
 
         # adding the data of one file after another to the merged dataset
@@ -1036,9 +1048,9 @@ def merge_gridded_data(gdirs, output_folder=None,
                 dim_lengths = []
                 for dim in dims:
                     if dim == 'y':
-                        dim_lengths.append(combined_grid.ny)
+                        dim_lengths.append(output_grid.ny)
                     elif dim == 'x':
-                        dim_lengths.append(combined_grid.nx)
+                        dim_lengths.append(output_grid.nx)
                     else:
                         if slice_of_var is not None:
                             # only keep selected part of the variable
@@ -1088,7 +1100,7 @@ def merge_gridded_data(gdirs, output_folder=None,
 
                 kwargs_reproject = dict(
                     variable=var,
-                    target_grid=combined_grid,
+                    target_grid=output_grid,
                     filename=in_file,
                     filesuffix=in_filesuffix,
                     use_glacier_mask=use_glacier_mask,

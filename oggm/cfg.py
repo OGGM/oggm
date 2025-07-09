@@ -301,6 +301,9 @@ BASENAMES['elevation_band_flowline'] = ('elevation_band_flowline.csv', _doc)
 _doc = "The outlines of this glacier complex sub-entities (for RGI7C only!)."
 BASENAMES['complex_sub_entities'] = ('complex_sub_entities.shp', _doc)
 
+_doc = "A dict containing all settings used during the OGGM workflow."
+BASENAMES['settings'] = ('settings.yml', _doc)
+
 
 def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.
@@ -378,11 +381,14 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     Parameters
     ----------
     file : str
-        path to the configuration file (default: OGGM params.cfg)
+        path to a user configuration file. The parameters provided in this file
+        will override the default settings in `OGGM params.cfg`. The file does
+        not need to include all parameters.
     logging_level : str
         set a logging level. See :func:`set_logging_config` for options.
     params : dict
-        overrides for specific parameters from the config file
+        overrides for specific parameters from the config file. Overrules a
+        potential provided file.
     """
     global IS_INITIALIZED
     global PARAMS
@@ -390,16 +396,29 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
 
     set_logging_config(logging_level=logging_level)
 
-    is_default = False
-    if file is None:
-        file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                            'params.cfg')
-        is_default = True
+    # Open default params file
+    is_default = True
+    file_default = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                                'params.cfg')
     try:
-        cp = ConfigObj(file, file_error=True)
+        cp = ConfigObj(file_default, file_error=True)
     except (ConfigObjError, IOError) as e:
-        log.critical('Config file could not be parsed (%s): %s', file, e)
+        log.critical('Config file could not be parsed (%s): %s',
+                     file_default, e)
         sys.exit()
+
+    # If provided open user params file and overwrite defaults
+    if file:
+        is_default = False
+        try:
+            cp_user = ConfigObj(file, file_error=True)
+        except (ConfigObjError, IOError) as e:
+            log.critical('Config file could not be parsed (%s): %s',
+                         file, e)
+            sys.exit()
+
+        for k, v in cp_user.items():
+            cp[k] = v
 
     if is_default:
         log.workflow('Reading default parameters from the OGGM `params.cfg` '
@@ -411,7 +430,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     # Static Paths
     oggm_static_paths()
 
-    # Apply code-side manual params overrides
+    # Apply code-side manual params overrides, overrules provided params file
     if params:
         for k, v in params.items():
             cp[k] = v

@@ -21,6 +21,8 @@ Enhancements
   ``dis_from_border``, ...) to define this ranking, providing greater flexibility
   and control over how the melting sequence is visualized (:pull:`1746`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Changed COPDEM data source (again) - this comes with good sides (:pull:`1773`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added BedMachine products to the shop (:pull:`1753`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Updated itslive velocity products to v2 (:pull:`1753`).
@@ -35,6 +37,20 @@ Enhancements
 - Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
   are no longer recursive and have been optimised for performance.
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added the ability to use an incomplete version of the full params.cfg file
+  to override some default parameter values. This can be done by providing the
+  file during initialization with ``cfg.initialize(file=mini_params_filepath)``
+  (:pull:`1776`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added a `compile_fl_diagnostics` (:pull:`1753`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- New standard glacier directories now use a new reference lookup
+  table to decide on the topo data to use (:pull:`1781`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Added the possibility to provide a custom grid  in 
+  ``workflow.merge_gridded_data``. If no grid is provided, the default is to
+  merge all grids of the provided gdirs (:pull:`1779`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~

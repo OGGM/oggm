@@ -1453,7 +1453,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb']].corr(),
                                    atol=0.35)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] == 0
         assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
@@ -1473,7 +1473,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'temp_mb']].corr(),
                                    atol=0.35)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] != 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
@@ -1493,7 +1493,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'prcp_mb']].corr(),
                                    atol=0.35)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] == 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] != cfg.PARAMS['prcp_fac']
@@ -1522,7 +1522,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.55)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] < 0
         assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['melt_f'] == cfg.PARAMS['melt_f_min']
@@ -1548,7 +1548,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.5)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] > 0
         assert pdf['melt_f'] != cfg.PARAMS['melt_f']
         assert pdf['melt_f'] == cfg.PARAMS['melt_f_max']
@@ -1577,7 +1577,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.45)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] < 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] > cfg.PARAMS['prcp_fac']
@@ -1604,7 +1604,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb2']].corr(),
                                    atol=0.5)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] > 0
         assert pdf['melt_f'] == cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] < cfg.PARAMS['prcp_fac']
@@ -1640,7 +1640,7 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb3']].corr(),
                                    atol=0.5)
 
-        pdf = gdir.read_json('mb_calib')
+        pdf = gdir.read_yml('settings')
         assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_max']
         assert pdf['melt_f'] > cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_min']
@@ -1657,10 +1657,10 @@ class TestClimate(unittest.TestCase):
 
         # Matchable positive with less range
         ref_mb = 1000
-        cfg.PARAMS['temp_bias_min'] = -0.5
-        cfg.PARAMS['temp_bias_max'] = 0.5
-        cfg.PARAMS['prcp_fac_min'] = 2
-        cfg.PARAMS['prcp_fac_max'] = 3
+        gdir.settings['temp_bias_min'] = -0.5
+        gdir.settings['temp_bias_max'] = 0.5
+        gdir.settings['prcp_fac_min'] = 2
+        gdir.settings['prcp_fac_max'] = 3
         with pytest.raises(RuntimeError):
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
@@ -1690,36 +1690,36 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb3']].corr(),
                                    atol=0.5)
 
-        pdf = gdir.read_json('mb_calib')
-        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
+        pdf = gdir.read_yml('settings')
+        assert pdf['temp_bias'] == gdir.settings['temp_bias_min']
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
+        assert pdf['prcp_fac'] == gdir.settings['prcp_fac_max']
 
         # Test perturbate
         massbalance.perturbate_mb_params(gdir, perturbation={'temp_bias': -1,
                                                              'prcp_fac': 2})
-        pdf = gdir.read_json('mb_calib')
-        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min'] - 1
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max'] * 2
+        pdf = gdir.read_yml('settings')
+        assert pdf['temp_bias'] == gdir.settings['temp_bias_min'] - 1
+        assert pdf['prcp_fac'] == gdir.settings['prcp_fac_max'] * 2
 
         massbalance.perturbate_mb_params(gdir, reset_default=True)
-        pdf = gdir.read_json('mb_calib')
-        assert pdf['temp_bias'] == cfg.PARAMS['temp_bias_min']
+        pdf = gdir.read_yml('settings')
+        assert pdf['temp_bias'] == gdir.settings['temp_bias_min']
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
-        assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac_max']
+        assert pdf['prcp_fac'] == gdir.settings['prcp_fac_max']
 
         # Test the use of gridded data(2D) instead of flowline data(1D) for the calibration
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
                                       ref_period=ref_period,
                                       use_2d_mb=False)
-        mb_calib_1d = gdir.read_json('mb_calib')
+        mb_calib_1d = gdir.read_yml('settings')
 
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
                                       ref_period=ref_period,
                                       use_2d_mb=True)
-        mb_calib_2d = gdir.read_json('mb_calib')
+        mb_calib_2d = gdir.read_yml('settings')
         # the calibration results for the melt factor should be close to each other (+/- 5% are tolerated)
         np.testing.assert_allclose(mb_calib_2d['melt_f'], mb_calib_1d['melt_f'], rtol=0.05)
 
@@ -2610,6 +2610,7 @@ class TestGrindelInvert(unittest.TestCase):
     def test_intersections(self):
         cfg.PARAMS['use_multiple_flowlines'] = True
         gdir = utils.GlacierDirectory(self.rgin, base_dir=self.testdir)
+        gdir.add_to_diagnostics('dem_source', 'USER')
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
@@ -2852,7 +2853,7 @@ class TestGCMClimate(unittest.TestCase):
 
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm) as cesm:
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, use_cftime=True) as cesm:
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
