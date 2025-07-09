@@ -25,6 +25,7 @@ import platform
 import struct
 import importlib
 import re as regexp
+from pathlib import Path
 
 # External libs
 import pandas as pd
@@ -52,6 +53,10 @@ except ImportError:
     pass
 try:
     import pyproj
+except ImportError:
+    pass
+try:
+    import yaml
 except ImportError:
     pass
 
@@ -464,6 +469,9 @@ class entity_task(object):
                          return_value=True, continue_on_error=None,
                          add_to_log_file=True, **kwargs):
 
+            settings_filesuffix = kwargs.get('settings_filesuffix', '')
+            gdir.settings_filesuffix = settings_filesuffix
+
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
 
@@ -473,8 +481,11 @@ class entity_task(object):
             task_name = task_func.__name__
 
             # Filesuffix are typically used to differentiate tasks
-            fsuffix = (kwargs.get('filesuffix', False) or
-                       kwargs.get('output_filesuffix', False))
+            fsuffix = settings_filesuffix
+            if kwargs.get('filesuffix', False):
+                fsuffix += kwargs.get('filesuffix', False)
+            if kwargs.get('output_filesuffix', False):
+                fsuffix += kwargs.get('output_filesuffix', False)
             if fsuffix:
                 task_name += fsuffix
 
@@ -489,13 +500,13 @@ class entity_task(object):
 
             # Run the task
             try:
-                if cfg.PARAMS['task_timeout'] > 0:
+                if gdir.settings['task_timeout'] > 0:
                     signal.signal(signal.SIGALRM, _timeout_handler)
-                    signal.alarm(cfg.PARAMS['task_timeout'])
+                    signal.alarm(gdir.settings['task_timeout'])
                 ex_t = time.time()
                 out = task_func(gdir, **kwargs)
                 ex_t = time.time() - ex_t
-                if cfg.PARAMS['task_timeout'] > 0:
+                if gdir.settings['task_timeout'] > 0:
                     signal.alarm(0)
                 if task_name != 'gdir_to_tar':
                     if add_to_log_file:
@@ -1562,7 +1573,8 @@ def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
 
 
 @entity_task(log)
-def glacier_statistics(gdir, inversion_only=False, apply_func=None):
+def glacier_statistics(gdir, settings_filesuffix='',
+                       inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1742,8 +1754,10 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # MB calib
-            mb_calib = gdir.read_json('mb_calib')
-            for k, v in mb_calib.items():
+            for k in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                      'reference_mb', 'reference_mb_err', 'reference_period',
+                      'mb_global_params', 'baseline_climate_source']:
+                v = gdir.settings[k]
                 if np.isscalar(v):
                     d[k] = v
                 else:
@@ -1949,7 +1963,8 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
 
 
 @global_task(log)
-def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
+def compile_fixed_geometry_mass_balance(gdirs, settings_filesuffix='',
+                                        filesuffix='',
                                         path=True, csv=False,
                                         use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None,
@@ -1967,6 +1982,9 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -2001,6 +2019,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     from oggm.core.massbalance import fixed_geometry_mass_balance
 
     out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
+                                 settings_filesuffix=settings_filesuffix,
                                  use_inversion_flowlines=use_inversion_flowlines,
                                  ys=ys, ye=ye, years=years, climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
@@ -2032,7 +2051,8 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 
 
 @global_task(log)
-def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
+def compile_ela(gdirs, settings_filesuffix='', filesuffix='',
+                path=True, csv=False, ys=None, ye=None,
                 years=None, climate_filename='climate_historical', temperature_bias=None,
                 precipitation_factor=None, climate_input_filesuffix='',
                 mb_model_class=None):
@@ -2046,6 +2066,9 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -2080,7 +2103,9 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     if mb_model_class is None:
         mb_model_class = MonthlyTIModel
 
-    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years,
+    out_df = execute_entity_task(compute_ela, gdirs,
+                                 settings_filesuffix=settings_filesuffix,
+                                 ys=ys, ye=ye, years=years,
                                  climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
@@ -2696,7 +2721,7 @@ class GlacierDirectory(object):
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False):
+                 from_tar=False, delete_tar=False, settings_filesuffix=''):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2714,6 +2739,8 @@ class GlacierDirectory(object):
             will check for a tar file at the expected location in `base_dir`.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
+        settings_filesuffix : str, default=''
+            a filesuffix for a settings file to use
         """
 
         if base_dir is None:
@@ -2771,8 +2798,32 @@ class GlacierDirectory(object):
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
 
+        # Root directory
+        self.base_dir = os.path.normpath(base_dir)
+        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
+                                self.rgi_id[:-3], self.rgi_id)
+
+        # Do we have to extract the files first?
+        if (reset or from_tar) and os.path.exists(self.dir):
+            shutil.rmtree(self.dir)
+
+        if from_tar:
+            if from_tar is True:
+                from_tar = self.dir + '.tar.gz'
+            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            write_shp = False
+        else:
+            mkdir(self.dir)
+
+        if not os.path.isdir(self.dir):
+            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
+
+        # define the initial settings for this gdir
+        self._settings_filesuffix = settings_filesuffix
+        self.settings = self.get_settings(settings_filesuffix=settings_filesuffix)
+
         # Do we want to use the RGI center point or ours?
-        if cfg.PARAMS['use_rgi_area']:
+        if self.settings['use_rgi_area']:
             if is_rgi7:
                 self.cenlon = float(rgi_entity.cenlon)
                 self.cenlat = float(rgi_entity.cenlat)
@@ -2924,25 +2975,6 @@ class GlacierDirectory(object):
         if rgi_date < 0:
             rgi_date = RGI_DATE[self.rgi_region]
         self.rgi_date = rgi_date
-        # Root directory
-        self.base_dir = os.path.normpath(base_dir)
-        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
-                                self.rgi_id[:-3], self.rgi_id)
-
-        # Do we have to extract the files first?
-        if (reset or from_tar) and os.path.exists(self.dir):
-            shutil.rmtree(self.dir)
-
-        if from_tar:
-            if from_tar is True:
-                from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
-            write_shp = False
-        else:
-            mkdir(self.dir)
-
-        if not os.path.isdir(self.dir):
-            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
@@ -3359,6 +3391,52 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with open(fp, 'w') as f:
             json.dump(var, f, default=np_convert)
+
+    def read_yml(self, filename, filesuffix='', allow_empty=False):
+        """Reads a yml file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
+
+        Returns
+        -------
+        A dictionary read from the yml file
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = yaml.safe_load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = yaml.safe_load(f)
+        return out
+
+    def write_yml(self, var, filename, filesuffix=''):
+        """ Writes a variable to a yml file on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to yml (must be a dictionary)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'w') as f:
+            yaml.dump(var, f)
 
     def get_climate_info(self, input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
@@ -3940,6 +4018,17 @@ class GlacierDirectory(object):
         # OK all good
         return None
 
+    @property
+    def settings_filesuffix(self):
+        return self._settings_filesuffix
+
+    @settings_filesuffix.setter
+    def settings_filesuffix(self, value):
+        self.settings = self.get_settings(settings_filesuffix=value)
+
+    def get_settings(self, settings_filesuffix):
+        return ModelSettings(self, filesuffix=settings_filesuffix)
+
 
 @entity_task(log)
 def copy_to_basedir(gdir, base_dir=None, setup='run'):
@@ -3972,7 +4061,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -3980,14 +4069,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
-                 'mb_calib', 'climate_historical', 'gridded_data',
+                 'settings', 'climate_historical', 'gridded_data',
                  'gcm_data', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
@@ -4215,3 +4304,127 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
+
+
+class YAMLFileObject(object):
+    def __init__(self, path, allow_empty=True):
+        self.path = Path(path)
+        self.allow_empty = allow_empty
+        self.data = self._load()
+
+    def _load(self):
+        if self.path.exists():
+            with open(self.path, 'r') as f:
+                return yaml.safe_load(f) or {}
+        elif not self.allow_empty:
+            raise FileNotFoundError(self.path)
+        return {}
+
+    def _save(self):
+        with open(self.path, 'w') as f:
+            yaml.safe_dump(self.data, f)
+
+    def _check_yaml_serializable(self, value):
+        try:
+            yaml.safe_dump(value)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Value '{value}' is not YAML serializable ({e})")
+
+    def _to_native_type(self, value):
+        if isinstance(value, (np.generic,)):
+            return value.item()
+        elif isinstance(value, dict):
+            return {k: self._to_native_type(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [self._to_native_type(v) for v in value]
+        return value
+
+    def get(self, key):
+        # to be always synced, if several objects work on the same file
+        self.data = self._load()
+        if key in self.data:
+            return self.data[key]
+        else:
+            raise KeyError(f"Key '{key}' not found!")
+
+    def set(self, key, value):
+        # to be always synced, if several objects work on the same file
+        self.data = self._load()
+        value = self._to_native_type(value)
+        self._check_yaml_serializable(value)
+        self.data[key] = value
+        self._save()
+
+    def __getitem__(self, key):
+        return self.get(key)
+
+    def __setitem__(self, key, value):
+        self.set(key, value)
+
+
+class ModelSettings(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
+                 reset_parent_filesuffix=False, allow_empty=True):
+        path = gdir.get_filepath('settings', filesuffix=filesuffix)
+
+        super(ModelSettings, self).__init__(path, allow_empty=allow_empty)
+
+        # this is to inherit parameters from other setting files, the other file
+        # is stored with the parent_filesuffix
+        if 'parent_filesuffix' not in self.data:
+            if parent_filesuffix:
+                self.set('parent_filesuffix', parent_filesuffix)
+            else:
+                # by default cfg.PARAMS is always the parent
+                self.set('parent_filesuffix', 'cfg.PARAMS')
+        elif parent_filesuffix:
+            if (self['parent_filesuffix'] != parent_filesuffix and
+                    not reset_parent_filesuffix):
+                raise InvalidWorkflowError(
+                    f"Current parent_filesuffix="
+                    f"{self['parent_filesuffix']}, you provided "
+                    f"{parent_filesuffix}. If you want to set a new value "
+                    f"you can use reset_parent_filesuffix=True")
+
+        self.filesuffix = filesuffix
+        if self.data['parent_filesuffix'] == 'cfg.PARAMS':
+            self.defaults = cfg.PARAMS.copy()
+        else:
+            self.defaults = ModelSettings(gdir,
+                                          filesuffix=self.data['parent_filesuffix'],
+                                          # check if parent exists
+                                          allow_empty=False)
+        self.gdir = gdir
+
+    def get(self, key):
+        if key in self.data:
+            return self.data[key]
+
+        if key in ['bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                   'mb_global_params', 'baseline_climate_source']:
+            # this is for backwards compatibility when mb_calib files was used
+            try:
+                value = self.gdir.read_json('mb_calib')[key]
+                self.set(key, value)
+                return value
+            except FileNotFoundError:
+                pass
+
+        if key in ['inversion_glen_a', 'inversion_fs', 'calving_water_level',
+                   ]:  # TODO: add calving variables
+            # this is for backwards compatibility when some parameters were
+            # stored in the diagnostics
+            try:
+                value = self.gdir.get_diagnostics()[key]
+                self.set(key, value)
+                return value
+            except KeyError:
+                pass
+
+        try:
+            # if a key is used from defaults, also add it to the settings file
+            value = self.defaults[key]
+            self.set(key, value)
+            return value
+        except KeyError:
+            raise KeyError(f"Key '{key}' not found!")

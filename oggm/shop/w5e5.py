@@ -64,7 +64,8 @@ def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
+def process_gswp3_w5e5_data(gdir, settings_filesuffix='',
+                            y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the GSWP3-W5E5+W5E5 baseline climate data for a glacier.
 
     The data is the same as W5E5 after 79, and is GSWP3 before that.
@@ -76,6 +77,12 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     y0 : int
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
@@ -222,7 +229,8 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
                                     source=dataset)
 
 
-def process_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
+def process_w5e5_data(gdir, settings_filesuffix='',
+                      y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the W5E5 baseline climate data for a glacier.
 
     Internally, this is actually calling process_gswp3_w5e5_data but only for
@@ -237,6 +245,12 @@ def process_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     y0 : int
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file (1979-2019), but with this kwarg
@@ -257,5 +271,6 @@ def process_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
                 'if you want older climate data,'
                 'use instead "process_gswp3_w5e5_data()"')
         raise InvalidParamsError(text)
-    process_gswp3_w5e5_data(gdir, y0=y0, y1=y1,
+    process_gswp3_w5e5_data(gdir, settings_filesuffix=settings_filesuffix,
+                            y0=y0, y1=y1,
                             output_filesuffix=output_filesuffix)
