@@ -76,6 +76,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
     def reset_state(self):
         """Reset any internal state of the model.
+
         This might not be needed by most models, but some models have an
         internal state (e.g. a snow cover history) which can be reset
         this way.
@@ -93,7 +94,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Parameters
         ----------
         heights: ndarray
-            the atitudes at which the mass balance will be computed
+            the altitudes at which the mass balance will be computed
         year: float, optional
             the time (in the "floating year" convention)
         fl_id: float, optional
@@ -371,68 +372,71 @@ class LinearMassBalance(MassBalanceModel):
 
 
 class MonthlyTIModel(MassBalanceModel):
-    """Monthly temperature index model.
-    """
-    def __init__(self, gdir,
-                 filename='climate_historical',
-                 input_filesuffix='',
-                 settings_filesuffix='',
-                 fl_id=None,
-                 melt_f=None,
-                 temp_bias=None,
-                 prcp_fac=None,
-                 bias=0,
-                 ys=None,
-                 ye=None,
-                 repeat=False,
-                 check_calib_params=True,
-                 ):
-        """Initialize.
+    """Monthly temperature index model."""
+    
+    def __init__(
+        self,
+        gdir,
+        filename: str = 'climate_historical',
+        input_filesuffix: str = '',
+        settings_filesuffix: str = '',
+        fl_id: int = None,
+        melt_f: float = None,
+        temp_bias: float = None,
+        prcp_fac: float = None,
+        bias: float = 0.0,
+        ys: int = None,
+        ye: int = None,
+        repeat: bool = False,
+        check_calib_params: bool = True,
+        ):
+        """Monthly temperature index model.
 
         Parameters
         ----------
         gdir : GlacierDirectory
-            the glacier directory
-        filename : str, optional
-            set to a different BASENAME if you want to use alternative climate
-            data. Default is 'climate_historical'
+            The glacier directory.
+        filename : str, default 'climate_historical'
+            Set to a different BASENAME if you want to use alternative
+            climate data.
         input_filesuffix : str, optional
-            append a suffix to the climate input filename (useful for GCM runs).
+            Append a suffix to the climate input filename (useful for
+            GCM runs).
         settings_filesuffix : str, optional
-            append a suffix to the settings file (useful for
-            sensitivity runs).
+            Append a suffix to the settings file (useful for sensitivity
+            runs).
         fl_id : int, optional
-            if this flowline has been calibrated alone and has specific
+            If this flowline has been calibrated alone and has specific
             model parameters.
         melt_f : float, optional
-            set to the value of the melt factor you want to use,
-            here the unit is kg m-2 day-1 K-1
-            (the default is to use the calibrated value).
+            The value of the melt factor you want to use, here the unit
+            is kg m-2 day-1 K-1. Defaults to the calibrated value.
         temp_bias : float, optional
-            set to the value of the temperature bias you want to use
-            (the default is to use the calibrated value).
+            The value of the temperature bias. Defaults to the
+            calibrated value.
         prcp_fac : float, optional
-            set to the value of the precipitation factor you want to use
-            (the default is to use the calibrated value).
+            The value of the precipitation factor. Defaults to the
+            calibrated value.
         bias : float, default 0.0
-            set to the alternative value of the calibration bias [mm we yr-1]
-            you want to use (the default is to use the calibrated value)
-            Note that this bias is *substracted* from the computed MB. Indeed:
+            The value of the calibration bias [mm we yr-1]. Defaults to
+            the calibrated value. Note that this bias is *subtracted*
+            from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
         ys : int, optional
-            The start of the climate period where the MB model is valid
-            (default: the period with available data)
+            The end of the climate period where the MB model is valid.
+            Defaults to the period with available data.
         ye : int, optional
-            The end of the climate period where the MB model is valid
-            (default: the period with available data)
+            The end of the climate period where the MB model is valid.
+            Defaults to the period with available data.
         repeat : bool, default False
             Whether the climate period given by [ys, ye] should be repeated
             indefinitely in a circular way
         check_calib_params : bool, default True
             OGGM will try hard not to use wrongly calibrated parameters
-            by checking the global parameters used during calibration and
-            the ones you are using at run time. If they don't match, it will
-            raise an error. Set to "False" to suppress this check.
+            by checking the global parameters used during calibration
+            and the ones you are using at run time. If they don't
+            match, it will raise an error. Set to ``False`` to suppress
+            this check.
         """
 
         self.settings_filesuffix = settings_filesuffix
@@ -1050,18 +1054,18 @@ class DailyTIModel(MonthlyTIModel):
     def __init__(
         self,
         gdir,
-        filename: str = "climate_historical_daily",
-        input_filesuffix : str = "",
-        settings_filesuffix="",
-        fl_id : int = None,
-        melt_f : float = None,
-        temp_bias : float = None,
-        prcp_fac : float = None,
-        bias : float = 0.0,
-        ys : int = None,
-        ye : int = None,
-        repeat : bool = False,
-        check_calib_params : bool = True,
+        filename: str = 'climate_historical_daily',
+        input_filesuffix: str = '',
+        settings_filesuffix: str = '',
+        fl_id: int = None,
+        melt_f: float = None,
+        temp_bias: float = None,
+        prcp_fac: float = None,
+        bias: float = 0.0,
+        ys: int = None,
+        ye: int = None,
+        repeat: bool = False,
+        check_calib_params: bool = True,
     ):
         """Inherits from MonthlyTIModel.
 
@@ -1069,56 +1073,54 @@ class DailyTIModel(MonthlyTIModel):
         ----------
         gdir : GlacierDirectory
             The glacier directory.
-        filename : str, default "climate_historical_daily"
+        filename : str, default 'climate_historical_daily'
             Set to a different BASENAME if you want to use alternative
             climate data.
         input_filesuffix : str, optional
             Append a suffix to the climate input filename (useful for
             GCM runs).
         settings_filesuffix : str, optional
-            append a suffix to the settings file (useful for
-            sensitivity runs).
+            Append a suffix to the settings file (useful for sensitivity
+            runs).
         fl_id : int, optional
             If this flowline has been calibrated alone and has specific
             model parameters.
         melt_f : float, optional
-            Set to the value of the melt factor you want to use, here
-            the unit is kg m-2 day-1 K-1 (the default is to use the
-            calibrated value).
+            The value of the melt factor you want to use, here the unit
+            is kg m-2 day-1 K-1. Defaults to the calibrated value.
         temp_bias : float, optional
-            Set to the value of the temperature bias you want to use
-            (the default is to use the calibrated value).
+            The value of the temperature bias. Defaults to the
+            calibrated value.
         prcp_fac : float, optional
-            Set to the value of the precipitation factor you want to use
-            (the default is to use the calibrated value).
-        bias : float, optional
-            Set to the alternative value of the calibration bias [mm we yr-1]
-            you want to use (the default is to use the calibrated
-            value). Note that this bias is *subtracted* from the
-            computed MB. Indeed:
+            The value of the precipitation factor. Defaults to the
+            calibrated value.
+        bias : float, default 0.0
+            The value of the calibration bias [mm we yr-1]. Defaults to
+            the calibrated value. Note that this bias is *subtracted*
+            from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
-        ys : int
-            The start of the climate period where the MB model is valid
-            (default: the period with available data).
-        ye : int
-            The end of the climate period where the MB model is valid
-            (default: the period with available data).
-        repeat : bool
+        ys : int, optional
+            The end of the climate period where the MB model is valid.
+            Defaults to the period with available data.
+        ye : int, optional
+            The end of the climate period where the MB model is valid.
+            Defaults to the period with available data.
+        repeat : bool, default False
             Whether the climate period given by [ys, ye] should be
             repeated indefinitely in a circular way.
-        check_calib_params : bool
+        check_calib_params : bool, default True
             OGGM will try hard not to use wrongly calibrated parameters
             by checking the global parameters used during calibration
             and the ones you are using at run time. If they don't
-            match, it will raise an error. Set to "False" to suppress
+            match, it will raise an error. Set to ``False`` to suppress
             this check.
         """
 
-        # Do not pass kwargs to prevent subclasses passing illegal args
-        # to MonthlyTIModel.
         self.settings_filesuffix = settings_filesuffix
         gdir.settings_filesuffix = settings_filesuffix
 
+        # Do not pass kwargs to prevent subclasses passing illegal args
+        # to MonthlyTIModel.
         super(DailyTIModel, self).__init__(
             gdir=gdir,
             filename=filename,
@@ -3021,7 +3023,7 @@ class ConstantMassBalance(MassBalanceModel):
         ----------
         gdir : GlacierDirectory
             the glacier directory
-        mb_model_class : MassBalanceModel class
+        mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
             the MassBalanceModel to use for the constant climate
         y0 : int, required
             the year at the center of the period of interest.
@@ -3032,8 +3034,7 @@ class ConstantMassBalance(MassBalanceModel):
         """
 
         super().__init__()
-        self.mbmod = mb_model_class(gdir,
-                                    **kwargs)
+        self.mbmod = mb_model_class(gdir=gdir, **kwargs)
 
         if y0 is None:
             raise InvalidParamsError('Please set `y0` explicitly')
@@ -3218,7 +3219,7 @@ class RandomMassBalance(MassBalanceModel):
         ----------
         gdir : GlacierDirectory
             the glacier directory
-        mb_model_class : MassBalanceModel class
+        mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
             the MassBalanceModel to use for the random shuffle
         y0 : int, required
             the year at the center of the period of interest.
@@ -3245,7 +3246,7 @@ class RandomMassBalance(MassBalanceModel):
 
         super().__init__()
         self.valid_bounds = [-1e4, 2e4]  # in m
-        self.mbmod = mb_model_class(gdir, **kwargs)
+        self.mbmod = mb_model_class(gdir=gdir, **kwargs)
 
         # Climate period
         self.prescribe_years = prescribe_years
@@ -3485,14 +3486,14 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         ----------
         gdir : GlacierDirectory
             the glacier directory
-        settings_filesuffix: str
-            You can use a different set of settings by providing a filesuffix.
-            This is useful for sensitivity experiments.
+        settings_filesuffix : str, optional
+            You can use a different set of settings by providing a
+            filesuffix. This is useful for sensitivity experiments.
         fls : list, optional
             list of flowline objects to use (defaults to 'model_flowlines')
-        mb_model_class : MassBalanceModel class
-            the MassBalanceModel to use (default is MonthlyTIModel,
-            alternatives are e.g. ConstantMassBalance...)
+        mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+            the MassBalanceModel to use e.g. ``DailyTIModel``,
+            ``ConstantMassBalance``.
         use_inversion_flowlines: bool, optional
             use 'inversion_flowlines' instead of 'model_flowlines'
         kwargs : kwargs to pass to mb_model_class
@@ -3525,9 +3526,13 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 rgi_filesuffix = input_filesuffix
 
             self.flowline_mb_models.append(
-                mb_model_class(gdir, settings_filesuffix=settings_filesuffix,
-                               input_filesuffix=rgi_filesuffix,
-                               **kwargs))
+                mb_model_class(
+                    gdir=gdir,
+                    settings_filesuffix=settings_filesuffix,
+                    input_filesuffix=rgi_filesuffix,
+                    **kwargs,
+                )
+            )
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
         self.hemisphere = gdir.hemisphere
@@ -3907,12 +3912,12 @@ def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='', **kwargs):
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
+    gdir : GlacierDirectory
         the glacier directory to process
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
+    settings_filesuffix : str, optional
+        You can use a different set of settings by providing a
+        filesuffix. This is useful for sensitivity experiments.
+        The settings_filesuffix is set by the @entity-task decorator.
     **kwargs : any kwarg accepted by mb_calibration_from_scalar_mb
     except `ref_mb` and `ref_mb_years`
     """
@@ -3964,12 +3969,12 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to calibrate
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
+    gdir : GlacierDirectory
+        the glacier directory to calibrate.
+    settings_filesuffix : str, optional
+        You can use a different set of settings by providing a
+        filesuffix. This is useful for sensitivity experiments.
+        The settings_filesuffix is set by the @entity-task decorator.
     ref_period : str, default: PARAMS['geodetic_mb_period']
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
@@ -4008,7 +4013,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         to calibrate (one of 'melt_f', 'temp_bias', 'prcp_fac'). If not
         set and the algorithm cannot match observations, it will raise an
         error.
-    mb_model_class : MassBalanceModel class
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
@@ -4077,7 +4082,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
         prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
 
-        return mb_calibration_from_scalar_mb(gdir,
+        return mb_calibration_from_scalar_mb(gdir=gdir,
                                              settings_filesuffix=settings_filesuffix,
                                              ref_mb=ref_mb,
                                              ref_mb_err=ref_mb_err,
@@ -4097,7 +4102,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              )
 
     else:
-        return mb_calibration_from_scalar_mb(gdir,
+        return mb_calibration_from_scalar_mb(gdir=gdir,
                                              settings_filesuffix=settings_filesuffix,
                                              ref_mb=ref_mb,
                                              ref_mb_err=ref_mb_err,
@@ -4116,7 +4121,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_scalar_mb(gdir, *,
-                                  settings_filesuffix='',
+                                  settings_filesuffix: str ='',
                                   ref_mb=None,
                                   ref_mb_err=None,
                                   ref_period=None,
@@ -4138,7 +4143,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
                                   baseline_climate_suffix:str=None,
-                                  eolis_data=None,
                                   extra_model_kwargs: dict = None,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
@@ -4164,12 +4168,13 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to calibrate
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
+    gdir : GlacierDirectory
+        the glacier directory to calibrate.
+    settings_filesuffix : str, optional
+        You can use a different set of settings by providing a
+        filesuffix. This is useful for sensitivity experiments.
+        If not given, ``settings_filesuffix`` is set by the
+        ``@entity-task`` decorator.
     ref_mb : float, required
         the reference mass balance to match (units: kg m-2 yr-1)
         It is required here - if you want to use available observations,
@@ -4197,7 +4202,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
     use_2d_mb : bool
         Set to True if the mass balance calibration has to be done of the 2D mask
         of the glacier (for fully distributed runs only).
-    mb_model_class : MassBalanceModel class
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
@@ -4309,14 +4314,20 @@ def mb_calibration_from_scalar_mb(gdir, *,
         if gdir.settings['use_winter_prcp_fac']:
             # Some sanity check
             if gdir.settings['prcp_fac'] is not None:
-                raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
-                                           "if using PARAMS['winter_prcp_factor'].")
-            prcp_fac = decide_winter_precip_factor(gdir, baseline_climate_suffix=baseline_climate_suffix)
+                raise InvalidWorkflowError(
+                    'Set PARAMS["prcp_fac"] to None '
+                    'if using PARAMS["winter_prcp_factor"].'
+                )
+            prcp_fac = decide_winter_precip_factor(
+                gdir=gdir, baseline_climate_suffix=baseline_climate_suffix
+            )
         else:
             prcp_fac = gdir.settings.defaults['prcp_fac']
             if prcp_fac is None:
-                raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
-                                           "or PARAMS['winter_prcp_factor'].")
+                raise InvalidWorkflowError(
+                    'Set either PARAMS["use_winter_prcp_fac"] '
+                    'or PARAMS["winter_prcp_factor"].'
+                )
 
     if temp_bias is None:
         temp_bias = 0
@@ -4324,7 +4335,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
     # Create the MB model we will calibrate
     if not extra_model_kwargs:
         mb_mod = mb_model_class(
-            gdir,
+            gdir=gdir,
             melt_f=melt_f,
             temp_bias=temp_bias,
             prcp_fac=prcp_fac,
@@ -4332,7 +4343,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
             settings_filesuffix=settings_filesuffix)
     else:
         mb_mod = mb_model_class(
-            gdir,
+            gdir=gdir,
             melt_f=melt_f,
             temp_bias=temp_bias,
             prcp_fac=prcp_fac,
@@ -4491,10 +4502,10 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
     are stored in the file for re-use after perturbation.
 
     Users can change the following 4 parameters:
-    - 'melt_f': unit [kg m-2 day-1 K-1], the melt factor
-    - 'prcp_fac': unit [-], the precipitation factor
-    - 'temp_bias': unit [K], the temperature correction applied to the timeseries
-    - 'bias': unit [mm we yr-1], *substracted* from the computed MB. Rarely used.
+        - **melt_f': unit [kg m-2 day-1 K-1], the melt factor.
+        - **prcp_fac': unit [-], the precipitation factor.
+        - **temp_bias': unit [K], the temperature correction applied to the timeseries.
+        - **bias': unit [mm we yr-1], *subtracted* from the computed MB. Rarely used.
 
     All parameter perturbations are additive, i.e. the value
     provided by the user is added to the *precalibrated* value.
@@ -4507,13 +4518,15 @@ def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffi
 
     Parameters
     ----------
+    gdir : GlacierDirectory
+        The glacier directory.
     perturbation : dict
-        the parameters to change and the associated value (see doc above)
-    reset_default : bool
-        reset the parameters to their original value. This might be
+        The parameters to change and the associated value (see doc above)
+    reset_default : bool, default False
+        Reset the parameters to their original value. This might be
         unnecessary if using the filesuffix mechanism.
-    filesuffix : str
-        write the modified parameters in a separate mb_calib.json file
+    filesuffix : str, optional
+        Write the modified parameters in a separate mb_calib.json file
         with the filesuffix appended. This can then be read by the
         MassBalanceModel for example instead of the default one.
         Note that it's always the default, precalibrated params
@@ -4566,7 +4579,7 @@ def _check_terminus_mass_flux(gdir, fls):
 
 
 @entity_task(log, writes=['inversion_flowlines', 'linear_mb_params'])
-def apparent_mb_from_linear_mb(gdir, settings_filesuffix='',
+def apparent_mb_from_linear_mb(gdir, settings_filesuffix:str='',
                                mb_gradient=3., ela_h=None):
     """Compute apparent mb from a linear mass balance assumption (for testing).
 
@@ -4575,12 +4588,13 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix='',
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
+    gdir : GlacierDirectory
+        The glacier directory to process.
+    settings_filesuffix : str, optional
+        You can use a different set of settings by providing a
+        filesuffix. This is useful for sensitivity experiments.
+        If not given, ``settings_filesuffix`` is set by the
+        ``@entity-task`` decorator.
     """
 
     # Do we have a calving glacier?
@@ -4632,25 +4646,27 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
-    mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
+    gdir : GlacierDirectory
+        The glacier directory to process.
+    settings_filesuffix : str, optional
+        You can use a different set of settings by providing a
+        filesuffix. This is useful for sensitivity experiments.
+        If not given, ``settings_filesuffix`` is set by the
+        ``@entity-task`` decorator.
+    mb_model : MassBalanceModel, default None
         the mass balance model to use - if None, will use the
-        one given by mb_model_class
-    mb_model_class : MassBalanceModel class
-        the MassBalanceModel class to use, default is MonthlyTIModel
-    mb_years : array, or tuple of length 2 (range)
-        the array of years from which you want to average the MB for (for
-        mb_model only). If an array of length 2 is given, all years
-        between this range (excluding the last one) are used.
-        Default is to pick all years from the reference
-        geodetic MB period, i.e. PARAMS['geodetic_mb_period'].
-        It does not matter much for the final result, but it should be a
-        period long enough to have a representative MB gradient.
+        one given by mb_model_class.
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
+    mb_years : array_like or tuple, default None
+        The array of years over which you want to average the mass
+        balance. This argument has little effect on the final result,
+        but it should be a period long enough to have a representative
+        mass balance gradient.
+        If an array of length 2 is given, the method uses all years
+        between this range, excluding the last one.
+        If None, the method will use all the years from the reference
+        geodetic mass balance period ``gdir.settings['geodetic_mb_period']``.
     """
 
     # Do we have a calving glacier?
@@ -4661,7 +4677,7 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     fls = gdir.read_pickle('inversion_flowlines')
 
     if mb_model is None:
-        mb_model = mb_model_class(gdir, settings_filesuffix=settings_filesuffix)
+        mb_model = mb_model_class(gdir=gdir, settings_filesuffix=settings_filesuffix)
 
     if mb_years is None:
         mb_years = gdir.settings['geodetic_mb_period']
@@ -4739,47 +4755,49 @@ def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-    settings_filesuffix: str
+    gdir : GlacierDirectory
+        The glacier directory to process.
+    settings_filesuffix : str, optional
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
-    ys : int
-        start year of the model run (default: from the climate file)
+        is set in the @entity-task decorator.
+    ys : int, optional
+        Start year of the model run (default: from the climate file).
         date)
-    ye : int
-        end year of the model run (default: from the climate file)
-    years : array of ints
-        override ys and ye with the years of your choice
-    monthly_step : bool
-        whether to store the diagnostic data at a monthly time step or not
-        (default is yearly)
-    use_inversion_flowlines : bool
-        whether to use the inversion flowlines or the model flowlines
-    climate_filename : str
-        name of the climate file, e.g. 'climate_historical' (default) or
-        'gcm_data'
-    climate_input_filesuffix: str
-        filesuffix for the input climate file
-    temperature_bias : float
-        add a bias to the temperature timeseries
-    precipitation_factor: float
-        multiply a factor to the precipitation time series
-        default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_fac']
-    mb_model_class : MassBalanceModel class
-        the MassBalanceModel class to use, default is MonthlyTIModel
+    ye : int, optional
+        End year of the model run (default: from the climate file).
+    years : array_like[int], optional
+        Override ``ys`` and ``ye`` with the years of your choice.
+    monthly_step : bool, default False
+        Store the diagnostic data at a monthly time resolution.
+        If False, stores it at an annual resolution.
+    use_inversion_flowlines : bool, default True
+        Use the inversion flowlines instead of the model flowlines.
+    climate_filename : str, default 'climate_historical'
+        Name of the climate file, e.g. 'climate_historical', 'gcm_data'.
+    climate_input_filesuffix: str, optional
+        Filesuffix for the input climate file.
+    temperature_bias : float, optional
+        Add a bias to the temperature timeseries.
+    precipitation_factor: float, optional
+        Multiplicative factor applied to the precipitation time series.
+        If None, uses the precipitation factor from the calibration in
+        ``gdir.settings['prcp_fac']``.
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     """
 
     if monthly_step:
         raise NotImplementedError('monthly_step not implemented yet')
 
-    mbmod = MultipleFlowlineMassBalance(gdir, mb_model_class=mb_model_class,
-                                        filename=climate_filename,
-                                        use_inversion_flowlines=use_inversion_flowlines,
-                                        input_filesuffix=climate_input_filesuffix,
-                                        settings_filesuffix=settings_filesuffix)
+    mbmod = MultipleFlowlineMassBalance(
+        gdir=gdir,
+        mb_model_class=mb_model_class,
+        filename=climate_filename,
+        use_inversion_flowlines=use_inversion_flowlines,
+        input_filesuffix=climate_input_filesuffix,
+        settings_filesuffix=settings_filesuffix,
+    )
 
     if temperature_bias is not None:
         mbmod.temp_bias = temperature_bias
@@ -4793,51 +4811,53 @@ def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
             ye = mbmod.flowline_mb_models[0].ye
         years = np.arange(ys, ye + 1)
 
-    odf = pd.Series(data=mbmod.get_specific_mb(year=years),
-                    index=years)
+    odf = pd.Series(data=mbmod.get_specific_mb(year=years), index=years)
     return odf
 
 
 @entity_task(log)
-def compute_ela(gdir, settings_filesuffix='',
+def compute_ela(gdir, settings_filesuffix: str='',
                 ys=None, ye=None, years=None, climate_filename='climate_historical',
                 temperature_bias=None, precipitation_factor=None, climate_input_filesuffix='',
                 mb_model_class=MonthlyTIModel):
 
-    """Computes the ELA of a glacier for a for given years and climate.
+    """Computes the ELA of a glacier for specific years and climate.
 
     Parameters
     ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        the glacier directory to process
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments. Code-wise the settings_filesuffix
-        is set in the @entity-task decorater.
-    ys : int
-        start year
-    ye : int
-        end year
-    years : array of ints
-        override ys and ye with the years of your choice
-    climate_filename : str
-        name of the climate file, e.g. 'climate_historical' (default) or
-        'gcm_data'
-    climate_input_filesuffix : str
-        filesuffix for the input climate file
-    temperature_bias : float
-        add a bias to the temperature timeseries
-    precipitation_factor: float
-        multiply a factor to the precipitation time series
-        default is None and means that the precipitation factor from the
-        calibration is applied which is cfg.PARAMS['prcp_fac']
-    mb_model_class : MassBalanceModel class
-        the MassBalanceModel class to use, default is MonthlyTIModel
+    gdir : GlacierDirectory
+        The glacier directory to process
+    settings_filesuffix : str, optional
+        You can use a different set of settings by providing a
+        filesuffix. This is useful for sensitivity experiments.
+        If not given, ``settings_filesuffix`` is set by the
+        ``@entity-task`` decorator.
+    ys : int, optional
+        Start year.
+    ye : int, optional
+        End year.
+    years : array_like[int], optional
+        Override ``ys`` and ``ye`` with the years of your choice.
+    climate_filename : str, default 'climate_historical'
+        Name of the climate file, e.g. 'climate_historical', 'gcm_data'.
+    climate_input_filesuffix: str, optional
+        Filesuffix for the input climate file.
+    temperature_bias : float, optional
+        Add a bias to the temperature timeseries.
+    precipitation_factor: float, optional
+        Multiplicative factor applied to the precipitation time series.
+        If None, uses the precipitation factor from the calibration in
+        ``gdir.settings['prcp_fac']``.
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     """
 
-    mbmod = mb_model_class(gdir, settings_filesuffix=settings_filesuffix,
-                           filename=climate_filename,
-                           input_filesuffix=climate_input_filesuffix)
+    mbmod = mb_model_class(
+        gdir=gdir,
+        settings_filesuffix=settings_filesuffix,
+        filename=climate_filename,
+        input_filesuffix=climate_input_filesuffix,
+    )
 
     if temperature_bias is not None:
         mbmod.temp_bias = temperature_bias
