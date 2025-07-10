@@ -2320,6 +2320,11 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
     gdir.settings['apparent_mb_from_any_mb_residual'] = residual
+
+    # this is only for backwards compatibility
+    if settings_filesuffix == '':
+        gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
+
     gdir.write_pickle(fls, 'inversion_flowlines', filesuffix=output_filesuffix)
 
 

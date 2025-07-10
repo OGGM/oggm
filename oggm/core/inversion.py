@@ -534,6 +534,11 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
         gdir.settings['inversion_glen_a'] = glen_a
         gdir.settings['inversion_fs'] = fs
 
+        # this is only for backwards compatibility
+        if settings_filesuffix == '':
+            gdir.add_to_diagnostics('inversion_glen_a', glen_a)
+            gdir.add_to_diagnostics('inversion_fs', glen_a)
+
     return out_volume
 
 
@@ -1186,6 +1191,10 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
     # Store for statistics
     gdir.settings['volume_before_calving'] = v_ref
 
+    # only for backward compatibility
+    if settings_filesuffix == '':
+        gdir.add_to_diagnostics('volume_before_calving', v_ref)
+
     # Get the relevant variables
     cls = gdir.read_pickle('inversion_input', filesuffix=output_filesuffix)[-1]
     slope = cls['slope_angle'][-1]
@@ -1246,6 +1255,10 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
         odf['calving_front_width'] = out['width']
         for k, v in odf.items():
             gdir.settings[k] = v
+
+            # this is only for backwards compatibility
+            if settings_filesuffix == '':
+                gdir.add_to_diagnostics(k, v)
         return odf
 
     # OK, we now find the zero between abs min and an arbitrary high front
@@ -1303,5 +1316,9 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
     odf['calving_front_width'] = out['width']
     for k, v in odf.items():
         gdir.settings[k] = v
+
+        # this is only for backwards compatibility
+        if settings_filesuffix == '':
+            gdir.add_to_diagnostics(k, v)
 
     return odf
