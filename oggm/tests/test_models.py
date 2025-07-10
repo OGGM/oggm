@@ -268,7 +268,7 @@ class TestInitPresentDayFlowline:
                 ref_mb=ref_mb,
                 ref_period=f'{start_year}-01-01_2020-01-01',
                 mb_model_class=cl,
-                filesuffix="daily",
+                settings_filesuffix="daily",
                 overwrite_gdir=False
             )
             cl._mb_params_filesuffix = "daily"
@@ -578,6 +578,7 @@ class TestMassBalanceModels:
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
+            - settings_filesuffix: 
             - rho: 900.0
             - t_solid: 0.0
             - t_liq: 2.0
@@ -5752,7 +5753,7 @@ class TestMassRedis:
             ref_mb=ref_mb,
             ref_period=f'{start_year}-01-01_2003-01-01',
             mb_model_class=model,
-            filesuffix=filesuffix,
+            settings_filesuffix=filesuffix,
             overwrite_gdir=False
         )
         model._mb_params_filesuffix = filesuffix  # apply calibration to model

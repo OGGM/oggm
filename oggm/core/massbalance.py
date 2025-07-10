@@ -1052,7 +1052,7 @@ class DailyTIModel(MonthlyTIModel):
         gdir,
         filename: str = "climate_historical_daily",
         input_filesuffix : str = "",
-        mb_params_filesuffix : str = "",
+        settings_filesuffix="",
         fl_id : int = None,
         melt_f : float = None,
         temp_bias : float = None,
@@ -1075,9 +1075,9 @@ class DailyTIModel(MonthlyTIModel):
         input_filesuffix : str, optional
             Append a suffix to the climate input filename (useful for
             GCM runs).
-        mb_params_filesuffix : str, optional
-            Append a suffix to the mb params calibration file (useful
-            for sensitivity runs).
+        settings_filesuffix : str, optional
+            append a suffix to the settings file (useful for
+            sensitivity runs).
         fl_id : int, optional
             If this flowline has been calibrated alone and has specific
             model parameters.
@@ -1116,11 +1116,14 @@ class DailyTIModel(MonthlyTIModel):
 
         # Do not pass kwargs to prevent subclasses passing illegal args
         # to MonthlyTIModel.
-        super().__init__(
+        self.settings_filesuffix = settings_filesuffix
+        gdir.settings_filesuffix = settings_filesuffix
+
+        super(DailyTIModel, self).__init__(
             gdir=gdir,
             filename=filename,
             input_filesuffix=input_filesuffix,
-            mb_params_filesuffix=mb_params_filesuffix,
+            settings_filesuffix=settings_filesuffix,
             fl_id=fl_id,
             melt_f=melt_f,
             temp_bias=temp_bias,
@@ -1585,7 +1588,7 @@ class DailySfcTIModel(DailyTIModel):
             gdir,
             filename="climate_historical_daily",
             input_filesuffix : str = "",
-            mb_params_filesuffix : str = "",
+            settings_filesuffix: str= "",
             fl_id : int = None,
             melt_f:float=None,
             temp_bias : float = None,
@@ -1624,9 +1627,9 @@ class DailySfcTIModel(DailyTIModel):
         input_filesuffix : str, optional
             Append a suffix to the climate input filename (useful for
             GCM runs).
-        mb_params_filesuffix : str, optional
-            Append a suffix to the mb params calibration file (useful
-            for sensitivity runs).
+        settings_filesuffix : str, optional
+            append a suffix to the settings file (useful for
+            sensitivity runs).
         fl_id : int, optional
             If this flowline has been calibrated alone and has specific
             model parameters.
@@ -1710,13 +1713,15 @@ class DailySfcTIModel(DailyTIModel):
         buckets: ArrayLike, default None
             Buckets for surface tracking scheme.
         """
+        self.settings_filesuffix = settings_filesuffix
+        gdir.settings_filesuffix = settings_filesuffix
 
-        super().__init__(
+        super(DailySfcTIModel, self).__init__(
             gdir=gdir,
             filename=filename,
             melt_f=melt_f,
             input_filesuffix = input_filesuffix,
-            mb_params_filesuffix = mb_params_filesuffix,
+            settings_filesuffix = settings_filesuffix,
             fl_id = fl_id,
             temp_bias = temp_bias,
             prcp_fac = prcp_fac,
