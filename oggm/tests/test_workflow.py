@@ -14,19 +14,21 @@ salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
 # Locals
+import oggm
 import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape, ModelSettings
 from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
 from oggm.shop import cru
-from oggm.core import flowline
+from oggm.core import flowline, gis, inversion, centerlines, massbalance
 from oggm import tasks
 from oggm import utils
 from oggm.core.massbalance import (MonthlyTIModel, MultipleFlowlineMassBalance,
                                    apparent_mb_from_any_mb)
 from oggm.core.flowline import (run_from_climate_data, run_random_climate,
                                 init_present_time_glacier, run_constant_climate, MixedBedFlowline)
+from oggm.core.inversion import get_inversion_volume
 from oggm.exceptions import InvalidWorkflowError
 
 # Globals
@@ -766,3 +768,116 @@ class TestGdirSettings:
             gdir, input_filesuffix='_rand_larger_thick')
 
         assert np.all(ds_orig_thick.length >= ds_larger_thick.length)
+
+    @pytest.mark.slow
+    def test_settings_inversion(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # for reference, perform an inversion with default paramters
+        workflow.inversion_tasks(gdir)
+        default_volume = get_inversion_volume(gdir)
+
+        # test with a larger glen a parameter in the settings file
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_glen_a', )
+        custom_settings['inversion_glen_a'] = gdir.settings['inversion_glen_a'] * 10
+        workflow.inversion_tasks(gdir, settings_filesuffix='_large_glen_a',
+                                 input_filesuffix='')
+        assert default_volume > get_inversion_volume(gdir,
+                                                     input_filesuffix='_large_glen_a')
+
+        # test with different lambda value
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_lambda',
+                                        )
+        custom_settings['trapezoid_lambdas'] = gdir.settings['trapezoid_lambdas'] * 1.5
+        workflow.inversion_tasks(gdir, settings_filesuffix='_large_lambda',
+                                 input_filesuffix='')
+        inv_out_default = gdir.read_pickle('inversion_output')
+        inv_out_lambda = gdir.read_pickle('inversion_output',
+                                          filesuffix='_large_lambda')
+        # do not look at last 5 grid points because of filter_inversion_output
+        assert np.all(inv_out_default[0]['thick'][:-5] <
+                      inv_out_lambda[0]['thick'][:-5])
+
+        # test calibrate from consensus with different lambda,
+        glen_a_before = custom_settings['inversion_glen_a']
+        workflow.calibrate_inversion_from_consensus(
+            gdirs, settings_filesuffix='_large_lambda',
+            input_filesuffix='',
+            apply_fs_on_mismatch=True)
+        glen_a_after = custom_settings['inversion_glen_a']
+        assert glen_a_before < glen_a_after
+
+        # test calibration from consensus with different melt_f, including
+        # apparent mass balance
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_melt_f',
+                                        )
+        custom_settings['melt_f'] = gdir.settings['melt_f'] * 1.1
+        massbalance.apparent_mb_from_any_mb(gdir,
+                                            settings_filesuffix='_large_melt_f',
+                                            output_filesuffix='_large_melt_f',)
+        workflow.calibrate_inversion_from_consensus(
+            gdirs, settings_filesuffix='_large_melt_f',
+            input_filesuffix='_large_melt_f', apply_fs_on_mismatch=True)
+        glen_a_after = custom_settings['inversion_glen_a']
+        inv_out_melt_f = gdir.read_pickle('inversion_output',
+                                          filesuffix='_large_melt_f')
+        # with larger melt_f the residual of the apparent mass balance must be
+        # larger, to compensate for the more negative mb
+        assert (gdir.get_diagnostics()['apparent_mb_from_any_mb_residual'] <
+                custom_settings['apparent_mb_from_any_mb_residual'])
+        # hence also the resulting flux must be more negative everywhere
+        assert np.all(inv_out_default[0]['flux'] < inv_out_melt_f[0]['flux'])
+
+        # test inversion calving with settings
+        coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
+        cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
+        entity = gpd.read_file(coxe_file).iloc[0]
+        entity.RGIId = 'RGI60-01.10299'
+        cfg.PARAMS['use_kcalving_for_inversion'] = True
+        cfg.PARAMS['use_kcalving_for_run'] = True
+
+        gdir = oggm.GlacierDirectory(entity)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        tasks.process_dummy_cru_file(gdir, seed=0)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.apparent_mb_from_any_mb(gdir)
+
+        inversion.prepare_for_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
+        cls1 = gdir.read_pickle('inversion_output')
+        # Increase calving for this one using settings
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_k',
+                                        parent_filesuffix=''
+                                        )
+        custom_settings['inversion_calving_k'] = 1
+
+        res_bef = gdir.settings['apparent_mb_from_any_mb_residual']
+        out = inversion.find_inversion_calving_from_any_mb(
+            gdir, settings_filesuffix='_large_k', output_filesuffix='_large_k',
+        )
+        cls2 = gdir.read_pickle('inversion_output', filesuffix='_large_k')
+
+        # Calving increases the volume and adds a residual
+        v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
+        v_new = np.sum([np.sum(fl['volume']) for fl in cls2])
+        assert v_ref < v_new
+        res_aft = custom_settings['apparent_mb_from_any_mb_residual']
+        assert res_aft > res_bef

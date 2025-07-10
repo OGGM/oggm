@@ -1169,7 +1169,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                     )
             # do inversion with A calibration to current volume
             calibrate_inversion_from_consensus(
-                [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                [gdir], settings_filesuffix=settings_filesuffix,
+                apply_fs_on_mismatch=True, error_on_mismatch=False,
                 filter_inversion_output=True,
                 volume_m3_reference=local_variables['vol_m3_ref'],
                 add_to_log_file=False)
@@ -1397,7 +1398,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                                         settings_filesuffix=settings_filesuffix,
                                         add_to_log_file=False)
                 calibrate_inversion_from_consensus(
-                    [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+                    [gdir], settings_filesuffix=settings_filesuffix,
+                    apply_fs_on_mismatch=True, error_on_mismatch=False,
                     filter_inversion_output=True,
                     volume_m3_reference=local_variables['vol_m3_ref'],
                     add_to_log_file=False)

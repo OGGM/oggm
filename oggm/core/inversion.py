@@ -52,6 +52,9 @@ MIN_WIDTH_FOR_INV = 10
 
 @entity_task(log, writes=['inversion_input'])
 def prepare_for_inversion(gdir,
+                          settings_filesuffix='',
+                          input_filesuffix='',
+                          output_filesuffix='',
                           invert_with_rectangular=True,
                           invert_all_rectangular=False,
                           invert_with_trapezoid=True,
@@ -65,10 +68,20 @@ def prepare_for_inversion(gdir,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the input inversion flowlines (useful for conducting
+        multiple experiments in the same gdir)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
 
     towrite = []
     for fl in fls:
@@ -85,7 +98,7 @@ def prepare_for_inversion(gdir,
 
         # Flux needs to be in [m3 s-1] (*ice* velocity * surface)
         # fl.flux is given in kg m-2 yr-1, rho in kg m-3, so this should be it:
-        rho = cfg.PARAMS['ice_density']
+        rho = gdir.settings['ice_density']
 
         # This might error if usuer didnt compute apparent MB
         try:
@@ -140,7 +153,7 @@ def prepare_for_inversion(gdir,
         towrite.append(cl_dic)
 
     # Write out
-    gdir.write_pickle(towrite, 'inversion_input')
+    gdir.write_pickle(towrite, 'inversion_input', filesuffix=output_filesuffix)
 
 
 def _inversion_poly(a3, a0):
@@ -191,7 +204,8 @@ def _compute_thick(a0s, a3, flux_a0, _inv_function):
     return out_thick
 
 
-def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
+def sia_thickness_via_optim(slope, width, flux, settings=None,
+                            shape='rectangular',
                             glen_a=None, fs=None, t_lambda=None):
     """Compute the thickness numerically instead of analytically.
 
@@ -202,23 +216,27 @@ def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
     slope : -np.gradient(hgt, dx)
     width : section width in m
     flux : mass flux in m3 s-1
+    settings : the settings to use, defaults to cfg.PARAMS
     shape : 'rectangular', 'trapezoid' or 'parabolic'
-    glen_a : Glen A, defaults to PARAMS
-    fs : sliding, defaults to PARAMS
-    t_lambda: the trapezoid lambda, defaults to PARAMS
+    glen_a : Glen A, defaults to settings
+    fs : sliding, defaults to settings
+    t_lambda: the trapezoid lambda, defaults to settings
 
     Returns
     -------
     the ice thickness (in m)
     """
 
+    if settings is None:
+        settings = cfg.PARAMS
+
     if len(np.atleast_1d(slope)) > 1:
         shape = utils.tolist(shape, len(slope))
         t_lambda = utils.tolist(t_lambda, len(slope))
         out = []
         for sl, w, f, s, t in zip(slope, width, flux, shape, t_lambda):
-            out.append(sia_thickness_via_optim(sl, w, f, shape=s,
-                                               glen_a=glen_a, fs=fs,
+            out.append(sia_thickness_via_optim(sl, w, f, settings=settings,
+                                               shape=s, glen_a=glen_a, fs=fs,
                                                t_lambda=t))
         return np.asarray(out)
 
@@ -229,19 +247,19 @@ def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
         return 0
 
     if glen_a is None:
-        glen_a = cfg.PARAMS['inversion_glen_a']
+        glen_a = settings['inversion_glen_a']
     if fs is None:
-        fs = cfg.PARAMS['inversion_fs']
+        fs = settings['inversion_fs']
     if t_lambda is None:
-        t_lambda = cfg.PARAMS['trapezoid_lambdas']
+        t_lambda = settings['trapezoid_lambdas']
     if shape not in ['parabolic', 'rectangular', 'trapezoid']:
         raise InvalidParamsError('shape must be `parabolic`, `trapezoid` '
                                  'or `rectangular`, not: {}'.format(shape))
 
     # Ice flow params
-    n = cfg.PARAMS['glen_n']
+    n = settings['glen_n']
     fd = 2 / (n+2) * glen_a
-    rho = cfg.PARAMS['ice_density']
+    rho = settings['ice_density']
     rhogh = (rho * cfg.G * slope) ** n
 
     # To avoid geometrical inconsistencies
@@ -261,8 +279,8 @@ def sia_thickness_via_optim(slope, width, flux, shape='rectangular',
     return out_h
 
 
-def sia_thickness(slope, width, flux, shape='rectangular',
-                  glen_a=None, fs=None, shape_factor=None):
+def sia_thickness(slope, width, flux, settings=None,
+                  shape='rectangular', glen_a=None, fs=None, shape_factor=None):
     """Computes the ice thickness from mass-conservation.
 
     This is a utility function tested against the true OGGM inversion
@@ -273,9 +291,10 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     slope : -np.gradient(hgt, dx) (we don't clip for min slope!)
     width : section width in m
     flux : mass flux in m3 s-1
+    settings : the settings to use, defaults to cfg.PARAMS
     shape : 'rectangular' or 'parabolic'
-    glen_a : Glen A, defaults to PARAMS
-    fs : sliding, defaults to PARAMS
+    glen_a : Glen A, defaults to settings
+    fs : sliding, defaults to settings
     shape_factor: for lateral drag
 
     Returns
@@ -283,10 +302,13 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     the ice thickness (in m)
     """
 
+    if settings is None:
+        settings = cfg.PARAMS
+
     if glen_a is None:
-        glen_a = cfg.PARAMS['inversion_glen_a']
+        glen_a = settings['inversion_glen_a']
     if fs is None:
-        fs = cfg.PARAMS['inversion_fs']
+        fs = settings['inversion_fs']
     if shape not in ['parabolic', 'rectangular']:
         raise InvalidParamsError('shape must be `parabolic` or `rectangular`, '
                                  'not: {}'.format(shape))
@@ -294,8 +316,8 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     _inv_function = _inversion_simple if fs == 0 else _inversion_poly
 
     # Ice flow params
-    fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
-    rho = cfg.PARAMS['ice_density']
+    fd = 2. / (settings['glen_n']+2) * glen_a
+    rho = settings['ice_density']
 
     # Convert the flux to m2 s-1 (averaged to represent the sections center)
     flux_a0 = 1 if shape == 'rectangular' else 1.5
@@ -315,16 +337,16 @@ def sia_thickness(slope, width, flux, shape='rectangular',
     return _compute_thick(a0, a3, flux_a0, _inv_function)
 
 
-def find_sia_flux_from_thickness(slope, width, thick, glen_a=None, fs=None,
-                                 shape='rectangular'):
+def find_sia_flux_from_thickness(slope, width, thick, settings=None,
+                                 glen_a=None, fs=None, shape='rectangular'):
     """Find the ice flux produced by a given thickness and slope.
 
     This can be done analytically but I'm lazy and use optimisation instead.
     """
 
     def to_minimize(x):
-        h = sia_thickness(slope, width, x[0], glen_a=glen_a, fs=fs,
-                          shape=shape)
+        h = sia_thickness(slope, width, x[0], settings=settings,
+                          glen_a=glen_a, fs=fs, shape=shape)
         return (thick - h)**2
 
     out = optimize.minimize(to_minimize, [1], bounds=((0, 1e12),))
@@ -357,8 +379,11 @@ def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
 
 
 @entity_task(log, writes=['inversion_output'])
-def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
-                                filesuffix='', water_level=None,
+def mass_conservation_inversion(gdir, settings_filesuffix='',
+                                input_filesuffix='',
+                                output_filesuffix='',
+                                glen_a=None, fs=None, write=True,
+                                water_level=None,
                                 t_lambda=None):
     """ Compute the glacier thickness along the flowlines
 
@@ -368,46 +393,54 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the inversion_input to use (useful for conducting many
+        runs in the same gdir)
+    output_filesuffix : str
+        this add a suffix to the output file (useful to avoid overwriting
+        previous experiments)
     glen_a : float
-        glen's creep parameter A. Defaults to cfg.PARAMS.
+        glen's creep parameter A. Defaults to gdir.settings.
     fs : float
-        sliding parameter. Defaults to cfg.PARAMS.
+        sliding parameter. Defaults to gdir.settings.
     write: bool
         default behavior is to compute the thickness and write the
         results in the pickle. Set to False in order to spare time
         during calibration.
-    filesuffix : str
-        add a suffix to the output file
     water_level : float
         to compute volume below water level - adds an entry to the output dict
     t_lambda : float
         defining the angle of the trapezoid walls (see documentation). Defaults
-        to cfg.PARAMS.
+        to gdir.settings.
     """
 
     # Defaults
     if glen_a is None:
-        glen_a = cfg.PARAMS['inversion_glen_a']
+        glen_a = gdir.settings['inversion_glen_a']
     if fs is None:
-        fs = cfg.PARAMS['inversion_fs']
+        fs = gdir.settings['inversion_fs']
     if t_lambda is None:
-        t_lambda = cfg.PARAMS['trapezoid_lambdas']
+        t_lambda = gdir.settings['trapezoid_lambdas']
 
     # Check input
     _inv_function = _inversion_simple if fs == 0 else _inversion_poly
 
     # Ice flow params
-    fd = 2. / (cfg.PARAMS['glen_n']+2) * glen_a
+    fd = 2. / (gdir.settings['glen_n']+2) * glen_a
     a3 = fs / fd
-    rho = cfg.PARAMS['ice_density']
+    rho = gdir.settings['ice_density']
 
     # Clip the slope, in rad
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
-    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+    min_slope = np.deg2rad(gdir.settings[min_slope])
 
     out_volume = 0.
 
-    cls = gdir.read_pickle('inversion_input')
+    cls = gdir.read_pickle('inversion_input', filesuffix=input_filesuffix)
     for cl in cls:
         # Clip slope to avoid negative and small slopes
         slope = cl['slope_angle']
@@ -428,7 +461,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         # Now recompute thickness where parabola is too flat
         is_trap = cl['is_trapezoid']
         if cl['invert_with_trapezoid']:
-            min_shape = cfg.PARAMS['mixed_min_shape']
+            min_shape = gdir.settings['mixed_min_shape']
             bed_shape = 4 * out_thick / w ** 2
             is_trap = ((bed_shape < min_shape) & ~ cl['is_rectangular'] &
                        (cl['flux'] > 0)) | is_trap
@@ -436,6 +469,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                 try:
                     out_thick[i] = sia_thickness_via_optim(slope[i], w[i],
                                                            cl['flux'][i],
+                                                           settings=gdir.settings,
                                                            shape='trapezoid',
                                                            t_lambda=t_lambda,
                                                            glen_a=glen_a,
@@ -446,6 +480,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
                     # no solution error - we do with rect
                     out_thick[i] = sia_thickness_via_optim(slope[i], w[i],
                                                            cl['flux'][i],
+                                                           settings=gdir.settings,
                                                            shape='rectangular',
                                                            glen_a=glen_a,
                                                            fs=fs)
@@ -495,15 +530,17 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         out_volume += np.sum(volume)
 
     if write:
-        gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
-        gdir.add_to_diagnostics('inversion_glen_a', glen_a)
-        gdir.add_to_diagnostics('inversion_fs', fs)
+        gdir.write_pickle(cls, 'inversion_output', filesuffix=output_filesuffix)
+        gdir.settings['inversion_glen_a'] = glen_a
+        gdir.settings['inversion_fs'] = fs
 
     return out_volume
 
 
 @entity_task(log, writes=['inversion_output'])
-def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
+def filter_inversion_output(gdir, settings_filesuffix='',
+                            input_filesuffix='', output_filesuffix='',
+                            n_smoothing=5, min_ice_thick=1.,
                             max_depression=5.):
     """Filters the last few grid points after the physically-based inversion.
 
@@ -511,7 +548,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     grid points on a glacier flowline are often noisy and create unphysical
     depressions. Here we try to correct for that. It is not volume conserving,
     but area conserving. If a parabolic shape factor is getting smaller than
-    the minimum defined one (cfg.PARAMS['mixed_min_shape']) the grid point is
+    the minimum defined one (gdir.settings['mixed_min_shape']) the grid point is
     changed to a trapezoid, similar to what is done during the actual
     physically-based inversion.
 
@@ -519,6 +556,15 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the 'inversion_output' to use
+    output_filesuffix:str
+        the filesuffix of the resulting 'inversion_output' to save back into
+        the gdir
     n_smoothing : int
         number of grid points which should be smoothed. Default is 5
     min_ice_thick : float
@@ -529,7 +575,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
 
     if gdir.is_tidewater:
         # No need for filter in tidewater case
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
         init_vol = np.sum([np.sum(cl['volume']) for cl in cls])
         return init_vol
 
@@ -540,7 +586,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
                                    'compute_downstream_bedshape tasks')
 
     dic_ds = gdir.read_pickle('downstream_line')
-    cls = gdir.read_pickle('inversion_output')
+    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
     cl = cls[-1]
 
     # check that their are enough grid points for smoothing
@@ -589,7 +635,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     # max
     max_h = np.where(cl_is_trap,
                      # -1. to get w0 > 0 at the end and not w0 = 0
-                     cl_width / cfg.PARAMS['trapezoid_lambdas'] - 1.,
+                     cl_width / gdir.settings['trapezoid_lambdas'] - 1.,
                      1e4)
     new_thick = np.where(new_thick > max_h, max_h, new_thick)
     # min
@@ -601,13 +647,13 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     # trapezoidal (as it is done during inversion)
     new_bed_shape = 4 * new_thick / cl_width ** 2
     new_is_trapezoid = ((cl_is_trap |
-                         (new_bed_shape < cfg.PARAMS['mixed_min_shape'])) &
+                         (new_bed_shape < gdir.settings['mixed_min_shape'])) &
                         ~cl_is_rect)
 
     # and calculate new volumes depending on shape
     new_volume = np.where(
         new_is_trapezoid,
-        cl_width * new_thick - cfg.PARAMS['trapezoid_lambdas'] / 2 *
+        cl_width * new_thick - gdir.settings['trapezoid_lambdas'] / 2 *
         new_thick ** 2,
         np.where(cl_is_rect, 1, 2 / 3) * cl_width * new_thick) * cl['dx']
 
@@ -616,16 +662,16 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
     cl['volume'][n_smoothing:] = new_volume
 
-    gdir.write_pickle(cls, 'inversion_output')
+    gdir.write_pickle(cls, 'inversion_output', filesuffix=output_filesuffix)
 
     # Return volume for convenience
     return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
 @entity_task(log)
-def get_inversion_volume(gdir):
-    """Small utility task to get to the volume od all glaciers."""
-    cls = gdir.read_pickle('inversion_output')
+def get_inversion_volume(gdir, input_filesuffix=''):
+    """Small utility task to get to the volume of all glaciers."""
+    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
     return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
@@ -639,7 +685,9 @@ def compute_velocities(*args, **kwargs):
 
 
 @entity_task(log, writes=['inversion_output'])
-def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
+def compute_inversion_velocities(gdir, settings_filesuffix='',
+                                 input_filesuffix='', output_filesuffix='',
+                                 glen_a=None, fs=None,
                                  with_sliding=None):
     """Surface velocities along the flowlines from inverted ice thickness.
 
@@ -659,6 +707,15 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the 'inversion_output' to use
+    output_filesuffix:str
+        the filesuffix of the resulting 'inversion_output' to save back into
+        the gdir
     with_sliding : bool
         if set to True, we will compute velocities the sliding component.
         the default is to check if sliding was used for the inversion
@@ -667,24 +724,22 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
         Glen's deformation parameter A. Defaults to PARAMS['inversion_glen_a']
     fs : float
         sliding paramter, defaults to PARAMS['inversion_fs']
-    filesuffix : str
-        add a suffix to the output file (optional)
     """
 
     # Defaults
     if glen_a is None:
-        glen_a = cfg.PARAMS['inversion_glen_a']
+        glen_a = gdir.settings['inversion_glen_a']
     if fs is None:
-        fs = cfg.PARAMS['inversion_fs']
+        fs = gdir.settings['inversion_fs']
 
-    rho = cfg.PARAMS['ice_density']
-    glen_n = cfg.PARAMS['glen_n']
+    rho = gdir.settings['ice_density']
+    glen_n = gdir.settings['glen_n']
 
     if with_sliding is None:
         with_sliding = fs != 0
 
     # Getting the data for the main flowline
-    cls = gdir.read_pickle('inversion_output')
+    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
 
     for cl in cls:
         # vol in m3 and dx in m
@@ -731,11 +786,13 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
         cl['u_basal'] = u_basal
         cl['u_deformation'] = u_deformation
 
-    gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
+    gdir.write_pickle(cls, 'inversion_output', filesuffix=output_filesuffix)
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness_per_altitude(gdir, add_slope=True,
+def distribute_thickness_per_altitude(gdir, settings_filesuffix='',
+                                      input_filesuffix='',
+                                      add_slope=True,
                                       topo_variable='topo_smoothed',
                                       smooth_radius=None,
                                       dis_from_border_exp=0.25,
@@ -749,6 +806,12 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the 'inversion_output' and 'inversion flowlines' to use
     add_slope : bool
         whether a corrective slope factor should be used or not
     topo_variable : str
@@ -756,7 +819,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         smoothed differently).
     smooth_radius : int
         pixel size of the gaussian smoothing. Default is to use
-        cfg.PARAMS['smooth_window'] (i.e. a size in meters). Set to zero to
+        gdir.settings['smooth_window'] (i.e. a size in meters). Set to zero to
         suppress smoothing.
     dis_from_border_exp : float
         the exponent of the distance from border mask
@@ -783,8 +846,8 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
             slope_factor = 1.
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output')
-    fls = gdir.read_pickle('inversion_flowlines')
+    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
+    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
     hs, ts, vs, xs, ys = [], [], [], [], []
     for cl, fl in zip(cls, fls):
         hs = np.append(hs, fl.surface_h)
@@ -835,7 +898,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     dx = gdir.grid.dx
     if smooth_radius != 0:
         if smooth_radius is None:
-            smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
+            smooth_radius = np.rint(gdir.settings['smooth_window'] / dx)
         thick = gaussian_blur(thick, int(smooth_radius))
         thick = np.where(glacier_mask, thick, 0.)
 
@@ -863,7 +926,9 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
 
 
 @entity_task(log, writes=['gridded_data'])
-def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
+def distribute_thickness_interp(gdir, settings_filesuffix='',
+                                input_filesuffix='',
+                                add_slope=True, smooth_radius=None,
                                 varname_suffix=''):
     """Compute a thickness map by interpolating between centerlines and border.
 
@@ -876,11 +941,17 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the 'inversion_output' and 'inversion flowlines' to use
     add_slope : bool
         whether a corrective slope factor should be used or not
     smooth_radius : int
         pixel size of the gaussian smoothing. Default is to use
-        cfg.PARAMS['smooth_window'] (i.e. a size in meters). Set to zero to
+        gdir.settings['smooth_window'] (i.e. a size in meters). Set to zero to
         suppress smoothing.
     varname_suffix : str
         add a suffix to the variable written in the file (for experiments)
@@ -914,8 +985,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     thick[:, -1] = 0.
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output')
-    fls = gdir.read_pickle('inversion_flowlines')
+    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
+    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
     vs = []
     for cl, fl in zip(cls, fls):
         vs.extend(cl['volume'])
@@ -939,7 +1010,7 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     dx = gdir.grid.dx
     if smooth_radius != 0:
         if smooth_radius is None:
-            smooth_radius = np.rint(cfg.PARAMS['smooth_window'] / dx)
+            smooth_radius = np.rint(gdir.settings['smooth_window'] / dx)
         thick = gaussian_blur(thick, int(smooth_radius))
         thick = np.where(glacier_mask, thick, 0.)
 
@@ -966,7 +1037,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     return thick
 
 
-def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
+def calving_flux_from_depth(gdir, input_filesuffix='',
+                            k=None, water_level=None, water_depth=None,
                             thick=None, fixed_water_depth=False):
     """Finds a calving flux from the calving front thickness.
 
@@ -977,6 +1049,8 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
     Parameters
     ----------
     gdir : GlacierDirectory
+    input_filesuffix: str
+        the filesuffix used for the inputs
     k : float
         calving constant
     water_level : float
@@ -1004,10 +1078,10 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
     # Defaults
     if k is None:
-        k = cfg.PARAMS['inversion_calving_k']
+        k = gdir.settings['inversion_calving_k']
 
     # Read necessary data
-    fl = gdir.read_pickle('inversion_flowlines')[-1]
+    fl = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)[-1]
 
     # Altitude at the terminus and frontal width
     free_board = utils.clip_min(fl.surface_h[-1], 0) - water_level
@@ -1015,7 +1089,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
     # Calving formula
     if thick is None:
-        cl = gdir.read_pickle('inversion_output')[-1]
+        cl = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)[-1]
         thick = cl['thick'][-1]
     if water_depth is None:
         water_depth = thick - free_board
@@ -1041,6 +1115,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
 @entity_task(log, writes=['diagnostics'])
 def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
+                                       input_filesuffix='', output_filesuffix='',
                                        mb_model=None, mb_years=None,
                                        water_level=None,
                                        glen_a=None, fs=None):
@@ -1058,6 +1133,10 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments. Code-wise the settings_filesuffix
         is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix used for the inversion flowlines to start
+    output_filesuffix:str
+        the filesuffix used for all outputs
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
         the mass balance model to use
     mb_years : array
@@ -1076,52 +1155,67 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
     """
     from oggm.core import massbalance
 
-    if not gdir.is_tidewater or not cfg.PARAMS['use_kcalving_for_inversion']:
+    if not gdir.is_tidewater or not gdir.settings['use_kcalving_for_inversion']:
         # Do nothing
         return
 
     # Let's start from a fresh state
     gdir.inversion_calving_rate = 0
     with utils.DisableLogger():
-        massbalance.apparent_mb_from_any_mb(gdir,
+        massbalance.apparent_mb_from_any_mb(
+            gdir,
+            settings_filesuffix=settings_filesuffix,
+            # only use input_filesuffix for first task as subsequent task use
+            # the results of previous tasks
+            input_filesuffix=input_filesuffix,
+            output_filesuffix=output_filesuffix,
+            mb_model=mb_model,
+            mb_years=mb_years)
+        prepare_for_inversion(gdir,
+                              settings_filesuffix=settings_filesuffix,
+                              input_filesuffix=output_filesuffix,
+                              output_filesuffix=output_filesuffix,
+                              )
+        v_ref = mass_conservation_inversion(gdir,
                                             settings_filesuffix=settings_filesuffix,
-                                            mb_model=mb_model,
-                                            mb_years=mb_years)
-        prepare_for_inversion(gdir)
-        v_ref = mass_conservation_inversion(gdir, water_level=water_level,
+                                            input_filesuffix=output_filesuffix,
+                                            output_filesuffix=output_filesuffix,
+                                            water_level=water_level,
                                             glen_a=glen_a, fs=fs)
 
     # Store for statistics
-    gdir.add_to_diagnostics('volume_before_calving', v_ref)
+    gdir.settings['volume_before_calving'] = v_ref
 
     # Get the relevant variables
-    cls = gdir.read_pickle('inversion_input')[-1]
+    cls = gdir.read_pickle('inversion_input', filesuffix=output_filesuffix)[-1]
     slope = cls['slope_angle'][-1]
     width = cls['width'][-1]
 
     # Stupidly enough the slope is clipped in the OGGM inversion, not
     # in inversion prepro - clip here
     min_slope = 'min_slope_ice_caps' if gdir.is_icecap else 'min_slope'
-    min_slope = np.deg2rad(cfg.PARAMS[min_slope])
+    min_slope = np.deg2rad(gdir.settings[min_slope])
     slope = utils.clip_array(slope, min_slope, np.pi / 2.)
 
     # Check that water level is within given bounds
     if water_level is None:
         th = cls['hgt'][-1]
         if gdir.is_lake_terminating:
-            water_level = th - cfg.PARAMS['free_board_lake_terminating']
+            water_level = th - gdir.settings['free_board_lake_terminating']
         else:
-            vmin, vmax = cfg.PARAMS['free_board_marine_terminating']
+            vmin, vmax = gdir.settings['free_board_marine_terminating']
             water_level = utils.clip_scalar(0, th - vmax, th - vmin)
 
     # The functions all have the same shape: they decrease, then increase
     # We seek the absolute minimum first
     def to_minimize(h):
-        fl = calving_flux_from_depth(gdir, water_level=water_level,
+        fl = calving_flux_from_depth(gdir, input_filesuffix=output_filesuffix,
+                                     water_level=water_level,
                                      water_depth=h)
 
         flux = fl['flux'] * 1e9 / cfg.SEC_IN_YEAR
-        sia_thick = sia_thickness(slope, width, flux, glen_a=glen_a, fs=fs)
+        sia_thick = sia_thickness(slope, width, flux, settings=gdir.settings,
+                                  glen_a=glen_a, fs=fs)
         return fl['thick'] - sia_thick
 
     abs_min = optimize.minimize(to_minimize, [1], bounds=((1e-4, 1e4), ),
@@ -1133,7 +1227,8 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
         # This happens, and means that this glacier simply can't calve
         # This is an indicator for physics not matching, often an unrealistic
         # slope of free-board
-        out = calving_flux_from_depth(gdir, water_level=water_level)
+        out = calving_flux_from_depth(gdir, input_filesuffix=output_filesuffix,
+                                      water_level=water_level)
 
         log.warning('({}) find_inversion_calving_from_any_mb: could not find '
                     'calving flux.'.format(gdir.rgi_id))
@@ -1150,7 +1245,7 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
         odf['calving_front_thick'] = out['thick']
         odf['calving_front_width'] = out['width']
         for k, v in odf.items():
-            gdir.add_to_diagnostics(k, v)
+            gdir.settings[k] = v
         return odf
 
     # OK, we now find the zero between abs min and an arbitrary high front
@@ -1159,7 +1254,8 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
 
     # Give the flux to the inversion and recompute
     # This is the thick guaranteeing OGGM Flux = Calving Law Flux
-    out = calving_flux_from_depth(gdir, water_level=water_level,
+    out = calving_flux_from_depth(gdir, input_filesuffix=output_filesuffix,
+                                  water_level=water_level,
                                   water_depth=opt)
     f_calving = out['flux']
 
@@ -1170,17 +1266,28 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
     with utils.DisableLogger():
         massbalance.apparent_mb_from_any_mb(gdir,
                                             settings_filesuffix=settings_filesuffix,
+                                            input_filesuffix=input_filesuffix,
+                                            output_filesuffix=output_filesuffix,
                                             mb_model=mb_model,
                                             mb_years=mb_years)
-        prepare_for_inversion(gdir)
-        mass_conservation_inversion(gdir, water_level=water_level,
+        prepare_for_inversion(gdir,
+                              settings_filesuffix=settings_filesuffix,
+                              input_filesuffix=output_filesuffix,
+                              output_filesuffix=output_filesuffix,
+                              )
+        mass_conservation_inversion(gdir,
+                                    settings_filesuffix=settings_filesuffix,
+                                    input_filesuffix=output_filesuffix,
+                                    output_filesuffix=output_filesuffix,
+                                    water_level=water_level,
                                     glen_a=glen_a, fs=fs)
 
-    out = calving_flux_from_depth(gdir, water_level=water_level)
+    out = calving_flux_from_depth(gdir, input_filesuffix=output_filesuffix,
+                                  water_level=water_level)
 
-    fl = gdir.read_pickle('inversion_flowlines')[-1]
+    fl = gdir.read_pickle('inversion_flowlines', filesuffix=output_filesuffix)[-1]
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
-                 cfg.PARAMS['ice_density'])
+                 gdir.settings['ice_density'])
 
     # Store results
     odf = dict()
@@ -1195,6 +1302,6 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
     odf['calving_front_thick'] = out['thick']
     odf['calving_front_width'] = out['width']
     for k, v in odf.items():
-        gdir.add_to_diagnostics(k, v)
+        gdir.settings[k] = v
 
     return odf
