@@ -178,20 +178,24 @@ def secure_url_retrieve(url, *args, **kwargs):
                         'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
                         'no_match/RGI62/b_040/{}/RGI60-15/RGI60-15.13.tar')
 
-    assert ('github' in url or
-            'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
-            'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
-            'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
-            'RGI2000-v7.0-regions.zip' in url or
-            base_extra_v14.format('L1') in url or
-            base_extra_v14.format('L2') in url or
-            base_extra_v14l3.format('L3') in url or
-            base_extra_l3 in url
-            )
+    valid_urls = {
+        'github',
+        'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/',
+        'cluster.klima.uni-bremen.de/~oggm/test_gdirs/',
+        'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/',
+        'cluster.klima.uni-bremen.de/~oggm/test_climate/',
+        'cluster.klima.uni-bremen.de/~oggm/test_files/',
+        'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
+        'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
+        'RGI2000-v7.0-regions.zip',
+        # GH Actions for DTCG fails if RGI data was never downloaded
+        'https://cluster.klima.uni-bremen.de/~oggm/rgi/',
+        base_extra_v14.format('L1'),
+        base_extra_v14.format('L2'),
+        base_extra_v14l3.format('L3'),
+        base_extra_l3,
+    }
+    assert any(substring in url for substring in valid_urls)
     return oggm_urlretrieve(url, *args, **kwargs)
 
 

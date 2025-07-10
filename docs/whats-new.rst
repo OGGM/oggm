@@ -35,7 +35,17 @@ Enhancements
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
 - Refactored mass balance functions ``get_specific_mb`` and``get_ela``. These
-  are no longer recursive and have been optimised for performance.
+  are no longer recursive and have been optimised for performance (:pull:`1767`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added support for processing GSWP3+W5E5 and W5E5 data in ``oggm.shop`` at
+  a daily resolution (:pull:`1769`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added daily temperature index model ``DailyTIModel``, refactored
+  ``MonthlyTIModel``, and parametrised tests. Please note that other OGGM
+  features may not yet fully support daily resolution data (:pull:`1769`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
+  (:pull:`1769`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - Added the ability to use an incomplete version of the full params.cfg file
   to override some default parameter values. This can be done by providing the
@@ -47,7 +57,7 @@ Enhancements
 - New standard glacier directories now use a new reference lookup
   table to decide on the topo data to use (:pull:`1781`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- Added the possibility to provide a custom grid  in 
+- Added the possibility to provide a custom grid  in
   ``workflow.merge_gridded_data``. If no grid is provided, the default is to
   merge all grids of the provided gdirs (:pull:`1779`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_

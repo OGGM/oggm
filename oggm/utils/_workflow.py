@@ -243,6 +243,12 @@ def show_versions(logger=None):
     return '\n'.join(out)
 
 
+def raise_oob_error(data: np.ndarray, name: str, msg: str = ""):
+        """Raises an out-of-bound error and displays data bounds."""
+        text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
+        raise ValueError(text)
+
+
 class SuperclassMeta(type):
     """Metaclass for abstract base classes.
 
@@ -2291,6 +2297,7 @@ def raw_climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                                                                f'{fs[-4:]}-12-01'))
                     # check if we have the full time period
                     n_years = int(fs[-4:]) - int(fs[:4]) + 1
+                    # BUG: fails with daily data
                     assert len(ds_pr_winter.time) == n_years * 7, 'chosen time-span invalid'
                     ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
                     d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
@@ -3549,7 +3556,8 @@ class GlacierDirectory(object):
                                    calendar=None,
                                    source=None,
                                    file_name='climate_historical',
-                                   filesuffix=''):
+                                   filesuffix='',
+                                   daily=False):
         """Creates a netCDF4 file with climate data timeseries.
 
         Parameters
@@ -3582,6 +3590,8 @@ class GlacierDirectory(object):
             How to name the file
         filesuffix : str
             Apply a suffix to the file
+        daily : bool, default False
+            Temporal resolution of the data. If True, adjusts long name.
         """
 
         if isinstance(prcp, xr.DataArray):
@@ -3654,21 +3664,46 @@ class GlacierDirectory(object):
             timev[:] = numdate
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
-            v.units = 'kg m-2'
-            v.long_name = 'total monthly precipitation amount'
+            v.units = "kg m-2"
+
+            if not daily:
+                resolution = "monthly"
+            else:
+                resolution = "daily"
+                if not (
+                    len(prcp) > (nc.hydro_yr_1 - nc.hydro_yr_0 + 1) * 28 * 12
+                ):
+                    raise ValueError(
+                        f"Data is not in daily resolution: {len(prcp)}"
+                    )
+                elif not (prcp.max() > 1):
+                    raise_oob_error(
+                        prcp, "Precipitation", "Check units are in kg m-2."
+                    )
+            v.long_name = f"total {resolution} precipitation amount"
 
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
             v.units = 'degC'
-            v.long_name = '2m temperature at height ref_hgt'
+            v.long_name = f'2m {resolution} temperature at height ref_hgt'
             v[:] = temp
+            if daily and not np.all(v[:].data <1e5):
+                raise_oob_error(
+                    temp, "Temperature", "Ensure there are no fill values."
+                )
 
             if temp_std is not None:
                 v = nc.createVariable('temp_std', 'f4', ('time',), zlib=zlib)
                 v.units = 'degC'
                 v.long_name = 'standard deviation of daily temperatures'
                 v[:] = temp_std
+                if daily and not np.all(v[:].data < 1e5):
+                    raise_oob_error(
+                        temp_std,
+                        "Temperature STD",
+                        "Ensure there are no fill values.",
+                    )
 
     def get_inversion_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
