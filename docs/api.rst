@@ -388,6 +388,8 @@ Interface
     MonthlyTIModel.get_specific_mb
     DailyTIModel
     DailyTIModel.get_specific_mb_daily
+    DailySfcTIModel
+    TIModel_Sfc_Type
 
 Models
 ------
@@ -399,6 +401,8 @@ Models
     LinearMassBalance
     MonthlyTIModel
     DailyTIModel
+    DailySfcTIModel
+    TIModel_Sfc_Type
     ConstantMassBalance
     RandomMassBalance
     UncertainMassBalance

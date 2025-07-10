@@ -980,10 +980,13 @@ class TestMassBalanceModels:
 
         h, w = gdir.get_inversion_flowline_hw()
         mbdf = gdir.get_ref_mb_data()
+        # mbdf = mbdf[mask]
+
         mbdf.loc[yr, "MY_MB"] = np.nan
         mb_mod = model(gdir, **kwargs)
         mask = mbdf.index.to_series().between(yrp[0], yrp[1])
         mbdf = mbdf[mask]
+        # mbdf_years = mbdf[mask].index.values
         mbdf_years = mbdf.index.values
         for yr in mbdf_years:
             F_yr = self.get_leap_value(F, yr)
@@ -1555,6 +1558,139 @@ class TestDailyMassBalanceModels:
         assert np.datetime64(time_index[0]) == np.datetime64(f"{ys}-01-01")
         assert np.datetime64(time_index[-1]) == np.datetime64(f"{ye}-12-31")
 
+    @pytest.mark.parametrize("year", [1979, 1980])
+    def test_get_2d_climate(self, DailyTIModel, hef_gdir, year):
+
+        gdir = hef_gdir
+        self.get_daily_data_path(gdir)  # check daily data exists
+        model = DailyTIModel(gdir)
+        fls = gdir.read_pickle("model_flowlines")
+        heights = fls[0].surface_h
+
+        temperature_ann, melt_t_ann, prcp_ann, prcpsol_ann = model._get_2d_annual_climate(heights=heights, year=year)
+
+        temperature_day, melt_t_day, prcp_day, prcpsol_day = model._get_2d_daily_climate(heights=heights, year=year)    
+
+    # @pytest.mark.parametrize("upscale,out", [(None, 1.0), (0.8, 0.8)])
+    def test_repr_daily_sfc(self, hef_gdir):
+        from textwrap import dedent
+
+        expected = dedent(f"""\
+        <oggm.MassBalanceModel>
+          Class: DailySfcTIModel
+          Attributes:
+            - hemisphere: nh
+            - climate_source: GSWP3_W5E5_daily
+            - melt_f: 6.59
+            - prcp_fac: 2.50
+            - temp_bias: 0.00
+            - bias: 0.00
+            - rho: 900.0
+            - t_solid: 0.0
+            - t_liq: 2.0
+            - t_melt: -1.0
+            - repeat: False
+            - ref_hgt: 2252.0
+            - ys: 1901
+            - ye: 2019
+            - resolution: day
+            - gradient_scheme: annual
+            - melt_f_ratio: 0.5
+            - melt_f_change: linear
+            - melt_frequency: year
+            - spinup_years: 6
+            - tau_e: 1.0
+            - check_data_exists: True
+            - optim: False
+            - hbins: nan
+            - snow_bucket: 0
+        """
+        )
+        mb_mod = massbalance.DailySfcTIModel(hef_gdir, bias=0)
+        assert mb_mod.__repr__() == expected
+
+    def test_set_class_attributes(self, hef_gdir, DailySfcTIModel):
+
+        attributes = {
+            "resolution": "month",
+            "gradient_scheme": "cte",
+            "melt_f_ratio": 1.0,
+            "melt_frequency": "month",
+            "spinup_years": 5,
+            "tau_e" : 0.1,
+            "melt_f_change": "neg_exp",
+            "check_data_exists" : False,
+            "optim": True,
+            "hbins": [0,1,2],
+        }
+        model = DailySfcTIModel(hef_gdir)
+        model.set_class_attributes(
+            **attributes
+        )
+        
+        for k, v in attributes.items():
+            assert hasattr(model, k)
+            assert getattr(model, k) == v
+
+    @pytest.mark.parametrize("frequency", ["year", "month", "day"])
+    def test_set_buckets(self, hef_gdir, DailySfcTIModel, frequency):
+        model = DailySfcTIModel(hef_gdir, melt_frequency=frequency, ys=1979)
+        assert model.melt_frequency == frequency
+        model.set_buckets()
+        assert isinstance(model.buckets, list)
+        assert isinstance(model.snow_bucket, int)
+        assert model.snow_bucket == model.buckets[0]
+        assert model.snow_bucket == 0  # should always be zero
+
+        assert hasattr(model, "columns")
+        assert isinstance(model.columns, list)
+        assert all(isinstance(i, np.datetime64) for i in model.columns)
+        assert model.columns[0] == np.datetime64("1979-01-01")
+
+    def test_set_flowline_distances(self, hef_gdir, DailySfcTIModel):
+        model = DailySfcTIModel(hef_gdir)
+        model.set_flowline_distances()
+        assert hasattr(model, "flowline_distances")
+        assert isinstance(model.flowline_distances, np.ndarray)
+        assert model.flowline_distances.shape == (model.fl.nx, )
+
+    def test_set_bucket_templates(self, hef_gdir, DailySfcTIModel):
+        for template in ["year", "month", "day", "bucket"]:
+            model = DailySfcTIModel(hef_gdir)
+            assert hasattr(model, f"mb_{template}")
+            bucket = getattr(model, f"mb_{template}")
+            assert isinstance(bucket, np.ndarray)
+            assert (bucket == 0).all()
+
+    @pytest.mark.parametrize("arg_melt_f_change", ["linear", "neg_exp"])
+    def test_set_melt_f_buckets(self, hef_gdir, DailySfcTIModel, arg_melt_f_change):
+        model = DailySfcTIModel(hef_gdir, melt_f_change=arg_melt_f_change)
+
+        melt_buckets = model.melt_f_buckets
+        assert isinstance(melt_buckets, np.ndarray)
+
+        # compare against original mb_sandbox
+        test_buckets = dict(
+                zip(
+                    model.buckets + [len(model.buckets)+1],
+                    np.linspace(
+                        model.melt_f * model.melt_f_ratio,
+                        model.melt_f, len(model.buckets)+1)
+                    )
+                )
+        test_buckets = list(test_buckets.values())
+        assert len(melt_buckets) == len(test_buckets)
+        if arg_melt_f_change == "linear":
+            assert np.allclose(melt_buckets, test_buckets)
+
+    @pytest.mark.parametrize("year,expected",[(1980, False), (1990, True)])
+    def test_get_spinup(self, hef_gdir, DailySfcTIModel, year, expected):
+        model = DailySfcTIModel(hef_gdir, ys=1979, spinup_years=5)
+        spinup = model.get_spinup(year=year)
+        assert spinup is expected
+        model = DailySfcTIModel(hef_gdir, ys=1979, spinup_years=0)
+        spinup = model.get_spinup(year=year)
+        assert not spinup
 
 class TestModelFlowlines():
 

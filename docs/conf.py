@@ -444,6 +444,7 @@ autodoc_type_aliases = {
     "GeoDataFrame": "geopandas.GeoDataFrame",
     "GlacierDirectory": "oggm.GlacierDirectory",
     "MassBalanceModel": "oggm.core.massbalance.MassBalanceModel",
+    "MonthlyTIModel": "oggm.core.massbalance.MonthlyTIModel",
 }
 
 # -- OGGM Stuffs ----------------------------------------------------

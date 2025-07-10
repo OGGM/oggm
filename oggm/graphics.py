@@ -204,6 +204,58 @@ def _plot_map(plotfunc):
     return newplotfunc
 
 
+def plot_os_map(gdirs, ax=None, figsize=None):
+    """Plots the glacier(s) over a googlemap."""
+
+    # if key is None:
+    #     try:
+    #         key = os.environ['STATIC_MAP_API_KEY']
+    #     except KeyError:
+    #         raise ValueError('You need to provide a Google API key'
+    #                          ' or set the STATIC_MAP_API_KEY environment'
+    #                          ' variable.')
+    
+    dofig = False
+    if ax is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_subplot(111)
+        dofig = True
+
+    gdirs = utils.tolist(gdirs)
+
+    xx, yy = [], []
+    for gdir in gdirs:
+        xx.extend(gdir.extent_ll[0])
+        yy.extend(gdir.extent_ll[1])
+
+    print(xx)
+    print(yy)
+
+    grid = salem.mercator_grid(center_ll=(10.80, 46.83), extent=(min(xx), min(yy)))
+
+    # gm = salem.GoogleVisibleMap(xx, yy, key=key, use_cache=False)
+    gm = salem.Map(grid, 500, 500,countries=True)
+    print(gm)
+
+    # img = gm.get_vardata()
+    cmap = salem.Map(gm.grid, countries=False, nx=gm.grid.nx)
+    # cmap.set_rgb(img)
+
+    for gdir in gdirs:
+        cmap.set_shapefile(gdir.read_shapefile('outlines'))
+
+    cmap.plot(ax)
+    title = ''
+    if len(gdirs) == 1:
+        title = gdir.rgi_id
+        if gdir.name is not None and gdir.name != '':
+            title += ': ' + gdir.name
+    ax.set_title(title)
+
+    if dofig:
+        plt.tight_layout()
+
+
 def plot_googlemap(gdirs, ax=None, figsize=None, key=None):
     """Plots the glacier(s) over a googlemap."""
 
