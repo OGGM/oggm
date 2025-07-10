@@ -179,16 +179,16 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        heights : ArrayLike, default None
+        heights : array_like, default None
             Altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided.
-        widths : ArrayLike, default None
+        widths : array_like, default None
             Widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided.
         fls : list[oggm.Flowline], default None
             List of flowline instances. Alternative to heights and
             widths, and overrides them if provided.
-        year : ArrayLike[float] or float, default None
+        year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
 
         Returns
@@ -213,7 +213,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
 
         Parameters
         ----------
-        year : ArrayLike[float] or float, default None
+        year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
         **kwargs
             Any other keyword argument accepted by ``self.get_annual_mb``.
@@ -864,8 +864,7 @@ class MonthlyTIModel(MassBalanceModel):
         iprcp : np.ndarray[np.float64]
             Precipitation during a given time period.
         **kwargs
-            Extra arguments are passed to child implementations of this
-            method.
+            Extra arguments passed to subclasses of this method.
 
         Returns
         -------
@@ -903,8 +902,7 @@ class MonthlyTIModel(MassBalanceModel):
         iprcp : np.ndarray[np.float64]
             Precipitation during a given time period.
         **kwargs
-            Extra arguments are passed to child implementations of this
-            method.
+            Extra arguments passed to subclasses of this method.
 
         Returns
         -------
@@ -981,6 +979,8 @@ class MonthlyTIModel(MassBalanceModel):
             temperature, total precipitation, and solid precipitation.
             Avoids recalculating climatology later in some workflows,
             e.g. ``run_with_hydro``.
+        **kwargs
+            Extra arguments passed to subclasses of this method.
 
         Returns
         -------
@@ -999,7 +999,31 @@ class MonthlyTIModel(MassBalanceModel):
         return mb_month / SEC_IN_MONTH / self.rho
 
     def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
+        """Get annual mass balance.
 
+        Parameters
+        ----------
+        heights : array_like
+            Flowline heights [m].
+        year : float, optional
+            Hydrological year. Default None.
+        add_climate : bool, default False
+            Additionally returns mean temperature and the sums of melt
+            temperature, total precipitation, and solid precipitation.
+            Avoids recalculating climatology later in some workflows,
+            e.g. ``run_with_hydro``.
+        **kwargs
+            Extra arguments passed to subclasses of this method.
+
+        Returns
+        -------
+        np.ndarray[np.float64] or tuple[np.ndarray]
+            Annual mass balance in metres of ice per second. If
+            ``add_climate`` is True, also returns mean temperature and
+            the sums of melt temperature, total precipitation, and
+            solid precipitation.
+        """
+        # TODO: deprecate kwargs if unused.
         t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
         mb_annual = np.sum(prcpsol - self.monthly_melt_f * tmelt, axis=1)
         mb_annual = (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
@@ -1082,8 +1106,8 @@ class DailyTIModel(MonthlyTIModel):
             this check.
         """
 
-        # Do not pass kwargs to prevent subclasses of DailyTIModel from
-        # passing illegal args to MonthlyTIModel.
+        # Do not pass kwargs to prevent subclasses passing illegal args
+        # to MonthlyTIModel.
         super().__init__(
             gdir=gdir,
             filename=filename,
@@ -1104,6 +1128,18 @@ class DailyTIModel(MonthlyTIModel):
         self, nc_data: xr.DataArray, ys: int, ye: int, default_grad: float
     ) -> None:
         """Constrain data to a start and end year.
+
+        Updates the following attributes:
+            - ``years``
+            - ``months``
+            - ``days``
+            - ``temp``
+            - ``prcp``
+            - ``grad``
+            - ``ref_hgt``
+            - ``climate_source``
+            - ``ys``
+            - ``ye``
 
         Parameters
         ----------
@@ -1285,6 +1321,10 @@ class DailyTIModel(MonthlyTIModel):
             temperature, total precipitation, and solid precipitation.
             Avoids recalculating climatology later in some workflows,
             e.g. ``run_with_hydro``.
+        **kwargs
+            Extra arguments passed to subclass implementations of this
+            method.
+        
 
         Returns
         -------
@@ -1329,7 +1369,7 @@ class DailyTIModel(MonthlyTIModel):
 
         Parameters
         ----------
-        heights : ArrayLike
+        heights : array_like
             Flowline heights [m].
         year : float, optional
             Hydrological year. Default None.
@@ -1338,6 +1378,8 @@ class DailyTIModel(MonthlyTIModel):
             temperature, total precipitation, and solid precipitation.
             Avoids recalculating climatology later in some workflows,
             e.g. ``run_with_hydro``.
+        **kwargs
+            Extra arguments passed to ``get_2d_temperature``.
 
         Returns
         -------
@@ -1435,9 +1477,9 @@ class DailyTIModel(MonthlyTIModel):
 
         Parameters
         ----------
-        heights : ArrayLike
+        heights : array_like
             Flowline heights [m].
-        year : ArrayLike
+        year : array_like
             Year or range of years.
 
         Returns
@@ -1462,16 +1504,16 @@ class DailyTIModel(MonthlyTIModel):
 
         Parameters
         ----------
-        heights : ArrayLike, default None
+        heights : array_like, default None
             Altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided.
-        widths : ArrayLike, default None
+        widths : array_like, default None
             Widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided.
         fls : list[oggm.Flowline], default None
             List of flowline instances. Alternative to heights and
             widths, and overrides them if provided.
-        year : ArrayLike[float] or float, default None
+        year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
 
         Returns
@@ -2842,16 +2884,16 @@ class DailySfcTIModel(DailyTIModel):
 
         Parameters
         ----------
-        heights : ArrayLike, default None
+        heights : array_like, default None
             Altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided.
-        widths : ArrayLike, default None
+        widths : array_like, default None
             Widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided.
         fls : list[oggm.Flowline], default None
             List of flowline instances. Alternative to heights and
             widths, and overrides them if provided.
-        year : ArrayLike[float] or float, default None
+        year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
 
         Returns
@@ -3637,16 +3679,16 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         Parameters
         ----------
-        heights : ArrayLike, default None
+        heights : array_like, default None
             Altitudes at which the mass balance will be computed.
             Overridden by ``fls`` if provided.
-        widths : ArrayLike, default None
+        widths : array_like, default None
             Widths of the flowline (necessary for the weighted average).
             Overridden by ``fls`` if provided.
         fls : list[oggm.Flowline], default None
             List of flowline instances. Alternative to heights and
             widths, and overrides them if provided.
-        year : ArrayLike[float] or float, default None
+        year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
 
         Returns
@@ -3752,7 +3794,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         Parameters
         ----------
-        year : ArrayLike[float] or float, default None
+        year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
 
         Returns
