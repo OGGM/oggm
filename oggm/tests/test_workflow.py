@@ -164,7 +164,7 @@ def random_for_plot():
             pickle.dump('none', f)
     except FileNotFoundError:
         pass
-    gdirs = up_to_inversion()
+    gdirs = up_to_inversion(reset=True)
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
     workflow.execute_entity_task(flowline.run_random_climate, gdirs, y0=1985,
@@ -187,7 +187,7 @@ class TestFullRun(unittest.TestCase):
         assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
 
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
-        assert np.all(dfc.iloc[:2].calving_rate_myr > 100)
+        assert np.all(dfc.iloc[:2].calving_rate_myr.values > 100)
         assert np.all(dfc.inv_volume_km3 > 0)
         assert np.all(dfc.bias == 0)
         assert np.all(dfc.temp_bias == 0)
@@ -451,7 +451,7 @@ def test_plot_region_inversion():
 
     pytest.importorskip('pytest_mpl')
 
-    gdirs = up_to_inversion()
+    gdirs = up_to_inversion(reset=True)
 
     # We prepare for the plot, which needs our own map to proceed.
     # Lets do a local mercator grid
