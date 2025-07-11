@@ -537,7 +537,7 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
         # this is only for backwards compatibility
         if settings_filesuffix == '':
             gdir.add_to_diagnostics('inversion_glen_a', glen_a)
-            gdir.add_to_diagnostics('inversion_fs', glen_a)
+            gdir.add_to_diagnostics('inversion_fs', fs)
 
     return out_volume
 
