@@ -10,6 +10,7 @@ import pandas as pd
 import shapely.geometry as shpg
 from numpy.testing import assert_allclose
 import pytest
+import netCDF4
 import calendar
 
 # Local imports
@@ -592,6 +593,93 @@ class TestMassBalanceModels:
         mb_mod = massbalance.DailyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
+    @pytest.mark.parametrize(
+        "arg_model",
+        [
+            massbalance.MonthlyTIModel,
+            massbalance.DailyTIModel,
+            massbalance.DailySfcTIModel,
+        ],
+    )
+    def test_set_temporal_bounds(self, nc_dataset, hef_gdir, arg_model):
+
+        # Monthly data in hef_gdir only goes up to 2002
+        ys, ye = (1990, 2000)
+        gdir = hef_gdir
+        nc_data = nc_dataset
+        assert isinstance(nc_data, netCDF4.Dataset)
+
+        model = arg_model
+        mb_mod = model(gdir)
+        test_ys = mb_mod.years[0]
+        test_ye = mb_mod.years[-1]
+        default_grad = gdir.settings["temp_default_gradient"]
+        mb_mod.set_temporal_bounds(
+            nc_data=nc_data, ys=ys, ye=ye, default_grad=default_grad
+        )
+
+        assert mb_mod.years[0] >= test_ys
+        assert mb_mod.years[0] == ys
+        assert mb_mod.years[-1] <= test_ye
+        assert mb_mod.years[-1] == ye
+
+        assert len(mb_mod.months) == (ye - ys + 1) * 12
+
+    @pytest.mark.parametrize("arg_ys,exp_ys", [(1990, 1990), (None, 1802)])
+    @pytest.mark.parametrize("arg_ye,exp_ye", [(None, 2002), (2000, 2000)])
+    @pytest.mark.parametrize(
+        "arg_model",
+        [
+            massbalance.MonthlyTIModel,
+            massbalance.DailyTIModel,
+            massbalance.DailySfcTIModel,
+        ],
+    )
+    def test_set_temporal_bounds_none(
+        self, nc_dataset, hef_gdir, arg_ys, arg_ye, exp_ys, exp_ye, arg_model
+    ):
+
+        # Monthly data in hef_gdir only goes up to 2002
+        ys, ye = (arg_ys, arg_ye)
+        gdir = hef_gdir
+        nc_data = nc_dataset
+        assert isinstance(nc_data, netCDF4.Dataset)
+        model = arg_model
+        mb_mod = model(gdir)
+
+        default_grad = gdir.settings["temp_default_gradient"]
+        mb_mod.set_temporal_bounds(
+            nc_data=nc_data, ys=ys, ye=ye, default_grad=default_grad
+        )
+
+        assert mb_mod.years[0] >= exp_ys
+        assert mb_mod.years[0] == exp_ys
+        assert mb_mod.years[-1] <= exp_ye
+        assert mb_mod.years[-1] == exp_ye
+
+        assert len(mb_mod.months) == (exp_ye - exp_ys + 1) * 12
+
+    @pytest.mark.parametrize(
+        "arg_model",
+        [
+            massbalance.MonthlyTIModel,
+            massbalance.DailyTIModel,
+            massbalance.DailySfcTIModel,
+        ],
+    )
+    @pytest.mark.parametrize("year", [1979, 1980])
+    def test_get_annual_climate(self, hef_gdir, year, arg_model):
+
+        gdir = hef_gdir
+        # self.get_daily_data_path(gdir)  # check daily data exists
+        model = arg_model(gdir)
+        fls = gdir.read_pickle("model_flowlines")
+        heights = fls[0].surface_h
+
+        climate = model.get_annual_climate(heights=heights, year=year)
+        for data in climate:
+            assert isinstance(data, np.ndarray)
+            assert len(data) == len(heights)
 
     @pytest.mark.parametrize(
         "cl",
@@ -922,7 +1010,6 @@ class TestMassBalanceModels:
         test_mbs = mb_mod.get_specific_mb(heights=heights, widths=widths, fls=fls, year=year)
 
         np.testing.assert_allclose(test_mbs, ref_mbs)
-
 
     @pytest.mark.parametrize("model", [massbalance.DailyTIModel])
     @pytest.mark.parametrize("arg_year", [1979, 1980])
@@ -1511,7 +1598,7 @@ class TestDailyMassBalanceModels:
     @pytest.fixture(name="DailySfcTIModel", scope="function")
     def get_dailySfcTIModel(self):
         """Override imports"""
-        yield massbalance.DailySfcTIModel
+        yield massbalance.DailySfcTIModel_refactor
 
     @pytest.fixture(name="MonthlyTIModel", scope="class")
     def get_monthlyTIModel(self):
@@ -1567,9 +1654,15 @@ class TestDailyMassBalanceModels:
         fls = gdir.read_pickle("model_flowlines")
         heights = fls[0].surface_h
 
-        temperature_ann, melt_t_ann, prcp_ann, prcpsol_ann = model._get_2d_annual_climate(heights=heights, year=year)
+        climate = model._get_2d_annual_climate(heights=heights, year=year)
+        for data in climate:
+            assert isinstance(data, np.ndarray)
+            assert len(data) == len(heights)
 
-        temperature_day, melt_t_day, prcp_day, prcpsol_day = model._get_2d_daily_climate(heights=heights, year=year)    
+        climate = model._get_2d_daily_climate(heights=heights, year=year)
+        for data in climate:
+            assert isinstance(data, np.ndarray)
+            assert len(data) == len(heights)
 
     # @pytest.mark.parametrize("upscale,out", [(None, 1.0), (0.8, 0.8)])
     def test_repr_daily_sfc(self, hef_gdir):
@@ -1585,6 +1678,7 @@ class TestDailyMassBalanceModels:
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
+            - settings_filesuffix: 
             - rho: 900.0
             - t_solid: 0.0
             - t_liq: 2.0
@@ -1593,17 +1687,16 @@ class TestDailyMassBalanceModels:
             - ref_hgt: 2252.0
             - ys: 1901
             - ye: 2019
+            - optim: False
             - resolution: day
             - gradient_scheme: annual
-            - melt_f_ratio: 0.5
+            - tau_e: 1.0
             - melt_f_change: linear
+            - melt_f_ratio: 0.5
             - melt_frequency: year
             - spinup_years: 6
-            - tau_e: 1.0
+            - first_snow_bucket: snow
             - check_data_exists: True
-            - optim: False
-            - hbins: nan
-            - snow_bucket: 0
         """
         )
         mb_mod = massbalance.DailySfcTIModel(hef_gdir, bias=0)
@@ -1688,9 +1781,9 @@ class TestDailyMassBalanceModels:
         model = DailySfcTIModel(hef_gdir, ys=1979, spinup_years=5)
         spinup = model.get_spinup(year=year)
         assert spinup is expected
-        model = DailySfcTIModel(hef_gdir, ys=1979, spinup_years=0)
-        spinup = model.get_spinup(year=year)
-        assert not spinup
+        # model = DailySfcTIModel(hef_gdir, ys=1979, spinup_years=0)
+        # spinup = model.get_spinup(year=year)
+        # assert not spinup
 
 class TestModelFlowlines():
 

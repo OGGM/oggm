@@ -1,5 +1,6 @@
 """Mass balance models - next generation"""
 
+from __future__ import annotations
 # Built ins
 import logging
 import os
@@ -589,17 +590,17 @@ class MonthlyTIModel(MassBalanceModel):
                 return self.gdir.settings
 
     def set_temporal_bounds(
-        self, nc_data: xr.DataArray, ys: int, ye: int, default_grad: float
+        self, nc_data: "netCDF4.Dataset", default_grad: float, ys: int = None, ye: int= None
     ) -> None:
         """Constrain data to a start and end year.
 
         Parameters
         ----------
-        nc_data : xr.DataArray
+        nc_data : netCDF4.Dataset
             Climate data.
-        ys : int or float
+        ys : int or float, optional
             Desired first year of data period.
-        ye : int or float
+        ye : int or float, optional
             Desired last year of data period.
         default_grad : float
             Default temperature gradient.
@@ -613,7 +614,7 @@ class MonthlyTIModel(MassBalanceModel):
         # We check for calendar years
         if (time[0].month != 1) or (time[-1].month != 12):
             raise InvalidWorkflowError(
-                "We now work exclusively with " "calendar years."
+                "We now work exclusively with calendar years."
             )
 
         # Quick trick because we know the size of our array
@@ -1841,7 +1842,10 @@ class DailySfcTIModel_refactor(DailyTIModel):
 
     # @classmethod
     def set_buckets(self):
-        """Set the index for surface tracking buckets."""
+        """Set the index for surface tracking buckets.
+        
+        TODO: does not support spinup_year = 0
+        """
 
         if self.melt_frequency == "year":
             buckets = [i for i in range(0, self.spinup_years, 1)]
@@ -1857,6 +1861,8 @@ class DailySfcTIModel_refactor(DailyTIModel):
         else:
             raise InvalidParamsError("melt_frequency must be 'year', 'month', 'day'")
         if not hasattr(self, "buckets"):
+            self.buckets = buckets
+        elif not self.buckets:
             self.buckets = buckets
         self.snow_bucket = self.buckets[0]
         # self.columns = buckets + ["delta_kg/m2"]
