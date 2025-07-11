@@ -187,6 +187,8 @@ class TestFullRun(unittest.TestCase):
         assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
 
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
+        for diagnostic in gdirs[1].get_diagnostics():
+            print(f'{diagnostic}: {gdirs[1].get_diagnostics()[diagnostic]}')
         assert np.all(dfc.iloc[:2].calving_rate_myr.values > 100)
         assert np.all(dfc.inv_volume_km3 > 0)
         assert np.all(dfc.bias == 0)
