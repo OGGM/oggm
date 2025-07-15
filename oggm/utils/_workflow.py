@@ -713,7 +713,7 @@ def get_centerline_lonlat(gdir,
                 olist.append(gs)
         elif geometrical_widths_output:
             dis_on_line = cl.dis_on_line * gdir.grid.dx
-            for _l in cl.geometrical_widths:
+            for _l in zip(cl.geometrical_widths, dis_on_line):
                 wi_m = _l.length * gdir.grid.dx
                 gs = dict()
                 gs['RGIID'] = gdir.rgi_id
@@ -870,7 +870,7 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
         A good first value to test is 3.
     simplify_line_after : float
         apply shapely's `simplify` method to the line *after* corner cutting.
-        This is to reduce the size of the geometeries after they have been
+        This is to reduce the size of the geometries after they have been
         smoothed. The default value of 0 is fine if you use corner cutting less
         than 4. Otherwize try a small number, like 0.05 or 0.1.
     """
