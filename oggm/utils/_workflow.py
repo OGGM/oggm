@@ -706,19 +706,19 @@ def get_centerline_lonlat(gdir,
                 gs = dict()
                 gs['RGIID'] = gdir.rgi_id
                 gs['SEGMENT_ID'] = j
-                gs['DIS_ON_LINE'] = d
+                gs['DISONLINE'] = d
                 gs['MAIN'] = mm
                 gs['WIDTH_m'] = wi_m
                 gs['geometry'] = shp_trafo(tra_func, _l)
                 olist.append(gs)
         elif geometrical_widths_output:
             dis_on_line = cl.dis_on_line * gdir.grid.dx
-            for _l in zip(cl.geometrical_widths):
+            for _l in cl.geometrical_widths:
                 wi_m = _l.length * gdir.grid.dx
                 gs = dict()
                 gs['RGIID'] = gdir.rgi_id
                 gs['SEGMENT_ID'] = j
-                gs['DIS_ON_LINE'] = d
+                gs['DISONLINE'] = d
                 gs['MAIN'] = mm
                 gs['WIDTH_m'] = wi_m
                 gs['geometry'] = shp_trafo(tra_func, _l)
