@@ -697,26 +697,28 @@ def get_centerline_lonlat(gdir,
         if keep_main_only and mm == 0:
             continue
         if corrected_widths_output:
-            le_segment = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
-            for wi, cur, (n1, n2), wi_m in zip(cl.widths, cl.line.coords,
-                                               cl.normals, cl.widths_m):
+            dis_on_line = cl.dis_on_line * gdir.grid.dx
+            for wi, cur, (n1, n2), wi_m, d in zip(cl.widths, cl.line.coords,
+                                                  cl.normals, cl.widths_m,
+                                                  dis_on_line):
                 _l = shpg.LineString([shpg.Point(cur + wi / 2. * n1),
                                       shpg.Point(cur + wi / 2. * n2)])
                 gs = dict()
                 gs['RGIID'] = gdir.rgi_id
                 gs['SEGMENT_ID'] = j
-                gs['LE_SEGMENT'] = le_segment
+                gs['DIS_ON_LINE'] = d
                 gs['MAIN'] = mm
                 gs['WIDTH_m'] = wi_m
                 gs['geometry'] = shp_trafo(tra_func, _l)
                 olist.append(gs)
         elif geometrical_widths_output:
-            le_segment = np.rint(np.max(cl.dis_on_line) * gdir.grid.dx)
-            for _l, wi_m in zip(cl.geometrical_widths, cl.widths_m):
+            dis_on_line = cl.dis_on_line * gdir.grid.dx
+            for _l in zip(cl.geometrical_widths):
+                wi_m = _l.length * gdir.grid.dx
                 gs = dict()
                 gs['RGIID'] = gdir.rgi_id
                 gs['SEGMENT_ID'] = j
-                gs['LE_SEGMENT'] = le_segment
+                gs['DIS_ON_LINE'] = d
                 gs['MAIN'] = mm
                 gs['WIDTH_m'] = wi_m
                 gs['geometry'] = shp_trafo(tra_func, _l)
