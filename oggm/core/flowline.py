@@ -1767,6 +1767,7 @@ class FluxBasedModel(FlowlineModel):
                 flux = find_sia_flux_from_thickness(slope,
                                                     fl.widths_m[0],
                                                     fgt,
+                                                    settings=self.settings,
                                                     shape=fl.shape_str[0],
                                                     glen_a=self.glen_a,
                                                     fs=self.fs)
@@ -3364,7 +3365,7 @@ def flowline_model_run(gdir, settings_filesuffix='',
         try:
             fs = gdir.settings['inversion_fs']
         except KeyError:
-            pass # if not available we stick with the default fs
+            pass  # if not available we stick with the default fs
 
         try:
             glen_a = gdir.settings['inversion_glen_a']

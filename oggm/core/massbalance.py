@@ -2211,6 +2211,8 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix='',
 
 @entity_task(log, writes=['inversion_flowlines'])
 def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
+                            input_filesuffix='',
+                            output_filesuffix='',
                             mb_model=None,
                             mb_model_class=MonthlyTIModel,
                             mb_years=None):
@@ -2227,6 +2229,13 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments. Code-wise the settings_filesuffix
         is set in the @entity-task decorater.
+    input_filesuffix: str
+        the filesuffix of the inversion flowlines which should be used (useful
+        for conducting multiple experiments in the same gdir)
+    output_filesuffix: str
+        the filesuffix of the final inversion flowlines which are saved back
+        into the gdir (useful for conducting multiple experiments in the same
+        gdir)
     mb_model : :py:class:`oggm.core.massbalance.MassBalanceModel`
         the mass balance model to use - if None, will use the
         one given by mb_model_class
@@ -2247,7 +2256,7 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     is_calving = cmb != 0
 
     # For each flowline compute the apparent MB
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
 
     if mb_model is None:
         mb_model = mb_model_class(gdir, settings_filesuffix=settings_filesuffix)
@@ -2310,8 +2319,13 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
 
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
-    gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    gdir.settings['apparent_mb_from_any_mb_residual'] = residual
+
+    # this is only for backwards compatibility
+    if settings_filesuffix == '':
+        gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
+
+    gdir.write_pickle(fls, 'inversion_flowlines', filesuffix=output_filesuffix)
 
 
 @entity_task(log)

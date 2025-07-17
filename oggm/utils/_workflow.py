@@ -4024,10 +4024,12 @@ class GlacierDirectory(object):
 
     @settings_filesuffix.setter
     def settings_filesuffix(self, value):
+        self._settings_filesuffix = value
         self.settings = self.get_settings(settings_filesuffix=value)
 
     def get_settings(self, settings_filesuffix):
-        return ModelSettings(self, filesuffix=settings_filesuffix)
+        return ModelSettings(self, filesuffix=settings_filesuffix,
+                             always_reload_data=False)
 
 
 @entity_task(log)
@@ -4307,9 +4309,10 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
 
 class YAMLFileObject(object):
-    def __init__(self, path, allow_empty=True):
+    def __init__(self, path, allow_empty=True, always_reload_data=True):
         self.path = Path(path)
         self.allow_empty = allow_empty
+        self.always_reload_data = always_reload_data
         self.data = self._load()
 
     def _load(self):
@@ -4340,8 +4343,9 @@ class YAMLFileObject(object):
         return value
 
     def get(self, key):
-        # to be always synced, if several objects work on the same file
-        self.data = self._load()
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
         if key in self.data:
             return self.data[key]
         else:
@@ -4364,27 +4368,33 @@ class YAMLFileObject(object):
 
 class ModelSettings(YAMLFileObject):
     def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
-                 reset_parent_filesuffix=False, allow_empty=True):
+                 reset_parent_filesuffix=False, allow_empty=True,
+                 always_reload_data=True,
+                 ):
         path = gdir.get_filepath('settings', filesuffix=filesuffix)
 
-        super(ModelSettings, self).__init__(path, allow_empty=allow_empty)
+        super(ModelSettings, self).__init__(path, allow_empty=allow_empty,
+                                            always_reload_data=always_reload_data,
+                                            )
 
         # this is to inherit parameters from other setting files, the other file
         # is stored with the parent_filesuffix
         if 'parent_filesuffix' not in self.data:
-            if parent_filesuffix:
+            if isinstance(parent_filesuffix, str):
                 self.set('parent_filesuffix', parent_filesuffix)
             else:
                 # by default cfg.PARAMS is always the parent
                 self.set('parent_filesuffix', 'cfg.PARAMS')
-        elif parent_filesuffix:
-            if (self['parent_filesuffix'] != parent_filesuffix and
-                    not reset_parent_filesuffix):
-                raise InvalidWorkflowError(
-                    f"Current parent_filesuffix="
-                    f"{self['parent_filesuffix']}, you provided "
-                    f"{parent_filesuffix}. If you want to set a new value "
-                    f"you can use reset_parent_filesuffix=True")
+        elif isinstance(parent_filesuffix, str):
+            if self['parent_filesuffix'] != parent_filesuffix:
+                if not reset_parent_filesuffix:
+                    raise InvalidWorkflowError(
+                        f"Current parent_filesuffix="
+                        f"{self['parent_filesuffix']}, you provided "
+                        f"{parent_filesuffix}. If you want to set a new value "
+                        f"you can use reset_parent_filesuffix=True")
+                else:
+                    self.set('parent_filesuffix', parent_filesuffix)
 
         self.filesuffix = filesuffix
         if self.data['parent_filesuffix'] == 'cfg.PARAMS':
@@ -4393,10 +4403,15 @@ class ModelSettings(YAMLFileObject):
             self.defaults = ModelSettings(gdir,
                                           filesuffix=self.data['parent_filesuffix'],
                                           # check if parent exists
-                                          allow_empty=False)
+                                          allow_empty=False,
+                                          always_reload_data=always_reload_data,
+                                          )
         self.gdir = gdir
 
     def get(self, key):
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
         if key in self.data:
             return self.data[key]
 
