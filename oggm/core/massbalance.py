@@ -2211,8 +2211,8 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix='',
 
 @entity_task(log, writes=['inversion_flowlines'])
 def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
-                            input_filesuffix='',
-                            output_filesuffix='',
+                            input_filesuffix=None,
+                            output_filesuffix=None,
                             mb_model=None,
                             mb_model_class=MonthlyTIModel,
                             mb_years=None):
@@ -2250,6 +2250,12 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         It does not matter much for the final result, but it should be a
         period long enough to have a representative MB gradient.
     """
+
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)

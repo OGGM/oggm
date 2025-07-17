@@ -39,7 +39,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                        minimise_for='area', precision_percent=1,
                        precision_absolute=1, min_ice_thickness=None,
                        first_guess_t_spinup=-2, t_spinup_max_step_length=2,
-                       maxiter=30, output_filesuffix='_dynamic_spinup',
+                       maxiter=30, output_filesuffix=None,
                        store_model_geometry=True, store_fl_diagnostics=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_spinup_best=False, ye=None,
@@ -74,7 +74,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     climate_input_filesuffix : str
         filesuffix for the input climate file
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
@@ -142,7 +142,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is gdir.settings['dynamic_spinup_min_ice_thick'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -156,7 +156,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         and 'ignore_errors=False' an error is raised.
         Default is 30
     output_filesuffix : str
-        for the output file
+        for the output file. If None the settings_filesuffix will be used.
     store_model_geometry : bool
         whether to store the full model geometry run file to disk or not.
         Default is True
@@ -210,6 +210,9 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         evolution_model.
     """
 
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
 
@@ -228,7 +231,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
-        min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+        min_ice_thickness = gdir.settings['dynamic_spinup_min_ice_thick']
 
     # check provided maximum start year here, and change min_spinup_period
     if spinup_start_yr_max is not None:
@@ -278,7 +281,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         geom_path = False
 
     if store_fl_diagnostics is None:
-        store_fl_diagnostics = cfg.PARAMS['store_fl_diagnostics']
+        store_fl_diagnostics = gdir.settings['store_fl_diagnostics']
 
     if store_fl_diagnostics:
         fl_diag_path = gdir.get_filepath('fl_diagnostics',
@@ -291,13 +294,19 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                                   filesuffix=output_filesuffix,
                                   delete=True)
 
-    if cfg.PARAMS['use_inversion_params_for_run']:
-        diag = gdir.get_diagnostics()
-        fs = diag.get('inversion_fs', cfg.PARAMS['fs'])
-        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
-    else:
-        fs = cfg.PARAMS['fs']
-        glen_a = cfg.PARAMS['glen_a']
+    fs = gdir.settings['fs']
+    glen_a = gdir.settings['glen_a']
+    if gdir.settings['use_inversion_params_for_run']:
+        # try-except statements for backwards-compatibility with gdir.get_diagnostics
+        try:
+            fs = gdir.settings['inversion_fs']
+        except KeyError:
+            pass  # if not available we stick with the default fs
+
+        try:
+            glen_a = gdir.settings['inversion_glen_a']
+        except KeyError:
+            pass  # if not available we stick with the default glen_a
 
     kwargs.setdefault('fs', fs)
     kwargs.setdefault('glen_a', glen_a)
@@ -307,15 +316,18 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         raise InvalidParamsError('Only use annual mb_elev_feedback with the '
                                  'dynamic spinup function!')
 
-    if cfg.PARAMS['use_kcalving_for_run']:
+    if gdir.settings['use_kcalving_for_run']:
         raise InvalidParamsError('Dynamic spinup not tested with '
-                                 "cfg.PARAMS['use_kcalving_for_run'] is `True`!")
+                                 "gdir.settings['use_kcalving_for_run'] is `True`!")
 
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
     # This is necessary if target_yr < yr_min + 10 or if the dynamic spinup failed.
     def save_model_without_dynamic_spinup():
-        gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
+        gdir.settings['run_dynamic_spinup_success'] = False
+        # this is only for backwards compatibility
+        if settings_filesuffix == '':
+            gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
         yr_use = np.clip(target_yr, yr_min, None)
         model_dynamic_spinup_end = evolution_model(flowlines=fls_spinup,
                                                    mb_model=mb_model_historical,
@@ -875,26 +887,27 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                     raise RuntimeError(e)
 
     # hurray, dynamic spinup successfully
-    gdir.add_to_diagnostics('run_dynamic_spinup_success', True)
+    # safe some stuff for diagnostics
+    diag_dyn = {
+        'run_dynamic_spinup_success': True,
+        'temp_bias_dynamic_spinup': float(final_t_spinup_guess[-1]),
+        'dynamic_spinup_target_year': int(target_yr),
+        'dynamic_spinup_period': int(spinup_period),
+        'dynamic_spinup_forward_model_iterations': int(forward_model_runs[-1]),
+        f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent':
+            float(final_mismatch[-1]),
+        f'reference_{minimise_for}_dynamic_spinup_{unit}':
+            float(reference_value),
+        'dynamic_spinup_other_variable_reference': float(other_reference_value),
+        'dynamic_spinup_mismatch_other_variable_percent':
+            float(other_variable_mismatch[-1]),
+    }
 
-    # also save some other stuff
-    gdir.add_to_diagnostics('temp_bias_dynamic_spinup',
-                            float(final_t_spinup_guess[-1]))
-    gdir.add_to_diagnostics('dynamic_spinup_target_year',
-                            int(target_yr))
-    gdir.add_to_diagnostics('dynamic_spinup_period',
-                            int(spinup_period))
-    gdir.add_to_diagnostics('dynamic_spinup_forward_model_iterations',
-                            int(forward_model_runs[-1]))
-    gdir.add_to_diagnostics(f'{minimise_for}_mismatch_dynamic_spinup_{unit}_'
-                            f'percent',
-                            float(final_mismatch[-1]))
-    gdir.add_to_diagnostics(f'reference_{minimise_for}_dynamic_spinup_{unit}',
-                            float(reference_value))
-    gdir.add_to_diagnostics('dynamic_spinup_other_variable_reference',
-                            float(other_reference_value))
-    gdir.add_to_diagnostics('dynamic_spinup_mismatch_other_variable_percent',
-                            float(other_variable_mismatch[-1]))
+    for k, v in diag_dyn.items():
+        gdir.settings[k] = v
+        # this is only for backwards compatibility
+        if settings_filesuffix == '':
+            gdir.add_to_diagnostics(k, v)
 
     # here only save the final model state if store_model_evolution = False
     if not store_model_evolution:
@@ -939,8 +952,9 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f):
 
 def dynamic_melt_f_run_with_dynamic_spinup(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
-        settings_filesuffix='', output_filesuffix='', evolution_model=None,
+        settings_filesuffix='', output_filesuffix=None, evolution_model=None,
         mb_model_historical=None, mb_model_spinup=None,
+        model_flowline_filesuffix='',
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
         precision_absolute=1, min_ice_thickness=None,
@@ -982,10 +996,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments.
     output_filesuffix : str
-        For the output file.
-        Default is ''
+        For the output file. If None the settings_filesuffix will be used.
+        Default is None
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
@@ -1042,7 +1056,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is gdir.settings['dynamic_spinup_min_ice_thick'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1061,7 +1075,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         Default is True
     store_fl_diagnostics : bool or None
         Whether to store the model flowline diagnostics to disk or not.
-        Default is None (-> cfg.PARAMS['store_fl_diagnostics'])
+        Default is None (-> gdir.settings['store_fl_diagnostics'])
     local_variables : dict
         User MUST provide a dictionary here. This dictionary is used to save
         the last temperature bias from the previous dynamic spinup run (for
@@ -1099,6 +1113,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         The final model after the run and the calculated geodetic mass balance
     """
 
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
 
@@ -1114,7 +1131,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         # ATTENTION: it is assumed that the flowlines in gdir have the volume
         # we want to match during calibrate_inversion_from_consensus when we
         # set_local_variables
-        fls_ref = gdir.read_pickle('model_flowlines')
+        fls_ref = gdir.read_pickle('model_flowlines',
+                                   filesuffix=model_flowline_filesuffix)
         local_variables['vol_m3_ref'] = np.sum([f.volume_m3 for f in fls_ref])
 
         # we are done with preparing the local_variables for the upcoming iterations
@@ -1146,7 +1164,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                        np.all(getattr(fl_prov, 'bed_h') ==
                               getattr(fl_orig, 'bed_h'))
                        for fl_prov, fl_orig in
-                       zip(fls_init, gdir.read_pickle('model_flowlines'))]):
+                       zip(fls_init,
+                           gdir.read_pickle(
+                               'model_flowlines',
+                               filesuffix=model_flowline_filesuffix))]):
             raise InvalidWorkflowError('If you want to perform a dynamic '
                                        'melt_f calibration including an '
                                        'inversion, it is not possible to '
@@ -1175,11 +1196,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                 volume_m3_reference=local_variables['vol_m3_ref'],
                 add_to_log_file=False)
 
-    # this is used to keep the original model_flowline unchanged (-> to be able
-    # to conduct different dynamic calibration runs in the same gdir)
-    model_flowline_filesuffix = '_dyn_melt_f_calib'
     init_present_time_glacier(gdir, settings_filesuffix=settings_filesuffix,
-                              filesuffix=model_flowline_filesuffix,
                               add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
@@ -1231,14 +1248,14 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                    ds.volume.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
-                  cfg.PARAMS['ice_density'])
+                  gdir.settings['ice_density'])
 
     return model, dmdtda_mdl
 
 
 def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir, melt_f, fls_init, ys, ye, local_variables,
-        settings_filesuffix='', output_filesuffix='',
+        settings_filesuffix='', output_filesuffix=None,
         evolution_model=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
@@ -1276,10 +1293,10 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments.
     output_filesuffix : str
-        For the output file.
-        Default is ''
+        For the output file. If None the settings_filesuffix will be used.
+        Default is None
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
@@ -1336,7 +1353,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is gdir.settings['dynamic_spinup_min_ice_thick'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1355,7 +1372,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         Default is True
     store_fl_diagnostics : bool or None
         Whether to store the model flowline diagnostics to disk or not.
-        Default is None (-> cfg.PARAMS['store_fl_diagnostics'])
+        Default is None (-> gdir.settings['store_fl_diagnostics'])
     do_inversion : bool
         If True a complete inversion is conducted using the provided melt_f
         before the actual fallback run.
@@ -1380,6 +1397,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         The final model after the run.
     """
     from oggm.workflow import calibrate_inversion_from_consensus
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
 
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
@@ -1450,6 +1470,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             add_fixed_geometry_spinup=add_fixed_geometry_spinup,
             **kwargs)
 
+        gdir.settings['used_spinup_option'] = 'dynamic spinup only'
+        # this is only for backwards compatibility
         gdir.add_to_diagnostics('used_spinup_option', 'dynamic spinup only')
 
     except RuntimeError:
@@ -1474,8 +1496,12 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                     'dynamic_spinup_other_variable_reference',
                     'dynamic_spinup_mismatch_other_variable_percent']:
             if key in diag:
+                gdir.settings[key] = None
+                # this is only for backwards compatibility
                 gdir.add_to_diagnostics(key, None)
 
+        gdir.settings['run_dynamic_spinup_success'] = False
+        # this is only for backwards compatibility
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
 
         # try to make a fixed geometry spinup
@@ -1493,6 +1519,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             init_model_fls=fls_init, evolution_model=evolution_model,
             fixed_geometry_spinup_yr=ys)
 
+        gdir.settings['used_spinup_option'] = 'fixed geometry spinup'
+        # this is only for backwards compatibility
         gdir.add_to_diagnostics('used_spinup_option', 'fixed geometry spinup')
 
     return model_end
@@ -1500,8 +1528,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
 
 def dynamic_melt_f_run(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
-        settings_filesuffix='',  output_filesuffix='', evolution_model=None,
+        settings_filesuffix='',  output_filesuffix=None, evolution_model=None,
         local_variables=None, set_local_variables=False, target_yr=None,
+        model_flowline_filesuffix='',
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1531,10 +1560,10 @@ def dynamic_melt_f_run(
     ye : int
         end year of the complete run, must be smaller or equal y1_ref_mb
     output_filesuffix : str
-        For the output file.
-        Default is ''
+        For the output file. If None the settings_filesuffix will be used.
+        Default is None
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
     local_variables : None
         Not needed in this function, just here to match with the function
@@ -1553,6 +1582,9 @@ def dynamic_melt_f_run(
     :py:class:`oggm.core.flowline.evolution_model`, float
         The final model after the run and the calculated geodetic mass balance
     """
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
 
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
@@ -1588,14 +1620,14 @@ def dynamic_melt_f_run(
                    ds.volume.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
                   (yr1_ref_mb - yr0_ref_mb) *
-                  cfg.PARAMS['ice_density'])
+                  gdir.settings['ice_density'])
 
     return model, dmdtda_mdl
 
 
 def dynamic_melt_f_run_fallback(
         gdir, melt_f, fls_init, ys, ye, local_variables,
-        settings_filesuffix='', output_filesuffix='',
+        settings_filesuffix='', output_filesuffix=None,
         evolution_model=None, target_yr=None, **kwargs):
     """
     This is the fallback function corresponding to the function
@@ -1623,10 +1655,10 @@ def dynamic_melt_f_run_fallback(
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments.
     output_filesuffix : str
-        For the output file.
-        Default is ''
+        For the output file. If None the settings_filesuffix will be used.
+        Default is None
     evolution_model : :class:oggm.core.FlowlineModel
-        which evolution model to use. Default: cfg.PARAMS['evolution_model']
+        which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
     target_yr : int or None
         The target year for a potential dynamic spinup (not needed here).
@@ -1639,6 +1671,9 @@ def dynamic_melt_f_run_fallback(
     :py:class:`oggm.core.flowline.evolution_model`
         The final model after the run.
     """
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
 
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
@@ -1657,6 +1692,8 @@ def dynamic_melt_f_run_fallback(
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
                                       **kwargs)
+        gdir.settings['used_spinup_option'] = 'no spinup'
+        # this is only for backwards compatibility
         gdir.add_to_diagnostics('used_spinup_option', 'no spinup')
     except RuntimeError as e:
         raise RuntimeError(f'In fallback function run_from_climate_data '
@@ -1667,11 +1704,12 @@ def dynamic_melt_f_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_melt_f_calibration(
-        gdir, settings_filesuffix='',
+        gdir, settings_filesuffix='', input_filesuffix=None,
         ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
         ref_period='', melt_f_min=None,
         melt_f_max=None, melt_f_max_step_length_minimum=0.1, maxiter=20,
-        ignore_errors=False, output_filesuffix='_dynamic_melt_f',
+        ignore_errors=False, output_filesuffix=None,
+        model_flowline_filesuffix=None,
         ys=None, ye=None, target_yr=None,
         run_function=dynamic_melt_f_run_with_dynamic_spinup,
         kwargs_run_function=None,
@@ -1732,10 +1770,10 @@ def run_dynamic_melt_f_calibration(
         Default is '' (-> PARAMS['geodetic_mb_period'])
     melt_f_min : float or None
         Lower absolute limit for melt_f.
-        Default is None (-> cfg.PARAMS['melt_f_min'])
+        Default is None (-> gdir.settings['melt_f_min'])
     melt_f_max : float or None
         Upper absolute limit for melt_f.
-        Default is None (-> cfg.PARAMS['melt_f_max'])
+        Default is None (-> gdir.settings['melt_f_max'])
     melt_f_max_step_length_minimum : float
         Defines a minimum maximal change of melt_f between two iterations. The
         maximum step length is needed to avoid too large steps, which likely
@@ -1757,8 +1795,12 @@ def run_dynamic_melt_f_calibration(
         fully an error is raised.
         Default is True
     output_filesuffix : str
-        For the output file.
-        Default is '_dynamic_melt_f'
+        For the output file. If None the settings_filesuffix will be used.
+        Default is None
+    model_flowline_filesuffix : str
+        for the model flowline to use if no other flowlines for initialisation
+        are provided. If None the settings_filesuffix will be used.
+        Default is None
     ys : int or None
         The start year of the conducted run. If None the first year of the
         provided climate file.
@@ -1775,18 +1817,19 @@ def run_dynamic_melt_f_calibration(
     run_function : function
         This function defines how a new defined melt_f is used to conduct the
         next model run. This function must contain the arguments 'gdir',
-        'melt_f', 'yr0_ref_mb', 'yr1_ref_mb', 'fls_init', 'ys', 'ye' and
-        'output_filesuffix'. Further this function must return the final model
-        and the calculated geodetic mass balance dmdtda in kg m-2 yr-1.
+        'settings_filesuffix', 'melt_f', 'yr0_ref_mb', 'yr1_ref_mb', 'fls_init',
+        'ys', 'ye' and 'output_filesuffix'. Further this function must return
+        the final model and the calculated geodetic mass balance dmdtda in
+        kg m-2 yr-1.
     kwargs_run_function : None or dict
         Can provide additional keyword arguments to the run_function as a
         dictionary.
     fallback_function : function
         This is a fallback function if the calibration is not working using
         'run_function' it is called. This function must contain the arguments
-        'gdir', 'melt_f', 'fls_init', 'ys', 'ye', 'local_variables' and
-        'output_filesuffix'. Further this function should return the final
-        model.
+        'gdir', 'settings_filesuffix', 'melt_f', 'fls_init', 'ys', 'ye',
+        'local_variables' and 'output_filesuffix'. Further this function should
+        return the final model.
     kwargs_fallback_function : None or dict
         Can provide additional keyword arguments to the fallback_function as a
         dictionary.
@@ -1812,11 +1855,18 @@ def run_dynamic_melt_f_calibration(
         The final dynamically spined-up model. Type depends on the selected
         evolution_model.
     """
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
+    if model_flowline_filesuffix is None:
+        model_flowline_filesuffix = settings_filesuffix
+
     # melt_f constraints
     if melt_f_min is None:
-        melt_f_min = cfg.PARAMS['melt_f_min']
+        melt_f_min = gdir.settings['melt_f_min']
     if melt_f_max is None:
-        melt_f_max = cfg.PARAMS['melt_f_max']
+        melt_f_max = gdir.settings['melt_f_max']
 
     if kwargs_run_function is None:
         kwargs_run_function = {}
@@ -1825,7 +1875,7 @@ def run_dynamic_melt_f_calibration(
 
     # geodetic mb stuff
     if not ref_period:
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_period = gdir.settings['geodetic_mb_period']
     # if a reference geodetic mb is specified also the error of it must be
     # specified, and vice versa
     if ((ref_dmdtda is None and err_ref_dmdtda is not None) or
@@ -1896,7 +1946,8 @@ def run_dynamic_melt_f_calibration(
         init_model_fls = fmod.fls
 
     if init_model_fls is None:
-        fls_init = gdir.read_pickle('model_flowlines')
+        fls_init = gdir.read_pickle('model_flowlines',
+                                    filesuffix=model_flowline_filesuffix)
     else:
         fls_init = copy.deepcopy(init_model_fls)
 
@@ -1923,10 +1974,14 @@ def run_dynamic_melt_f_calibration(
             # provided run_function, so we us the fallback_function
 
             # this diagnostics should be overwritten inside the fallback_function
+            gdir.settings['used_spinup_option'] = 'fallback_function'
+            # this is only for backwards compatibility
             gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
 
-            model = fallback_function(gdir=gdir, melt_f=melt_f,
-                                      fls_init=fls_init, ys=ys, ye=ye,
+            model = fallback_function(gdir=gdir,
+                                      settings_filesuffix=settings_filesuffix,
+                                      melt_f=melt_f, fls_init=fls_init,
+                                      ys=ys, ye=ye,
                                       local_variables=local_variables_run_function,
                                       output_filesuffix=output_filesuffix,
                                       **kwargs_fallback_function)
@@ -1936,9 +1991,14 @@ def run_dynamic_melt_f_calibration(
             # using the run_function, and therefore we save the best guess we
             # found so far
             if only_first_guess:
+                gdir.settings['used_spinup_option'] = first_guess_diagnostic_msg
+                # this is only for backwards compatibility
                 gdir.add_to_diagnostics('used_spinup_option',
                                         first_guess_diagnostic_msg)
             else:
+                gdir.settings['used_spinup_option'] = ('dynamic melt_f '
+                                                       'calibration (part success)')
+                # this is only for backwards compatibility
                 gdir.add_to_diagnostics('used_spinup_option',
                                         'dynamic melt_f calibration (part '
                                         'success)')
@@ -1952,26 +2012,26 @@ def run_dynamic_melt_f_calibration(
                                              local_variables=local_variables_run_function,
                                              **kwargs_run_function)
 
-            gdir.add_to_diagnostics(
-                'dmdtda_mismatch_dynamic_calibration_reference',
-                float(ref_dmdtda))
-            gdir.add_to_diagnostics(
-                'dmdtda_dynamic_calibration_given_error',
-                float(err_ref_dmdtda))
-            gdir.add_to_diagnostics('dmdtda_dynamic_calibration_error_scaling_factor',
-                                    float(err_dmdtda_scaling_factor))
-            gdir.add_to_diagnostics(
-                'dmdtda_mismatch_dynamic_calibration',
-                float(best_mismatch))
-            gdir.add_to_diagnostics(
-                'dmdtda_mismatch_with_initial_melt_f',
-                float(initial_mismatch))
-            gdir.add_to_diagnostics('melt_f_dynamic_calibration',
-                                    float(melt_f))
-            gdir.add_to_diagnostics('melt_f_before_dynamic_calibration',
-                                    float(melt_f_initial))
-            gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
-                                    int(dynamic_melt_f_calibration_runs[-1]))
+            # some dianostics for later
+            diag_dyn_melt = {
+                'dmdtda_mismatch_dynamic_calibration_reference':
+                    float(ref_dmdtda),
+                'dmdtda_dynamic_calibration_given_error': float(err_ref_dmdtda),
+                'dmdtda_dynamic_calibration_error_scaling_factor':
+                    float(err_dmdtda_scaling_factor),
+                'dmdtda_mismatch_dynamic_calibration': float(best_mismatch),
+                'dmdtda_mismatch_with_initial_melt_f': float(initial_mismatch),
+                'melt_f_dynamic_calibration': float(melt_f),
+                'melt_f_before_dynamic_calibration': float(melt_f_initial),
+                'run_dynamic_melt_f_calibration_iterations':
+                    int(dynamic_melt_f_calibration_runs[-1]),
+            }
+
+            for k, v in diag_dyn_melt.items():
+                gdir.settings[k] = v
+                # this is only for backwards compatibility
+                if settings_filesuffix == '':
+                    gdir.add_to_diagnostics(k, v)
 
         return model
 
@@ -1983,6 +2043,7 @@ def run_dynamic_melt_f_calibration(
                  melt_f=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
                  local_variables=local_variables_run_function,
+                 model_flowline_filesuffix=model_flowline_filesuffix,
                  set_local_variables=True, **kwargs_run_function)
 
     # this is the actual model run which is executed each iteration in order to
@@ -2316,23 +2377,25 @@ def run_dynamic_melt_f_calibration(
     assert final_melt_f == gdir.settings['melt_f']
 
     # hurray, dynamic melt_f calibration successful
-    gdir.add_to_diagnostics('used_spinup_option',
-                            'dynamic melt_f calibration (full success)')
-    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration_reference',
-                            float(ref_dmdtda))
-    gdir.add_to_diagnostics('dmdtda_dynamic_calibration_given_error',
-                            float(err_ref_dmdtda))
-    gdir.add_to_diagnostics('dmdtda_dynamic_calibration_error_scaling_factor',
-                            float(err_dmdtda_scaling_factor))
-    gdir.add_to_diagnostics('dmdtda_mismatch_dynamic_calibration',
-                            float(final_mismatch))
-    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_melt_f',
-                            float(mismatch_dmdtda[0]))
-    gdir.add_to_diagnostics('melt_f_dynamic_calibration', float(final_melt_f))
-    gdir.add_to_diagnostics('melt_f_before_dynamic_calibration',
-                            float(melt_f_initial))
-    gdir.add_to_diagnostics('run_dynamic_melt_f_calibration_iterations',
-                            int(dynamic_melt_f_calibration_runs[-1]))
+    diag_dyn_melt = {
+        'used_spinup_option': 'dynamic melt_f calibration (full success)',
+        'dmdtda_mismatch_dynamic_calibration_reference': float(ref_dmdtda),
+        'dmdtda_dynamic_calibration_given_error': float(err_ref_dmdtda),
+        'dmdtda_dynamic_calibration_error_scaling_factor':
+            float(err_dmdtda_scaling_factor),
+        'dmdtda_mismatch_dynamic_calibration': float(final_mismatch),
+        'dmdtda_mismatch_with_initial_melt_f': float(mismatch_dmdtda[0]),
+        'melt_f_dynamic_calibration': float(final_melt_f),
+        'melt_f_before_dynamic_calibration': float(melt_f_initial),
+        'run_dynamic_melt_f_calibration_iterations':
+            int(dynamic_melt_f_calibration_runs[-1]),
+    }
+
+    for k, v in diag_dyn_melt.items():
+        gdir.settings[k] = v
+        # this is only for backwards compatibility
+        if settings_filesuffix == '':
+            gdir.add_to_diagnostics(k, v)
 
     log.info(f'Dynamic melt_f calibration worked for {gdir.rgi_id}!')
 

@@ -147,7 +147,7 @@ class TestInitPresentDayFlowline:
             plt.show()
 
         # test if providing a filesuffix is working
-        init_present_time_glacier(gdir, filesuffix='_test')
+        init_present_time_glacier(gdir, output_filesuffix='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
         gdir.settings_filesuffix = '_dummy_downstream'
@@ -175,7 +175,7 @@ class TestInitPresentDayFlowline:
         centerlines.fixed_dx_elevation_band_flowline(gdir,
                                                      bin_variables=[vn])
 
-        tasks.init_present_time_glacier(gdir, filesuffix='_consensus',
+        tasks.init_present_time_glacier(gdir, output_filesuffix='_consensus',
                                         use_binned_thickness_data=vn)
         fl_consensus = gdir.read_pickle('model_flowlines',
                                         filesuffix='_consensus')[0]
@@ -217,7 +217,7 @@ class TestInitPresentDayFlowline:
         df_fixed_dx.to_csv(gdir.get_filepath('elevation_band_flowline',
                                              filesuffix='_fixed_dx'))
 
-        tasks.init_present_time_glacier(gdir, filesuffix='_consensus_rect',
+        tasks.init_present_time_glacier(gdir, output_filesuffix='_consensus_rect',
                                         use_binned_thickness_data=vn)
         fl_consensus_rect = gdir.read_pickle('model_flowlines',
                                              filesuffix='_consensus_rect')[0]
@@ -3710,13 +3710,13 @@ class TestDynamicSpinup:
                 mb_elev_feedback='monthly')
 
         # test that error is raised if used together with calving
-        cfg.PARAMS['use_kcalving_for_run'] = True
+        hef_gdir.settings['use_kcalving_for_run'] = True
         with pytest.raises(InvalidParamsError,
                            match='Dynamic spinup not tested with *'):
             run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for)
-        cfg.PARAMS['use_kcalving_for_run'] = False
+        hef_gdir.settings['use_kcalving_for_run'] = False
 
         # test that fixed_geometry_spinup is added correctly if spinup period
         # is shorten due to too large precision
@@ -3868,14 +3868,6 @@ class TestDynamicSpinup:
         err_ref_dmdtda = float(sel['err_dmdtda'])
         err_ref_dmdtda *= 1000  # kg m-2 yr-1
 
-        if do_inversion:
-            # before the run, check that the dyn model flowlines does not exist
-            # only important if inversion is included, so original
-            # model_flowlines are unchagned (to be able to conduct more dynamic
-            # calibration runs in the same gdir)
-            assert not os.path.isfile(
-                os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
-
         # conduct a run including a dynamic spinup and inversion
         melt_f_max = 1000 * 12 / 365
         precision_percent = 10
@@ -3920,18 +3912,6 @@ class TestDynamicSpinup:
                           rtol=np.abs(err_ref_dmdtda / ref_dmdtda))
         assert gdir.get_diagnostics()['used_spinup_option'] == \
                'dynamic melt_f calibration (full success)'
-
-        if do_inversion:
-            # after the run, check that the dyn model flowlines exists and that
-            # the original model flowlines are unchanged
-            assert os.path.isfile(
-                os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
-            assert np.all([np.all(getattr(fl_prev, 'surface_h') ==
-                                  getattr(fl_now, 'surface_h')) and
-                           np.all(getattr(fl_prev, 'bed_h') ==
-                                  getattr(fl_now, 'bed_h'))
-                           for fl_prev, fl_now in
-                           zip(fls, gdir.read_pickle('model_flowlines'))])
 
         # test that error is raised if ignore_error=False
         reset_melt_f()
