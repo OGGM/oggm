@@ -1997,10 +1997,12 @@ class TestInversion(unittest.TestCase):
         # Make it fail
         with pytest.raises(ValueError):
             a = (0.1, 3)
+            gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
             workflow.calibrate_inversion_from_consensus(gdir,
                                                         a_bounds=a)
 
         a = (0.1, 5)
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
         df = workflow.calibrate_inversion_from_consensus(gdir,
                                                          a_bounds=a,
                                                          error_on_mismatch=False)
@@ -2008,6 +2010,7 @@ class TestInversion(unittest.TestCase):
 
         # With fs it can work
         a = (0.1, 3)
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
         df = workflow.calibrate_inversion_from_consensus(gdir,
                                                          a_bounds=a,
                                                          apply_fs_on_mismatch=True)
@@ -2031,8 +2034,8 @@ class TestInversion(unittest.TestCase):
         massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
 
-        cfg.PARAMS['inversion_fs'] = 5.7e-20
-        cfg.PARAMS['inversion_glen_a'] = 2.4e-24
+        gdir.settings['inversion_fs'] = 5.7e-20
+        gdir.settings['inversion_glen_a'] = 2.4e-24
 
         inversion.prepare_for_inversion(gdir,
                                         invert_with_rectangular=False,
@@ -2042,7 +2045,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt1 = inversion.mass_conservation_inversion(gdir)
 
-        cfg.PARAMS['trapezoid_lambdas'] = 1
+        gdir.settings['trapezoid_lambdas'] = 1
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt2 = inversion.mass_conservation_inversion(gdir)
 
