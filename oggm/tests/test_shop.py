@@ -799,3 +799,10 @@ class Test_Glathida:
         assert sdf['n_valid_gridded_points'] < sdf['n_valid_thick_points']
         assert sdf['date_mode'] < sdf['date_max']
         assert sdf['avg_thick'] < sdf['max_thick']
+
+        odf = glathida.glathida_on_grid(gdir)
+        assert odf is not None
+
+        godf = glathida.compile_glathida_on_grid([gdir])
+
+        assert godf is not None
