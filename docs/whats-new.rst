@@ -134,6 +134,10 @@ Enhancements
 - Added the rgi7g_to_complex task which adds a mask of glacier
   entities in the glacier complex glacier dirs (:pull:`1736`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- A new global task (`glathida.compile_glathida_on_grid`) is available to generate
+  big tables that can be used for e.g. ML workflows for ice thickness estimation
+  (:pull:`1782`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~

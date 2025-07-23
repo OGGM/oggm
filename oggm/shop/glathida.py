@@ -222,7 +222,6 @@ def compile_glathida_on_grid(gdirs, filesuffix='', path=True,
     The assumption is that the tasks:
     - tasks.gridded_attributes,
     - tasks.gridded_mb_attributes,
-
     have been run prior to this.
 
     Parameters
