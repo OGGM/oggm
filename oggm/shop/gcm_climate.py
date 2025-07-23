@@ -534,6 +534,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                      ensemble_member=None,
                      version='v2.1',
                      year_range=('1951', '1980'),
+                     realistic_scaling=True,
                      filesuffix='',
                      output_filesuffix='',
                      **kwargs):
@@ -654,15 +655,65 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         t = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] * len(temp))
         t = cftime.num2date(np.append([0], t[:-1]), units, calendar='noleap')
 
-        temp = xr.DataArray((loc_tmp.data + temp.data[:, np.newaxis]).flatten(),
-                            coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
-                            dims=('time',))
+        if realistic_scaling:
+            # 1. Compute reference monthly anomalies (subtract climatology from each month in ref period)
+            ref_monthly_anoms = ds_ref.temp.groupby('time.year').apply(
+                lambda x: x.groupby('time.month').mean().values - loc_tmp.data
+            ).values  # shape: (N_ref_years, 12)
 
-        # For precip the std dev is very small - lets keep it as is for now but
-        # this is a bit ridiculous. We clip to zero here to be sure
-        precip = utils.clip_min((loc_pre.data + precip.data[:, np.newaxis]).flatten(), 0)
-        precip = xr.DataArray(precip, dims=('time',),
-                              coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
+            N_years = temp.data.shape[0]
+            monthly_series = []
+            rng = np.random.default_rng(seed=42)  # for reproducibility
+
+            for i in range(N_years):
+                # Pick a random reference year
+                ref_idx = rng.integers(0, ref_monthly_anoms.shape[0])
+                # Get the 12 monthly anomalies for that year
+                ref_anoms = ref_monthly_anoms[ref_idx]
+                # Add the annual anomaly and the climatology
+                year_months = loc_tmp.data + temp.data[i] + ref_anoms
+                monthly_series.append(year_months)
+
+            monthly_series = np.array(monthly_series).flatten()
+
+            # 3. Create the new DataArray with the correct time axis
+            temp = xr.DataArray(
+                monthly_series,
+                coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
+                dims=('time',)
+            )
+        else:
+            temp = xr.DataArray((loc_tmp.data + temp.data[:, np.newaxis]).flatten(),
+                                coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
+                                dims=('time',))
+
+        if realistic_scaling:
+            # 1. Compute reference monthly anomalies for precip
+            ref_monthly_anoms_pre = ds_ref.prcp.groupby('time.year').apply(
+                lambda x: x.groupby('time.month').mean().values - loc_pre.data
+            ).values  # shape: (N_ref_years, 12)
+
+            monthly_series_pre = []
+            for i in range(N_years):
+                ref_idx = rng.integers(0, ref_monthly_anoms_pre.shape[0])
+                ref_anoms_pre = ref_monthly_anoms_pre[ref_idx]
+                year_months_pre = loc_pre.data + precip.data[i] + ref_anoms_pre
+                monthly_series_pre.append(year_months_pre)
+
+            monthly_series_pre = np.array(monthly_series_pre).flatten()
+            monthly_series_pre = utils.clip_min(monthly_series_pre, 0)
+
+            precip = xr.DataArray(
+                monthly_series_pre,
+                dims=('time',),
+                coords={'time': t, 'lon': temp.lon, 'lat': temp.lat}
+            )
+        else:
+            # For precip the std dev is very small - lets keep it as is for now but
+            # this is a bit ridiculous. We clip to zero here to be sure
+            precip = utils.clip_min((loc_pre.data + precip.data[:, np.newaxis]).flatten(), 0)
+            precip = xr.DataArray(precip, dims=('time',),
+                                coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
 
     process_gcm_data(gdir, output_filesuffix=output_filesuffix,
                      prcp=precip, temp=temp,
