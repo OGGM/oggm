@@ -664,7 +664,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
 
         if variance_boost:
             # 1. Compute reference monthly anomalies (subtract climatology from each month in ref period)
-            ref_monthly_anoms = ds_ref.temp.resample(time='YS').apply(
+            ref_monthly_anoms = ds_ref.temp.resample(time='YS').map(
                 lambda x: x.groupby('time.month').mean().values - loc_tmp.data
             ).values  # shape: (N_ref_years * 12)
 
@@ -700,9 +700,10 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                                 coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
                                 dims=('time',))
 
+        # Now precip
         if variance_boost:
             # 1. Compute reference monthly anomalies (subtract climatology from each month in ref period)
-            ref_monthly_anoms = ds_ref.prcp.resample(time='YS').apply(
+            ref_monthly_anoms = ds_ref.prcp.resample(time='YS').map(
                 lambda x: x.groupby('time.month').mean().values - loc_tmp.data
             ).values  # shape: (N_ref_years * 12)
 
