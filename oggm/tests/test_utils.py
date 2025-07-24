@@ -1709,6 +1709,7 @@ class TestPreproCLI(unittest.TestCase):
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
                                            'use_temp_bias_from_file': False,
+                                           'map_proj': 'tmerc',
                                            'prcp_fac': 2.5,
                                            }
                           )

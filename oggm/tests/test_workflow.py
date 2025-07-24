@@ -103,6 +103,7 @@ def up_to_climate(reset=False, use_mp=None, params_file=None):
     cfg.PARAMS['baseline_climate'] = 'CRU'
     cfg.PARAMS['evolution_model'] = 'FluxBased'
     cfg.PARAMS['downstream_line_shape'] = 'parabola'
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
