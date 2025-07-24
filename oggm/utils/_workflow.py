@@ -2401,7 +2401,7 @@ def extend_past_climate_run(past_run_file=None,
 
         # New vars
         for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_min_h_m2', 'length', 'calving', 'calving_rate']:
+                   'area', 'area_min_h', 'length', 'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'

@@ -575,13 +575,13 @@ class TestWorkflowUtils:
                                         input_filesuffix=filesuffix)
 
         def check_result(ds):
-            assert 'area_min_h_m2' in ds.data_vars
+            assert 'area_min_h' in ds.data_vars
             assert 'melt_on_glacier' in ds.data_vars
             assert 'melt_on_glacier_monthly' in ds.data_vars
             assert ds_1['melt_on_glacier'].unit == 'kg yr-1'
             assert ds_1['melt_on_glacier_monthly'].unit == 'kg yr-1'
             assert np.all(np.isnan(
-                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_min_h_m2'].values))
+                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_min_h'].values))
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier'].values))
             assert np.all(np.isnan(
