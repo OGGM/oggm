@@ -534,7 +534,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                      ensemble_member=None,
                      version='v2.1',
                      year_range=('1951', '1980'),
-                     realistic_scaling=True,
+                     variance_boost=False,
                      filesuffix='',
                      output_filesuffix='',
                      **kwargs):
@@ -561,6 +561,13 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
     year_range : tuple of str
         the year range for which you want to compute the anomalies. Default
         for LMR is `('1951', '1980')`
+    variance_boost : bool
+        LMR data has very low variability. This makes it hard to bias
+        correct properly. This option enables the addition of realistic monthly
+        variability by sampling monthly anomalies from the reference period for
+        each year, resulting in a synthetic time series with more realistic
+        intra-annual variability suitable for bias correction. This has the
+        tendency to over-estimate interannual variability though.
     ensemble_member : int
         the ensemble member to use (default is the ensemble mean). An
         integer between 0 and 19.
@@ -655,28 +662,34 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
         t = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] * len(temp))
         t = cftime.num2date(np.append([0], t[:-1]), units, calendar='noleap')
 
-        if realistic_scaling:
+        if variance_boost:
             # 1. Compute reference monthly anomalies (subtract climatology from each month in ref period)
-            ref_monthly_anoms = ds_ref.temp.groupby('time.year').apply(
+            ref_monthly_anoms = ds_ref.temp.resample(time='YS').apply(
                 lambda x: x.groupby('time.month').mean().values - loc_tmp.data
-            ).values  # shape: (N_ref_years, 12)
+            ).values  # shape: (N_ref_years * 12)
 
-            N_years = temp.data.shape[0]
+            # 2. Compute annual means for reference and LMR
+            ref_annual_means = ds_ref.temp.resample(time='YS').mean().values  # (N_ref_years,)
+            lmr_annual_anoms = temp.data  # (N_years,)
+
+            # 3. Get ranks (as percentiles)
+            ref_ranks = np.argsort(np.argsort(ref_annual_means)) / (len(ref_annual_means) - 1)
+            lmr_ranks = np.argsort(np.argsort(lmr_annual_anoms)) / (len(lmr_annual_anoms) - 1)
+
+            # 4. For each LMR year, find the closest reference year in rank
             monthly_series = []
-            rng = np.random.default_rng(seed=42)  # for reproducibility
-
-            for i in range(N_years):
-                # Pick a random reference year
-                ref_idx = rng.integers(0, ref_monthly_anoms.shape[0])
-                # Get the 12 monthly anomalies for that year
-                ref_anoms = ref_monthly_anoms[ref_idx]
-                # Add the annual anomaly and the climatology
+            for i, lmr_rank in enumerate(lmr_ranks):
+                ref_idx = np.argmin(np.abs(ref_ranks - lmr_rank))
+                ref_anoms = ref_monthly_anoms[ref_idx*12:ref_idx*12+12]
+                # Optionally demean to preserve annual mean
+                # For some reason this doesn't have the intended outcome
+                # ref_anoms = ref_anoms - ref_anoms.mean()
                 year_months = loc_tmp.data + temp.data[i] + ref_anoms
                 monthly_series.append(year_months)
 
             monthly_series = np.array(monthly_series).flatten()
 
-            # 3. Create the new DataArray with the correct time axis
+            # 5. Create the new DataArray with the correct time axis
             temp = xr.DataArray(
                 monthly_series,
                 coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
@@ -687,24 +700,35 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                                 coords={'time': t, 'lon': temp.lon, 'lat': temp.lat},
                                 dims=('time',))
 
-        if realistic_scaling:
-            # 1. Compute reference monthly anomalies for precip
-            ref_monthly_anoms_pre = ds_ref.prcp.groupby('time.year').apply(
-                lambda x: x.groupby('time.month').mean().values - loc_pre.data
-            ).values  # shape: (N_ref_years, 12)
+        if variance_boost:
+            # 1. Compute reference monthly anomalies (subtract climatology from each month in ref period)
+            ref_monthly_anoms = ds_ref.prcp.resample(time='YS').apply(
+                lambda x: x.groupby('time.month').mean().values - loc_tmp.data
+            ).values  # shape: (N_ref_years * 12)
 
-            monthly_series_pre = []
-            for i in range(N_years):
-                ref_idx = rng.integers(0, ref_monthly_anoms_pre.shape[0])
-                ref_anoms_pre = ref_monthly_anoms_pre[ref_idx]
-                year_months_pre = loc_pre.data + precip.data[i] + ref_anoms_pre
-                monthly_series_pre.append(year_months_pre)
+            # 2. Compute annual means for reference and LMR
+            ref_annual_means = ds_ref.prcp.resample(time='YS').mean().values  # (N_ref_years,)
+            lmr_annual_anoms = precip.data  # (N_years,)
 
-            monthly_series_pre = np.array(monthly_series_pre).flatten()
-            monthly_series_pre = utils.clip_min(monthly_series_pre, 0)
+            # 3. Get ranks (as percentiles)
+            ref_ranks = np.argsort(np.argsort(ref_annual_means)) / (len(ref_annual_means) - 1)
+            lmr_ranks = np.argsort(np.argsort(lmr_annual_anoms)) / (len(lmr_annual_anoms) - 1)
+
+            # 4. For each LMR year, find the closest reference year in rank
+            monthly_series = []
+            for i, lmr_rank in enumerate(lmr_ranks):
+                ref_idx = np.argmin(np.abs(ref_ranks - lmr_rank))
+                ref_anoms = ref_monthly_anoms[ref_idx*12:ref_idx*12+12]
+                # Optionally demean to preserve annual mean
+                # For some reason this doesn't have the intended outcome
+                # ref_anoms = ref_anoms - ref_anoms.mean()
+                year_months = loc_tmp.data + precip.data[i] + ref_anoms
+                monthly_series.append(year_months)
+
+            monthly_series = np.array(monthly_series).flatten()
 
             precip = xr.DataArray(
-                monthly_series_pre,
+                monthly_series,
                 dims=('time',),
                 coords={'time': t, 'lon': temp.lon, 'lat': temp.lat}
             )
@@ -713,7 +737,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
             # this is a bit ridiculous. We clip to zero here to be sure
             precip = utils.clip_min((loc_pre.data + precip.data[:, np.newaxis]).flatten(), 0)
             precip = xr.DataArray(precip, dims=('time',),
-                                coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
+                                  coords={'time': t, 'lon': temp.lon, 'lat': temp.lat})
 
     process_gcm_data(gdir, output_filesuffix=output_filesuffix,
                      prcp=precip, temp=temp,
