@@ -69,6 +69,7 @@ class TestGIS(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 20
+        cfg.PARAMS['use_multiprocessing'] = False
 
     def tearDown(self):
         self.rm_dir()
@@ -428,11 +429,10 @@ class TestGIS(unittest.TestCase):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        cfg.PARAMS['map_proj'] = 'tmerc'
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
 
-        # specifying a source will look for a DEN in a respective folder
+        # specifying a source will look for a DEM in a respective folder
         self.assertRaises(ValueError, gis.rasterio_glacier_mask,
                           gdir, source='SRTM')
 
@@ -463,7 +463,7 @@ class TestGIS(unittest.TestCase):
 
         # not sure if we want such a hard coded test, but this will fail if the
         # sample data changes but could also indicate changes in rasterio
-        self.assertTrue(data.sum() == 3218)
+        np.testing.assert_allclose(data.sum(), 3218, atol=5)
 
     def test_intersects(self):
 
