@@ -984,7 +984,7 @@ class FlowlineModel(object):
             points with a minimum ice thickness are considered for the total
             area or the total volume. This is useful to smooth out yearly
             fluctuations when matching to observations. The names of this new
-            variables include the suffix _min_h (e.g. 'area_m2_min_h')
+            variables include the suffix _min_h (e.g. 'area_min_h_m2')
 
         Returns
         -------
@@ -1112,11 +1112,11 @@ class FlowlineModel(object):
 
         if 'area_min_h' in ovars:
             # filled with a value if dynamic_spinup_min_ice_thick is not None
-            diag_ds['area_m2_min_h'] = ('time', np.zeros(nm) * np.nan)
-            diag_ds['area_m2_min_h'].attrs['description'] = \
+            diag_ds['area_min_h_m2'] = ('time', np.zeros(nm) * np.nan)
+            diag_ds['area_min_h_m2'].attrs['description'] = \
                 f'Total glacier area of gridpoints with a minimum ice' \
                 f'thickness of {dynamic_spinup_min_ice_thick} m'
-            diag_ds['area_m2_min_h'].attrs['unit'] = 'm 2'
+            diag_ds['area_min_h_m2'].attrs['unit'] = 'm 2'
 
         if 'length' in ovars:
             diag_ds['length_m'] = ('time', np.zeros(nm) * np.nan)
@@ -1374,7 +1374,7 @@ class FlowlineModel(object):
             if 'volume_bwl' in ovars:
                 diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
             if 'area_min_h' in ovars:
-                diag_ds['area_m2_min_h'].data[i] = np.sum([np.sum(
+                diag_ds['area_min_h_m2'].data[i] = np.sum([np.sum(
                     fl.bin_area_m2[fl.thick > dynamic_spinup_min_ice_thick])
                     for fl in self.fls])
             # Terminus thick is a bit more logic

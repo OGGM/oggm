@@ -1133,7 +1133,7 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
     allowed_data_vars = ['volume_m3', 'volume_bsl_m3', 'volume_bwl_m3',
                          'volume_m3_min_h',  # only here for back compatibility
                          # as it is a variable in gdirs v1.6 2023.1
-                         'area_m2', 'area_m2_min_h', 'length_m', 'calving_m3',
+                         'area_m2', 'area_min_h_m2', 'length_m', 'calving_m3',
                          'calving_rate_myr', 'off_area',
                          'on_area', 'model_mb', 'is_fixed_geometry_spinup']
     for gi in range(10):
@@ -2401,7 +2401,7 @@ def extend_past_climate_run(past_run_file=None,
 
         # New vars
         for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_m2_min_h', 'length', 'calving', 'calving_rate']:
+                   'area', 'area_min_h_m2', 'length', 'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'

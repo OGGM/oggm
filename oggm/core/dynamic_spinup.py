@@ -436,7 +436,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
             if type(ds) == tuple:
                 ds = ds[0]
-            model_area_km2 = ds.area_m2_min_h.loc[target_yr].values * 1e-6
+            model_area_km2 = ds.area_min_h_m2.loc[target_yr].values * 1e-6
             model_volume_km3 = ds.volume_m3.loc[target_yr].values * 1e-9
         else:
             # only run to rgi date and extract values
