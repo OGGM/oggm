@@ -45,3 +45,4 @@ docs/_images
 docs/.doctrees
 oggm/version.py
 oggm/ignore
+ignore/
