@@ -101,7 +101,7 @@ def cook23_to_gdir(gdir, vars=['thk', 'divflux']):
             if vn in nc.variables:
                 v = nc.variables[vn]
             else:
-                v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+                v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
 
             if var == 'thk':
                 v.units = 'm'
@@ -111,7 +111,7 @@ def cook23_to_gdir(gdir, vars=['thk', 'divflux']):
                 v.long_name = 'Divergence of ice flux from Cook et al. 2023'
 
             v.data_source = url
-            v[:] = data
+            v[:] = data.astype(np.float32)
 
 
 @utils.entity_task(log)

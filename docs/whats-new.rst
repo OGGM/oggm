@@ -56,6 +56,10 @@ Enhancements
   in snowfall (:pull:`1791`).
   By `Fabien Maussion <https://github.com/fmaussion>`_ and
   `Patrick Schmitt <https://github.com/pat-schmitt>`_.
+- Flowlines shapefiles output now have more attributes and are easier to
+  use (:pull:`1786`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 Bug fixes
 ~~~~~~~~~
@@ -143,6 +147,10 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the rgi7g_to_complex task which adds a mask of glacier
   entities in the glacier complex glacier dirs (:pull:`1736`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- A new global task (`glathida.compile_glathida_on_grid`) is available to generate
+  big tables that can be used for e.g. ML workflows for ice thickness estimation
+  (:pull:`1782`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes

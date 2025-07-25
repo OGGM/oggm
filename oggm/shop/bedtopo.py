@@ -70,12 +70,12 @@ def add_consensus_thickness(gdir, base_url=None):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm'
         ln = 'Ice thickness from the consensus estimate'
         v.long_name = ln
         v.base_url = base_url
-        v[:] = thick
+        v[:] = thick.astype(np.float32)
 
 
 @utils.entity_task(log)
