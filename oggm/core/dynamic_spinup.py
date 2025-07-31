@@ -43,7 +43,8 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        store_model_evolution=True, ignore_errors=False,
                        return_t_spinup_best=False, ye=None,
                        model_flowline_filesuffix='',
-                       add_fixed_geometry_spinup=False, **kwargs):
+                       add_fixed_geometry_spinup=False, allow_calving=False,
+                       **kwargs):
     """Dynamically spinup the glacier to match area or volume at the RGI date.
 
     This task allows to do simulations in the recent past (before the glacier
@@ -195,6 +196,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         defined start year (could be defined through spinup_period or
         spinup_start_yr). Only has an effect if store_model_evolution is True.
         Default is False
+    allow_calving : bool
+        If True you can use the dynamic spinup with calving. So far this is not
+        tested and you need to know what you are doing when switching it on.
+        Default is False
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -301,8 +306,14 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                                  'dynamic spinup function!')
 
     if cfg.PARAMS['use_kcalving_for_run']:
-        raise InvalidParamsError('Dynamic spinup not tested with '
-                                 "cfg.PARAMS['use_kcalving_for_run'] is `True`!")
+        if allow_calving:
+            log.warning("You are using the dynamic spinup with calving, this "
+                        "is experimental and not tested!")
+        else:
+            raise InvalidParamsError('Dynamic spinup not tested with '
+                                     "cfg.PARAMS['use_kcalving_for_run'] is "
+                                     "`True`! If you know what you are doing "
+                                     "you can set allow_calving=True!')")
 
     # this function saves a model without conducting a dynamic spinup, but with
     # the provided output_filesuffix, so following tasks can find it.
