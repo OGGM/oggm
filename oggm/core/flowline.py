@@ -1035,18 +1035,17 @@ class FlowlineModel(object):
         if geom_path:
             self.to_geometry_netcdf(geom_path)
 
-        ny = len(yearly_time)
-        if ny == 1:
+        nm = len(monthly_time)
+        if nm == 1:
             yrs = [yrs]
             hyrs = [hyrs]
             months = [months]
             hmonths = [hmonths]
-        nm = len(monthly_time)
 
         if do_geom or do_fl_diag:
-            sects = [(np.zeros((ny, fl.nx)) * np.nan) for fl in self.fls]
-            widths = [(np.zeros((ny, fl.nx)) * np.nan) for fl in self.fls]
-            buckets = [np.zeros(ny) for _ in self.fls]
+            sects = [(np.zeros((nm, fl.nx)) * np.nan) for fl in self.fls]
+            widths = [(np.zeros((nm, fl.nx)) * np.nan) for fl in self.fls]
+            buckets = [np.zeros(nm) for _ in self.fls]
 
         # Diagnostics dataset
         diag_ds = xr.Dataset()
@@ -1173,8 +1172,17 @@ class FlowlineModel(object):
                         ds.attrs['mb_model_{}'.format(k)] = v
 
                 # Coordinates
-                ds.coords['time'] = yearly_time
-                ds['time'].attrs['description'] = 'Floating hydrological year'
+                ds.coords['time'] = ('time', monthly_time)
+                ds.coords['calendar_year'] = ('time', yrs)
+                ds.coords['calendar_month'] = ('time', months)
+                ds.coords['hydro_year'] = ('time', hyrs)
+                ds.coords['hydro_month'] = ('time', hmonths)
+
+                ds['time'].attrs['description'] = 'Floating year'
+                ds['calendar_year'].attrs['description'] = 'Calendar year'
+                ds['calendar_month'].attrs['description'] = 'Calendar month'
+                ds['hydro_year'].attrs['description'] = 'Hydrological year'
+                ds['hydro_month'].attrs['description'] = 'Hydrological month'
 
             # Variables and attributes
             ovars_fl = cfg.PARAMS['store_fl_diagnostic_variables']
@@ -1228,32 +1236,35 @@ class FlowlineModel(object):
                     if 'climatic_mb' not in ovars_fl:
                         ovars_fl.append('climatic_mb')
 
-                    ds['flux_divergence_myr'] = (('time', 'dis_along_flowline'),
+                    ds['flux_divergence'] = (('time', 'dis_along_flowline'),
                                                  width * np.nan)
                     desc = 'Ice-flux divergence'
-                    ds['flux_divergence_myr'].attrs['description'] = desc
-                    ds['flux_divergence_myr'].attrs['unit'] = 'm yr-1'
+                    ds['flux_divergence'].attrs['description'] = desc
+                    unit = 'm yr-1' if not store_monthly_step else 'm month-1'
+                    ds['flux_divergence'].attrs['unit'] = unit
                 if 'climatic_mb' in ovars_fl:
                     # We need dhdt to define where to calculate climatic_mb
                     if 'dhdt' not in ovars_fl:
                         ovars_fl.append('dhdt')
 
-                    ds['climatic_mb_myr'] = (('time', 'dis_along_flowline'),
+                    ds['climatic_mb'] = (('time', 'dis_along_flowline'),
                                              width * np.nan)
                     desc = 'Climatic mass balance forcing'
-                    ds['climatic_mb_myr'].attrs['description'] = desc
-                    ds['climatic_mb_myr'].attrs['unit'] = 'm yr-1'
+                    ds['climatic_mb'].attrs['description'] = desc
+                    unit = 'm yr-1' if not store_monthly_step else 'm month-1'
+                    ds['climatic_mb'].attrs['unit'] = unit
 
                     # needed for the calculation of mb at start of period
                     surface_h_previous = {}
                     for fl_id, fl in enumerate(self.fls):
                         surface_h_previous[fl_id] = fl.surface_h
                 if 'dhdt' in ovars_fl:
-                    ds['dhdt_myr'] = (('time', 'dis_along_flowline'),
+                    ds['dhdt'] = (('time', 'dis_along_flowline'),
                                       width * np.nan)
                     desc = 'Thickness change'
-                    ds['dhdt_myr'].attrs['description'] = desc
-                    ds['dhdt_myr'].attrs['unit'] = 'm yr-1'
+                    ds['dhdt'].attrs['description'] = desc
+                    unit = 'm yr-1' if not store_monthly_step else 'm month-1'
+                    ds['dhdt'].attrs['unit'] = unit
 
                     # needed for the calculation of dhdt
                     thickness_previous_dhdt = {}
@@ -1279,7 +1290,6 @@ class FlowlineModel(object):
             spinup_vol = np.cumsum(spinup_vol[::-1])[::-1]
 
         # Run
-        j = 0
         prev_state = None  # for the stopping criterion
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
 
@@ -1289,13 +1299,13 @@ class FlowlineModel(object):
                 self.run_until(yr)
 
             # Glacier geometry
-            if (do_geom or do_fl_diag) and mo == 1:
+            if do_geom or do_fl_diag:
                 for s, w, b, fl in zip(sects, widths, buckets, self.fls):
-                    s[j, :] = fl.section
-                    w[j, :] = fl.widths_m
+                    s[i, :] = fl.section
+                    w[i, :] = fl.widths_m
                     if self.is_tidewater:
                         try:
-                            b[j] = fl.calving_bucket_m3
+                            b[i] = fl.calving_bucket_m3
                         except AttributeError:
                             pass
 
@@ -1304,39 +1314,40 @@ class FlowlineModel(object):
                     for fl_id, (ds, fl) in enumerate(zip(fl_diag_dss, self.fls)):
                         # area and volume are already being taken care of above
                         if 'thickness' in ovars_fl:
-                            ds['thickness_m'].data[j, :] = fl.thick
+                            ds['thickness_m'].data[i, :] = fl.thick
                         if 'volume_bsl' in ovars_fl:
-                            ds['volume_bsl_m3'].data[j, :] = fl.volume_bsl_m3
+                            ds['volume_bsl_m3'].data[i, :] = fl.volume_bsl_m3
                         if 'volume_bwl' in ovars_fl:
-                            ds['volume_bwl_m3'].data[j, :] = fl.volume_bwl_m3
+                            ds['volume_bwl_m3'].data[i, :] = fl.volume_bwl_m3
                         if 'ice_velocity' in ovars_fl and (yr > self.y0):
                             # Velocity can only be computed with dynamics
                             var = self.u_stag[fl_id]
                             val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2 * self._surf_vel_fac
-                            ds['ice_velocity_myr'].data[j, :] = val * cfg.SEC_IN_YEAR
+                            ds['ice_velocity_myr'].data[i, :] = val * cfg.SEC_IN_YEAR
                         if 'dhdt' in ovars_fl and (yr > self.y0):
-                            # dhdt can only be computed after one year
+                            # dhdt can only be computed after one step
                             val = fl.thick - thickness_previous_dhdt[fl_id]
-                            ds['dhdt_myr'].data[j, :] = val
+                            ds['dhdt'].data[i, :] = val
                             thickness_previous_dhdt[fl_id] = fl.thick
                         if 'climatic_mb' in ovars_fl and (yr > self.y0):
                             # yr - 1 to use the mb which lead to the current
                             # state, also using previous surface height
                             val = self.get_mb(surface_h_previous[fl_id],
-                                              self.yr - 1,
+                                              monthly_time[i-1],
                                               fl_id=fl_id)
                             # only save climatic mb where dhdt is non zero,
                             # isclose for avoiding numeric represention artefacts
-                            dhdt_zero = np.isclose(ds['dhdt_myr'].data[j, :],
+                            dhdt_zero = np.isclose(ds['dhdt'].data[i, :],
                                                    0.)
-                            ds['climatic_mb_myr'].data[j, :] = np.where(
+                            fac_sec = cfg.SEC_IN_MONTH if store_monthly_step else cfg.SEC_IN_YEAR
+                            ds['climatic_mb'].data[i, :] = np.where(
                                 dhdt_zero,
                                 0.,
-                                val * cfg.SEC_IN_YEAR)
+                                val * fac_sec)
                             surface_h_previous[fl_id] = fl.surface_h
                         if 'flux_divergence' in ovars_fl and (yr > self.y0):
                             # calculated after the formula dhdt = mb + flux_div
-                            val = ds['dhdt_myr'].data[j, :] - ds['climatic_mb_myr'].data[j, :]
+                            val = ds['dhdt'].data[i, :] - ds['climatic_mb'].data[i, :]
                             # special treatment for retreating: If the glacier
                             # terminus is getting ice free it means the
                             # climatic mass balance is more negative than the
@@ -1349,14 +1360,10 @@ class FlowlineModel(object):
                             # with an (arbitrary) factor of 0.1.
                             has_become_ice_free = np.logical_and(
                                 np.isclose(fl.thick, 0.),
-                                ds['dhdt_myr'].data[j, :] < 0.
+                                ds['dhdt'].data[i, :] < 0.
                             )
                             fac = np.where(has_become_ice_free, 0.1, 1.)
-                            ds['flux_divergence_myr'].data[j, :] = val * fac
-
-                # j is the yearly index in case we have monthly output
-                # we have to count it ourselves
-                j += 1
+                            ds['flux_divergence'].data[i, :] = val * fac
 
             # Diagnostics
             if 'volume' in ovars:
@@ -1412,10 +1419,10 @@ class FlowlineModel(object):
                     if np.isscalar(v) and not k.startswith('_'):
                         ds.attrs['mb_model_{}'.format(k)] = v
 
-                ds.coords['time'] = yearly_time
+                ds.coords['time'] = monthly_time
                 ds['time'].attrs['description'] = 'Floating hydrological year'
-                varcoords = OrderedDict(time=('time', yearly_time),
-                                        year=('time', yearly_time))
+                varcoords = OrderedDict(time=('time', monthly_time),
+                                        year=('time', yrs))
                 ds['ts_section'] = xr.DataArray(s, dims=('time', 'x'),
                                                 coords=varcoords)
                 ds['ts_width_m'] = xr.DataArray(w, dims=('time', 'x'),
