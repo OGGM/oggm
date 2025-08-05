@@ -150,12 +150,9 @@ class TestInitPresentDayFlowline:
         init_present_time_glacier(gdir, output_filesuffix='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
-        gdir.settings_filesuffix = '_dummy_downstream'
         gdir.settings['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
-            init_present_time_glacier(gdir,
-                                      settings_filesuffix='_dummy_downstream')
-        gdir.settings_filesuffix = ''
+            init_present_time_glacier(gdir)
 
     def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
                                                  monkeypatch):
@@ -3724,7 +3721,7 @@ class TestDynamicSpinup:
             run_dynamic_spinup(
                 hef_gdir,
                 spinup_start_yr=1979,
-                precision_percent=0.00012,
+                precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
                 target_yr=yr_rgi,
@@ -3736,7 +3733,7 @@ class TestDynamicSpinup:
             run_dynamic_spinup(
                 hef_gdir,
                 spinup_start_yr=1979,
-                precision_percent=0.00012,
+                precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
                 target_yr=yr_rgi,

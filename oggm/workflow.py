@@ -510,13 +510,16 @@ def gis_prepro_tasks(gdirs):
 
 
 @global_task(log)
-def climate_tasks(gdirs, settings_filesuffix='',
+def climate_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
                   overwrite_gdir=False, override_missing=None):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    input_filesuffix: str
+        the filesuffix of the input inversion flowlines which should be used
+        (useful for conducting multiple experiments in the same gdir)
     """
 
     # Process climate data
@@ -528,7 +531,8 @@ def climate_tasks(gdirs, settings_filesuffix='',
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir)
     execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
-                        settings_filesuffix=settings_filesuffix)
+                        settings_filesuffix=settings_filesuffix,
+                        input_filesuffix=input_filesuffix,)
 
 
 @global_task(log)

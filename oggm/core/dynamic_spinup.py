@@ -1195,8 +1195,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                 filter_inversion_output=True,
                 volume_m3_reference=local_variables['vol_m3_ref'],
                 add_to_log_file=False)
-
+    model_flowline_filesuffix = f'{model_flowline_filesuffix}_dyn_melt_f_calib'
     init_present_time_glacier(gdir, settings_filesuffix=settings_filesuffix,
+                              output_filesuffix=model_flowline_filesuffix,
                               add_to_log_file=False)
 
     # Now do a dynamic spinup to match area
