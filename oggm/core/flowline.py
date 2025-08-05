@@ -3115,6 +3115,7 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
 
     map_dx = gdir.grid.dx
     def_lambda = gdir.settings['trapezoid_lambdas']
+
     cls = gdir.read_pickle('inversion_flowlines',
                            filesuffix=input_filesuffix)
 
