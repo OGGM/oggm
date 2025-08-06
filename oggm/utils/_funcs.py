@@ -9,7 +9,7 @@ import logging
 import warnings
 import shutil
 from packaging.version import Version
-
+import calendar
 # External libs
 import pandas as pd
 import numpy as np
@@ -25,6 +25,7 @@ except AttributeError:
     # Old scipy
     from scipy.signal import gaussian
 from scipy.interpolate import interp1d
+import cftime
 import shapely.geometry as shpg
 from shapely.ops import linemerge
 from shapely.validation import make_valid
@@ -411,6 +412,24 @@ def weighted_average_1d(data, weights):
         raise ZeroDivisionError("Weights sum to zero, can't be normalized")
     return np.multiply(data, weights).sum() / scl
 
+def weighted_average_2d(data, weights):
+    """A faster weighted average without dimension checks.
+
+    Parameters
+    ----------
+    data : ArrayLike
+        Must be of shape (n, m).
+    weights : ArrayLike
+        Must be of shape (n, ).
+
+    We use it because it turned out to be quite a bottleneck in calibration.
+    """
+    scl = np.sum(weights, axis=0)
+    if scl == 0:
+        raise ZeroDivisionError(
+            "Weights sum to zero, can't be normalized")
+    # can't broadcast operands unless transposed
+    return np.multiply(np.transpose(data), weights).sum(axis=1) / scl
 
 if Version(np.__version__) < Version('1.17'):
     clip_array = np.clip
@@ -829,6 +848,127 @@ def calendardate_to_hydrodate(y, m, start_month=None):
     return out_y, out_m
 
 
+def calendardate_to_hydrodate_cftime(
+    dates: np.ndarray, start_month: int
+) -> np.ndarray:
+    """Converts an array of Julian datetimes to hydrological dates.
+
+    The offset is calculated based on days, so cftime automatically
+    adjusts for different month/year lengths. Beware that a converted
+    time series may not necessarily end on the last day of a month.
+
+    Parameters
+    ----------
+    dates : np.ndarray[cftime.datetime]
+        Julian datetimes.
+    start_month : int
+        The first month of the hydrological/water year.
+
+    Returns
+    -------
+    np.ndarray[cftime.datetime]
+        Dates following the hydrological/water calendar.
+    """
+
+    julian_year_start = int(dates[0].year)
+    julian_month_start = int(dates[0].month)
+
+    if start_month == 1:
+        return dates  # no need to convert if year matches
+
+    if not start_month:
+        raise InvalidParamsError(
+            "Specify the hydrological convention using the start month."
+        )
+    else:
+        hydro_year_start = julian_year_start
+        month_difference = julian_month_start - start_month
+        if month_difference >= 0:
+            hydro_month_start = 1 + month_difference
+        else:
+            hydro_year_start = julian_year_start - 1
+            hydro_month_start = 13 + month_difference
+
+    if start_month != 1:  # no need to convert if year start matches.
+        offset = cftime.datetime(hydro_year_start, hydro_month_start, 1)
+        timedelta = dates[0] - offset
+        dates = np.vectorize(lambda x: x - timedelta)(dates)
+
+    return dates
+
+
+def hydrodate_to_calendardate_cftime(
+    dates: np.ndarray, start_month: int
+) -> np.ndarray:
+    """Converts an array of hydrological datetimes to Julian dates.
+
+    The offset is calculated based on days, so cftime automatically
+    adjusts for different month/year lengths. Beware that a converted
+    time series may not necessarily end on the last day of a month.
+
+    Parameters
+    ----------
+    dates : np.ndarray[cftime.datetime]
+        Hydrological dates.
+    start_month : int
+        The first month of the hydrological/water year.
+
+    Returns
+    -------
+    np.ndarray[cftime.datetime]
+        Dates following the Julian calendar.
+    """
+
+    hydro_year_start = int(dates[0].year)
+    hydro_month_start = int(dates[0].month)
+
+    if not start_month:
+        raise InvalidParamsError(
+            "Specify the hydrological convention using the start month."
+        )
+    elif start_month == 1:
+        return dates  # no need to convert if year matches
+    else:
+        julian_year_start = hydro_year_start
+        month_difference = start_month + hydro_month_start
+        if month_difference > 13:
+            julian_year_start = hydro_year_start + 1
+            julian_month_start = month_difference - 13
+        else:
+            julian_month_start = month_difference - 1
+
+    if start_month != 1:  # no need to convert if year start matches.
+        offset = cftime.datetime(julian_year_start, julian_month_start, 1)
+        timedelta = offset - dates[0]
+        dates = np.vectorize(lambda x: x + timedelta)(dates)
+
+    return dates
+
+
+def get_total_days(first_year: int, last_year: int) -> int:
+    """Get the total number of days across two years.
+
+    Parameters
+    ----------
+    first_year : int
+        First year in period.
+    last_year : int
+        Last year in period. This year is included in the total number
+        of days.
+
+    Returns
+    -------
+    int
+        The total number of days across two years, including the last
+        year, i.e. the period <first_year>-01-01 to <last_year>-12-31.
+    """
+    total_days = (1 + last_year - first_year) * 365 + calendar.leapdays(
+        first_year, last_year
+    )
+
+    return total_days
+
+
 def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     """Creates a monthly timeseries in units of float years.
 
@@ -1028,3 +1168,21 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
             cooked_rgidf[val] = gi_gdf[key].values
 
     return cooked_rgidf
+
+
+def get_cropped_dataset(
+    dataset: xr.Dataset, latitude: float, longitude: float
+) -> xr.Dataset:
+    """Get dataset cropped to glacier extents."""
+    try:
+        c = (dataset.longitude - longitude) ** 2 + (
+            dataset.latitude - latitude
+        ) ** 2
+        dataset = dataset.isel(points=np.argmin(c.data))
+    except ValueError:
+        # this should not occur for flattened data
+        dataset = dataset.sel(
+            longitude=longitude, latitude=latitude, method="nearest"
+        )
+
+    return dataset
