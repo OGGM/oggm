@@ -693,6 +693,7 @@ class TestGdirSettings:
         # ERA5 only available until 2018
         #custom_settings['geodetic_mb_period'] = '2000-01-01_2018-01-01'
         workflow.climate_tasks(gdirs, settings_filesuffix='_adapted_baseline',
+                               input_filesuffix='',
                                override_missing='-1000')
         # Now it should be W5E5
         assert gdir.get_climate_info()['baseline_climate_source'] == 'ERA5'
@@ -822,6 +823,7 @@ class TestGdirSettings:
         custom_settings['melt_f'] = gdir.settings['melt_f'] * 1.1
         massbalance.apparent_mb_from_any_mb(gdir,
                                             settings_filesuffix='_large_melt_f',
+                                            input_filesuffix='',
                                             output_filesuffix='_large_melt_f',)
         workflow.calibrate_inversion_from_consensus(
             gdirs, settings_filesuffix='_large_melt_f',
