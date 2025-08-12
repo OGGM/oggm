@@ -1775,7 +1775,7 @@ class TestClimate(unittest.TestCase):
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ref_mb.mean()
         ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb, ref_period=ref_period)
+        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb, ref_mb_period=ref_period)
         mb_new = massbalance.MonthlyTIModel(gdir)
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -1799,7 +1799,7 @@ class TestClimate(unittest.TestCase):
         gdir.write_pickle(fls, 'inversion_flowlines')
 
         mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
-                                        ref_period=ref_period)
+                                      ref_mb_period=ref_period)
         mb_new = massbalance.MultipleFlowlineMassBalance(gdir,
                                                          use_inversion_flowlines=True)
 
