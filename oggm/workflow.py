@@ -526,7 +526,7 @@ def climate_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
     execute_entity_task(tasks.process_climate_data, gdirs,
                         settings_filesuffix=settings_filesuffix)
     # mass balance and the apparent mass balance
-    execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+    execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
                         settings_filesuffix=settings_filesuffix,
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir)

@@ -641,18 +641,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             mb_calibration_strategy = mb_calibration_strategy.replace('_regional', '')
 
         if mb_calibration_strategy == 'informed_threestep':
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                          gdirs,
                                          informed_threestep=True,
                                          use_regional_avg=use_regional_avg)
         elif mb_calibration_strategy == 'melt_temp':
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias',
                                          use_regional_avg=use_regional_avg)
         elif mb_calibration_strategy == 'temp_melt':
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                          gdirs,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f',

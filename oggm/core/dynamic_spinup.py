@@ -1706,9 +1706,10 @@ def dynamic_melt_f_run_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def run_dynamic_melt_f_calibration(
-        gdir, settings_filesuffix='', input_filesuffix=None,
-        ref_dmdtda=None, err_ref_dmdtda=None, err_dmdtda_scaling_factor=1,
-        ref_period='', melt_f_min=None,
+        gdir, settings_filesuffix='', observations_filesuffix='',
+        overwrite_observations=False,
+        ref_mb=None, ref_mb_err=None, ref_mb_err_scaling_factor=1,
+        ref_mb_period=None, melt_f_min=None,
         melt_f_max=None, melt_f_max_step_length_minimum=0.1, maxiter=20,
         ignore_errors=False, output_filesuffix=None,
         model_flowline_filesuffix=None,
@@ -1726,13 +1727,14 @@ def run_dynamic_melt_f_calibration(
     mass balance. How one model run looks like is defined in the 'run_function'.
     This function should take a new melt_f guess, conducts a dynamic run and
     calculate the geodetic mass balance. The goal is to match the geodetic mass
-    blanance 'ref_dmdtda' inside the provided error 'err_ref_dmdtda'. If the
-    minimisation of the mismatch between the provided and modeled geodetic mass
-    balance is not working the 'fallback_function' is called. In there it is
-    decided what run should be conducted in such a failing case. Further if
-    'ignore_error' is set to True and we could not find a satisfying mismatch
-    the best run so far is saved (if not one successful run with 'run_function'
-    the 'fallback_function' is called).
+    blanance 'ref_mb' inside the provided error 'ref_mb_err' (by default the
+    values from Hugonnet are used). If the minimisation of the mismatch between
+    the provided and modeled geodetic mass balance is not working the
+    'fallback_function' is called. In there it is decided what run should be
+    conducted in such a failing case. Further if 'ignore_error' is set to True
+    and we could not find a satisfying mismatch the best run so far is saved
+    (if not one successful run with 'run_function' the 'fallback_function' is
+    called).
 
     Parameters
     ----------
@@ -1742,21 +1744,28 @@ def run_dynamic_melt_f_calibration(
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments. Code-wise the settings_filesuffix
         is set in the @entity-task decorater.
-    ref_dmdtda : float or None
+    observations_filesuffix: str
+        The observations filesuffix, from where the reference calibration data
+        'ref_mb' should be used. Code-wise the observations_filesuffix is set in
+        the @entity-task decorater.
+    overwrite_observations : bool
+        If you want to overwrite already existing observation values in the
+        provided observations file set this to True. Default is False.
+    ref_mb : float or None
         The reference geodetic mass balance to match (units: kg m-2 yr-1). If
         None the data from Hugonnet 2021 is used.
         Default is None
-    err_ref_dmdtda : float or None
+    ref_mb_err : float or None
         The error of the reference geodetic mass balance to match (unit: kg m-2
         yr-1). Must always be a positive number. If None the data from Hugonett
         2021 is used.
         Default is None
-    err_dmdtda_scaling_factor : float
+    ref_mb_err_scaling_factor : float
         The error of the geodetic mass balance is multiplied by this factor.
         When looking at more glaciers you should set this factor smaller than
         1 (Default), but the smaller this factor the more glaciers will fail
-        during calibration. The factor is only used if ref_dmdtda = None and
-        err_ref_dmdtda = None.
+        during calibration. The factor is only used if ref_mb = None and
+        ref_mb_err = None.
         The idea is that we reduce the uncertainty of individual observations
         to count for correlated uncertainties when looking at regional or
         global scales. If err_scaling_factor is 1 (Default) and you look at the
@@ -1765,9 +1774,9 @@ def run_dynamic_melt_f_calibration(
         boundaries given in Hugonett 2021 e.g. for the global estimate, because
         some correlation of the individual errors is assumed during aggregation
         of glaciers to regions (for more details see paper Hugonett 2021).
-    ref_period : str
-        If ref_dmdtda is None one of '2000-01-01_2010-01-01',
-        '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
+    ref_mb_period : str
+        If ref_mb is None one of '2000-01-01_2010-01-01',
+        '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_mb is
         set, this should still match the same format but can be any date.
         Default is '' (-> PARAMS['geodetic_mb_period'])
     melt_f_min : float or None
@@ -1876,34 +1885,86 @@ def run_dynamic_melt_f_calibration(
         kwargs_fallback_function = {}
 
     # geodetic mb stuff
-    if not ref_period:
-        ref_period = gdir.settings['geodetic_mb_period']
+    # handle which ref mb to use (default or provided via kwargs or
+    # in observations file)
+    ref_mb_provided = {}
+    if ref_mb is not None:
+        ref_mb_provided['value'] = ref_mb
+    if ref_mb_err is not None:
+        ref_mb_provided['err'] = ref_mb_err
+    if ref_mb_period is not None:
+        ref_mb_provided['period'] = ref_mb_period
+
+    if 'ref_mb' in gdir.observations.data:
+        ref_mb_in_file = gdir.observations['ref_mb']
+    else:
+        ref_mb_in_file = None
+
+    # if nothing is provided use hugonnet
+    if (ref_mb_provided == {}) and (ref_mb_in_file is None):
+        if not ref_mb_period:
+            ref_mb_period = gdir.settings['geodetic_mb_period']
+        df_ref_mb = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+        sel = df_ref_mb.loc[df_ref_mb['period'] == ref_mb_period].iloc[0]
+        # reference geodetic mass balance from Hugonnet 2021
+        ref_mb = float(sel['dmdtda'])
+        # dmdtda: in meters water-equivalent per year -> we convert
+        ref_mb *= 1000  # kg m-2 yr-1
+        # error of reference geodetic mass balance from Hugonnet 2021
+        ref_mb_err = float(sel['err_dmdtda'])
+        ref_mb_err *= 1000  # kg m-2 yr-1
+        ref_mb_err *= ref_mb_err_scaling_factor
+        ref_mb_use = {
+            'value': ref_mb,
+            'period': ref_mb_period,
+            'err': ref_mb_err,
+        }
+
+    # if nothing in file, or if we should overwrite the file
+    elif (ref_mb_in_file is None) or (ref_mb_in_file is not None and
+                                      overwrite_observations):
+        ref_mb_use = ref_mb_provided
+
+    # only in file
+    elif ref_mb_in_file is not None and ref_mb_provided == {}:
+        ref_mb_use = ref_mb_in_file
+
+    # provided in file and as kwarg
+    else:
+        # if the provided is the same as the one stored in the file it is fine
+        if ref_mb_in_file != ref_mb_provided:
+            raise InvalidWorkflowError(
+                'You provided a reference mass balance, but their is already '
+                'one stored in the current observation file '
+                f'({os.path.basename(gdir.observations.path)}). If you want to '
+                'overwrite set overwrite_observations = True.')
+        else:
+            ref_mb_use = ref_mb_in_file
+
+    gdir.observations['ref_mb'] = ref_mb_use
+
+    # now we can extract the actual values we want to use
+    if 'value' in ref_mb_use:
+        ref_mb = ref_mb_use['value']
+    if 'err' in ref_mb_use:
+        ref_mb_err = ref_mb_use['err']
+    if 'period' in ref_mb_use:
+        ref_mb_period = ref_mb_use['period']
+
     # if a reference geodetic mb is specified also the error of it must be
     # specified, and vice versa
-    if ((ref_dmdtda is None and err_ref_dmdtda is not None) or
-            (ref_dmdtda is not None and err_ref_dmdtda is None)):
+    if ((ref_mb is None and ref_mb_err is not None) or
+            (ref_mb is not None and ref_mb_err is None)):
         raise RuntimeError('If you provide a reference geodetic mass balance '
-                           '(ref_dmdtda) you must also provide an error for it '
-                           '(err_ref_dmdtda), and vice versa!')
-    # Get the reference geodetic mb and error if not given
-    if ref_dmdtda is None:
-        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
-        # reference geodetic mass balance from Hugonnet 2021
-        ref_dmdtda = float(sel['dmdtda'])
-        # dmdtda: in meters water-equivalent per year -> we convert
-        ref_dmdtda *= 1000  # kg m-2 yr-1
-        # error of reference geodetic mass balance from Hugonnet 2021
-        err_ref_dmdtda = float(sel['err_dmdtda'])
-        err_ref_dmdtda *= 1000  # kg m-2 yr-1
-        err_ref_dmdtda *= err_dmdtda_scaling_factor
+                           '(ref_mb) you must also provide an error for it '
+                           '(ref_mb_err), and vice versa!')
 
-    if err_ref_dmdtda <= 0:
+    if ref_mb_err <= 0:
         raise RuntimeError('The provided error for the geodetic mass-balance '
-                           '(err_ref_dmdtda) must be positive and non zero! But'
-                           f'given was {err_ref_dmdtda}!')
+                           '(ref_mb_err) must be positive and non zero! But '
+                           f'given was {ref_mb_err}!')
     # get start and end year of geodetic mb
-    yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
+    yr0_ref_mb, yr1_ref_mb = ref_mb_period.split('_')
     yr0_ref_mb = int(yr0_ref_mb.split('-')[0])
     yr1_ref_mb = int(yr1_ref_mb.split('-')[0])
 
@@ -2017,10 +2078,10 @@ def run_dynamic_melt_f_calibration(
             # some dianostics for later
             diag_dyn_melt = {
                 'dmdtda_mismatch_dynamic_calibration_reference':
-                    float(ref_dmdtda),
-                'dmdtda_dynamic_calibration_given_error': float(err_ref_dmdtda),
+                    float(ref_mb),
+                'dmdtda_dynamic_calibration_given_error': float(ref_mb_err),
                 'dmdtda_dynamic_calibration_error_scaling_factor':
-                    float(err_dmdtda_scaling_factor),
+                    float(ref_mb_err_scaling_factor),
                 'dmdtda_mismatch_dynamic_calibration': float(best_mismatch),
                 'dmdtda_mismatch_with_initial_melt_f': float(initial_mismatch),
                 'melt_f_dynamic_calibration': float(melt_f),
@@ -2075,7 +2136,7 @@ def run_dynamic_melt_f_calibration(
         model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
 
         # calculate the mismatch of dmdtda
-        cost = float(dmdtda_mdl - ref_dmdtda)
+        cost = float(dmdtda_mdl - ref_mb)
 
         return cost
 
@@ -2255,26 +2316,26 @@ def run_dynamic_melt_f_calibration(
         melt_f_guess.append(new_melt_f)
         mismatch.append(new_mismatch)
 
-        if abs(mismatch[-1]) < err_ref_dmdtda:
+        if abs(mismatch[-1]) < ref_mb_err:
             return mismatch[-1], new_melt_f
 
         # second (arbitrary) guess is given depending on the outcome of first
         # guess, melt_f is changed for percent of mismatch relative to
-        # err_ref_dmdtda times melt_f_max_step_length (if
-        # mismatch = 2 * err_ref_dmdtda this corresponds to 100%; for 100% or
+        # ref_mb_err times melt_f_max_step_length (if
+        # mismatch = 2 * ref_mb_err this corresponds to 100%; for 100% or
         # 150% the next step is (-1) * melt_f_max_step_length; if mismatch
         # -40%, next step is 0.4 * melt_f_max_step_length; but always at least
         # an absolute change of 0.02 is imposed to prevent too close guesses).
         # (-1) as if mismatch is negative we need a larger melt_f to get closer
         # to 0.
         step = (-1) * np.sign(mismatch[-1]) * \
-            max((np.abs(mismatch[-1]) - err_ref_dmdtda) / err_ref_dmdtda *
+            max((np.abs(mismatch[-1]) - ref_mb_err) / ref_mb_err *
                 melt_f_max_step_length, 0.02)
         new_mismatch, new_melt_f = get_mismatch(melt_f_guess[0] + step)
         melt_f_guess.append(new_melt_f)
         mismatch.append(new_mismatch)
 
-        if abs(mismatch[-1]) < err_ref_dmdtda:
+        if abs(mismatch[-1]) < ref_mb_err:
             return mismatch[-1], new_melt_f
 
         # Now start with splin fit for guessing
@@ -2304,13 +2365,13 @@ def run_dynamic_melt_f_calibration(
             melt_f_guess.append(new_melt_f)
             mismatch.append(new_mismatch)
 
-            if abs(mismatch[-1]) < err_ref_dmdtda:
+            if abs(mismatch[-1]) < ref_mb_err:
                 return mismatch[-1], new_melt_f
 
         # Ok when we end here the spinup could not find satisfying match after
         # maxiter(ations)
         raise RuntimeError(f'Could not find mismatch smaller '
-                           f'{err_ref_dmdtda} kg m-2 yr-1 (only '
+                           f'{ref_mb_err} kg m-2 yr-1 (only '
                            f'{np.min(np.abs(mismatch))} kg m-2 yr-1) in '
                            f'{maxiter} Iterations!')
 
@@ -2381,10 +2442,10 @@ def run_dynamic_melt_f_calibration(
     # hurray, dynamic melt_f calibration successful
     diag_dyn_melt = {
         'used_spinup_option': 'dynamic melt_f calibration (full success)',
-        'dmdtda_mismatch_dynamic_calibration_reference': float(ref_dmdtda),
-        'dmdtda_dynamic_calibration_given_error': float(err_ref_dmdtda),
+        'dmdtda_mismatch_dynamic_calibration_reference': float(ref_mb),
+        'dmdtda_dynamic_calibration_given_error': float(ref_mb_err),
         'dmdtda_dynamic_calibration_error_scaling_factor':
-            float(err_dmdtda_scaling_factor),
+            float(ref_mb_err_scaling_factor),
         'dmdtda_mismatch_dynamic_calibration': float(final_mismatch),
         'dmdtda_mismatch_with_initial_melt_f': float(mismatch_dmdtda[0]),
         'melt_f_dynamic_calibration': float(final_melt_f),

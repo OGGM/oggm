@@ -1011,6 +1011,8 @@ class TestElevationBandFlowlines(unittest.TestCase):
             assert ds.volume_m3[-1] < ds.volume_m3[0]
             assert ds.length_m[-1] < ds.length_m[0]
 
+        assert 'ref_mb' in gdir.observations.data
+
 
 class TestGeometry(unittest.TestCase):
 
@@ -2431,7 +2433,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.mb_calibration_from_hugonnet_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -2490,7 +2492,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.mb_calibration_from_hugonnet_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
         inversion.find_inversion_calving_from_any_mb(gdir)
 

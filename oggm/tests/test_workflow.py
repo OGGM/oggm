@@ -614,7 +614,7 @@ class TestGdirSettings:
         settings_informed_threestep['use_winter_prcp_fac'] = True
         settings_informed_threestep['baseline_climate'] = 'W5E5'
 
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                      gdirs,
                                      overwrite_gdir=True,
                                      informed_threestep=True,
@@ -632,7 +632,7 @@ class TestGdirSettings:
 
         # recalibration without overwrite_gdir should raise an error
         with pytest.raises(InvalidWorkflowError):
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                          gdirs,
                                          overwrite_gdir=False,
                                          informed_threestep=True,
@@ -858,7 +858,7 @@ class TestGdirSettings:
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.mb_calibration_from_hugonnet_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -883,3 +883,111 @@ class TestGdirSettings:
         assert v_ref < v_new
         res_aft = custom_settings['apparent_mb_from_any_mb_residual']
         assert res_aft > res_bef
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestGdirObservations:
+
+    @pytest.mark.slow
+    def test_observations_ref_mb(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
+        gdir = gdirs[0]
+        mb_calib_cluster = gdirs[0].read_json('mb_calib')
+
+        settings_informed_threestep = ModelSettings(gdir,
+                                                    filesuffix='_informed_threestep')
+        settings_informed_threestep['use_temp_bias_from_file'] = True
+        settings_informed_threestep['use_winter_prcp_fac'] = True
+        settings_informed_threestep['baseline_climate'] = 'W5E5'
+        assert 'ref_mb' not in gdir.observations.data
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     informed_threestep=True,
+                                     settings_filesuffix='_informed_threestep',
+                                     )
+        # check that observation was added to the observation files and that the
+        # result is the same as the previous implementation
+        assert 'ref_mb' in gdir.observations.data
+        mb_calib_threestep = gdirs[0].read_yml('settings',
+                                               '_informed_threestep')
+        assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        assert_allclose(mb_calib_cluster['prcp_fac'],
+                        mb_calib_threestep['prcp_fac'],
+                        atol=1e-3)
+        assert_allclose(mb_calib_cluster['temp_bias'],
+                        mb_calib_threestep['temp_bias'],
+                        atol=1e-3)
+        # use slightly different observation from hugonnet for sensitivity test
+        hugonnet_adapted = gdir.observations['ref_mb']
+        hugonnet_adapted['value'] = (hugonnet_adapted['value'] +
+                                     hugonnet_adapted['err'] / 2)
+        gdir.observations_filesuffix = '_hugonnet_adapted'
+        gdir.observations['ref_mb'] = hugonnet_adapted
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     informed_threestep=True,
+                                     settings_filesuffix='_informed_threestep',
+                                     observations_filesuffix='_hugonnet_adapted',
+                                     use_observations_file=True,
+                                     )
+        mb_calib_hugonnet_adapted = gdirs[0].read_yml('settings',
+                                                      '_informed_threestep')
+        # with a less negative geodetic mass balance we need more mass input,
+        # with the same melt_f
+        assert mb_calib_threestep['melt_f'] == mb_calib_hugonnet_adapted['melt_f']
+        assert mb_calib_threestep['prcp_fac'] < mb_calib_hugonnet_adapted['prcp_fac']
+
+        # set back to default for the following tests
+        gdir.observations_filesuffix = ''
+
+        # different combinations of providing observation in file and as kwarg
+        ref_mb = gdir.observations['ref_mb']['value']
+        ref_mb_err = gdir.observations['ref_mb']['err']
+        ref_mb_period = gdir.observations['ref_mb']['period']
+        # provided and file observations the same without overwriting should work
+        tasks.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='', overwrite_observations=False,
+            ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+            ref_mb_period=ref_mb_period, ref_mb_years=None,
+            write_to_gdir=False,
+        )
+        # providing different in file and kwargs should raise
+        with pytest.raises(InvalidWorkflowError) as exc_info:
+            tasks.mb_calibration_from_scalar_mb(
+                gdir, observations_filesuffix='', overwrite_observations=False,
+                ref_mb=ref_mb-100, ref_mb_err=ref_mb_err,
+                ref_mb_period=ref_mb_period, ref_mb_years=None,
+                write_to_gdir=False,
+            )
+        assert 'You provided a reference mass balance, but' in str(exc_info.value)
+        # but is allowed when overwrite is True
+        tasks.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='', overwrite_observations=True,
+            ref_mb=ref_mb-100, ref_mb_err=ref_mb_err,
+            ref_mb_period=ref_mb_period, ref_mb_years=None,
+            write_to_gdir=False,
+        )
+        assert ref_mb - gdir.observations['ref_mb']['value'] == 100
+        # use an empty observations file and provide through kwargs
+        tasks.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='_empty', overwrite_observations=False,
+            ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+            ref_mb_period=ref_mb_period, ref_mb_years=None,
+            write_to_gdir=False,
+        )
+        assert 'ref_mb' in gdir.observations.data
+        # provide nothing should raise
+        with pytest.raises(InvalidWorkflowError) as exc_info:
+            tasks.mb_calibration_from_scalar_mb(
+                gdir, observations_filesuffix='empty2',
+                overwrite_observations=False,
+                ref_mb=None, ref_mb_err=None,
+                ref_mb_period=None, ref_mb_years=None,
+                write_to_gdir=False,
+            )
+        assert 'You have not provided an reference' in str(exc_info.value)
