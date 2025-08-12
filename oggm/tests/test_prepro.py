@@ -1440,10 +1440,16 @@ class TestClimate(unittest.TestCase):
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
         ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
+        # this function cleanes the observations file before each test
+        def reset_observation_file(gdir):
+            gdir.observations.data.pop('ref_mb', None)
+            gdir.observations._save()
+
         # Default is to calibrate melt_f
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period)
+                                      ref_mb_period=ref_period)
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1461,9 +1467,10 @@ class TestClimate(unittest.TestCase):
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
 
         # Let's calibrate on temp_bias
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param1='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1481,9 +1488,10 @@ class TestClimate(unittest.TestCase):
         assert pdf['prcp_fac'] == cfg.PARAMS['prcp_fac']
 
         # Let's calibrate on precip
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param1='prcp_fac')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1507,12 +1515,14 @@ class TestClimate(unittest.TestCase):
         # Very positive
         ref_mb = 2000
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period)
+                                          ref_mb_period=ref_period)
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1533,12 +1543,14 @@ class TestClimate(unittest.TestCase):
         # Very negative
         ref_mb = -10000
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period)
+                                          ref_mb_period=ref_period)
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1560,13 +1572,15 @@ class TestClimate(unittest.TestCase):
         # Very positive
         ref_mb = 3000
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac')
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias')
 
@@ -1587,13 +1601,15 @@ class TestClimate(unittest.TestCase):
         # Very negative
         ref_mb = -10000
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac')
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias')
 
@@ -1614,21 +1630,24 @@ class TestClimate(unittest.TestCase):
         # Extremely negative
         ref_mb = -20000
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac')
 
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac',
                                           calibrate_param2='temp_bias')
 
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias',
                                       calibrate_param3='melt_f')
@@ -1650,9 +1669,10 @@ class TestClimate(unittest.TestCase):
         # Unmatchable positive
         ref_mb = 10000
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac',
                                           calibrate_param2='temp_bias',
                                           calibrate_param3='melt_f')
@@ -1664,21 +1684,24 @@ class TestClimate(unittest.TestCase):
         gdir.settings['prcp_fac_min'] = 2
         gdir.settings['prcp_fac_max'] = 3
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac')
 
         with pytest.raises(RuntimeError):
+            reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_period=ref_period,
+                                          ref_mb_period=ref_period,
                                           calibrate_param1='prcp_fac',
                                           calibrate_param2='temp_bias')
 
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias',
                                       calibrate_param3='melt_f')
@@ -1711,15 +1734,17 @@ class TestClimate(unittest.TestCase):
         assert pdf['prcp_fac'] == gdir.settings['prcp_fac_max']
 
         # Test the use of gridded data(2D) instead of flowline data(1D) for the calibration
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       use_2d_mb=False)
         mb_calib_1d = gdir.read_yml('settings')
 
+        reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_period=ref_period,
+                                      ref_mb_period=ref_period,
                                       use_2d_mb=True)
         mb_calib_2d = gdir.read_yml('settings')
         # the calibration results for the melt factor should be close to each other (+/- 5% are tolerated)

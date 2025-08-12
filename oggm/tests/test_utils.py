@@ -1075,7 +1075,7 @@ class TestPreproCLI(unittest.TestCase):
                                            '--elev-bands',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
-                                           '--err-dmdtda-scaling-factor', '0.5',
+                                           '--ref-mb-err-scaling-factor', '0.5',
                                            ])
 
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'

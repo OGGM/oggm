@@ -764,6 +764,7 @@ class TestMassBalanceModels:
 
         # We calibrate to zero
         df = massbalance.mb_calibration_from_scalar_mb(gdir,
+                                                       observations_filesuffix='_constant',
                                                        calibrate_param1='temp_bias',
                                                        ref_mb=0,
                                                        ref_mb_years=(1970, 2001),
@@ -2885,6 +2886,7 @@ class TestHEF:
 
         # We calibrate to zero
         df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
+                                                       observations_filesuffix='_eq_glacier_wide',
                                                        calibrate_param1='temp_bias',
                                                        ref_mb=0,
                                                        ref_mb_years=(1970, 2001),
@@ -2992,6 +2994,7 @@ class TestHEF:
         # Try something else here - find out the bias needed for 0 mb
         dfo = hef_gdir.read_yml('settings')
         df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
+                                                       observations_filesuffix='_random',
                                                        calibrate_param1='temp_bias',
                                                        melt_f=dfo['melt_f'],
                                                        ref_mb=0,
@@ -4509,6 +4512,8 @@ class TestDynamicSpinup:
             gdir, melt_f_max=melt_f_max,
             ref_mb=ref_dmdtda + delta_ref_dmdtda,
             ref_mb_err=err_ref_dmdtda + delta_err_ref_dmdtda,
+            ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+            overwrite_observations=True,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib_user_dmdtda',
@@ -4537,6 +4542,8 @@ class TestDynamicSpinup:
                 output_filesuffix='_dyn_melt_f_calib_error',
                 ignore_errors=False,
                 ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+                ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+                overwrite_observations=True,
                 maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
@@ -4547,6 +4554,8 @@ class TestDynamicSpinup:
             output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
             ignore_errors=True,
             ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+            ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+            overwrite_observations=True,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
@@ -4562,6 +4571,8 @@ class TestDynamicSpinup:
             output_filesuffix='_dyn_melt_f_calib_error',
             ignore_errors=True,
             ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+            ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+            overwrite_observations=True,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == 'no spinup'
@@ -4574,11 +4585,15 @@ class TestDynamicSpinup:
                                match='If you provide a reference geodetic '
                                      'mass balance .*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, melt_f_max=melt_f_max,
+                    gdir, observations_filesuffix='_failing_test',
+                    melt_f_max=melt_f_max,
                     run_function=dynamic_melt_f_run,
                     fallback_function=dynamic_melt_f_run_fallback,
                     ref_mb=use_ref_dmdtda,
-                    ref_mb_err=use_err_ref_dmdtda)
+                    ref_mb_err=use_err_ref_dmdtda,
+                    ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+                    overwrite_observations=True,
+                )
 
         # test error is raised if given years outside of geodetic period
         with pytest.raises(RuntimeError,
@@ -4605,7 +4620,8 @@ class TestDynamicSpinup:
                                      ys=yr_rgi, ye=yr_rgi + 1,
                                      output_filesuffix='_one_yr')
         run_dynamic_melt_f_calibration(
-            gdir, melt_f_max=melt_f_max,
+            gdir, observations_filesuffix='_one_yr',
+            melt_f_max=melt_f_max,
             init_model_filesuffix='_one_yr',
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)

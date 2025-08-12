@@ -1764,8 +1764,7 @@ def run_dynamic_melt_f_calibration(
         The error of the geodetic mass balance is multiplied by this factor.
         When looking at more glaciers you should set this factor smaller than
         1 (Default), but the smaller this factor the more glaciers will fail
-        during calibration. The factor is only used if ref_mb = None and
-        ref_mb_err = None.
+        during calibration.
         The idea is that we reduce the uncertainty of individual observations
         to count for correlated uncertainties when looking at regional or
         global scales. If err_scaling_factor is 1 (Default) and you look at the
@@ -1913,7 +1912,6 @@ def run_dynamic_melt_f_calibration(
         # error of reference geodetic mass balance from Hugonnet 2021
         ref_mb_err = float(sel['err_dmdtda'])
         ref_mb_err *= 1000  # kg m-2 yr-1
-        ref_mb_err *= ref_mb_err_scaling_factor
         ref_mb_use = {
             'value': ref_mb,
             'period': ref_mb_period,
@@ -1948,6 +1946,8 @@ def run_dynamic_melt_f_calibration(
         ref_mb = ref_mb_use['value']
     if 'err' in ref_mb_use:
         ref_mb_err = ref_mb_use['err']
+        # apply the scaling factor
+        ref_mb_err *= ref_mb_err_scaling_factor
     if 'period' in ref_mb_use:
         ref_mb_period = ref_mb_use['period']
 
