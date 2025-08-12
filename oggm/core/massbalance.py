@@ -1930,7 +1930,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
     if ref_mb_years is not None:
         ref_mb_provided['years'] = ref_mb_years
 
-    if 'ref_mb' in gdir.observations.data:
+    if 'ref_mb' in gdir.observations:
         ref_mb_in_file = gdir.observations['ref_mb']
     else:
         ref_mb_in_file = None
@@ -2153,7 +2153,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Write
     if write_to_gdir:
-        if any(key in gdir.settings.data
+        if any(key in gdir.settings
                for key in ['melt_f', 'prcp_fac', 'temp_bias']) and not overwrite_gdir:
             raise InvalidWorkflowError('Their are already mass balance parameters '
                                        'stored in the settings file. Set '

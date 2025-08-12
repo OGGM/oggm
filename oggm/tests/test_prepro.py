@@ -1011,7 +1011,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
             assert ds.volume_m3[-1] < ds.volume_m3[0]
             assert ds.length_m[-1] < ds.length_m[0]
 
-        assert 'ref_mb' in gdir.observations.data
+        assert 'ref_mb' in gdir.observations
 
 
 class TestGeometry(unittest.TestCase):

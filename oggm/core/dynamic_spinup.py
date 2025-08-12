@@ -942,7 +942,7 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f):
     -------
 
     """
-    if 'melt_f' not in gdir.settings.data:
+    if 'melt_f' not in gdir.settings:
         raise InvalidWorkflowError('No `melt_f` in gdir.settings. '
                                    'You first need to calibrate the whole '
                                    'MassBalanceModel before changing melt_f '
@@ -1894,7 +1894,7 @@ def run_dynamic_melt_f_calibration(
     if ref_mb_period is not None:
         ref_mb_provided['period'] = ref_mb_period
 
-    if 'ref_mb' in gdir.observations.data:
+    if 'ref_mb' in gdir.observations:
         ref_mb_in_file = gdir.observations['ref_mb']
     else:
         ref_mb_in_file = None

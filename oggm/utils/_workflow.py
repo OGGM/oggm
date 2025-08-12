@@ -4388,6 +4388,12 @@ class YAMLFileObject(object):
     def __setitem__(self, key, value):
         self.set(key, value)
 
+    def __repr__(self):
+        return repr(self.data)
+
+    def __contains__(self, key):
+        return key in self.data
+
 
 class ModelSettings(YAMLFileObject):
     def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
@@ -4467,6 +4473,11 @@ class ModelSettings(YAMLFileObject):
         except KeyError:
             raise KeyError(f"Key '{key}' not found!")
 
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data:{repr(self.data)}")
+
 
 class Observations(YAMLFileObject):
     def __init__(self, gdir, filesuffix='', allow_empty=True,
@@ -4480,3 +4491,8 @@ class Observations(YAMLFileObject):
 
         self.filesuffix = filesuffix
         self.gdir = gdir
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data:{repr(self.data)}")

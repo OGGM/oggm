@@ -902,7 +902,7 @@ class TestGdirObservations:
         settings_informed_threestep['use_temp_bias_from_file'] = True
         settings_informed_threestep['use_winter_prcp_fac'] = True
         settings_informed_threestep['baseline_climate'] = 'W5E5'
-        assert 'ref_mb' not in gdir.observations.data
+        assert 'ref_mb' not in gdir.observations
         workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                      gdirs,
                                      overwrite_gdir=True,
@@ -911,7 +911,7 @@ class TestGdirObservations:
                                      )
         # check that observation was added to the observation files and that the
         # result is the same as the previous implementation
-        assert 'ref_mb' in gdir.observations.data
+        assert 'ref_mb' in gdir.observations
         mb_calib_threestep = gdirs[0].read_yml('settings',
                                                '_informed_threestep')
         assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
@@ -980,7 +980,7 @@ class TestGdirObservations:
             ref_mb_period=ref_mb_period, ref_mb_years=None,
             write_to_gdir=False,
         )
-        assert 'ref_mb' in gdir.observations.data
+        assert 'ref_mb' in gdir.observations
         # provide nothing should raise
         with pytest.raises(InvalidWorkflowError) as exc_info:
             tasks.mb_calibration_from_scalar_mb(
