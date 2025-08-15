@@ -168,9 +168,7 @@ class TestInitPresentDayFlowline:
 
         gdir.settings['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
-            init_present_time_glacier(gdir,
-                                      settings_filesuffix='_dummy_downstream')
-        gdir.settings_filesuffix = ''
+            init_present_time_glacier(gdir)
 
     def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
                                                  monkeypatch):
