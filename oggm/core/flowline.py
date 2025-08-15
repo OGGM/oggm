@@ -1767,6 +1767,7 @@ class FluxBasedModel(FlowlineModel):
                 flux = find_sia_flux_from_thickness(slope,
                                                     fl.widths_m[0],
                                                     fgt,
+                                                    settings=self.settings,
                                                     shape=fl.shape_str[0],
                                                     glen_a=self.glen_a,
                                                     fs=self.fs)
@@ -3073,7 +3074,8 @@ def calving_glacier_downstream_line(line, n_points):
 
 
 @entity_task(log, writes=['model_flowlines'])
-def init_present_time_glacier(gdir, settings_filesuffix='', filesuffix='',
+def init_present_time_glacier(gdir, settings_filesuffix='',
+                              input_filesuffix=None, output_filesuffix=None,
                               use_binned_thickness_data=False):
     """Merges data from preprocessing tasks. First task after inversion!
 
@@ -3088,10 +3090,12 @@ def init_present_time_glacier(gdir, settings_filesuffix='', filesuffix='',
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments. Code-wise the settings_filesuffix
         is set in the @entity-task decorater.
-    filesuffix : str
-        append a suffix to the model_flowlines filename (e.g. useful for
-        dynamic melt_f calibration including an inversion, so the original
-        model_flowlines are not changed).
+    input_filesuffix : str
+        the filesuffix of the inversion_input to use (useful for conducting many
+        runs in the same gdir). If None the settings_filesuffix will be used.
+    output_filesuffix : str
+        append a suffix to the model_flowlines filename (useful for conducting many
+        runs in the same gdir). If None the settings_filesuffix will be used.
     use_binned_thickness_data : bool or str
         if you want to use thickness data, which was binned to the elevation
         band flowlines with tasks.elevation_band_flowine and
@@ -3099,12 +3103,20 @@ def init_present_time_glacier(gdir, settings_filesuffix='', filesuffix='',
         data here to create a flowline for a dynamic model run
     """
 
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
     # Some vars
-    invs = gdir.read_pickle('inversion_output')
+    invs = gdir.read_pickle('inversion_output',
+                            filesuffix=input_filesuffix)
 
     map_dx = gdir.grid.dx
     def_lambda = gdir.settings['trapezoid_lambdas']
-    cls = gdir.read_pickle('inversion_flowlines')
+    cls = gdir.read_pickle('inversion_flowlines',
+                           filesuffix=input_filesuffix)
 
     # Fill the tributaries
     new_fls = []
@@ -3229,7 +3241,7 @@ def init_present_time_glacier(gdir, settings_filesuffix='', filesuffix='',
         fl.order = line_order(fl)
 
     # Write the data
-    gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
+    gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=output_filesuffix)
 
 
 def decide_evolution_model(gdir=None, evolution_model=None):
@@ -3364,7 +3376,7 @@ def flowline_model_run(gdir, settings_filesuffix='',
         try:
             fs = gdir.settings['inversion_fs']
         except KeyError:
-            pass # if not available we stick with the default fs
+            pass  # if not available we stick with the default fs
 
         try:
             glen_a = gdir.settings['inversion_glen_a']

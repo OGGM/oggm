@@ -510,13 +510,16 @@ def gis_prepro_tasks(gdirs):
 
 
 @global_task(log)
-def climate_tasks(gdirs, settings_filesuffix='',
+def climate_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
                   overwrite_gdir=False, override_missing=None):
     """Run all climate related entity tasks on a list of glaciers.
     Parameters
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    input_filesuffix: str
+        the filesuffix of the input inversion flowlines which should be used
+        (useful for conducting multiple experiments in the same gdir)
     """
 
     # Process climate data
@@ -528,11 +531,14 @@ def climate_tasks(gdirs, settings_filesuffix='',
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir)
     execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
-                        settings_filesuffix=settings_filesuffix)
+                        settings_filesuffix=settings_filesuffix,
+                        input_filesuffix=input_filesuffix,)
 
 
 @global_task(log)
-def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
+def inversion_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
+                    output_filesuffix=None,
+                    glen_a=None, fs=None, filter_inversion_output=True,
                     add_to_log_file=True):
     """Run all ice thickness inversion tasks on a list of glaciers.
 
@@ -542,11 +548,29 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
+    input_filesuffix: str
+        The filesuffix of the input inversion flowlines. If None the
+        settings_filesuffix will be used.
+    output_filesuffix: str
+        The filesuffix used for saving resulting inversion files to the gdir. If
+        None the settings_filesuffix will be used.
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
     """
 
-    if cfg.PARAMS['use_kcalving_for_inversion']:
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
+    # We use the settings of the first gdir for defining general parameters
+    gdirs[0].settings_filesuffix = settings_filesuffix
+
+    if gdirs[0].settings['use_kcalving_for_inversion']:
         # Differentiate between calving and non-calving glaciers
         gdirs_nc = []
         gdirs_c = []
@@ -562,32 +586,62 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
 
         if gdirs_nc:
             execute_entity_task(tasks.prepare_for_inversion, gdirs_nc,
+                                settings_filesuffix=settings_filesuffix,
+                                # only use input_filesuffix for first task as
+                                # subsequent task use the results of previous
+                                # tasks
+                                input_filesuffix=input_filesuffix,
+                                output_filesuffix=output_filesuffix,
                                 add_to_log_file=add_to_log_file)
             execute_entity_task(tasks.mass_conservation_inversion, gdirs_nc,
+                                settings_filesuffix=settings_filesuffix,
+                                input_filesuffix=output_filesuffix,
+                                output_filesuffix=output_filesuffix,
                                 glen_a=glen_a, fs=fs,
                                 add_to_log_file=add_to_log_file)
             if filter_inversion_output:
                 execute_entity_task(tasks.filter_inversion_output, gdirs_nc,
+                                    settings_filesuffix=settings_filesuffix,
+                                    input_filesuffix=output_filesuffix,
+                                    output_filesuffix=output_filesuffix,
                                     add_to_log_file=add_to_log_file)
 
         if gdirs_c:
             execute_entity_task(tasks.find_inversion_calving_from_any_mb,
                                 gdirs_c,
+                                settings_filesuffix=settings_filesuffix,
+                                input_filesuffix=output_filesuffix,
+                                output_filesuffix=output_filesuffix,
                                 glen_a=glen_a, fs=fs,
                                 add_to_log_file=add_to_log_file)
     else:
         execute_entity_task(tasks.prepare_for_inversion, gdirs,
+                            settings_filesuffix=settings_filesuffix,
+                            # only use input_filesuffix for first task as
+                            # subsequent task use the results of previous
+                            # tasks
+                            input_filesuffix=input_filesuffix,
+                            output_filesuffix=output_filesuffix,
                             add_to_log_file=add_to_log_file)
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
+                            settings_filesuffix=settings_filesuffix,
+                            input_filesuffix=output_filesuffix,
+                            output_filesuffix=output_filesuffix,
                             glen_a=glen_a, fs=fs,
                             add_to_log_file=add_to_log_file)
         if filter_inversion_output:
             execute_entity_task(tasks.filter_inversion_output, gdirs,
+                                settings_filesuffix=settings_filesuffix,
+                                input_filesuffix=output_filesuffix,
+                                output_filesuffix=output_filesuffix,
                                 add_to_log_file=add_to_log_file)
 
 
 @global_task(log)
-def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
+def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
+                                       input_filesuffix=None,
+                                       output_filesuffix=None,
+                                       ignore_missing=True,
                                        fs=0, a_bounds=(0.1, 10),
                                        apply_fs_on_mismatch=False,
                                        error_on_mismatch=True,
@@ -603,6 +657,15 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
+    input_filesuffix: str
+        The filesuffix of the input inversion flowlines. If None the
+        settings_filesuffix will be used.
+    output_filesuffix: str
+        The filesuffix used for saving resulting inversion files to the gdir. If
+        None the settings_filesuffix will be used.
     ignore_missing : bool
         set this to true to silence the error if some glaciers could not be
         found in the consensus estimate.
@@ -630,6 +693,12 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     a dataframe with the individual glacier volumes
     """
 
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
     gdirs = utils.tolist(gdirs)
 
     # Get the ref data for the glaciers we have
@@ -645,15 +714,20 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
     df = df.reindex(rids)
 
-    # Optimize the diff to ref
-    def_a = cfg.PARAMS['inversion_glen_a']
+    # Optimize the diff to ref, using the settings of the first gdir
+    gdirs[0].settings_filesuffix = settings_filesuffix
+    def_a = gdirs[0].settings['inversion_glen_a']
 
     def compute_vol(x):
-        inversion_tasks(gdirs, glen_a=x*def_a, fs=fs,
+        inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
+                        input_filesuffix=input_filesuffix,
+                        output_filesuffix=output_filesuffix,
+                        glen_a=x*def_a, fs=fs,
                         filter_inversion_output=filter_inversion_output,
                         add_to_log_file=add_to_log_file)
         odf = df.copy()
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                          input_filesuffix=output_filesuffix,
                                           add_to_log_file=add_to_log_file)
         # if the user provides a glacier volume all glaciers are considered,
         # dropna() below exclude glaciers where no ITMIX volume is available
@@ -700,6 +774,9 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
         if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
             do_filter = filter_inversion_output
             return calibrate_inversion_from_consensus(gdirs,
+                                                      settings_filesuffix=settings_filesuffix,
+                                                      input_filesuffix=input_filesuffix,
+                                                      output_filesuffix=output_filesuffix,
                                                       ignore_missing=ignore_missing,
                                                       fs=5.7e-20, a_bounds=a_bounds,
                                                       apply_fs_on_mismatch=False,
@@ -717,10 +794,14 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                      ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A
-    inversion_tasks(gdirs, glen_a=out_fac*def_a, fs=fs,
+    inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
+                    input_filesuffix=input_filesuffix,
+                    output_filesuffix=output_filesuffix,
+                    glen_a=out_fac*def_a, fs=fs,
                     filter_inversion_output=filter_inversion_output,
                     add_to_log_file=add_to_log_file)
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            input_filesuffix=output_filesuffix,
                                             add_to_log_file=add_to_log_file)
     return df
 
