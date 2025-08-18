@@ -638,7 +638,223 @@ def inversion_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
 
 
 @global_task(log)
+def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
+                                    observations_filesuffix='',
+                                    overwrite_observations=False,
+                                    ref_volume_m3=None,
+                                    ref_volume_year=None,
+                                    rgi_ids_in_ref_volume=None,
+                                    input_filesuffix=None,
+                                    output_filesuffix=None,
+                                    fs=0, a_bounds=(0.1, 10),
+                                    apply_fs_on_mismatch=False,
+                                    error_on_mismatch=True,
+                                    filter_inversion_output=True,
+                                    add_to_log_file=True):
+    """Fit the total volume of the glaciers to the provided estimate.
+
+    This method finds the "best Glen A" to match all glaciers in gdirs with
+    a valid inverted volume.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
+    observations_filesuffix: str
+        You can provide a filesuffix for the reference volume to use. If you
+        provide ref_volume_m3, then this values will be stored in the
+        observations file, if ref_volume_m3 is not already present. If you want
+        to force to use the provided values and override the current ones, set
+        overwrite_observations to True.
+    overwrite_observations : bool
+        If you want to overwrite already existing observation values in the
+        provided observations file set this to True. Default is False.
+    ref_volume_m3 : float
+        Option to give an own total glacier volume to match to
+    ref_volume_year : int or None
+        The year when the reference volume is valid. If None the RGI date is
+        used.
+    rgi_ids_in_ref_volume : list or None
+        If the reference volume is only valid for part of the provided gdirs,
+        because some glaciers do not have a volume estimate available. But in
+        the end the inversion will be performed on all gdirs. If None all gdirs
+        are used. Default is None.
+    input_filesuffix: str
+        The filesuffix of the input inversion flowlines. If None the
+        settings_filesuffix will be used.
+    output_filesuffix: str
+        The filesuffix used for saving resulting inversion files to the gdir. If
+        None the settings_filesuffix will be used.
+    fs : float
+        invert with sliding (default: no)
+    a_bounds: tuple
+        factor to apply to default A
+    apply_fs_on_mismatch: false
+        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
+        Oerlemans) and try to optimize A again.
+    error_on_mismatch: bool
+        sometimes the given bounds do not allow to find a zero mismatch:
+        this will normally raise an error, but you can switch this off,
+        use the closest value instead and move on.
+    filter_inversion_output : bool
+        whether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
+    add_to_log_file : bool
+        if the called entity tasks should write into log of gdir. Default True
+
+    Returns
+    -------
+    a dataframe with the individual glacier volumes
+    """
+
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
+
+    gdirs = utils.tolist(gdirs)
+
+    for gdir in gdirs:
+        gdir.observations_filesuffix = observations_filesuffix
+
+    # check if reference volume referes to all gdirs
+    if rgi_ids_in_ref_volume is not None:
+        gdirs_use = [gdir for gdir in gdirs
+                     if gdir.rgi_id in rgi_ids_in_ref_volume]
+    else:
+        gdirs_use = gdirs
+
+    if any('ref_volume_m3' in gdir.observations for gdir in gdirs):
+        ref_volume_m3_file = sum([gdir.observations['ref_volume_m3']['value']
+                                  for gdir in gdirs_use])
+        if ref_volume_m3 is None:
+            # if no reference volume is porvided use the one from the obs-file
+            ref_volume_m3 = ref_volume_m3_file
+        elif ref_volume_m3_file == ref_volume_m3:
+            # ok the provided ref volume is the same as stored in the obs-file
+            pass
+        elif not overwrite_observations:
+            raise InvalidWorkflowError(
+                'You have provided an reference volume, but their is already '
+                'one stored in the current observations file (filesuffix = '
+                f'{observations_filesuffix})! If you want to overwrite set '
+                f'overwrite_observations = True.')
+        else:
+            for gdir in gdirs:
+                if 'ref_volume_m3' in gdir.observations:
+                    gdir.observations['ref_volume_m3']['value'] = None
+
+    # Optimize the diff to ref, using the settings of the first gdir
+    gdirs_use[0].settings_filesuffix = settings_filesuffix
+    def_a = gdirs_use[0].settings['inversion_glen_a']
+
+    # create a container to store the individual modelled glacier volumes
+    rids = [gdir.rgi_id for gdir in gdirs_use]
+    df = pd.DataFrame(index=rids)
+
+    def compute_vol(x):
+        inversion_tasks(gdirs_use, settings_filesuffix=settings_filesuffix,
+                        input_filesuffix=input_filesuffix,
+                        output_filesuffix=output_filesuffix,
+                        glen_a=x*def_a, fs=fs,
+                        filter_inversion_output=filter_inversion_output,
+                        add_to_log_file=add_to_log_file)
+        odf = df.copy()
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs_use,
+                                          input_filesuffix=output_filesuffix,
+                                          add_to_log_file=add_to_log_file)
+        return odf
+
+    def to_minimize(x):
+        log.workflow('Volume estimate optimisation with '
+                     'A factor: {} and fs: {}'.format(x, fs))
+        odf = compute_vol(x)
+        return ref_volume_m3 - odf.oggm.sum()
+
+    try:
+        out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
+                                         full_output=True)
+        if r.converged:
+            log.workflow('calibrate_inversion_from_volume '
+                         'converged after {} iterations and fs={}. The '
+                         'resulting Glen A factor is {}.'
+                         ''.format(r.iterations, fs, out_fac))
+        else:
+            raise ValueError('Unexpected error in optimization.brentq')
+    except ValueError:
+        # Ok can't find an A. Log for debug:
+        odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
+        odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
+        ref_vol_1 = ref_volume_m3 * 1e-9
+        ref_vol_2 = ref_volume_m3 * 1e-9
+        msg = ('calibration from volume estimate CAN\'T converge with fs={}.\n'
+               'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
+               'Ref={:.3f} OGGM={:.3f} for A factor {}'
+               ''.format(fs,
+                         ref_vol_1, odf1.oggm, a_bounds[0],
+                         ref_vol_2, odf2.oggm, a_bounds[1]))
+        if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
+            do_filter = filter_inversion_output
+            return calibrate_inversion_from_volume(gdirs,
+                                                   settings_filesuffix=settings_filesuffix,
+                                                   observations_filesuffix=observations_filesuffix,
+                                                   overwrite_observations=overwrite_observations,
+                                                   ref_volume_m3=ref_volume_m3,
+                                                   rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+                                                   input_filesuffix=input_filesuffix,
+                                                   output_filesuffix=output_filesuffix,
+                                                   fs=5.7e-20, a_bounds=a_bounds,
+                                                   apply_fs_on_mismatch=False,
+                                                   error_on_mismatch=error_on_mismatch,
+                                                   filter_inversion_output=do_filter,
+                                                   add_to_log_file=add_to_log_file)
+        if error_on_mismatch:
+            raise ValueError(msg)
+
+        out_fac = a_bounds[int(abs(ref_vol_1 - odf1.oggm) >
+                               abs(ref_vol_2 - odf2.oggm))]
+        log.workflow(msg)
+        log.workflow('We use A factor = {} and fs = {} and move on.'
+                     ''.format(out_fac, fs))
+
+    # Compute the final volume with the correct A for all gdirs
+    rids = [gdir.rgi_id for gdir in gdirs]
+    df = pd.DataFrame(index=rids)
+    inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
+                    input_filesuffix=input_filesuffix,
+                    output_filesuffix=output_filesuffix,
+                    glen_a=out_fac*def_a, fs=fs,
+                    filter_inversion_output=filter_inversion_output,
+                    add_to_log_file=add_to_log_file)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            input_filesuffix=output_filesuffix,
+                                            add_to_log_file=add_to_log_file)
+    # add the actually derived volume to the observations file
+    for gdir in gdirs:
+        vol_single = df.vol_oggm_m3.loc[gdir.rgi_id]
+        if ref_volume_year is None:
+            year_single = gdir.rgi_date
+        else:
+            year_single = ref_volume_year
+        if 'ref_volume_m3' in gdir.observations:
+            current_vol = gdir.observations['ref_volume_m3']
+            current_vol['value'] = vol_single
+        else:
+            current_vol = {'value': vol_single}
+        current_vol['year'] = year_single
+        gdir.observations['ref_volume_m3'] = current_vol
+
+    return df
+
+
+@global_task(log)
 def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
+                                       observations_filesuffix='',
+                                       overwrite_observations=False,
                                        input_filesuffix=None,
                                        output_filesuffix=None,
                                        ignore_missing=True,
@@ -646,7 +862,6 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
                                        apply_fs_on_mismatch=False,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
-                                       volume_m3_reference=None,
                                        add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
@@ -660,6 +875,12 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
     settings_filesuffix: str
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments.
+    observations_filesuffix: str
+        You can provide a filesuffix where the reference volume used will be
+        stored.
+    overwrite_observations : bool
+        If you want to overwrite already existing observation values in the
+        provided observations file set this to True. Default is False.
     input_filesuffix: str
         The filesuffix of the input inversion flowlines. If None the
         settings_filesuffix will be used.
@@ -714,95 +935,37 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
 
     df = df.reindex(rids)
 
-    # Optimize the diff to ref, using the settings of the first gdir
-    gdirs[0].settings_filesuffix = settings_filesuffix
-    def_a = gdirs[0].settings['inversion_glen_a']
+    # only use those glaciers which have an itmix estimate
+    odf = df.copy().dropna()
+    ref_volume_m3 = odf.vol_itmix_m3.sum()
+    rgi_ids_in_ref_volume = list(odf.index)
 
-    def compute_vol(x):
-        inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
-                        input_filesuffix=input_filesuffix,
-                        output_filesuffix=output_filesuffix,
-                        glen_a=x*def_a, fs=fs,
-                        filter_inversion_output=filter_inversion_output,
-                        add_to_log_file=add_to_log_file)
-        odf = df.copy()
-        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
-                                          input_filesuffix=output_filesuffix,
-                                          add_to_log_file=add_to_log_file)
-        # if the user provides a glacier volume all glaciers are considered,
-        # dropna() below exclude glaciers where no ITMIX volume is available
-        if volume_m3_reference is None:
-            return odf.dropna()
-        else:
-            return odf
+    # do the calibration
+    df_oggm = calibrate_inversion_from_volume(
+        gdirs, settings_filesuffix=settings_filesuffix,
+        observations_filesuffix=observations_filesuffix,
+        overwrite_observations=overwrite_observations,
+        ref_volume_m3=ref_volume_m3,
+        rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+        input_filesuffix=input_filesuffix,
+        output_filesuffix=output_filesuffix,
+        fs=fs, a_bounds=a_bounds,
+        apply_fs_on_mismatch=apply_fs_on_mismatch,
+        error_on_mismatch=error_on_mismatch,
+        filter_inversion_output=filter_inversion_output,
+        add_to_log_file=add_to_log_file)
 
-    def to_minimize(x):
-        log.workflow('Consensus estimate optimisation with '
-                     'A factor: {} and fs: {}'.format(x, fs))
-        odf = compute_vol(x)
-        if volume_m3_reference is None:
-            return odf.vol_itmix_m3.sum() - odf.oggm.sum()
-        else:
-            return volume_m3_reference - odf.oggm.sum()
+    # add the oggm volume to the dataframe which will be returned
+    df['vol_oggm_m3'] = df_oggm['vol_oggm_m3']
 
-    try:
-        out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
-                                         full_output=True)
-        if r.converged:
-            log.workflow('calibrate_inversion_from_consensus '
-                         'converged after {} iterations and fs={}. The '
-                         'resulting Glen A factor is {}.'
-                         ''.format(r.iterations, fs, out_fac))
-        else:
-            raise ValueError('Unexpected error in optimization.brentq')
-    except ValueError:
-        # Ok can't find an A. Log for debug:
-        odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
-        odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
-        if volume_m3_reference is None:
-            ref_vol_1 = odf1.vol_itmix_m3
-            ref_vol_2 = odf2.vol_itmix_m3
-        else:
-            ref_vol_1 = volume_m3_reference * 1e-9
-            ref_vol_2 = volume_m3_reference * 1e-9
-        msg = ('calibration from consensus estimate CAN\'T converge with fs={}.\n'
-               'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
-               'Ref={:.3f} OGGM={:.3f} for A factor {}'
-               ''.format(fs,
-                         ref_vol_1, odf1.oggm, a_bounds[0],
-                         ref_vol_2, odf2.oggm, a_bounds[1]))
-        if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
-            do_filter = filter_inversion_output
-            return calibrate_inversion_from_consensus(gdirs,
-                                                      settings_filesuffix=settings_filesuffix,
-                                                      input_filesuffix=input_filesuffix,
-                                                      output_filesuffix=output_filesuffix,
-                                                      ignore_missing=ignore_missing,
-                                                      fs=5.7e-20, a_bounds=a_bounds,
-                                                      apply_fs_on_mismatch=False,
-                                                      error_on_mismatch=error_on_mismatch,
-                                                      volume_m3_reference=volume_m3_reference,
-                                                      filter_inversion_output=do_filter,
-                                                      add_to_log_file=add_to_log_file)
-        if error_on_mismatch:
-            raise ValueError(msg)
-
-        out_fac = a_bounds[int(abs(ref_vol_1 - odf1.oggm) >
-                               abs(ref_vol_2 - odf2.oggm))]
-        log.workflow(msg)
-        log.workflow('We use A factor = {} and fs = {} and move on.'
-                     ''.format(out_fac, fs))
-
-    # Compute the final volume with the correct A
-    inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
-                    input_filesuffix=input_filesuffix,
-                    output_filesuffix=output_filesuffix,
-                    glen_a=out_fac*def_a, fs=fs,
-                    filter_inversion_output=filter_inversion_output,
-                    add_to_log_file=add_to_log_file)
-    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
-                                            input_filesuffix=output_filesuffix,
-                                            add_to_log_file=add_to_log_file)
+    # add the original estimates to the observations file
+    for gdir in gdirs:
+        gdir.observations_filesuffix = observations_filesuffix
+        ref_volume_sinlge = gdir.observations['ref_volume_m3']
+        for col in df.columns:
+            if col != 'vol_oggm_m3':
+                ref_volume_sinlge[col] = df[col].loc[gdir.rgi_id]
+        gdir.observations['ref_volume_m3'] = ref_volume_sinlge
     return df
 
 

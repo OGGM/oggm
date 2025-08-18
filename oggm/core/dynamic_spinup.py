@@ -969,8 +969,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     'fallback_function' is
     'dynamic_melt_f_run_with_dynamic_spinup_fallback'). This
     function defines a new melt_f in the glacier directory and conducts an
-    inversion calibrating A to match '_vol_m3_ref' with this new melt_f
-    ('calibrate_inversion_from_consensus'). Afterwards a dynamic spinup is
+    inversion calibrating A to match 'ref_volume_m3' with this new melt_f
+    ('calibrate_inversion_from_volume'). Afterwards a dynamic spinup is
     conducted to match 'minimise_for' (for more info look at docstring of
     'run_dynamic_spinup'). And in the end the geodetic mass balance of the
     current run is calculated (between the period [yr0_ref_mb, yr1_ref_mb]) and
@@ -1122,18 +1122,26 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
 
-    from oggm.workflow import calibrate_inversion_from_consensus
+    from oggm.workflow import calibrate_inversion_from_volume
 
     if set_local_variables:
         # clear the provided dictionary and set the first elements
         local_variables.clear()
         local_variables['t_spinup'] = [first_guess_t_spinup]
-        # ATTENTION: it is assumed that the flowlines in gdir have the volume
-        # we want to match during calibrate_inversion_from_consensus when we
-        # set_local_variables
-        fls_ref = gdir.read_pickle('model_flowlines',
-                                   filesuffix=model_flowline_filesuffix)
-        local_variables['vol_m3_ref'] = np.sum([f.volume_m3 for f in fls_ref])
+
+        # for backward compatiblitiy, we check if volume is part of the
+        # observations file. If not we through a warning and add it
+        if 'ref_volume_m3' not in gdir.observations:
+            log.warning("You seem to be using 'older' preprocessed directories "
+                        "with a more recent version of OGGM. While this is "
+                        "possible be aware that the handling of observations "
+                        "has changed. TODO: add link once new OGGM is released")
+            ref_volume_m3 = {}
+            fls_ref = gdir.read_pickle('model_flowlines',
+                                       filesuffix=model_flowline_filesuffix)
+            ref_volume_m3['value'] = np.sum([f.volume_m3 for f in fls_ref])
+            ref_volume_m3['year'] = gdir.rgi_date
+            gdir.observations['ref_volume_m3'] = ref_volume_m3
 
         # we are done with preparing the local_variables for the upcoming iterations
         return None
@@ -1189,11 +1197,12 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                     add_to_log_file=False,  # dont write to log
                                     )
             # do inversion with A calibration to current volume
-            calibrate_inversion_from_consensus(
+            calibrate_inversion_from_volume(
                 [gdir], settings_filesuffix=settings_filesuffix,
                 apply_fs_on_mismatch=True, error_on_mismatch=False,
                 filter_inversion_output=True,
-                volume_m3_reference=local_variables['vol_m3_ref'],
+                ref_volume_m3=gdir.observations['ref_volume_m3']['value'],
+                ref_volume_year=gdir.observations['ref_volume_m3']['year'],
                 add_to_log_file=False)
 
     model_flowline_filesuffix = f'{model_flowline_filesuffix}_dyn_melt_f_calib'
@@ -1256,7 +1265,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
 
 
 def dynamic_melt_f_run_with_dynamic_spinup_fallback(
-        gdir, melt_f, fls_init, ys, ye, local_variables,
+        gdir, melt_f, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None,
         evolution_model=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
@@ -1288,9 +1297,6 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         start year of the run
     ye : int
         end year of the run
-    local_variables : dict
-        Dict in which under the key 'vol_m3_ref' the volume which is used in
-        'calibrate_inversion_from_consensus'
     settings_filesuffix: str
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments.
@@ -1398,18 +1404,13 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     :py:class:`oggm.core.flowline.evolution_model`
         The final model after the run.
     """
-    from oggm.workflow import calibrate_inversion_from_consensus
+    from oggm.workflow import calibrate_inversion_from_volume
 
     if output_filesuffix is None:
         output_filesuffix = settings_filesuffix
 
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
-
-    if local_variables is None:
-        raise RuntimeError('Need the volume to do'
-                           'calibrate_inversion_from_consensus provided in '
-                           'local_variables!')
 
     # revert gdir to original state if necessary
     if melt_f != gdir.settings['melt_f']:
@@ -1419,11 +1420,12 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                 apparent_mb_from_any_mb(gdir,
                                         settings_filesuffix=settings_filesuffix,
                                         add_to_log_file=False)
-                calibrate_inversion_from_consensus(
+                calibrate_inversion_from_volume(
                     [gdir], settings_filesuffix=settings_filesuffix,
                     apply_fs_on_mismatch=True, error_on_mismatch=False,
                     filter_inversion_output=True,
-                    volume_m3_reference=local_variables['vol_m3_ref'],
+                    ref_volume_m3=gdir.observations['ref_volume_m3']['value'],
+                    ref_volume_year=gdir.observations['ref_volume_m3']['year'],
                     add_to_log_file=False)
     if os.path.isfile(os.path.join(gdir.dir,
                                    'model_flowlines_dyn_melt_f_calib.pkl')):
@@ -1628,7 +1630,7 @@ def dynamic_melt_f_run(
 
 
 def dynamic_melt_f_run_fallback(
-        gdir, melt_f, fls_init, ys, ye, local_variables,
+        gdir, melt_f, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None,
         evolution_model=None, target_yr=None, **kwargs):
     """
@@ -1650,9 +1652,6 @@ def dynamic_melt_f_run_fallback(
         start year of the run
     ye : int
         end year of the run
-    local_variables : dict
-        Not needed in this function, just here to match with the function
-        call in run_dynamic_melt_f_calibration.
     settings_filesuffix: str
         You can use a different set of settings by providing a filesuffix. This
         is useful for sensitivity experiments.
@@ -1838,7 +1837,7 @@ def run_dynamic_melt_f_calibration(
         This is a fallback function if the calibration is not working using
         'run_function' it is called. This function must contain the arguments
         'gdir', 'settings_filesuffix', 'melt_f', 'fls_init', 'ys', 'ye',
-        'local_variables' and 'output_filesuffix'. Further this function should
+        and 'output_filesuffix'. Further this function should
         return the final model.
     kwargs_fallback_function : None or dict
         Can provide additional keyword arguments to the fallback_function as a
@@ -2045,7 +2044,6 @@ def run_dynamic_melt_f_calibration(
                                       settings_filesuffix=settings_filesuffix,
                                       melt_f=melt_f, fls_init=fls_init,
                                       ys=ys, ye=ye,
-                                      local_variables=local_variables_run_function,
                                       output_filesuffix=output_filesuffix,
                                       **kwargs_fallback_function)
         else:

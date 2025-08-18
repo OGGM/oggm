@@ -211,24 +211,68 @@ class TestFullRun(unittest.TestCase):
         # check if mini params file is used as expected
         assert cfg.PARAMS['lru_maxsize'] == 123
 
-        df = workflow.calibrate_inversion_from_consensus(gdirs,
-                                                         ignore_missing=True)
-        df = df.dropna()
+        df_orig = workflow.calibrate_inversion_from_consensus(
+            gdirs, overwrite_observations=True, ignore_missing=True)
+        df = df_orig.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
-                                   rtol=0.01)
+                                   rtol=0.001)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
+
+        # check that observations values are added to the file
+        assert 'ref_volume_m3' in gdirs[0].observations
+        gdir_0_ref_vol = gdirs[0].observations['ref_volume_m3']
+
+        # test that using observations from file is working
+        provided_vol_095 = 0
+        for gdir in gdirs:
+            ref_vol = gdir.observations['ref_volume_m3']
+            ref_vol['value'] *= 0.95
+            provided_vol_095 += ref_vol['value']
+            gdir.observations['ref_volume_m3'] = ref_vol
+        df_095 = workflow.calibrate_inversion_from_volume(
+            gdirs,
+            overwrite_observations=True,
+            apply_fs_on_mismatch=True,
+        )
+        assert df_095.vol_oggm_m3.sum() < df_orig.vol_oggm_m3.sum()
+        assert (gdirs[0].observations['ref_volume_m3']['value'] <
+                gdir_0_ref_vol['value'])
+        np.testing.assert_allclose(
+            provided_vol_095, df_095['vol_oggm_m3'].sum(), rtol=1e-2)
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
         user_provided_volume_m3 = df.vol_itmix_m3.sum() - delta_volume_m3
-        df = workflow.calibrate_inversion_from_consensus(
-            gdirs, ignore_missing=True,
-            volume_m3_reference=user_provided_volume_m3)
+        # we only use those which have an itmix volume
+        rgi_ids_in_ref_volume = list(df.dropna().index)
+        # check that error is raised if already an observations stored in file
+        with pytest.raises(InvalidWorkflowError) as exc_info:
+            df = workflow.calibrate_inversion_from_volume(
+                gdirs,
+                overwrite_observations=False,
+                ref_volume_m3=user_provided_volume_m3,
+                rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+            )
+        assert 'You have provided an reference volume, ' in str(exc_info.value)
 
-        np.testing.assert_allclose(user_provided_volume_m3,
-                                   df.vol_oggm_m3.sum(),
-                                   rtol=0.01)
+        df = workflow.calibrate_inversion_from_volume(
+            gdirs,
+            overwrite_observations=True,
+            ref_volume_m3=user_provided_volume_m3,
+            rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+        )
+
+        np.testing.assert_allclose(
+            user_provided_volume_m3,
+            df.loc[rgi_ids_in_ref_volume].vol_oggm_m3.sum(),
+            rtol=0.001)
+        gdir_0_ref_vol_user_provided = gdirs[0].observations['ref_volume_m3']
+        assert (gdir_0_ref_vol['value'] !=
+                gdir_0_ref_vol_user_provided['value'])
+        assert (gdir_0_ref_vol['vol_itmix_m3'] ==
+                gdir_0_ref_vol_user_provided['vol_itmix_m3'])
+
 
     @pytest.mark.slow
     def test_shapefile_output(self):
@@ -883,6 +927,7 @@ class TestGdirSettings:
         assert v_ref < v_new
         res_aft = custom_settings['apparent_mb_from_any_mb_residual']
         assert res_aft > res_bef
+
 
 @pytest.mark.usefixtures('with_class_wd')
 class TestGdirObservations:

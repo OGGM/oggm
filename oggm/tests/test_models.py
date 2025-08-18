@@ -3979,19 +3979,6 @@ class TestDynamicSpinup:
                     ref_mb=ref_dmdtda,
                     ref_mb_err=use_err_ref_dmdtda)
 
-        # test if fallback raise error if no local variable provided
-        with pytest.raises(RuntimeError,
-                           match='Need the volume to do *'):
-            dynamic_melt_f_run_with_dynamic_spinup_fallback(
-                gdir,
-                melt_f=gdir.read_json('mb_calib')['melt_f'],
-                fls_init=gdir.read_pickle('model_flowlines'),
-                ys=gdir.get_climate_info()['baseline_yr_0'],
-                ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
-                local_variables=None,
-                minimise_for=minimise_for
-            )
-
         # test providing adapted observations through the observations file
         ref_mb_adapted = ref_mb_hugonnet
         ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
@@ -4255,8 +4242,6 @@ class TestDynamicSpinup:
             fls_init=gdir.read_pickle('model_flowlines'),
             ys=gdir.get_climate_info()['baseline_yr_0'],
             ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
-            local_variables={'vol_m3_ref':
-                                 gdir.read_pickle('model_flowlines')[0].volume_m3},
             minimise_for=minimise_for
         )
         assert original_melt_f == gdir.read_json('mb_calib')['melt_f']
