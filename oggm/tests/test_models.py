@@ -5378,7 +5378,10 @@ class TestMassRedis:
         tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                             ref_mb_period='1953-01-01_2003-01-01')
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
-        workflow.calibrate_inversion_from_consensus([gdir])
+        # previously calibrate_inversion_from_consensus was used, but with the
+        # RGI5 id not estimate is available and here we just use the first guess
+        # as it is done in calibrate_inversion_from_consensus
+        workflow.inversion_tasks(gdir, glen_a=0.1*cfg.PARAMS['inversion_glen_a'])
         tasks.init_present_time_glacier(gdir)
 
         seed = 0

@@ -734,7 +734,7 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
         if ref_volume_m3 is None:
             # if no reference volume is porvided use the one from the obs-file
             ref_volume_m3 = ref_volume_m3_file
-        elif ref_volume_m3_file == ref_volume_m3:
+        elif np.isclose(ref_volume_m3_file, ref_volume_m3, rtol=1e-2):
             # ok the provided ref volume is the same as stored in the obs-file
             pass
         elif not overwrite_observations:

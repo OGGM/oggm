@@ -2039,6 +2039,7 @@ class TestInversion(unittest.TestCase):
         a = (0.1, 3)
         gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
         df = workflow.calibrate_inversion_from_consensus(gdir,
+                                                         overwrite_observations=True,
                                                          a_bounds=a,
                                                          apply_fs_on_mismatch=True)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
