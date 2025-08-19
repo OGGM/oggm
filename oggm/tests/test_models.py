@@ -3405,28 +3405,37 @@ class TestDynamicSpinup:
         ref_value = 0
         if minimise_for == 'area':
             unit = 'km2'
+            unit_conversion = 1e6  # converting m2 and km2
+            obs_var = 'ref_area_m2'
         elif minimise_for == 'volume':
             unit = 'km3'
+            unit_conversion = 1e9  # converting m3 and km3
+            obs_var = 'ref_volume_m3'
         else:
             raise ValueError('Unknown variable to minimise for!')
         var_name = f'{minimise_for}_{unit}'
         for fl in fls:
             ref_value += getattr(fl, var_name)
+        # add to observations file
+        # is needed because the test climate dataset has ye = 2003
+        assert hef_gdir.rgi_date == 2003
+        yr_rgi = 2002
+        ref_value_obs_file = {
+            'value': ref_value * unit_conversion,
+            'year':  yr_rgi,
+        }
+        hef_gdir.observations[obs_var] = ref_value_obs_file
 
         precision_percent = 10
         # this value is chosen in a way that it effects the result in the 'area'
         # run but not in the 'volume' run
         precision_absolute = 0.1
         min_ice_thickness = 10
-        assert hef_gdir.rgi_date == 2003
-        # is needed because the test climate dataset has ye = 2003
-        yr_rgi = 2002
         # test version were the whole model evolution is saved and when it is
         # not saved
         for store_model_evolution in [True, False]:
             model_dynamic_spinup = run_dynamic_spinup(
                 hef_gdir,
-                target_yr=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 precision_absolute=precision_absolute,
@@ -3467,10 +3476,6 @@ class TestDynamicSpinup:
             assert 'dynamic_spinup_forward_model_iterations' in gdir_diagnostics.keys()
             mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent'
             assert mismatch_key in gdir_diagnostics.keys()
-            assert 'dynamic_spinup_other_variable_reference' in \
-                   gdir_diagnostics.keys()
-            assert 'dynamic_spinup_mismatch_other_variable_percent' in \
-                   gdir_diagnostics.keys()
 
             # check if model geometry is correctly saved in gdir with
             fp = hef_gdir.get_filepath('model_geometry',
@@ -3494,6 +3499,7 @@ class TestDynamicSpinup:
             ref_value = 0.6
         model_dynamic_spinup_target_yr = run_dynamic_spinup(
             hef_gdir,
+            overwrite_observations=True,
             target_yr=target_yr,
             target_value=ref_value,
             minimise_for=minimise_for,
@@ -3522,12 +3528,12 @@ class TestDynamicSpinup:
         assert len(model_dynamic_spinup_target_yr.fls) == len(fls)
 
         # test if spinup_start_yr is handled correctly and overrides the spinup_period
+        hef_gdir.observations[obs_var] = ref_value_obs_file
         spinup_start_yr = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -3556,12 +3562,13 @@ class TestDynamicSpinup:
             'The difference between the rgi_date and the start year of the '
             'climate data is too small to run a dynamic spinup!':
                 {'min_spinup_period': 300},
-            'The given reference value is Zero, no dynamic spinup possible!':
-                {'init_model_fls': fls_zero_ice},
             'Not able to conduct one error free run. Error is "out_of_domain"':
                 {'first_guess_t_spinup': -100},
             'Could not find mismatch smaller 0.1%':
-                {'precision_percent': 0.1}
+                {'precision_percent': 0.1},
+            'The given reference value is Zero, no dynamic spinup possible!':
+                {'target_value': 0, 'target_yr': yr_rgi,
+                 'overwrite_observations': True},
         }
 
         for err_msg, kwarg_dyn_spn in error_settings.items():
@@ -3572,7 +3579,6 @@ class TestDynamicSpinup:
                 run_dynamic_spinup(
                     hef_gdir,
                     minimise_for=minimise_for,
-                    target_yr=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
                     spinup_period=10,
@@ -3590,7 +3596,6 @@ class TestDynamicSpinup:
             model = run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
-                target_yr=2002,
                 ye=2002,
                 ignore_errors=ignore_errors,
                 maxiter=2,
@@ -3607,6 +3612,10 @@ class TestDynamicSpinup:
             assert len(model.fls) == len(fmod.fls)
 
         yr_rgi = 2000
+        target_var = hef_gdir.observations[obs_var]
+        target_var['value'] = ref_value * unit_conversion
+        target_var['year'] = yr_rgi
+        hef_gdir.observations[obs_var] = target_var
         yr_min = hef_gdir.get_climate_info()['baseline_yr_0']
         ye = hef_gdir.get_climate_info()['baseline_yr_1'] + 1
         precision_percent = 1
@@ -3615,7 +3624,6 @@ class TestDynamicSpinup:
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            target_yr=yr_rgi,
             ye=ye,
             return_t_spinup_best=True,
             minimise_for=minimise_for,
@@ -3648,7 +3656,6 @@ class TestDynamicSpinup:
             spinup_period=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
-            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -3697,7 +3704,6 @@ class TestDynamicSpinup:
             minimise_for=minimise_for,
             init_model_filesuffix='_one_yr',
             init_model_yr=yr_rgi - 1,
-            target_yr=yr_rgi,
             store_model_geometry=False)
 
         # test that error is raised if mb_elev_feedback not annual
@@ -3727,7 +3733,6 @@ class TestDynamicSpinup:
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
-                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=False)
             run_without_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_without_fixed_spinup', path=False)
@@ -3739,7 +3744,6 @@ class TestDynamicSpinup:
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
-                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=True)
             run_with_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_with_fixed_spinup', path=False)

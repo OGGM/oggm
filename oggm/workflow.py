@@ -837,7 +837,7 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
     for gdir in gdirs:
         vol_single = df.vol_oggm_m3.loc[gdir.rgi_id]
         if ref_volume_year is None:
-            year_single = gdir.rgi_date
+            year_single = gdir.rgi_date + 1
         else:
             year_single = ref_volume_year
         if 'ref_volume_m3' in gdir.observations:
