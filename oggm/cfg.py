@@ -304,6 +304,9 @@ BASENAMES['complex_sub_entities'] = ('complex_sub_entities.shp', _doc)
 _doc = "A dict containing all settings used during the OGGM workflow."
 BASENAMES['settings'] = ('settings.yml', _doc)
 
+_doc = "A dict containing all observations used during the OGGM workflow."
+BASENAMES['observations'] = ('observations.yml', _doc)
+
 
 def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.
