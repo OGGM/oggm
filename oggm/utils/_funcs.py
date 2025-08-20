@@ -1170,10 +1170,10 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
     return cooked_rgidf
 
 
-def get_cropped_dataset(
+def get_closest_grid_point_of_dataset(
     dataset: xr.Dataset, latitude: float, longitude: float
 ) -> xr.Dataset:
-    """Get dataset cropped to glacier extents."""
+    """Get data of closest grid point of dataset."""
     try:
         c = (dataset.longitude - longitude) ** 2 + (
             dataset.latitude - latitude

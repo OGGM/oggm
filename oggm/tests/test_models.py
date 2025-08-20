@@ -19,7 +19,7 @@ from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
-from oggm.shop.w5e5 import process_gswp3_w5e5_data_daily
+from oggm.shop.w5e5 import process_gswp3_w5e5_data
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH, SEC_IN_DAY
 from oggm.utils import get_demo_file, ncDataset
@@ -78,7 +78,7 @@ except ImportError:
 @pytest.fixture(scope="class", name="fixture_get_w5e5_data")
 def fixture_get_w5e5_data(hef_gdir):
     workflow.execute_entity_task(
-        gdirs=hef_gdir, task=process_gswp3_w5e5_data_daily
+        gdirs=hef_gdir, task=process_gswp3_w5e5_data, daily=True
         )
 
 def assert_daily_model(model):
@@ -5727,7 +5727,7 @@ class TestMassRedis:
         gdir = hef_gdir
         if assert_daily_model(model):
             workflow.execute_entity_task(
-                gdirs=gdir, task=process_gswp3_w5e5_data_daily
+                gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
             )
             start_year = 1979
             climate_file = "climate_historical_daily"

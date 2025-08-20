@@ -244,9 +244,9 @@ def show_versions(logger=None):
 
 
 def raise_oob_error(data: np.ndarray, name: str, msg: str = ""):
-        """Raises an out-of-bound error and displays data bounds."""
-        text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
-        raise ValueError(text)
+    """Raises an out-of-bound error and displays data bounds."""
+    text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
+    raise ValueError(text)
 
 
 class SuperclassMeta(type):
@@ -3549,15 +3549,15 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         _write_shape_to_disk(var, fp, to_tar=cfg.PARAMS['use_tar_shapefiles'])
 
-    def write_monthly_climate_file(self, time, prcp, temp,
-                                   ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
-                                   temp_std=None,
-                                   time_unit=None,
-                                   calendar=None,
-                                   source=None,
-                                   file_name='climate_historical',
-                                   filesuffix='',
-                                   daily=False):
+    def write_climate_file(self, time, prcp, temp,
+                           ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
+                           temp_std=None,
+                           time_unit=None,
+                           calendar=None,
+                           source=None,
+                           file_name='climate_historical',
+                           filesuffix='',
+                           daily=False):
         """Creates a netCDF4 file with climate data timeseries.
 
         Parameters
@@ -3670,9 +3670,7 @@ class GlacierDirectory(object):
                 resolution = "monthly"
             else:
                 resolution = "daily"
-                if not (
-                    len(prcp) > (nc.hydro_yr_1 - nc.hydro_yr_0 + 1) * 28 * 12
-                ):
+                if not len(prcp) > (nc.hydro_yr_1 - nc.hydro_yr_0 + 1) * 28 * 12:
                     raise ValueError(
                         f"Data is not in daily resolution: {len(prcp)}"
                     )

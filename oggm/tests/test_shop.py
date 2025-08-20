@@ -438,7 +438,7 @@ class Test_w5e5:
             self.assert_data_bounds(dataset=ds_clim, period=(1979, 2019))
         if daily:
             assert ds_clim.time[0]["time.day"] == 1
-            assert ds_clim.time["time.day"].max() < 32
+            assert ds_clim.time["time.day"].max() == 31
         else:
             assert np.all(ds_clim.temp_std > 0)
             assert np.all(ds_clim.temp_std <= 10)
@@ -452,11 +452,16 @@ class Test_w5e5:
         path_clim = gdir.get_filepath("climate_historical")
         assert os.path.exists(path_clim)
 
+        period = (1901, 2019)
+
         with xr.open_dataset(path_clim) as ds_clim:
-            self.assert_data_bounds(dataset=ds_clim, period=(1901, 2019))
+            self.assert_data_bounds(dataset=ds_clim, period=period)
+            ds_clim_monthly = ds_clim
             # temp_std
             assert np.all(ds_clim.temp_std > 0)
             assert np.all(ds_clim.temp_std <= 10)
+
+        assert len(ds_clim_monthly.time) == (np.diff(period)[0] + 1) * 12
 
         # test climate statistics with winter_daily_mean_prcp
         # they should be computed even if cfg.PARAMS['use_winter_prcp_fac'] is False!
@@ -475,20 +480,40 @@ class Test_w5e5:
         with pytest.raises(KeyError):
             df["1990-2030_uncorrected_winter_daily_mean_prcp"]
 
-    def test_process_gswp3_w5e5_data_daily(self, w5e5_hef_gdir):
-
-        gdir = w5e5_hef_gdir
-        from oggm.shop import w5e5
-
-        w5e5.process_gswp3_w5e5_data_daily(gdir)
+        # test daily implementation
+        w5e5.process_gswp3_w5e5_data(gdir, daily=True)
         path_clim = gdir.get_filepath("climate_historical_daily")
         assert os.path.exists(path_clim)
 
         with xr.open_dataset(path_clim) as ds_clim:
-            self.assert_data_bounds(dataset=ds_clim, period=(1901, 2019))
+            self.assert_data_bounds(dataset=ds_clim, period=period)
+            ds_clim_daily = ds_clim
+
+        # compare monthly with daily
+        # ignoring leap years this should hold
+        assert len(ds_clim_daily.time) > (np.diff(period)[0] + 1) * 365
+
+        # compare grid point selection
+        climate_info_daily = gdir.get_climate_info(input_filesuffix='_daily')
+        climate_info_monthly = gdir.get_climate_info()
+        for key in ['baseline_yr_0', 'baseline_yr_1',
+                    'baseline_climate_ref_hgt', 'baseline_climate_ref_pix_lon',
+                    'baseline_climate_ref_pix_lat']:
+            assert climate_info_daily[key] == climate_info_monthly[key]
+
+        # compare monthly and daily precipitation
+        prcp_sum_from_daily = ds_clim_daily.prcp.resample(time="MS").sum()
+        np.testing.assert_allclose(prcp_sum_from_daily,
+                                   ds_clim_monthly.prcp, atol=1e-4)
+
+        # compare monthly and daily temperature
+        temp_mean_from_daily = ds_clim_daily.temp.resample(time="MS").mean()
+        np.testing.assert_allclose(temp_mean_from_daily,
+                                   ds_clim_monthly.temp, atol=1e-4)
 
         # TODO: test climate statistics with winter_daily_mean_prcp
-        # Currently this doesn't support daily data
+        # Currently utils.compile_climate_statistics doesn't support daily data
+
 
 class Test_ecmwf:
 

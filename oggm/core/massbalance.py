@@ -232,7 +232,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         for mb_year in year:
             if self.valid_bounds is None:
                 raise ValueError('attribute `valid_bounds` needs to be '
-                                'set for the ELA computation.')
+                                 'set for the ELA computation.')
 
             # Check for invalid ELAs
             b0, b1 = self.valid_bounds
@@ -243,10 +243,12 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                 stack.append(np.nan)
             else:
                 year_length = self.get_year_length(year=mb_year)
+
                 def to_minimize(x):
                     return (self.get_annual_mb([x], year=mb_year, **kwargs)[0] *
-                    year_length * self.rho)
-                stack.append(optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1))
+                            year_length * self.rho)
+                stack.append(optimize.brentq(to_minimize, *self.valid_bounds,
+                                             xtol=0.1))
 
         return set_array_type(stack)
 
