@@ -560,7 +560,7 @@ class Test_ecmwf:
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
-            ci = gdir.get_climate_info('CERA_alone')
+            ci = gdir.get_climate_info(input_filesuffix='CERA_alone')
             assert ci['baseline_climate_source'] == 'CERA|ERA5'
             assert ci['baseline_yr_0'] == 1901
             assert ci['baseline_yr_1'] == 2010
@@ -608,7 +608,7 @@ class Test_ecmwf:
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
-            ci = gdir.get_climate_info('CERA_repl')
+            ci = gdir.get_climate_info(input_filesuffix='CERA_repl')
             assert ci['baseline_climate_source'] == 'CERA+ERA5'
             assert ci['baseline_yr_0'] == 1901
             assert ci['baseline_yr_1'] == 2018

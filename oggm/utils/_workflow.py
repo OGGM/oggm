@@ -3445,17 +3445,21 @@ class GlacierDirectory(object):
         with open(fp, 'w') as f:
             yaml.dump(var, f)
 
-    def get_climate_info(self, input_filesuffix=''):
+    def get_climate_info(self, filename='climate_historical',
+                         input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
 
         Parameters
         ----------
+        filename : str
+            the filename of the climate file we want to get the info.
+            Default is 'climate_historical'.
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used.
         """
         out = {}
         try:
-            f = self.get_filepath('climate_historical',
+            f = self.get_filepath(filename,
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
@@ -4405,7 +4409,7 @@ class ModelSettings(YAMLFileObject):
         # this is to inherit parameters from other setting files, the other file
         # is stored with the parent_filesuffix
         if 'parent_filesuffix' not in self.data:
-            if parent_filesuffix:
+            if parent_filesuffix is not None:
                 self.set('parent_filesuffix', parent_filesuffix)
             else:
                 # by default cfg.PARAMS is always the parent

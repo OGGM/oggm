@@ -380,14 +380,11 @@ Interface
     :nosignatures:
 
     MassBalanceModel
+    MassBalanceModel.get_daily_mb
     MassBalanceModel.get_monthly_mb
     MassBalanceModel.get_annual_mb
     MassBalanceModel.get_specific_mb
     MassBalanceModel.get_ela
-    MonthlyTIModel
-    MonthlyTIModel.get_specific_mb
-    DailyTIModel
-    DailyTIModel.get_specific_mb_daily
 
 Models
 ------
