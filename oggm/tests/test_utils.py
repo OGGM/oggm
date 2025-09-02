@@ -116,23 +116,11 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [12, 12])
 
-        yr = 1998 + 2 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 3)
-
-        yr = 1998 + 1 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 2)
-
-        # tests for floating point precision
-        yr = 1 + 1/12 - 1/12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1, 1)
-
-        for i in range(12):
-            yr = 2000
-            r = utils.floatyear_to_date(yr + i / 12)
-            assert r == (yr, i + 1)
+        # test a leap year
+        y, m, d = utils.floatyear_to_date(1980.1612021857923, months_only=False)
+        assert y == 1980
+        assert m == 2
+        assert d == 29
 
     def test_date_to_floatyear(self):
 
@@ -161,30 +149,89 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, 2099)
+        myr = utils.float_years_timeseries(1800, 2099)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, ny=300)
+        myr = utils.float_years_timeseries(1800, ny=300)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-1', freq='M')
-        myr = utils.monthly_timeseries(1, 6000)
+        myr = utils.float_years_timeseries(1, 6000)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-12', freq='M')
-        myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
+        myr = utils.float_years_timeseries(1, 6000, include_last_year=True)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         with pytest.raises(ValueError):
-            utils.monthly_timeseries(1)
+            utils.float_years_timeseries(1)
+
+        # test daily timeseries
+        time = pd.date_range('1/1/1800', periods=365.25 * 299, freq='D')
+        myr = utils.float_years_timeseries(1800, 2099, monthly=False)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        myr = utils.float_years_timeseries(1800, ny=300, monthly=False)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01', '6000-1', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, monthly=False)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01-01', '6000-12-31', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, monthly=False,
+                                           include_last_year=True)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+    def test_round_trip_floating_point_year(self):
+        # monthly round trip for all dates between 0000 and 3000
+        months_arr = np.arange(np.datetime64('0000-01', 'M'),
+                               np.datetime64('3001-01', 'M'),
+                               dtype='datetime64[M]')
+        years = months_arr.astype('datetime64[Y]').astype(int) + 1970
+        months = (months_arr.astype('datetime64[M]').astype(int) % 12) + 1
+
+        fy = utils.date_to_floatyear(years, months)
+        y2, m2 = utils.floatyear_to_date(fy)
+
+        ok = (years == y2) & (months == m2)
+        assert sum(~ok) == 0
+
+        # daily roundtrip for all dates between 0000 and 3000
+        start = np.datetime64('0000-01-01', 'D')
+        end_exclusive = np.datetime64('3001-01-01', 'D')
+        dates = np.arange(start, end_exclusive, dtype='datetime64[D]')
+
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        mstart = dates.astype('datetime64[M]').astype('datetime64[D]')
+        days = (dates - mstart).astype(int) + 1
+
+        fy = utils.date_to_floatyear(years, months, days)
+        y2, m2, d2 = utils.floatyear_to_date(fy, months_only=False)
+
+        ok = (years == y2) & (months == m2) & (days == d2)
+        assert sum(~ok) == 0
 
     @pytest.mark.parametrize("d,w", [
         (np.arange(10), np.arange(10)),

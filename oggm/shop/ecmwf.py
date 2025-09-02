@@ -204,7 +204,7 @@ def process_ecmwf_data(gdir, settings_filesuffix='', dataset=None, ensemble_memb
             temp_std = ds['t2m_std'].data
 
     # OK, ready to write
-    gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
-                                    filesuffix=output_filesuffix,
-                                    temp_std=temp_std,
-                                    source=dataset)
+    gdir.write_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
+                            filesuffix=output_filesuffix,
+                            temp_std=temp_std,
+                            source=dataset)

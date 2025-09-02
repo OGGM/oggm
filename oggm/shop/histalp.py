@@ -159,7 +159,7 @@ def process_histalp_data(gdir, settings_filesuffix='',
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
 
-    gdir.write_monthly_climate_file(time, prcp[:, 1, 1], temp[:, 1, 1],
-                                    hgt[1, 1], ref_lon[1], ref_lat[1],
-                                    filesuffix=output_filesuffix,
-                                    source=source)
+    gdir.write_climate_file(time, prcp[:, 1, 1], temp[:, 1, 1],
+                            hgt[1, 1], ref_lon[1], ref_lat[1],
+                            filesuffix=output_filesuffix,
+                            source=source)

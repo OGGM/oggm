@@ -244,9 +244,9 @@ def show_versions(logger=None):
 
 
 def raise_oob_error(data: np.ndarray, name: str, msg: str = ""):
-        """Raises an out-of-bound error and displays data bounds."""
-        text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
-        raise ValueError(text)
+    """Raises an out-of-bound error and displays data bounds."""
+    text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
+    raise ValueError(text)
 
 
 class SuperclassMeta(type):
@@ -3445,17 +3445,21 @@ class GlacierDirectory(object):
         with open(fp, 'w') as f:
             yaml.dump(var, f)
 
-    def get_climate_info(self, input_filesuffix=''):
+    def get_climate_info(self, filename='climate_historical',
+                         input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
 
         Parameters
         ----------
+        filename : str
+            the filename of the climate file we want to get the info.
+            Default is 'climate_historical'.
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used.
         """
         out = {}
         try:
-            f = self.get_filepath('climate_historical',
+            f = self.get_filepath(filename,
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
@@ -3549,15 +3553,15 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         _write_shape_to_disk(var, fp, to_tar=cfg.PARAMS['use_tar_shapefiles'])
 
-    def write_monthly_climate_file(self, time, prcp, temp,
-                                   ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
-                                   temp_std=None,
-                                   time_unit=None,
-                                   calendar=None,
-                                   source=None,
-                                   file_name='climate_historical',
-                                   filesuffix='',
-                                   daily=False):
+    def write_climate_file(self, time, prcp, temp,
+                           ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
+                           temp_std=None,
+                           time_unit=None,
+                           calendar=None,
+                           source=None,
+                           file_name='climate_historical',
+                           filesuffix='',
+                           daily=False):
         """Creates a netCDF4 file with climate data timeseries.
 
         Parameters
@@ -3670,9 +3674,7 @@ class GlacierDirectory(object):
                 resolution = "monthly"
             else:
                 resolution = "daily"
-                if not (
-                    len(prcp) > (nc.hydro_yr_1 - nc.hydro_yr_0 + 1) * 28 * 12
-                ):
+                if not len(prcp) > (nc.hydro_yr_1 - nc.hydro_yr_0 + 1) * 28 * 12:
                     raise ValueError(
                         f"Data is not in daily resolution: {len(prcp)}"
                     )
@@ -4415,7 +4417,7 @@ class ModelSettings(YAMLFileObject):
         # this is to inherit parameters from other setting files, the other file
         # is stored with the parent_filesuffix
         if 'parent_filesuffix' not in self.data:
-            if isinstance(parent_filesuffix, str):
+            if parent_filesuffix is not None:
                 self.set('parent_filesuffix', parent_filesuffix)
             else:
                 # by default cfg.PARAMS is always the parent
