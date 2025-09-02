@@ -17,13 +17,14 @@ from scipy.interpolate import interp1d
 from scipy import optimize
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH, SEC_IN_DAY
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_DAY
 from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
-                        monthly_timeseries, ncDataset, get_temp_bias_dataframe,
+                        float_years_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, weighted_average_2d,
-                        lazy_property, set_array_type, get_total_days)
+                        weighted_average_1d, lazy_property, set_array_type,
+                        get_days_of_year, get_seconds_of_year, get_days_of_month,
+                        get_seconds_of_month, get_total_days)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -52,9 +53,11 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Used for certain methods - if the hydrological year is requested.
     rho : float, default: ``cfg.PARAMS['ice_density']``
         Density of ice
+    use_leap_years : bool, default: False
+        If the calendar should use leap years
     """
 
-    def __init__(self, gdir=None):
+    def __init__(self, gdir=None, use_leap_years=False):
         """ Initialize."""
         self.valid_bounds = None
         self.hemisphere = None
@@ -62,6 +65,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             self.rho = cfg.PARAMS['ice_density']
         else:
             self.rho = gdir.settings['ice_density']
+        self.use_leap_years = use_leap_years
 
     def __repr__(self):
         """String Representation of the mass balance model"""
@@ -83,6 +87,98 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         this way.
         """
         pass
+
+    def days_in_month(self, year):
+        """Get the number of days of a month, with or without leap years,
+        depending on self.use_leap_years.
+
+        Parameters
+        ----------
+        year: float
+            The year (in the "floating year" convention).
+
+        Returns
+        -------
+        int
+            The number of days of the month
+        """
+        return get_days_of_month(year, use_leap_years=self.use_leap_years)
+
+    def sec_in_month(self, year):
+        """Get the seconds of the month, with or without leap years, depending
+        on self.use_leap_years.
+
+        Parameters
+        ----------
+        year: float
+            The year (in the "floating year" convention).
+
+        Returns
+        -------
+        int
+            The seconds of the month
+        """
+        return get_seconds_of_month(year, use_leap_years=self.use_leap_years)
+
+    def days_in_year(self, year):
+        """Get the number of days of a year, with or without leap years,
+        depending on self.use_leap_years.
+
+        Parameters
+        ----------
+        year: float
+            The year (in the "floating year" convention).
+
+        Returns
+        -------
+        int
+            The number of days of the year
+        """
+        return get_days_of_year(year, use_leap_years=self.use_leap_years)
+
+    def sec_in_year(self, year):
+        """Get the seconds of the year, with or without leap years, depending
+        on self.use_leap_years.
+
+        Parameters
+        ----------
+        year: float
+            The year (in the "floating year" convention).
+
+        Returns
+        -------
+        int
+            The seconds of the year
+        """
+        return get_seconds_of_year(year, use_leap_years=self.use_leap_years)
+
+    def get_daily_mb(self, heights, year=None, fl_id=None, fls=None):
+        """Daily mass balance at given altitude(s) for a moment in time.
+
+        Units: [m s-1], or meters of ice per second
+
+        Note: `year` is optional because some simpler models have no time
+        component.
+
+        Parameters
+        ----------
+        heights: ndarray
+            the altitudes at which the mass balance will be computed
+        year: float, optional
+            the time (in the "floating year" convention)
+        fl_id: float, optional
+            the index of the flowline in the fls array (might be ignored
+            by some MB models)
+        fls: list of flowline instances, optional
+            the flowlines array, in case the MB model implementation needs
+            to know details about the glacier geometry at the moment the
+            MB model is called
+
+        Returns
+        -------
+        the mass balance (same dim as `heights`) (units: [m s-1])
+        """
+        raise NotImplementedError()
 
     def get_monthly_mb(self, heights, year=None, fl_id=None, fls=None):
         """Monthly mass balance at given altitude(s) for a moment in time.
@@ -143,44 +239,14 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
-    def get_annual_specific_mass_balance(self, fls: list, year: float) -> float:
-        """Get annual specific mass balance from multiple flowlines.
-
-        Parameters
-        ----------
-        fls : list[oggm.Flowline]
-            Flowline instances.
-        year: float
-            Time in "floating year" convention.
-
-        Returns
-        -------
-        float
-            Annual specific mass balance from multiple flowlines.
-        """
-        mbs = []
-        widths = []
-        for i, fl in enumerate(fls):
-            _widths = fl.widths
-            try:
-                # For rect and parabola don't compute spec mb
-                _widths = np.where(fl.thick > 0, _widths, 0)
-            except AttributeError:
-                pass
-            widths.append(_widths)
-            mbs.append(
-                self.get_annual_mb(fl.surface_h, fls=fls, fl_id=i, year=year)
-            )
-        widths = np.concatenate(widths, axis=0)  # 2x faster than np.append
-        mbs = np.concatenate(mbs, axis=0)
-        mbs = weighted_average_1d(mbs, widths)
-
-        return mbs
-
-    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
+    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None,
+                        time_resolution='annual'):
         """Specific mass balance for a given glacier geometry.
 
-        Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+        Units depends on time_resolution:
+        - 'annual': [mm w.e. yr-1], or millimeter water equivalent per year.
+        - 'monthly': [mm w.e. month-1], or millimeter water equivalent per month.
+        - 'daily': [mm w.e. day-1], or millimeter water equivalent per day.
 
         Parameters
         ----------
@@ -195,6 +261,9 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             widths, and overrides them if provided.
         year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
+        time_resolution : str
+            The resolution of the provided "floating year". Options are
+            'annual', 'monthly' or 'daily'. Default is 'annual'.
 
         Returns
         -------
@@ -203,15 +272,53 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         stack = []
         year = np.atleast_1d(year)
+
+        if time_resolution == 'annual':
+            mb_function = self.get_annual_mb
+            # mm w.e. yr-1
+
+            unit_conversion = self.sec_in_year
+        elif time_resolution == 'monthly':
+            mb_function = self.get_monthly_mb
+
+            # mm w.e. month-1
+            unit_conversion = self.sec_in_month
+        elif time_resolution == 'daily':
+            mb_function = self.get_daily_mb
+
+            # mm w.e. day-1
+            def unit_conversion(x):
+                return SEC_IN_DAY
+        else:
+            raise ValueError(f"time_resolution {time_resolution} not supported. "
+                             "Options are 'annual', 'monthly' or 'daily'.")
+
         for mb_yr in year:
             if fls is not None:
-                mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
-            else:
-                mbs = self.get_annual_mb(heights, year=mb_yr)
+                mbs = []
+                widths = []
+                for i, fl in enumerate(fls):
+                    _widths = fl.widths
+                    try:
+                        # For rect and parabola don't compute spec mb
+                        _widths = np.where(fl.thick > 0, _widths, 0)
+                    except AttributeError:
+                        pass
+                    widths.append(_widths)
+                    mbs.append(
+                        mb_function(fl.surface_h, fls=fls, fl_id=i, year=mb_yr)
+                    )
+                # 2x faster than np.append
+                widths = np.concatenate(widths, axis=0)
+                mbs = np.concatenate(mbs, axis=0)
                 mbs = weighted_average_1d(mbs, widths)
+            else:
+                mbs = mb_function(heights, year=mb_yr)
+                mbs = weighted_average_1d(mbs, widths)
+            mbs *= unit_conversion(mb_yr)
             stack.append(mbs)
 
-        return set_array_type(stack) * SEC_IN_YEAR * self.rho
+        return set_array_type(stack) * self.rho
 
     def get_ela(self, year=None, **kwargs):
         """Get the equilibrium line altitude for a given year.
@@ -233,7 +340,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         for mb_year in year:
             if self.valid_bounds is None:
                 raise ValueError('attribute `valid_bounds` needs to be '
-                                'set for the ELA computation.')
+                                 'set for the ELA computation.')
 
             # Check for invalid ELAs
             b0, b1 = self.valid_bounds
@@ -243,11 +350,13 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
                     (self.get_annual_mb([b1], year=mb_year, **kwargs)[0] < 0)):
                 stack.append(np.nan)
             else:
-                year_length = self.get_year_length(year=mb_year)
+                year_length = self.sec_in_year(year=mb_year)
+
                 def to_minimize(x):
                     return (self.get_annual_mb([x], year=mb_year, **kwargs)[0] *
-                    year_length * self.rho)
-                stack.append(optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1))
+                            year_length * self.rho)
+                stack.append(optimize.brentq(to_minimize, *self.valid_bounds,
+                                             xtol=0.1))
 
         return set_array_type(stack)
 
@@ -264,21 +373,6 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         True if this year can be simulated by the model
         """
         raise NotImplementedError()
-
-    def get_year_length(self, year: float = None) -> float:
-        """Get the number of seconds in a year.
-
-        Parameters
-        ----------
-        year : float or int
-            Year in floating year convention.
-
-        Returns
-        -------
-        float
-            The number of seconds in a year.
-        """
-        return SEC_IN_YEAR
 
 
 class ScalarMassBalance(MassBalanceModel):
@@ -386,11 +480,14 @@ class MonthlyTIModel(MassBalanceModel):
         temp_bias: float = None,
         prcp_fac: float = None,
         bias: float = 0.0,
+        temp_melt: float = None,
         ys: int = None,
         ye: int = None,
         repeat: bool = False,
         check_calib_params: bool = True,
-        ):
+        check_climate_data: bool = True,
+        use_leap_years: bool = False,
+    ):
         """Monthly temperature index model.
 
         Parameters
@@ -423,8 +520,12 @@ class MonthlyTIModel(MassBalanceModel):
             the calibrated value. Note that this bias is *subtracted*
             from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
+        temp_melt : float or None, default None
+            The threshold for the air temperature above which ice melt is
+            assumed to occur (-1°C the default for monthly mb models). If None
+            settings['temp_melt'] is used.
         ys : int, optional
-            The end of the climate period where the MB model is valid.
+            The start of the climate period where the MB model is valid.
             Defaults to the period with available data.
         ye : int, optional
             The end of the climate period where the MB model is valid.
@@ -438,15 +539,23 @@ class MonthlyTIModel(MassBalanceModel):
             and the ones you are using at run time. If they don't
             match, it will raise an error. Set to ``False`` to suppress
             this check.
+        check_climate_data : bool, default True
+            If True the climate input data is checked if it is provided in total
+            years and that the length matches.
+        use_leap_years : bool, default False
+            If the calendar should use leap years
         """
 
         self.settings_filesuffix = settings_filesuffix
         gdir.settings_filesuffix = settings_filesuffix
 
-        super(MonthlyTIModel, self).__init__(gdir=gdir)
+        super(MonthlyTIModel, self).__init__(gdir=gdir,
+                                             use_leap_years=use_leap_years)
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.fl_id = fl_id  # which flowline are we the model of?
         self.gdir = gdir
+        self.filename = filename
+        self.input_filesuffix = input_filesuffix
 
         if melt_f is None:  # This prevents class methods
             melt_f = self.calib_params['melt_f']
@@ -470,7 +579,9 @@ class MonthlyTIModel(MassBalanceModel):
                            'warning.')
                     raise InvalidWorkflowError(msg)
             src = self.calib_params['baseline_climate_source']
-            src_calib = gdir.get_climate_info()['baseline_climate_source']
+            src_calib = gdir.get_climate_info(
+                filename=self.filename, input_filesuffix=self.input_filesuffix
+            )['baseline_climate_source']
             if src != src_calib:
                 msg = (f'You seem to have calibrated with the {src} '
                        f"climate data while this gdir was calibrated with "
@@ -482,16 +593,20 @@ class MonthlyTIModel(MassBalanceModel):
         self.bias = bias
 
         # Global parameters
-        self.t_solid = gdir.settings['temp_all_solid']
-        self.t_liq = gdir.settings['temp_all_liq']
-        self.t_melt = gdir.settings['temp_melt']
+        self.temp_all_solid = gdir.settings['temp_all_solid']
+        self.temp_all_liq = gdir.settings['temp_all_liq']
+        if temp_melt is None:
+            self.temp_melt = gdir.settings['temp_melt']
+        else:
+            gdir.settings['temp_melt'] = temp_melt
+            self.temp_melt = temp_melt
 
         # check if valid prcp_fac is used
         if prcp_fac is None:
             raise TypeError('prcp_fac cannot be None.')
         elif prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac must be positive')
-        default_grad = gdir.settings['temp_default_gradient']
+        self.temp_default_gradient = gdir.settings['temp_default_gradient']
 
         # Public attrs
         self.hemisphere = gdir.hemisphere
@@ -507,7 +622,38 @@ class MonthlyTIModel(MassBalanceModel):
         # Read climate file
         fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
         with ncDataset(fpath, mode='r') as nc:
-            self.set_temporal_bounds(nc_data=nc, ys=ys, ye=ye, default_grad=default_grad)
+            time = nc.variables["time"]
+            time = cftime.num2date(time[:], time.units, calendar=time.calendar)
+
+            # only use defined years
+            years = np.array(list(map(lambda x: x.year, time)))
+            pok = slice(None)  # take all is default (optim)
+            if ys is not None:
+                pok = years >= ys
+            if ye is not None:
+                try:
+                    pok = pok & (years <= ye)
+                except TypeError:
+                    pok = years <= ye
+
+            self.years = years[pok]
+            self.months = np.array(list(map(lambda x: x.month, time)))[pok]
+            self.days = np.array(list(map(lambda x: x.day, time)))[pok]
+
+            if check_climate_data:
+                # check for full years, this is overwritten for daily
+                self._check_for_full_years()
+
+            # Read timeseries and correct it
+            self.temp = nc.variables["temp"][pok].astype(np.float64) + self._temp_bias
+            self.prcp = nc.variables["prcp"][pok].astype(np.float64) * self._prcp_fac
+
+            grad = self.prcp * 0 + self.temp_default_gradient
+            self.grad = grad
+            self.ref_hgt = nc.ref_hgt
+            self.climate_source = nc.climate_source
+            self.ys = self.years[0]
+            self.ye = self.years[-1]
 
     def __repr__(self):
         """String Representation of the mass balance model"""
@@ -530,10 +676,6 @@ class MonthlyTIModel(MassBalanceModel):
                 nbform = '    - {}: {}'
                 summary += [nbform.format(k, v)]
         return '\n'.join(summary) + '\n'
-
-    @property
-    def monthly_melt_f(self):
-        return self.melt_f * 365 / 12
 
     # adds the possibility of changing prcp_fac
     # after instantiation with properly changing the prcp time series
@@ -591,64 +733,23 @@ class MonthlyTIModel(MassBalanceModel):
             else:
                 return self.gdir.settings
 
-    def set_temporal_bounds(
-        self, nc_data: "netCDF4.Dataset", default_grad: float, ys: int = None, ye: int= None
-    ) -> None:
-        """Constrain data to a start and end year.
-
-        Parameters
-        ----------
-        nc_data : netCDF4.Dataset
-            Climate data.
-        ys : int or float, optional
-            Desired first year of data period.
-        ye : int or float, optional
-            Desired last year of data period.
-        default_grad : float
-            Default temperature gradient.
-        """
-        time = nc_data.variables["time"]
-        time = cftime.num2date(time[:], time.units, calendar=time.calendar)
-        ny, r = divmod(len(time), 12)
-        if r:
-            raise ValueError("Climate data should be N full years")
-
-        # We check for calendar years
-        if (time[0].month != 1) or (time[-1].month != 12):
+    def _check_for_full_years(self):
+        # We check for full calendar years
+        if self.years[0] != self.years[-1]:
+            nr_of_months = (self.years[-1] - self.years[0] + 1) * 12
+        else:
+            nr_of_months = 12
+        len_data_ok = len(self.years) == nr_of_months
+        months_ok = (self.months[0] == 1) or (self.months[-1] == 12)
+        if not months_ok or not len_data_ok:
             raise InvalidWorkflowError(
-                "We now work exclusively with calendar years."
+                "We now work exclusively with full calendar years. Check "
+                "provided climate data! \n Your current selection: "
+                f"{self.months[0]:02d}.{self.years[0]:04d} - "
+                f"{self.months[-1]:02d}.{self.years[-1]:04d}\n"
+                f"Your data has {len(self.years)} timestamps, but we expect "
+                f"{nr_of_months}."
             )
-
-        # Quick trick because we know the size of our array
-        years = np.repeat(
-            np.arange(time[-1].year - ny + 1, time[-1].year + 1), 12
-        )
-        pok = slice(None)  # take all is default (optim)
-        if ys is not None:
-            pok = years >= ys
-        if ye is not None:
-            try:
-                pok = pok & (years <= ye)
-            except TypeError:
-                pok = years <= ye
-
-        self.years = years[pok]
-        self.months = np.tile(np.arange(1, 13), ny)[pok]
-
-        # Read timeseries and correct it
-        self.temp = (
-            nc_data.variables["temp"][pok].astype(np.float64) + self._temp_bias
-        )
-        self.prcp = (
-            nc_data.variables["prcp"][pok].astype(np.float64) * self._prcp_fac
-        )
-
-        grad = self.prcp * 0 + default_grad
-        self.grad = grad
-        self.ref_hgt = nc_data.ref_hgt
-        self.climate_source = nc_data.climate_source
-        self.ys = self.years[0]
-        self.ye = self.years[-1]
 
     def is_year_valid(self, year: int) -> bool:
         """Check if a year is within the climate period.
@@ -660,7 +761,7 @@ class MonthlyTIModel(MassBalanceModel):
         """
         return self.ys <= year <= self.ye
 
-    def get_valid_year(self, year: int) -> int:
+    def validate_year(self, year: int) -> int:
         """Get and validate if a year is outside the data's time range.
 
         Raises
@@ -677,131 +778,69 @@ class MonthlyTIModel(MassBalanceModel):
             )
         return year
 
-    def get_time_index(self, year: int, month: int) -> np.ndarray:
-        """Get time index for a particular year and month.
+    def _get_tempformelt(self, temp):
+        tempformelt = temp - self.temp_melt
+        clip_min(tempformelt, 0, out=tempformelt)
+        return tempformelt
 
-        Parameters
-        ----------
-        year : int
-            Integer year.
-        month : int
-            Integer month.
+    def _get_prcpsol(self, prcp, temp):
+        fac = 1 - (temp - self.temp_all_solid) / (self.temp_all_liq - self.temp_all_solid)
+        return prcp * clip_array(fac, 0, 1)
 
-        Returns
-        -------
-        np.ndarray
-            Time index (months).
-        """
-        time_index = np.where((self.years == year) & (self.months == month))[0][0]
+    def _get_climate_for_index(self, heights: ArrayLike, pok: ArrayLike
+                               ) -> tuple:
+        """Returns climate information at provided heights and time indexes.
 
-        return time_index
-
-    def get_indexed_climate_data(self, index: ArrayLike) -> tuple:
-        """Get climate data at an index.
-
-        Data are already corrected for temperature bias and
-        precipitation factor.
-
-        Parameters
-        ----------
-        index : array_like
-            Any indexing system compatible with ``np.ndarray``. For most
-            operations this will be a time index.
-
-        Returns
-        -------
-        tuple[np.ndarray[np.float64]]
-            Temperature, precipitation, and slope gradient for a given
-            index.
-        """
-        return self.temp[index], self.prcp[index], self.grad[index]
-
-    def get_precipitation(
-        self, precipitation: np.ndarray, temperature: np.ndarray, npix: int
-    ) -> tuple:
-        """Get total and solid precipitation.
-
-        Parameters
-        ----------
-        precipitation : np.ndarray[np.float64]
-            Precipitation.
-        temperature : np.ndarray[np.float64]
-            Temperatures.
-        npix : int
-            Number of pixels.
-
-        Returns
-        -------
-        tuple[np.ndarray]
-            Total and solid precipitation.
-        """
-        prcp_total = np.ones(npix) * precipitation
-        fac = 1 - (temperature - self.t_solid) / (self.t_liq - self.t_solid)
-        prcp_solid = prcp_total * clip_array(fac, 0, 1)
-
-        return prcp_total, prcp_solid
-
-    def get_2d_precipitation(
-        self, precipitation: np.ndarray, temperature: np.ndarray, npix: int
-    ) -> tuple:
-        """Get total and solid precipitation.
-
-        Parameters
-        ----------
-        precipitation : np.ndarray[np.float64]
-            Precipitation.
-        temperature : np.ndarray[np.float64]
-            Temperatures.
-        npix : int
-            Number of pixels.
-
-        Returns
-        -------
-        tuple[np.ndarray]
-            Total and solid precipitation.
-        """
-        prcp_total = np.atleast_2d(precipitation).repeat(npix, 0)
-        fac = 1 - (temperature - self.t_solid) / (self.t_liq - self.t_solid)
-        prcp_solid = prcp_total * clip_array(fac, 0, 1)
-
-        return prcp_total, prcp_solid
-
-    def get_2d_temperature(
-        self,
-        heights: np.ndarray,
-        temperatures: np.ndarray,
-        gradients: np.ndarray,
-        npix: int,
-        timesteps: int,
-    ) -> np.ndarray:
-        """Get temperature from 2D data.
+        If only one time index is provided also the climate information is
+        returned in 1D, otherwise in 2D.
 
         Parameters
         ----------
         heights : array_like
-            Flowline heights [m].
-        temperatures : np.ndarray[np.float64]
-            Temperatures.
-        gradients : np.ndarray[np.float64]
-            Slope gradients.
-        npix : int
-            Number of pixels.
-        timesteps : int
-            Temporal resolution.
+            the heights of interest in meters
+        pok : np.ndarray
+            the time indexes of interest
 
         Returns
         -------
-        np.ndarray[np.float64]
-            Temperatures.
+        tuple[np.ndarray]
+            Temperature, melt temperatures, total precipitation, and
+            solid precipitation for each height pixel.
         """
-        heights = np.asarray(heights)  # sometimes passed as list
-        grad_temp = np.atleast_2d(gradients).repeat(npix, 0)
-        grad_temp *= (
-            heights.repeat(timesteps).reshape(grad_temp.shape) - self.ref_hgt
-        )
-        temperature = np.atleast_2d(temperatures).repeat(npix, 0) + grad_temp
+        # Read already (temperature bias and precipitation factor corrected!)
+        itemp = self.temp[pok]
+        iprcp = self.prcp[pok]
+        igrad = self.grad[pok]
 
-        return temperature
+        # For each height pixel:
+        heights = np.asarray(heights)  # sometimes heights are passed as lists
+        npix = len(heights)
+
+        if np.size(pok) == 1:
+            # fast path for 1D data (one time index)
+            # Compute temp and tempformelt (temperature above melting threshold)
+            temp = itemp + igrad * (heights - self.ref_hgt)
+            tempformelt = self._get_tempformelt(temp)
+
+            # Compute solid precipitation from total precipitation
+            prcp = np.ones(npix) * iprcp
+            prcpsol = self._get_prcpsol(prcp, temp)
+
+            return temp, tempformelt, prcp, prcpsol
+
+        # otherwise we need to handle 2D data
+        # Compute temp and tempformelt (temperature above melting threshold)
+        grad_temp = np.atleast_2d(igrad).repeat(npix, 0)
+        grad_temp *= (heights.repeat(len(pok)).reshape(grad_temp.shape) -
+                      self.ref_hgt)
+        temp2d = np.atleast_2d(itemp).repeat(npix, 0) + grad_temp
+        temp2dformelt = self._get_tempformelt(temp2d)
+
+        # Compute solid precipitation from total precipitation
+        prcp = np.atleast_2d(iprcp).repeat(npix, 0)
+        prcpsol = self._get_prcpsol(prcp, temp2d)
+
+        return temp2d, temp2dformelt, prcp, prcpsol
 
     def get_monthly_climate(
         self, heights: np.ndarray, year: float = None
@@ -814,9 +853,9 @@ class MonthlyTIModel(MassBalanceModel):
         Parameters
         ----------
         heights : np.ndarray[np.float64]
-            Flowline heights [m].
+            Heights in m.
         year : float, optional
-            Hydrological year. Default None.
+            The year (in the "floating year" convention). Default None.
 
         Returns
         -------
@@ -825,138 +864,29 @@ class MonthlyTIModel(MassBalanceModel):
             solid precipitation.
         """
         y, m = floatyear_to_date(year)
-        y = self.get_valid_year(year=y)
-        pok = self.get_time_index(year=y, month=m)
+        y = self.validate_year(year=y)
+        pok = np.where((self.years == y) & (self.months == m))[0][0]
 
-        itemp, iprcp, igrad = self.get_indexed_climate_data(index=pok)
+        t, tmelt, prcp, prcpsol = self._get_climate_for_index(
+            heights=heights, pok=pok,)
 
-        temp, tempformelt, prcp, prcpsol = self.get_monthly_climate_data(
-            heights=heights,
-            itemp=itemp,
-            igrad=igrad,
-            iprcp=iprcp,
-            pok=pok,
-        )
+        # get tmelt for the entire month
+        tmelt *= self.days_in_month(year=year)
 
-        return temp, tempformelt, prcp, prcpsol
+        return t, tmelt, prcp, prcpsol
 
-    def get_melt_temperature(self, temperature: np.ndarray) -> np.ndarray:
-        """Get melt temperatures.
-
-        Parameters
-        ----------
-        temperature : np.ndarray
-            Temperatures.
-
-        Returns
-        -------
-        np.ndarray
-            Melt temperatures.
-        """
-        melt_temperature = temperature - self.t_melt
-        clip_min(melt_temperature, 0, out=melt_temperature)
-
-        return melt_temperature
-
-    def get_monthly_climate_data(
-        self,
-        heights: ArrayLike,
-        itemp: np.ndarray,
-        igrad: np.ndarray,
-        iprcp: np.ndarray,
-        **kwargs,
-    ) -> tuple:
-        """Get climate data for each height pixel.
-
-        Parameters
-        ----------
-        heights : array_like
-            Flowline heights [m].
-        itemp : np.ndarray[np.float64]
-            Temperatures during a given time period.
-        igrad : np.ndarray[np.float64]
-            Slope gradient during a given time period.
-        iprcp : np.ndarray[np.float64]
-            Precipitation during a given time period.
-        **kwargs
-            Extra arguments passed to subclasses of this method.
-
-        Returns
-        -------
-        tuple[np.ndarray]
-            Temperatures, melt temperatures, total precipitation, solid
-            precipitation.
-        """
-        npix = len(heights)
-        temperature = np.ones(npix) * itemp + igrad * (heights - self.ref_hgt)
-        melt_temperature = self.get_melt_temperature(temperature=temperature)
-        prcp, prcpsol = self.get_precipitation(
-            precipitation=iprcp, temperature=temperature, npix=npix
-        )
-
-        return temperature, melt_temperature, prcp, prcpsol
-
-    def get_annual_climate_data(
-        self,
-        heights: ArrayLike,
-        itemp: np.ndarray,
-        igrad: np.ndarray,
-        iprcp: np.ndarray,
-        **kwargs,
-    ) -> tuple:
-        """Get climate data for each height pixel.
-
-        Parameters
-        ----------
-        heights : array_like
-            Flowline heights [m].
-        itemp : np.ndarray[np.float64]
-            Temperatures during a given time period.
-        igrad : np.ndarray[np.float64]
-            Slope gradient during a given time period.
-        iprcp : np.ndarray[np.float64]
-            Precipitation during a given time period.
-        **kwargs
-            Extra arguments passed to subclasses of this method.
-
-        Returns
-        -------
-        tuple[np.ndarray]
-            Temperature, melt temperatures, total precipitation, and
-            solid precipitation for each height pixel.
-        """
-        pok: np.ndarray = kwargs.get("pok", itemp)  # get time index
-        heights = np.asarray(heights)  # sometimes heights are passed as lists
-        npix = len(heights)
-
-        temperature = self.get_2d_temperature(
-            heights=heights,
-            temperatures=itemp,
-            gradients=igrad,
-            npix=npix,
-            timesteps=len(pok),
-        )
-        melt_temperature = self.get_melt_temperature(temperature=temperature)
-        prcp, prcpsol = self.get_2d_precipitation(
-            precipitation=iprcp, temperature=temperature, npix=npix
-        )
-
-        return temperature, melt_temperature, prcp, prcpsol
-
-    def _get_2d_annual_climate(self, heights, year):
+    def _get_2d_annual_climate(self, heights, year=None):
         # Avoid code duplication with a getter routine
         year = np.floor(year)
-        year = self.get_valid_year(year=year)
+        year = self.validate_year(year=year)
         pok = np.where(self.years == year)[0]
         if len(pok) < 1:
-            raise ValueError(f'Year {int(year)} not in record')
+            raise ValueError('Year {} not in record'.format(int(year)))
 
-        itemp, iprcp, igrad = self.get_indexed_climate_data(index=pok)
-        temp2d, temp2dformelt, prcp, prcpsol = self.get_annual_climate_data(
-            heights, itemp, igrad, iprcp, pok=pok
-        )
+        t, tmelt, prcp, prcpsol = self._get_climate_for_index(
+            heights=heights, pok=pok)
 
-        return temp2d, temp2dformelt, prcp, prcpsol
+        return t, tmelt, prcp, prcpsol
 
     def get_annual_climate(self, heights, year=None):
         """Annual climate information at given heights.
@@ -970,25 +900,31 @@ class MonthlyTIModel(MassBalanceModel):
             Mean temperature, and sums of melt temperature,
             precipitation, and solid precipitation.
         """
-        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
+        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(
+            heights=heights, year=year)
+        myr = date_to_floatyear(np.repeat(int(np.floor(year)), 12),
+                                np.arange(1, 13))
+        days_of_month = [self.days_in_month(year=yr) for yr in myr]
+        # get tmelt for the entire month
+        tmelt *= days_of_month
+
         return (t.mean(axis=1), tmelt.sum(axis=1),
                 prcp.sum(axis=1), prcpsol.sum(axis=1))
 
-    def get_monthly_mb(
-        self,
-        heights: np.ndarray,
-        year: float = None,
-        add_climate: bool = False,
-        **kwargs,
-    ) -> np.ndarray:
+    def get_monthly_mb(self,
+                       heights: np.ndarray,
+                       year: float = None,
+                       add_climate: bool = False,
+                       **kwargs,
+                       ) -> np.float64 or tuple:
         """Get monthly mass balance.
 
         Parameters
         ----------
         heights : array_like
-            Flowline heights [m].
+            Heights in m.
         year : float, optional
-            Hydrological year. Default None.
+            The year (in the "floating year" convention). Default None.
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
@@ -1006,12 +942,14 @@ class MonthlyTIModel(MassBalanceModel):
             solid precipitation.
         """
         t, tmelt, prcp, prcpsol = self.get_monthly_climate(heights, year=year)
-        mb_month = prcpsol - self.monthly_melt_f * tmelt
-        mb_month -= self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+
+        # lenght of the month in days already considered in tmelt in get_monhtly_climate
+        mb_month = prcpsol - self.melt_f * tmelt
+        sec_in_month = self.sec_in_month(year=year)
+        mb_month -= (self.bias * sec_in_month / self.sec_in_year(year=year))
         if add_climate:
-            return (mb_month / SEC_IN_MONTH / self.rho, t, tmelt,
-                    prcp, prcpsol)
-        return mb_month / SEC_IN_MONTH / self.rho
+            return mb_month / sec_in_month / self.rho, t, tmelt, prcp, prcpsol
+        return mb_month / sec_in_month / self.rho
 
     def get_annual_mb(self, heights, year=None, add_climate=False, **kwargs):
         """Get annual mass balance.
@@ -1019,9 +957,9 @@ class MonthlyTIModel(MassBalanceModel):
         Parameters
         ----------
         heights : array_like
-            Flowline heights [m].
+            Heights in m.
         year : float, optional
-            Hydrological year. Default None.
+            The year (in the "floating year" convention). Default None.
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
@@ -1038,10 +976,16 @@ class MonthlyTIModel(MassBalanceModel):
             the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
-        # TODO: deprecate kwargs if unused.
         t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
-        mb_annual = np.sum(prcpsol - self.monthly_melt_f * tmelt, axis=1)
-        mb_annual = (mb_annual - self.bias) / SEC_IN_YEAR / self.rho
+        myr = date_to_floatyear(np.repeat(int(np.floor(year)), 12),
+                                np.arange(1, 13))
+        days_of_month = [self.days_in_month(year=yr) for yr in myr]
+        # get tmelt for the entire month
+        tmelt *= days_of_month
+
+        mb_annual = np.sum(prcpsol - self.melt_f * tmelt, axis=1)
+        mb_annual = ((mb_annual - self.bias) / self.sec_in_year(year=year) /
+                     self.rho)
         if add_climate:
             return (mb_annual, t.mean(axis=1), tmelt.sum(axis=1),
                     prcp.sum(axis=1), prcpsol.sum(axis=1))
@@ -1049,10 +993,7 @@ class MonthlyTIModel(MassBalanceModel):
 
 
 class DailyTIModel(MonthlyTIModel):
-    """Daily temperature index model.
-
-    Adapted from OGGM/massbalance-sandbox.
-    """
+    """Daily temperature index model."""
 
     def __init__(
         self,
@@ -1065,10 +1006,13 @@ class DailyTIModel(MonthlyTIModel):
         temp_bias: float = None,
         prcp_fac: float = None,
         bias: float = 0.0,
+        temp_melt: float = 0.0,
         ys: int = None,
         ye: int = None,
         repeat: bool = False,
         check_calib_params: bool = True,
+        check_climate_data: bool = True,
+        use_leap_years: bool = True,
     ):
         """Inherits from MonthlyTIModel.
 
@@ -1102,6 +1046,9 @@ class DailyTIModel(MonthlyTIModel):
             the calibrated value. Note that this bias is *subtracted*
             from the computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
+        temp_melt : float, default 0.0
+            The threshold for the air temperature above which ice melt is
+            assumed to occur (0°C the default for daily mb models).
         ys : int, optional
             The end of the climate period where the MB model is valid.
             Defaults to the period with available data.
@@ -1117,6 +1064,11 @@ class DailyTIModel(MonthlyTIModel):
             and the ones you are using at run time. If they don't
             match, it will raise an error. Set to ``False`` to suppress
             this check.
+        check_climate_data : bool, default True
+            If True, check the climate input data is provided in total
+            years and that the length matches.
+        use_leap_years : bool, default True
+            If the calendar should use leap years.
         """
 
         self.settings_filesuffix = settings_filesuffix
@@ -1134,10 +1086,13 @@ class DailyTIModel(MonthlyTIModel):
             temp_bias=temp_bias,
             prcp_fac=prcp_fac,
             bias=bias,
+            temp_melt=temp_melt,
             ys=ys,
             ye=ye,
             repeat=repeat,
             check_calib_params=check_calib_params,
+            check_climate_data=check_climate_data,
+            use_leap_years=use_leap_years,
         )
 
     @property
@@ -1148,198 +1103,158 @@ class DailyTIModel(MonthlyTIModel):
     def melt_f(self, new_melt_f):
         self._melt_f = new_melt_f
 
-    def set_temporal_bounds(
-        self, nc_data: xr.DataArray, ys: int, ye: int, default_grad: float
-    ) -> None:
-        """Constrain data to a start and end year.
+    def _check_for_full_years(self):
+        # We check for full calendar years
+        nr_of_days = 0
+        for yr in np.arange(self.years[0], self.years[-1] + 1):
+            nr_of_days += self.days_in_year(yr)
+        len_data_ok = len(self.years) == nr_of_days
+        months_ok = (self.months[0] == 1) and (self.months[-1] == 12)
+        days_ok = (self.days[0] == 1) and (self.days[-1] == 31)
+        if not months_ok or not days_ok or not len_data_ok:
+            raise InvalidWorkflowError(
+                "We now work exclusively with full calendar years (01.01. - "
+                "31.12.). Check provided climate data!\nYour current selection: "
+                f"{self.days[0]:02d}.{self.months[0]:02d}.{self.years[0]:04d} - "
+                f"{self.days[-1]:02d}.{self.months[-1]:02d}.{self.years[-1]:04d}"
+                f"\nYour data has {len(self.years)} timestamps, but we expect "
+                f"{nr_of_days}."
+            )
 
-        Updates the following attributes:
-            - ``years``
-            - ``months``
-            - ``days``
-            - ``temp``
-            - ``prcp``
-            - ``grad``
-            - ``ref_hgt``
-            - ``climate_source``
-            - ``ys``
-            - ``ye``
+    def get_annual_climate(self, heights, year=None):
+        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
 
-        Parameters
-        ----------
-        nc_data : xr.DataArray
-            Climate data.
-        ys : int or float
-            Desired first year of data period.
-        ye : int or float
-            Desired last year of data period.
-        default_grad : float
-            Default temperature gradient.
-        """
-        time = nc_data.variables["time"]
-        time = cftime.num2date(time[:], time.units, calendar=time.calendar)
-        # data are no longer in hydro years
-        # time = calendardate_to_hydrodate_cftime(dates=time, start_month=int(time[0].month))
+        return (t.mean(axis=1), tmelt.sum(axis=1),
+                prcp.sum(axis=1), prcpsol.sum(axis=1))
 
-        # 1.5x faster than np.vectorize
-        years = np.array(list(map(lambda x: x.year, time)))
-        pok = slice(None)  # take all is default (optim)
-        if ys is not None:
-            pok = years >= ys
-        if ye is not None:
-            try:
-                pok = pok & (years <= ye)
-            except TypeError:
-                pok = years <= ye
-
-        self.years = years[pok]
-        self.months = np.array(list(map(lambda x: x.month, time)))[pok]
-        self.days = np.array(list(map(lambda x: x.day, time)))[pok]
-
-        self.temp = (
-            nc_data.variables["temp"][pok].astype(np.float64) + self._temp_bias
-        )
-        # this is prcp computed by instantiation, which changes if
-        # prcp_fac is updated (see @property)
-        self.prcp = (
-            nc_data.variables["prcp"][pok].astype(np.float64) * self._prcp_fac
-        )
-
-        grad = self.prcp * 0 + default_grad
-        self.grad = grad
-        self.ref_hgt = nc_data.ref_hgt
-        self.climate_source = nc_data.climate_source
-        self.ys = self.years[0]
-        self.ye = self.years[-1]
-
-    def get_time_index(self, year: int, month: int) -> np.ndarray:
-        """Get time index for a particular year and month.
-
-        Parameters
-        ----------
-        year : int
-            Integer year.
-        month : int
-            Integer month.
-
-        Returns
-        -------
-        np.ndarray
-            Time index (days).
-        """
-        time_index = np.where((self.years == year) & (self.months == month))[0]
-
-        return time_index
-
-    def get_monthly_climate_data(
-        self,
-        heights: ArrayLike,
-        itemp: np.ndarray,
-        igrad: np.ndarray,
-        iprcp: np.ndarray,
-        **kwargs,
+    def _get_2d_monthly_climate(
+        self, heights: np.ndarray, year: float = None
     ) -> tuple:
-        """Get climate data for each height pixel.
+        y, m = floatyear_to_date(year)
+        y = self.validate_year(year=y)
+        pok = np.where((self.years == y) & (self.months == m))[0]
+
+        t, tmelt, prcp, prcpsol = self._get_climate_for_index(
+            heights=heights, pok=pok)
+
+        return t, tmelt, prcp, prcpsol
+
+    def get_monthly_climate(
+        self, heights: np.ndarray, year: float = None
+    ) -> tuple:
+        """Monthly climate information at given heights.
+
+        Note that prcp is corrected with the precipitation factor and that
+        all other model biases (temp and prcp) are applied.
 
         Parameters
         ----------
-        heights : array_like
-            Flowline heights [m].
-        itemp : np.ndarray[np.float64]
-            Temperatures during a given time period.
-        igrad : np.ndarray[np.float64]
-            Slope gradient during a given time period.
-        iprcp : np.ndarray[np.float64]
-            Precipitation during a given time period.
-        **kwargs
-            Extra arguments passed to ``get_2d_temperature``.
+        heights : np.ndarray[np.float64]
+            Heights in m.
+        year : float, optional
+            The year (in the "floating year" convention). Default None.
 
         Returns
         -------
         tuple[np.ndarray]
-            Temperature, melt temperatures, total precipitation, and
-            solid precipitation for each height pixel."""
+            Temperatures, melt temperatures, total precipitation, and
+            solid precipitation.
+        """
 
-        return self.get_annual_climate_data(
-            heights=heights, itemp=itemp, igrad=igrad, iprcp=iprcp, **kwargs
-        )
+        t, tmelt, prcp, prcpsol = self._get_2d_monthly_climate(heights, year)
 
-    def get_daily_climate_data(
-        self,
-        heights: ArrayLike,
-        itemp: np.ndarray,
-        igrad: np.ndarray,
-        iprcp: np.ndarray,
-        **kwargs,
-    ) -> tuple:
-        """Get climate data for each height pixel.
+        return (t.mean(axis=1), tmelt.sum(axis=1),
+                prcp.sum(axis=1), prcpsol.sum(axis=1))
+
+    def get_daily_climate(self,
+                          heights: np.ndarray,
+                          year: float = None,
+                          ) -> tuple:
+        """Daily climate information at given heights.
+
+        Note that prcp is corrected with the precipitation factor and that
+        all other model biases (temp and prcp) are applied.
 
         Parameters
         ----------
-        heights : array_like
-            Flowline heights [m].
-        itemp : np.ndarray[np.float64]
-            Temperatures during a given time period.
-        igrad : np.ndarray[np.float64]
-            Slope gradient during a given time period.
-        iprcp : np.ndarray[np.float64]
-            Precipitation during a given time period.
-        **kwargs
-            Extra arguments passed to ``get_2d_temperature``.
+        heights : np.ndarray[np.float64]
+            Heights in m.
+        year : float, optional
+            The year (in the "floating year" convention). Default None.
 
         Returns
         -------
         tuple[np.ndarray]
-            Temperature, melt temperatures, total precipitation, and
-            solid precipitation for each height pixel."""
+            Temperatures, melt temperatures, total precipitation, and
+            solid precipitation.
+        """
+        y, m, d = floatyear_to_date(year, months_only=False)
+        y = self.validate_year(year=y)
+        pok = np.where((self.years == y) &
+                       (self.months == m) &
+                       (self.days == d))[0][0]
 
-        temp2d, temp2dformelt, prcp, prcpsol = self.get_annual_climate_data(
-            heights=heights, itemp=itemp, igrad=igrad, iprcp=iprcp, **kwargs
-        )
+        t, tmelt, prcp, prcpsol = self._get_climate_for_index(
+            heights=heights, pok=pok, )
 
-        return temp2d, temp2dformelt, prcp, prcpsol
+        return t, tmelt, prcp, prcpsol
 
-    def get_melt_temperature(
-        self, temperature: np.ndarray, time_index: np.ndarray = None
-    ) -> np.ndarray:
-        """Get melt temperature.
+    def get_daily_mb(self,
+                     heights: np.ndarray,
+                     year: int = None,
+                     add_climate: bool = False,
+                     **kwargs,
+                     ) -> np.float64 or tuple:
+        """Get daily mass balance.
 
-        This method is kept in case it needs modifying for synthetic
-        daily data (mb_pseudo_daily).
+        Accounts for leap years by default.
 
         Parameters
         ----------
-        temperature : np.ndarray
-            Temperatures.
-        time_index : np.ndarray, default None
-            Measurement times. Currently a placeholder for synthetic
-            data.
+        heights : array_like
+            Heights in m.
+        year : int, optional
+            The year (in the "floating year" convention). Default None.
+        add_climate : bool, default False
+            Additionally returns mean temperature and the sums of melt
+            temperature, total precipitation, and solid precipitation.
+            Avoids recalculating climatology later in some workflows,
+            e.g. ``run_with_hydro``.
+        **kwargs
+            Extra arguments passed to subclasses of this method.
 
         Returns
         -------
-        np.ndarray
-            Melt temperatures.
+        np.ndarray[np.float64] or tuple[np.ndarray]
+            Daily mass balance in metres of ice per second. If
+            ``add_climate`` is True, also returns mean temperature and
+            the sums of melt temperature, total precipitation, and
+            solid precipitation.
         """
-        melt_temperature = temperature - self.t_melt
-        clip_min(melt_temperature, 0, out=melt_temperature)
+        t, tmelt, prcp, prcpsol = self.get_daily_climate(heights, year=year)
 
-        return melt_temperature
+        mb_daily = prcpsol - self.melt_f * tmelt
+        mb_daily -= (self.bias * SEC_IN_DAY / self.sec_in_year(year=year))
 
-    def get_monthly_mb(
-        self,
-        heights: ArrayLike,
-        year: float = None,
-        add_climate: bool = False,
-        **kwargs,
-    ) -> np.ndarray:
+        if add_climate:
+            return (mb_daily / SEC_IN_DAY / self.rho,
+                    t, tmelt, prcp, prcpsol)
+        return mb_daily / SEC_IN_DAY / self.rho
+
+    def get_monthly_mb(self,
+                       heights: np.ndarray,
+                       year: float = None,
+                       add_climate: bool = False,
+                       **kwargs,
+                       ) -> np.float64 or tuple:
         """Get monthly mass balance.
 
         Parameters
         ----------
-        heights : array_like
-            Flowline heights [m].
+        heights : np.ndarray
+            Heights in m.
         year : float, optional
-            Hydrological year. Default None.
+            The year (in the "floating year" convention). Default None.
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
@@ -1352,41 +1267,31 @@ class DailyTIModel(MonthlyTIModel):
 
         Returns
         -------
-        np.ndarray[np.float64] or tuple[np.ndarray]
+        np.float64 or tuple[np.ndarray]
             Monthly mass balance in metres of ice per second. If
             ``add_climate`` is True, also returns mean temperature and
             the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
-        temperature, melt_temperature, prcp, prcpsol = self.get_monthly_climate(
-            heights, year=year
-        )
-        # more accurate than using mean days per month
-        days_in_month = prcpsol.shape[1]
-        mb_month = np.sum(
-            prcpsol - self.melt_f * days_in_month * melt_temperature, axis=1
-        )
-        mb_month = (
-            (mb_month - self.bias) / (SEC_IN_DAY * days_in_month) / self.rho
-        )
+        t, tmelt, prcp, prcpsol = self._get_2d_monthly_climate(heights, year)
+
+        mb_month = np.sum(prcpsol - self.melt_f * tmelt,
+                          axis=1)
+        sec_in_month = self.sec_in_month(year=year)
+        mb_month -= (self.bias * sec_in_month / self.sec_in_year(year=year))
+
         if add_climate:
-            return (
-                mb_month,
-                temperature.mean(axis=1),
-                melt_temperature.sum(axis=1),
-                prcp.sum(axis=1),
-                prcpsol.sum(axis=1),
-            )
+            return (mb_month / sec_in_month / self.rho, t.mean(axis=1),
+                    tmelt.sum(axis=1), prcp.sum(axis=1), prcpsol.sum(axis=1))
 
-        return mb_month
+        return mb_month / sec_in_month / self.rho
 
-    def get_annual_mb(
-        self,
-        heights: ArrayLike,
-        year: float = None,
-        add_climate: bool = False,
-        **kwargs,
-    ) -> np.ndarray:
+    def get_annual_mb(self,
+                      heights: np.ndarray,
+                      year: float = None,
+                      add_climate: bool = False,
+                      **kwargs,
+                      ) -> np.float64 or tuple:
         """Get annual mass balance.
 
         This is equivalent to taking the sum of ``get_daily_mb``.
@@ -1394,9 +1299,9 @@ class DailyTIModel(MonthlyTIModel):
         Parameters
         ----------
         heights : array_like
-            Flowline heights [m].
+            Heights in m.
         year : float, optional
-            Hydrological year. Default None.
+            The year (in the "floating year" convention). Default None.
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
@@ -1413,86 +1318,17 @@ class DailyTIModel(MonthlyTIModel):
             the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
-        temperature, melt_temperature, prcp, prcpsol = (
-            self._get_2d_annual_climate(heights, year)
-        )
+        t, tmelt, prcp, prcpsol = self._get_2d_annual_climate(heights, year)
 
-        year_length = self.get_year_length(year)
-        upscale_factor = prcpsol.shape[1] / 365
-        mb_annual = np.sum(
-            prcpsol - self.melt_f * upscale_factor * melt_temperature,
-            axis=1,
-        )
+        mb_annual = np.sum(prcpsol - self.melt_f * tmelt,
+                           axis=1)
+        mb_annual = ((mb_annual - self.bias) / self.sec_in_year(year=year) /
+                     self.rho)
 
-        mb_annual = (
-            (mb_annual - self.bias * upscale_factor)
-            / year_length
-            / self.rho
-        )
         if add_climate:
-            return (
-                mb_annual,
-                temperature.mean(axis=1),
-                melt_temperature.sum(axis=1),
-                prcp.sum(axis=1),
-                prcpsol.sum(axis=1),
-            )
+            return (mb_annual, t.mean(axis=1), tmelt.sum(axis=1),
+                    prcp.sum(axis=1), prcpsol.sum(axis=1))
         return mb_annual
-
-    def get_daily_mb(
-        self,
-        heights: ArrayLike,
-        year: int = None,
-        add_climate: bool = False,
-        **kwargs,
-    ) -> np.ndarray:
-        """Get daily mass balance.
-
-        Accounts for leap years.
-
-        Parameters
-        ----------
-        heights : array_like
-            Flowline heights [m].
-        year : int, optional
-            Hydrological year. Default None.
-        add_climate : bool, default False
-            Additionally returns mean temperature and the sums of melt
-            temperature, total precipitation, and solid precipitation.
-            Avoids recalculating climatology later in some workflows,
-            e.g. ``run_with_hydro``.
-
-        Returns
-        -------
-        np.ndarray[np.float64] or tuple[np.ndarray]
-            Daily mass balance in metres of ice per second. If
-            ``add_climate`` is True, also returns mean temperature and
-            the sums of melt temperature, total precipitation, and
-            solid precipitation.
-        """
-        if isinstance(year, float):
-            raise TypeError("Year must be an integer.")  # Why?
-
-        temperature, melt_temperature, prcp, prcpsol = (
-            self._get_2d_daily_climate(heights=heights, year=year)
-        )
-        upscale_factor = prcpsol.shape[1] / 365
-        mb_daily = (
-            prcpsol - self.melt_f * upscale_factor * melt_temperature
-        )
-
-        mb_daily = (
-            (mb_daily - self.bias * upscale_factor) / SEC_IN_DAY / self.rho
-        )
-        if add_climate:
-            return (
-                mb_daily,
-                temperature.mean(axis=1),
-                melt_temperature.sum(axis=1),
-                prcp.sum(axis=1),
-                prcpsol.sum(axis=1),
-            )
-        return mb_daily
 
     def _get_2d_daily_climate(
         self, heights: ArrayLike, year: ArrayLike
@@ -1517,76 +1353,64 @@ class DailyTIModel(MonthlyTIModel):
 
         return self._get_2d_annual_climate(heights=heights, year=year)
 
-    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
-        """Specific mass balance for a given glacier geometry.
+    # def get_specific_mb(self, heights=None, widths=None, fls=None, year=None, time_resolution="annual"):
+    #     """Specific mass balance for a given glacier geometry.
 
-        Inheriting avoids recalculating SEC_IN_YEAR for each year. This
-        changes the year length in the unit, but not how the specific MB
-        is calculated.
+    #     Inheriting avoids recalculating SEC_IN_YEAR for each year. This
+    #     changes the year length in the unit, but not how the specific MB
+    #     is calculated.
 
-        Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+    #     Units depends on time_resolution:
+    #     - 'annual': [mm w.e. yr-1], or millimeter water equivalent per year.
+    #     - 'monthly': [mm w.e. month-1], or millimeter water equivalent per month.
+    #     - 'daily': [mm w.e. day-1], or millimeter water equivalent per day.
 
-        Parameters
-        ----------
-        heights : array_like, default None
-            Altitudes at which the mass balance will be computed.
-            Overridden by ``fls`` if provided.
-        widths : array_like, default None
-            Widths of the flowline (necessary for the weighted average).
-            Overridden by ``fls`` if provided.
-        fls : list[oggm.Flowline], default None
-            List of flowline instances. Alternative to heights and
-            widths, and overrides them if provided.
-        year : array_like[float] or float, default None
-            Year, or a range of years in "floating year" convention.
+    #     Parameters
+    #     ----------
+    #     heights : array_like, default None
+    #         Altitudes at which the mass balance will be computed.
+    #         Overridden by ``fls`` if provided.
+    #     widths : array_like, default None
+    #         Widths of the flowline (necessary for the weighted average).
+    #         Overridden by ``fls`` if provided.
+    #     fls : list[oggm.Flowline], default None
+    #         List of flowline instances. Alternative to heights and
+    #         widths, and overrides them if provided.
+    #     year : array_like[float] or float, default None
+    #         Year, or a range of years in "floating year" convention.
+    #     time_resolution : str
+    #         The resolution of the provided "floating year". Options are
+    #         'annual', 'monthly' or 'daily'. Default is 'annual'.
 
-        Returns
-        -------
-        np.ndarray
-            Specific mass balance (units: mm w.e. yr-1).
-        """
-        smb = super().get_specific_mb(
-            heights=heights, widths=widths, fls=fls, year=year
-        )
-        mask = np.vectorize(calendar.isleap)(year)  # strangely faster than map
-        smb = np.where(mask, smb * 366 / 365, smb)
+    #     Returns
+    #     -------
+    #     np.ndarray
+    #         Specific mass balance (units: mm w.e. yr-1).
+    #     """
+    #     smb = super().get_specific_mb(
+    #         heights=heights, widths=widths, fls=fls, year=year
+    #     )
+    #     mask = np.vectorize(calendar.isleap)(year)  # strangely faster than map
+    #     smb = np.where(mask, smb * 366 / 365, smb)
 
-        return smb
+    #     return smb
 
-    def get_specific_mb_daily(self, heights=None, widths=None, fls=None, year=None):
-        """ returns specific daily mass balance in kg m-2 day
+    # def get_specific_mb_daily(self, heights=None, widths=None, fls=None, year=None):
+    #     """ returns specific daily mass balance in kg m-2 day
 
-        (implemented in order that Sarah Hanus can use daily input and also gets daily output)
-        """
-        if len(np.atleast_1d(year)) > 1:
-            stack = []
-            for yr in year:
-                out = self.get_specific_mb_daily(heights=heights, widths=widths, year=yr)
-                stack = np.append(stack, out)
-            return np.asarray(stack)
+    #     (implemented in order that Sarah Hanus can use daily input and also gets daily output)
+    #     """
+    #     if len(np.atleast_1d(year)) > 1:
+    #         stack = []
+    #         for yr in year:
+    #             out = self.get_specific_mb_daily(heights=heights, widths=widths, year=yr)
+    #             stack = np.append(stack, out)
+    #         return np.asarray(stack)
 
-        mb = self.get_daily_mb(heights, year=year)
-        spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
-        assert len(spec_mb) > 360
-        return spec_mb
-
-    def get_year_length(self, year: float = None) -> float:
-        """Get the number of seconds in a year.
-
-        Parameters
-        ----------
-        year : float or int
-            Year in floating year convention.
-
-        Returns
-        -------
-        float
-            The number of seconds in a year.
-        """
-        if not calendar.isleap(year):
-            return SEC_IN_YEAR
-        else:
-            return SEC_IN_DAY * 366
+    #     mb = self.get_daily_mb(heights, year=year)
+    #     spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
+    #     assert len(spec_mb) > 360
+    #     return spec_mb
 
 
 class DailySfcTIModel(DailyTIModel):
@@ -1607,10 +1431,13 @@ class DailySfcTIModel(DailyTIModel):
         temp_bias: float = None,
         prcp_fac: float = None,
         bias: float = 0.0,
+        temp_melt = 0.0,
         ys: int = None,
         ye: int = None,
         repeat: bool = False,
         check_calib_params: bool = True,
+        check_climate_data: bool = True,
+        use_leap_years: bool = True,
         resolution: str = "day",
         gradient_scheme: str = "annual",
         melt_f_ratio: float = 0.5,
@@ -1658,6 +1485,9 @@ class DailySfcTIModel(DailyTIModel):
             value). Note that this bias is *subtracted* from the
             computed MB. Indeed:
             BIAS = MODEL_MB - REFERENCE_MB.
+        temp_melt : float, default 0.0
+            The threshold for the air temperature above which ice melt is
+            assumed to occur (0°C the default for daily mb models).
         ys : int, optional
             The start of the climate period where the MB model is valid
             (default: the period with available data).
@@ -1673,6 +1503,11 @@ class DailySfcTIModel(DailyTIModel):
             and the ones you are using at run time. If they don't
             match, it will raise an error. Set to "False" to suppress
             this check.
+        check_climate_data : bool, default True
+            If True, check the climate input data is provided in total
+            years and that the length matches.
+        use_leap_years : bool, default True
+            If the calendar should use leap years.
         resolution : str, default 'day'
             Temporal mass balance resolution.
         gradient_scheme : str, default 'annual'
@@ -2570,11 +2405,12 @@ class DailySfcTIModel(DailyTIModel):
                     resolution="month",
                     add_climate=add_climate,
                 )
+            sec_in_month = self.sec_in_month(year=year)
             mb_month = (
                 self.mb_bucket["delta_kg/m2"].values
-                - self.bias * SEC_IN_MONTH / SEC_IN_YEAR
+                - self.bias * sec_in_month / SEC_IN_YEAR
             )
-            mb_month = mb_month.flatten() / SEC_IN_MONTH / self.rho
+            mb_month = mb_month.flatten() / sec_in_month / self.rho
             self.mb_month[year] = mb_month
             self.mb_month[year] = mb_month
 
@@ -2723,87 +2559,87 @@ class DailySfcTIModel(DailyTIModel):
         else:
             raise InvalidParamsError("Set resolution to 'day'")
 
-    def get_specific_mb(
-        self, heights=None, widths=None, fls=None, year=None, **kwargs
-    ):
-        """Get the specific mass balance for a given glacier geometry.
+    # def get_specific_mb(
+    #     self, heights=None, widths=None, fls=None, year=None, **kwargs
+    # ):
+    #     """Get the specific mass balance for a given glacier geometry.
 
-        Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+    #     Units: [mm w.e. yr-1], or millimeter water equivalent per year.
 
-        Parameters
-        ----------
-        heights : array_like, default None
-            Altitudes at which the mass balance will be computed.
-            Overridden by ``fls`` if provided.
-        widths : array_like, default None
-            Widths of the flowline (necessary for the weighted average).
-            Overridden by ``fls`` if provided.
-        fls : list[oggm.Flowline], default None
-            List of flowline instances. Alternative to heights and
-            widths, and overrides them if provided.
-        year : array_like[float] or float, default None
-            Year, or a range of years in "floating year" convention.
+    #     Parameters
+    #     ----------
+    #     heights : array_like, default None
+    #         Altitudes at which the mass balance will be computed.
+    #         Overridden by ``fls`` if provided.
+    #     widths : array_like, default None
+    #         Widths of the flowline (necessary for the weighted average).
+    #         Overridden by ``fls`` if provided.
+    #     fls : list[oggm.Flowline], default None
+    #         List of flowline instances. Alternative to heights and
+    #         widths, and overrides them if provided.
+    #     year : array_like[float] or float, default None
+    #         Year, or a range of years in "floating year" convention.
 
-        Returns
-        -------
-        np.ndarray
-            Specific mass balance (units: mm w.e. yr-1).
-        """
-        stack = []
-        year = np.atleast_1d(year)
-        for mb_yr in year:
-            if fls is not None:
-                mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
-            else:
-                mbs = self.get_annual_mb(heights=heights, year=mb_yr, **kwargs)
-                mbs = weighted_average_1d(mbs, widths)
-            stack.append(mbs)
+    #     Returns
+    #     -------
+    #     np.ndarray
+    #         Specific mass balance (units: mm w.e. yr-1).
+    #     """
+    #     stack = []
+    #     year = np.atleast_1d(year)
+    #     for mb_yr in year:
+    #         if fls is not None:
+    #             mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
+    #         else:
+    #             mbs = self.get_annual_mb(heights=heights, year=mb_yr, **kwargs)
+    #             mbs = weighted_average_1d(mbs, widths)
+    #         stack.append(mbs)
 
-        smb = set_array_type(stack) * SEC_IN_YEAR * self.rho
-        mask = np.vectorize(calendar.isleap)(year)  # strangely faster than map
-        smb = np.where(mask, smb * 366 / 365, smb)
+    #     smb = set_array_type(stack) * SEC_IN_YEAR * self.rho
+    #     mask = np.vectorize(calendar.isleap)(year)  # strangely faster than map
+    #     smb = np.where(mask, smb * 366 / 365, smb)
 
-        return smb
+    #     return smb
 
-    def get_specific_mb_daily(
-        self, heights=None, widths=None, fls=None, year=None
-    ):
-        """Get specific daily mass balance for a given glacier geometry.
+    # def get_specific_mb_daily(
+    #     self, heights=None, widths=None, fls=None, year=None
+    # ):
+    #     """Get specific daily mass balance for a given glacier geometry.
 
-        Units: [mm w.e. day-1], or millimeter water equivalent per day.
+    #     Units: [mm w.e. day-1], or millimeter water equivalent per day.
 
-        Parameters
-        ----------
-        heights : array_like, default None
-            Altitudes at which the mass balance will be computed.
-            Overridden by ``fls`` if provided.
-        widths : array_like, default None
-            Widths of the flowline (necessary for the weighted average).
-            Overridden by ``fls`` if provided.
-        fls : list[oggm.Flowline], default None
-            List of flowline instances. Alternative to heights and
-            widths, and overrides them if provided.
-        year : array_like[float] or float, default None
-            Year, or a range of years in "floating year" convention.
+    #     Parameters
+    #     ----------
+    #     heights : array_like, default None
+    #         Altitudes at which the mass balance will be computed.
+    #         Overridden by ``fls`` if provided.
+    #     widths : array_like, default None
+    #         Widths of the flowline (necessary for the weighted average).
+    #         Overridden by ``fls`` if provided.
+    #     fls : list[oggm.Flowline], default None
+    #         List of flowline instances. Alternative to heights and
+    #         widths, and overrides them if provided.
+    #     year : array_like[float] or float, default None
+    #         Year, or a range of years in "floating year" convention.
 
-        Returns
-        -------
-        np.ndarray
-            Specific mass balance (units: mm w.e. day-1).
-        """
-        if len(np.atleast_1d(year)) > 1:
-            stack = []
-            for yr in year:
-                out = self.get_specific_mb_daily(
-                    heights=heights, widths=widths, year=yr
-                )
-                stack = np.append(stack, out)
-            return np.asarray(stack)
+    #     Returns
+    #     -------
+    #     np.ndarray
+    #         Specific mass balance (units: mm w.e. day-1).
+    #     """
+    #     if len(np.atleast_1d(year)) > 1:
+    #         stack = []
+    #         for yr in year:
+    #             out = self.get_specific_mb_daily(
+    #                 heights=heights, widths=widths, year=yr
+    #             )
+    #             stack = np.append(stack, out)
+    #         return np.asarray(stack)
 
-        mb = self.get_daily_mb(heights, year=year)
-        spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
-        assert len(spec_mb) > 360
-        return spec_mb
+    #     mb = self.get_daily_mb(heights, year=year)
+    #     spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
+    #     assert len(spec_mb) > 360
+    #     return spec_mb
 
     def get_ela(self, year=None, **kwargs):
         """Get the equilibrium line altitude for a given year.
@@ -3020,8 +2856,8 @@ class ConstantMassBalance(MassBalanceModel):
         -------
         (temp, tempformelt, prcp, prcpsol)
         """
-        yrs = monthly_timeseries(self.years[0], self.years[-1],
-                                 include_last_year=True)
+        yrs = float_years_timeseries(self.years[0], self.years[-1],
+                                     include_last_year=True)
         heights = np.atleast_1d(heights)
         nh = len(heights)
         shape = (len(yrs), nh)
@@ -3396,6 +3232,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         self.valid_bounds = self.flowline_mb_models[-1].valid_bounds
         self.hemisphere = gdir.hemisphere
+        self.rho = self.flowline_mb_models[-1].rho
+        self.use_leap_years = self.flowline_mb_models[-1].use_leap_years
 
     @property
     def temp_bias(self):
@@ -3435,9 +3273,12 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def get_daily_mb(self, heights, year=None, fl_id=None, **kwargs):
         if fl_id is None:
-            raise ValueError("`fl_id` is required for MultipleFlowlineMassBalance.")
+            raise ValueError("`fl_id` is required for"
+                             "MultipleFlowlineMassBalance.")
 
-        return self.flowline_mb_models[fl_id].get_daily_mb(heights, year=year, **kwargs)
+        return self.flowline_mb_models[fl_id].get_daily_mb(heights,
+                                                           year=year,
+                                                           **kwargs)
 
     def get_monthly_mb(self, heights, year=None, fl_id=None, **kwargs):
 
@@ -3459,6 +3300,55 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                                             year=year,
                                                             **kwargs)
 
+    def _get_mb_on_flowlines(self, fls=None, year=None, mb_call=None):
+        if fls is None:
+            fls = self.fls
+
+        heights = []
+        widths = []
+        mbs = []
+        for i, fl in enumerate(fls):
+            h = fl.surface_h
+            heights = np.append(heights, h)
+            widths = np.append(widths, fl.widths)
+            mbs = np.append(mbs, mb_call(h, year=year, fl_id=i))
+
+        return heights, widths, mbs
+
+    def get_daily_mb_on_flowlines(self, fls=None, year=None):
+        """Get the MB on all points of the glacier at once.
+
+        Parameters
+        ----------
+        fls: list, optional
+            the list of flowlines to get the mass balance from. Defaults
+            to self.fls
+        year: float, optional
+            the time (in the "floating year" convention)
+        Returns
+        -------
+        Tuple of (heights, widths, mass_balance) 1D arrays
+        """
+        return self._get_mb_on_flowlines(fls=fls, year=year,
+                                         mb_call=self.get_daily_mb)
+
+    def get_monthly_mb_on_flowlines(self, fls=None, year=None):
+        """Get the MB on all points of the glacier at once.
+
+        Parameters
+        ----------
+        fls: list, optional
+            the list of flowlines to get the mass balance from. Defaults
+            to self.fls
+        year: float, optional
+            the time (in the "floating year" convention)
+        Returns
+        -------
+        Tuple of (heights, widths, mass_balance) 1D arrays
+        """
+        return self._get_mb_on_flowlines(fls=fls, year=year,
+                                         mb_call=self.get_monthly_mb)
+
     def get_annual_mb_on_flowlines(self, fls=None, year=None):
         """Get the MB on all points of the glacier at once.
 
@@ -3473,94 +3363,17 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         -------
         Tuple of (heights, widths, mass_balance) 1D arrays
         """
+        return self._get_mb_on_flowlines(fls=fls, year=year,
+                                         mb_call=self.get_annual_mb)
 
-        if fls is None:
-            fls = self.fls
-
-        heights = []
-        widths = []
-        mbs = []
-        for i, fl in enumerate(fls):
-            h = fl.surface_h
-            heights = np.append(heights, h)
-            widths = np.append(widths, fl.widths)
-            mbs = np.append(mbs, self.get_annual_mb(h, year=year, fl_id=i))
-
-        return heights, widths, mbs
-
-    def get_annual_specific_mass_balance(self, fls: list, year: float) -> float:
-        """Get annual specific mass balance from multiple flowlines.
-
-        Parameters
-        ----------
-        fls : list[oggm.Flowline]
-            Flowline instances.
-        year : float
-            Time in "floating year" convention.
-
-        Returns
-        -------
-        float
-            Annual specific mass balance from multiple flowlines.
-        """
-        mbs = []
-        widths = []
-        for i, (fl, mb_mod) in enumerate(zip(fls, self.flowline_mb_models)):
-            _widths = fl.widths
-            try:
-                # For rect and parabola don't compute spec mb
-                _widths = np.where(fl.thick > 0, _widths, 0)
-            except AttributeError:
-                pass
-            widths.append(_widths)
-            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
-            year_length = mb_mod.get_year_length(year)
-            # Multiplying rho by weighted avg changes the results
-            mbs.append(mb * year_length * mb_mod.rho)
-        widths = np.concatenate(widths, axis=0)  # 2x faster than np.append
-        mbs = np.concatenate(mbs, axis=0)
-        mbs = weighted_average_1d(mbs, widths)
-
-        return mbs
-
-    def get_monthly_specific_mass_balance(self, fls: list, year: float) -> float:
-        """Get annual specific mass balance from multiple flowlines.
-
-        Parameters
-        ----------
-        fls : list[oggm.Flowline]
-            Flowline instances.
-        year : float
-            Time in "floating year" convention.
-
-        Returns
-        -------
-        float
-            Annual specific mass balance from multiple flowlines.
-        """
-        mbs = []
-        widths = []
-        for i, (fl, mb_mod) in enumerate(zip(fls, self.flowline_mb_models)):
-            _widths = fl.widths
-            try:
-                # For rect and parabola don't compute spec mb
-                _widths = np.where(fl.thick > 0, _widths, 0)
-            except AttributeError:
-                pass
-            widths.append(_widths)
-            mb = mb_mod.get_monthly_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
-            # Multiplying rho by weighted avg changes the results
-            mbs.append(mb * cfg.SEC_IN_MONTH * mb_mod.rho)
-        widths = np.concatenate(widths, axis=0)  # 2x faster than np.append
-        mbs = np.concatenate(mbs, axis=0)
-        mbs = weighted_average_1d(mbs, widths)
-
-        return mbs
-
-    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None):
+    def get_specific_mb(self, heights=None, widths=None, fls=None, year=None,
+                        time_resolution='annual',):
         """Specific mass balance for a given glacier geometry.
 
-        Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+        Units depends on time_resolution:
+        - 'annual': [mm w.e. yr-1], or millimeter water equivalent per year.
+        - 'monthly': [mm w.e. month-1], or millimeter water equivalent per month.
+        - 'daily': [mm w.e. day-1], or millimeter water equivalent per day.
 
         Parameters
         ----------
@@ -3575,6 +3388,9 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             widths, and overrides them if provided.
         year : array_like[float] or float, default None
             Year, or a range of years in "floating year" convention.
+        time_resolution : str
+            The resolution of the provided "floating year". Options are
+            'annual', 'monthly' or 'daily'. Default is 'annual'.
 
         Returns
         -------
@@ -3590,86 +3406,11 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         if fls is None:
             fls = self.fls
 
-        stack = []
-        year = np.atleast_1d(year)
-        for mb_yr in year:
-            mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
-            stack.append(mbs)
-
-        return set_array_type(stack)
-
-    def get_specific_mb_daily(
-        self, heights=None, widths=None, fls=None, year=None
-    ):
-        """Get specific daily mass balance.
-
-        TODO: Returns identical annual SMB to ``get_specific_mb`` when
-        using ``weighted_average_1d`` (but this cannot return an output
-        at daily resolution).
-        Unlike ``get_specific_mb``, this returns the weighted average
-        for all days.
-        """
-        if heights is not None or widths is not None:
-            raise ValueError(
-                "`heights` and `widths` kwargs do not work with "
-                "MultipleFlowlineMassBalance!"
-            )
-
-        if fls is None:
-            fls = self.fls
-
-        stack = []
-        year = np.atleast_1d(year)
-
-        for mb_yr in year:
-            # with leap years we don't know the size of the final array
-            mbs = []
-            widths = []
-            for i, (fl, mb_mod) in enumerate(zip(fls, self.flowline_mb_models)):
-                _widths = fl.widths
-                try:
-                    # For rect and parabola don't compute spec mb
-                    _widths = np.where(fl.thick > 0, _widths, 0)
-                except AttributeError:
-                    pass
-                widths.append(_widths)
-                mb = mb_mod.get_daily_mb(fl.surface_h, year=mb_yr, fls=fls, fl_id=i)
-                mbs.append(mb)
-
-            mbs = np.vstack(mbs)
-            widths = np.hstack(widths)
-            mbs = weighted_average_2d(mbs, widths) * SEC_IN_DAY * mb_mod.rho
-            stack.append(mbs)
-        return set_array_type(np.concatenate(stack, axis=0))
-
-    def get_specific_mb_monthly(
-        self, heights=None, widths=None, fls=None, year=None
-    ):
-        """Get specific monthly mass balance.
-
-        TODO: Returns identical annual SMB to ``get_specific_mb`` when
-        using ``weighted_average_1d`` (but this cannot return an output
-        at daily resolution).
-        Unlike ``get_specific_mb``, this returns the weighted average
-        for all days.
-        """
-        if heights is not None or widths is not None:
-            raise ValueError(
-                "`heights` and `widths` kwargs do not work with "
-                "MultipleFlowlineMassBalance!"
-            )
-
-        if fls is None:
-            fls = self.fls
-
-        stack = []
-        year = np.atleast_1d(year)
-        for mb_yr in year:
-            mbs = self.get_monthly_specific_mass_balance(fls=fls, year=mb_yr)
-
-            stack.append(mbs)
-
-        return set_array_type(stack)
+        # we can use the function from MassBalanceModel as the correct mb models
+        # are selected by the fl_id in get_annual_mb, get_monthly_mb and
+        # get_daily_mb as defined in MultipleFlowlineMassBalance
+        return super().get_specific_mb(fls=fls, year=year,
+                                       time_resolution=time_resolution,)
 
     def get_ela(self, year=None, **kwargs):
         """Get the equilibrium line altitude for a given year.
@@ -3809,7 +3550,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     calibrate_param2=None,
                                     calibrate_param3=None,
                                     mb_model_class=MonthlyTIModel,
-                                    extra_model_kwargs: dict = None,
+                                    **kwargs: dict,
                                     ):
     """Calibrate for geodetic MB data from Hugonnet et al., 2021.
 
@@ -3877,6 +3618,8 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         the MassBalanceModel to use for the calibration. Needs to use the
         same parameters as MonthlyTIModel (the default): melt_f,
         temp_bias, prcp_fac.
+    kwargs : dict
+        kwargs to pass to the mb_model_class instance
 
     Returns
     -------
@@ -3958,7 +3701,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              prcp_fac_max=prcp_fac_max,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
-                                             extra_model_kwargs=extra_model_kwargs,
+                                             **kwargs
                                              )
 
     else:
@@ -3975,7 +3718,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              calibrate_param3=calibrate_param3,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
-                                             extra_model_kwargs=extra_model_kwargs,
+                                             **kwargs
                                              )
 
 
@@ -4003,7 +3746,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
                                   baseline_climate_suffix:str=None,
-                                  extra_model_kwargs: dict = None,
+                                  **kwargs: dict,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
@@ -4107,8 +3850,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
     temp_bias_max: float
         the maximum accepted value for the temperature bias during optimisation.
         Defaults to gdir.settings['temp_bias_max'].
-    extra_model_kwargs: dict
-        Extra model parameters to pass to mb_model_class.
+    kwargs: dict
+        kwargs to pass to the mb_model_calss instance
     """
 
     # Param constraints
@@ -4193,23 +3936,16 @@ def mb_calibration_from_scalar_mb(gdir, *,
         temp_bias = 0
 
     # Create the MB model we will calibrate
-    if not extra_model_kwargs:
-        mb_mod = mb_model_class(
-            gdir=gdir,
-            melt_f=melt_f,
-            temp_bias=temp_bias,
-            prcp_fac=prcp_fac,
-            check_calib_params=False,
-            settings_filesuffix=settings_filesuffix)
-    else:
-        mb_mod = mb_model_class(
-            gdir=gdir,
-            melt_f=melt_f,
-            temp_bias=temp_bias,
-            prcp_fac=prcp_fac,
-            check_calib_params=False,
-            settings_filesuffix=settings_filesuffix,
-            **extra_model_kwargs)
+    mb_mod = mb_model_class(
+        gdir=gdir,
+        melt_f=melt_f,
+        temp_bias=temp_bias,
+        prcp_fac=prcp_fac,
+        check_calib_params=False,
+        settings_filesuffix=settings_filesuffix,
+        input_filesuffix=baseline_climate_suffix,
+        **kwargs
+    )
 
     # Check that the years are available
     for y in years:
@@ -4334,8 +4070,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    df['mb_global_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
-    df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
+    df['mb_global_params'] = {k: getattr(mb_mod, k) for k in MB_GLOBAL_PARAMS}
+    df['baseline_climate_source'] = gdir.get_climate_info(
+        filename=mb_mod.filename, input_filesuffix=mb_mod.input_filesuffix
+    )['baseline_climate_source']
 
     # Write
     if write_to_gdir:
@@ -4719,7 +4457,7 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         smb = 0
         for yr in mb_years:
             amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr)
-            amb *= cfg.SEC_IN_YEAR * rho
+            amb *= mb_model.sec_in_year(year=yr) * rho
             mbz += amb
             smb += weighted_average_1d(amb, widths)
         mb_on_fl.append(mbz / len(mb_years))

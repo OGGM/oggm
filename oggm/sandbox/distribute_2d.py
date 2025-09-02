@@ -394,7 +394,7 @@ def distribute_thickness_from_simulation(gdir,
     # monthly interpolation for higher temporal resolution
     if add_monthly:
         # create new monthly time coordinate, last year only with month 1
-        monthly_time = utils.monthly_timeseries(dg.time[0], dg.time[-1])
+        monthly_time = utils.float_years_timeseries(dg.time[0], dg.time[-1])
         yrs, months = utils.floatyear_to_date(monthly_time)
         # interpolate and add years and months as new coords
         dg = dg[['area_m2', 'volume_m3']].interp(time=monthly_time,

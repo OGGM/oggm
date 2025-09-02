@@ -936,7 +936,7 @@ class FlowlineModel(object):
             # We force timesteps to monthly frequencies for consistent results
             # among use cases (monthly or yearly output) and also to prevent
             # "too large" steps in the adaptive scheme.
-            ts = utils.monthly_timeseries(self.yr, y1)
+            ts = utils.float_years_timeseries(self.yr, y1)
             # Add the last date to be sure we end on it - implementations
             # of `step()` and of the loop below should not run twice anyways
             ts = np.append(ts, y1)
@@ -1066,7 +1066,7 @@ class FlowlineModel(object):
             store_monthly_step = self.mb_step == 'monthly'
 
         if store_monthly_step:
-            monthly_time = utils.monthly_timeseries(y0, y1)
+            monthly_time = utils.float_years_timeseries(y0, y1)
         else:
             monthly_time = np.arange(np.floor(y0), np.floor(y1)+1)
 
@@ -1080,11 +1080,6 @@ class FlowlineModel(object):
             self.to_geometry_netcdf(geom_path)
 
         ny = len(yearly_time)
-        if ny == 1:
-            yrs = [yrs]
-            hyrs = [hyrs]
-            months = [months]
-            hmonths = [hmonths]
         nm = len(monthly_time)
 
         if do_geom or do_fl_diag:
@@ -1109,6 +1104,8 @@ class FlowlineModel(object):
         diag_ds.attrs['mb_model_class'] = self.mb_model.__class__.__name__
         for k, v in self.mb_model.__dict__.items():
             if np.isscalar(v) and not k.startswith('_'):
+                if type(v) is bool:
+                    v = str(v)
                 diag_ds.attrs['mb_model_{}'.format(k)] = v
 
         # Coordinates
@@ -1315,11 +1312,15 @@ class FlowlineModel(object):
 
                 for j, yr in enumerate(monthly_time[is_spinup_time]):
                     smb = self.get_mb(h, year=yr, fl_id=fl_id, fls=self.fls)
-                    spinup_vol[j] -= np.sum(smb * a)  # per second and minus because backwards
+                    # depening on resolution we get seconds of period -> we want
+                    # total mass not per second
+                    if store_monthly_step:
+                        seconds = self.mb_model.sec_in_month(yr)
+                    else:
+                        seconds = self.mb_model.sec_in_year(yr)
+                    spinup_vol[j] -= np.sum(smb * a) * seconds  # minus because backwards
 
             # per unit time
-            dt = (monthly_time[1:] - monthly_time[:-1]) * cfg.SEC_IN_YEAR
-            spinup_vol[:-1] = spinup_vol[:-1] * dt
             spinup_vol = np.cumsum(spinup_vol[::-1])[::-1]
 
         # Run
@@ -1454,6 +1455,8 @@ class FlowlineModel(object):
                 ds.attrs['mb_model_class'] = self.mb_model.__class__.__name__
                 for k, v in self.mb_model.__dict__.items():
                     if np.isscalar(v) and not k.startswith('_'):
+                        if type(v) is bool:
+                            v = str(v)
                         ds.attrs['mb_model_{}'.format(k)] = v
 
                 ds.coords['time'] = yearly_time
@@ -4034,12 +4037,10 @@ def run_with_hydro(gdir, settings_filesuffix='',
     # Ok now we have arrays, we can work with that
     # -> second time varying loop is for mass balance
     months = [1]
-    seconds = cfg.SEC_IN_YEAR
     ntime = len(years) + 1
     oshape = (ntime, 1)
     if store_monthly_hydro:
         months = np.arange(1, 13)
-        seconds = cfg.SEC_IN_MONTH
         oshape = (ntime, 12)
 
     out = {
@@ -4139,10 +4140,12 @@ def run_with_hydro(gdir, settings_filesuffix='',
                                                        year=flt_yr,
                                                        add_climate=True)
                         mb, _, _, prcp, prcpsol = mb_out
+                        seconds = mb_mod.sec_in_month(flt_yr)
                     else:
                         mb_out = mb_mod.get_annual_mb(bin_elev, fl_id=fl_id,
                                                       year=yr, add_climate=True)
                         mb, _, _, prcp, prcpsol = mb_out
+                        seconds = mb_mod.sec_in_year(yr)
                 except ValueError as e:
                     if 'too many values to unpack' in str(e):
                         raise InvalidWorkflowError('Run with hydro needs a MB '
@@ -4155,7 +4158,7 @@ def run_with_hydro(gdir, settings_filesuffix='',
 
                 # Bias of the mb model is a fake melt term that we need to deal with
                 # This is here for correction purposes later
-                mb_bias = mb_mod.bias * seconds / cfg.SEC_IN_YEAR
+                mb_bias = mb_mod.bias * seconds / mb_mod.sec_in_year(yr)
 
                 liq_prcp_on_g = (prcp - prcpsol) * bin_area
                 liq_prcp_off_g = (prcp - prcpsol) * off_area

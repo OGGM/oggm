@@ -4,10 +4,8 @@
 # Builtins
 import os
 import sys
-import math
 import logging
 import warnings
-import shutil
 from packaging.version import Version
 import calendar
 # External libs
@@ -39,8 +37,8 @@ except ImportError:
 
 # Locals
 import oggm.cfg as cfg
-from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils._downloads import get_demo_file, file_downloader
+from oggm.cfg import SEC_IN_YEAR, SEC_IN_DAY
+from oggm.utils._downloads import get_demo_file
 from oggm.exceptions import InvalidParamsError, InvalidGeometryError
 
 # Module logger
@@ -62,6 +60,12 @@ ADHIKARI_FACTORS_RECTANGULAR = interp1d(_ADHIKARI_TABLE_ZETAS,
 ADHIKARI_FACTORS_PARABOLIC = interp1d(_ADHIKARI_TABLE_ZETAS,
                                       _ADHIKARI_TABLE_PARABOLIC,
                                       fill_value='extrapolate')
+
+# those constants help for vectorized conversion between dates and float years
+_BASE_CUM_START = np.array([0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304,
+                            334], dtype=np.int64)
+_BASE_CUM_END = np.array([31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334,
+                          365], dtype=np.int64)
 
 
 def parse_rgi_meta(version=None):
@@ -177,7 +181,8 @@ def set_array_type(array):
     """Convert array to scalar if it contains a single value.
 
     Converting arrays with ndim > 0 to scalar is deprecated in numpy
-    1.25+. Some OGGM functions expect arrays with a single value to be returned as scalars.
+    1.25+. Some OGGM functions expect arrays with a single value to be returned
+    as scalars.
 
     Parameters
     ----------
@@ -412,6 +417,7 @@ def weighted_average_1d(data, weights):
         raise ZeroDivisionError("Weights sum to zero, can't be normalized")
     return np.multiply(data, weights).sum() / scl
 
+
 def weighted_average_2d(data, weights):
     """A faster weighted average without dimension checks.
 
@@ -430,6 +436,7 @@ def weighted_average_2d(data, weights):
             "Weights sum to zero, can't be normalized")
     # can't broadcast operands unless transposed
     return np.multiply(np.transpose(data), weights).sum(axis=1) / scl
+
 
 if Version(np.__version__) < Version('1.17'):
     clip_array = np.clip
@@ -719,67 +726,93 @@ def multipolygon_to_polygon(geometry, gdir=None):
     return geometry
 
 
-def floatyear_to_date(yr):
-    """Converts a float year to an actual (year, month) pair.
-
-    Note that this doesn't account for leap years (365-day no leap calendar),
-    and that the months all have the same length.
-
-    Parameters
-    ----------
-    yr : float or list of float
-        The floating year
-    """
-
-    if isinstance(yr, xr.DataArray):
-        yr = yr.values
-
-    # Ensure yr is a np.array, even for scalar values
-    yr = np.atleast_1d(yr).astype(np.float64)
-
-    # check if year is inside machine precision to next higher int
-    yr_ceil = np.ceil(yr)
-    yr = np.where(np.isclose(yr,
-                             yr_ceil,
-                             rtol=np.finfo(np.float64).eps,
-                             atol=0
-                             ),
-                  yr_ceil,
-                  yr)
-
-    out_y, remainder = np.divmod(yr, 1)
-    out_y = out_y.astype(int)
-
-    month_exact = (remainder * 12 + 1)
-    # np.where to deal with floating point precision
-    out_m = np.minimum(12,
-                       np.where(np.isclose(month_exact, np.round(month_exact)),
-                                np.round(month_exact),
-                                np.floor(month_exact)).astype(int))
-
-    if yr.size == 1:
-        out_y = out_y.item()
-        out_m = out_m.item()
-
-    return out_y, out_m
+def _is_leap_year_vec(y):
+    y = np.asarray(y, dtype=np.int64)
+    return (y % 4 == 0) & ((y % 100 != 0) | (y % 400 == 0))
 
 
-def date_to_floatyear(y, m):
-    """Converts an integer (year, month) pair to a float year.
+def date_to_floatyear(y, m, d=None):
+    """Converts an integer (year, month) pair or (year, month, day) to a float
+    year.
 
-    Note that this doesn't account for leap years (365-day no leap calendar),
-    and that the months all have the same length.
+    This does account for leap years and the individual length of months.
+    Tested in a round trip for all days between 1000 - 2500.
 
     Parameters
     ----------
-    y : int
+    y : int or array_like
         the year
-    m : int
+    m : int or array_like
         the month
+    d : int or array_like or None
+        the day. If None the 1. of the month is used
     """
+    y = np.asarray(y, dtype=np.int64)
+    m = np.asarray(m, dtype=np.int64)
 
-    return (np.asanyarray(y) + (np.asanyarray(m) - 1) *
-            SEC_IN_MONTH / SEC_IN_YEAR)
+    if d is None:
+        y, m = np.broadcast_arrays(y, m)
+        d = np.ones_like(y, dtype=np.int64)
+    else:
+        d = np.asarray(d, dtype=np.int64)
+        y, m, d = np.broadcast_arrays(y, m, d)
+
+    leap = _is_leap_year_vec(y)
+    days_in_year = 365 + leap.astype(np.int64)
+
+    doy = d + _BASE_CUM_START[(m - 1)] + (leap & (m > 2))
+    return y.astype(np.float64) + (doy - 1) / days_in_year
+
+
+def floatyear_to_date(yr, months_only=True):
+    """Converts a float year to an actual (year, month) pair or
+    (year, month, day).
+
+    This does account for leap years and the individual length of months.
+    Tested in a round trip for all days between 1000 - 2500.
+
+    Parameters
+    ----------
+    yr : float or array_like
+        The floating year
+    months_only : bool, optional
+        If you True a tuple (year, month) will be returned, if False a tuple
+        (year, month, day) will be returned. Default is True.
+    """
+    yr = np.asarray(yr, dtype=np.float64)
+    y = np.floor(yr).astype(np.int64)
+    f = yr - y
+    f = np.clip(f, 0.0, np.nextafter(1.0, 0.0))
+
+    leap = _is_leap_year_vec(y)
+    N = 365 + leap.astype(np.int64)
+
+    x = f * N.astype(np.float64)
+    doy_minus1 = np.rint(x).astype(np.int64)
+    doy_minus1 = np.clip(doy_minus1, 0, N - 1)
+    doy = doy_minus1 + 1
+
+    adj = doy - (leap & (doy > 59)).astype(np.int64)  # collapse leap past Feb
+    m_idx = np.searchsorted(_BASE_CUM_END, adj, side='left')  # 0..11
+    month = (m_idx + 1).astype(np.int64)
+
+    if months_only:
+        return y, month
+
+    prev_end = np.where(m_idx > 0, _BASE_CUM_END[m_idx - 1], 0)
+    day = (adj - prev_end).astype(np.int64)
+
+    feb29 = leap & (doy == 60)
+    if np.any(feb29):
+        if np.size(feb29) == 1:
+            # we only have a single date
+            month = 2
+            day = 29
+        else:
+            month[feb29] = 2
+            day[feb29] = 29
+
+    return y, month, day
 
 
 def hydrodate_to_calendardate(y, m, start_month=None):
@@ -944,10 +977,8 @@ def hydrodate_to_calendardate_cftime(
 
     return dates
 
-
 def get_total_days(first_year: int, last_year: int) -> int:
     """Get the total number of days across two years.
-
     Parameters
     ----------
     first_year : int
@@ -955,7 +986,6 @@ def get_total_days(first_year: int, last_year: int) -> int:
     last_year : int
         Last year in period. This year is included in the total number
         of days.
-
     Returns
     -------
     int
@@ -969,11 +999,113 @@ def get_total_days(first_year: int, last_year: int) -> int:
     return total_days
 
 
-def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
-    """Creates a monthly timeseries in units of float years.
+def get_days_of_year(year: float, use_leap_years: bool = False) -> int:
+    """Get the number of days of a given year.
 
     Parameters
     ----------
+    year : float or int
+        Year in floating year convention.
+    use_leap_years : bool
+        Define if leap years should be returned.
+
+    Returns
+    -------
+    int
+        The number of days of a given year.
+    """
+    if use_leap_years:
+        # use floatyear_to_date to avoid floating point mistakes (e.g. 1999.9999999)
+        yr_int = floatyear_to_date(year)[0]
+        return 366 if calendar.isleap(yr_int) else 365
+    else:
+        return 365
+
+
+def get_seconds_of_year(year: float = None, use_leap_years: bool = False) -> int:
+    """Get the number of seconds in a year.
+
+    Parameters
+    ----------
+    year : float or int
+        Year in floating year convention.
+    use_leap_years : bool
+        Define if leap years should be returned.
+
+    Returns
+    -------
+    int
+        The number of seconds in a year.
+    """
+    if use_leap_years:
+        return SEC_IN_DAY * get_days_of_year(year, use_leap_years=use_leap_years)
+    else:
+        return SEC_IN_YEAR
+
+
+def get_days_of_month(year: float = None, use_leap_years: bool = False) -> int:
+    """Get the number of days in a month.
+
+    Parameters
+    ----------
+    year : float or int
+        Year in floating year convention.
+    use_leap_years : bool
+        Define if leap years should be returned.
+
+    Returns
+    -------
+    int
+        The number of days in the current month.
+    """
+    yr, mth = floatyear_to_date(year)
+    if use_leap_years:
+        return calendar.monthrange(yr, mth)[1]
+    else:
+        return {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30,
+                10: 31, 11: 30, 12: 31}[mth]
+
+
+def get_seconds_of_month(year: float = None, use_leap_years: bool = False) -> int:
+    """Get the number of seconds in a year.
+
+    Parameters
+    ----------
+    year : float or int
+        Year in floating year convention.
+    use_leap_years : bool
+        Define if leap years should be returned.
+
+    Returns
+    -------
+    int
+        The number of seconds in the current month.
+    """
+    return SEC_IN_DAY * get_days_of_month(year=year,
+                                          use_leap_years=use_leap_years)
+
+
+def float_years_timeseries(y0, y1=None, ny=None, include_last_year=False,
+                           monthly=True):
+    """Creates a timeseries in units of float years in monthly or daily
+    resolution.
+
+    Parameters
+    ----------
+    y0 : int
+        The year to start the timeseries
+    y1 : int
+        The year to end the timeseries. If None you need to set ny.
+        Default is None.
+    ny : int
+        The number of years of the timeseries. If None you need to set y1.
+        Default is None.
+    include_last_year : bool
+        If the last year should be included. Default is False.
+    monthly : bool
+        If True the resulting timeseries will be in monthly resolution. If False
+        it will be in daily resolution. Default is True.
+
     """
 
     if isinstance(y0, xr.DataArray):
@@ -981,17 +1113,42 @@ def monthly_timeseries(y0, y1=None, ny=None, include_last_year=False):
     if isinstance(y1, xr.DataArray):
         y1 = y1.values
 
-    if y1 is not None:
-        years = np.arange(np.floor(y0), np.floor(y1) + 1)
-    elif ny is not None:
-        years = np.arange(np.floor(y0), np.floor(y0) + ny)
+    if y1 is None:
+        if ny is not None:
+            y1 = y0 + ny - 1
+        else:
+            raise ValueError("Need at least two positional arguments.")
+
+    # convert both years to int
+    y0 = int(np.floor(y0))
+    y1 = int(np.floor(y1))
+
+    if monthly:
+        if include_last_year:
+            y1 += 1
+            end_month = '01'  # last date is ignored by np.arange
+        else:
+            end_month = '02'  # last date is ignored by np.arange
+        dates = np.arange(np.datetime64(f'{y0}-01', 'M'),
+                          np.datetime64(f'{y1}-{end_month}', 'M'),
+                          dtype='datetime64[M]')
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        days = None
     else:
-        raise ValueError("Need at least two positional arguments.")
-    months = np.tile(np.arange(12) + 1, len(years))
-    years = years.repeat(12)
-    out = date_to_floatyear(years, months)
-    if not include_last_year:
-        out = out[:-11]
+        if include_last_year:
+            end_date = np.datetime64(f'{y1 + 1}-01-01', 'D')
+        else:
+            end_date = np.datetime64(f'{y1}-01-02', 'D')
+        dates = np.arange(np.datetime64(f'{y0}-01-01', 'D'),
+                          end_date,
+                          dtype='datetime64[D]')
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        mstart = dates.astype('datetime64[M]').astype('datetime64[D]')
+        days = (dates - mstart).astype(int) + 1
+
+    out = date_to_floatyear(y=years, m=months, d=days)
     return out
 
 
@@ -1170,10 +1327,10 @@ def cook_rgidf(gi_gdf, o1_region, o2_region='01', version='60', ids=None,
     return cooked_rgidf
 
 
-def get_cropped_dataset(
+def get_closest_grid_point_of_dataset(
     dataset: xr.Dataset, latitude: float, longitude: float
 ) -> xr.Dataset:
-    """Get dataset cropped to glacier extents."""
+    """Get data of closest grid point of dataset."""
     try:
         c = (dataset.longitude - longitude) ** 2 + (
             dataset.latitude - latitude

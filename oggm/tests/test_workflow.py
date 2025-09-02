@@ -623,9 +623,10 @@ class TestGdirSettings:
         mb_calib_threestep = gdirs[0].read_yml('settings',
                                                '_informed_threestep')
         assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        # this difference is because we now take actual length of months into account
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=1e-3)
+                        atol=0.05)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
                         atol=1e-3)

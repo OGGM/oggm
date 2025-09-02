@@ -2347,7 +2347,7 @@ def run_dynamic_melt_f_calibration(
                                             reset=True)
                 return model_return
             else:
-                raise RuntimeError('Dynamic melt_f calibration was not '
+                raise RuntimeError('Dynamic melt_f calibration not '
                                    f'successful! Error Message: {e}')
         else:
             if ignore_errors:
