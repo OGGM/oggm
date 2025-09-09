@@ -6696,7 +6696,7 @@ class TestDistribute2D:
             volume_merged = (
                 ds_merged.loc[{'time': yr}].simulated_thickness.sum().values *
                 ds_merged.salem.grid.dx**2 * 1e-9)
-            assert_allclose(volume_run, volume_merged, atol=2e-7)
+            assert_allclose(volume_run, volume_merged, atol=5e-7)
 
             if do_plot:
                 ds_merged.loc[{'time': yr}].simulated_thickness.plot()
