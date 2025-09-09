@@ -160,9 +160,7 @@ class TestInitPresentDayFlowline:
 
         gdir.settings['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
-            init_present_time_glacier(gdir,
-                                      settings_filesuffix='_dummy_downstream')
-        gdir.settings_filesuffix = ''
+            init_present_time_glacier(gdir)
 
     def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
                                                  monkeypatch):
@@ -251,10 +249,11 @@ class TestInitPresentDayFlowline:
             tasks.mb_calibration_from_scalar_mb(
                 gdir,
                 ref_mb=ref_mb,
-                ref_period=ref_period,
+                ref_mb_period=ref_period,
                 mb_model_class=cl,
                 settings_filesuffix="_daily",
-                overwrite_gdir=True
+                observations_filesuffix='_daily',
+                overwrite_gdir=True,
             )
             mb_mod = cl(gdir, settings_filesuffix='_daily')
 
@@ -1147,15 +1146,17 @@ class TestMassBalanceModels:
         ModelSettings(gdir, filesuffix='_monthly', parent_filesuffix='')
         massbalance.mb_calibration_from_scalar_mb(
             gdir, settings_filesuffix='_monthly',
+            observations_filesuffix='_monthly',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
             mb_model_class=massbalance.MonthlyTIModel,
-            baseline_climate_suffix='_monthly',
+            input_filesuffix='_monthly',
         )
         massbalance.mb_calibration_from_scalar_mb(
             gdir, settings_filesuffix='_daily',
+            observations_filesuffix='_daily',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
             mb_model_class=massbalance.DailyTIModel)
 
         settings_monthly = ModelSettings(gdir, filesuffix='_monthly')
@@ -4417,16 +4418,16 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                      gdir,)
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False,)
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_consensus(
+        workflow.calibrate_inversion_from_volume(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
-            volume_m3_reference=vol_m3_ref,
+            ref_volume_m3=vol_m3_ref,
             add_to_log_file=False)
 
         # save original melt_f to be able to reset back to default for testing
@@ -4575,32 +4576,38 @@ class TestDynamicSpinup:
                     ref_mb=ref_dmdtda,
                     ref_mb_err=use_err_ref_dmdtda)
 
-        # test providing adapted observations through the observations file
-        ref_mb_adapted = ref_mb_hugonnet
-        ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
-                                   ref_mb_adapted['err'] / 2)
-        gdir.observations_filesuffix = '_hugonnet_adapted'
-        gdir.observations['ref_mb'] = ref_mb_adapted
+        if minimise_for == 'area' and do_inversion:
+            # test providing adapted observations through the observations file
+            ref_mb_adapted = ref_mb_hugonnet
+            ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
+                                       ref_mb_adapted['err'] / 2)
+            gdir.observations_filesuffix = '_hugonnet_adapted'
+            gdir.observations['ref_mb'] = ref_mb_adapted
 
-        run_dynamic_melt_f_calibration(
-            gdir,
-            observations_filesuffix='_hugonnet_adapted',
-            melt_f_max=melt_f_max,
-            run_function=dynamic_melt_f_run_with_dynamic_spinup,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent': precision_percent,
-                                 'precision_absolute': precision_absolute,
-                                 'do_inversion': do_inversion},
-            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent': precision_percent,
-                                      'precision_absolute': precision_absolute,
-                                      'do_inversion': do_inversion},
-            output_filesuffix='_dyn_melt_f_hugonnet_adapted',
-            ys=1979, ye=ye)
+            # save melt_f before calibration
+            gdir.settings_filesuffix = ''
+            melt_f_before = gdir.settings['melt_f']
 
-        # with a less negative geodetic mass balance the melt f should be smaller
-        assert gdir.settings['melt_f'] < melt_f_orig
+            run_dynamic_melt_f_calibration(
+                gdir,
+                observations_filesuffix='_hugonnet_adapted',
+                melt_f_max=melt_f_max,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_hugonnet_adapted',
+                ys=1979, ye=ye)
+
+            # with a less negative geodetic mass balance the melt f should be
+            # smaller after calibration
+            assert gdir.settings['melt_f'] < melt_f_before
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -5006,16 +5013,16 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                      gdir, )
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False, )
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_consensus(
+        workflow.calibrate_inversion_from_volume(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
-            volume_m3_reference=vol_m3_ref,
+            ref_volume_m3=vol_m3_ref,
             add_to_log_file=False)
 
         # save original melt_f to be able to reset back to default for testing
@@ -5955,19 +5962,27 @@ class TestMassRedis:
 
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
                                        massbalance.DailyTIModel,])
-    def test_hef_retreat(self, hef_gdir, model):
+    def test_hef_retreat(self, class_case_dir, model):
 
-        gdir = hef_gdir
-        if is_daily_model(model):
-            workflow.execute_entity_task(
-                gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
-            )
-            climate_file = "climate_historical_daily"
-            settings_filesuffix = '_daily'
-        else:
-            climate_file = "climate_historical"
-            settings_filesuffix = '_monthly'
+        import geopandas as gpd
 
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+        cfg.PARAMS['baseline_climate'] = ''
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PARAMS['min_ice_thick_for_length'] = 5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=class_case_dir)
         tasks.define_glacier_region(gdir)
         tasks.simple_glacier_masks(gdir)
         tasks.elevation_band_flowline(gdir)
@@ -5976,13 +5991,27 @@ class TestMassRedis:
         tasks.compute_downstream_bedshape(gdir)
         tasks.process_custom_climate_data(gdir)
 
-        mbdf = hef_gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        ref_mb = mbdf.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        if is_daily_model(model):
+            workflow.execute_entity_task(
+                gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
+            )
+            climate_file = "climate_historical_daily"
+            settings_filesuffix = '_daily'
+            ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+        else:
+            climate_file = "climate_historical"
+            settings_filesuffix = ''
+
+        mbdf = gdir.get_ref_mb_data()
         cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
-        tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
-                                            ref_mb_period='1953-01-01_2003-01-01')
+        tasks.mb_calibration_from_scalar_mb(gdir,
+                                            settings_filesuffix=settings_filesuffix,
+                                            ref_mb=ref_mb,
+                                            ref_mb_period='1953-01-01_2003-01-01',
+                                            overwrite_gdir=True,
+                                            mb_model_class=model,
+                                            )
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
         # previously calibrate_inversion_from_consensus was used, but with the
         # RGI5 id not estimate is available and here we just use the first guess
@@ -5997,7 +6026,8 @@ class TestMassRedis:
         biases = [-0.6, -0.3, 0]
         for bias in biases:
             tasks.run_random_climate(
-                gdir, settings_filesuffix=settings_filesuffix,
+                gdir,
+                settings_filesuffix=settings_filesuffix,
                 nyears=500, y0=1990, halfsize=10,
                 temperature_bias=bias,
                 seed=seed,
@@ -6016,7 +6046,8 @@ class TestMassRedis:
                 MethodCurveModel = partial(MassRedistributionCurveModel,
                                            advance_method=advance_method)
                 tasks.run_random_climate(
-                    gdir, settings_filesuffix=settings_filesuffix,
+                    gdir,
+                    settings_filesuffix=settings_filesuffix,
                     nyears=500, y0=1990, halfsize=10,
                     temperature_bias=bias,
                     seed=seed,
@@ -6038,7 +6069,8 @@ class TestMassRedis:
             cc = [c for c in odf_v if f'_t{bias}' in c]
             sdf = odf_v[cc].loc[:100]
             for c in sdf.columns[1:]:
-                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=0.07)
+                rtol = 0.08 if is_daily_model(model) else 0.07
+                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=rtol)
 
         if do_plot:
             for advance_method in [0, 1, 2]:

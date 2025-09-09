@@ -2447,7 +2447,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         is set in the @entity-task decorater.
     observations_filesuffix: str
         You can provide a filesuffix for the mb observations to use. If you
-        provide ref_mb, ref_mb_err, ref_period and/or ref_mb_years, then this
+        provide ref_mb, ref_mb_err, ref_mb_period and/or ref_mb_years, then this
         values will be stored in the observations file, if ref_mb is not already
         present. If you want to force to use the provided values and override
         the current ones, set overwrite_observations to True. Code-wise the
@@ -2466,7 +2466,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         date format - for example '2000-01-01_2010-01-01'. If this is not
         set, ref_mb_years needs to be set.
     ref_mb_years : tuple of length 2 (range) or list of years.
-        convenience kwarg to override ref_period. If a tuple of length 2 is
+        convenience kwarg to override ref_mb_period. If a tuple of length 2 is
         given, all years between this range (excluding the last one) are used.
         If a list  of years is given, all these will be used (useful for
         data with gaps)
@@ -2545,7 +2545,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
     if temp_bias_max is None:
         temp_bias_max = gdir.settings['temp_bias_max']
     if ref_mb_years is not None and ref_mb_period is not None:
-        raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_period` '
+        raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_mb_period` '
                                  'at the same time.')
 
     if not use_2d_mb:
@@ -2629,7 +2629,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         y1 = int(y1.split('-')[0])
         years = np.arange(y0, y1)
     else:
-        raise InvalidParamsError('One of `ref_mb_years` or `ref_period` '
+        raise InvalidParamsError('One of `ref_mb_years` or `ref_mb_period` '
                                  'is required for calibration.')
 
     # Do we have a calving glacier?
@@ -2795,8 +2795,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    df['mb_global_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
-    df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
+    df['mb_global_params'] = {k: gdir.settings[k] for k in MB_GLOBAL_PARAMS}
+    df['baseline_climate_source'] = gdir.get_climate_info(
+        filename=mb_mod.filename, input_filesuffix=mb_mod.input_filesuffix
+    )['baseline_climate_source']
 
     # Write
     if write_to_gdir:

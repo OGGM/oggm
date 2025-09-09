@@ -667,9 +667,11 @@ class TestGdirSettings:
         mb_calib_threestep = gdirs[0].read_yml('settings',
                                                '_informed_threestep')
         assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        # now MonthlyTIModel takes length of months into account which explains
+        # this 'large' difference in prcp_fac
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=1e-3)
+                        atol=5e-2)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
                         atol=1e-3)
@@ -960,9 +962,11 @@ class TestGdirObservations:
         mb_calib_threestep = gdirs[0].read_yml('settings',
                                                '_informed_threestep')
         assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        # now MonthlyTIModel takes length of months into account which explains
+        # this 'large' difference in prcp_fac
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=1e-3)
+                        atol=5e-2)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
                         atol=1e-3)
