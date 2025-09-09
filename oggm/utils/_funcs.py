@@ -977,27 +977,6 @@ def hydrodate_to_calendardate_cftime(
 
     return dates
 
-def get_total_days(first_year: int, last_year: int) -> int:
-    """Get the total number of days across two years.
-    Parameters
-    ----------
-    first_year : int
-        First year in period.
-    last_year : int
-        Last year in period. This year is included in the total number
-        of days.
-    Returns
-    -------
-    int
-        The total number of days across two years, including the last
-        year, i.e. the period <first_year>-01-01 to <last_year>-12-31.
-    """
-    total_days = (1 + last_year - first_year) * 365 + calendar.leapdays(
-        first_year, last_year
-    )
-
-    return total_days
-
 
 def get_days_of_year(year: float, use_leap_years: bool = False) -> int:
     """Get the number of days of a given year.

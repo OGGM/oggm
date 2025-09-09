@@ -217,6 +217,10 @@ class TestFuncs(object):
         ok = (years == y2) & (months == m2)
         assert sum(~ok) == 0
 
+        y2, m2, d2 = utils.floatyear_to_date(fy, months_only=False)
+        ok = (years == y2) & (months == m2) & ([d == 1 for d in d2])
+        assert sum(~ok) == 0
+
         # daily roundtrip for all dates between 0000 and 3000
         start = np.datetime64('0000-01-01', 'D')
         end_exclusive = np.datetime64('3001-01-01', 'D')

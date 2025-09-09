@@ -396,8 +396,7 @@ Models
     LinearMassBalance
     MonthlyTIModel
     DailyTIModel
-    DailySfcTIModel
-    TIModel_Sfc_Type
+    SfcTypeTIModel
     ConstantMassBalance
     RandomMassBalance
     UncertainMassBalance

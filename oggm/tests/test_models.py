@@ -10,7 +10,6 @@ import pandas as pd
 import shapely.geometry as shpg
 from numpy.testing import assert_allclose
 import pytest
-import netCDF4
 import calendar
 
 # Local imports
@@ -23,7 +22,8 @@ from oggm.core import climate, inversion, centerlines
 from oggm.shop.w5e5 import process_gswp3_w5e5_data
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils import get_demo_file, ModelSettings, ncDataset
+from oggm.utils import (get_demo_file, ModelSettings,
+                        floatyear_to_date, date_to_floatyear)
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 from oggm.tests.funcs import get_test_dir
@@ -80,18 +80,6 @@ def is_daily_model(model):
     # isinstance silently fails
     return issubclass(
         model, massbalance.DailyTIModel
-    )
-
-@pytest.fixture(scope="class", name="fixture_get_w5e5_data")
-def fixture_get_w5e5_data(hef_gdir):
-    workflow.execute_entity_task(
-        gdirs=hef_gdir, task=process_gswp3_w5e5_data, daily=True
-        )
-
-def assert_daily_model(model):
-    # isinstance silently fails
-    return issubclass(
-        model, (massbalance.DailyTIModel)
     )
 
 
@@ -598,7 +586,7 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MonthlyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
-    def test_repr_daily(self, hef_gdir):
+    def test_repr_daily_and_sfc_type(self, hef_gdir):
         from textwrap import dedent
 
         tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
@@ -634,12 +622,35 @@ class TestMassBalanceModels:
                                           check_calib_params=False)
         assert mb_mod.__repr__() == expected
 
+        expected = dedent(f"""\
+        <oggm.MassBalanceModel>
+          Class: SfcTypeTIModel
+          Attributes:
+            - settings_filesuffix: _daily
+            - rho: 900.0
+            - use_leap_years: True
+            - aging_frequency: annual
+            - climate_resolution: annual
+            - spinup_years: 6
+            - save_spinup_mbs: False
+            - ys: 2000
+            - tau_e: 1.0
+            - melt_f_ratio: 0.5
+            - melt_f_change: neg_exp
+            - store_buckets: False
+            - use_previous_mbs: False
+            - mb_buckets_year: 2000
+        """)
+        mb_mod = massbalance.SfcTypeTIModel(hef_gdir,
+                                            settings_filesuffix='_daily',
+                                            check_calib_params=False)
+        assert mb_mod.__repr__() == expected
+
     @pytest.mark.parametrize(
         "arg_model",
         [
             massbalance.MonthlyTIModel,
             massbalance.DailyTIModel,
-            massbalance.DailySfcTIModel,
         ],
     )
     @pytest.mark.parametrize("year", [1979, 1980])
@@ -881,7 +892,7 @@ class TestMassBalanceModels:
             # test call with single value
             smb_single = mb_mod.get_specific_mb(year=years[0], fls=fls,
                                                 heights=heights, widths=widths,)
-            # assert isinstance(smb_single, float)
+            assert isinstance(smb_single, float)
             assert smb_single == smb[0]
 
             # monthly resolution
@@ -976,83 +987,6 @@ class TestMassBalanceModels:
             totest = (mb_mod.flowline_mb_models[-1].get_annual_mb([ela_z], year=yr) *
                       mb_mod.flowline_mb_models[-1].sec_in_year(yr) * mb_mod.rho)
             assert_allclose(totest[0], 0, atol=1)
-
-    """Daily MB Models"""
-
-    @pytest.fixture(name="DailyTIModel", scope="class", autouse=True)
-    def get_daily_TIModel(self):
-        """Override imports"""
-        yield massbalance.DailyTIModel
-
-    @pytest.fixture(name="DailySfcTIModel", scope="class", autouse=True)
-    def get_daily_sfc_TIModel(self):
-        """Override imports"""
-        yield massbalance.DailySfcTIModel
-
-    def get_leap_value(self, value, year: int):
-        """Extrapolate annual value to fit a leap year."""
-
-        if calendar.isleap(year):
-            value = value + (value / 365)
-        return value
-
-    @pytest.mark.skip
-    @pytest.mark.parametrize("with_fls", (True, False))
-    @pytest.mark.parametrize("year_range", (np.arange(1979, 2019), 1979, 1980))
-    def test_specific_mb_inheritance(self, hef_gdir, DailyTIModel, with_fls, year_range):
-        """Ensure inherited function is scaled correctly."""
-        gdir = hef_gdir
-        init_present_time_glacier(gdir)
-        mb_mod = DailyTIModel(gdir, bias=0, check_calib_params=False)
-
-        stack = []
-        year = np.atleast_1d(year_range)
-        fls = gdir.read_pickle("model_flowlines")
-        if not with_fls:
-            heights = np.concatenate([i.surface_h for i in fls], axis=0)
-            widths = np.concatenate([i.widths for i in fls], axis=0)
-            fls = None
-        else:
-            heights = None
-            widths = None
-
-        for mb_yr in year:
-            if fls is not None:
-                mbs = mb_mod.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
-            else:
-                mbs = mb_mod.get_annual_mb(heights, year=mb_yr)
-                mbs = utils.weighted_average_1d(mbs, widths)
-
-            year_length = mb_mod.get_seconds_of_year(mb_yr)
-            stack.append(mbs * year_length * mb_mod.rho)
-        ref_mbs = utils.set_array_type(stack)
-
-        test_mbs = mb_mod.get_specific_mb(heights=heights, widths=widths, fls=fls, year=year)
-
-        np.testing.assert_allclose(test_mbs, ref_mbs)
-
-    @pytest.mark.parametrize("model", [massbalance.DailyTIModel])
-    @pytest.mark.parametrize("arg_year", [1979, 1980])
-    def test_get_daily_mb(self, hef_gdir, model, arg_year):
-
-        gdir = hef_gdir
-        init_present_time_glacier(gdir)
-        mb_mod = model(gdir, bias=0, check_calib_params=False)
-        fls = gdir.read_pickle("model_flowlines")
-        heights = fls[0].surface_h
-        number_of_heights = len(heights)
-        annual_mb = mb_mod.get_annual_mb(heights=heights, year=arg_year)
-        assert annual_mb.shape == (number_of_heights,)
-
-        test_mb = mb_mod.get_daily_mb(heights=heights, year=arg_year)
-        assert isinstance(test_mb, np.ndarray)
-        assert test_mb.shape[0] == number_of_heights
-        if not calendar.isleap(arg_year):
-            assert test_mb.shape[1] == 365
-            np.testing.assert_allclose(test_mb.mean(axis=1), annual_mb)
-        else:
-            assert test_mb.shape[1] == 366
-            np.testing.assert_allclose(test_mb.mean(axis=1), annual_mb)
 
     def test_daily_mb_model(self, hef_gdir):
 
@@ -1426,6 +1360,375 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(ds_daily.volume[-1], ds_monthly.volume[-1],
                                    atol=3e7)
 
+    @pytest.mark.slow
+    def test_sfc_type_mb_model(self, hef_gdir):
+
+        # add daily and monthly w5e5 for 'fair' comparisons of MonthlyTIModel to
+        # DailyTIModel later in the tests
+        tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+        tasks.process_gswp3_w5e5_data(hef_gdir, output_filesuffix='_monthly')
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        # only use main flowline for tests
+        inv_fl = gdir.read_pickle('inversion_flowlines')[-1]
+        h = inv_fl.surface_h
+
+        ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+
+        # test different combinations of climate resolution and aging
+        clim_res_aging_pairs = [('daa', ('daily_timodel', 'annual', 'annual')),
+                                ('dma', ('daily_timodel', 'monthly', 'annual')),
+                                ('dda', ('daily_timodel', 'daily', 'annual')),
+                                ('dmm', ('daily_timodel', 'monthly', 'monthly')),
+                                ('ddm', ('daily_timodel', 'daily', 'monthly')),
+                                ('maa', ('monthly_timodel', 'annual', 'annual')),
+                                ('mma', ('monthly_timodel', 'monthly', 'annual')),
+                                ('mmm', ('monthly_timodel', 'monthly', 'monthly')),
+                                ]
+        # container for saving outcomes of different options for comparisions
+        smb_annual = {}
+        ice_mb_annual = {}
+        smb_monthly_4 = {}
+        smb_monthly_8 = {}
+        smb_daily_3_9 = {}
+        smb_daily_5_9 = {}
+        for setting, (ti_model, clim_res, aging) in clim_res_aging_pairs:
+            if ti_model == 'daily_timodel':
+                mb_model_class = massbalance.DailyTIModel
+                settings_filesuffix = '_daily'
+                input_filesuffix = ''
+            elif ti_model == 'monthly_timodel':
+                mb_model_class = massbalance.MonthlyTIModel
+                settings_filesuffix = ''
+                input_filesuffix = '_monthly'
+            else:
+                raise NotImplementedError(f"ti_model: {ti_model}")
+
+            mb_mod = massbalance.SfcTypeTIModel(
+                gdir,
+                settings_filesuffix=settings_filesuffix,
+                mb_model_class=mb_model_class,
+                ys=2000,
+                climate_resolution=clim_res,
+                aging_frequency=aging,
+                save_spinup_mbs=True,
+                store_buckets=clim_res,
+                use_previous_mbs=True,
+                check_calib_params=False,
+                input_filesuffix=input_filesuffix,
+            )
+
+            assert inv_fl.nx == mb_mod.mb_buckets_np.shape[0]
+            np.testing.assert_allclose(inv_fl.surface_h, mb_mod.fl.surface_h)
+
+            target_year_annual = 2002
+            # after making this call all mbs from ys to 2018 were calculated and all
+            # buckets are stored
+            smb_annual[setting] = mb_mod.get_annual_mb(heights=h,
+                                                     year=target_year_annual)
+            assert mb_mod.mb_buckets_year == target_year_annual + 1
+            # here we test getting the ice_mb and to get a previously calculated
+            # value
+            ice_mb_annual[setting] = mb_mod.get_annual_mb(
+                heights=h, year=target_year_annual, climatic_mb_or_ice_mb='ice_mb')
+
+            if clim_res in ['monthly', 'daily']:
+                target_year_month = target_year_annual + 1
+                # test get_monthly_mb call
+                smb_monthly_4[setting] = mb_mod.get_monthly_mb(
+                    heights=h,
+                    year=date_to_floatyear(y=target_year_month, m=4))
+                assert mb_mod.mb_buckets_year == date_to_floatyear(y=target_year_month, m=5)
+                smb_monthly_8[setting] = mb_mod.get_monthly_mb(
+                    heights=h, year=date_to_floatyear(y=target_year_month, m=8))
+                assert mb_mod.mb_buckets_year == date_to_floatyear(y=target_year_month, m=9)
+
+            if clim_res in ['daily']:
+                target_year_day = target_year_month
+                smb_daily_3_9[setting] = mb_mod.get_daily_mb(
+                    heights=h,
+                    year=date_to_floatyear(y=target_year_day, m=9, d=3))
+                assert mb_mod.mb_buckets_year == date_to_floatyear(
+                    y=target_year_day, m=9, d=4)
+                smb_daily_5_9[setting] = mb_mod.get_daily_mb(
+                    heights=h,
+                    year=date_to_floatyear(y=target_year_day, m=9, d=5))
+                assert mb_mod.mb_buckets_year == date_to_floatyear(
+                    y=target_year_day, m=9, d=6)
+
+            mb_buckets = mb_mod.mb_buckets_stored
+
+            # check if current bucket is the same as the stored one
+            np.testing.assert_allclose(
+                mb_mod.mb_buckets_np[:, :-1],  # exclude ice bucket
+                mb_buckets[mb_mod.mb_buckets_year])
+
+            # for monthly and annual climate resolution we run a longer period
+            # for a more comprehensive test, daily takes a very long time
+            if clim_res in ['monthly', 'annual']:
+                mb_mod.get_annual_mb(heights=h,
+                                     year=2019)
+
+            for yr in mb_buckets:
+                # check snow bucket is empty after aging
+                should_be_empty = False
+                y, m, d = floatyear_to_date(yr, months_only=False)
+                if aging == 'annual' and m == 1 and d == 1:
+                    should_be_empty = True
+                elif aging == 'monthly' and d == 1:
+                    should_be_empty = True
+
+                if should_be_empty:
+                    assert not np.any(mb_buckets[yr].values[:, 0])
+
+                # only after the spinup years ice formation should be possible
+                if yr < 2000 - 1:
+                    # oldest firn layer should be empty
+                    assert not np.any(mb_buckets[yr].values[:, -1])
+                else:
+                    if aging == 'annual':
+                        # with annual aging there should be something in the
+                        # oldest firn layer for our example with HEF
+                        assert np.any(mb_buckets[yr].values[:, -1])
+
+                # check that stored heights equal the provided once
+                if yr < mb_mod.mb_buckets_year:
+                    np.testing.assert_allclose(
+                        mb_mod.mb_heights[yr], h)
+
+        if do_plot:
+            # compare sfc tracking to mb_models without surface tracking
+            mb_mod_daily = massbalance.DailyTIModel(
+                gdir, settings_filesuffix='_daily', check_calib_params=False)
+            mb_mod_monthly = massbalance.MonthlyTIModel(
+                gdir, input_filesuffix='_monthly', check_calib_params=False)
+
+            # plot comparing climatic mass balance
+            plt.figure(figsize=(5, 7))
+            plt.plot(mb_mod_daily.get_annual_mb(h, target_year_annual), h,
+                     c='k',
+                     label='DailyTIModel without sfc tracking')
+            plt.plot(mb_mod_monthly.get_annual_mb(h, target_year_annual), h,
+                     c='k', ls='--',
+                     label='MonthlyTIModel without sfc tracking')
+            plt.plot(smb_annual['daa'], h, c='C0',
+                     label='SMB: ti_model: daily, clim: annual, aging: annual')
+            plt.plot(smb_annual['dma'], h, c='C1',
+                     label='SMB: ti_model: daily, clim: monthly, aging: annual')
+            plt.plot(smb_annual['dda'], h, c='C3',
+                     label='SMB: ti_model: daily, clim: daily, aging: annual')
+            plt.plot(smb_annual['dmm'], h, c='C2',
+                     label='SMB: ti_model: daily, clim: monthly, aging: monthly')
+            plt.plot(smb_annual['ddm'], h, c='C4',
+                     label='SMB: ti_model: daily, clim: daily, aging: monthly')
+            plt.plot(smb_annual['maa'], h, c='C0', ls='--',
+                     label='SMB: ti_model: monthly, clim: annual, aging: annual')
+            plt.plot(smb_annual['mma'], h, c='C1', ls='--',
+                     label='SMB: ti_model: monthly, clim: monthly, aging: annual')
+            plt.plot(smb_annual['mmm'], h, c='C2', ls='--',
+                     label='SMB: ti_model: monthly, clim: monthly, aging: monthly')
+            plt.title(f"Annual climatic mb for the year {target_year_annual}")
+            plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.01))
+            plt.tight_layout()
+            plt.show()
+
+            # plot looking at ice mass balance which is important for dynamics
+            plt.figure(figsize=(5, 7))
+            plt.plot(mb_mod_daily.get_annual_mb(h, target_year_annual), h,
+                     c='k',
+                     label='DailyTIModel without sfc tracking')
+            plt.plot(mb_mod_monthly.get_annual_mb(h, target_year_annual), h,
+                     c='k', ls='--',
+                     label='MonthlyTIModel without sfc tracking')
+            plt.plot(ice_mb_annual['daa'], h, c='C0',
+                     label='ICE-MB: ti_model: daily, clim: annual, aging: annual')
+            plt.plot(ice_mb_annual['dma'], h, c='C1',
+                     label='ICE-MB: ti_model: daily, clim: monthly, aging: annual')
+            plt.plot(ice_mb_annual['dda'], h, c='C3',
+                     label='ICE-MB: ti_model: daily, clim: daily, aging: annual')
+            plt.plot(ice_mb_annual['dmm'], h, c='C2',
+                     label='ICE-MB: ti_model: daily, clim: monthly, aging: monthly')
+            plt.plot(ice_mb_annual['ddm'], h, c='C4',
+                     label='ICE-MB: ti_model: daily, clim: daily, aging: monthly')
+            plt.plot(ice_mb_annual['maa'], h, c='C0', ls='--',
+                     label='ICE-MB: ti_model: monthly, clim: annual, aging: annual')
+            plt.plot(ice_mb_annual['mma'], h, c='C1', ls='--',
+                     label='ICE-MB: ti_model: monthly, clim: monthly, aging: annual')
+            plt.plot(ice_mb_annual['mmm'], h, c='C2', ls='--',
+                     label='ICE-MB: ti_model: monthly, clim: monthly, aging: monthly')
+            plt.title(f"Annual Ice MB for the year {target_year_annual}")
+            plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.04))
+            plt.tight_layout()
+            plt.show()
+
+            # looking at monthly profiles, 2019.04
+            plt.figure(figsize=(5, 7))
+            plt.plot(mb_mod_daily.get_monthly_mb(
+                h, date_to_floatyear(y=target_year_month, m=4)),
+                     h, c='k', label='DailyTIModel without sfc tracking')
+            plt.plot(mb_mod_monthly.get_monthly_mb(
+                h, date_to_floatyear(y=target_year_month, m=4)),
+                     h, c='k', ls='--',
+                     label='MonthlyTIModel without sfc tracking')
+            plt.plot(smb_monthly_4['dma'], h, c='C0',
+                     label='SMB: ti_model: daily, clim: monthly, aging: annual')
+            plt.plot(smb_monthly_4['dda'], h, c='C2',
+                     label='SMB: ti_model: daily, clim: daily, aging: annual')
+            plt.plot(smb_monthly_4['dmm'], h, c='C1',
+                     label='SMB: ti_model: daily, clim: monthly, aging: monthly')
+            plt.plot(smb_monthly_4['ddm'], h, c='C3',
+                     label='SMB: ti_model: daily, clim: daily, aging: monthly')
+            plt.plot(smb_monthly_4['mma'], h, c='C0', ls='--',
+                     label='SMB: ti_model: monthly, clim: monthly, aging: annual')
+            plt.plot(smb_monthly_4['mmm'], h, c='C1', ls='--',
+                     label='SMB: ti_model: monthly, clim: monthly, aging: monthly')
+            plt.title(f'Monthly Profiles for April {target_year_month}')
+            plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.04))
+            plt.tight_layout()
+            plt.show()
+
+            # looking at monthly profiles, 2019.08
+            plt.figure(figsize=(5, 7))
+            plt.plot(mb_mod_daily.get_monthly_mb(
+                h, date_to_floatyear(y=target_year_month, m=8)),
+                     h, c='k', label='DailyTIModel without sfc tracking')
+            plt.plot(mb_mod_monthly.get_monthly_mb(
+                h, date_to_floatyear(y=target_year_month, m=8)),
+                     h, c='k', ls='--',
+                     label='MonthlyTIModel without sfc tracking')
+            plt.plot(smb_monthly_8['dma'], h, c='C0',
+                     label='SMB: ti_model: daily, clim: monthly, aging: annual')
+            plt.plot(smb_monthly_8['dda'], h, c='C2',
+                     label='SMB: ti_model: daily, clim: daily, aging: annual')
+            plt.plot(smb_monthly_8['dmm'], h, c='C1',
+                     label='SMB: ti_model: daily, clim: monthly, aging: monthly')
+            plt.plot(smb_monthly_8['ddm'], h, c='C3',
+                     label='SMB: ti_model: daily, clim: daily, aging: monthly')
+            plt.plot(smb_monthly_8['mma'], h, c='C0', ls='--',
+                     label='SMB: ti_model: monthly, clim: monthly, aging: annual')
+            plt.plot(smb_monthly_8['mmm'], h, c='C1', ls='--',
+                     label='SMB: ti_model: monthly, clim: monthly, aging: monthly')
+            plt.title(f'Monthly Profiles for August {target_year_month}')
+            plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.04))
+            plt.tight_layout()
+            plt.show()
+
+            # looking at daily profiles
+            plt.figure(figsize=(5, 7))
+            plt.plot(mb_mod_daily.get_daily_mb(
+                h, date_to_floatyear(y=target_year_day, m=9, d=3)),
+                h, c='k', label='DailyTIModel without sfc tracking')
+            plt.plot(smb_daily_3_9['dda'], h, c='C0',
+                     label='SMB: ti_model: daily, clim: daily, aging: annual')
+            plt.plot(smb_daily_3_9['ddm'], h, c='C2',
+                     label='SMB: ti_model: daily, clim: daily, aging: monthly')
+            plt.title(f'Daily Profiles for 03.09.{target_year_day}')
+            plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.04))
+            plt.tight_layout()
+            plt.show()
+
+            # looking at daily profiles
+            plt.figure(figsize=(5, 7))
+            plt.plot(mb_mod_daily.get_daily_mb(
+                h, date_to_floatyear(y=target_year_day, m=9, d=5)),
+                h, c='k', label='DailyTIModel without sfc tracking')
+            plt.plot(smb_daily_5_9['dda'], h, c='C0',
+                     label='SMB: ti_model: daily, clim: daily, aging: annual')
+            plt.plot(smb_daily_5_9['ddm'], h, c='C2',
+                     label='SMB: ti_model: daily, clim: daily, aging: monthly')
+            plt.title(f'Daily Profiles for 05.09.{target_year_day}')
+            plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1.04))
+            plt.tight_layout()
+            plt.show()
+
+        # test check of available climate data
+        with pytest.raises(ValueError,
+                           match='Climate data for spinup not available. *'):
+            massbalance.SfcTypeTIModel(gdir, settings_filesuffix='_daily',
+                                       ys=1800, check_calib_params=False,)
+
+        with pytest.raises(InvalidWorkflowError,
+                           match='The current buckets are valid for *'):
+            mb_mod = massbalance.SfcTypeTIModel(
+                gdir, settings_filesuffix='_daily', ys=2000,
+                use_previous_mbs=False, check_calib_params=False, )
+            mb_mod.get_annual_mb(heights=h, year=2000)
+            # calling the same year a second time with use_previous_mbs=False
+            # should raise
+            mb_mod.get_annual_mb(heights=h, year=2000)
+
+        # Look at different options of defining the melt_f per bucket
+        mb_mod = massbalance.SfcTypeTIModel(
+            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            climate_resolution='monthly', aging_frequency='monthly',
+            melt_f_change="neg_exp", melt_f_ratio=0.5)
+        melt_f_exp = np.asarray(list(mb_mod.melt_f_buckets.values()))
+        # check ratio
+        np.testing.assert_allclose(melt_f_exp[0] / melt_f_exp[-1], 0.5, atol=1e-3)
+
+        mb_mod = massbalance.SfcTypeTIModel(
+            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            climate_resolution='monthly', aging_frequency='monthly',
+            melt_f_change="neg_exp", melt_f_ratio=0.5, tau_e=0.5)
+        melt_f_exp_05 = np.asarray(list(mb_mod.melt_f_buckets.values()))
+        # check ratio
+        np.testing.assert_allclose(melt_f_exp_05[0] / melt_f_exp_05[-1], 0.5,
+                                   atol=1e-3)
+
+        mb_mod = massbalance.SfcTypeTIModel(
+            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            climate_resolution='monthly', aging_frequency='monthly',
+            melt_f_change="linear", melt_f_ratio=0.5)
+        melt_f_linear = np.asarray(list(mb_mod.melt_f_buckets.values()))
+        np.testing.assert_allclose(melt_f_linear[0] / melt_f_linear[-1], 0.5)
+
+        np.testing.assert_allclose(melt_f_linear[0], melt_f_exp[0])
+        np.testing.assert_allclose(melt_f_exp[0], melt_f_exp_05[0])
+        np.testing.assert_allclose(melt_f_linear[-1], melt_f_exp[-1], atol=1e-2)
+        np.testing.assert_allclose(melt_f_exp[-1], melt_f_exp_05[-1], atol=1e-2)
+        np.testing.assert_allclose(melt_f_linear[-1], gdir.settings['melt_f'])
+        # the exponential decay is not perfectly between 0 and 1
+        np.testing.assert_allclose(melt_f_exp[-1], gdir.settings['melt_f'],
+                                   atol=1e-2)
+        np.testing.assert_allclose(melt_f_exp_05[-1], gdir.settings['melt_f'],
+                                   atol=1e-4)
+
+        if do_plot:
+            plt.plot(melt_f_exp, label='melt_f_change = neg_exp, tau_e = 1')
+            plt.plot(melt_f_exp_05, label='melt_f_change = neg_exp, tau_e = 0.5')
+            plt.plot(melt_f_linear, label='melt_f_change = linear')
+
+            plt.legend()
+            plt.show()
+
+        # test changing melt_f also adapts melt_f_buckets and resets buckets
+        mb_mod.get_annual_mb(h, 2005)
+        # bucket year is always one timestep ahead of the last calculated mb
+        assert mb_mod.mb_buckets_year == 2006
+        mb_buckets_2006 = mb_mod.mb_buckets.copy()
+        mb_mod.melt_f = 5
+        melt_f_linear_5 = np.asarray(list(mb_mod.melt_f_buckets.values()))
+        np.testing.assert_allclose(melt_f_linear_5[0] / melt_f_linear_5[-1], 0.5)
+        assert melt_f_linear_5[-1] == 5
+        # should be reset to the ys
+        assert mb_mod.mb_buckets_year == 2000
+
+        # test starting from user provided spinup buckets
+        mb_mod = massbalance.SfcTypeTIModel(
+            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            climate_resolution='monthly', aging_frequency='monthly',
+            ys=2000, spinup_buckets=mb_buckets_2006)
+        np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
+        # after running it should be differnt
+        mb_mod.get_annual_mb(h, 2001)
+        with pytest.raises(AssertionError):
+            np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
+        # but after setting a mb parameter it should be reset
+        mb_mod.prcp_fac = 1
+        np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
+
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
@@ -1446,18 +1749,12 @@ class TestMassBalanceModels:
                                                   melt_f=df['melt_f'],
                                                   temp_bias=df['temp_bias'],
                                                   prcp_fac=df['prcp_fac'],
-                                                  y0=1985,
-                                                  check_calib_params=False,
-                                                  )
+                                                  y0=1985)
         ombh = cmb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         otmb = np.average(ombh, weights=w)
         np.testing.assert_allclose(0., otmb, atol=0.2)
 
-        mb_mod = massbalance.ConstantMassBalance(
-            gdir,
-            y0=2002 - 15,
-            check_calib_params=False
-        )
+        mb_mod = massbalance.ConstantMassBalance(gdir, y0=2002 - 15)
         nmbh = mb_mod.get_annual_mb(h) * SEC_IN_YEAR * rho
         ntmb = np.average(nmbh, weights=w)
 
@@ -1551,12 +1848,8 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        ref_mod = massbalance.ConstantMassBalance(
-            gdir, y0=1985, check_calib_params=False
-        )
-        mb_mod = massbalance.RandomMassBalance(
-            gdir, seed=10, y0=1985, check_calib_params=False
-        )
+        ref_mod = massbalance.ConstantMassBalance(gdir, y0=1985)
+        mb_mod = massbalance.RandomMassBalance(gdir, seed=10, y0=1985)
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -1636,30 +1929,26 @@ class TestMassBalanceModels:
                                      weights=w))
         np.testing.assert_allclose(mb_ts, mb_ts2)
 
-    def test_random_mb_unique(self, hef_gdir, check_calib_params=False):
+    def test_random_mb_unique(self, hef_gdir):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
         ref_mod = massbalance.ConstantMassBalance(gdir,
                                                   y0=2002 - 15,
-                                                  halfsize=15,
-                                                  check_calib_params=False)
+                                                  halfsize=15)
         mb_mod = massbalance.RandomMassBalance(gdir, seed=10,
                                                y0=2002 - 15,
                                                unique_samples=True,
-                                               halfsize=15,
-                                               check_calib_params=False)
+                                               halfsize=15)
         mb_mod2 = massbalance.RandomMassBalance(gdir, seed=20,
                                                 y0=2002 - 15,
                                                 unique_samples=True,
-                                                halfsize=15,
-                                                check_calib_params=False)
+                                                halfsize=15)
         mb_mod3 = massbalance.RandomMassBalance(gdir, seed=20,
                                                 y0=2002 - 15,
                                                 unique_samples=True,
-                                                halfsize=15,
-                                                check_calib_params=False)
+                                                halfsize=15)
 
         h, w = gdir.get_inversion_flowline_hw()
 
@@ -1728,7 +2017,7 @@ class TestMassBalanceModels:
         # test mass balance with temperature bias
         assert np.mean(r_mbh) < np.mean(r_mbh3)
 
-    def test_uncertain_mb(self, hef_gdir, check_calib_params=False):
+    def test_uncertain_mb(self, hef_gdir):
 
         gdir = hef_gdir
 
@@ -1842,19 +2131,15 @@ class TestMassBalanceModels:
 
         return elapsed
 
-    def test_get_performance(self, hef_gdir, check_calib_params=False):
+    def test_get_performance(self, hef_gdir):
         gdir = hef_gdir
         init_present_time_glacier(gdir)
         t_01 = self.get_performance(
-            gdir=gdir,
-            model=massbalance.ConstantMassBalance,
-            y0=2002 - 15,
-            check_calib_params=False
+            gdir=gdir, model=massbalance.ConstantMassBalance, y0=2002 - 15
         )
-
         assert isinstance(t_01, float)
 
-    def test_mb_performance(self, hef_gdir, check_calib_params=False):
+    def test_mb_performance(self, hef_gdir):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
@@ -1866,7 +2151,7 @@ class TestMassBalanceModels:
             gdir=gdir, model=massbalance.ConstantMassBalance, y0=y0)
         t2 = self.get_performance(gdir=gdir, model=massbalance.MonthlyTIModel)
         t3 = self.get_performance(
-            gdir=gdir, model=massbalance.DailyTIModel,check_calib_params=False)
+            gdir=gdir, model=massbalance.DailyTIModel, check_calib_params=False)
 
         try:
             # not faster as two and a half times t2
@@ -1876,219 +2161,6 @@ class TestMassBalanceModels:
         except AssertionError:
             # no big deal
             pytest.skip('Allowed failure')
-
-
-# provides daily data across all tests
-@pytest.mark.usefixtures("fixture_get_w5e5_data")
-class TestDailyMassBalanceModels:
-    """In-depth testing of DailyTIModels.
-
-    Separated from TestMassBalanceModels to avoid clutter.
-    """
-
-    @pytest.fixture(name="DailyTIModel", scope="class")
-    def get_dailyTIModel(self):
-        """Override imports"""
-        yield massbalance.DailyTIModel
-
-    @pytest.fixture(name="DailySfcTIModel", scope="function")
-    def get_dailySfcTIModel(self):
-        """Override imports"""
-        yield massbalance.DailySfcTIModel
-
-    @pytest.fixture(name="MonthlyTIModel", scope="class")
-    def get_monthlyTIModel(self):
-        """Override imports"""
-        yield massbalance.MonthlyTIModel
-
-    def get_daily_data_path(self, gdir) -> bool:
-        file_path = gdir.get_filepath("climate_historical_daily")
-        assert os.path.exists(file_path)
-        return file_path
-
-    @pytest.mark.parametrize("year", [1979, 1980])
-    def test_get_2d_climate(self, DailyTIModel, hef_gdir, year):
-
-        gdir = hef_gdir
-        self.get_daily_data_path(gdir)  # check daily data exists
-        model = DailyTIModel(gdir, check_calib_params=False)
-        fls = gdir.read_pickle("model_flowlines")
-        heights = fls[0].surface_h
-
-        climate = model._get_2d_annual_climate(heights=heights, year=year)
-        for data in climate:
-            assert isinstance(data, np.ndarray)
-            assert len(data) == len(heights)
-
-        climate = model._get_2d_daily_climate(heights=heights, year=year)
-        for data in climate:
-            assert isinstance(data, np.ndarray)
-            assert len(data) == len(heights)
-
-    # @pytest.mark.parametrize("upscale,out", [(None, 1.0), (0.8, 0.8)])
-    def test_repr_daily_sfc(self, hef_gdir):
-        from textwrap import dedent
-
-        expected = dedent(f"""\
-        <oggm.MassBalanceModel>
-          Class: DailySfcTIModel
-          Attributes:
-            - hemisphere: nh
-            - climate_source: GSWP3_W5E5_daily
-            - melt_f: 6.53
-            - prcp_fac: 2.50
-            - temp_bias: 0.00
-            - bias: 0.00
-            - settings_filesuffix: 
-            - rho: 900.0
-            - use_leap_years: True
-            - filename: climate_historical_daily
-            - input_filesuffix: 
-            - temp_all_solid: 0.0
-            - temp_all_liq: 2.0
-            - temp_melt: 0.0
-            - temp_default_gradient: -0.0065
-            - repeat: False
-            - ref_hgt: 2252.0
-            - ys: 1901
-            - ye: 2019
-            - resolution: day
-            - gradient_scheme: annual
-            - melt_f_ratio: 0.5
-            - melt_f_change: linear
-            - melt_frequency: year
-            - spinup_years: 6
-            - tau_e: 1.0
-            - check_data_exists: True
-            - optim: False
-            - hbins: nan
-            - snow_bucket: snow
-        """
-        )
-        mb_mod = massbalance.DailySfcTIModel(hef_gdir, bias=0, check_calib_params=False)
-        assert mb_mod.__repr__() == expected
-
-    def test_set_tracking_attributes(self, hef_gdir, DailySfcTIModel):
-
-        attributes = {
-            "resolution": "month",
-            "gradient_scheme": "cte",
-            "melt_f_ratio": 1.0,
-            "melt_frequency": "month",
-            "spinup_years": 5,
-            "tau_e": 0.1,
-            "melt_f_change": "neg_exp",
-            "check_data_exists": False,
-            "optim": True,
-            "hbins": [0, 1, 2],
-        }
-        model = DailySfcTIModel(hef_gdir, check_calib_params=False)
-        model.set_tracking_attributes(**attributes)
-
-        for k, v in attributes.items():
-            assert hasattr(model, k)
-            assert getattr(model, k) == v
-
-    @pytest.mark.parametrize("frequency", ["year", "month", "day"])
-    @pytest.mark.parametrize(
-        "spinup_years",
-        [
-            pytest.param(
-                0,
-                marks=pytest.mark.xfail(
-                    reason="Zero spinup years not yet implemented."
-                ),
-            ),
-            1,
-            6,
-            10,
-        ],
-    )
-    def test_set_buckets(
-        self, hef_gdir, DailySfcTIModel, frequency, spinup_years
-    ):
-        model = DailySfcTIModel(
-            hef_gdir,
-            melt_frequency=frequency,
-            ys=1979,
-            spinup_years=spinup_years,
-            check_calib_params=False,
-        )
-        assert model.melt_frequency == frequency
-        model.set_buckets()
-        assert isinstance(model.buckets, list)
-        # assert isinstance(model.snow_bucket, int)
-        assert model.snow_bucket == model.buckets[0]
-        if frequency != "year":
-            assert model.snow_bucket == 0  # should always be zero
-        else:
-            assert model.snow_bucket == "snow"
-
-        assert hasattr(model, "columns")
-        assert isinstance(model.columns, list)
-        # assert all(isinstance(i, np.datetime64) for i in model.columns)
-        # assert model.columns[0] == np.datetime64("1979-01-01")
-        assert len(model.columns) == len(model.buckets) + 1
-
-    def test_set_flowline_distances(self, hef_gdir, DailySfcTIModel):
-        model = DailySfcTIModel(hef_gdir, check_calib_params=False)
-        model.set_flowline_distances()
-        assert hasattr(model, "flowline_distances")
-        assert isinstance(model.flowline_distances, np.ndarray)
-        assert model.flowline_distances.shape == (model.fl.nx,)
-
-    def test_set_bucket_templates(self, hef_gdir, DailySfcTIModel):
-        for template in ["year", "month", "day", "bucket"]:
-            model = DailySfcTIModel(hef_gdir, check_calib_params=False)
-            assert hasattr(model, f"mb_{template}")
-            bucket = getattr(model, f"mb_{template}")
-            # assert isinstance(bucket, np.ndarray)
-            # assert (bucket == 0).all()
-            assert isinstance(bucket, pd.DataFrame)
-            # assert bucket.empty
-
-    @pytest.mark.parametrize("arg_melt_f_change", ["linear", "neg_exp"])
-    def test_set_melt_f_buckets(
-        self, hef_gdir, DailySfcTIModel, arg_melt_f_change
-    ):
-        model = DailySfcTIModel(
-            hef_gdir,
-            melt_f_change=arg_melt_f_change,
-            check_calib_params=False
-        )
-
-        melt_buckets = model.melt_f_buckets
-        assert isinstance(melt_buckets, dict)
-
-        # compare against original mb_sandbox
-        test_buckets = dict(
-            zip(
-                model.buckets + [len(model.buckets) + 1],
-                np.linspace(
-                    model.melt_f * model.melt_f_ratio,
-                    model.melt_f,
-                    len(model.buckets) + 1,
-                ),
-            )
-        )
-        test_buckets = list(test_buckets.values())
-        assert len(melt_buckets) == len(test_buckets)
-        if arg_melt_f_change == "linear":
-            assert np.allclose(list(melt_buckets.values()), test_buckets)
-
-    @pytest.mark.parametrize("year,expected", [(1980, False), (1990, True)])
-    def test_get_spinup(self, hef_gdir, DailySfcTIModel, year, expected):
-        model = DailySfcTIModel(
-            hef_gdir,
-            ys=1979,
-            spinup_years=5,
-            check_calib_params=False
-        )
-        spinup = model.get_spinup(year=year)
-        assert spinup is expected
-        # model = DailySfcTIModel(hef_gdir, ys=1979, spinup_years=0)
-        # spinup = model.get_spinup(year=year)
-        # assert not spinup
 
 
 class TestModelFlowlines():

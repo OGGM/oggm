@@ -1,12 +1,8 @@
 """Mass balance models - next generation"""
 
-from __future__ import annotations
 # Built ins
 import logging
 import os
-import calendar
-import warnings
-import copy
 # External libs
 import cftime
 import numpy as np
@@ -24,7 +20,7 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
                         weighted_average_1d, lazy_property, set_array_type,
                         get_days_of_year, get_seconds_of_year, get_days_of_month,
-                        get_seconds_of_month, get_total_days)
+                        get_seconds_of_month, )
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -65,6 +61,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             self.rho = cfg.PARAMS['ice_density']
         else:
             self.rho = gdir.settings['ice_density']
+            self.gdir = gdir
         self.use_leap_years = use_leap_years
 
     def __repr__(self):
@@ -553,7 +550,6 @@ class MonthlyTIModel(MassBalanceModel):
                                              use_leap_years=use_leap_years)
         self.valid_bounds = [-1e4, 2e4]  # in m
         self.fl_id = fl_id  # which flowline are we the model of?
-        self.gdir = gdir
         self.filename = filename
         self.input_filesuffix = input_filesuffix
 
@@ -602,10 +598,8 @@ class MonthlyTIModel(MassBalanceModel):
             self.temp_melt = temp_melt
 
         # check if valid prcp_fac is used
-        if prcp_fac is None:
-            raise TypeError('prcp_fac cannot be None.')
-        elif prcp_fac <= 0:
-            raise InvalidParamsError('prcp_fac must be positive')
+        if prcp_fac <= 0:
+            raise InvalidParamsError('prcp_fac has to be above zero!')
         self.temp_default_gradient = gdir.settings['temp_default_gradient']
 
         # Public attrs
@@ -943,7 +937,7 @@ class MonthlyTIModel(MassBalanceModel):
         """
         t, tmelt, prcp, prcpsol = self.get_monthly_climate(heights, year=year)
 
-        # lenght of the month in days already considered in tmelt in get_monhtly_climate
+        # length of the month in days already considered in tmelt in get_monthly_climate
         mb_month = prcpsol - self.melt_f * tmelt
         sec_in_month = self.sec_in_month(year=year)
         mb_month -= (self.bias * sec_in_month / self.sec_in_year(year=year))
@@ -1074,8 +1068,6 @@ class DailyTIModel(MonthlyTIModel):
         self.settings_filesuffix = settings_filesuffix
         gdir.settings_filesuffix = settings_filesuffix
 
-        # Do not pass kwargs to prevent subclasses passing illegal args
-        # to MonthlyTIModel.
         super(DailyTIModel, self).__init__(
             gdir=gdir,
             filename=filename,
@@ -1094,14 +1086,6 @@ class DailyTIModel(MonthlyTIModel):
             check_climate_data=check_climate_data,
             use_leap_years=use_leap_years,
         )
-
-    @property
-    def melt_f(self):
-        return self._melt_f
-
-    @melt_f.setter
-    def melt_f(self, new_melt_f):
-        self._melt_f = new_melt_f
 
     def _check_for_full_years(self):
         # We check for full calendar years
@@ -1330,1357 +1314,970 @@ class DailyTIModel(MonthlyTIModel):
                     prcp.sum(axis=1), prcpsol.sum(axis=1))
         return mb_annual
 
-    def _get_2d_daily_climate(
-        self, heights: ArrayLike, year: ArrayLike
-    ) -> tuple:
-        """Get daily climate data for specific years and heights.
 
-        Parameters
-        ----------
-        heights : array_like
-            Flowline heights [m].
-        year : array_like
-            Year or range of years.
+class SfcTypeTIModel(MassBalanceModel):
+    """Temperature-Index model with surface type distinction using a bucket
+    system.
 
-        Returns
-        -------
-        tuple[np.ndarray]
-            Temperature, melt temperatures, total precipitation, and
-            solid precipitation for each height pixel.
-        """
-        # This works because we overload methods called by the parent's
-        # ``_get_2d_annual_climate`` with this class' methods.
-
-        return self._get_2d_annual_climate(heights=heights, year=year)
-
-    # def get_specific_mb(self, heights=None, widths=None, fls=None, year=None, time_resolution="annual"):
-    #     """Specific mass balance for a given glacier geometry.
-
-    #     Inheriting avoids recalculating SEC_IN_YEAR for each year. This
-    #     changes the year length in the unit, but not how the specific MB
-    #     is calculated.
-
-    #     Units depends on time_resolution:
-    #     - 'annual': [mm w.e. yr-1], or millimeter water equivalent per year.
-    #     - 'monthly': [mm w.e. month-1], or millimeter water equivalent per month.
-    #     - 'daily': [mm w.e. day-1], or millimeter water equivalent per day.
-
-    #     Parameters
-    #     ----------
-    #     heights : array_like, default None
-    #         Altitudes at which the mass balance will be computed.
-    #         Overridden by ``fls`` if provided.
-    #     widths : array_like, default None
-    #         Widths of the flowline (necessary for the weighted average).
-    #         Overridden by ``fls`` if provided.
-    #     fls : list[oggm.Flowline], default None
-    #         List of flowline instances. Alternative to heights and
-    #         widths, and overrides them if provided.
-    #     year : array_like[float] or float, default None
-    #         Year, or a range of years in "floating year" convention.
-    #     time_resolution : str
-    #         The resolution of the provided "floating year". Options are
-    #         'annual', 'monthly' or 'daily'. Default is 'annual'.
-
-    #     Returns
-    #     -------
-    #     np.ndarray
-    #         Specific mass balance (units: mm w.e. yr-1).
-    #     """
-    #     smb = super().get_specific_mb(
-    #         heights=heights, widths=widths, fls=fls, year=year
-    #     )
-    #     mask = np.vectorize(calendar.isleap)(year)  # strangely faster than map
-    #     smb = np.where(mask, smb * 366 / 365, smb)
-
-    #     return smb
-
-    # def get_specific_mb_daily(self, heights=None, widths=None, fls=None, year=None):
-    #     """ returns specific daily mass balance in kg m-2 day
-
-    #     (implemented in order that Sarah Hanus can use daily input and also gets daily output)
-    #     """
-    #     if len(np.atleast_1d(year)) > 1:
-    #         stack = []
-    #         for yr in year:
-    #             out = self.get_specific_mb_daily(heights=heights, widths=widths, year=yr)
-    #             stack = np.append(stack, out)
-    #         return np.asarray(stack)
-
-    #     mb = self.get_daily_mb(heights, year=year)
-    #     spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
-    #     assert len(spec_mb) > 360
-    #     return spec_mb
-
-
-class DailySfcTIModel(DailyTIModel):
-    """Daily temperature index model with surface tracking.
-
-    Distinguishes surface types using a bucket system. Adapted from
-    OGGM/massbalance-sandbox. Incompatible with hydro years.
+    Adapted from OGGM/massbalance-sandbox and explained in Schuster et al. 2023.
     """
 
     def __init__(
         self,
         gdir,
-        filename: str = "climate_historical_daily",
-        input_filesuffix: str = "",
         settings_filesuffix: str = "",
-        fl_id: int = None,
-        melt_f: float = None,
-        temp_bias: float = None,
-        prcp_fac: float = None,
-        bias: float = 0.0,
-        temp_melt = 0.0,
-        ys: int = None,
-        ye: int = None,
-        repeat: bool = False,
-        check_calib_params: bool = True,
-        check_climate_data: bool = True,
         use_leap_years: bool = True,
-        resolution: str = "day",
-        gradient_scheme: str = "annual",
+        mb_model_class=DailyTIModel,
+        climate_resolution: str = "annual",
+        aging_frequency: str = "annual",
         melt_f_ratio: float = 0.5,
-        melt_frequency: str = "year",
-        melt_f_change: str = "linear",
+        melt_f_change: str = "neg_exp",
+        tau_e: float = 1.0,
+        ys: int = 2000,
         spinup_years: int = 6,
-        tau_e: float = 1.0,  # 0.5
-        check_data_exists: bool = True,
-        optim: bool = False,
-        hbins: ArrayLike = np.nan,
-        buckets: ArrayLike = None,
+        save_spinup_mbs: bool = False,
+        spinup_buckets: np.ndarray = None,
+        fl = None,
+        use_main_fl_from: str = 'inversion_flowlines',
+        hbins: ArrayLike = None,
+        store_buckets: bool or str = False,
+        store_buckets_dates: ArrayLike = None,
+        use_previous_mbs: bool = False,
         **kwargs,
     ):
-        """Inherits from DailyTIModel.
+        """Surface type temperature index model.
 
         Parameters
         ----------
         gdir : GlacierDirectory
             The glacier directory.
-        filename : str, optional
-            Set to a different BASENAME if you want to use alternative climate
-            data. Default is 'climate_historical_daily'.
-        input_filesuffix : str, optional
-            Append a suffix to the climate input filename (useful for
-            GCM runs).
         settings_filesuffix : str, optional
             append a suffix to the settings file (useful for
             sensitivity runs).
-        fl_id : int, optional
-            If this flowline has been calibrated alone and has specific
-            model parameters.
-        melt_f : float, optional
-            Set to the value of the melt factor you want to use, here
-            the unit is kg m-2 day-1 K-1
-            (the default is to use the calibrated value).
-        temp_bias : float, optional
-            Set to the value of the temperature bias you want to use
-            (the default is to use the calibrated value).
-        prcp_fac : float, optional
-            Set to the value of the precipitation factor you want to use
-            (the default is to use the calibrated value).
-        bias : float, optional
-            Set to the alternative value of the calibration bias [mm we yr-1]
-            you want to use (the default is to use the calibrated
-            value). Note that this bias is *subtracted* from the
-            computed MB. Indeed:
-            BIAS = MODEL_MB - REFERENCE_MB.
-        temp_melt : float, default 0.0
-            The threshold for the air temperature above which ice melt is
-            assumed to occur (0°C the default for daily mb models).
-        ys : int, optional
-            The start of the climate period where the MB model is valid
-            (default: the period with available data).
-        ye : int, optional
-            The end of the climate period where the MB model is valid
-            (default: the period with available data).
-        repeat : bool, default False
-            Whether the climate period given by [ys, ye] should be
-            repeated indefinitely in a circular way.
-        check_calib_params : bool, default True
-            OGGM will try hard not to use wrongly calibrated parameters
-            by checking the global parameters used during calibration
-            and the ones you are using at run time. If they don't
-            match, it will raise an error. Set to "False" to suppress
-            this check.
-        check_climate_data : bool, default True
-            If True, check the climate input data is provided in total
-            years and that the length matches.
         use_leap_years : bool, default True
             If the calendar should use leap years.
-        resolution : str, default 'day'
-            Temporal mass balance resolution.
-        gradient_scheme : str, default 'annual'
-            Temperature gradient scheme:
-              - *annual*: Spatial and seasonal variation, constant over
-                multiple years.
+        mb_model_class : MassBalanceModel, default ``DailyTIModel``
+            The MassBalanceModel to use together with surface type tracking.
+            Options are DailyTIModel and MonthlyTIModel.
+        climate_resolution : str, default 'annual'
+            Temporal mass balance resolution. Options are 'annaul', 'monthly'
+            and 'daily', but the mb_model_class need to be able to provide this
+            resolution.
+        aging_frequency : str, default "annual"
+            Frequency at which the buckets are moved to the next one (= getting
+            older). Options are "annual" or "monthly".
+            If annual, the model uses one snow and (spinup_years-1) firn buckets.
+            If monthly, the snow ages over the number of months * spinup_years.
         melt_f_ratio : float, default 0.5
             Ratio of snow melt factor to ice melt factor.
             Between 0 and 1, where 1 is no surface type distinction.
             Default 0.5 to match GloGEM.
-        melt_frequency : str, default "year"
-            Frequency to update melt factor, either "year" or "month".
-            If annual, the model uses one snow and five firn buckets.
-            If monthly, the snow ages over the number of spinup years.
-        melt_f_change : str, default "linear"
+        melt_f_change : str, default "neg_exp"
             How the snow melt factor changes relative to the ice melt
-            factor. Either "linear" or "neg_exp".
+            factor, either "linear" or "neg_exp" (see `tau_e` for the equation).
+        tau_e : float, default 1
+            Only used if melt_f_change is 'neg_exp'. It describes how fast the
+            snow melt factor approximates to the ice melt factor via
+            melt_f=melt_f_ice+(melt_f_snow-melt_f_ice)*np.exp(-time_yr/tau_e_fold_yr)
+            Must be larger than zero to prevent ``melt_f`` being set to NaN in
+            the first bucket.
+        ys : int, default 2000
+            The initial year from where we want to get mb values. This means the
+            bucket system is spun up so that at ys for the first time ice
+            can form. For spinup the years ys - spinup_years up to ys are used.
         spinup_years : int, default 6
-            Number of spinup years. Every bucket can be filled after
-            the spinup period.
-        tau_e : float, default 0.5
-            How quickly the snow melt factor approximates the ice melt
-            factor. Must be larger than zero to prevent ``melt_f``
-            being set to NaN in the first bucket.
-        check_data_exists : bool, default True
-            Check if the year/month has already been computed. If True,
-            use the pre-computed output from ``mb_month`` or
-            ``mb_year``. Set to False if using ``random_climate`` or
-            ``constant_climate``.
-        optim : bool, default False
-            Deprecated. If True, estimates a CTE bucket profile during
-            spinup and reuses it to compute MB for all heights, ignoring
-            changes in surface type over time.
+            Number of spinup years. This defines the number of buckets we use
+            (see aging_frequency for explanation). The minimum allowed value is
+            1 (corresponds to only having a snow bucket for
+            aging_frequency='annual'). The spinup ensures every bucket has the
+            opportunity to be filled and ice can form at ys.
+        save_spinup_mbs : bool, default False
+            If we want to safe the climatic mb and ice mb during the spinup
+            period. This is mainly useful for testing.
+        spinup_buckets : np.ndarray, default None
+            Instead of conducting a spinup of the buckets you can provide the
+            initial buckets. It is assumed that these buckets are valid at the
+            time ys.
+        fl: Flowline, default None
+            The flowline for defining the grid-points. If None, the flowline
+            defined in `use_main_fl_from` is used. During all consecutive calls
+            it is always checked the length of provided heights equals the
+            length of the grid-points of the flowline.
+        use_main_fl_from: str, default 'inversion_flowlines'
+            If the main flowline of 'inversion_flowlines' or 'model_flowlines'
+            should be used. If fl is provided this is ignored.
         hbins: ArrayLike, default None
             Height bins for classifying surface types. Only needed for
-            ``ConstantMBModel``. If None, defaults to ``np.nan``.
-        buckets: ArrayLike, default None
-            Buckets for surface tracking scheme.
+            ``ConstantMBModel``. Currently untested!
+        store_buckets: bool or str, default False
+            If buckets should be stored along the way. Options are 'annual',
+            'monthly', 'daily' or False.
+        store_buckets_dates: ArrayLike, default []
+            In addition to the frequency of when the buckets should be stored
+            defined in `store_buckets` you can also provide a few selected dates
+            where the buckets should be stored.
+        use_previous_mbs: bool, default False
+            If True, and you call get_annual_mb, get_monthly_mb or get_daily_mb
+            it is checked if the desired year was already computed and return
+            this values. In this case the provided heights will be ignored. This
+            can be needed for some tasks (e.g. run_with_hydro), but the user
+            should be aware that this behaviour is different than other
+            mb_models work, because with surface tracking we have included a
+            memory of the past. If False and you try to revisit a past year and
+            error is raised.
+        **kwargs:
+            keyword arguments to pass to the mb_model_class
         """
 
         self.settings_filesuffix = settings_filesuffix
         gdir.settings_filesuffix = settings_filesuffix
 
-        super(DailySfcTIModel, self).__init__(
-            gdir=gdir,
-            filename=filename,
-            melt_f=melt_f,
-            input_filesuffix=input_filesuffix,
-            settings_filesuffix=settings_filesuffix,
-            fl_id=fl_id,
-            temp_bias=temp_bias,
-            prcp_fac=prcp_fac,
-            bias=bias,
-            ys=ys,
-            ye=ye,
-            repeat=repeat,
-            check_calib_params=check_calib_params,
-        )
+        super(SfcTypeTIModel, self).__init__(gdir=gdir,
+                                             use_leap_years=use_leap_years)
 
-        self.set_tracking_attributes(
-            resolution=resolution,
-            gradient_scheme=gradient_scheme,
-            melt_f_ratio=melt_f_ratio,
-            melt_frequency=melt_frequency,
-            spinup_years=spinup_years,
-            tau_e=tau_e,
-            melt_f_change=melt_f_change,
-            check_data_exists=check_data_exists,
-            optim=optim,
-            hbins=hbins,
-        )
-        self.fl = self.set_flowline_from_gdir()
-        if not buckets:
-            self.set_buckets()
+        # the mass balance model we use to get the climate data, as well as
+        # melt_f, prcp_fac and temp_bias
+        if mb_model_class not in [MonthlyTIModel, DailyTIModel]:
+            raise NotImplementedError(f"mb_model_class: {mb_model_class}")
+        self.mbmod = mb_model_class(gdir=gdir,
+                                    settings_filesuffix=settings_filesuffix,
+                                    **kwargs)
+
+        # check compatibility of aging_frequency and climate_resolution: aging
+        # can not happen at higher temporal resolution than the climate steps
+        if aging_frequency not in ["annual", "monthly"]:
+            raise NotImplementedError(f"aging_frequency. {aging_frequency}")
+        climate_and_aging_compatible = True
+        if climate_resolution == 'annual':
+            if aging_frequency != 'annual':
+                climate_and_aging_compatible = False
+        elif climate_resolution in ['monthly', 'daily']:
+            # currently the fastest aging supported is monthly
+            pass
         else:
-            self.buckets = buckets
-        self.set_flowline_distances()
-
-        # used to check if the same height is applied later
-        self.inv_heights = self.fl.surface_h
-        self.set_bucket_templates()
-
-    def set_tracking_attributes(
-        self,
-        resolution: str,
-        gradient_scheme: str,
-        melt_f_ratio: float,
-        melt_frequency: str,
-        spinup_years: int,
-        tau_e: float,
-        melt_f_change: str,
-        check_data_exists: bool,
-        optim: bool,
-        hbins: ArrayLike,
-    ):
-        """Set class attributes.
-
-        Parameters
-        ----------
-
-        resolution : str, default 'day'
-            Temporal mass balance resolution.
-        gradient_scheme : str, default 'annual'
-            Temperature gradient scheme:
-              - *annual*: Spatial and seasonal variation, constant over
-                multiple years.
-        melt_f_ratio : float, default 0.5
-            Ratio of snow melt factor to ice melt factor.
-            Between 0 and 1, where 1 is no surface type distinction.
-            Default 0.5 to match GloGEM.
-        melt_frequency : str, default "year"
-            Frequency to update melt factor, either "year" or
-            "month". If annual, the model uses one snow and five firn
-            buckets. If monthly, the snow ages over the number of
-            spinup years.
-        melt_f_change : str, default "linear"
-            How the snow melt factor changes relative to the ice melt
-            factor. Either "linear" or "neg_exp".
-        spinup_years : int, default 6
-            Number of spinup years. Every bucket can be filled after
-            the spinup period.
-        tau_e : float, default 0.5
-            How quickly the snow melt factor approximates the ice melt
-            factor. Must be larger than zero to prevent ``melt_f``
-            being set to NaN in the first bucket.
-        check_data_exists : bool, default True
-            Check if the year/month has already been computed. If True,
-            use the pre-computed output from ``mb_month`` or
-            ``mb_year``. Set to False if using ``random_climate`` or
-            ``constant_climate``.
-        optim : bool, default False
-            Deprecated. If True, estimates a CTE bucket profile during
-            spinup and reuses it to compute MB for all heights, ignoring
-            changes in surface type over time.
-        hbins: ArrayLike, default None
-            Height bins for classifying surface types. Only needed for
-            ``ConstantMBModel``.
-        """
-
-        self.resolution = resolution
-        self.gradient_scheme = gradient_scheme
-        self.melt_f_ratio = melt_f_ratio
-        if melt_f_change not in ["linear", "neg_exp"]:
-            raise InvalidParamsError(
-                "`melt_f_change` must be 'linear' or 'neg_exp'"
-            )
-        elif melt_f_change == "neg_exp" and tau_e < 0:
-            raise InvalidParamsError(
-                "`tau_e` must be above zero for `melt_f_change` is 'neg_exp'."
-            )
-        elif melt_frequency not in ["year", "month", "day"]:
-            raise InvalidParamsError(
-                f"`melt_frequency` must be 'year', 'month', or 'day'"
-            )
-        else:
-            self.melt_f_change = melt_f_change
-        self.melt_frequency = melt_frequency
-        self.spinup_years = spinup_years
-        self.tau_e = tau_e
-        self.check_data_exists = check_data_exists
-        self.optim = optim
-        self.hbins = hbins
-
-    # @classmethod
-    def set_spinup_years(self, value: int):
-        """Set the number of spinup years."""
-        self.spinup_years = value
-
-    # @classmethod
-    def set_buckets(self):
-        """Set the index for surface tracking buckets.
-
-        TODO: does not support spinup_year = 0
-        """
-
-        if not self.spinup_years:
             raise NotImplementedError(
-                "Running with no spinup years is not yet supported."
-            )
-
-        if self.melt_frequency == "year":
-            buckets = ["snow"] + [
-                f"firn_{i}" for i in range(1, self.spinup_years, 1)
-            ]
-            # time_index = [np.datetime64(f"{self.ys + i}") for i in buckets]
-        elif self.melt_frequency == "month":
-            # buckets = np.arange(0, 12 * cls.spinup_years, 1).tolist()
-            buckets = [i for i in range(0, 12 * self.spinup_years, 1)]
-            # time_index = [np.datetime64(f"{self.ys}") + np.timedelta64(i, "M") for i in buckets]
-        elif self.melt_frequency == "day":
-            days = get_total_days(self.ys - self.spinup_years, self.ys)
-            buckets = [i for i in range(days + 1)]
-            # time_index = [np.datetime64(f"{self.ys}") + np.timedelta64(i, "D") for i in buckets]
-        else:
+                f"climate_resolution: {climate_resolution}")
+        if not climate_and_aging_compatible:
             raise InvalidParamsError(
-                "melt_frequency must be 'year', 'month', 'day'"
-            )
-        if not hasattr(self, "buckets"):
-            self.buckets = buckets
-        elif not self.buckets:
-            self.buckets = buckets
-        self.snow_bucket = self.buckets[0]
-        self.columns = buckets + ["delta_kg/m2"]
-        # self.melt_f_buckets = None
+                f"The selected climate_resolution '{climate_resolution}' is "
+                f"not compatible with an aging_frequency '{aging_frequency}'. "
+                "The climate resolution must be the same or shorter than "
+                "aging (e.g. you can not age monthly while the climate is "
+                "only applied annual).")
+        self.aging_frequency = aging_frequency
+        self.climate_resolution = climate_resolution
 
-    def set_flowline_from_gdir(self):
-        self.fl = self.gdir.read_pickle("inversion_flowlines")[-1]
-        return self.fl
+        # stuff related to spinup, only used if spinup_buckets is None
+        if spinup_years < 1:
+            raise InvalidParamsError("spinup_years needed to be at least 1, you "
+                                     f"provided {spinup_years}.")
+        self.spinup_years = spinup_years
+        self.save_spinup_mbs = save_spinup_mbs
+        self.spinup_buckets = spinup_buckets
+        if isinstance(self.spinup_buckets, pd.core.frame.DataFrame):
+            self.spinup_buckets = self.spinup_buckets.values
+        self.ys = ys
+        if self.spinup_buckets is None:
+            # check if climate data for spinup is available
+            spinup_start = self.ys - self.spinup_years
+            try:
+                self.mbmod.validate_year(spinup_start)
+                self.mbmod.validate_year(self.ys)
+            except ValueError as e:
+                raise ValueError(
+                    "Climate data for spinup not available. We need data for "
+                    f"the period {spinup_start} (ys - spinup_years) to "
+                    f"{self.ys}, but we get the following error: {e}")
 
-    def set_flowline_distances(self):
-        self.flowline_distances = self.fl.dx_meter * np.arange(self.fl.nx)
+        # defining the number of grid points and the spinup heights, either with
+        # fl or hbins
+        self.hbins = hbins  # TODO: need to test with constant_mb (maybe hbins[::-1])
+        if fl is not None:
+            self.fl = fl
+        else:
+            if use_main_fl_from == 'inversion_flowlines':
+                self.fl = self.gdir.read_pickle("inversion_flowlines")[-1]
+            elif use_main_fl_from == 'model_flowlines':
+                self.fl = self.gdir.read_pickle("model_flowlines")[-1]
+            elif self.hbins is not None:
+                # ok we are working with height bins here, don't need the fl
+                self.fl = None
+            else:
+                raise InvalidParamsError("We need a flowline or height bins "
+                                         "(hbins) for defining the number of "
+                                         "buckets we want to compute!")
 
-    # @classmethod
-    def set_bucket_templates(self):
-        self._mb_template = pd.DataFrame(
-            0, index=self.fl.dx_meter * np.arange(self.fl.nx), columns=[]
+        # create labels for the grid_points and define heights used during spinup
+        if self.fl is not None:
+            # for the flowline we use the distance along the flowline
+            self.buckets_grid_point_label = self.fl.dx_meter * np.arange(self.fl.nx)
+            self.spinup_heights = self.fl.surface_h
+        else:
+            # for hbins we just use numbers
+            self.buckets_grid_point_label = np.arange(len(self.hbins))
+            self.spinup_heights = self.hbins
+
+        # here we set the names of the buckets, this depends on the
+        # aging_frequency and spinup_years
+        if self.aging_frequency == "annual":
+            firn_buckets = [f"firn_{i}" for i in range(1, self.spinup_years, 1)]
+        elif self.aging_frequency == "monthly":
+            firn_buckets = [f"firn_{i}" for i in
+                            range(1, 12 * self.spinup_years, 1)]
+        else:
+            raise InvalidParamsError("aging_frequency must be 'annual' or "
+                                     "'monthly'")
+
+        # we also add a snow and an ice bucket
+        self.buckets = ["snow"] + firn_buckets + ["ice"]
+
+        # set a template for an empty bucket and mb containers
+        self._empty_mb_buckets_np = np.zeros((len(self.buckets_grid_point_label),
+                                              len(self.buckets)))
+        self._empty_smb_pd = pd.DataFrame(
+            0, index=self.buckets_grid_point_label, columns=[]
         )
-        self._mb_template.index.name = "distance_along_flowline"
-        self._mb_template_bucket = pd.DataFrame(
-            0,
-            index=self.fl.dx_meter * np.arange(self.fl.nx),
-            columns=self.columns,
-        )
-        self._mb_template_bucket.index.name = "distance_along_flowline"
 
-        self.mb_month = self._mb_template.copy()
-        self.mb_year = self._mb_template.copy()
-        self.mb_day = self._mb_template.copy()
-        pd_bucket = self._mb_template_bucket.copy()
-        self.mb_bucket = pd_bucket
-
-    def set_melt_f(self, value):
-        """Set new melt_f and reset buckets."""
-        self.melt_f = value
-
-        # Recompute buckets since they depend on new melt_f
-        self.reset_mb_buckets()
+        # stuff related to varying melt_f for each bucket
+        self.tau_e = tau_e
+        self.melt_f_ratio = melt_f_ratio
+        self.melt_f_change = melt_f_change
+        self.melt_f_buckets = None
         self.set_melt_f_buckets()
+
+        # define if some additonal outputs should be saved along the way
+        if ((store_buckets == 'monthly' and
+             self.climate_resolution == 'annual') or
+                (store_buckets == 'daily' and
+                 self.climate_resolution != 'daily')):
+            raise InvalidParamsError(
+                "It is not possible to save the buckets in a higher resolution "
+                "than the applied climate! Your selection: store_buckets = "
+                f"{store_buckets}, climate_resolution = "
+                f"{self.climate_resolution}")
+        self.store_buckets = store_buckets
+        if store_buckets_dates is None:
+            store_buckets_dates = []
+        else:
+            # if specific dates are provided this overrules store_buckets
+            self.store_buckets = True
+        self.store_buckets_dates = store_buckets_dates
+
+        # if the user wants to return previously calculated mb values
+        self.use_previous_mbs = use_previous_mbs
+
+        # Initialise buckets and conduct a potential spinup
+        self._init_buckets()
+
+    def _init_buckets(self):
+        # reset some containers for a fresh start
+        self.mb_buckets_np = self._empty_mb_buckets_np.copy()  # kg m-2
+        self.climatic_mb = self._empty_smb_pd.copy()  # kg m-2
+        self.ice_mb = self._empty_smb_pd.copy()  # kg m-2
+        self.mb_heights = self._empty_smb_pd.copy()  # m
+
+        if self.store_buckets:
+            # the mb_buckets are stored in a dict, with key corresponding to the
+            # date and the buckets saved as pandas dataframes
+            self.mb_buckets_stored = {}
+
+        # now define the initial buckets
+        if self.spinup_buckets is not None:
+            # ok user provided the initial buckets, check shape and use
+            provided_shape = self.spinup_buckets.shape
+            needed_shape = self._empty_mb_buckets_np.shape
+            if (provided_shape[0] != needed_shape[0] or
+                    provided_shape[1] != needed_shape[1] - 1):  # exclude ice
+                raise InvalidParamsError(
+                    "The provided spinup_buckets have the shape "
+                    f"{provided_shape}, but we expect the shape "
+                    f"({needed_shape[0]}, {needed_shape[1] - 1}).")
+
+            self.mb_buckets_np = self._empty_mb_buckets_np.copy()
+            self.mb_buckets_np[:, :-1] = self.spinup_buckets.copy()
+            self.mb_buckets_year = self.ys
+
+        else:
+            # we need to make a spinup
+            # define the spinup timesteps depending on the climate resolution
+            spinup_start_year = self.ys - self.spinup_years
+            if self.climate_resolution == 'annual':
+                spinup_steps = range(spinup_start_year, self.ys)
+            elif self.climate_resolution == 'monthly':
+                spinup_steps = float_years_timeseries(
+                    y0=spinup_start_year, y1=self.ys)[:-1]
+            elif self.climate_resolution == 'daily':
+                spinup_steps = float_years_timeseries(
+                    y0=spinup_start_year, y1=self.ys, monthly=False)[:-1]
+            else:
+                raise NotImplementedError(
+                    f"climate_resolution {self.climate_resolution}")
+
+            # do the actual spinup
+            for yr in spinup_steps:
+                self._apply_climate_step_and_aging_to_buckets(
+                    heights=self.spinup_heights, year=yr,
+                    save_mbs=self.save_spinup_mbs)
+
+            assert self.mb_buckets_year == self.ys
+
+    @property
+    def mb_buckets(self):
+        # returns current snow and firn buckets, but not the ice bucket,
+        # for ice look at ice_mb
+        return pd.DataFrame(self.mb_buckets_np[:, :-1],
+                            index=self.buckets_grid_point_label,
+                            columns=self.buckets[:-1],)
 
     @property
     def melt_f(self):
-        return self._melt_f
+        return self.mbmod.melt_f
 
     @melt_f.setter
     def melt_f(self, value):
         """Set new melt_f and reset the buckets."""
-        self._melt_f = value
-        if isinstance(self, DailySfcTIModel) and hasattr(self, "optim"):
-            self.reset_mb_buckets()
-            self.set_melt_f_buckets()
+        self.mbmod.melt_f = value
+        self.set_melt_f_buckets()
+        # Recompute buckets
+        self._init_buckets()
 
     @property
     def prcp_fac(self):
         """Precipitation factor"""
-        return self._prcp_fac
+        return self.mbmod.prcp_fac
 
     @prcp_fac.setter
     def prcp_fac(self, value):
-        """Set new precipitation factor.
-
-        Will change precipitation time series and reset buckets.
-        """
-        if value <= 0:
-            raise InvalidParamsError("prcp_fac has to be above zero!")
-        # do not call prcp_fac here to avoid recursion
-        # use new_prcp_fac to not get maximum recusion depth error
-        self.prcp *= value / self._prcp_fac
-
-        if isinstance(self, DailySfcTIModel):
-            self.reset_mb_buckets()
-        self._prcp_fac = value
+        """Set new precipitation factor and reset buckets."""
+        self.mbmod.prcp_fac = value
+        # Recompute buckets
+        self._init_buckets()
 
     @property
     def temp_bias(self):
-        return self._temp_bias
+        return self.mbmod.temp_bias
 
     @temp_bias.setter
     def temp_bias(self, value):
-        self.temp += value - self._temp_bias
-
-        if isinstance(self, DailySfcTIModel):
-            self.reset_mb_buckets()
-        self._temp_bias = value
+        """Set new temperature bias and reset buckets."""
+        self.mbmod.temp_bias = value
+        # Recompute buckets
+        self._init_buckets()
 
     def set_melt_f_buckets(self):
-        """Set the buckets for the melt factor.
-
-        Returns
-        -------
-
-        np.ndarray
-            Melt factor for each bucket plus an ice layer.
-        """
+        """Set the melt factor for each bucket."""
         if self.melt_f_change == "linear":
-            self._melt_f_buckets = dict(
-                zip(
-                    self.buckets + ["ice"],
-                    np.linspace(
-                        self._melt_f * self.melt_f_ratio,
-                        self._melt_f,
-                        len(self.buckets) + 1,
-                    ),
-                )
+            self.melt_f_buckets = dict(
+                zip(self.buckets,
+                    np.linspace(self.melt_f * self.melt_f_ratio, self.melt_f,
+                                len(self.buckets),),
+                    )
             )
         elif self.melt_f_change == "neg_exp":
-            time = np.linspace(
-                0, self.spinup_years, len(self.buckets + ["ice"])
-            )
-            melt_f_snow = self.melt_f_ratio * self._melt_f
-            self._melt_f_buckets = dict(
-                zip(
-                    self.buckets + ["ice"],
-                    self._melt_f
-                    + (melt_f_snow - self._melt_f) * np.exp(-time / self.tau_e),
-                )
+            if self.tau_e <= 0:
+                raise InvalidParamsError("`tau_e` must be above zero for"
+                                         "`melt_f_change` = 'neg_exp'.")
+            buckets_linspace = np.linspace(0, self.spinup_years,
+                                           len(self.buckets))
+            melt_f_snow = self.melt_f_ratio * self.melt_f
+            self.melt_f_buckets = dict(
+                zip(self.buckets,
+                    self.melt_f + (melt_f_snow - self.melt_f) *
+                    np.exp(-buckets_linspace / self.tau_e),
+                    )
             )
         else:
-            raise NotImplementedError("Cannot set melt_f buckets externally.")
+            raise NotImplementedError(f"melt_f_change: {self.melt_f_change}")
 
-    @property
-    def melt_f_buckets(self) -> dict:
-        """
-        Interpolate from snow melt factor to ice melt factor by using
-        ``melt_f_ratio`` and ``tau_e`` to get the bucket melt factor.
-        Setting this in ``__init__`` prevents updates.
-        """
-        # if not hasattr(self, "_melt_f_buckets"):
-        #     self.set_melt_f_buckets()
-
-        try:
-            return self._melt_f_buckets
-        except:
-            self.set_melt_f_buckets()
-        return self._melt_f_buckets
-
-    def get_spinup(self, year: int) -> bool:
-        if self.spinup_years == 0:
-            spinup = False
-            raise NotImplementedError(
-                "Running with no spinup years is not yet supported."
-            )
-        elif year < self.ys + self.spinup_years:
-            msg = (
-                f"{year} is outside of climate bounds {self.ys}",
-                f"with {self.spinup_years} spinup years",
-            )
-            log.warning(" ".join(msg))
-            spinup = False
-        else:
-            spinup = True
-
-        return spinup
-
-    def reset_mb_buckets(self, init_model_fls="use_inversion_flowline"):
-        """Reset mass balance buckets.
-
-        Removes all years, months, and empties the buckets. Called when
-        setting new melt_f, prcp_fac, temp_bias, etc.
-        """
-
-        if self.optim:
-            self._mb_template_bucket = pd.DataFrame(
-                0, index=self.hbins[::-1], columns=self.columns
-            )
-            self._mb_template_bucket.index.name = "hbins_height"
-            self._mb_template = pd.DataFrame(
-                0, index=self.hbins[::-1], columns=[]
-            )
-            self._mb_template.index.name = "distance_along_flowline"
-        elif init_model_fls != "use_inversion_flowline":
-            # fls = gdir.read_pickle('model_flowlines')
-            self.fl = copy.deepcopy(init_model_fls)[-1]
-            self.mod_heights = self.fl.surface_h
-
-            # container templates
-            # use the distance_along_flowline as index
-            self._mb_template = pd.DataFrame(
-                0, index=self.fl.dx_meter * np.arange(self.fl.nx), columns=[]
-            )
-            self._mb_template.index.name = "distance_along_flowline"
-            self._mb_template_bucket = pd.DataFrame(
-                0,
-                index=self.fl.dx_meter * np.arange(self.fl.nx),
-                columns=self.columns,
-            )
-            self._mb_template_bucket.index.name = "distance_along_flowline"
-        else:
-            if not hasattr(self, "_mb_template"):
-                self.set_bucket_templates()
-
-        self.mb_month = self._mb_template.copy()
-        self.mb_year = self._mb_template.copy()
-        self.mb_day = self._mb_template.copy()
-
-        pd_bucket = self._mb_template_bucket.copy()
-        self.mb_bucket = pd_bucket
-
-    def _add_delta_mb_vary_melt_f(
+    def _apply_climate_step_and_aging_to_buckets(
         self,
         heights: ArrayLike,
-        year: int = None,
-        resolution="year",
-        add_climate=False,
+        year: float = None,
+        save_mbs: bool = True,
     ):
-        """Add and remove bucket mass balances.
+        """ This is the central method where the magic is happening.
+
+        It gets the climate input data for the provided year, adds fresh snow to
+        the snow bucket, and melts the buckets in the correct order. At the end
+        it checks if aging is needed, which moves everything into the next older
+        bucket.
 
         Parameters
         ----------
 
         heights: array_like
-           heights of elevation flowline, at the monent only inversion height works!!!
-           Only put heights inside that fit to "distance_along_flowline.
-        year: int or float
-           if melt_frequency='year', integer calendar float year,
-           if melt_frequency=='month', year should be a calendar float year,
-           so it corresponds to 1 month of a specific year, i
-        resolution: str, default "year"
-           'year', 'month', or 'day'
-           if melt_frequency -> climate_resol has to be always monthly
-           but if annual melt_frequency can have either annual climate_resol (if get_annual_mb is used)
-           or monthly climate_resol (if get_monthly_mb is used)
-        add_climate : bool, default False
-           default is False. If True, climate (temperature, temp_for_melt, prcp, prcp_solid) are also given as output
-           practical for get_monthly_mb with add_climate=True, as then we do not need to compute climate twice!!!
+           heights used to get the climate input data, need to be the same
+           length as the number of defined grid points and in the same order.
+           The number of grid points was defined either through fl or hbins at
+           initialisation.
+        year: float
+           year in calendar float year
+        save_mbs: bool, default True
+            If True, the climatic_mb and the ice_mb are saved. This is set to
+            False during spinup
 
         """
 
-        np_pd_bucket = self.mb_bucket.values  # last column is delta_kg/m2
+        # Need to provide heights for the same grid points as the bucket was
+        # initialized. They also need to be in the same order, but this we can
+        # not check
+        if len(heights) != len(self.buckets_grid_point_label):
+            raise InvalidParamsError(f'Number of heights ({len(heights)}) does '
+                                     'not match number of grid points provided '
+                                     'on initialization '
+                                     f'({len(self.buckets_grid_point_label)}).')
 
-        if self.melt_frequency == "month":
-            if resolution != "month":
-                raise InvalidWorkflowError(
-                    "Need monthly resolution if melt_frequency is monthly"
-                )
-            if not isinstance(year, float):
-                raise InvalidParamsError("Year must be a calendar float year.")
+        # get the current buckets, first is snow, last is ice, inbetween firn
+        mb_buckets_np = self.mb_buckets_np
 
-        # check if the first bucket is be empty if:
-        if (resolution == "year") and (self.melt_frequency == "year"):
-            check_empty_bucket = True
+        # get the climate data in the defined resolution
+        if self.climate_resolution == "annual":
+            t, tmelt, prcp, prcpsol = self.mbmod.get_annual_climate(heights, year)
+        elif self.climate_resolution == "monthly":
+            t, tmelt, prcp, prcpsol = self.mbmod.get_monthly_climate(heights, year)
+        elif self.climate_resolution == "daily":
+            t, tmelt, prcp, prcpsol = self.mbmod.get_daily_climate(heights, year)
         else:
-            check_empty_bucket = False
+            raise NotImplementedError(
+                f"climate_resolution: {self.climate_resolution}")
 
-        # if resolution =='month' but melt_frequency == 'year',
-        # first_snow_bucket is not empty when mc != 1
-        _, mc = floatyear_to_date(float(year))
-        if resolution == "month" and self.melt_frequency == "year" and mc == 1:
-            resolution_mismatch = True
+        # now we use tmelt for melting the buckets in order, the following
+        # algorithm is optimized for np arrays smaller to shape (1000, 72),
+        # which corresponds to 1000 flowline grid points and 72 buckets (= 6
+        # years with monthly aging). We do this only for the snow and firn
+        # buckets and deal with ice afterwards. For checking the code I add the
+        # shape of variables as comments.
+
+        # here we will save the results, use view to modify in-place
+        snow_buckets_new = mb_buckets_np[:, :-1]
+        nr_grid_points, nr_buckets = snow_buckets_new.shape
+        # we need the sum of the old buckets later for calculating delta kg m-2
+        snow_buckets_old_sum = snow_buckets_new.sum(axis=1)
+        # melt_f per bucket without ice, (1, nr_buckets)
+        melt_f_buckets = np.asarray(list(self.melt_f_buckets.values())[:-1],
+                                    dtype=float)[None, :]
+        # add one axis to tmelt for correct shape, (nr_grid_points, 1)
+        tmelt = tmelt[:, None]
+
+        # all solid precip. goes into fresh snow bucket before we start melting
+        snow_buckets_new[:, 0] += prcpsol
+
+        # now calculate cumulative tfm needed to melt each bucket and subtract
+        # available tmelt, finally we convert back to mass in each bucket
+        # (nr_grid_points, nr_buckets)
+        buckets_kg_m2_cumsum_left = (((snow_buckets_new / melt_f_buckets
+                                       ).cumsum(axis=1) - tmelt) *
+                                     melt_f_buckets)
+
+        # when the cumsum is negative this bucket and all above have melted
+        # completely, (nr_grid_points, nr_buckets)
+        melted_buckets = buckets_kg_m2_cumsum_left < 0
+
+        # number of fully melted buckets per grid point, (nr_grid_points,)
+        nr_melted_buckets = melted_buckets.sum(axis=1)
+
+        # set melted buckets to zero
+        snow_buckets_new[melted_buckets] = 0.0
+
+        # set buckets which have only partially melted
+        some_left_buckets = np.where(nr_melted_buckets < nr_buckets)[0]
+        if some_left_buckets.size:
+            partly_melted_bucket = nr_melted_buckets[some_left_buckets]
+            # Set the partially melted bucket to the leftover mass
+            snow_buckets_new[some_left_buckets, partly_melted_bucket] = (
+                buckets_kg_m2_cumsum_left[some_left_buckets, partly_melted_bucket])
+
+        # Now deal with ice, ice melts where some tmelt is still left after
+        # melting all buckets
+        all_melted_grid_points = (nr_melted_buckets == nr_buckets)
+        if np.any(all_melted_grid_points):
+            remaining_tfm = -(buckets_kg_m2_cumsum_left[all_melted_grid_points, -1] /
+                              melt_f_buckets[:, -1])
+            ice_melt_kg_m2 = remaining_tfm * self.melt_f_buckets['ice']
+            # we use -= here because there could be some newly formed ice
+            # already in the ice bucket after aging
+            self.mb_buckets_np[all_melted_grid_points, -1] -= ice_melt_kg_m2
         else:
-            resolution_mismatch = False
-        if (
-            check_empty_bucket
-            or (self.melt_frequency == "month")
-            or resolution_mismatch
-        ):
-            np_pd_values_first_snow_bucket = np_pd_bucket[
-                :, 0
-            ]  # first snow bucket
+            ice_melt_kg_m2 = None
 
-            if (
-                len(
-                    np_pd_values_first_snow_bucket[
-                        np_pd_values_first_snow_bucket != 0
-                    ]
-                )
-                > 0
-            ):
-                raise InvalidWorkflowError(
-                    "The first snow bucket should be empty, but isn't"
-                    "Try reset_mb_buckets() and rerun the task."
-                )
+        if save_mbs:
+            # Calculate the climatic mb as delta of buckets and minus potential
+            # ice melt, all in kg m-2
+            delta_kg_m2 = (snow_buckets_new.sum(axis=1)  # sum of buckets at the end
+                           - snow_buckets_old_sum)  # sum of buckets at the start
+            if ice_melt_kg_m2 is not None:
+                delta_kg_m2[all_melted_grid_points] -= ice_melt_kg_m2  # ice melt
 
-        if resolution == "year":
-            t, temp2d_melt, prcp, prcpsol = self._get_2d_annual_climate(
-                heights, year
+            # save the climatic mb of this timestep
+            self.climatic_mb[year] = delta_kg_m2
+
+        # save the mb of ice, this includes potential ice gain from aging after
+        # the call of _bucket_aging and melt where all snow/firn buckets are
+        # empty
+        if save_mbs:
+            self.ice_mb[year] = self.mb_buckets_np[:, -1].copy()
+        # we empty the ice bucket after saving to avoid any double counting
+        self.mb_buckets_np[:, -1] = 0.0
+
+        if save_mbs:
+            self.mb_heights[year] = heights
+
+        # update the current year of the buckets, this is set one timestep later
+        # to the currently applied climate step (e.g. after applying the climate
+        # of January the bucket refers to the first of February)
+        if self.climate_resolution == 'annual':
+            buckets_yr = int(year) + 1
+            buckets_month = 1
+            buckets_day = 1
+            self.mb_buckets_year = buckets_yr
+        elif self.climate_resolution == 'monthly':
+            buckets_yr, buckets_month = floatyear_to_date(float(year))
+            buckets_day = 1
+            # special case when a new year starts
+            if buckets_month == 12:
+                buckets_yr += 1
+                buckets_month = 1
+            else:
+                buckets_month += 1
+            self.mb_buckets_year = date_to_floatyear(buckets_yr, buckets_month)
+        elif self.climate_resolution == 'daily':
+            buckets_yr, buckets_month, buckets_day = floatyear_to_date(
+                float(year), months_only=False)
+            # date_to_floatyear can deal with monthly and yearly overflows
+            # (e.g. 32.01. == 01.02., and 32.12.2000 == 01.01.2001)
+            self.mb_buckets_year = date_to_floatyear(
+                buckets_yr, buckets_month, buckets_day + 1)
+            # finally we get the values without the overflow for aging below
+            buckets_yr, buckets_month, buckets_day = floatyear_to_date(
+                self.mb_buckets_year, months_only=False
             )
-            if add_climate:
-                # TODO: Check correct dimensions
-                raise NotImplementedError("Not implemented.")
-                # t = t.mean(axis=1)
-                # temp2d_melt = temp2d_melt.sum(axis=1)
-                # prcp = prcp.sum(axis=1)
-                # prcpsol = prcpsol.sum(axis=1)
-            # all solid precipitation goes into first snow bucket
-            np_pd_bucket[:, 0] = prcpsol.sum(axis=1)
-            """Remaining temperature for melt energy used for melt.
-            Reduced when looping over buckets until it equals the
-            potential ice melt."""
-            remaining_tfm = temp2d_melt.sum(axis=1)
-            np_pd_bucket[:, -1] = prcpsol.sum(axis=1)  # set delta to solid prcp
-        elif resolution == "month":
-            if isinstance(type(year), int):
-                raise InvalidWorkflowError(
-                    "Use float years with monthly climate resolution."
-                )
-            t, temp2d_melt, prcp, prcpsol = self.get_monthly_climate(
-                heights, year
-            )
-            np_pd_bucket[:, 0] = np_pd_bucket[:, 0] + prcpsol.flatten()
-            remaining_tfm = temp2d_melt.flatten()
-            np_pd_bucket[:, -1] = prcpsol.flatten()
-
-        # need the right unit
-        if self.resolution == "day":
-            upscale_factor = prcpsol.shape[1] / 365
         else:
-            upscale_factor = 1
+            raise NotImplementedError(
+                f"climate_resolution: {self.climate_resolution} ")
 
-        """
-        For each bucket in the loop:
-        Get the temperature necessary to melt all snow and firn in each
-        bucket (tfm). For snow this corresponds to melting all solid
-        precipitation. ``melt_f`` values are used to convert from kg/m2
-        in buckets to tfm in [K]. 
-        """
-        melt_f_buckets = self.melt_f_buckets
-        # don't include delta_kg/m2 in pd_buckets, and melt_f of 'ice'
-        tfm_to_melt_b = np_pd_bucket[:, :-1] / (
-            np.array(list(melt_f_buckets.values()))[:-1] * upscale_factor
-        )  # in K
-        tfm_to_melt_b = tfm_to_melt_b.T  # transpose to correct shape
-
-        np_delta_kg_m2 = np_pd_bucket[:, -1]
-        for e, b in enumerate(self.buckets):  # no ice bucket
-
-            """Recompute bucket's mass:
-            Get the kg/m2 of that bucket not melted that year / month.
-            If completely melted set to zero.
-            Otherwise reconvert ``tfm`` energy unit into kg/m2 by using
-            the right melt_factor.
-            """
-            remainder_mb_in_bucket = (
-                clip_min(tfm_to_melt_b[e] - remaining_tfm, 0)
-                * melt_f_buckets[b]
-                * upscale_factor
-            )
-
-            """Get remaining tfm to melt other buckets if this bucket's
-            entire mb melted away."""
-
-            remaining_tfm = clip_min(remaining_tfm - tfm_to_melt_b[e], 0)
-            """Add lost mb to delta_kg/m2"""
-            np_delta_kg_m2 = (
-                np_delta_kg_m2 + remainder_mb_in_bucket - np_pd_bucket[:, e]
-            )
-            np_pd_bucket[:, e] = remainder_mb_in_bucket
-
-            # if remaining_tfm is zero, no need to continue loop
-            # e.g. in winter when tfm is often very small
-            if len(remaining_tfm[remaining_tfm != 0]) == 0:
-                break
-
-        """Assume the ice bucket is infinite, so everything that could
-        be melted is included inside of delta_kg/m2. This means all
-        remaining tfm energy is used to melt the infinite ice bucket.
-        """
-        np_pd_bucket[:, -1] = (
-            np_delta_kg_m2
-            - remaining_tfm * melt_f_buckets["ice"] * upscale_factor
-        )
-        self.mb_bucket = pd.DataFrame(
-            np_pd_bucket,
-            columns=self.mb_bucket.columns.values,
-            index=self.mb_bucket.index,
-        )
-        if add_climate:
-            return self.mb_bucket, t, temp2d_melt, prcp, prcpsol
+        # Finally the bucket aging, potentially new formed ice is considered in
+        # the next climate step
+        if self.aging_frequency == 'annual':
+            if self.climate_resolution == 'annual':
+                # we need to age each step
+                self._bucket_aging()
+            elif self.climate_resolution == 'monthly':
+                # we age if the bucket month is January (bucket year is always
+                # one timestep ahead of current climate year, see above)
+                if buckets_month == 1:
+                    self._bucket_aging()
+            elif self.climate_resolution == 'daily':
+                if buckets_month == 1 and buckets_day == 1:
+                    self._bucket_aging()
+            else:
+                raise NotImplementedError(
+                    f"climate_resolution: {self.climate_resolution} ")
+        elif self.aging_frequency == 'monthly':
+            if self.climate_resolution == 'monthly':
+                # we need to age each step
+                self._bucket_aging()
+            elif self.climate_resolution == 'daily':
+                if buckets_day == 1:
+                    self._bucket_aging()
+            else:
+                # it is already checked at initialisation that
+                # climate_resolution is <= aging_frequency, but if we have
+                # overseen something, this should raise
+                raise NotImplementedError(
+                    f"climate_resolution: {self.climate_resolution} ")
         else:
-            return self.mb_bucket
+            raise NotImplementedError(
+                f"aging_frequency: {self.aging_frequency} ")
 
-    def _update(self):
-        """Update buckets as they age.
+        # check if the resulting bucket should be stored for later
+        if self.store_buckets:
+            store_current_bucket = False
+            if self.mb_buckets_year in self.store_buckets_dates:
+                store_current_bucket = True
+            elif self.store_buckets == 'annual':
+                if buckets_month == 1 and buckets_day == 1:
+                    store_current_bucket = True
+            elif self.store_buckets == 'monthly':
+                if buckets_day == 1:
+                    store_current_bucket = True
+            elif self.store_buckets == 'daily':
+                store_current_bucket = True
+            else:
+                raise NotImplementedError(f"store_buckets: {self.store_buckets}")
 
-        Called by ``get_annual_mb``, ``get_monthly_mb`` or
-        ``get_daily_mb`` after each melt timestep set by
-        ``melt_frequency``.
+            if store_current_bucket:
+                self.mb_buckets_stored[self.mb_buckets_year] = pd.DataFrame(
+                    self.mb_buckets_np[:, :-1].copy(),
+                    index=self.buckets_grid_point_label,
+                    columns=self.buckets[:-1],)
+
+        # nothing to return as every thing is stored is some variables
+        return None
+
+    def _bucket_aging(self):
+        """In this function the aging of buckets happens.
+
+        This means all buckets are moved one step and an empty fresh snow bucket
+        is added at the top. The last bucket is the ice bucket and it is always
+        set to zero before calling the aging in
+        _apply_climate_step_and_aging_to_buckets (but we also check for this).
         """
 
-        np_pd_bucket = self.mb_bucket.values
+        mb_buckets_np = self.mb_buckets_np
 
-        if np.any(np.isnan(np_pd_bucket[:, -1])):  # delta_kg/m2 already exists
-            raise InvalidWorkflowError("The buckets have already been updated.")
-
-        if len(np_pd_bucket[:, :-1][np_pd_bucket[:, :-1] < 0]) > 0:
+        # check that all snow and firn buckets are positive
+        if mb_buckets_np[:, :-1].min() < 0:
             raise ValueError("Bucket values must all be positive.")
 
-        pd_bucket_val_old = np_pd_bucket[:, :-2]
-        len_h = len(self.mb_bucket.index)
-        np_updated_bucket = np.concatenate(
-            [
-                np.zeros(len_h).reshape(len_h, 1),
-                pd_bucket_val_old,
-                np.full((len_h, 1), np.nan),
-            ],  # kg/m2 bucket should be np.nan
-            axis=1,
-        )
-        self.mb_bucket = pd.DataFrame(
-            np_updated_bucket,
-            columns=self.mb_bucket.columns.values,
-            index=self.mb_bucket.index,
-        )
-        return self.mb_bucket
+        # check ice bucket is empty and we do not loose any mass
+        if np.any(mb_buckets_np[:, -1]):
+            raise ValueError("Ice bucket not empty, need to check!")
 
-    def get_annual_mb(
-        self,
-        heights: ArrayLike,
-        year: int,
-        add_climate: bool = False,
-        add_bucket: bool = False,
-        spinup: bool = True,
-        auto_spinup: bool = True,
-        **kwargs,
-    ):
-        """Get annual mass balance.
+        mb_buckets_val_old = mb_buckets_np[:, :-1]
+        len_h = len(self.buckets_grid_point_label)
+        # add a new fresh snow bucket and move everything to the next older
+        # bucket, the last firn bucket is transferred to ice here
+        updated_bucket_np = np.concatenate(
+            [np.zeros(len_h).reshape(len_h, 1), mb_buckets_val_old], axis=1)
+
+        self.mb_buckets_np = updated_bucket_np
+
+    def _run_until(self, heights, year, mb_resolution):
+
+        # check the current year of the bucket has not exceeded the current year
+        if self.mb_buckets_year > year and not self.use_previous_mbs:
+            raise InvalidWorkflowError(
+                "The current buckets are valid for the float year "
+                f"{self.mb_buckets_year}, and you want to have values for "
+                f"{year}. If you want to get previously calculated mass "
+                "balance values set use_previous_mbs to True. Be aware that "
+                "in case that previously calculated mb values are available "
+                "your provided heights here will be ignored!")
+
+        # calculate all needed time steps with the same heights
+        if self.climate_resolution == 'annual':
+            if mb_resolution == 'annual':
+                missing_float_years = range(self.mb_buckets_year, year + 1)
+            else:
+                # mb_resolution can not be shorter than climate_resolution
+                raise NotImplementedError(f"mb_resolution: {mb_resolution}")
+        elif self.climate_resolution == 'monthly':
+            if mb_resolution == 'annual':
+                missing_float_years = float_years_timeseries(
+                    y0=np.floor(self.mb_buckets_year), y1=year,
+                    include_last_year=True, )
+            elif mb_resolution == 'monthly':
+                missing_float_years = float_years_timeseries(
+                    y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1)
+                # only keep those actually needed
+                missing_float_years = [yr for yr in missing_float_years
+                                       if yr <= year]
+            else:
+                # mb_resolution can not be shorter than climate_resolution
+                raise NotImplementedError(f"mb_resolution: {mb_resolution}")
+        elif self.climate_resolution == 'daily':
+            if mb_resolution == 'annual':
+                missing_float_years = float_years_timeseries(
+                    y0=np.floor(self.mb_buckets_year), y1=year,
+                    include_last_year=True, monthly=False)
+            elif mb_resolution == 'monthly':
+                missing_float_years = float_years_timeseries(
+                    y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1,
+                    monthly=False
+                )
+                # only keep those actually needed
+                y, m = floatyear_to_date(year)
+                y_end = y if m != 12 else y + 1
+                m_end = m + 1 if m != 12 else 1
+                missing_float_years = [yr for yr in missing_float_years
+                                       if yr < date_to_floatyear(y_end, m_end)]
+            elif mb_resolution == 'daily':
+                missing_float_years = float_years_timeseries(
+                    y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1,
+                    monthly=False
+                )
+                # only keep those actually needed
+                y, m, d = floatyear_to_date(year, months_only=False)
+                missing_float_years = [yr for yr in missing_float_years
+                                       # date_to_floatyear can handle overflows
+                                       # e.g. 32.12.2000 == 01.01.2001
+                                       if yr < date_to_floatyear(y, m, d + 1)]
+            else:
+                raise NotImplementedError(f"mb_resolution: {mb_resolution}")
+        else:
+            raise NotImplementedError(
+                f"'climate_resolution': {self.climate_resolution}")
+
+        # if use_previous_mbs=True it could be there are no missing_float_years
+        for yr in missing_float_years:
+            if yr < self.mb_buckets_year:
+                continue
+
+            self._apply_climate_step_and_aging_to_buckets(heights=heights,
+                                                          year=yr)
+
+    def get_annual_mb(self,
+                      heights: ArrayLike,
+                      year: int or float,
+                      add_climate: bool = False,
+                      climatic_mb_or_ice_mb: str = 'climatic_mb',
+                      **kwargs,
+                      ) -> np.float64 or tuple:
+        """Get annual climatic mass balance or the ice mass balance.
+
+        The ice mass balance is important for ice dynamics.
 
         Parameters
         ----------
         heights : ArrayLike
-            Flowline heights [m].
-        year : int
-            Hydrological year.
+            The heights of each grid point for the provided year. They need to
+            have the same length as the number of defined grid points and in
+            the same order. The number of grid points at its order were defined
+            either through fl or hbins at initialisation.
+        year : int or float
+            Year in calendar float year or as int
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
             Avoids recalculating climatology later in some workflows,
             e.g. ``run_with_hydro``.
-        add_bucket : bool, default False
-            If True, additionally returns data for each bucket and
-            height grid point. Useful when visualising how buckets
-            change over time.
-        spinup : bool, default True
-            If true, apply a spinup time to fill up the buckets before
-            running the model.
-        auto_spinup : bool, default True
-            If True, automatically sets the number of spinup years.
+        climatic_mb_or_ice_mb : str, default 'climatic_mb'
+            Defines if you want to retrive the climatic mass balance or the mass
+            balance only for ice. The later one is meant to be used together
+            with ice dynamics
         **kwargs
-            Additional arguments passed to...
+            Extra arguments passed to subclasses of this method.
+
         Returns
         -------
         np.ndarray[np.float64] or tuple[np.ndarray]
-            Annual mass balance in metres of ice per second. If
-            ``add_climate`` is True, also returns mean temperature and
-            the sums of melt temperature, total precipitation, and
+            Annual climatic mass balance or ice mass balance in metres of ice
+            per second. If ``add_climate`` is True, also returns mean
+            temperature, the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
 
-        spinup = self.get_spinup(year=year)
-
-        # if len(self.mb_annual) > 0:
-        # if self.mb_annual[0] > self.mb_annual[-1]:
-        #     raise InvalidWorkflowError('Run years in ascending order. Try resetting.')
-        if heights[0] < heights[-1]:
-            raise ValueError("Heights are not in descending order.")
-
-        if self.check_data_exists and year in self.mb_year.columns:
-            mb_annual = self.mb_year[year].values
-            if add_bucket:
-                raise InvalidWorkflowError("Call reset_mb_buckets() and rerun.")
-            elif add_climate:
-                t, temp2dformelt, prcp, prcpsol = self._get_2d_annual_climate(
-                    heights, year
-                )
-                return (
-                    mb_annual,
-                    t.mean(axis=1),
-                    temp2dformelt.sum(axis=1),
-                    prcp.sum(axis=1),
-                    prcpsol.sum(axis=1),
-                )
-            else:
-                return mb_annual
+        if climatic_mb_or_ice_mb == 'climatic_mb':
+            mbs = self.climatic_mb
+        elif climatic_mb_or_ice_mb == 'ice_mb':
+            mbs = self.ice_mb
         else:
-            check_index = []
-            if self.melt_frequency == "year":
-                # Check if every year exists
-                for bef in np.arange(1, self.spinup_years, 1):
-                    check_index.append(
-                        int(year - bef) not in self.mb_year.columns
-                    )
-                check_compute = np.any(np.array(check_index))
-            elif self.melt_frequency == "month":
-                try:
-                    # Check first and last month of each spinup year exists.
-                    for bef in np.arange(1, self.spinup_years, 1):
-                        check_index.append(
-                            date_to_floatyear(year - bef, 1)
-                            not in self.mb_month.columns
-                        )
-                        check_index.append(
-                            date_to_floatyear(year - bef, 12)
-                            not in self.mb_month.columns
-                        )
-                    check_compute = np.any(np.array(check_index))
-                except:
-                    check_compute = True
+            raise NotImplementedError(
+                f"'climatic_mb_or_ice_mb': {climatic_mb_or_ice_mb}")
 
-        if check_compute and spinup and auto_spinup:
-            self.reset_mb_buckets()
-            for yr in np.arange(year - self.spinup_years, year):
-                self.get_annual_mb(
-                    heights,
-                    year=yr,
-                    spinup=False,
-                    add_climate=False,
-                    add_bucket=False,
-                    auto_spinup=auto_spinup,
-                    **kwargs,
-                )
-        if spinup:
-            # check if spinup years have been computed.
-            # Should have been computed automatically if auto_spinup=True
-            for bef in np.arange(1, self.spinup_years, 1):
-                if int(year - bef) not in self.mb_year.columns.values:
-                    raise InvalidWorkflowError(
-                        "Get the annual mass balance for all spinup years beforehand."
-                    )
+        # compute all steps up to the desired target year using constant heights
+        self._run_until(heights=heights, year=year,
+                        mb_resolution='annual')
 
-        if self.melt_frequency == "year":
-            self.mb_bucket = self._add_delta_mb_vary_melt_f(
-                heights, year=year, resolution="year"
-            )
-            mb_annual = (
-                (self.mb_bucket["delta_kg/m2"].values - self.bias)
-                / SEC_IN_YEAR
-                / self.rho
-            )
-            if add_bucket:
-                pd_bucket = self.mb_bucket.copy()
-            self._update()
-            self.mb_year[year] = mb_annual
-        elif self.melt_frequency == "month":
-            for m in np.arange(1, 13, 1):
-                floatyear = date_to_floatyear(year, m)
-                out = self.get_monthly_mb(
-                    heights,
-                    year=floatyear,
-                    add_bucket=add_bucket,
-                    spinup=spinup,
-                    add_climate=add_climate,
-                    auto_spinup=auto_spinup,
-                    **kwargs,
-                )
-                if add_bucket and m == 12:
-                    pd_bucket = out[1]
-            mb_annual = self.mb_year[year].values
-        if add_bucket:
-            return mb_annual, pd_bucket
-        elif add_climate:
-            t, temp2dformelt, prcp, prcpsol = self._get_2d_annual_climate(
-                heights, year
-            )
-            return (
-                mb_annual,
-                t.mean(axis=1),
-                temp2dformelt.sum(axis=1),
-                prcp.sum(axis=1),
-                prcpsol.sum(axis=1),
-            )
+        # ok now everything should be available, and we can sum up annual values
+        # as needed
+        if self.climate_resolution == 'annual':
+            annual_mb = mbs[year].values
+        elif self.climate_resolution == 'monthly':
+            float_months = float_years_timeseries(y0=year, y1=year+1,
+                                                  monthly=True)[:-1]
+            annual_mb = np.sum(mbs[float_months].values, axis=1)
+        elif self.climate_resolution == 'daily':
+            float_days = float_years_timeseries(y0=year, y1=year+1,
+                                                monthly=False)[:-1]
+            annual_mb = np.sum(mbs[float_days].values, axis=1)
         else:
-            return mb_annual
+            raise NotImplementedError(
+                f"'climate_resolution': {self.climate_resolution}")
 
-    def get_monthly_mb(
-        self,
-        heights: ArrayLike,
-        year: int,
-        add_climate: bool = False,
-        add_bucket: bool = False,
-        spinup: bool = True,
-        auto_spinup: bool = True,
-        **kwargs,
-    ):
-        """Get monthly mass balance.
+        # convert from kg m-2 to m s-1
+        annual_mb = ((annual_mb - self.mbmod.bias) / self.sec_in_year(year) /
+                     self.mbmod.rho)
+
+        if add_climate:
+            # because of the use of different climate resolutions we always need
+            # to make a distinct call here, even it is potentially already
+            # called in _apply_climate_step_and_aging_to_buckets
+            t, tmelt, prcp, prcpsol = self.mbmod.get_annual_climate(
+                heights=self.mb_heights[year], year=year)
+            return annual_mb, t, tmelt, prcp, prcpsol
+        else:
+            return annual_mb
+
+    def get_monthly_mb(self,
+                       heights: ArrayLike,
+                       year: float,
+                       add_climate: bool = False,
+                       climatic_mb_or_ice_mb: str = 'climatic_mb',
+                       **kwargs,
+                       ) -> np.float64 or tuple:
+        """Get monthly climatic mass balance or the ice mass balance.
+
+        The ice mass balance is important for ice dynamics.
 
         Parameters
         ----------
         heights : ArrayLike
-            Flowline heights [m].
+            The heights of each grid point for the provided year. They need to
+            have the same length as the number of defined grid points and in
+            the same order. The number of grid points at its order were defined
+            either through fl or hbins at initialisation.
         year : float
-            Calendar float year.
+            Year in calendar float year
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
             Avoids recalculating climatology later in some workflows,
             e.g. ``run_with_hydro``.
-        add_bucket : bool, default False
-            If True, additionally returns data for each bucket and
-            height grid point. Useful when visualising how buckets
-            change over time.
-        spinup : bool, default True
-            If true, apply a spinup time to fill up the buckets before
-            running the model.
-        auto_spinup : bool, default True
-            If True, automatically sets the number of spinup years.
+        climatic_mb_or_ice_mb : str, default 'climatic_mb'
+            Defines if you want to retrive the climatic mass balance or the mass
+            balance only for ice. The later one is meant to be used together
+            with ice dynamics
         **kwargs
-            Additional arguments passed to...
+            Extra arguments passed to subclasses of this method.
+
         Returns
         -------
         np.ndarray[np.float64] or tuple[np.ndarray]
-            Annual mass balance in metres of ice per second. If
-            ``add_climate`` is True, also returns mean temperature and
-            the sums of melt temperature, total precipitation, and
+            Monthly climatic mass balance or ice mass balance in metres of ice
+            per second. If ``add_climate`` is True, also returns mean
+            temperature, the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
 
-        spinup = self.get_spinup()
-        if heights[0] < heights[-1]:
-            raise ValueError("Heights are not in descending order.")
-
-        if self.check_data_exists and year in self.mb_month.columns:
-            mb_month = self.mb_month[year].values
-            if add_bucket:
-                raise InvalidWorkflowError("Call reset_mb_buckets() and rerun.")
-            elif add_climate:
-                t, temp2dformelt, prcp, prcpsol = self.get_monthly_climate(
-                    heights, year
-                )
-                return mb_month, t, temp2dformelt, prcp, prcpsol
-            else:
-                return mb_month
-        elif not isinstance(year, float):
-            raise InvalidParamsError("Year must be the calendar float year.")
+        if climatic_mb_or_ice_mb == 'climatic_mb':
+            mbs = self.climatic_mb
+        elif climatic_mb_or_ice_mb == 'ice_mb':
+            mbs = self.ice_mb
         else:
-            y, m = floatyear_to_date(year)
-            try:
-                check_compute = (
-                    date_to_floatyear(y - self.spinup_years, 1)
-                    not in self.mb_month.columns
-                )
-            except:
-                check_compute = True
-            if check_compute:
-                spinup = True
-                try:
-                    if np.any(
-                        self.mb_year.columns[-self.spinup_years :]
-                        == np.arange(y - self.spinup_years, y, 1)
-                    ):
-                        spinup = False
-                except:
-                    spinup = True
-                if (self.melt_frequency == "year") and (not spinup):
-                    check_compute = False
+            raise NotImplementedError(
+                f"'climatic_mb_or_ice_mb': {climatic_mb_or_ice_mb}")
 
-            if check_compute and spinup and auto_spinup:
-                self.reset_mb_buckets()
-                for yr in np.arange(y - self.spinup_years, y):
-                    self.get_annual_mb(
-                        heights,
-                        year=yr,
-                        spinup=False,
-                        add_climate=False,
-                        add_bucket=False,
-                        auto_spinup=False,
-                        **kwargs,
-                    )
-                if m > 1:
-                    for mb in np.arange(1, m, 1):
-                        floatyear_before = date_to_floatyear(y, mb)
-                        self.get_monthly_mb(
-                            heights,
-                            year=floatyear_before,
-                            spinup=False,
-                            add_climate=False,
-                            add_bucket=False,
-                            auto_spinup=False,
-                            **kwargs,
-                        )
-            if spinup:
-                for bef in np.arange(1, self.spinup_years, 1):
-                    if int(y - bef) not in self.mb_year.columns:
-                        raise InvalidWorkflowError(
-                            "Get the monthly mass balance for all spinup years beforehand."
-                        )
-                        # check if the months before had been computed for that year
-                for mb in np.arange(1, m, 1):
-                    floatyear_before = date_to_floatyear(y, mb)
-                    if floatyear_before not in self.mb_month.columns:
-                        raise InvalidWorkflowError(
-                            "Get the monthly mass balance for all spinup years beforehand."
-                        )
+        # compute all steps up to the desired target year using constant heights
+        self._run_until(heights=heights, year=year,
+                        mb_resolution='monthly')
 
-            if add_climate:
-                self.mb_bucket, t, temp2dformelt, prcp, prcpsol = (
-                    self._add_delta_mb_vary_melt_f(
-                        heights,
-                        year=year,
-                        resolution="month",
-                        add_climate=add_climate,
-                    )
-                )
-            else:
-                self.mb_bucket = self._add_delta_mb_vary_melt_f(
-                    heights,
-                    year=year,
-                    resolution="month",
-                    add_climate=add_climate,
-                )
-            sec_in_month = self.sec_in_month(year=year)
-            mb_month = (
-                self.mb_bucket["delta_kg/m2"].values
-                - self.bias * sec_in_month / SEC_IN_YEAR
-            )
-            mb_month = mb_month.flatten() / sec_in_month / self.rho
-            self.mb_month[year] = mb_month
-            self.mb_month[year] = mb_month
+        # ok now everything should be available, and we can sum up monthly
+        # values as needed
+        if self.climate_resolution == 'annual':
+            raise NotImplementedError('You can not get a monthly mb with an '
+                                      'annual climate resolution!')
+        elif self.climate_resolution == 'monthly':
+            monthly_mb = mbs[year].values
+        elif self.climate_resolution == 'daily':
+            y_start, m_start, d_start = floatyear_to_date(year,
+                                                          months_only=False)
+            float_days = float_years_timeseries(
+                y0=year, y1=year + 1, monthly=False)[:-1]
+            # only keep days larger equal than the start of the month
+            float_days = [day for day in float_days
+                          if day >= date_to_floatyear(y_start, m_start, 1)]
+            # only keep days smaller the start of the next month
+            m_end = m_start + 1 if m_start != 12 else 1
+            y_end = y_start if m_start != 12 else y_start + 1
+            float_days = [day for day in float_days
+                          if day < date_to_floatyear(y_end, m_end, 1)]
+            monthly_mb = np.sum(mbs[float_days].values, axis=1)
+        else:
+            raise NotImplementedError(
+                f"'climate_resolution': {self.climate_resolution}")
 
-            if self.melt_frequency == "year":
-                warnings.warn(
-                    "Using ``get_monthly_mb`` with annual melt_frequency gives a different annual mass balance"
-                    "to ``get_annual_mb``, because it relies on bulk estimates"
-                )
-                if m == 12:
-                    # only works if same height
-                    if add_bucket:
-                        pd_bucket = self.mb_bucket.copy()
-                    self._update()
-                    if int(year) not in self.mb_year.columns:
-                        check_compute = [
-                            int(i) == int(year) for i in self.mb_month.columns
-                        ]
-                        # first check if we have all 12 months of the year together
-                        if (
-                            len(self.mb_month.loc[:, check_compute].columns)
-                            != 12
-                        ):
-                            raise InvalidWorkflowError(
-                                "Get the monthly mass balance for all spinup years beforehand."
-                            )
-                        else:
-                            # Unit is in m ice per second, so take mean of all columns corresponding to that year
-                            self.mb_year[int(year)] = (
-                                self.mb_month.loc[:, check_compute]
-                                .mean(axis=1)
-                                .values
-                            )
-                elif add_bucket and m != 12:
-                    pd_bucket = self.mb_bucket.copy()
-            elif self.melt_frequency == "month":
-                if add_bucket:
-                    pd_bucket = self.mb_bucket.copy()
-                self._update()  # need to update it after each month
-                # if December, also want to save it to the annual mb
-                if m == 12:
-                    """Sum up the monthly mb and update the annual pd_mb.
-                    Run if year not in array or skipped check_data_exists,
-                    e.g. for random / constant runs."""
-                    if (
-                        int(year) not in self.mb_year.columns
-                        or not self.check_data_exists
-                    ):
-                        check_compute = [
-                            int(i) == int(year) for i in self.mb_month.columns
-                        ]
-                        # first check if we have all 12 months of the year together
-                        if (
-                            len(self.mb_month.loc[:, check_compute].columns)
-                            != 12
-                        ):
-                            raise InvalidWorkflowError(
-                                "Get the monthly mass balance for all spinup years beforehand."
-                            )
-                        self.mb_year[int(year)] = (
-                            self.mb_month.loc[:, check_compute]
-                            .mean(axis=1)
-                            .values
-                        )
-            if add_climate and not add_bucket:
-                return mb_month, t, temp2dformelt, prcp, prcpsol
-            elif add_bucket:
-                return mb_month, pd_bucket
-            elif add_climate and add_bucket:
-                raise InvalidWorkflowError(
-                    "``add_bucket`` and ``add_climate`` cannot both be True."
-                )
-            else:
-                return mb_month
+        # convert from kg m-2 to m s-1
+        monthly_mb = ((monthly_mb / self.sec_in_month(year=year) -
+                       self.mbmod.bias / self.sec_in_year(year)) /
+                      self.mbmod.rho)
 
-    def get_daily_mb(
-        self,
-        heights: ArrayLike,
-        year: float = None,
-        add_climate: bool = False,
-        add_bucket: bool = False,
-        spinup: bool = True,
-        auto_spinup: bool = True,
-        **kwargs,
-    ):
-        """Get daily mass balance.
+        if add_climate:
+            # because of the use of different climate resolutions we always need
+            # to make a distinct call here, even it is potentially already
+            # called in _apply_climate_step_and_aging_to_buckets
+            t, tmelt, prcp, prcpsol = self.mbmod.get_monthly_climate(
+                heights=self.mb_heights[year], year=year)
+            return monthly_mb, t, tmelt, prcp, prcpsol
+        else:
+            return monthly_mb
+
+    def get_daily_mb(self,
+                     heights: ArrayLike,
+                     year: float,
+                     add_climate: bool = False,
+                     climatic_mb_or_ice_mb: str = 'climatic_mb',
+                     **kwargs,
+                     ) -> np.float64 or tuple:
+        """Get daily climatic mass balance or the ice mass balance.
+
+        The ice mass balance is important for ice dynamics.
 
         Parameters
         ----------
         heights : ArrayLike
-            Flowline heights [m].
+            The heights of each grid point for the provided year. They need to
+            have the same length as the number of defined grid points and in
+            the same order. The number of grid points at its order were defined
+            either through fl or hbins at initialisation.
         year : float
-            Calendar float year.
+            Year in calendar float year
         add_climate : bool, default False
             Additionally returns mean temperature and the sums of melt
             temperature, total precipitation, and solid precipitation.
             Avoids recalculating climatology later in some workflows,
             e.g. ``run_with_hydro``.
-        add_bucket : bool, default False
-            If True, additionally returns data for each bucket and
-            height grid point. Useful when visualising how buckets
-            change over time.
-        spinup : bool, default True
-            If true, apply a spinup time to fill up the buckets before
-            running the model.
-        auto_spinup : bool, default True
-            If True, automatically sets the number of spinup years.
+        climatic_mb_or_ice_mb : str, default 'climatic_mb'
+            Defines if you want to retrive the climatic mass balance or the mass
+            balance only for ice. The later one is meant to be used together
+            with ice dynamics
         **kwargs
-            Additional arguments passed to...
+            Extra arguments passed to subclasses of this method.
+
         Returns
         -------
         np.ndarray[np.float64] or tuple[np.ndarray]
-            Annual mass balance in metres of ice per second. If
-            ``add_climate`` is True, also returns mean temperature and
-            the sums of melt temperature, total precipitation, and
+            Daily climatic mass balance or ice mass balance in metres of ice
+            per second. If ``add_climate`` is True, also returns mean
+            temperature, the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
-        # TODO: make this more user friendly
 
-        spinup = self.get_spinup(year=year)
-        if heights[0] < heights[-1]:
-            raise ValueError("Heights are not in descending order.")
-        if isinstance(year, float):
-            raise InvalidParamsError("Year must be an integer.")
-
-        if self.resolution == "day":
-            # get 2D values, dependencies on height and time (days)
-            out = self._get_2d_daily_climate(heights, year)
-            t, temp2dformelt, prcp, prcpsol = out
-            # days of year
-            doy = len(prcpsol.T)  # 365.25
-            # to have the same unit of melt_f, which is
-            # the monthly temperature sensitivity (kg /m² /mth /K),
-            upscale_factor = prcpsol.shape[1] / 365
-            melt_f_daily = self.melt_f * upscale_factor
-            mb_daily = prcpsol - melt_f_daily * temp2dformelt
-
-            # more correct than using a mean value for days in a month
-            warnings.warn("Daily mass balance is still experimental.")
-
-            mb_daily = (mb_daily - self.bias * doy) / SEC_IN_DAY / self.rho
-
-            if add_climate:
-                return mb_daily, t, temp2dformelt, prcp, prcpsol
-            else:
-                return mb_daily
+        if climatic_mb_or_ice_mb == 'climatic_mb':
+            mbs = self.climatic_mb
+        elif climatic_mb_or_ice_mb == 'ice_mb':
+            mbs = self.ice_mb
         else:
-            raise InvalidParamsError("Set resolution to 'day'")
+            raise NotImplementedError(
+                f"'climatic_mb_or_ice_mb': {climatic_mb_or_ice_mb}")
 
-    # def get_specific_mb(
-    #     self, heights=None, widths=None, fls=None, year=None, **kwargs
-    # ):
-    #     """Get the specific mass balance for a given glacier geometry.
+        # compute all steps up to the desired target year using constant heights
+        self._run_until(heights=heights, year=year,
+                        mb_resolution='daily')
 
-    #     Units: [mm w.e. yr-1], or millimeter water equivalent per year.
+        # ok now everything should be available
+        if self.climate_resolution in ['annual', 'monthly']:
+            raise NotImplementedError(
+                'You can not get a daily mb with an annual or monthly climate '
+                f'resolution! Your climate resolution: {self.climate_resolution}')
+        elif self.climate_resolution == 'daily':
+            daily_mb = mbs[year].values
+        else:
+            raise NotImplementedError(
+                f"'climate_resolution': {self.climate_resolution}")
 
-    #     Parameters
-    #     ----------
-    #     heights : array_like, default None
-    #         Altitudes at which the mass balance will be computed.
-    #         Overridden by ``fls`` if provided.
-    #     widths : array_like, default None
-    #         Widths of the flowline (necessary for the weighted average).
-    #         Overridden by ``fls`` if provided.
-    #     fls : list[oggm.Flowline], default None
-    #         List of flowline instances. Alternative to heights and
-    #         widths, and overrides them if provided.
-    #     year : array_like[float] or float, default None
-    #         Year, or a range of years in "floating year" convention.
+        # convert from kg m-2 to m s-1
+        daily_mb = ((daily_mb / SEC_IN_DAY -
+                     self.mbmod.bias / self.sec_in_year(year)) /
+                    self.mbmod.rho)
 
-    #     Returns
-    #     -------
-    #     np.ndarray
-    #         Specific mass balance (units: mm w.e. yr-1).
-    #     """
-    #     stack = []
-    #     year = np.atleast_1d(year)
-    #     for mb_yr in year:
-    #         if fls is not None:
-    #             mbs = self.get_annual_specific_mass_balance(fls=fls, year=mb_yr)
-    #         else:
-    #             mbs = self.get_annual_mb(heights=heights, year=mb_yr, **kwargs)
-    #             mbs = weighted_average_1d(mbs, widths)
-    #         stack.append(mbs)
-
-    #     smb = set_array_type(stack) * SEC_IN_YEAR * self.rho
-    #     mask = np.vectorize(calendar.isleap)(year)  # strangely faster than map
-    #     smb = np.where(mask, smb * 366 / 365, smb)
-
-    #     return smb
-
-    # def get_specific_mb_daily(
-    #     self, heights=None, widths=None, fls=None, year=None
-    # ):
-    #     """Get specific daily mass balance for a given glacier geometry.
-
-    #     Units: [mm w.e. day-1], or millimeter water equivalent per day.
-
-    #     Parameters
-    #     ----------
-    #     heights : array_like, default None
-    #         Altitudes at which the mass balance will be computed.
-    #         Overridden by ``fls`` if provided.
-    #     widths : array_like, default None
-    #         Widths of the flowline (necessary for the weighted average).
-    #         Overridden by ``fls`` if provided.
-    #     fls : list[oggm.Flowline], default None
-    #         List of flowline instances. Alternative to heights and
-    #         widths, and overrides them if provided.
-    #     year : array_like[float] or float, default None
-    #         Year, or a range of years in "floating year" convention.
-
-    #     Returns
-    #     -------
-    #     np.ndarray
-    #         Specific mass balance (units: mm w.e. day-1).
-    #     """
-    #     if len(np.atleast_1d(year)) > 1:
-    #         stack = []
-    #         for yr in year:
-    #             out = self.get_specific_mb_daily(
-    #                 heights=heights, widths=widths, year=yr
-    #             )
-    #             stack = np.append(stack, out)
-    #         return np.asarray(stack)
-
-    #     mb = self.get_daily_mb(heights, year=year)
-    #     spec_mb = np.average(mb * self.rho * SEC_IN_DAY, weights=widths, axis=0)
-    #     assert len(spec_mb) > 360
-    #     return spec_mb
+        if add_climate:
+            # because of the use of different climate resolutions we always need
+            # to make a distinct call here, even it is potentially already
+            # called in _apply_climate_step_and_aging_to_buckets
+            t, tmelt, prcp, prcpsol = self.mbmod.get_daily_climate(
+                heights=self.mb_heights[year], year=year)
+            return daily_mb, t, tmelt, prcp, prcpsol
+        else:
+            return daily_mb
 
     def get_ela(self, year=None, **kwargs):
-        """Get the equilibrium line altitude for a given year.
-
-        Parameters
-        ----------
-        year: array_like[float] or float, default None
-            Year, or a range of years in "floating year" convention.
-        **kwargs:
-            Any other keyword argument accepted by ``self.get_annual_mb``.
-
-        Returns
-        -------
-        float or np.ndarray:
-            The equilibrium line altitude (ELA) in m.
-        """
-        if len(np.atleast_1d(year)) > 1:
-            return np.asarray([self.get_ela(year=yr, **kwargs) for yr in year])
-
-        if self.valid_bounds is None:
-            raise ValueError(
-                "attribute `valid_bounds` needs to be "
-                "set for the ELA computation."
-            )
-
-        # Check for invalid ELAs
-        # b0, b1 = self.valid_bounds
-        # if (np.any(~np.isfinite(
-        #        self.get_annual_mb([b0, b1], year=year, **kwargs))) or
-        #        (self.get_annual_mb([b0], year=year, **kwargs)[0] > 0) or
-        #        (self.get_annual_mb([b1], year=year, **kwargs)[0] < 0)):
-        #    return np.nan
-
-        def to_minimize(x):
-            return (
-                self.get_annual_mb([x], year=year, **kwargs)[0]
-                * SEC_IN_YEAR
-                * self.rho
-            )
-
-        return optimize.brentq(to_minimize, *self.valid_bounds, xtol=0.1)
+        # an idea to implement get_ela could be to use the previously computed
+        # climatic_mb values together with the used heights and do an
+        # interpolation to find the height where climatic_mb = 0, see spline_fit
+        # in dynamic spinup
+        raise NotImplementedError("Getting the ela for SfcTypeTIModel is"
+                                  "currently not supported.")
 
 
 class ConstantMassBalance(MassBalanceModel):
@@ -4090,144 +3687,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     return df
 
-# @entity_task(log, writes=['mb_calib'])
-def minimize_bias_geodetic(x, gd_mb=None, mb_geodetic=None,
-                           h=None, w=None, pf=2.5,
-                           absolute_bias=False,
-                           ys=np.arange(2000, 2020, 1),
-                           oggm_default_mb=False,
-                           spinup=True):
-    """ calibrates the melt factor (melt_f) by getting the bias to zero
-    comparing modelled mean specific mass balance between 2000 and 2020 to
-    observed geodetic data (from Hugonnet et al. 2021)
-
-    (and actually the minimisation occurs only when doing scipy.optimize.brentq(minimize_bias_geodetic, 10, 100, ...)
-    but we don't want to change the function at this stage)
-
-    Parameters
-    ----------
-    x : float
-        what is optimised (here the melt_f)
-    gd_mb: class instance
-        instantiated class of TIModel, this is updated by melt_f
-    mb_geodetic: float
-         geodetic mass balance between 2000-2020 of the instantiated glacier
-    h: ndarray
-        heights of the instantiated glacier
-    w: ndarray
-        widths of the instantiated glacier.
-        Important to set that otherwise it is assumed that the glacier has the same width everywhere!
-    pf: float
-        precipitation scaling factor
-        default is 2.5
-    absolute_bias : bool
-        if absolute_bias == True, the absolute value of the bias is returned.
-        if optimisation is done with Powell need absolute bias.
-        If optimisation is done with Brentq, absolute_bias has to be set False
-        The default is False.
-    ys: ndarray
-        years for which specific mass balance is computed
-        default is 2000--2019 (when using W5E5)
-    oggm_default_mb : bool
-        if default oggm mass balance should be used (default is False)
-    spinup : bool
-        send to get_specific_mb (for sfc type distinction)
-
-    Returns
-    -------
-    float
-        bias: modeled mass balance mean - reference mean (geodetic)
-        if absolute_bias = True:  np.abs(bias) is returned
-
-    """
-    if oggm_default_mb:
-        gd_mb.mu_star = x
-    else:
-        gd_mb.melt_f = x
-
-    gd_mb.prcp_fac = pf
-
-    try:
-        mb_specific = gd_mb.get_specific_mb(heights=h,
-                                            widths=w,
-                                            year=ys,
-                                            spinup=spinup
-                                            ).mean()
-    except:
-        mb_specific = gd_mb.get_specific_mb(heights=h,
-                                        widths=w,
-                                        year=ys
-                                        ).mean()
-
-    if absolute_bias:
-        bias_calib = np.abs(np.mean(mb_specific -
-                                    mb_geodetic))
-    else:
-        bias_calib = np.mean(mb_specific - mb_geodetic)
-
-    return bias_calib
-
-# @entity_task(log, writes=['mb_calib'])
-def optimize_std_quot_brentq_geod(x, gd_mb=None, mb_geodetic=None,
-                                  mb_glaciological=None,
-                                  h=None, w=None,
-                                  ys_glac=np.arange(1979, 2020, 1),
-                                  ):
-    """ calibrates the optimal precipitation factor (pf) by correcting the
-    standard deviation of the modelled mass balance by using the standard deviation
-    from the direct glaciological measurements as reference
-
-    for each pf an optimal melt_f is found (by using the geodetic data via `minimize_bias_geodetic`),
-    then (1 - standard deviation quotient between modelled and reference mass balance) is computed,
-    which is then minimised
-
-    (and actually the optimisation occurs only when doing
-    scipy.optimize.brentq(optimize_std_quot_brentq_geod, 0.1, 10, ...)
-    but we don't want to change the function at this stage)
-
-    Parameters
-    ----------
-    x : float
-        what is optimised (here the precipitation factor)
-    gd_mb : class instance
-        instantiated class of TIModel, this is updated by pf and melt_f
-    mb_geodetic: float
-        geodetic mass balance between 2000-2020 of the instantiated glacier
-    mb_glaciological : pandas.core.series.Series
-        direct glaciological timeseries
-        e.g. gdir.get_ref_mb_data(input_filesuffix='_{}_{}'.format(temporal_resol, climate_type))['ANNUAL_BALANCE']
-    h: ndarray
-        heights of the instantiated glacier
-    w: ndarray
-        widths of the instantiated glacier
-    ys_glac : ndarray
-        array of years where both, glaciological observations and climate data are available
-        (just use the years from the ref_mb_data file)
-
-    Returns
-    -------
-    float
-        1- quot_std
-
-    """
-
-    pf = x
-    # compute optimal melt_f according to geodetic data
-    melt_f_opt = optimize.brentq(minimize_bias_geodetic, 10, 1000,
-                                       xtol=0.01,
-                                       args=(gd_mb, mb_geodetic, h, w, pf),
-                                       disp=True)
-
-    gd_mb.melt_f = melt_f_opt
-    gd_mb.prcp_fac = pf
-    # now compute std over this time period using
-    # direct glaciological observations
-    mod_std = gd_mb.get_specific_mb(heights=h, widths=w,
-                                    year=ys_glac).std()
-    ref_std = mb_glaciological.loc[ys_glac].values.std()
-    quot_std = mod_std / ref_std
-
-    return 1 - quot_std
 
 @entity_task(log, writes=['mb_calib'])
 def perturbate_mb_params(gdir, perturbation=None, reset_default=False, filesuffix=''):

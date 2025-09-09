@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 import shapely.geometry as shpg
 import matplotlib.pyplot as plt
-import netCDF4
 
 from oggm.shop import cru, histalp, ecmwf, w5e5
 from oggm import cfg, tasks
@@ -18,7 +17,7 @@ from oggm.core import flowline
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils
 from oggm.utils import mkdir, _downloads
-from oggm.utils import oggm_urlretrieve, ncDataset
+from oggm.utils import oggm_urlretrieve
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 from oggm.workflow import reset_multiprocessing
 
@@ -345,11 +344,3 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
     """
     return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')
-
-@pytest.fixture(name="nc_dataset", scope="function")
-def nc_dataset(hef_gdir):
-    gdir = hef_gdir
-    fpath = gdir.get_filepath("climate_historical")
-    with ncDataset(fpath, mode='r') as nc:
-        assert isinstance(nc, netCDF4.Dataset)
-        yield nc
