@@ -130,9 +130,11 @@ class TestSouthGlacier(unittest.TestCase):
         # compute the bias to make it 0 SMB on the 2D DEM
         rho = cfg.PARAMS['ice_density']
         mbmod = ConstantMassBalance(gdirs[0], bias=0, y0=1995)
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
+        sec_in_year = np.mean([mbmod.sec_in_year(yr)
+                               for yr in np.arange(1980, 2011)])
+        mymb = mbmod.get_annual_mb(demref) * sec_in_year * rho
         mbmod = ConstantMassBalance(gdirs[0], y0=1995, bias=np.average(mymb))
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
+        mymb = mbmod.get_annual_mb(demref) * sec_in_year * rho
         np.testing.assert_allclose(np.average(mymb), 0., atol=1e-3)
 
         # Same for ref

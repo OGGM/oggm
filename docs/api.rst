@@ -380,6 +380,7 @@ Interface
     :nosignatures:
 
     MassBalanceModel
+    MassBalanceModel.get_daily_mb
     MassBalanceModel.get_monthly_mb
     MassBalanceModel.get_annual_mb
     MassBalanceModel.get_specific_mb
@@ -394,6 +395,7 @@ Models
 
     LinearMassBalance
     MonthlyTIModel
+    DailyTIModel
     ConstantMassBalance
     RandomMassBalance
     UncertainMassBalance

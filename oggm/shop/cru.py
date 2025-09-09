@@ -268,10 +268,10 @@ def process_cru_data(gdir, settings_filesuffix='',
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
 
-    gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
-                                    loc_hgt, loc_lon, loc_lat,
-                                    filesuffix=output_filesuffix,
-                                    source=nc_ts_tmp._nc.title[:10])
+    gdir.write_climate_file(time, ts_pre.values, ts_tmp.values,
+                            loc_hgt, loc_lon, loc_lat,
+                            filesuffix=output_filesuffix,
+                            source=nc_ts_tmp._nc.title[:10])
 
     ncclim._nc.close()
     nc_ts_tmp._nc.close()
@@ -394,8 +394,8 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     loc_lat = loc_lat[1]
     assert np.isfinite(loc_hgt)
 
-    gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
-                                    loc_hgt, loc_lon, loc_lat,
-                                    filesuffix=output_filesuffix,
-                                    source='CRU CL2 and some randomness')
+    gdir.write_climate_file(time, ts_pre.values, ts_tmp.values,
+                            loc_hgt, loc_lon, loc_lat,
+                            filesuffix=output_filesuffix,
+                            source='CRU CL2 and some randomness')
     ncclim._nc.close()

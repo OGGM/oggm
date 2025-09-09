@@ -68,7 +68,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '9bfeb6dfea9513f790877819d9a6cbd2c7b61611'
+SAMPLE_DATA_COMMIT = '2ac71d40e0e4e60d9973e9dd2cf92e09bca84d2b'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'

@@ -134,10 +134,10 @@ def process_custom_climate_data(gdir, settings_filesuffix='',
     iprcp = prcp[:, ilat, ilon]
     nc_ts.close()
 
-    gdir.write_monthly_climate_file(time, iprcp, itemp, ihgt,
-                                    ref_pix_lon, ref_pix_lat,
-                                    filesuffix=output_filesuffix,
-                                    source=fpath)
+    gdir.write_climate_file(time, iprcp, itemp, ihgt,
+                            ref_pix_lon, ref_pix_lat,
+                            filesuffix=output_filesuffix,
+                            source=fpath)
 
 
 @entity_task(log)
@@ -197,6 +197,12 @@ def process_climate_data(gdir, settings_filesuffix='',
         process_gswp3_w5e5_data(gdir, settings_filesuffix=settings_filesuffix,
                                 output_filesuffix=output_filesuffix,
                                 y0=y0, y1=y1, **kwargs)
+    elif baseline == "W5E5_daily":
+        from oggm.shop.w5e5 import process_gswp3_w5e5_data
+        process_gswp3_w5e5_data(
+            gdir, output_filesuffix=output_filesuffix,
+            y0=y0, y1=y1, daily=True, **kwargs,
+        )
     elif baseline in ['ERA5', 'ERA5L', 'CERA', 'ERA5dr', 'ERA5L-HMA']:
         from oggm.shop.ecmwf import process_ecmwf_data
         process_ecmwf_data(gdir, settings_filesuffix=settings_filesuffix,
@@ -382,11 +388,11 @@ def historical_delta_method(gdir, settings_filesuffix='',
 
     if not replace_with_ref_data:
         # Just write what we have
-        gdir.write_monthly_climate_file(ts_tmp.time.values,
-                                        ts_pre.values, ts_tmp.values,
-                                        ref_hgt, ref_lon, ref_lat,
-                                        filesuffix=output_filesuffix,
-                                        source=source)
+        gdir.write_climate_file(ts_tmp.time.values,
+                                ts_pre.values, ts_tmp.values,
+                                ref_hgt, ref_lon, ref_lat,
+                                filesuffix=output_filesuffix,
+                                source=source)
     else:
         # Select all hist data before the ref
         ts_tmp = ts_tmp.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
@@ -394,12 +400,12 @@ def historical_delta_method(gdir, settings_filesuffix='',
         ts_pre = ts_pre.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
         ts_pre = ts_pre.isel(time=slice(0, -1))
         # Concatenate and write
-        gdir.write_monthly_climate_file(np.append(ts_pre.time, ref_prcp.time),
-                                        np.append(ts_pre, ref_prcp),
-                                        np.append(ts_tmp, ref_temp),
-                                        ref_hgt, ref_lon, ref_lat,
-                                        filesuffix=output_filesuffix,
-                                        source=source)
+        gdir.write_climate_file(np.append(ts_pre.time, ref_prcp.time),
+                                np.append(ts_pre, ref_prcp),
+                                np.append(ts_tmp, ref_temp),
+                                ref_hgt, ref_lon, ref_lat,
+                                filesuffix=output_filesuffix,
+                                source=source)
 
     if delete_input_files:
         # Delete all files without suffix

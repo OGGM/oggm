@@ -166,15 +166,15 @@ def process_gcm_data(gdir, prcp=None, temp=None,
             ts_pre = prcp  # mm month-1
             source = source + '_no_OGGM_bias_correction'
 
-        gdir.write_monthly_climate_file(temp.time.values,
-                                        ts_pre.values, ts_tmp.values,
-                                        float(ds_ref.ref_hgt),
-                                        prcp.lon.values, prcp.lat.values,
-                                        time_unit=time_unit,
-                                        calendar=calendar,
-                                        file_name='gcm_data',
-                                        source=source,
-                                        filesuffix=output_filesuffix)
+        gdir.write_climate_file(temp.time.values,
+                                ts_pre.values, ts_tmp.values,
+                                float(ds_ref.ref_hgt),
+                                prcp.lon.values, prcp.lat.values,
+                                time_unit=time_unit,
+                                calendar=calendar,
+                                file_name='gcm_data',
+                                source=source,
+                                filesuffix=output_filesuffix)
 
 
 @entity_task(log, writes=['gcm_data'])

@@ -12,6 +12,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import xarray as xr
+import cftime
 from numpy.testing import assert_array_equal, assert_allclose
 
 import oggm
@@ -115,23 +116,11 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [12, 12])
 
-        yr = 1998 + 2 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 3)
-
-        yr = 1998 + 1 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 2)
-
-        # tests for floating point precision
-        yr = 1 + 1/12 - 1/12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1, 1)
-
-        for i in range(12):
-            yr = 2000
-            r = utils.floatyear_to_date(yr + i / 12)
-            assert r == (yr, i + 1)
+        # test a leap year
+        y, m, d = utils.floatyear_to_date(1980.1612021857923, months_only=False)
+        assert y == 1980
+        assert m == 2
+        assert d == 29
 
     def test_date_to_floatyear(self):
 
@@ -160,30 +149,89 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, 2099)
+        myr = utils.float_years_timeseries(1800, 2099)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, ny=300)
+        myr = utils.float_years_timeseries(1800, ny=300)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-1', freq='M')
-        myr = utils.monthly_timeseries(1, 6000)
+        myr = utils.float_years_timeseries(1, 6000)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-12', freq='M')
-        myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
+        myr = utils.float_years_timeseries(1, 6000, include_last_year=True)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         with pytest.raises(ValueError):
-            utils.monthly_timeseries(1)
+            utils.float_years_timeseries(1)
+
+        # test daily timeseries
+        time = pd.date_range('1/1/1800', periods=365.25 * 299, freq='D')
+        myr = utils.float_years_timeseries(1800, 2099, monthly=False)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        myr = utils.float_years_timeseries(1800, ny=300, monthly=False)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01', '6000-1', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, monthly=False)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01-01', '6000-12-31', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, monthly=False,
+                                           include_last_year=True)
+        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+    def test_round_trip_floating_point_year(self):
+        # monthly round trip for all dates between 0000 and 3000
+        months_arr = np.arange(np.datetime64('0000-01', 'M'),
+                               np.datetime64('3001-01', 'M'),
+                               dtype='datetime64[M]')
+        years = months_arr.astype('datetime64[Y]').astype(int) + 1970
+        months = (months_arr.astype('datetime64[M]').astype(int) % 12) + 1
+
+        fy = utils.date_to_floatyear(years, months)
+        y2, m2 = utils.floatyear_to_date(fy)
+
+        ok = (years == y2) & (months == m2)
+        assert sum(~ok) == 0
+
+        # daily roundtrip for all dates between 0000 and 3000
+        start = np.datetime64('0000-01-01', 'D')
+        end_exclusive = np.datetime64('3001-01-01', 'D')
+        dates = np.arange(start, end_exclusive, dtype='datetime64[D]')
+
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        mstart = dates.astype('datetime64[M]').astype('datetime64[D]')
+        days = (dates - mstart).astype(int) + 1
+
+        fy = utils.date_to_floatyear(years, months, days)
+        y2, m2, d2 = utils.floatyear_to_date(fy, months_only=False)
+
+        ok = (years == y2) & (months == m2) & (days == d2)
+        assert sum(~ok) == 0
 
     @pytest.mark.parametrize("d,w", [
         (np.arange(10), np.arange(10)),
@@ -201,6 +249,25 @@ class TestFuncs(object):
         d, w = ([0], [0])
         with pytest.raises(ZeroDivisionError):
             utils.weighted_average_1d(d, weights=w)
+
+    @pytest.mark.parametrize("d,w", [
+        (np.arange(10), np.arange(10)),
+        (np.arange(10)-5, np.arange(10)-5),
+        (np.random.random(1000), np.random.random(1000)),
+        ([[2, 1]], [1]),
+        ([[0, 1]], [1]),
+    ])
+    def test_weighted_avg_2d(self, d, w):
+        if not isinstance(d, list):
+            d = d[:, None] + d
+        r1 = utils.weighted_average_2d(d, weights=w)
+        r2 = np.average(d, weights=w, axis=0)
+        assert_allclose(r1, r2)
+
+    def test_weighted_avg_2d_fail(self):
+        d, w = ([0, 0], [0])
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_average_2d(d, weights=w)
 
     @pytest.mark.parametrize(
             "in_data,out_type",
@@ -308,6 +375,202 @@ class TestFuncs(object):
         y, m = utils.hydrodate_to_calendardate(y, m, start_month=1)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
+
+    def get_cftime_index(
+        self, start_day: int = 65286, years: int = 3
+    ) -> np.ndarray:
+        """Get a time index with cftime datetimes."""
+        end_day = start_day + (365 * years) + 1
+        days = np.arange(start_day, end_day)
+        units = "days since 1801-01-01"
+        time_index = cftime.num2date(days[:], units=units, calendar="standard")
+        return time_index
+
+    def test_get_cftime_index(self):
+        test_time_index = cftime.num2date(
+            np.arange(65286, 66382),
+            units="days since 1801-01-01",
+            calendar="standard",
+        )
+        compare_time_index = self.get_cftime_index(start_day=65286, years=3)
+        assert len(compare_time_index) == len(test_time_index)
+        assert (compare_time_index[:] == test_time_index[:]).all()
+
+    def get_expected_hydrodate_matrix(self, julian_year=1979):
+        """Get expected hydrological months and years.
+
+        Generates expected hydrological months and years for all
+        Julian months and possible hydrological start months.
+
+        Parameters
+        ----------
+        julian_year : int, default 1979
+            The reference calendar year.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Two matrices M[i,j], Y[i,j] where i is a hydrological year's
+            start month and j is the Julian calendar month.
+            * Month matrix: the element at (i,j) is the expected
+            hydrological month. Diagonal = 1.
+            * Year matrix: the element at (i, j) is the expected
+            hydrological year. Diagonal and above = julian_year,
+            below the diagonal = julian_year - 1.
+
+        """
+        nx = 13
+        months = np.diag(np.full(nx - 1, 1))
+        for i in range(2, nx):
+            months = (
+                months
+                + np.diag(np.full(nx - i, i), i - 1)
+                + np.diag(np.full(nx - i, nx + 1 - i), -i + 1)
+            )
+
+        years = np.full(nx * nx, julian_year).reshape(nx, nx)
+        years += np.tril(np.full(nx, -1), -1)
+
+        return months, years
+
+    @pytest.mark.parametrize("julian_year", [1979, 1980])  # leap year
+    def test_get_expected_hydrodate_matrix(self, julian_year):
+
+        months, years = self.get_expected_hydrodate_matrix(
+            julian_year=julian_year
+        )
+        nx = 12
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            np.testing.assert_array_equal(
+                months[0, i:], np.arange(i + 1, nx + 1)
+            )
+            np.testing.assert_array_less(months, nx + 1)
+            np.testing.assert_array_less(-months, 0)  # no array_greater
+
+        np.testing.assert_array_less(years, julian_year + 1)
+        np.testing.assert_array_equal(
+            years[np.triu_indices_from(years, 0)], julian_year
+        )
+        np.testing.assert_array_equal(
+            years[np.tril_indices_from(years, -1)], julian_year - 1
+        )
+
+    def get_expected_julian_matrix(self, hydro_year=1979) -> tuple:
+        """Get expected hydrological months and years.
+
+        Generates expected hydrological months and years for all
+        Julian months and possible hydrological start months.
+
+        Parameters
+        ----------
+        hydro_year : int, default 1979
+            The reference hydrological year.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Two matrices M[i,j], Y[i,j] where i is a hydrological year's
+            start month and j is the hydrological calendar month.
+            * Month matrix: the element at (i,j) is the expected
+            Julian month. Diagonal = 1.
+            * Year matrix: the element at (i, j) is the expected
+            Julian year. Diagonal and below = hydrological_year + 1,
+            above the diagonal = hydrological_year
+        """
+        nx = 12
+        months = np.zeros((nx, nx), dtype=int)
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            months[i, :] = np.arange(1 + i, nx + i + 1)
+        mask = np.where(months > nx)
+        months[mask] = months[mask] - nx
+
+        years = np.full(nx * nx, hydro_year).reshape(nx, nx)
+        years[mask] += 1
+
+        return months, years
+
+    @pytest.mark.parametrize("hydro_year", [1979, 1980])  # leap year
+    def test_get_expected_julian_matrix(self, hydro_year):
+
+        months, years = self.get_expected_julian_matrix(hydro_year=hydro_year)
+        months = np.fliplr(months)  # all elements in a diag are equal
+        years = np.fliplr(years)
+        nx = 12
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            np.testing.assert_array_less(months, nx + 1)
+            np.testing.assert_array_less(-months, 0)  # no array_greater
+
+        np.testing.assert_array_less(years, hydro_year + 2)
+        np.testing.assert_array_less(-years, -hydro_year + 1)
+        np.testing.assert_array_equal(
+            years[np.triu_indices_from(years, 0)], hydro_year
+        )
+        np.testing.assert_array_equal(
+            years[np.tril_indices_from(years, -1)], hydro_year + 1
+        )
+
+    @pytest.mark.parametrize("julian_year", [1979, 1980])  # leap year
+    @pytest.mark.parametrize(
+        "start_month", np.arange(1, 13), ids=[f"{i}" for i in np.arange(1, 13)]
+    )
+    def test_calendardate_to_hydrodate_cftime(self, start_month, julian_year):
+        expected_months, _ = self.get_expected_hydrodate_matrix(
+            julian_year=julian_year
+        )
+        for julian_start_month in range(1, 13):
+            cf_date = cftime.datetime(
+                julian_year, julian_start_month, 1, calendar="standard"
+            )
+            julian_start_day = cftime.date2num(
+                cf_date, units="days since 1801-01-01"
+            )
+            time_index = self.get_cftime_index(start_day=julian_start_day)
+
+            compare_index = utils.calendardate_to_hydrodate_cftime(
+                dates=time_index, start_month=start_month
+            )
+            assert len(compare_index) == len(time_index)
+            expected = expected_months[start_month - 1, julian_start_month - 1]
+            if start_month <= julian_start_month:
+                assert compare_index[0].year == julian_year
+                assert compare_index[0].month == expected
+            else:
+                assert compare_index[0].year == julian_year - 1
+                assert compare_index[0].month == expected
+            assert compare_index[0].day == 1
+
+    @pytest.mark.parametrize("hydro_year", [1979, 1980])  # leap year
+    @pytest.mark.parametrize(
+        "start_month", np.arange(1, 13), ids=[f"{i}" for i in np.arange(1, 13)]
+    )
+    def test_hydrodate_to_calendardate_cftime(self, start_month, hydro_year):
+        expected_months, _ = self.get_expected_julian_matrix(
+            hydro_year=hydro_year
+        )
+        for hydro_start_month in range(1, 13):
+            cf_date = cftime.datetime(
+                hydro_year, hydro_start_month, 1, calendar="standard"
+            )
+            hydro_start_day = cftime.date2num(
+                cf_date, units="days since 1801-01-01"
+            )
+            time_index = self.get_cftime_index(start_day=hydro_start_day)
+
+            compare_index = utils.hydrodate_to_calendardate_cftime(
+                dates=time_index, start_month=start_month
+            )
+            assert len(compare_index) == len(time_index)
+            expected = expected_months[start_month - 1, hydro_start_month - 1]
+            if start_month + hydro_start_month > 13:
+                assert compare_index[0].year == hydro_year + 1
+                assert compare_index[0].month == expected
+            else:
+                assert compare_index[0].year == hydro_year
+                assert compare_index[0].month == expected
+            assert compare_index[0].day == 1
 
     def test_rgi_meta(self):
         cfg.initialize()

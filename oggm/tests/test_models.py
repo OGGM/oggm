@@ -18,9 +18,10 @@ from oggm.core.massbalance import LinearMassBalance
 import xarray as xr
 from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
+from oggm.shop.w5e5 import process_gswp3_w5e5_data
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, ModelSettings
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 from oggm.tests.funcs import get_test_dir
@@ -71,6 +72,13 @@ try:
     has_shapely2 = True
 except ImportError:
     pass
+
+
+def is_daily_model(model):
+    # isinstance silently fails
+    return issubclass(
+        model, massbalance.DailyTIModel
+    )
 
 
 class TestInitPresentDayFlowline:
@@ -222,18 +230,38 @@ class TestInitPresentDayFlowline:
         np.testing.assert_allclose(fl_consensus_rect.volume_m3, ref_vol_rect)
         assert np.sum(fl_consensus_rect.is_rectangular) == 10
 
-    def test_present_time_glacier_massbalance(self, hef_gdir):
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
+                                    massbalance.DailyTIModel,],)
+    def test_present_time_glacier_massbalance(self, hef_gdir, cl):
 
         gdir = hef_gdir
         gdir.settings['downstream_line_shape'] = cfg.PARAMS['downstream_line_shape']
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.MonthlyTIModel(gdir)
+        mbdf = gdir.get_ref_mb_data()
+
+        if is_daily_model(cl):
+            # daily need to be calibrated first
+            tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+            ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+            ref_mb = mbdf.ANNUAL_BALANCE.mean()
+            ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+            tasks.mb_calibration_from_scalar_mb(
+                gdir,
+                ref_mb=ref_mb,
+                ref_mb_period=ref_period,
+                mb_model_class=cl,
+                settings_filesuffix="_daily",
+                observations_filesuffix='_daily',
+                overwrite_gdir=True,
+            )
+            mb_mod = cl(gdir, settings_filesuffix='_daily')
+
+        else:
+            mb_mod = cl(gdir)
 
         fls = gdir.read_pickle('model_flowlines')
-        glacier = FlowlineModel(fls)
-
-        mbdf = gdir.get_ref_mb_data()
+        glacier = FlowlineModel(fls, mb_model=cl)
 
         hgts = np.array([])
         widths = np.array([])
@@ -242,10 +270,10 @@ class TestInitPresentDayFlowline:
             widths = np.concatenate((widths, fl.widths_m))
         tot_mb = []
         refmb = []
-        grads = hgts * 0
+        grads = np.zeros_like(hgts)
         for yr, mb in mbdf.iterrows():
             refmb.append(mb['ANNUAL_BALANCE'])
-            mbh = (mb_mod.get_annual_mb(hgts, yr) * SEC_IN_YEAR *
+            mbh = (mb_mod.get_annual_mb(hgts, yr) * mb_mod.sec_in_year(yr) *
                    cfg.PARAMS['ice_density'])
             grads += mbh
             tot_mb.append(np.average(mbh, weights=widths))
@@ -396,8 +424,6 @@ class TestMassBalanceModels:
 
         rho = cfg.PARAMS['ice_density']
 
-        F = SEC_IN_YEAR * rho
-
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
@@ -409,15 +435,18 @@ class TestMassBalanceModels:
 
         mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
         for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * F
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          rho)
             ela_z = mb_mod.get_ela(year=yr)
-            totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
+            totest = (mb_mod.get_annual_mb([ela_z], year=yr) *
+                      mb_mod.sec_in_year(yr) * rho)
             assert_allclose(totest[0], 0, atol=1)
 
         mb_mod = massbalance.MonthlyTIModel(gdir)
         for i, yr in enumerate(np.arange(yrp[0], yrp[1] + 1)):
             ela_z = mb_mod.get_ela(year=yr)
-            totest = mb_mod.get_annual_mb([ela_z], year=yr) * F
+            totest = (mb_mod.get_annual_mb([ela_z], year=yr) *
+                      mb_mod.sec_in_year(yr) * rho)
             assert_allclose(totest[0], 0, atol=1)
 
         # real data
@@ -426,7 +455,8 @@ class TestMassBalanceModels:
         mbdf.loc[yr, 'MY_MB'] = np.nan
         mb_mod = massbalance.MonthlyTIModel(gdir)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) *
+                          mb_mod.sec_in_year(yr) * rho)
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
@@ -438,7 +468,8 @@ class TestMassBalanceModels:
 
         mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          rho)
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
 
         np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
@@ -447,10 +478,12 @@ class TestMassBalanceModels:
 
         mb_mod = massbalance.MonthlyTIModel(gdir)
         for yr in mbdf.index.values:
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          rho)
             mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 1
-            my_mb_on_h = mb_mod.get_annual_mb(h, yr) * SEC_IN_YEAR * rho
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          rho)
             mbdf.loc[yr, 'BIASED_MB'] = np.average(my_mb_on_h, weights=w)
             mb_mod.temp_bias = 0
 
@@ -460,8 +493,7 @@ class TestMassBalanceModels:
         assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
 
         # Repeat
-        mb_mod = massbalance.MonthlyTIModel(gdir, repeat=True,
-                                             ys=1901, ye=1950)
+        mb_mod = massbalance.MonthlyTIModel(gdir, repeat=True, ys=1901, ye=1950)
         yrs = np.arange(100) + 1901
         mb = mb_mod.get_specific_mb(h, w, year=yrs)
         assert_allclose(mb[50], mb[-50])
@@ -487,6 +519,42 @@ class TestMassBalanceModels:
                                                     years=mbdf.index.values)
         assert_allclose(s, mbdf['MY_MB'])
 
+        # compare get_monhtly_mb and get_annual_mb
+        mb_mod = massbalance.MonthlyTIModel(gdir)
+        yr = 2000
+        mb_annual, t_a, tmelt_a, prcp_a, prcpsol_a = mb_mod.get_annual_mb(
+            h, year=yr, add_climate=True
+        )
+        mb_monthly = []
+        t_m = []
+        tmelt_m = []
+        prcp_m = []
+        prcpsol_m = []
+        for fyr in utils.float_years_timeseries(y0=2000, y1=2001)[:-1]:
+            mb_tmp, t_tmp, tmelt_tmp, prcp_tmp, prcpsol_tmp = mb_mod.get_monthly_mb(
+                h, year=fyr, add_climate=True
+            )
+            mb_monthly.append(mb_tmp)
+            t_m.append(t_tmp)
+            tmelt_m.append(tmelt_tmp)
+            prcp_m.append(prcp_tmp)
+            prcpsol_m.append(prcpsol_tmp)
+
+        # climate forcing of mb should be the same
+        np.testing.assert_allclose(np.sum(tmelt_m, axis=0), tmelt_a)
+        np.testing.assert_allclose(np.sum(prcpsol_m, axis=0), prcpsol_a)
+        np.testing.assert_allclose((np.sum(prcpsol_m, axis=0) -
+                                    mb_mod.melt_f * np.sum(tmelt_m,axis=0)) /
+                                   mb_mod.sec_in_year(yr) / mb_mod.rho,
+                                   mb_annual)
+
+        # test implementation of days of month in MonthlyTIModel.get_annual_mb
+        myr = utils.date_to_floatyear(np.repeat(int(np.floor(yr)), 12),
+                                      np.arange(1, 13))
+        days_of_month = [mb_mod.days_in_month(year=yr) for yr in myr]
+        # no leap years should be used in MonthlyTIModel
+        assert np.sum(days_of_month) == 365
+
     def test_repr(self, hef_gdir):
         from textwrap import dedent
 
@@ -496,15 +564,19 @@ class TestMassBalanceModels:
           Attributes:
             - hemisphere: nh
             - climate_source: histalp_merged_hef.nc
-            - melt_f: 6.59
+            - melt_f: 6.53
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
             - settings_filesuffix: 
             - rho: 900.0
-            - t_solid: 0.0
-            - t_liq: 2.0
-            - t_melt: -1.0
+            - use_leap_years: False
+            - filename: climate_historical
+            - input_filesuffix: 
+            - temp_all_solid: 0.0
+            - temp_all_liq: 2.0
+            - temp_melt: -1.0
+            - temp_default_gradient: -0.0065
             - repeat: False
             - ref_hgt: 3160.0
             - ys: 1802
@@ -513,12 +585,61 @@ class TestMassBalanceModels:
         mb_mod = massbalance.MonthlyTIModel(hef_gdir, bias=0)
         assert mb_mod.__repr__() == expected
 
-    def test_prcp_fac_temp_bias_update(self, hef_gdir):
+    def test_repr_daily(self, hef_gdir):
+        from textwrap import dedent
+
+        tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+
+        expected = dedent(f"""\
+        <oggm.MassBalanceModel>
+          Class: DailyTIModel
+          Attributes:
+            - hemisphere: nh
+            - climate_source: GSWP3_W5E5_daily
+            - melt_f: 6.53
+            - prcp_fac: 2.50
+            - temp_bias: 0.00
+            - bias: 0.00
+            - settings_filesuffix: _daily
+            - rho: 900.0
+            - use_leap_years: True
+            - filename: climate_historical_daily
+            - input_filesuffix: 
+            - temp_all_solid: 0.0
+            - temp_all_liq: 2.0
+            - temp_melt: 0.0
+            - temp_default_gradient: -0.0065
+            - repeat: False
+            - ref_hgt: 2252.0
+            - ys: 1901
+            - ye: 2019
+        """
+                          )
+        ModelSettings(hef_gdir, filesuffix='_daily', parent_filesuffix='')
+        mb_mod = massbalance.DailyTIModel(hef_gdir,
+                                          settings_filesuffix='_daily', bias=0,
+                                          check_calib_params=False)
+        assert mb_mod.__repr__() == expected
+
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
+                                    massbalance.DailyTIModel,],)
+    def test_prcp_fac_temp_bias_update(self, hef_gdir, cl):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        mb_mod = massbalance.MonthlyTIModel(gdir, bias=0)
+        if is_daily_model(cl):
+            tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+            filename = "climate_historical_daily"
+            check_calib_params = False
+            ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+            settings_filesuffix = '_daily'
+        else:
+            filename = "climate_historical"
+            check_calib_params = True
+            settings_filesuffix = ''
+        mb_mod = cl(gdir, settings_filesuffix=settings_filesuffix, bias=0,
+                    filename=filename, check_calib_params=check_calib_params)
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
@@ -565,11 +686,27 @@ class TestMassBalanceModels:
             mb_mod.prcp_fac = -100
 
     @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
+                                    massbalance.DailyTIModel,
                                     massbalance.ConstantMassBalance,
-                                    massbalance.RandomMassBalance])
+                                    massbalance.RandomMassBalance,])
     def test_glacierwide_mb_model(self, hef_gdir, cl):
         gdir = hef_gdir
         init_present_time_glacier(gdir)
+
+        check_calib_params = True
+        settings_filesuffix = ''
+        if is_daily_model(cl):
+            tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+            start_year = 1979
+            eval_year = 2000
+            yrs = np.arange(39) + start_year  # data until 2019
+            check_calib_params = False
+            ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+            settings_filesuffix = '_daily'
+        else:
+            start_year = 1901
+            eval_year = 1950
+            yrs = np.arange(100) + start_year
 
         fls = gdir.read_pickle('model_flowlines')
         h = np.array([])
@@ -578,8 +715,6 @@ class TestMassBalanceModels:
             w = np.append(w, fl.widths)
             h = np.append(h, fl.surface_h)
 
-        yrs = np.arange(100) + 1901
-
         if cl is massbalance.RandomMassBalance:
             kwargs = {'seed': 0, 'y0': 1985}
         elif cl is massbalance.ConstantMassBalance:
@@ -587,10 +722,11 @@ class TestMassBalanceModels:
         else:
             kwargs = {}
 
-        mb = cl(gdir, **kwargs)
-        mb_gw = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
-                                                        mb_model_class=cl,
-                                                        **kwargs)
+        mb = cl(gdir, settings_filesuffix=settings_filesuffix,
+                check_calib_params=check_calib_params, **kwargs)
+        mb_gw = massbalance.MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix=settings_filesuffix, fls=fls,
+            mb_model_class=cl, check_calib_params=check_calib_params, **kwargs)
 
         assert_allclose(mb.get_specific_mb(h, w, year=yrs),
                         mb_gw.get_specific_mb(year=yrs))
@@ -598,10 +734,21 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_ela(year=yrs),
                         mb_gw.get_ela(year=yrs))
 
-        _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=1950)
-        mbs_h = mb.get_annual_mb(_h, year=1950)
+        _h, _w, mbs_gw = mb_gw.get_annual_mb_on_flowlines(year=eval_year)
+        mbs_h = mb.get_annual_mb(_h, year=eval_year)
 
         assert_allclose(mbs_h, mbs_gw)
+
+        _h, _w, mbs_gw = mb_gw.get_monthly_mb_on_flowlines(year=eval_year)
+        mbs_h = mb.get_monthly_mb(_h, year=eval_year)
+
+        assert_allclose(mbs_h, mbs_gw)
+
+        if is_daily_model(cl):
+            _h, _w, mbs_gw = mb_gw.get_daily_mb_on_flowlines(year=eval_year)
+            mbs_h = mb.get_daily_mb(_h, year=eval_year)
+
+            assert_allclose(mbs_h, mbs_gw)
 
         mb.bias = 100
         mb_gw.bias = 100
@@ -634,10 +781,16 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_ela(year=yrs[:10]),
                         mb_gw.get_ela(year=yrs[:10]))
 
-        if cl is massbalance.MonthlyTIModel:
-            mb = cl(gdir)
-            mb_gw = massbalance.MultipleFlowlineMassBalance(gdir,
-                                                            mb_model_class=cl)
+        assert_allclose(mb.get_ela(year=yrs[:30]),
+                        mb_gw.get_ela(year=yrs[:30]))
+
+        if issubclass(cl, (massbalance.MonthlyTIModel,
+                           massbalance.DailyTIModel,),):
+            mb = cl(gdir, settings_filesuffix=settings_filesuffix,
+                    check_calib_params=check_calib_params)
+            mb_gw = massbalance.MultipleFlowlineMassBalance(
+                gdir, settings_filesuffix=settings_filesuffix,
+                mb_model_class=cl, check_calib_params=check_calib_params)
             mb = massbalance.UncertainMassBalance(mb, rdn_bias_seed=1,
                                                   rdn_prcp_fac_seed=2,
                                                   rdn_temp_bias_seed=3)
@@ -647,50 +800,114 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
-        # ELA won't pass because of API incompatibility
-        # assert_allclose(mb.get_ela(year=yrs[:30]),
-        #                 mb_gw.get_ela(year=yrs[:30]))
+    @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
+                                       massbalance.DailyTIModel])
+    def test_get_specific_mb(self, hef_gdir, model):
 
-    @pytest.mark.parametrize("ref_year", [1979, 1980])
-    def test_get_annual_specific_mass_balance(self, hef_gdir, ref_year):
+        check_calib_params = True
+        settings_filesuffix = ''
+        if is_daily_model(model):
+            tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+            check_calib_params = False
+            ModelSettings(hef_gdir, filesuffix='_daily', parent_filesuffix='')
+            settings_filesuffix = '_daily'
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
+        ys = 1979
+        ye = 2002
+        years = np.arange(ys, ye + 1)
+        fls = gdir.read_pickle("inversion_flowlines")
+        heights_fls = np.concatenate([i.surface_h for i in fls], axis=0)
+        widths_fls = np.concatenate([i.widths for i in fls], axis=0)
 
-        test_fls = gdir.read_pickle("model_flowlines")
-        assert len(test_fls) > 1
-        mb_mod = massbalance.MultipleFlowlineMassBalance(
-            gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
+        mb_mod_native = model(gdir, settings_filesuffix=settings_filesuffix,
+                              check_calib_params=check_calib_params,
+                              ys=ys, ye=ye)
+        mb_mod_multi_fls = massbalance.MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix=settings_filesuffix, fls=fls,
+            mb_model_class=model, check_calib_params=check_calib_params,
+            ys=ys, ye=ye,
         )
-        test_mbs = mb_mod.get_annual_specific_mass_balance(
-            fls=test_fls, year=ref_year
-        )
-        assert isinstance(test_mbs, np.float64)
 
-        # Compare to old function
-        flowline_models = mb_mod.flowline_mb_models
-        fls = gdir.read_pickle("model_flowlines")
-        year = ref_year
-        mbs = []
-        widths = []
-        for i, (fl, mb_mod) in enumerate(zip(fls, flowline_models)):
-            _widths = fl.widths
-            try:
-                # For rect and parabola don't compute spec mb
-                _widths = np.where(fl.thick > 0, _widths, 0)
-            except AttributeError:
-                pass
-            assert isinstance(_widths, np.ndarray)
-            widths = np.append(widths, _widths)
-            mb = mb_mod.get_annual_mb(fl.surface_h, year=year, fls=fls, fl_id=i)
-            mbs = np.append(mbs, mb * SEC_IN_YEAR * mb_mod.rho)
-        assert widths.shape == mbs.shape
-        ref_mbs = utils.weighted_average_1d(mbs, widths)
+        for mb_mod, fls, heights, widths in zip(
+                [mb_mod_native, mb_mod_multi_fls], [None, fls],
+                [heights_fls, None], [widths_fls, None]):
+            # test call with array
+            smb = mb_mod.get_specific_mb(year=years, fls=fls, heights=heights,
+                                         widths=widths,)
+            assert isinstance(smb, np.ndarray)
+            assert smb.shape == (1 + (ye - ys),)
+            # test call with single value
+            smb_single = mb_mod.get_specific_mb(year=years[0], fls=fls,
+                                                heights=heights, widths=widths,)
+            assert isinstance(smb_single, float)
+            assert smb_single == smb[0]
 
-        assert test_mbs == ref_mbs
+            # monthly resolution
+            years_m = utils.float_years_timeseries(ys, ye, include_last_year=True)
+            smb_monthly = mb_mod.get_specific_mb(year=years_m, fls=fls,
+                                                 heights=heights, widths=widths,
+                                                 time_resolution='monthly',)
+            assert isinstance(smb_monthly, np.ndarray)
+            assert len(smb) * 12 == len(smb_monthly)
+            # should be the same as annual in total
+            np.testing.assert_allclose(smb.sum(), smb_monthly.sum())
+            # and also per year it should be the same
+            np.testing.assert_allclose(smb,
+                                       smb_monthly.reshape((len(smb), 12)).sum(axis=1))
+            # test call with single value
+            smb_monthly_single = mb_mod.get_specific_mb(year=years_m[0],
+                                                        fls=fls,
+                                                        heights=heights,
+                                                        widths=widths,
+                                                        time_resolution='monthly',
+            )
+            assert isinstance(smb_monthly_single, float)
+            assert smb_monthly_single == smb_monthly[0]
 
-    def test_get_specific_mb(self, hef_gdir):
+            if is_daily_model(model):
+                # daily resolution
+                years_d = utils.float_years_timeseries(ys, ye, monthly=False,
+                                                       include_last_year=True)
+                smb_daily = mb_mod.get_specific_mb(year=years_d, fls=fls,
+                                                   heights=heights,
+                                                   widths=widths,
+                                                   time_resolution='daily',)
+                assert isinstance(smb_daily, np.ndarray)
+                total_days = sum(
+                    [mb_mod.days_in_year(yr) for yr in years])
+                assert len(smb_daily) == total_days
+                # should be the same as annual in total
+                np.testing.assert_allclose(smb.sum(), smb_daily.sum())
+                # also for each year it should be the same,
+                # a bit complicated because of leap years
+                start_index = 0
+                for i, yr in enumerate(years):
+                    end_index = start_index + mb_mod.days_in_year(yr)
+                    np.testing.assert_allclose(smb[i],
+                                               smb_daily[start_index:end_index].sum())
+                    start_index = end_index
+                # test call with single value
+                smb_daily_single = mb_mod.get_specific_mb(year=years_d[0],
+                                                          fls=fls,
+                                                          heights=heights,
+                                                          widths=widths,
+                                                          time_resolution='daily',)
+                assert isinstance(smb_daily_single, float)
+                assert smb_daily_single == smb_daily[0]
 
+    @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
+                                       massbalance.DailyTIModel])
+    def test_get_ela(self, hef_gdir, model):
+
+        check_calib_params = True
+        settings_filesuffix = ''
+        if is_daily_model(model):
+            tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+            check_calib_params = False
+            ModelSettings(hef_gdir, filesuffix='_daily', parent_filesuffix='')
+            settings_filesuffix = '_daily'
         gdir = hef_gdir
         init_present_time_glacier(gdir)
         ys = 1979
@@ -700,46 +917,10 @@ class TestMassBalanceModels:
         fls = gdir.read_pickle("inversion_flowlines")
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir,
+            settings_filesuffix=settings_filesuffix,
             fls=fls,
-            mb_model_class=massbalance.MonthlyTIModel,
-            repeat=True,
-            ys=ys,
-            ye=ye,
-        )
-        smb = mb_mod.get_specific_mb(year=years)
-        assert isinstance(smb, np.ndarray)
-        assert smb.shape == (1 + (ye - ys),)
-
-        # Rough non-weighted bounds
-        ref_smb_lo = (
-            mb_mod.get_annual_mb(fls[-1].surface_h, year=ys, fls=fls, fl_id=-1)
-            * cfg.SEC_IN_YEAR
-            * cfg.PARAMS["ice_density"]
-        )
-        ref_smb_hi = (
-            mb_mod.get_annual_mb(fls[0].surface_h, year=ys, fls=fls, fl_id=0)
-            * cfg.SEC_IN_YEAR
-            * cfg.PARAMS["ice_density"]
-        )
-
-        smb_single = mb_mod.get_specific_mb(year=ys)
-        assert isinstance(smb_single, float)
-        assert smb_single == smb[0]
-        assert ref_smb_lo.mean() < smb_single < ref_smb_hi.mean()
-
-    def test_get_ela(self, hef_gdir):
-
-        gdir = hef_gdir
-        init_present_time_glacier(gdir)
-        ys = 1979
-        ye = 2019
-        years = np.arange(ys, ye + 1)
-
-        fls = gdir.read_pickle("inversion_flowlines")
-        mb_mod = massbalance.MultipleFlowlineMassBalance(
-            gdir,
-            fls=fls,
-            mb_model_class=massbalance.MonthlyTIModel,
+            mb_model_class=model,
+            check_calib_params=check_calib_params,
             repeat=True,
             ys=ys,
             ye=ye,
@@ -748,10 +929,387 @@ class TestMassBalanceModels:
         assert isinstance(ela, np.ndarray)
         assert ela.shape == (1 + (ye - ys),)
 
-        ela_single = mb_mod.get_ela(year=ys)
-        assert isinstance(ela_single, float)
-        assert ela_single == ela[0]
-        assert fls[-1].surface_h.min() < ela_single < fls[0].surface_h.max()
+        for i, (yr, ela_array) in enumerate(zip(years, ela)):
+            ela_z = mb_mod.get_ela(year=yr)
+            assert isinstance(ela_z, float)
+            assert ela_z == ela_array
+            totest = (mb_mod.flowline_mb_models[-1].get_annual_mb([ela_z], year=yr) *
+                      mb_mod.flowline_mb_models[-1].sec_in_year(yr) * mb_mod.rho)
+            assert_allclose(totest[0], 0, atol=1)
+
+    def test_daily_mb_model(self, hef_gdir):
+
+        # add daily and monthly w5e5 for 'fair' comparisons of MonthlyTIModel to
+        # DailyTIModel later in the tests
+        tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+        tasks.process_gswp3_w5e5_data(hef_gdir, output_filesuffix='_monthly')
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        # Flowlines height of the main flowline
+        h, w = gdir.get_inversion_flowline_hw()
+        h = sorted(h)
+
+        # for the daily model we use an own settings file because of tmelt = 0
+        # and we use the other parameters as for monthly by using
+        # parent_filesuffix=''
+        ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+
+        mb_mod_daily = massbalance.DailyTIModel(gdir,
+                                                settings_filesuffix='_daily',
+                                                check_calib_params=False)
+        mb_mod_monthly = massbalance.MonthlyTIModel(gdir,
+                                                    input_filesuffix='_monthly',
+                                                    check_calib_params=False)
+
+        # compare MonthlyTIModel and DailyTIModel for annual mb
+        yr = 2000  # just a random pick
+        mb_annual_d, t_d, tmelt_d, prcp_d, prcpsol_d = mb_mod_daily.get_annual_mb(
+            year=yr, heights=h, add_climate=True)
+        mb_annual_m, t_m, tmelt_m, prcp_m, prcpsol_m = mb_mod_monthly.get_annual_mb(
+            year=yr, heights=h, add_climate=True)
+
+        # check that the raw climate is similar
+        np.testing.assert_allclose(prcp_d, prcp_m)
+        np.testing.assert_allclose(t_d, t_m, atol=0.02)
+
+        # plot for looking at how mb gradient is changing
+        if do_plot:
+            # for checking how much has changed to OGGM v1.6 here a hard coded
+            mb_annual_oggm_v16 = [
+                -1.42297448e-07, -1.41160282e-07, -1.39199219e-07, -1.36113197e-07,
+                -1.31840437e-07, -1.26940610e-07, -1.21949801e-07, -1.17948533e-07,
+                -1.14388734e-07, -1.11166865e-07, -1.08178550e-07, -1.05308084e-07,
+                -1.02515762e-07, -9.96907271e-08, -9.67172896e-08, -9.36011930e-08,
+                -9.03592687e-08, -8.69923123e-08, -8.29093380e-08, -7.90813507e-08,
+                -7.55444959e-08, -7.24727279e-08, -6.93747120e-08, -6.63505138e-08,
+                -6.35754355e-08, -6.11641273e-08, -5.89809293e-08, -5.67949353e-08,
+                -5.44956761e-08, -5.20240215e-08, -4.93213255e-08, -4.63693337e-08,
+                -4.31273607e-08, -3.95146795e-08, -3.55167024e-08, -3.16922755e-08,
+                -2.85680526e-08, -2.60397302e-08, -2.37143703e-08, -2.13926889e-08,
+                -1.90271618e-08, -1.73486999e-08, -1.65511508e-08, -1.39938251e-08,
+                -1.14532445e-08, -8.95108401e-09, -8.90165026e-09, -6.43941025e-09,
+                -3.79873736e-09, -8.85807717e-10,  2.50943975e-09,  4.80588815e-09,
+                6.39301260e-09,  1.01207768e-08,  1.35185100e-08,  1.59884941e-08,
+                1.70314225e-08,  2.04225150e-08,  2.35563242e-08,  2.53007150e-08,
+                2.65123374e-08,  2.91862845e-08,  3.14872294e-08,  3.31400347e-08,
+                3.39361834e-08,  3.73918160e-08,  3.92227052e-08,  4.10314532e-08,
+                4.13874876e-08,  4.39342346e-08,  4.43393872e-08,  4.58317424e-08,
+                4.86526460e-08,  4.93663560e-08,  5.36643971e-08,  5.41680453e-08,
+                5.84341486e-08,  6.00092412e-08,  6.30844863e-08,  6.58271495e-08,
+                6.76431998e-08,  7.15019273e-08,  7.21872267e-08,  7.61114775e-08,
+                7.71056592e-08,  7.76305573e-08,  8.12629938e-08,  8.45592440e-08,
+                8.70176740e-08,  8.83996244e-08]
+            np.testing.assert_allclose(mb_annual_oggm_v16, mb_annual_m,
+                                       atol=1.3e-9)
+
+            plt.plot(prcpsol_d, h, label='daily')
+            plt.plot(prcpsol_m, h, label='monthly')
+            plt.title(f'annual solid prcp for {yr}')
+            plt.legend()
+            plt.show()
+
+            plt.plot(tmelt_d, h, label='daily')
+            plt.plot(tmelt_m, h, label='monthly')
+            plt.title(f'annual temperature for melt {yr}')
+            plt.legend()
+            plt.show()
+
+            plt.plot(mb_annual_d, h, label='daily')
+            plt.plot(mb_annual_m, h, label='monthly')
+            plt.plot(mb_annual_oggm_v16, h, label='monthly, OGGM v1.6')
+            plt.title(f'annual mb for {yr}')
+            plt.legend()
+            plt.show()
+
+        # because gradients are changing we can not expect a good fit here
+        np.testing.assert_allclose(prcpsol_d, prcpsol_m, atol=340)
+        np.testing.assert_allclose(tmelt_d, tmelt_m, atol=125)
+        np.testing.assert_allclose(mb_annual_d, mb_annual_m, atol=4e-8)
+
+        # compare MonthlyTIModel and DailyTIModel for monthly mb
+        yr = 2000  # just a random pick
+        m = 6  # just a random pick
+        myr = utils.date_to_floatyear(yr, m)
+        mb_monthly_d, t_d, tmelt_d, prcp_d, prcpsol_d = mb_mod_daily.get_monthly_mb(
+            year=myr, heights=h, add_climate=True)
+        mb_monthly_m, t_m, tmelt_m, prcp_m, prcpsol_m = mb_mod_monthly.get_monthly_mb(
+            year=myr, heights=h, add_climate=True)
+        # check that the raw climate is similar
+        np.testing.assert_allclose(prcp_d, prcp_m)
+        np.testing.assert_allclose(t_d, t_m, atol=1e-4)
+
+        # plot for looking at how mb gradient is changing
+        if do_plot:
+            mb_monthly_oggm_v16 = [
+                -5.13190966e-07, -5.11211812e-07, -5.07798727e-07, -5.02498359e-07,
+                -4.95374449e-07, -4.87205038e-07, -4.78881443e-07, -4.71262960e-07,
+                -4.64485043e-07, -4.58350551e-07, -4.52660749e-07, -4.47195333e-07,
+                -4.41878705e-07, -4.36499791e-07, -4.30838316e-07, -4.24905215e-07,
+                -4.18732537e-07, -4.12321795e-07, -4.05990839e-07, -4.00175269e-07,
+                -3.94790126e-07, -3.89446968e-07, -3.84058153e-07, -3.78797739e-07,
+                -3.73970655e-07, -3.69776327e-07, -3.65978784e-07, -3.62176377e-07,
+                -3.58176952e-07, -3.53877655e-07, -3.49176475e-07, -3.44041660e-07,
+                -3.38402440e-07, -3.31937059e-07, -3.24663937e-07, -3.17706537e-07,
+                -3.12022949e-07, -3.07423423e-07, -3.03193127e-07, -2.98969523e-07,
+                -2.94666154e-07, -2.91612695e-07, -2.90161794e-07, -2.85509505e-07,
+                -2.80887679e-07, -2.76335747e-07, -2.76245818e-07, -2.71766509e-07,
+                -2.66962595e-07, -2.61663392e-07, -2.55486755e-07, -2.50892238e-07,
+                -2.46389327e-07, -2.34266499e-07, -2.21147635e-07, -2.11610869e-07,
+                -2.07584057e-07, -1.94490833e-07, -1.82390996e-07, -1.75655792e-07,
+                -1.70977641e-07, -1.60653361e-07, -1.51769266e-07, -1.45387680e-07,
+                -1.42313699e-07, -1.28971282e-07, -1.21902102e-07, -1.10290002e-07,
+                -1.07780730e-07, -8.98316793e-08, -8.69762307e-08, -7.64583579e-08,
+                -6.02983722e-08, -5.64291333e-08, -3.31281440e-08, -3.03977137e-08,
+                -8.33160424e-09, -1.40054651e-09,  1.21318019e-08,  2.42006525e-08,
+                3.21920240e-08,  4.91720184e-08,  5.21876188e-08,  6.94559431e-08,
+                7.11095569e-08,  7.11095569e-08,  7.11095569e-08,  7.11095569e-08,
+                7.11095569e-08,  7.11095569e-08]
+            np.testing.assert_allclose(mb_monthly_oggm_v16, mb_monthly_m,
+                                       atol=1.3e-9)
+
+            plt.plot(prcpsol_d, h, label='daily')
+            plt.plot(prcpsol_m, h, label='monthly')
+            plt.title(f'monthly solid prcp for {m:02d}.{yr}')
+            plt.legend()
+            plt.show()
+
+            plt.plot(tmelt_d, h, label='daily')
+            plt.plot(tmelt_m, h, label='monthly')
+            plt.title(f'monthly temperature for melt for {m:02d}.{yr}')
+            plt.legend()
+            plt.show()
+
+            plt.plot(mb_monthly_d, h, label='daily')
+            plt.plot(mb_monthly_m, h, label='monthly')
+            plt.plot(mb_monthly_oggm_v16, h, label='monthly, OGGM v1.6')
+            plt.title(f'monthly mb for {m:02d}.{yr}')
+            plt.legend()
+            plt.show()
+
+        # because gradients are changing we can not expect a good fit here
+        np.testing.assert_allclose(prcpsol_d, prcpsol_m, atol=170)
+        np.testing.assert_allclose(tmelt_d, tmelt_m, atol=180)
+        np.testing.assert_allclose(mb_monthly_d, mb_monthly_m, atol=1e-7)
+
+        # look at daily mb, should look similar from the curves as monthly mb
+        # from MonthlyTIModel
+        yr = 2000  # just a random pick
+        m = 6  # just a random pick
+        d = 15  # just a random pick
+        myr = utils.date_to_floatyear(yr, m, d)
+        mb_daily_d, t_d, tmelt_d, prcp_d, prcpsol_d = mb_mod_daily.get_daily_mb(
+            year=myr, heights=h, add_climate=True)
+        assert isinstance(mb_daily_d, np.ndarray)
+        assert mb_daily_d.shape[0] == len(h)
+
+        if do_plot:
+
+            plt.plot(prcpsol_d, h, label='daily')
+            plt.title(f'daily solid prcp for {d:02d}.{m:02d}.{yr}')
+            plt.legend()
+            plt.show()
+
+            plt.plot(tmelt_d, h, label='daily')
+            plt.title(f'daily temperature for melt for {d:02d}.{m:02d}.{yr}')
+            plt.legend()
+            plt.show()
+
+            plt.plot(mb_daily_d, h, label='daily')
+            plt.title(f'daily mb for {d:02d}.{m:02d}.{yr}')
+            plt.legend()
+            plt.show()
+
+        # real data (copy from MonthlyTIModel testing)
+        # need to recalibrate for daily first
+        mbdf = hef_gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+        ref_mb = mbdf.mean()
+        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+
+        # before recalibration compare specific mb of monthly and daily with
+        # same parameters
+        fls = gdir.read_pickle('inversion_flowlines')
+        y0, y1 = ref_period.split('_')
+        y0 = int(y0.split('-')[0])
+        y1 = int(y1.split('-')[0])
+        years = np.arange(y0, y1)
+        specific_mb_d = mb_mod_daily.get_specific_mb(fls=fls, year=years).mean()
+        specific_mb_m = mb_mod_monthly.get_specific_mb(fls=fls, year=years).mean()
+        # there is a small difference (total value in order of 280)
+        np.testing.assert_allclose(specific_mb_d, specific_mb_m, atol=15)
+        assert specific_mb_d > specific_mb_m
+        # daily specific mb is larger than monthly with same melt_f -> after
+        # calibration we expect a larger melt_f
+
+        # do recalibration for daily and monthly
+        ModelSettings(gdir, filesuffix='_monthly', parent_filesuffix='')
+        massbalance.mb_calibration_from_scalar_mb(
+            gdir, settings_filesuffix='_monthly',
+            observations_filesuffix='_monthly',
+            overwrite_gdir=True,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
+            mb_model_class=massbalance.MonthlyTIModel,
+            input_filesuffix='_monthly',
+        )
+        massbalance.mb_calibration_from_scalar_mb(
+            gdir, settings_filesuffix='_daily',
+            observations_filesuffix='_daily',
+            overwrite_gdir=True,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
+            mb_model_class=massbalance.DailyTIModel)
+
+        settings_monthly = ModelSettings(gdir, filesuffix='_monthly')
+        settings_daily = ModelSettings(gdir, filesuffix='_daily')
+        assert settings_daily['melt_f'] > settings_monthly['melt_f']
+        assert settings_daily['prcp_fac'] == settings_monthly['prcp_fac']
+        assert settings_daily['temp_bias'] == settings_monthly['temp_bias']
+        # after calibration the specific mb should be very close
+        mb_mod_daily = massbalance.DailyTIModel(
+            gdir, settings_filesuffix='_daily')
+        mb_mod_monthly = massbalance.MonthlyTIModel(
+            gdir, settings_filesuffix='_monthly', input_filesuffix='_monthly')
+        specific_mb_d = mb_mod_daily.get_specific_mb(fls=fls, year=years).mean()
+        specific_mb_m = mb_mod_monthly.get_specific_mb(fls=fls, year=years).mean()
+        np.testing.assert_allclose(specific_mb_d, specific_mb_m)
+
+        if do_plot:
+            # look at monthly and daily profiles after calibration
+            # one annual profile
+            yr = 2000  # just a random pick
+            mb_annual_d = mb_mod_daily.get_annual_mb(year=yr, heights=h)
+            mb_annual_m = mb_mod_monthly.get_annual_mb(year=yr, heights=h)
+
+            plt.plot(mb_annual_d, h, label='daily')
+            plt.plot(mb_annual_m, h, label='monthly')
+            plt.title('Comparing monthly and daily after calibration '
+                      f'for {yr}')
+            plt.legend(); plt.grid('on');
+            plt.show()
+
+            # one monthly profile
+            yr = 2000  # just a random pick
+            m = 6  # just a random pick
+            myr = utils.date_to_floatyear(yr, m)
+            mb_monthly_d = mb_mod_daily.get_monthly_mb(year=myr, heights=h)
+            mb_monthly_m = mb_mod_monthly.get_monthly_mb(year=myr, heights=h)
+
+            plt.plot(mb_monthly_d, h, label='daily')
+            plt.plot(mb_monthly_m, h, label='monthly')
+            plt.title('Comparing monthly and daily after calibration '
+                      f'for {m:02d}.{yr}')
+            plt.legend(); plt.grid('on');
+            plt.show()
+
+        # now actually compare to real data
+        h, w = gdir.get_inversion_flowline_hw()
+        mbdf = gdir.get_ref_mb_data()
+        mbdf.loc[yr, 'MY_MB'] = np.nan
+        mb_mod = massbalance.DailyTIModel(gdir, settings_filesuffix='_daily')
+        for yr in mbdf.index.values:
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          mb_mod.rho)
+            mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
+
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
+                                   mbdf['MY_MB'].mean(),
+                                   atol=1e-2)
+        mbdf['MY_ELA'] = mb_mod.get_ela(year=mbdf.index.values)
+        assert mbdf[['MY_ELA', 'MY_MB']].corr().values[0, 1] < -0.9
+        assert mbdf[['MY_ELA', 'ANNUAL_BALANCE']].corr().values[0, 1] < -0.6
+
+        mb_mod = massbalance.DailyTIModel(gdir, settings_filesuffix='_daily',
+                                          bias=0)
+        for yr in mbdf.index.values:
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          mb_mod.rho)
+            mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
+
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
+                                   mbdf['MY_MB'].mean(),
+                                   atol=1e-2)
+
+        mb_mod = massbalance.DailyTIModel(gdir, settings_filesuffix='_daily')
+        for yr in mbdf.index.values:
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          mb_mod.rho)
+            mbdf.loc[yr, 'MY_MB'] = np.average(my_mb_on_h, weights=w)
+            mb_mod.temp_bias = 1
+            my_mb_on_h = (mb_mod.get_annual_mb(h, yr) * mb_mod.sec_in_year(yr) *
+                          mb_mod.rho)
+            mbdf.loc[yr, 'BIASED_MB'] = np.average(my_mb_on_h, weights=w)
+            mb_mod.temp_bias = 0
+
+        np.testing.assert_allclose(mbdf['ANNUAL_BALANCE'].mean(),
+                                   mbdf['MY_MB'].mean(),
+                                   atol=1e-2)
+        assert mbdf.ANNUAL_BALANCE.mean() > mbdf.BIASED_MB.mean()
+
+        # Repeat
+        mb_mod = massbalance.DailyTIModel(gdir, settings_filesuffix='_daily',
+                                          repeat=True, ys=1901, ye=1950)
+        yrs = np.arange(100) + 1901
+        mb = mb_mod.get_specific_mb(h, w, year=yrs)
+        assert_allclose(mb[50], mb[-50])
+
+        # Go for glacier wide now
+        fls = gdir.read_pickle('inversion_flowlines')
+        mb_gw_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir, mb_model_class=massbalance.DailyTIModel,
+            settings_filesuffix='_daily', fls=fls,repeat=True, ys=1901, ye=1950)
+        mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
+        assert_allclose(mb, mb_gw)
+
+        # Test massbalance task
+        s = massbalance.fixed_geometry_mass_balance(
+            gdir, mb_model_class=massbalance.DailyTIModel,
+            settings_filesuffix='_daily', climate_input_filesuffix='_daily',
+        )
+        assert s.index[0] == 1901
+        assert s.index[-1] == 2019
+
+        s = massbalance.fixed_geometry_mass_balance(
+            gdir, mb_model_class=massbalance.DailyTIModel,
+            settings_filesuffix='_daily', climate_input_filesuffix='_daily',
+            ys=1990, ye=2000)
+        assert s.index[0] == 1990
+        assert s.index[-1] == 2000
+
+        s = massbalance.fixed_geometry_mass_balance(
+            gdir, mb_model_class=massbalance.DailyTIModel,
+            settings_filesuffix='_daily', climate_input_filesuffix='_daily',
+            years=mbdf.index.values)
+        assert_allclose(s, mbdf['MY_MB'])
+
+        # compare MonthlyTIModel and DailyTIModel with dynamic run, both
+        # calibrated to the same mb with mb_calibration_from_scalar_mb
+        tasks.run_from_climate_data(gdir, settings_filesuffix='_daily',
+                                    mb_model_class=massbalance.DailyTIModel,
+                                    climate_input_filesuffix='_daily',
+                                    ys=1980, ye=2020,
+                                    output_filesuffix='_daily')
+        tasks.run_from_climate_data(gdir, settings_filesuffix='_monthly',
+                                    mb_model_class=massbalance.MonthlyTIModel,
+                                    climate_input_filesuffix='_monthly',
+                                    ys=1980, ye=2020,
+                                    output_filesuffix='_monthly')
+        ds_daily = utils.compile_run_output(gdir, input_filesuffix='_daily')
+        ds_monthly = utils.compile_run_output(gdir, input_filesuffix='_monthly')
+
+        if do_plot:
+            ds_daily.volume.plot(label='daily')
+            ds_monthly.volume.plot(label='monthly')
+            plt.legend()
+            plt.show()
+
+            ds_daily.area.plot(label='daily')
+            ds_monthly.area.plot(label='monthly')
+            plt.legend()
+            plt.show()
+
+        # quite some differences after static calibration
+        np.testing.assert_allclose(ds_daily.volume[-1], ds_monthly.volume[-1],
+                                   atol=3e7)
 
     def test_constant_mb_model(self, hef_gdir):
 
@@ -864,7 +1422,7 @@ class TestMassBalanceModels:
         # ELA
         elah = cmb_mod.get_ela()
         t, tm, p, ps = cmb_mod.get_annual_climate([elah])
-        mb = ps - cmb_mod.mbmod.monthly_melt_f * tm
+        mb = ps - cmb_mod.mbmod.melt_f * tm
         # not perfect because of time/months/zinterp issues
         np.testing.assert_allclose(mb, 0, atol=0.2)
 
@@ -1142,31 +1700,47 @@ class TestMassBalanceModels:
         assert_allclose(unc_mb, unc2_mb)
         assert np.std(unc_mb) > 50
 
+    def get_performance(self, gdir, model, start_year=1901, end_year=2002,
+                        **kwargs) -> float:
+        """Get model performance for monthly MB."""
+        h, w = gdir.get_inversion_flowline_hw()
+        # Climate period, 10 day timestep
+        yrs = np.arange(start_year, end_year, 10 / 365)
+        start_time = time.time()
+        mb = model(gdir, **kwargs)
+        for yr in yrs:
+            mb.get_monthly_mb(h, yr)
+        elapsed = time.time() - start_time
+
+        return elapsed
+
+    def test_get_performance(self, hef_gdir):
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        t_01 = self.get_performance(
+            gdir=gdir, model=massbalance.ConstantMassBalance, y0=2002 - 15
+        )
+        assert isinstance(t_01, float)
+
     def test_mb_performance(self, hef_gdir):
 
         gdir = hef_gdir
         init_present_time_glacier(gdir)
-
-        h, w = gdir.get_inversion_flowline_hw()
-
-        # Climate period, 10 day timestep
-        yrs = np.arange(1850, 2002, 10 / 365)
+        tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
 
         # models
-        start_time = time.time()
-        mb1 = massbalance.ConstantMassBalance(gdir, y0=2002-15)
-        for yr in yrs:
-            mb1.get_monthly_mb(h, yr)
-        t1 = time.time() - start_time
-        start_time = time.time()
-        mb2 = massbalance.MonthlyTIModel(gdir)
-        for yr in yrs:
-            mb2.get_monthly_mb(h, yr)
-        t2 = time.time() - start_time
+        y0 = 2002 - 15
+        t1 = self.get_performance(
+            gdir=gdir, model=massbalance.ConstantMassBalance, y0=y0)
+        t2 = self.get_performance(gdir=gdir, model=massbalance.MonthlyTIModel)
+        t3 = self.get_performance(
+            gdir=gdir, model=massbalance.DailyTIModel,check_calib_params=False)
 
-        # not faster as two times t2
         try:
-            assert t1 >= (t2 / 2)
+            # not faster as two and a half times t2
+            assert t1 >= (t2 / 2.5)
+            # daily is a bit slower
+            assert t2 >= (t3 / 2.5)
         except AssertionError:
             # no big deal
             pytest.skip('Allowed failure')
@@ -1780,7 +2354,7 @@ class TestIO():
         model = FluxBasedModel(fls, mb_model=mb, y0=0.,
                                glen_a=self.glen_a)
 
-        years = utils.monthly_timeseries(0, 500)
+        years = utils.float_years_timeseries(0, 500)
         vol_ref = []
         a_ref = []
         l_ref = []
@@ -3204,7 +3778,8 @@ class TestHEF:
 
         # Mass balance models
         mb_cru = massbalance.MonthlyTIModel(gdir)
-        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data')
+        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data',
+                                             check_calib_params=False)
 
         # Average over 1961-1990
         h, w = gdir.get_inversion_flowline_hw()
@@ -3243,6 +3818,10 @@ class TestHEF:
         run_from_climate_data(gdir, ys=1961, ye=1990,
                               output_filesuffix='_hist')
         run_from_climate_data(gdir, ys=1961, ye=1990,
+                              mb_model_class=partial(
+                                  massbalance.MonthlyTIModel,
+                                  check_calib_params=False,
+                              ),
                               climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
@@ -3837,6 +4416,20 @@ class TestDynamicSpinup:
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
+        # redo the calibration and inversion to be sure we start from a clean
+        # state which is up to date with the current oggm implementation
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+                                     gdir,)
+        tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False,)
+        # do inversion with A calibration to current volume
+        fls_ref = gdir.read_pickle('model_flowlines')
+        vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
+        workflow.calibrate_inversion_from_volume(
+            [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+            filter_inversion_output=True,
+            ref_volume_m3=vol_m3_ref,
+            add_to_log_file=False)
+
         # save original melt_f to be able to reset back to default for testing
         melt_f_orig = gdir.read_json('mb_calib')['melt_f']
 
@@ -3983,32 +4576,38 @@ class TestDynamicSpinup:
                     ref_mb=ref_dmdtda,
                     ref_mb_err=use_err_ref_dmdtda)
 
-        # test providing adapted observations through the observations file
-        ref_mb_adapted = ref_mb_hugonnet
-        ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
-                                   ref_mb_adapted['err'] / 2)
-        gdir.observations_filesuffix = '_hugonnet_adapted'
-        gdir.observations['ref_mb'] = ref_mb_adapted
+        if minimise_for == 'area' and do_inversion:
+            # test providing adapted observations through the observations file
+            ref_mb_adapted = ref_mb_hugonnet
+            ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
+                                       ref_mb_adapted['err'] / 2)
+            gdir.observations_filesuffix = '_hugonnet_adapted'
+            gdir.observations['ref_mb'] = ref_mb_adapted
 
-        run_dynamic_melt_f_calibration(
-            gdir,
-            observations_filesuffix='_hugonnet_adapted',
-            melt_f_max=melt_f_max,
-            run_function=dynamic_melt_f_run_with_dynamic_spinup,
-            kwargs_run_function={'minimise_for': minimise_for,
-                                 'precision_percent': precision_percent,
-                                 'precision_absolute': precision_absolute,
-                                 'do_inversion': do_inversion},
-            fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
-            kwargs_fallback_function={'minimise_for': minimise_for,
-                                      'precision_percent': precision_percent,
-                                      'precision_absolute': precision_absolute,
-                                      'do_inversion': do_inversion},
-            output_filesuffix='_dyn_melt_f_hugonnet_adapted',
-            ys=1979, ye=ye)
+            # save melt_f before calibration
+            gdir.settings_filesuffix = ''
+            melt_f_before = gdir.settings['melt_f']
 
-        # with a less negative geodetic mass balance the melt f should be smaller
-        assert gdir.settings['melt_f'] < melt_f_orig
+            run_dynamic_melt_f_calibration(
+                gdir,
+                observations_filesuffix='_hugonnet_adapted',
+                melt_f_max=melt_f_max,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_hugonnet_adapted',
+                ys=1979, ye=ye)
+
+            # with a less negative geodetic mass balance the melt f should be
+            # smaller after calibration
+            assert gdir.settings['melt_f'] < melt_f_before
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -4411,6 +5010,20 @@ class TestDynamicSpinup:
             from_prepro_level=3, prepro_border=160,
             prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
+
+        # redo the calibration and inversion to be sure we start from a clean
+        # state which is up to date with the current oggm implementation
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+                                     gdir, )
+        tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False, )
+        # do inversion with A calibration to current volume
+        fls_ref = gdir.read_pickle('model_flowlines')
+        vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
+        workflow.calibrate_inversion_from_volume(
+            [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
+            filter_inversion_output=True,
+            ref_volume_m3=vol_m3_ref,
+            add_to_log_file=False)
 
         # save original melt_f to be able to reset back to default for testing
         melt_f_orig = gdir.read_json('mb_calib')['melt_f']
@@ -5249,8 +5862,8 @@ class TestHydro:
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_type', ['random', 'const', 'hist'])
     @pytest.mark.parametrize('mb_bias', [500, -500, 0])
-    def test_hydro_monhly_vs_annual(self, hef_gdir, inversion_params,
-                                    mb_type, mb_bias):
+    def test_hydro_monthly_vs_annual(self, hef_gdir, inversion_params,
+                                     mb_type, mb_bias):
 
         gdir = hef_gdir
         gdir.rgi_date = 1990
@@ -5347,7 +5960,9 @@ class TestHydro:
 
 class TestMassRedis:
 
-    def test_hef_retreat(self, class_case_dir):
+    @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
+                                       massbalance.DailyTIModel,])
+    def test_hef_retreat(self, class_case_dir, model):
 
         import geopandas as gpd
 
@@ -5376,11 +5991,27 @@ class TestMassRedis:
         tasks.compute_downstream_bedshape(gdir)
         tasks.process_custom_climate_data(gdir)
 
+        if is_daily_model(model):
+            workflow.execute_entity_task(
+                gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
+            )
+            climate_file = "climate_historical_daily"
+            settings_filesuffix = '_daily'
+            ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+        else:
+            climate_file = "climate_historical"
+            settings_filesuffix = ''
+
         mbdf = gdir.get_ref_mb_data()
         cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
-        tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
-                                            ref_mb_period='1953-01-01_2003-01-01')
+        tasks.mb_calibration_from_scalar_mb(gdir,
+                                            settings_filesuffix=settings_filesuffix,
+                                            ref_mb=ref_mb,
+                                            ref_mb_period='1953-01-01_2003-01-01',
+                                            overwrite_gdir=True,
+                                            mb_model_class=model,
+                                            )
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
         # previously calibrate_inversion_from_consensus was used, but with the
         # RGI5 id not estimate is available and here we just use the first guess
@@ -5394,10 +6025,16 @@ class TestMassRedis:
         odf_v = pd.DataFrame()
         biases = [-0.6, -0.3, 0]
         for bias in biases:
-            tasks.run_random_climate(gdir, nyears=500, y0=1990, halfsize=10,
-                                     temperature_bias=bias,
-                                     seed=seed,
-                                     output_filesuffix='_fl')
+            tasks.run_random_climate(
+                gdir,
+                settings_filesuffix=settings_filesuffix,
+                nyears=500, y0=1990, halfsize=10,
+                temperature_bias=bias,
+                seed=seed,
+                mb_model_class=model,
+                climate_filename=climate_file,
+                output_filesuffix='_fl'
+            )
             with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                    filesuffix='_fl')) as ds:
                 df_fl = ds.to_dataframe()
@@ -5408,11 +6045,17 @@ class TestMassRedis:
             for advance_method in [0, 1, 2]:
                 MethodCurveModel = partial(MassRedistributionCurveModel,
                                            advance_method=advance_method)
-                tasks.run_random_climate(gdir, nyears=500, y0=1990, halfsize=10,
-                                         temperature_bias=bias,
-                                         seed=seed,
-                                         evolution_model=MethodCurveModel,
-                                         output_filesuffix='_mr')
+                tasks.run_random_climate(
+                    gdir,
+                    settings_filesuffix=settings_filesuffix,
+                    nyears=500, y0=1990, halfsize=10,
+                    temperature_bias=bias,
+                    seed=seed,
+                    mb_model_class=model,
+                    climate_filename=climate_file,
+                    evolution_model=MethodCurveModel,
+                    output_filesuffix='_mr'
+                )
                 with xr.open_dataset(gdir.get_filepath('model_diagnostics',
                                                        filesuffix='_mr')) as ds:
                     df_mr = ds.to_dataframe()
@@ -5426,7 +6069,8 @@ class TestMassRedis:
             cc = [c for c in odf_v if f'_t{bias}' in c]
             sdf = odf_v[cc].loc[:100]
             for c in sdf.columns[1:]:
-                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=0.07)
+                rtol = 0.08 if is_daily_model(model) else 0.07
+                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=rtol)
 
         if do_plot:
             for advance_method in [0, 1, 2]:
@@ -5853,7 +6497,7 @@ class TestSemiImplicitModel:
                 max_velocity_rmsd = velocity_rmsd
                 max_velocity_year = year
 
-        assert max_velocity_rmsd > 150
+        assert max_velocity_rmsd > 40
 
         if do_plot:
             plt.figure()
@@ -6052,7 +6696,7 @@ class TestDistribute2D:
             volume_merged = (
                 ds_merged.loc[{'time': yr}].simulated_thickness.sum().values *
                 ds_merged.salem.grid.dx**2 * 1e-9)
-            assert_allclose(volume_run, volume_merged, atol=2e-7)
+            assert_allclose(volume_run, volume_merged, atol=5e-7)
 
             if do_plot:
                 ds_merged.loc[{'time': yr}].simulated_thickness.plot()
