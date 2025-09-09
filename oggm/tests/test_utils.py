@@ -1338,11 +1338,11 @@ class TestPreproCLI(unittest.TestCase):
                                            '--elev-bands',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
-                                           '--err-dmdtda-scaling-factor', '0.5',
+                                           '--ref-mb-err-scaling-factor', '0.5',
                                            ])
 
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
-        assert kwargs['err_dmdtda_scaling_factor'] == 0.5
+        assert kwargs['ref_mb_err_scaling_factor'] == 0.5
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',

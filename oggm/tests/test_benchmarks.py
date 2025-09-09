@@ -116,8 +116,8 @@ class TestSouthGlacier(unittest.TestCase):
                             tmp_file=self.tf,
                             pre_file=self.pf)
 
-        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
+                            ref_mb_period='2000-01-01_2010-01-01')
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -184,8 +184,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
+                            ref_mb_period='2000-01-01_2010-01-01')
 
         # Tested tasks
         task_list = [
@@ -266,8 +266,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
+                            ref_mb_period='2000-01-01_2010-01-01')
         execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
                             mb_years=[2000, 2009])
 
@@ -343,8 +343,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
+                            ref_mb_period='2000-01-01_2010-01-01')
         execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
                             mb_years=[2000, 2009])
 
@@ -429,8 +429,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.process_cru_data, gdirs,
                             tmp_file=self.tf,
                             pre_file=self.pf)
-        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+        execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
+                            ref_mb_period='2000-01-01_2010-01-01')
         execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
                             mb_years=[2000, 2009])
 
@@ -449,10 +449,10 @@ class TestSouthGlacier(unittest.TestCase):
         df.columns = ['glacier']
 
         # recalibrate with regio values
-        execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
+        execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
                             use_regional_avg=True,
                             overwrite_gdir=True,
-                            ref_period='2000-01-01_2010-01-01')
+                            ref_mb_period='2000-01-01_2010-01-01')
         df['region'] = utils.compile_fixed_geometry_mass_balance(gdirs)['RGI60-01.16195']
         assert 0.99 < df.corr().iloc[0, 1] < 1
         assert np.all(df.std() > 450)
@@ -577,7 +577,7 @@ class TestCoxeGlacier(unittest.TestCase):
 
         # Climate tasks
         tasks.process_dummy_cru_file(gdir, seed=0)
-        tasks.mb_calibration_from_geodetic_mb(gdir)
+        tasks.mb_calibration_from_hugonnet_mb(gdir)
         tasks.apparent_mb_from_any_mb(gdir)
 
         # Inversion tasks

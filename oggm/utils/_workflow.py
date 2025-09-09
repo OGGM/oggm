@@ -478,6 +478,9 @@ class entity_task(object):
             settings_filesuffix = kwargs.get('settings_filesuffix', '')
             gdir.settings_filesuffix = settings_filesuffix
 
+            observations_filesuffix = kwargs.get('observations_filesuffix', '')
+            gdir.observations_filesuffix = observations_filesuffix
+
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
 
@@ -2728,7 +2731,8 @@ class GlacierDirectory(object):
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False, settings_filesuffix=''):
+                 from_tar=False, delete_tar=False, settings_filesuffix='',
+                 observations_filesuffix=''):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2748,6 +2752,8 @@ class GlacierDirectory(object):
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
             a filesuffix for a settings file to use
+        observations_filesuffix : str, default=''
+            a filesuffix for a observations file to use
         """
 
         if base_dir is None:
@@ -2828,6 +2834,11 @@ class GlacierDirectory(object):
         # define the initial settings for this gdir
         self._settings_filesuffix = settings_filesuffix
         self.settings = self.get_settings(settings_filesuffix=settings_filesuffix)
+
+        # define the initial observations for this gdir
+        self._observations_filesuffix = observations_filesuffix
+        self.observations = self.get_observations(
+            observations_filesuffix=observations_filesuffix)
 
         # Do we want to use the RGI center point or ours?
         if self.settings['use_rgi_area']:
@@ -4061,10 +4072,24 @@ class GlacierDirectory(object):
 
     @settings_filesuffix.setter
     def settings_filesuffix(self, value):
+        self._settings_filesuffix = value
         self.settings = self.get_settings(settings_filesuffix=value)
 
     def get_settings(self, settings_filesuffix):
-        return ModelSettings(self, filesuffix=settings_filesuffix)
+        return ModelSettings(self, filesuffix=settings_filesuffix,
+                             always_reload_data=False)
+
+    @property
+    def observations_filesuffix(self):
+        return self._observations_filesuffix
+
+    @observations_filesuffix.setter
+    def observations_filesuffix(self, value):
+        self._observations_filesuffix = value
+        self.observations = self.get_observations(observations_filesuffix=value)
+
+    def get_observations(self, observations_filesuffix):
+        return Observations(self, filesuffix=observations_filesuffix)
 
 
 @entity_task(log)
@@ -4344,9 +4369,10 @@ def base_dir_to_tar(base_dir=None, delete=True):
 
 
 class YAMLFileObject(object):
-    def __init__(self, path, allow_empty=True):
+    def __init__(self, path, allow_empty=True, always_reload_data=True):
         self.path = Path(path)
         self.allow_empty = allow_empty
+        self.always_reload_data = always_reload_data
         self.data = self._load()
 
     def _load(self):
@@ -4372,13 +4398,14 @@ class YAMLFileObject(object):
             return value.item()
         elif isinstance(value, dict):
             return {k: self._to_native_type(v) for k, v in value.items()}
-        elif isinstance(value, list):
+        elif isinstance(value, list) or isinstance(value, np.ndarray):
             return [self._to_native_type(v) for v in value]
         return value
 
     def get(self, key):
-        # to be always synced, if several objects work on the same file
-        self.data = self._load()
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
         if key in self.data:
             return self.data[key]
         else:
@@ -4398,30 +4425,42 @@ class YAMLFileObject(object):
     def __setitem__(self, key, value):
         self.set(key, value)
 
+    def __repr__(self):
+        return repr(self.data)
+
+    def __contains__(self, key):
+        return key in self.data
+
 
 class ModelSettings(YAMLFileObject):
     def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
-                 reset_parent_filesuffix=False, allow_empty=True):
+                 reset_parent_filesuffix=False, allow_empty=True,
+                 always_reload_data=True,
+                 ):
         path = gdir.get_filepath('settings', filesuffix=filesuffix)
 
-        super(ModelSettings, self).__init__(path, allow_empty=allow_empty)
+        super(ModelSettings, self).__init__(path, allow_empty=allow_empty,
+                                            always_reload_data=always_reload_data,
+                                            )
 
         # this is to inherit parameters from other setting files, the other file
         # is stored with the parent_filesuffix
         if 'parent_filesuffix' not in self.data:
-            if parent_filesuffix is not None:
+            if isinstance(parent_filesuffix, str):
                 self.set('parent_filesuffix', parent_filesuffix)
             else:
                 # by default cfg.PARAMS is always the parent
                 self.set('parent_filesuffix', 'cfg.PARAMS')
-        elif parent_filesuffix:
-            if (self['parent_filesuffix'] != parent_filesuffix and
-                    not reset_parent_filesuffix):
-                raise InvalidWorkflowError(
-                    f"Current parent_filesuffix="
-                    f"{self['parent_filesuffix']}, you provided "
-                    f"{parent_filesuffix}. If you want to set a new value "
-                    f"you can use reset_parent_filesuffix=True")
+        elif isinstance(parent_filesuffix, str):
+            if self['parent_filesuffix'] != parent_filesuffix:
+                if not reset_parent_filesuffix:
+                    raise InvalidWorkflowError(
+                        f"Current parent_filesuffix="
+                        f"{self['parent_filesuffix']}, you provided "
+                        f"{parent_filesuffix}. If you want to set a new value "
+                        f"you can use reset_parent_filesuffix=True")
+                else:
+                    self.set('parent_filesuffix', parent_filesuffix)
 
         self.filesuffix = filesuffix
         if self.data['parent_filesuffix'] == 'cfg.PARAMS':
@@ -4430,10 +4469,15 @@ class ModelSettings(YAMLFileObject):
             self.defaults = ModelSettings(gdir,
                                           filesuffix=self.data['parent_filesuffix'],
                                           # check if parent exists
-                                          allow_empty=False)
+                                          allow_empty=False,
+                                          always_reload_data=always_reload_data,
+                                          )
         self.gdir = gdir
 
     def get(self, key):
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
         if key in self.data:
             return self.data[key]
 
@@ -4465,3 +4509,27 @@ class ModelSettings(YAMLFileObject):
             return value
         except KeyError:
             raise KeyError(f"Key '{key}' not found!")
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data:{repr(self.data)}")
+
+
+class Observations(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', allow_empty=True,
+                 always_reload_data=True,
+                 ):
+        path = gdir.get_filepath('observations', filesuffix=filesuffix)
+
+        super(Observations, self).__init__(path, allow_empty=allow_empty,
+                                           always_reload_data=always_reload_data,
+                                           )
+
+        self.filesuffix = filesuffix
+        self.gdir = gdir
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data:{repr(self.data)}")
