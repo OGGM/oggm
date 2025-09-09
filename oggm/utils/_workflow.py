@@ -478,6 +478,9 @@ class entity_task(object):
             settings_filesuffix = kwargs.get('settings_filesuffix', '')
             gdir.settings_filesuffix = settings_filesuffix
 
+            observations_filesuffix = kwargs.get('observations_filesuffix', '')
+            gdir.observations_filesuffix = observations_filesuffix
+
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
 
@@ -2728,7 +2731,8 @@ class GlacierDirectory(object):
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False, settings_filesuffix=''):
+                 from_tar=False, delete_tar=False, settings_filesuffix='',
+                 observations_filesuffix=''):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2748,6 +2752,8 @@ class GlacierDirectory(object):
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
             a filesuffix for a settings file to use
+        observations_filesuffix : str, default=''
+            a filesuffix for a observations file to use
         """
 
         if base_dir is None:
@@ -2828,6 +2834,11 @@ class GlacierDirectory(object):
         # define the initial settings for this gdir
         self._settings_filesuffix = settings_filesuffix
         self.settings = self.get_settings(settings_filesuffix=settings_filesuffix)
+
+        # define the initial observations for this gdir
+        self._observations_filesuffix = observations_filesuffix
+        self.observations = self.get_observations(
+            observations_filesuffix=observations_filesuffix)
 
         # Do we want to use the RGI center point or ours?
         if self.settings['use_rgi_area']:
@@ -4068,6 +4079,18 @@ class GlacierDirectory(object):
         return ModelSettings(self, filesuffix=settings_filesuffix,
                              always_reload_data=False)
 
+    @property
+    def observations_filesuffix(self):
+        return self._observations_filesuffix
+
+    @observations_filesuffix.setter
+    def observations_filesuffix(self, value):
+        self._observations_filesuffix = value
+        self.observations = self.get_observations(observations_filesuffix=value)
+
+    def get_observations(self, observations_filesuffix):
+        return Observations(self, filesuffix=observations_filesuffix)
+
 
 @entity_task(log)
 def copy_to_basedir(gdir, base_dir=None, setup='run'):
@@ -4375,7 +4398,7 @@ class YAMLFileObject(object):
             return value.item()
         elif isinstance(value, dict):
             return {k: self._to_native_type(v) for k, v in value.items()}
-        elif isinstance(value, list):
+        elif isinstance(value, list) or isinstance(value, np.ndarray):
             return [self._to_native_type(v) for v in value]
         return value
 
@@ -4401,6 +4424,12 @@ class YAMLFileObject(object):
 
     def __setitem__(self, key, value):
         self.set(key, value)
+
+    def __repr__(self):
+        return repr(self.data)
+
+    def __contains__(self, key):
+        return key in self.data
 
 
 class ModelSettings(YAMLFileObject):
@@ -4480,3 +4509,27 @@ class ModelSettings(YAMLFileObject):
             return value
         except KeyError:
             raise KeyError(f"Key '{key}' not found!")
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data:{repr(self.data)}")
+
+
+class Observations(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', allow_empty=True,
+                 always_reload_data=True,
+                 ):
+        path = gdir.get_filepath('observations', filesuffix=filesuffix)
+
+        super(Observations, self).__init__(path, allow_empty=allow_empty,
+                                           always_reload_data=always_reload_data,
+                                           )
+
+        self.filesuffix = filesuffix
+        self.gdir = gdir
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data:{repr(self.data)}")

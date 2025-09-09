@@ -1922,6 +1922,7 @@ class SfcTypeTIModel(MassBalanceModel):
         set to zero before calling the aging in
         _apply_climate_step_and_aging_to_buckets (but we also check for this).
         """
+        return self.ys <= year <= self.ye
 
         mb_buckets_np = self.mb_buckets_np
 
@@ -3100,7 +3101,9 @@ def decide_winter_precip_factor(gdir, baseline_climate_suffix:str=""):
 
 
 @entity_task(log, writes=['mb_calib'])
-def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='', **kwargs):
+def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='',
+                                observations_filesuffix='',
+                                **kwargs):
     """Calibrate for in-situ, annual MB.
 
     This only works for glaciers which have WGMS data!
@@ -3112,10 +3115,14 @@ def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='', **kwargs):
     ----------
     gdir : GlacierDirectory
         the glacier directory to process
-    settings_filesuffix : str, optional
-        You can use a different set of settings by providing a
-        filesuffix. This is useful for sensitivity experiments.
-        The settings_filesuffix is set by the @entity-task decorator.
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    observations_filesuffix: str
+        The observations filesuffix, where the used calibration data will be
+        stored. Code-wise the observations_filesuffix is set in the @entity-task
+        decorater.
     **kwargs : any kwarg accepted by mb_calibration_from_scalar_mb
     except `ref_mb` and `ref_mb_years`
     """
@@ -3126,17 +3133,24 @@ def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='', **kwargs):
     mbdf = gdir.get_ref_mb_data()
     # Keep only valid values
     mbdf = mbdf.loc[~mbdf['ANNUAL_BALANCE'].isnull()]
+
+    gdir.observations['ref_mb'] = {
+        'value': mbdf['ANNUAL_BALANCE'].mean(),
+        'years': mbdf.index.values,
+    }
+
     return mb_calibration_from_scalar_mb(gdir,
                                          settings_filesuffix=settings_filesuffix,
-                                         ref_mb=mbdf['ANNUAL_BALANCE'].mean(),
-                                         ref_mb_years=mbdf.index.values,
+                                         observations_filesuffix=observations_filesuffix,
                                          **kwargs)
 
 
 @entity_task(log, writes=['mb_calib'])
-def mb_calibration_from_geodetic_mb(gdir, *,
+def mb_calibration_from_hugonnet_mb(gdir, *,
                                     settings_filesuffix='',
-                                    ref_period=None,
+                                    observations_filesuffix='',
+                                    use_observations_file=False,
+                                    ref_mb_period=None,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
                                     use_regional_avg=False,
@@ -3167,13 +3181,22 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
     Parameters
     ----------
-    gdir : GlacierDirectory
-        the glacier directory to calibrate.
-    settings_filesuffix : str, optional
-        You can use a different set of settings by providing a
-        filesuffix. This is useful for sensitivity experiments.
-        The settings_filesuffix is set by the @entity-task decorator.
-    ref_period : str, default: PARAMS['geodetic_mb_period']
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to calibrate
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    observations_filesuffix: str
+        The observations filesuffix, where the used calibration data will be
+        stored. Code-wise the observations_filesuffix is set in the @entity-task
+        decorater.
+    use_observations_file : bool
+        By default this function reads the data from Hugonnet and adds it to the
+        observations file. If you want to use different observations within this
+        function you can set this to True. This can be useful for sensitivity
+        tests. Default is False.
+    ref_mb_period : str, default: PARAMS['geodetic_mb_period']
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
         the same format but can be any date.
@@ -3222,29 +3245,43 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     -------
     the calibrated parameters as dict
     """
-    if not ref_period:
-        ref_period = gdir.settings['geodetic_mb_period']
 
-    # Get the reference data
-    ref_mb_err = np.nan
-    if use_regional_avg:
-        ref_mb_df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-        ref_mb_df = pd.read_csv(get_demo_file(ref_mb_df))
-        ref_mb_df = ref_mb_df.loc[ref_mb_df.period == ref_period].set_index('reg')
-        # dmdtda already in kg m-2 yr-1
-        ref_mb = ref_mb_df.loc[int(gdir.rgi_region), 'dmdtda']
-        ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda']
+    # instead of the given values by hugonnet use the once from the provided
+    # observations file
+    if use_observations_file:
+        ref_mb_use = gdir.observations['ref_mb']
     else:
-        try:
-            ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-            ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
-            # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
-            ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
-            ref_mb_err = ref_mb_df['err_dmdtda'].iloc[0] * 1000
-        except KeyError:
-            if override_missing is None:
-                raise
-            ref_mb = override_missing
+        if not ref_mb_period:
+            ref_mb_period = gdir.settings['geodetic_mb_period']
+
+        # Get the reference data
+        ref_mb_err = np.nan
+        if use_regional_avg:
+            ref_mb_df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
+            ref_mb_df = pd.read_csv(get_demo_file(ref_mb_df))
+            ref_mb_df = ref_mb_df.loc[ref_mb_df.period == ref_mb_period].set_index('reg')
+            # dmdtda already in kg m-2 yr-1
+            ref_mb = ref_mb_df.loc[int(gdir.rgi_region), 'dmdtda']
+            ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda']
+        else:
+            try:
+                ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+                ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_mb_period]
+                # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
+                ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
+                ref_mb_err = ref_mb_df['err_dmdtda'].iloc[0] * 1000
+            except KeyError:
+                if override_missing is None:
+                    raise
+                ref_mb = override_missing
+
+        ref_mb_use = {
+            'value': ref_mb,
+            'period': ref_mb_period,
+            'err': ref_mb_err,
+        }
+
+    gdir.observations['ref_mb'] = ref_mb_use
 
     temp_bias = 0
     if gdir.settings['use_temp_bias_from_file']:
@@ -3284,9 +3321,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
         return mb_calibration_from_scalar_mb(gdir=gdir,
                                              settings_filesuffix=settings_filesuffix,
-                                             ref_mb=ref_mb,
-                                             ref_mb_err=ref_mb_err,
-                                             ref_period=ref_period,
+                                             observations_filesuffix=observations_filesuffix,
                                              write_to_gdir=write_to_gdir,
                                              overwrite_gdir=overwrite_gdir,
                                              use_2d_mb=use_2d_mb,
@@ -3304,9 +3339,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     else:
         return mb_calibration_from_scalar_mb(gdir=gdir,
                                              settings_filesuffix=settings_filesuffix,
-                                             ref_mb=ref_mb,
-                                             ref_mb_err=ref_mb_err,
-                                             ref_period=ref_period,
+                                             observations_filesuffix=observations_filesuffix,
                                              write_to_gdir=write_to_gdir,
                                              overwrite_gdir=overwrite_gdir,
                                              use_2d_mb=use_2d_mb,
@@ -3321,10 +3354,12 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_scalar_mb(gdir, *,
-                                  settings_filesuffix: str ='',
+                                  settings_filesuffix='',
+                                  observations_filesuffix='',
+                                  overwrite_observations=False,
                                   ref_mb=None,
                                   ref_mb_err=None,
-                                  ref_period=None,
+                                  ref_mb_period=None,
                                   ref_mb_years=None,
                                   write_to_gdir=True,
                                   overwrite_gdir=False,
@@ -3342,7 +3377,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_min=None,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
-                                  baseline_climate_suffix:str=None,
                                   **kwargs: dict,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
@@ -3368,13 +3402,22 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     Parameters
     ----------
-    gdir : GlacierDirectory
-        the glacier directory to calibrate.
-    settings_filesuffix : str, optional
-        You can use a different set of settings by providing a
-        filesuffix. This is useful for sensitivity experiments.
-        If not given, ``settings_filesuffix`` is set by the
-        ``@entity-task`` decorator.
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to calibrate
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    observations_filesuffix: str
+        You can provide a filesuffix for the mb observations to use. If you
+        provide ref_mb, ref_mb_err, ref_mb_period and/or ref_mb_years, then this
+        values will be stored in the observations file, if ref_mb is not already
+        present. If you want to force to use the provided values and override
+        the current ones, set overwrite_observations to True. Code-wise the
+        observations_filesuffix is set in the @entity-task decorater.
+    overwrite_observations : bool
+        If you want to overwrite already existing observation values in the
+        provided observations file set this to True. Default is False.
     ref_mb : float, required
         the reference mass balance to match (units: kg m-2 yr-1)
         It is required here - if you want to use available observations,
@@ -3382,11 +3425,11 @@ def mb_calibration_from_scalar_mb(gdir, *,
         or :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
     ref_mb_err : float, optional
         currently only used for logging - it is not used in the calibration.
-    ref_period : str, optional
+    ref_mb_period : str, optional
         date format - for example '2000-01-01_2010-01-01'. If this is not
         set, ref_mb_years needs to be set.
     ref_mb_years : tuple of length 2 (range) or list of years.
-        convenience kwarg to override ref_period. If a tuple of length 2 is
+        convenience kwarg to override ref_mb_period. If a tuple of length 2 is
         given, all years between this range (excluding the last one) are used.
         If a list  of years is given, all these will be used (useful for
         data with gaps)
@@ -3464,8 +3507,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
         temp_bias_min = gdir.settings['temp_bias_min']
     if temp_bias_max is None:
         temp_bias_max = gdir.settings['temp_bias_max']
-    if ref_mb_years is not None and ref_period is not None:
-        raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_period` '
+    if ref_mb_years is not None and ref_mb_period is not None:
+        raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_mb_period` '
                                  'at the same time.')
 
     if not use_2d_mb:
@@ -3480,23 +3523,76 @@ def mb_calibration_from_scalar_mb(gdir, *,
             heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
             widths = np.ones(len(heights))
 
+    # handle which ref mb to use (provided or in observations file)
+    ref_mb_provided = {}
+    if ref_mb is not None:
+        ref_mb_provided['value'] = ref_mb
+    if ref_mb_err is not None:
+        ref_mb_provided['err'] = ref_mb_err
+    if ref_mb_period is not None:
+        ref_mb_provided['period'] = ref_mb_period
+    if ref_mb_years is not None:
+        ref_mb_provided['years'] = ref_mb_years
+
+    if 'ref_mb' in gdir.observations:
+        ref_mb_in_file = gdir.observations['ref_mb']
+    else:
+        ref_mb_in_file = None
+
+    # if nothing is provided raise an error
+    if (ref_mb_provided == {}) and (ref_mb_in_file is None):
+        raise InvalidWorkflowError(
+            'You have not provided an reference mass balance! Either add it to '
+            'the observations file '
+            f'({os.path.basename(gdir.observations.path)}), or pass it through '
+            f'kwargs (ref_mb, ref_mb_err, ref_mb_period/ref_mb_years.')
+
+    # here handle different cases of provided values for the ref mb
+    if (ref_mb_in_file is None) or (ref_mb_in_file is not None and
+                                    overwrite_observations):
+        gdir.observations['ref_mb'] = ref_mb_provided
+        ref_mb_use = ref_mb_provided
+    elif ref_mb_in_file is not None and ref_mb_provided == {}:
+        # only provided in file, this is ok so continue
+        ref_mb_use = ref_mb_in_file
+    else:
+        # if the provided is the same as the one stored in the file it is fine
+        if ref_mb_in_file != ref_mb_provided:
+            raise InvalidWorkflowError(
+                'You provided a reference mass balance, but their is already '
+                'one stored in the current observation file '
+                f'({os.path.basename(gdir.observations.path)}). If you want to '
+                'overwrite set overwrite_observations = True.')
+        else:
+            ref_mb_use = ref_mb_in_file
+
+    # now we can extract the actual values we want to use
+    ref_mb = ref_mb_use['value']
+    if 'err' in ref_mb_use:
+        ref_mb_err = ref_mb_use['err']
+    if 'period' in ref_mb_use:
+        ref_mb_period = ref_mb_use['period']
+    if 'years' in ref_mb_use:
+        ref_mb_years = ref_mb_use['years']
+
     # Let's go
     # Climate period
     # TODO: doesn't support hydro years
     if ref_mb_years is not None:
         if len(ref_mb_years) > 2:
             years = np.asarray(ref_mb_years)
-            ref_period = 'custom'
+            ref_mb_period = 'custom'
         else:
             years = np.arange(*ref_mb_years)
-            ref_period = f'{ref_mb_years[0]}-01-01_{ref_mb_years[1]}-01-01'
-    elif ref_period is not None:
-        y0, y1 = ref_period.split('_')
+            ref_mb_period = f'{ref_mb_years[0]}-01-01_{ref_mb_years[1]}-01-01'
+        gdir.observations['ref_mb']['period'] = ref_mb_period
+    elif ref_mb_period is not None:
+        y0, y1 = ref_mb_period.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
         years = np.arange(y0, y1)
     else:
-        raise InvalidParamsError('One of `ref_mb_years` or `ref_period` '
+        raise InvalidParamsError('One of `ref_mb_years` or `ref_mb_period` '
                                  'is required for calibration.')
 
     # Do we have a calving glacier?
@@ -3540,7 +3636,6 @@ def mb_calibration_from_scalar_mb(gdir, *,
         prcp_fac=prcp_fac,
         check_calib_params=False,
         settings_filesuffix=settings_filesuffix,
-        input_filesuffix=baseline_climate_suffix,
         **kwargs
     )
 
@@ -3663,18 +3758,18 @@ def mb_calibration_from_scalar_mb(gdir, *,
     # What did we try to match?
     df['reference_mb'] = ref_mb
     df['reference_mb_err'] = ref_mb_err
-    df['reference_period'] = ref_period
+    df['reference_period'] = ref_mb_period
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    df['mb_global_params'] = {k: getattr(mb_mod, k) for k in MB_GLOBAL_PARAMS}
+    df['mb_global_params'] = {k: gdir.settings[k] for k in MB_GLOBAL_PARAMS}
     df['baseline_climate_source'] = gdir.get_climate_info(
         filename=mb_mod.filename, input_filesuffix=mb_mod.input_filesuffix
     )['baseline_climate_source']
 
     # Write
     if write_to_gdir:
-        if any(key in gdir.settings.data
+        if any(key in gdir.settings
                for key in ['melt_f', 'prcp_fac', 'temp_bias']) and not overwrite_gdir:
             raise InvalidWorkflowError('Their are already mass balance parameters '
                                        'stored in the settings file. Set '

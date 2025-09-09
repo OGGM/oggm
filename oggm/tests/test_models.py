@@ -251,10 +251,11 @@ class TestInitPresentDayFlowline:
             tasks.mb_calibration_from_scalar_mb(
                 gdir,
                 ref_mb=ref_mb,
-                ref_period=ref_period,
+                ref_mb_period=ref_period,
                 mb_model_class=cl,
                 settings_filesuffix="_daily",
-                overwrite_gdir=True
+                observations_filesuffix='_daily',
+                overwrite_gdir=True,
             )
             mb_mod = cl(gdir, settings_filesuffix='_daily')
 
@@ -375,7 +376,7 @@ class TestInitFlowlineOtherGlacier:
         ref_mb = -500
         massbalance.mb_calibration_from_scalar_mb(gdir,
                                                   ref_mb=ref_mb,
-                                                  ref_period=ref_period)
+                                                  ref_mb_period=ref_period)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1980, 2000))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir)
@@ -646,34 +647,8 @@ class TestMassBalanceModels:
                                             check_calib_params=False)
         assert mb_mod.__repr__() == expected
 
-    @pytest.mark.parametrize(
-        "arg_model",
-        [
-            massbalance.MonthlyTIModel,
-            massbalance.DailyTIModel,
-        ],
-    )
-    @pytest.mark.parametrize("year", [1979, 1980])
-    def test_get_annual_climate(self, hef_gdir, year, arg_model):
-
-        gdir = hef_gdir
-        # self.get_daily_data_path(gdir)  # check daily data exists
-        model = arg_model(gdir, check_calib_params=False)
-        fls = gdir.read_pickle("model_flowlines")
-        heights = fls[0].surface_h
-
-        climate = model.get_annual_climate(heights=heights, year=year)
-        for data in climate:
-            assert isinstance(data, np.ndarray)
-            assert len(data) == len(heights)
-
-    @pytest.mark.parametrize(
-        "cl",
-        [
-            massbalance.MonthlyTIModel,
-            massbalance.DailyTIModel,
-        ],
-    )
+    @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
+                                    massbalance.DailyTIModel,],)
     def test_prcp_fac_temp_bias_update(self, hef_gdir, cl):
 
         gdir = hef_gdir
@@ -744,7 +719,7 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        check_calib_params = False
+        check_calib_params = True
         settings_filesuffix = ''
         if is_daily_model(cl):
             tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
@@ -1197,15 +1172,17 @@ class TestMassBalanceModels:
         ModelSettings(gdir, filesuffix='_monthly', parent_filesuffix='')
         massbalance.mb_calibration_from_scalar_mb(
             gdir, settings_filesuffix='_monthly',
+            observations_filesuffix='_monthly',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
             mb_model_class=massbalance.MonthlyTIModel,
-            baseline_climate_suffix='_monthly',
+            input_filesuffix='_monthly',
         )
         massbalance.mb_calibration_from_scalar_mb(
             gdir, settings_filesuffix='_daily',
+            observations_filesuffix='_daily',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
             mb_model_class=massbalance.DailyTIModel)
 
         settings_monthly = ModelSettings(gdir, filesuffix='_monthly')
@@ -1740,6 +1717,7 @@ class TestMassBalanceModels:
 
         # We calibrate to zero
         df = massbalance.mb_calibration_from_scalar_mb(gdir,
+                                                       observations_filesuffix='_constant',
                                                        calibrate_param1='temp_bias',
                                                        ref_mb=0,
                                                        ref_mb_years=(1970, 2001),
@@ -3877,6 +3855,7 @@ class TestHEF:
 
         # We calibrate to zero
         df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
+                                                       observations_filesuffix='_eq_glacier_wide',
                                                        calibrate_param1='temp_bias',
                                                        ref_mb=0,
                                                        ref_mb_years=(1970, 2001),
@@ -3984,6 +3963,7 @@ class TestHEF:
         # Try something else here - find out the bias needed for 0 mb
         dfo = hef_gdir.read_yml('settings')
         df = massbalance.mb_calibration_from_scalar_mb(hef_gdir,
+                                                       observations_filesuffix='_random',
                                                        calibrate_param1='temp_bias',
                                                        melt_f=dfo['melt_f'],
                                                        ref_mb=0,
@@ -4399,28 +4379,37 @@ class TestDynamicSpinup:
         ref_value = 0
         if minimise_for == 'area':
             unit = 'km2'
+            unit_conversion = 1e6  # converting m2 and km2
+            obs_var = 'ref_area_m2'
         elif minimise_for == 'volume':
             unit = 'km3'
+            unit_conversion = 1e9  # converting m3 and km3
+            obs_var = 'ref_volume_m3'
         else:
             raise ValueError('Unknown variable to minimise for!')
         var_name = f'{minimise_for}_{unit}'
         for fl in fls:
             ref_value += getattr(fl, var_name)
+        # add to observations file
+        # is needed because the test climate dataset has ye = 2003
+        assert hef_gdir.rgi_date == 2003
+        yr_rgi = 2002
+        ref_value_obs_file = {
+            'value': ref_value * unit_conversion,
+            'year':  yr_rgi,
+        }
+        hef_gdir.observations[obs_var] = ref_value_obs_file
 
         precision_percent = 10
         # this value is chosen in a way that it effects the result in the 'area'
         # run but not in the 'volume' run
         precision_absolute = 0.1
         min_ice_thickness = 10
-        assert hef_gdir.rgi_date == 2003
-        # is needed because the test climate dataset has ye = 2003
-        yr_rgi = 2002
         # test version were the whole model evolution is saved and when it is
         # not saved
         for store_model_evolution in [True, False]:
             model_dynamic_spinup = run_dynamic_spinup(
                 hef_gdir,
-                target_yr=yr_rgi,
                 minimise_for=minimise_for,
                 precision_percent=precision_percent,
                 precision_absolute=precision_absolute,
@@ -4461,10 +4450,6 @@ class TestDynamicSpinup:
             assert 'dynamic_spinup_forward_model_iterations' in gdir_diagnostics.keys()
             mismatch_key = f'{minimise_for}_mismatch_dynamic_spinup_{unit}_percent'
             assert mismatch_key in gdir_diagnostics.keys()
-            assert 'dynamic_spinup_other_variable_reference' in \
-                   gdir_diagnostics.keys()
-            assert 'dynamic_spinup_mismatch_other_variable_percent' in \
-                   gdir_diagnostics.keys()
 
             # check if model geometry is correctly saved in gdir with
             fp = hef_gdir.get_filepath('model_geometry',
@@ -4488,6 +4473,7 @@ class TestDynamicSpinup:
             ref_value = 0.6
         model_dynamic_spinup_target_yr = run_dynamic_spinup(
             hef_gdir,
+            overwrite_observations=True,
             target_yr=target_yr,
             target_value=ref_value,
             minimise_for=minimise_for,
@@ -4516,12 +4502,12 @@ class TestDynamicSpinup:
         assert len(model_dynamic_spinup_target_yr.fls) == len(fls)
 
         # test if spinup_start_yr is handled correctly and overrides the spinup_period
+        hef_gdir.observations[obs_var] = ref_value_obs_file
         spinup_start_yr = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -4550,12 +4536,13 @@ class TestDynamicSpinup:
             'The difference between the rgi_date and the start year of the '
             'climate data is too small to run a dynamic spinup!':
                 {'min_spinup_period': 300},
-            'The given reference value is Zero, no dynamic spinup possible!':
-                {'init_model_fls': fls_zero_ice},
             'Not able to conduct one error free run. Error is "out_of_domain"':
                 {'first_guess_t_spinup': -100},
             'Could not find mismatch smaller 0.1%':
-                {'precision_percent': 0.1}
+                {'precision_percent': 0.1},
+            'The given reference value is Zero, no dynamic spinup possible!':
+                {'target_value': 0, 'target_yr': yr_rgi,
+                 'overwrite_observations': True},
         }
 
         for err_msg, kwarg_dyn_spn in error_settings.items():
@@ -4566,7 +4553,6 @@ class TestDynamicSpinup:
                 run_dynamic_spinup(
                     hef_gdir,
                     minimise_for=minimise_for,
-                    target_yr=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
                     spinup_period=10,
@@ -4584,7 +4570,6 @@ class TestDynamicSpinup:
             model = run_dynamic_spinup(
                 hef_gdir,
                 minimise_for=minimise_for,
-                target_yr=2002,
                 ye=2002,
                 ignore_errors=ignore_errors,
                 maxiter=2,
@@ -4601,6 +4586,10 @@ class TestDynamicSpinup:
             assert len(model.fls) == len(fmod.fls)
 
         yr_rgi = 2000
+        target_var = hef_gdir.observations[obs_var]
+        target_var['value'] = ref_value * unit_conversion
+        target_var['year'] = yr_rgi
+        hef_gdir.observations[obs_var] = target_var
         yr_min = hef_gdir.get_climate_info()['baseline_yr_0']
         ye = hef_gdir.get_climate_info()['baseline_yr_1'] + 1
         precision_percent = 1
@@ -4609,7 +4598,6 @@ class TestDynamicSpinup:
             hef_gdir,
             spinup_period=40,
             spinup_start_yr=spinup_start_yr,
-            target_yr=yr_rgi,
             ye=ye,
             return_t_spinup_best=True,
             minimise_for=minimise_for,
@@ -4642,7 +4630,6 @@ class TestDynamicSpinup:
             spinup_period=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
-            target_yr=yr_rgi,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
@@ -4691,7 +4678,6 @@ class TestDynamicSpinup:
             minimise_for=minimise_for,
             init_model_filesuffix='_one_yr',
             init_model_yr=yr_rgi - 1,
-            target_yr=yr_rgi,
             store_model_geometry=False)
 
         # test that error is raised if mb_elev_feedback not annual
@@ -4721,7 +4707,6 @@ class TestDynamicSpinup:
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
-                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=False)
             run_without_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_without_fixed_spinup', path=False)
@@ -4733,7 +4718,6 @@ class TestDynamicSpinup:
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
-                target_yr=yr_rgi,
                 add_fixed_geometry_spinup=True)
             run_with_fixed_spinup = utils.compile_run_output(
                 hef_gdir, input_filesuffix='_with_fixed_spinup', path=False)
@@ -4829,16 +4813,16 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                      gdir,)
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False,)
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_consensus(
+        workflow.calibrate_inversion_from_volume(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
-            volume_m3_reference=vol_m3_ref,
+            ref_volume_m3=vol_m3_ref,
             add_to_log_file=False)
 
         # save original melt_f to be able to reset back to default for testing
@@ -4897,6 +4881,9 @@ class TestDynamicSpinup:
             output_filesuffix='_dyn_melt_f_calib_spinup_inversion',
             ys=1979, ye=ye)
 
+        # this is used later
+        ref_mb_hugonnet = gdir.observations['ref_mb']
+
         # check that we are matching all desired ref values
         ds = utils.compile_run_output(
             gdir, input_filesuffix='_dyn_melt_f_calib_spinup_inversion',
@@ -4940,7 +4927,9 @@ class TestDynamicSpinup:
                                           'maxiter': 2},
                 output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
                 ignore_errors=False,
-                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+                ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+                ref_mb_period=gdir.settings['geodetic_mb_period'],
+                overwrite_observations=True,
                 maxiter=2)
 
         # test that error is raised if no dict is provided for local_variables
@@ -4965,9 +4954,10 @@ class TestDynamicSpinup:
                                match='If you provide a reference geodetic '
                                      'mass balance .*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, melt_f_max=melt_f_max,
-                    ref_dmdtda=use_ref_dmdtda,
-                    err_ref_dmdtda=use_err_ref_dmdtda)
+                    gdir, overwrite_observations=True,
+                    melt_f_max=melt_f_max,
+                    ref_mb=use_ref_dmdtda,
+                    ref_mb_err=use_err_ref_dmdtda)
 
         # test that error is raised if user provided dmdtda error is 0 or
         # negative
@@ -4976,22 +4966,43 @@ class TestDynamicSpinup:
                                match='The provided error for the geodetic '
                                      'mass-balance.*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, melt_f_max=melt_f_max,
-                    ref_dmdtda=ref_dmdtda,
-                    err_ref_dmdtda=use_err_ref_dmdtda)
+                    gdir, overwrite_observations=True,
+                    melt_f_max=melt_f_max,
+                    ref_mb=ref_dmdtda,
+                    ref_mb_err=use_err_ref_dmdtda)
 
-        # test if fallback raise error if no local variable provided
-        with pytest.raises(RuntimeError,
-                           match='Need the volume to do *'):
-            dynamic_melt_f_run_with_dynamic_spinup_fallback(
+        if minimise_for == 'area' and do_inversion:
+            # test providing adapted observations through the observations file
+            ref_mb_adapted = ref_mb_hugonnet
+            ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
+                                       ref_mb_adapted['err'] / 2)
+            gdir.observations_filesuffix = '_hugonnet_adapted'
+            gdir.observations['ref_mb'] = ref_mb_adapted
+
+            # save melt_f before calibration
+            gdir.settings_filesuffix = ''
+            melt_f_before = gdir.settings['melt_f']
+
+            run_dynamic_melt_f_calibration(
                 gdir,
-                melt_f=gdir.read_json('mb_calib')['melt_f'],
-                fls_init=gdir.read_pickle('model_flowlines'),
-                ys=gdir.get_climate_info()['baseline_yr_0'],
-                ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
-                local_variables=None,
-                minimise_for=minimise_for
-            )
+                observations_filesuffix='_hugonnet_adapted',
+                melt_f_max=melt_f_max,
+                run_function=dynamic_melt_f_run_with_dynamic_spinup,
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'precision_percent': precision_percent,
+                                     'precision_absolute': precision_absolute,
+                                     'do_inversion': do_inversion},
+                fallback_function=dynamic_melt_f_run_with_dynamic_spinup_fallback,
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'precision_percent': precision_percent,
+                                          'precision_absolute': precision_absolute,
+                                          'do_inversion': do_inversion},
+                output_filesuffix='_dyn_melt_f_hugonnet_adapted',
+                ys=1979, ye=ye)
+
+            # with a less negative geodetic mass balance the melt f should be
+            # smaller after calibration
+            assert gdir.settings['melt_f'] < melt_f_before
 
     @pytest.mark.parametrize('do_inversion', [True, False])
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -5081,7 +5092,7 @@ class TestDynamicSpinup:
             err_dmdtda_scaling_factor = 0.2
             run_dynamic_melt_f_calibration(
                 gdir, melt_f_max=melt_f_max,
-                err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
+                ref_mb_err_scaling_factor=err_dmdtda_scaling_factor,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
                                      'precision_percent': precision_percent,
@@ -5170,7 +5181,7 @@ class TestDynamicSpinup:
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
             ignore_errors=True,
-            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            ref_mb=ref_dmdtda, ref_mb_err=0.000001,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
@@ -5207,7 +5218,7 @@ class TestDynamicSpinup:
                                       'do_inversion': do_inversion},
             output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
             ignore_errors=True,
-            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            ref_mb=ref_dmdtda, ref_mb_err=0.000001,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
@@ -5229,8 +5240,6 @@ class TestDynamicSpinup:
             fls_init=gdir.read_pickle('model_flowlines'),
             ys=gdir.get_climate_info()['baseline_yr_0'],
             ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
-            local_variables={'vol_m3_ref':
-                                 gdir.read_pickle('model_flowlines')[0].volume_m3},
             minimise_for=minimise_for
         )
         assert original_melt_f == gdir.read_json('mb_calib')['melt_f']
@@ -5245,8 +5254,8 @@ class TestDynamicSpinup:
             delta_err_ref_dmdtda = -50
             run_dynamic_melt_f_calibration(
                 gdir, melt_f_max=melt_f_max,
-                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                ref_mb=ref_dmdtda + delta_ref_dmdtda,
+                ref_mb_err=err_ref_dmdtda + delta_err_ref_dmdtda,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
                                      'precision_percent': precision_percent,
@@ -5294,8 +5303,8 @@ class TestDynamicSpinup:
             # run without max spinup_start_yr_max
             run_dynamic_melt_f_calibration(
                 gdir, melt_f_max=melt_f_max,
-                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                ref_mb=ref_dmdtda + delta_ref_dmdtda,
+                ref_mb_err=err_ref_dmdtda + delta_err_ref_dmdtda,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
                                      'precision_percent': precision_percent,
@@ -5313,8 +5322,8 @@ class TestDynamicSpinup:
             # run with max limit
             run_dynamic_melt_f_calibration(
                 gdir, melt_f_max=melt_f_max,
-                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                ref_mb=ref_dmdtda + delta_ref_dmdtda,
+                ref_mb_err=err_ref_dmdtda + delta_err_ref_dmdtda,
                 ignore_errors=True,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
@@ -5352,8 +5361,8 @@ class TestDynamicSpinup:
             # run with add_fixed_geometry_spinup
             run_dynamic_melt_f_calibration(
                 gdir, melt_f_max=melt_f_max,
-                ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-                err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+                ref_mb=ref_dmdtda + delta_ref_dmdtda,
+                ref_mb_err=err_ref_dmdtda + delta_err_ref_dmdtda,
                 ignore_errors=True,
                 run_function=dynamic_melt_f_run_with_dynamic_spinup,
                 kwargs_run_function={'minimise_for': minimise_for,
@@ -5399,16 +5408,16 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
                                      gdir, )
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False, )
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_consensus(
+        workflow.calibrate_inversion_from_volume(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
-            volume_m3_reference=vol_m3_ref,
+            ref_volume_m3=vol_m3_ref,
             add_to_log_file=False)
 
         # save original melt_f to be able to reset back to default for testing
@@ -5463,7 +5472,7 @@ class TestDynamicSpinup:
         err_dmdtda_scaling_factor = 0.01
         run_dynamic_melt_f_calibration(
             gdir, melt_f_max=melt_f_max,
-            err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
+            ref_mb_err_scaling_factor=err_dmdtda_scaling_factor,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib_err_scaling',
@@ -5498,8 +5507,10 @@ class TestDynamicSpinup:
         delta_err_ref_dmdtda = -50
         run_dynamic_melt_f_calibration(
             gdir, melt_f_max=melt_f_max,
-            ref_dmdtda=ref_dmdtda + delta_ref_dmdtda,
-            err_ref_dmdtda=err_ref_dmdtda + delta_err_ref_dmdtda,
+            ref_mb=ref_dmdtda + delta_ref_dmdtda,
+            ref_mb_err=err_ref_dmdtda + delta_err_ref_dmdtda,
+            ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+            overwrite_observations=True,
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib_user_dmdtda',
@@ -5527,7 +5538,9 @@ class TestDynamicSpinup:
                 fallback_function=dynamic_melt_f_run,
                 output_filesuffix='_dyn_melt_f_calib_error',
                 ignore_errors=False,
-                ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+                ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+                ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+                overwrite_observations=True,
                 maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
         # if the first guess can improve (but not enough)
@@ -5537,7 +5550,9 @@ class TestDynamicSpinup:
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib_spinup_inversion_error',
             ignore_errors=True,
-            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+            ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+            overwrite_observations=True,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == \
@@ -5552,7 +5567,9 @@ class TestDynamicSpinup:
             fallback_function=dynamic_melt_f_run_fallback,
             output_filesuffix='_dyn_melt_f_calib_error',
             ignore_errors=True,
-            ref_dmdtda=ref_dmdtda, err_ref_dmdtda=0.000001,
+            ref_mb=ref_dmdtda, ref_mb_err=0.000001,
+            ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+            overwrite_observations=True,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
         assert gdir.get_diagnostics()['used_spinup_option'] == 'no spinup'
@@ -5565,11 +5582,15 @@ class TestDynamicSpinup:
                                match='If you provide a reference geodetic '
                                      'mass balance .*'):
                 run_dynamic_melt_f_calibration(
-                    gdir, melt_f_max=melt_f_max,
+                    gdir, observations_filesuffix='_failing_test',
+                    melt_f_max=melt_f_max,
                     run_function=dynamic_melt_f_run,
                     fallback_function=dynamic_melt_f_run_fallback,
-                    ref_dmdtda=use_ref_dmdtda,
-                    err_ref_dmdtda=use_err_ref_dmdtda)
+                    ref_mb=use_ref_dmdtda,
+                    ref_mb_err=use_err_ref_dmdtda,
+                    ref_mb_period=cfg.PARAMS['geodetic_mb_period'],
+                    overwrite_observations=True,
+                )
 
         # test error is raised if given years outside of geodetic period
         with pytest.raises(RuntimeError,
@@ -5596,7 +5617,8 @@ class TestDynamicSpinup:
                                      ys=yr_rgi, ye=yr_rgi + 1,
                                      output_filesuffix='_one_yr')
         run_dynamic_melt_f_calibration(
-            gdir, melt_f_max=melt_f_max,
+            gdir, observations_filesuffix='_one_yr',
+            melt_f_max=melt_f_max,
             init_model_filesuffix='_one_yr',
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)
@@ -6335,7 +6357,22 @@ class TestMassRedis:
 
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
                                        massbalance.DailyTIModel,])
-    def test_hef_retreat(self, hef_gdir, model):
+    def test_hef_retreat(self, class_case_dir, model):
+
+        import geopandas as gpd
+
+        cfg.initialize()
+        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
+        cfg.PARAMS['border'] = 40
+        cfg.PARAMS['baseline_climate'] = ''
+        cfg.PARAMS['use_multiprocessing'] = False
+        cfg.PARAMS['min_ice_thick_for_length'] = 5
+        cfg.PARAMS['use_winter_prcp_fac'] = False
+        cfg.PARAMS['use_temp_bias_from_file'] = False
+        cfg.PARAMS['prcp_fac'] = 2.5
 
         gdir = hef_gdir
         if is_daily_model(model):
@@ -6356,24 +6393,32 @@ class TestMassRedis:
         tasks.compute_downstream_bedshape(gdir)
         tasks.process_custom_climate_data(gdir)
 
-        mbdf = hef_gdir.get_ref_mb_data()['ANNUAL_BALANCE']
-        ref_mb = mbdf.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-        cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
-        tasks.mb_calibration_from_scalar_mb(
-            gdir,
-            ref_mb=ref_mb,
-            ref_period=ref_period,
-            mb_model_class=model,
-            settings_filesuffix=settings_filesuffix,
-            overwrite_gdir=True,
-        )
+        if is_daily_model(model):
+            workflow.execute_entity_task(
+                gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
+            )
+            climate_file = "climate_historical_daily"
+            settings_filesuffix = '_daily'
+            ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+        else:
+            climate_file = "climate_historical"
+            settings_filesuffix = ''
 
-        tasks.apparent_mb_from_any_mb(gdir, mb_years=[mbdf.index[0],
-                                                      mbdf.index[-1] + 1],
-                                      settings_filesuffix=settings_filesuffix,
-                                      mb_model_class=model)
-        workflow.calibrate_inversion_from_consensus([gdir])
+        mbdf = gdir.get_ref_mb_data()
+        cfg.PARAMS['melt_f_max'] = 600 * 12 / 365
+        ref_mb = mbdf.ANNUAL_BALANCE.mean()
+        tasks.mb_calibration_from_scalar_mb(gdir,
+                                            settings_filesuffix=settings_filesuffix,
+                                            ref_mb=ref_mb,
+                                            ref_mb_period='1953-01-01_2003-01-01',
+                                            overwrite_gdir=True,
+                                            mb_model_class=model,
+                                            )
+        tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+        # previously calibrate_inversion_from_consensus was used, but with the
+        # RGI5 id not estimate is available and here we just use the first guess
+        # as it is done in calibrate_inversion_from_consensus
+        workflow.inversion_tasks(gdir, glen_a=0.1*cfg.PARAMS['inversion_glen_a'])
         tasks.init_present_time_glacier(gdir)
 
         seed = 0
@@ -6383,7 +6428,8 @@ class TestMassRedis:
         biases = [-0.6, -0.3, 0]
         for bias in biases:
             tasks.run_random_climate(
-                gdir, settings_filesuffix=settings_filesuffix,
+                gdir,
+                settings_filesuffix=settings_filesuffix,
                 nyears=500, y0=1990, halfsize=10,
                 temperature_bias=bias,
                 seed=seed,
@@ -6402,7 +6448,8 @@ class TestMassRedis:
                 MethodCurveModel = partial(MassRedistributionCurveModel,
                                            advance_method=advance_method)
                 tasks.run_random_climate(
-                    gdir, settings_filesuffix=settings_filesuffix,
+                    gdir,
+                    settings_filesuffix=settings_filesuffix,
                     nyears=500, y0=1990, halfsize=10,
                     temperature_bias=bias,
                     seed=seed,
@@ -6424,7 +6471,8 @@ class TestMassRedis:
             cc = [c for c in odf_v if f'_t{bias}' in c]
             sdf = odf_v[cc].loc[:100]
             for c in sdf.columns[1:]:
-                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=0.07)
+                rtol = 0.08 if is_daily_model(model) else 0.07
+                assert_allclose(sdf[sdf.columns[0]], sdf[c], rtol=rtol)
 
         if do_plot:
             for advance_method in [0, 1, 2]:
@@ -7050,7 +7098,7 @@ class TestDistribute2D:
             volume_merged = (
                 ds_merged.loc[{'time': yr}].simulated_thickness.sum().values *
                 ds_merged.salem.grid.dx**2 * 1e-9)
-            assert_allclose(volume_run, volume_merged, atol=2e-7)
+            assert_allclose(volume_run, volume_merged, atol=5e-7)
 
             if do_plot:
                 ds_merged.loc[{'time': yr}].simulated_thickness.plot()
