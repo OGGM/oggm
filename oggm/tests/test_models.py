@@ -6374,17 +6374,10 @@ class TestMassRedis:
         cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
-        gdir = hef_gdir
-        if is_daily_model(model):
-            workflow.execute_entity_task(
-                gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
-            )
-            climate_file = "climate_historical_daily"
-            settings_filesuffix = '_daily'
-        else:
-            climate_file = "climate_historical"
-            settings_filesuffix = '_monthly'
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
 
+        gdir = oggm.GlacierDirectory(entity, base_dir=class_case_dir)
         tasks.define_glacier_region(gdir)
         tasks.simple_glacier_masks(gdir)
         tasks.elevation_band_flowline(gdir)
@@ -6418,7 +6411,7 @@ class TestMassRedis:
         # previously calibrate_inversion_from_consensus was used, but with the
         # RGI5 id not estimate is available and here we just use the first guess
         # as it is done in calibrate_inversion_from_consensus
-        workflow.inversion_tasks(gdir, glen_a=0.1*cfg.PARAMS['inversion_glen_a'])
+        workflow.inversion_tasks(gdir, glen_a=0.1 * cfg.PARAMS['inversion_glen_a'])
         tasks.init_present_time_glacier(gdir)
 
         seed = 0

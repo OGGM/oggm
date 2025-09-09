@@ -1922,7 +1922,6 @@ class SfcTypeTIModel(MassBalanceModel):
         set to zero before calling the aging in
         _apply_climate_step_and_aging_to_buckets (but we also check for this).
         """
-        return self.ys <= year <= self.ye
 
         mb_buckets_np = self.mb_buckets_np
 
