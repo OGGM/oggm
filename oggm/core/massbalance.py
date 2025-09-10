@@ -1577,9 +1577,9 @@ class SfcTypeTIModel(MassBalanceModel):
     def _init_buckets(self):
         # reset some containers for a fresh start
         self.mb_buckets_np = self._empty_mb_buckets_np.copy()  # kg m-2
-        self.climatic_mb = self._empty_smb_pd.copy()  # kg m-2
-        self.ice_mb = self._empty_smb_pd.copy()  # kg m-2
-        self.mb_heights = self._empty_smb_pd.copy()  # m
+        self._climatic_mb = {}  # kg m-2
+        self._ice_mb = {}  # kg m-2
+        self._mb_heights = {}  # m
 
         if self.store_buckets:
             # the mb_buckets are stored in a dict, with key corresponding to the
@@ -1633,6 +1633,21 @@ class SfcTypeTIModel(MassBalanceModel):
         return pd.DataFrame(self.mb_buckets_np[:, :-1],
                             index=self.buckets_grid_point_label,
                             columns=self.buckets[:-1],)
+
+    @property
+    def climatic_mb(self):
+        return pd.DataFrame(self._climatic_mb,
+                            index=self.buckets_grid_point_label)
+
+    @property
+    def ice_mb(self):
+        return pd.DataFrame(self._ice_mb,
+                            index=self.buckets_grid_point_label)
+
+    @property
+    def mb_heights(self):
+        return pd.DataFrame(self._mb_heights,
+                            index=self.buckets_grid_point_label)
 
     @property
     def melt_f(self):
@@ -1814,18 +1829,18 @@ class SfcTypeTIModel(MassBalanceModel):
                 delta_kg_m2[all_melted_grid_points] -= ice_melt_kg_m2  # ice melt
 
             # save the climatic mb of this timestep
-            self.climatic_mb[year] = delta_kg_m2
+            self._climatic_mb[year] = delta_kg_m2
 
         # save the mb of ice, this includes potential ice gain from aging after
         # the call of _bucket_aging and melt where all snow/firn buckets are
         # empty
         if save_mbs:
-            self.ice_mb[year] = self.mb_buckets_np[:, -1].copy()
+            self._ice_mb[year] = self.mb_buckets_np[:, -1].copy()
         # we empty the ice bucket after saving to avoid any double counting
         self.mb_buckets_np[:, -1] = 0.0
 
         if save_mbs:
-            self.mb_heights[year] = heights
+            self._mb_heights[year] = heights
 
         # update the current year of the buckets, this is set one timestep later
         # to the currently applied climate step (e.g. after applying the climate
@@ -2062,6 +2077,10 @@ class SfcTypeTIModel(MassBalanceModel):
             solid precipitation.
         """
 
+        # compute all steps up to the desired target year using constant heights
+        self._run_until(heights=heights, year=year,
+                        mb_resolution='annual')
+
         if climatic_mb_or_ice_mb == 'climatic_mb':
             mbs = self.climatic_mb
         elif climatic_mb_or_ice_mb == 'ice_mb':
@@ -2069,10 +2088,6 @@ class SfcTypeTIModel(MassBalanceModel):
         else:
             raise NotImplementedError(
                 f"'climatic_mb_or_ice_mb': {climatic_mb_or_ice_mb}")
-
-        # compute all steps up to the desired target year using constant heights
-        self._run_until(heights=heights, year=year,
-                        mb_resolution='annual')
 
         # ok now everything should be available, and we can sum up annual values
         # as needed
@@ -2145,6 +2160,10 @@ class SfcTypeTIModel(MassBalanceModel):
             solid precipitation.
         """
 
+        # compute all steps up to the desired target year using constant heights
+        self._run_until(heights=heights, year=year,
+                        mb_resolution='monthly')
+
         if climatic_mb_or_ice_mb == 'climatic_mb':
             mbs = self.climatic_mb
         elif climatic_mb_or_ice_mb == 'ice_mb':
@@ -2152,10 +2171,6 @@ class SfcTypeTIModel(MassBalanceModel):
         else:
             raise NotImplementedError(
                 f"'climatic_mb_or_ice_mb': {climatic_mb_or_ice_mb}")
-
-        # compute all steps up to the desired target year using constant heights
-        self._run_until(heights=heights, year=year,
-                        mb_resolution='monthly')
 
         # ok now everything should be available, and we can sum up monthly
         # values as needed
@@ -2238,6 +2253,10 @@ class SfcTypeTIModel(MassBalanceModel):
             solid precipitation.
         """
 
+        # compute all steps up to the desired target year using constant heights
+        self._run_until(heights=heights, year=year,
+                        mb_resolution='daily')
+
         if climatic_mb_or_ice_mb == 'climatic_mb':
             mbs = self.climatic_mb
         elif climatic_mb_or_ice_mb == 'ice_mb':
@@ -2245,10 +2264,6 @@ class SfcTypeTIModel(MassBalanceModel):
         else:
             raise NotImplementedError(
                 f"'climatic_mb_or_ice_mb': {climatic_mb_or_ice_mb}")
-
-        # compute all steps up to the desired target year using constant heights
-        self._run_until(heights=heights, year=year,
-                        mb_resolution='daily')
 
         # ok now everything should be available
         if self.climate_resolution in ['annual', 'monthly']:
