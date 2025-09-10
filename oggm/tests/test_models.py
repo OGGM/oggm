@@ -628,8 +628,12 @@ class TestMassBalanceModels:
           Class: SfcTypeTIModel
           Attributes:
             - settings_filesuffix: _daily
+            - hemisphere: nh
             - rho: 900.0
             - use_leap_years: True
+            - filename: climate_historical_daily
+            - input_filesuffix: 
+            - bias: 0.0
             - aging_frequency: annual
             - climate_resolution: annual
             - spinup_years: 6
