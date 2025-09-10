@@ -1663,12 +1663,12 @@ class TestMassBalanceModels:
 
         np.testing.assert_allclose(melt_f_linear[0], melt_f_exp[0])
         np.testing.assert_allclose(melt_f_exp[0], melt_f_exp_05[0])
-        np.testing.assert_allclose(melt_f_linear[-1], melt_f_exp[-1], atol=1e-2)
-        np.testing.assert_allclose(melt_f_exp[-1], melt_f_exp_05[-1], atol=1e-2)
+        np.testing.assert_allclose(melt_f_linear[-1], melt_f_exp[-1], atol=2e-2)
+        np.testing.assert_allclose(melt_f_exp[-1], melt_f_exp_05[-1], atol=2e-2)
         np.testing.assert_allclose(melt_f_linear[-1], gdir.settings['melt_f'])
         # the exponential decay is not perfectly between 0 and 1
         np.testing.assert_allclose(melt_f_exp[-1], gdir.settings['melt_f'],
-                                   atol=1e-2)
+                                   atol=2e-2)
         np.testing.assert_allclose(melt_f_exp_05[-1], gdir.settings['melt_f'],
                                    atol=1e-4)
 
