@@ -4446,7 +4446,7 @@ class ModelSettings(YAMLFileObject):
         # this is to inherit parameters from other setting files, the other file
         # is stored with the parent_filesuffix
         if 'parent_filesuffix' not in self.data:
-            if isinstance(parent_filesuffix, str):
+            if parent_filesuffix is not None:
                 self.set('parent_filesuffix', parent_filesuffix)
             else:
                 # by default cfg.PARAMS is always the parent

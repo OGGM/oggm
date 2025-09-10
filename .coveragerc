@@ -1,4 +1,5 @@
 [run]
+branch = True
 source = oggm
 omit =
     */tests/*
@@ -42,4 +43,4 @@ exclude_lines =
 ignore_errors = True
 
 [html]
-directory = coverage_html_report
+directory = ../logs/coverage
