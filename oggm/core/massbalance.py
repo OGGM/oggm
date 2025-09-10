@@ -3,6 +3,7 @@
 # Built ins
 import logging
 import os
+import inspect
 # External libs
 import cftime
 import numpy as np
@@ -1442,6 +1443,10 @@ class SfcTypeTIModel(MassBalanceModel):
         self.mbmod = mb_model_class(gdir=gdir,
                                     settings_filesuffix=settings_filesuffix,
                                     **kwargs)
+        self.filename = self.mbmod.filename
+        self.input_filesuffix = self.mbmod.input_filesuffix
+        self.hemisphere = self.mbmod.hemisphere
+        self.bias = self.mbmod.bias
 
         # check compatibility of aging_frequency and climate_resolution: aging
         # can not happen at higher temporal resolution than the climate steps
@@ -1957,7 +1962,7 @@ class SfcTypeTIModel(MassBalanceModel):
         # calculate all needed time steps with the same heights
         if self.climate_resolution == 'annual':
             if mb_resolution == 'annual':
-                missing_float_years = range(self.mb_buckets_year, year + 1)
+                missing_float_years = range(self.mb_buckets_year, int(year) + 1)
             else:
                 # mb_resolution can not be shorter than climate_resolution
                 raise NotImplementedError(f"mb_resolution: {mb_resolution}")
@@ -2270,6 +2275,9 @@ class SfcTypeTIModel(MassBalanceModel):
             return daily_mb, t, tmelt, prcp, prcpsol
         else:
             return daily_mb
+
+    def is_year_valid(self, year):
+        return self.mbmod.is_year_valid(year)
 
     def get_ela(self, year=None, **kwargs):
         # an idea to implement get_ela could be to use the previously computed
@@ -2818,6 +2826,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             else:
                 rgi_filesuffix = input_filesuffix
 
+            # some mb_models need the actual flowlines (e.g. SfcTypeTIModel)
+            if 'fl' in inspect.signature(mb_model_class).parameters:
+                kwargs['fl'] = fl
+
             self.flowline_mb_models.append(
                 mb_model_class(
                     gdir=gdir,
@@ -3057,7 +3069,7 @@ def calving_mb(gdir):
     return gdir.inversion_calving_rate * 1e9 * rho / gdir.rgi_area_m2
 
 
-def decide_winter_precip_factor(gdir, baseline_climate_suffix:str=""):
+def decide_winter_precip_factor(gdir):
     """Utility function to decide on a precip factor based on winter precip."""
 
     # We have to decide on a precip factor
@@ -3068,7 +3080,7 @@ def decide_winter_precip_factor(gdir, baseline_climate_suffix:str=""):
 
     # get non-corrected winter daily mean prcp (kg m-2 day-1)
     # it is easier to get this directly from the raw climate files
-    fp = gdir.get_filepath('climate_historical', filesuffix=baseline_climate_suffix)
+    fp = gdir.get_filepath('climate_historical')
     with xr.open_dataset(fp).prcp as ds_pr:
         # just select winter months
         if gdir.hemisphere == 'nh':
@@ -3085,8 +3097,7 @@ def decide_winter_precip_factor(gdir, baseline_climate_suffix:str=""):
         text = ('the climate period has to go from 1979-01 to 2019-12,',
                 'use W5E5 or GSWP3_W5E5 as baseline climate and',
                 'repeat the climate processing')
-        if not baseline_climate_suffix:
-            assert len(ds_pr_winter.time) == 41 * 7, text
+        assert len(ds_pr_winter.time) == 41 * 7, text
         w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
 
     # from MB sandbox calibration to winter MB
@@ -3376,6 +3387,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_min=None,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
+                                  return_mb_model=False,
                                   **kwargs: dict,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
@@ -3489,8 +3501,11 @@ def mb_calibration_from_scalar_mb(gdir, *,
     temp_bias_max: float
         the maximum accepted value for the temperature bias during optimisation.
         Defaults to gdir.settings['temp_bias_max'].
+    return_mb_model: bool
+        if the finally calibrated mb_model should be returned. Useful for
+        testing mb_models with a memory (e.g. SfcTypeTIModel). Default is False.
     kwargs: dict
-        kwargs to pass to the mb_model_calss instance
+        kwargs to pass to the mb_model_class instance
     """
 
     # Param constraints
@@ -3613,9 +3628,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                     'Set PARAMS["prcp_fac"] to None '
                     'if using PARAMS["winter_prcp_factor"].'
                 )
-            prcp_fac = decide_winter_precip_factor(
-                gdir=gdir, baseline_climate_suffix=baseline_climate_suffix
-            )
+            prcp_fac = decide_winter_precip_factor(gdir=gdir)
         else:
             prcp_fac = gdir.settings.defaults['prcp_fac']
             if prcp_fac is None:
@@ -3779,6 +3792,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
                     'mb_global_params', 'baseline_climate_source']:
             gdir.settings[key] = df[key]
 
+    if return_mb_model:
+        return df, mb_mod
     return df
 
 

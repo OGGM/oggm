@@ -729,6 +729,9 @@ class FlowlineModel(object):
                 _mb_call = value.get_annual_mb
             else:
                 raise ValueError('mb_elev_feedback not understood')
+            # some models have a climatic and ice mb (e.g. SfcTIModel), for
+            # dynamics we want ice; if not available it is ignored
+            _mb_call = partial(_mb_call, climatic_mb_or_ice_mb='ice_mb')
         self._mb_model = value
         self._mb_call = _mb_call
         self._mb_current_date = None

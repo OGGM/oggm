@@ -1282,7 +1282,7 @@ class TestMassBalanceModels:
         fls = gdir.read_pickle('inversion_flowlines')
         mb_gw_mod = massbalance.MultipleFlowlineMassBalance(
             gdir, mb_model_class=massbalance.DailyTIModel,
-            settings_filesuffix='_daily', fls=fls,repeat=True, ys=1901, ye=1950)
+            settings_filesuffix='_daily', fls=fls, repeat=True, ys=1901, ye=1950)
         mb_gw = mb_gw_mod.get_specific_mb(year=yrs)
         assert_allclose(mb, mb_gw)
 
@@ -1705,6 +1705,159 @@ class TestMassBalanceModels:
         # but after setting a mb parameter it should be reset
         mb_mod.prcp_fac = 1
         np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
+
+    def test_sfc_type_mb_model_calib_dynamics(self, hef_gdir):
+
+        # sfc tracking only works with a single flowline
+        gdir = workflow.init_glacier_directories(
+            ['RGI60-11.00897'],  # Hintereisferner
+            from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
+
+        # add daily climate
+        tasks.process_gswp3_w5e5_data(gdir, daily=True)
+
+        # data for calibration
+        mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+        ref_mb = mbdf.mean()
+        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+
+        # prepare settings for pure Daily and SfcTypeDaily
+        ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
+        ModelSettings(gdir, filesuffix='_daily_sfc', parent_filesuffix='')
+
+        # calibrate Daily
+        massbalance.mb_calibration_from_scalar_mb(
+            gdir, settings_filesuffix='_daily',
+            observations_filesuffix='_daily',
+            overwrite_gdir=True,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
+            calibrate_param1='prcp_fac',
+            calibrate_param2='melt_f',
+            calibrate_param3='temp_bias',
+            mb_model_class=massbalance.DailyTIModel)
+
+        df, mb_mod_claib = massbalance.mb_calibration_from_scalar_mb(
+            gdir, settings_filesuffix='_daily_sfc',
+            observations_filesuffix='_daily_sfc',
+            overwrite_gdir=True,
+            ref_mb=ref_mb, ref_mb_period=ref_period,
+            calibrate_param1='prcp_fac',
+            calibrate_param2='melt_f',
+            calibrate_param3='temp_bias',
+            return_mb_model=True,
+            mb_model_class=partial(massbalance.SfcTypeTIModel,
+                                   mb_model_class=massbalance.DailyTIModel,
+                                   ys=mbdf.index[0],  # this defines the year of the initial bucket
+                                   ),
+        )
+
+        gdir.settings_filesuffix = '_daily'
+        daily_settings = gdir.settings
+        gdir.settings_filesuffix = '_daily_sfc'
+        daily_sfc_settings = gdir.settings
+
+        # including surface tracking increases the needed energy for melt, to
+        # compensate for this we expect a smaller prcp_fac after calibration
+        # (if the other parameters are the same)
+        assert daily_settings['melt_f'] == daily_sfc_settings['melt_f']
+        assert daily_settings['temp_bias'] == daily_sfc_settings['temp_bias']
+        assert daily_settings['prcp_fac'] > daily_sfc_settings['prcp_fac']
+
+        # test if buckets are the same after calibration and if we newly
+        # initilize the model
+        mb_mod_new = massbalance.SfcTypeTIModel(
+            gdir, settings_filesuffix='_daily_sfc',
+            mb_model_class=massbalance.DailyTIModel,
+            ys=mbdf.index[0])
+        # by calling one of the last years, all previous values need to be
+        # computed as well
+        mb_mod_new.get_specific_mb(fls=[mb_mod_new.fl], year=2019)
+        assert mb_mod_claib.mb_buckets_year == mb_mod_new.mb_buckets_year
+        np.testing.assert_allclose(mb_mod_claib.mb_buckets_np,
+                                   mb_mod_new.mb_buckets_np)
+        np.testing.assert_allclose(mb_mod_claib.climatic_mb.values,
+                                   mb_mod_new.climatic_mb.values)
+        np.testing.assert_allclose(mb_mod_claib.ice_mb.values,
+                                   mb_mod_new.ice_mb.values)
+
+        # now conduct two dynamic runs and compare
+        tasks.run_from_climate_data(gdir, settings_filesuffix='_daily',
+                                    mb_model_class=massbalance.DailyTIModel,
+                                    climate_input_filesuffix='_daily',
+                                    ys=1980, ye=2020,
+                                    output_filesuffix='_daily')
+        ds_daily = utils.compile_run_output(gdir, input_filesuffix='_daily')
+        dyn_model = tasks.run_from_climate_data(
+            gdir, settings_filesuffix='_daily_sfc',
+            mb_model_class=partial(
+                massbalance.SfcTypeTIModel,
+                mb_model_class=massbalance.DailyTIModel,
+                ys=mbdf.index[0]),
+            climate_input_filesuffix='_daily',
+            ys=1980, ye=2020,
+            output_filesuffix='_daily_sfc')
+        ds_daily_sfc = utils.compile_run_output(gdir, input_filesuffix='_daily_sfc')
+
+        if do_plot:
+            ds_daily.volume.plot(label='DailyTIModel')
+            ds_daily_sfc.volume.plot(label='SfcTypeTIModel with DailyTIModel')
+            plt.legend()
+            plt.show()
+
+        # including surface tracking we expect slower retreat as more energy is
+        # needed to melt the input mass
+        assert ds_daily.volume[-1] < ds_daily_sfc.volume[-1]
+
+        # test run_with_hydro, just testing if it runs without errors
+        gdir.settings_filesuffix = '_daily'
+        gdir.settings['store_model_geometry'] = True
+        tasks.run_with_hydro(
+            run_task=run_from_climate_data, gdir=gdir,
+            settings_filesuffix='_daily',
+            mb_model_class=massbalance.DailyTIModel,
+            climate_input_filesuffix='_daily', ys=1980, ye=2020,
+            output_filesuffix='_daily_hydro')
+
+        gdir.settings_filesuffix = '_daily_sfc'
+        gdir.settings['store_model_geometry'] = True
+        tasks.run_with_hydro(
+            run_task=run_from_climate_data,
+            gdir=gdir, settings_filesuffix='_daily_sfc',
+            mb_model_class=partial(
+                massbalance.SfcTypeTIModel,
+                mb_model_class=massbalance.DailyTIModel,
+                ys=mbdf.index[0],
+                # run_with_hydro revisit the mb_values, we need to allow this
+                use_previous_mbs=True,
+            ),
+            climate_input_filesuffix='_daily',
+            ys=1980, ye=2020,
+            output_filesuffix='_daily_sfc_hydro')
+
+        if do_plot:
+            def plot_runoff(filesuffix, title):
+                with xr.open_dataset(
+                        gdir.get_filepath('model_diagnostics',
+                                          filesuffix=filesuffix)) as ds:
+                    ds = ds.isel(time=slice(0, -1)).load()
+                sel_vars = [v for v in ds.variables
+                            if 'month_2d' not in ds[v].dims]
+                df_annual = ds[sel_vars].to_dataframe()
+                runoff_vars = ['melt_off_glacier', 'melt_on_glacier',
+                               'liq_prcp_off_glacier', 'liq_prcp_on_glacier']
+                df_runoff = df_annual[runoff_vars] * 1e-9
+                df_runoff = df_runoff.rolling(6, center=True,
+                                              min_periods=1).mean()
+
+                f, ax = plt.subplots(figsize=(10, 6))
+                df_runoff.plot.area(ax=ax); plt.xlabel('Years');
+                plt.ylabel('Runoff (Mt)'); plt.title(title);
+                plt.show()
+
+            plot_runoff('_daily_hydro', 'DailyTIModel')
+            plot_runoff('_daily_sfc_hydro', 'SfcTypeTIModel with DailyTIModel')
 
     def test_constant_mb_model(self, hef_gdir):
 
