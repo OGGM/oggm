@@ -89,12 +89,12 @@ def add_smoothed_glacier_topo(gdir, outline_offset=-40,
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = 'm'
         v.long_name = 'Glacier topo smoothed'
         v.description = ("DEM smoothed just on the glacier. The DEM outside "
                          "the glacier doesn't impact the smoothing.")
-        v[:] = smooth_glacier
+        v[:] = smooth_glacier.astype(np.float32)
 
 
 @entity_task(log, writes=['gridded_data'])
@@ -218,23 +218,23 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = '-'
         v.long_name = 'Points grouped by band along the flowline'
         v.description = ('Points grouped by band along the flowline, '
                          'ordered from top to bottom.')
-        v[:] = band_index
+        v[:] = band_index.astype(np.float32)
 
         vn = 'rank_per_band'
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x',))
+            v = nc.createVariable(vn, 'f4', ('y', 'x',), zlib=True, fill_value=np.nan)
         v.units = '-'
         v.long_name = 'Points ranked by thickness and elevation within band'
         v.description = ('Points ranked by thickness and elevation within each '
                          'band.')
-        v[:] = per_band_rank
+        v[:] = per_band_rank.astype(np.float32)
 
 
 @entity_task(log, writes=['gridded_simulation'])

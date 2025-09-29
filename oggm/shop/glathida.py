@@ -4,6 +4,7 @@ import os
 # External libs
 import pandas as pd
 import numpy as np
+import xarray as xr
 
 # Optional libs
 try:
@@ -145,6 +146,147 @@ def compile_glathida_statistics(gdirs, filesuffix='', path=True):
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
                                     ('glathida_statistics' +
+                                     filesuffix + '.csv')))
+        else:
+            out.to_csv(path)
+
+    return out
+
+
+@utils.entity_task(log)
+def glathida_on_grid(gdir):
+    """Gather a dataframe of predictors for this glacier.
+    """
+
+    # Read the data
+    try:
+        df = pd.read_csv(gdir.get_filepath('glathida_data'))
+    except FileNotFoundError:
+        return None
+
+    # Agregate on grid
+    drop_vars = ['date', 'elevation_date', 'flag', 'rgi_id', 'survey_id', 'elevation']
+    df_agg = df.drop(drop_vars, axis=1).groupby('ij_grid').mean()
+
+    # Conversion does not preserve ints
+    df_agg['i_grid'] = df_agg['i_grid'].astype(int)
+    df_agg['j_grid'] = df_agg['j_grid'].astype(int)
+
+    # Some other variables do not make much sense as mean
+    def mode(x):
+        return x.mode().iloc[0]
+
+    df_agg['survey_id'] = df[['ij_grid', 'survey_id']].groupby('ij_grid').agg(mode)['survey_id']
+    df_agg['date'] = df[['ij_grid', 'date']].groupby('ij_grid').agg(mode)['date']
+    df_agg['rgi_id'] = df['rgi_id'].iloc[0]
+
+    try:
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ds = ds.load()
+    except:
+        return None
+
+    # Select variables
+    vns = ['topo',
+           'topo_smoothed',
+           'slope',
+           'slope_factor',
+           'aspect',
+           'dis_from_border',
+           'catchment_area',
+           'lin_mb_above_z',
+           'oggm_mb_above_z',
+           'consensus_ice_thickness',
+           'millan_ice_thickness',
+           'bedmachine_ice_thickness',
+           'millan_v',
+           'itslive_v',
+           'hugonnet_dhdt',
+           ]
+    for vn in vns:
+        try:
+            df_agg[vn] = ds[vn].isel(x=('z', df_agg['i_grid']), y=('z', df_agg['j_grid']))
+        except KeyError:
+            pass
+
+    return df_agg.reset_index()
+
+
+@utils.global_task(log)
+def compile_glathida_on_grid(gdirs, filesuffix='', path=True,
+                             climate_statistics_file='',
+                             glacier_statistics_file='',
+                             ):
+    """Gather as many predictors as possible for the big ML table.
+
+    The assumption is that the tasks:
+    - tasks.gridded_attributes,
+    - tasks.gridded_mb_attributes,
+    have been run prior to this.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        Set to a path to store the file to your chosen location
+    """
+    from oggm.workflow import execute_entity_task
+
+    out_df = execute_entity_task(glathida_on_grid, gdirs)
+    out_df = [df for df in out_df if df is not None]
+    out = pd.concat(out_df).reset_index()
+    out = out.drop(['index'], axis=1)
+
+    if glacier_statistics_file:
+        vns = {'cenlon': 'glacier_cenlon',
+               'cenlat': 'glacier_cenlat',
+               'rgi_area_km2': 'glacier_area_km2',
+               'rgi_year': 'glacier_outline_year',
+               'is_tidewater': 'glacier_is_tidewater',
+               'dem_med_elev': 'glacier_median_elev',
+               'dem_min_elev': 'glacier_min_elev',
+               'dem_max_elev': 'glacier_max_elev',
+               'main_flowline_length': 'glacier_length',
+               'inv_volume_km3': 'glacier_oggm_volume',
+               'reference_mb': 'glacier_reference_mb',
+               }
+        dfc = pd.read_csv(glacier_statistics_file, index_col=0)
+
+        # Select only needed columns
+        dfc_sel = dfc[list(vns.keys())]
+
+        # Merge: left join keeps all rows from `out`
+        out = out.merge(dfc_sel, left_on='rgi_id', right_index=True, how='left')
+
+        # Rename columns to final output names
+        out = out.rename(columns=vns)
+
+    if climate_statistics_file:
+        vns = {'1980-2010_aar': 'glacier_aar',
+               '1980-2010_avg_temp_mean_elev': 'glacier_avg_temp',
+               '1980-2010_avg_prcpsol_mean_elev': 'glacier_avg_prcpsol',
+               '1980-2010_avg_prcp': 'glacier_avg_prcp',
+               '1980-2010_avg_tempmelt_mean_elev': 'glacier_avg_meltingtemp',
+               }
+        dfc = pd.read_csv(climate_statistics_file, index_col=0)
+
+        # Select only needed columns
+        dfc_sel = dfc[list(vns.keys())]
+
+        # Merge: left join keeps all rows from `out`
+        out = out.merge(dfc_sel, left_on='rgi_id', right_index=True, how='left')
+
+        # Rename columns to final output names
+        out = out.rename(columns=vns)
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    ('glathida_on_grid' +
                                      filesuffix + '.csv')))
         else:
             out.to_csv(path)

@@ -47,10 +47,13 @@ Enhancements
 - New standard glacier directories now use a new reference lookup
   table to decide on the topo data to use (:pull:`1781`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- Added the possibility to provide a custom grid  in 
+- Added the possibility to provide a custom grid  in
   ``workflow.merge_gridded_data``. If no grid is provided, the default is to
   merge all grids of the provided gdirs (:pull:`1779`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Flowlines shapefiles output now have more attributes and are easier to
+  use (:pull:`1786`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Flowline diagnostic variables can now be saved with a monthly resolution.
   With this the unit of some variables depends on the requested resolution.
   To reflect this the correct unit is stored in the attributes of the variables
@@ -144,6 +147,10 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added the rgi7g_to_complex task which adds a mask of glacier
   entities in the glacier complex glacier dirs (:pull:`1736`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- A new global task (`glathida.compile_glathida_on_grid`) is available to generate
+  big tables that can be used for e.g. ML workflows for ice thickness estimation
+  (:pull:`1782`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes

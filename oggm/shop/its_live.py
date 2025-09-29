@@ -164,13 +164,13 @@ def _reproject_and_scale(gdir, do_error=False):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm yr-1'
         ln = 'ITS LIVE velocity data'
         if do_error:
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
-        v[:] = vv.filled(np.nan)
+        v[:] = vv.filled(np.nan).astype(np.float32)
 
         vn = 'itslive_vx'
         if do_error:
@@ -178,13 +178,13 @@ def _reproject_and_scale(gdir, do_error=False):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm yr-1'
         ln = 'ITS LIVE velocity data in x map direction'
         if do_error:
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
-        v[:] = vx.filled(np.nan)
+        v[:] = vx.filled(np.nan).astype(np.float32)
 
         vn = 'itslive_vy'
         if do_error:
@@ -192,13 +192,13 @@ def _reproject_and_scale(gdir, do_error=False):
         if vn in nc.variables:
             v = nc.variables[vn]
         else:
-            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True)
+            v = nc.createVariable(vn, 'f4', ('y', 'x', ), zlib=True, fill_value=np.nan)
         v.units = 'm yr-1'
         ln = 'ITS LIVE velocity data in y map direction'
         if do_error:
             ln = 'Uncertainty of ' + ln
         v.long_name = ln
-        v[:] = vy.filled(np.nan)
+        v[:] = vy.filled(np.nan).astype(np.float32)
 
 
 @utils.entity_task(log, writes=['gridded_data'])
