@@ -51,6 +51,13 @@ Enhancements
   ``workflow.merge_gridded_data``. If no grid is provided, the default is to
   merge all grids of the provided gdirs (:pull:`1779`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Flowline diagnostic variables can now be saved with a monthly resolution.
+  With this the unit of some variables depends on the requested resolution.
+  To reflect this the correct unit is stored in the attributes of the variables
+  and the following variable names were changed: ``dhdt_myr`` -> ``dhdt``,
+  ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
+  ``flux_divergence`` (:pull:`1792`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
