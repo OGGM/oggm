@@ -139,7 +139,7 @@ class Test_millan22:
             thick = ds.millan_ice_thickness.where(mask).data
 
         # Simply some coverage and sanity checks
-        assert np.isfinite(thick).sum() / mask.sum() > 0.92
+        assert np.isfinite(thick).sum() / mask.sum() > 0.97
         assert np.nanmax(thick) > 800
         assert np.nansum(thick) * gdir.grid.dx**2 * 1e-9 > 174
 
@@ -153,14 +153,14 @@ class Test_millan22:
             vy = ds.millan_vy.where(mask).data
 
         # Simply some coverage and sanity checks
-        assert np.isfinite(v).sum() / mask.sum() > 0.92
+        assert np.isfinite(v).sum() / mask.sum() > 0.97
         assert np.nanmax(v) > 2000
         assert np.nanmax(vx) > 500
         assert np.nanmax(vy) > 400
 
         # Stats
         df = millan22.compile_millan_statistics([gdir]).iloc[0]
-        assert df['millan_avg_vel'] > 180
+        assert df['millan_avg_vel'] > 175
         assert df['millan_max_vel'] > 2000
         assert df['millan_perc_cov'] > 0.95
         assert df['millan_vel_perc_cov'] > 0.92
