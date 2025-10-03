@@ -1561,9 +1561,7 @@ class SfcTypeTIModel(MassBalanceModel):
                 f"{store_buckets}, climate_resolution = "
                 f"{self.climate_resolution}")
         self.store_buckets = store_buckets
-        if store_buckets_dates is None:
-            store_buckets_dates = []
-        else:
+        if store_buckets_dates is not None:
             # if specific dates are provided this overrules store_buckets
             self.store_buckets = True
         self.store_buckets_dates = store_buckets_dates
@@ -1912,8 +1910,9 @@ class SfcTypeTIModel(MassBalanceModel):
         # check if the resulting bucket should be stored for later
         if self.store_buckets:
             store_current_bucket = False
-            if self.mb_buckets_year in self.store_buckets_dates:
-                store_current_bucket = True
+            if self.store_buckets_dates is not None:
+                if self.mb_buckets_year in self.store_buckets_dates:
+                    store_current_bucket = True
             elif self.store_buckets == 'annual':
                 if buckets_month == 1 and buckets_day == 1:
                     store_current_bucket = True
