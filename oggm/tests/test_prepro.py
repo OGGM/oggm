@@ -1433,6 +1433,15 @@ class TestClimate(unittest.TestCase):
         centerlines.fixed_dx_elevation_band_flowline(gdir)
         climate.process_custom_climate_data(gdir)
 
+        from oggm.ignore.lmr_forcing import process_mira_data
+        process_mira_data(gdir, filesuffix='mira')
+
+        with xr.open_dataset(gdir.get_filepath('climate_historical')) as dsc:
+            dsc = dsc.load()
+
+        with xr.open_dataset(gdir.get_filepath('climate_historical', filesuffix='mira')) as dse:
+            dse = dse.load()
+
         mbdf = gdir.get_ref_mb_data()
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
