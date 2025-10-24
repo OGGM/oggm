@@ -192,7 +192,8 @@ def process_gswp3_w5e5_data(gdir, settings_filesuffix='',
     gdir.write_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
                             filesuffix=output_filesuffix,
                             temp_std=temp_std,
-                            source=dataset)
+                            source=dataset,
+                            daily=daily)
 
 
 @entity_task(log, writes=["climate_historical"])

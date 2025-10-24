@@ -3606,7 +3606,8 @@ class GlacierDirectory(object):
         filesuffix : str
             Apply a suffix to the file
         daily : bool, default False
-            Temporal resolution of the data. If True, adjusts long name.
+            Temporal resolution of the data. If True, adjust variable
+            long name in NetCDF file.
         """
 
         if isinstance(prcp, xr.DataArray):
@@ -3685,7 +3686,7 @@ class GlacierDirectory(object):
                 resolution = "monthly"
             else:
                 resolution = "daily"
-                if not len(prcp) > (nc.hydro_yr_1 - nc.hydro_yr_0 + 1) * 28 * 12:
+                if not len(prcp) > (nc.yr_1 - nc.yr_0 + 1) * 28 * 12:
                     raise ValueError(
                         f"Data is not in daily resolution: {len(prcp)}"
                     )
@@ -3701,10 +3702,6 @@ class GlacierDirectory(object):
             v.units = 'degC'
             v.long_name = f'2m {resolution} temperature at height ref_hgt'
             v[:] = temp
-            if daily and not np.all(v[:].data <1e5):
-                raise_oob_error(
-                    temp, "Temperature", "Ensure there are no fill values."
-                )
 
             if temp_std is not None:
                 v = nc.createVariable('temp_std', 'f4', ('time',), zlib=zlib)
