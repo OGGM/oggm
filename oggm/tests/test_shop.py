@@ -285,6 +285,12 @@ class Test_rgitopo:
         assert len(out) > 5
         assert pd.Series(out).iloc[1:].sum() > 5
 
+        # check that the file is not here if a wrong DEM is chosen
+        cfg.PARAMS['continue_on_error'] = True
+        rgitopo.select_dem_from_dir(gd[0], dem_source='REMA', keep_dem_folders=True)
+        assert not os.path.exists(gd[0].get_filepath('dem'))
+        cfg.PARAMS['continue_on_error'] = False
+
 
 class Test_w5e5:
 

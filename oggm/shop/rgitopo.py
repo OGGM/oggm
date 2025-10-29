@@ -98,6 +98,14 @@ def select_dem_from_dir(gdir, dem_source=None, keep_dem_folders=False):
         Set this to True to prevent that (e.g. for sensitivity tests)
     """
 
+    # First things first - delete the DEM to avoid surprises
+    dem_path = gdir.get_filepath('dem')
+    if os.path.exists(dem_path):
+        os.remove(dem_path)
+    source_path = gdir.get_filepath('dem_source')
+    if os.path.exists(source_path):
+        os.remove(source_path)
+
     if dem_source == 'RGI':
         dem_source = gdir.rgi_dem_source
     if dem_source == 'BY_RES':
