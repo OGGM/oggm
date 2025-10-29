@@ -346,15 +346,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
         if rgi_version == '62':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20250616.csv')
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
             dfs = pd.read_csv(fs, index_col=0)
             rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
         if rgi_version == '70G':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20250616.csv')
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
             dfs = pd.read_csv(fs, index_col=0)
             rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
         if rgi_version == '70C':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20250616.csv')
+            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
             dfs = pd.read_csv(fs, index_col=0)
             rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
