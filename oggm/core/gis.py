@@ -1160,6 +1160,12 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
     """
+
+    # First things first - delete hypsometry file
+    hypso_path = gdir.get_filepath('hypsometry')
+    if os.path.exists(hypso_path):
+        os.remove(hypso_path)
+
     dem = read_geotiff_dem(gdir)
 
     # This is the very robust way
@@ -1252,7 +1258,7 @@ def compute_hypsometry_attributes(gdir, min_perc=0.2):
     df['dem_source'] = [gdir.get_diagnostics()['dem_source']]
     for b, bs in zip(hi, (bins[1:] + bins[:-1])/2):
         df['{}'.format(np.round(bs).astype(int))] = [b]
-    df.to_csv(gdir.get_filepath('hypsometry'), index=False)
+    df.to_csv(hypso_path, index=False)
 
 
 @entity_task(log, writes=['glacier_mask'])
