@@ -24,8 +24,14 @@ def check_internet_access(
 ):
     """Check if Internet is available.
     
-    hostname : str
+    hostname : str, default "8.8.8.8"
         Web address. Can be a public DNS or an HTTP link.
+    port : int, default 53
+        An open and unfiltered port number. This should be 53 for
+        the domain, or 443 for https.
+    timeout : int, default 1
+        Time in seconds before the connection times out.
+
     """
     try:
         socket.setdefaulttimeout(timeout)
