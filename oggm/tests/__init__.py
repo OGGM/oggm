@@ -20,12 +20,16 @@ if Version(matplotlib.__version__) >= Version("2"):
                                 'baseline_images', 'freetype_28')
 
 def check_internet_access(
-    dns: str = "8.8.8.8", port: int = 53, timeout: int = 1
+    hostname: str = "8.8.8.8", port: int = 53, timeout: int = 1
 ):
-    """Check if Internet is available."""
+    """Check if Internet is available.
+    
+    hostname : str
+        Web address. Can be a public DNS or an HTTP link.
+    """
     try:
         socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((dns, port))
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((hostname, port))
         return True
     except socket.error as e:
         return False
