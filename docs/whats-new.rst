@@ -61,7 +61,8 @@ Enhancements
   ``workflow.merge_gridded_data``. If no grid is provided, the default is to
   merge all grids of the provided gdirs (:pull:`1779`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-
+- Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 Bug fixes
 ~~~~~~~~~
 
