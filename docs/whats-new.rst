@@ -61,6 +61,8 @@ Enhancements
   ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
   ``flux_divergence`` (:pull:`1792`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
