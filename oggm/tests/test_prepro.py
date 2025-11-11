@@ -847,7 +847,6 @@ class TestElevationBandFlowlines(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
@@ -1851,7 +1850,6 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
@@ -2397,7 +2395,6 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
@@ -2516,7 +2513,6 @@ class TestGrindelInvert(unittest.TestCase):
         cfg.PARAMS['use_multiple_flowlines'] = False
         cfg.PARAMS['use_tar_shapefiles'] = False
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
     def tearDown(self):
@@ -2649,7 +2645,6 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = ''
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
