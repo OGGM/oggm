@@ -1628,11 +1628,11 @@ def mb_calibration_from_geodetic_mb(gdir, *,
             ref_mb = override_missing
 
     temp_bias = 0
-    if cfg.PARAMS['use_temp_bias_from_file']:
+    if informed_threestep:
         climinfo = gdir.get_climate_info()
         if 'w5e5' not in climinfo['baseline_climate_source'].lower():
-            raise InvalidWorkflowError('use_temp_bias_from_file currently '
-                                       'only available for W5E5 data.')
+            raise InvalidWorkflowError('only for W5E5 data.')
+
         bias_df = get_temp_bias_dataframe()
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
@@ -1642,10 +1642,6 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         temp_bias = sel_df['median_temp_bias_w_err_grouped']
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
-    if informed_threestep:
-        if not cfg.PARAMS['use_temp_bias_from_file']:
-            raise InvalidParamsError('With `informed_threestep` you need to '
-                                     'set `use_temp_bias_from_file`.')
         if not cfg.PARAMS['use_winter_prcp_fac']:
             raise InvalidParamsError('With `informed_threestep` you need to '
                                      'set `use_winter_prcp_fac`.')

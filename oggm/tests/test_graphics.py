@@ -180,7 +180,6 @@ def test_multiple_inversion():
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PATHS['working_dir'] = testdir
 
@@ -266,7 +265,6 @@ def test_multiple_models():
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['border'] = 40
 
@@ -377,7 +375,6 @@ def test_chhota_shigri():
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
 
     hef_file = get_demo_file('divides_RGI50-14.15990.shp')
@@ -422,7 +419,6 @@ def test_ice_cap():
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
 
     df = gpd.read_file(get_demo_file('divides_RGI50-05.08389.shp'))
@@ -465,7 +461,6 @@ def test_coxe():
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['trapezoid_lambdas'] = 1
     cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
 
     hef_file = get_demo_file('rgi_RGI50-01.10299.shp')
