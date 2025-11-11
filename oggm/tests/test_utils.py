@@ -854,7 +854,6 @@ class TestStartFromV14(unittest.TestCase):
 
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
 
         n_intersects = 0
         for gdir in gdirs:
@@ -1287,7 +1286,6 @@ class TestPreproCLI(unittest.TestCase):
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
-                                           'use_temp_bias_from_file': False,
                                            'prcp_fac': 2.5,
                                            }
                           )
@@ -1456,7 +1454,6 @@ class TestPreproCLI(unittest.TestCase):
                                                'evolution_model': evolution_model,
                                                'downstream_line_shape': downstream_line_shape,
                                                'use_winter_prcp_fac': False,
-                                               'use_temp_bias_from_file': False,
                                                'prcp_fac': 2.5,
                                                })
 
@@ -1596,7 +1593,6 @@ class TestPreproCLI(unittest.TestCase):
         params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
                   'baseline_climate': 'CRU',
                   'use_winter_prcp_fac': False,
-                  'use_temp_bias_from_file': False,
                   'prcp_fac': 2.5,
                   'evolution_model': 'MassRedistributionCurve',
                   'downstream_line_shape': 'parabola',
@@ -1708,7 +1704,6 @@ class TestPreproCLI(unittest.TestCase):
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'use_winter_prcp_fac': False,
-                                           'use_temp_bias_from_file': False,
                                            'prcp_fac': 2.5,
                                            }
                           )
@@ -1910,7 +1905,6 @@ class TestBenchmarkCLI(unittest.TestCase):
                                        'geodetic_mb_period': '2000-01-01_2010-01-01',
                                        'baseline_climate': 'CRU',
                                        'use_winter_prcp_fac': False,
-                                       'use_temp_bias_from_file': False,
                                        'prcp_fac': 2.5,
                                        })
 
