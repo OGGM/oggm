@@ -282,10 +282,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         temp_a_gcm = tempds_gcm.isel(points=np.argmin(c.data))
         temp_a_hist = tempds_hist.isel(points=np.argmin(c.data))
         # merge historical with gcm together
-        # TODO: change to drop_conflicts when xarray version v0.17.0 can
-        #  be used with salem
         temp_a = xr.merge([temp_a_gcm, temp_a_hist],
-                          combine_attrs='override')
+                          combine_attrs='drop_conflicts', join='outer')
         temp = temp_a.tasAdjust
         temp['lon'] = temp_a.longitude
         temp['lat'] = temp_a.latitude
@@ -303,8 +301,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
              (precipds_gcm.latitude - glat) ** 2)
         precip_a_gcm = precipds_gcm.isel(points=np.argmin(c.data))
         precip_a_hist = precipds_hist.isel(points=np.argmin(c.data))
-        precip_a = xr.merge([precip_a_gcm, precip_a_hist],
-                            combine_attrs='override')
+        precip_a = xr.merge([precip_a_gcm, precip_a_hist], combine_attrs='drop_conflicts',
+                            join='outer')
 
         precip = precip_a.prAdjust
         precip['lon'] = precip_a.longitude
