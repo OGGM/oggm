@@ -38,7 +38,7 @@ jobs:
         if: ${{ contains(matrix.container, 'slim') }}
         run: apt-get -y update && apt-get -y install git curl
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
@@ -57,7 +57,7 @@ jobs:
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
       - name: Upload pytest-mpl artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: "${{ steps.sanitize-name.outputs.sanitized_name }}"
           path: /tmp/oggm-mpl-results/

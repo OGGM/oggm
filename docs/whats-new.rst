@@ -59,6 +59,13 @@ Enhancements
 - Flowlines shapefiles output now have more attributes and are easier to
   use (:pull:`1786`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Flowline diagnostic variables can now be saved with a monthly resolution.
+  With this the unit of some variables depends on the requested resolution.
+  To reflect this the correct unit is stored in the attributes of the variables
+  and the following variable names were changed: ``dhdt_myr`` -> ``dhdt``,
+  ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
+  ``flux_divergence`` (:pull:`1792`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 
 Bug fixes
