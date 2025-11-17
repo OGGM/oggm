@@ -202,7 +202,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     member : str
         ensemble member gcm that you want to process
     ssp : str
-        ssp scenario to process (only 'ssp126', 'ssp370' or 'ssp585' are available)
+        ssp scenario to process ('ssp126', 'ssp370' or 'ssp585' are available for the primary GCMs, additional ones are available for the secondary GCMs)
     year_range : tuple of str
         the year range for which the anomalies are computed
         (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')`
@@ -245,20 +245,29 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
     else:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/'
-
-    path = f'{gcm_server}/cmip6/isimip3b/flat/2023.2/monthly/'
+    
     add = '_global_monthly_flat_glaciers.nc'
+    # secondary GCMs are all in 2025.11, primary GCMs are in 2023.2
+    versions = ["2025.11","2023.2"]
 
-    fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
-    fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
-    fpath_temp_h = fpath_spec.format(var='tasAdjust', ssp='historical')
-    fpath_precip = fpath_spec.format(var='prAdjust', ssp=ssp)
-    fpath_precip_h = fpath_spec.format(var='prAdjust', ssp='historical')
-    with utils.get_lock():
-        fpath_temp = utils.file_downloader(fpath_temp)
-        fpath_temp_h = utils.file_downloader(fpath_temp_h)
-        fpath_precip = utils.file_downloader(fpath_precip)
-        fpath_precip_h = utils.file_downloader(fpath_precip_h)
+    for v in versions:
+        path = f'{gcm_server}/cmip6/isimip3b/flat/{v}/monthly/'
+        fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
+        fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
+        fpath_temp_h = fpath_spec.format(var='tasAdjust', ssp='historical')
+        fpath_precip = fpath_spec.format(var='prAdjust', ssp=ssp)
+        fpath_precip_h = fpath_spec.format(var='prAdjust', ssp='historical')
+        with utils.get_lock():
+            try:
+                fpath_temp = utils.file_downloader(fpath_temp)
+                fpath_temp_h = utils.file_downloader(fpath_temp_h)
+                fpath_precip = utils.file_downloader(fpath_precip)
+                fpath_precip_h = utils.file_downloader(fpath_precip_h)
+                break
+            except:
+                # go and check in the next version
+                pass
+              
 
     # Read the GCM files
     with xr.open_dataset(fpath_temp_h, use_cftime=True) as tempds_hist, \
@@ -317,6 +326,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         assert r == 0
         dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
         precip = precip * dimo * (60 * 60 * 24)
+
 
     process_gcm_data(gdir, output_filesuffix=output_filesuffix,
                      prcp=precip, temp=temp,
