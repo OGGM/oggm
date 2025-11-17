@@ -246,27 +246,19 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     else:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/'
     
+    path = f'{gcm_server}/cmip6/isimip3b/flat/2025.11/monthly/'
     add = '_global_monthly_flat_glaciers.nc'
-    # secondary GCMs are all in 2025.11, primary GCMs are in 2023.2
-    versions = ["2025.11","2023.2"]
 
-    for v in versions:
-        path = f'{gcm_server}/cmip6/isimip3b/flat/{v}/monthly/'
-        fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
-        fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
-        fpath_temp_h = fpath_spec.format(var='tasAdjust', ssp='historical')
-        fpath_precip = fpath_spec.format(var='prAdjust', ssp=ssp)
-        fpath_precip_h = fpath_spec.format(var='prAdjust', ssp='historical')
-        with utils.get_lock():
-            try:
-                fpath_temp = utils.file_downloader(fpath_temp)
-                fpath_temp_h = utils.file_downloader(fpath_temp_h)
-                fpath_precip = utils.file_downloader(fpath_precip)
-                fpath_precip_h = utils.file_downloader(fpath_precip_h)
-                break
-            except:
-                # go and check in the next version
-                pass
+    fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
+    fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
+    fpath_temp_h = fpath_spec.format(var='tasAdjust', ssp='historical')
+    fpath_precip = fpath_spec.format(var='prAdjust', ssp=ssp)
+    fpath_precip_h = fpath_spec.format(var='prAdjust', ssp='historical')
+    with utils.get_lock():
+        fpath_temp = utils.file_downloader(fpath_temp)
+        fpath_temp_h = utils.file_downloader(fpath_temp_h)
+        fpath_precip = utils.file_downloader(fpath_precip)
+        fpath_precip_h = utils.file_downloader(fpath_precip_h)
               
 
     # Read the GCM files
