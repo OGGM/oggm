@@ -959,6 +959,8 @@ class TestGdirObservations:
         # check that observation was added to the observation files and that the
         # result is the same as the previous implementation
         assert 'ref_mb' in gdir.observations
+        for key in ['value', 'unit', 'err', 'period']:
+            assert key in gdir.observations['ref_mb']
         mb_calib_threestep = gdirs[0].read_yml('settings',
                                                '_informed_threestep')
         assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
@@ -996,12 +998,13 @@ class TestGdirObservations:
 
         # different combinations of providing observation in file and as kwarg
         ref_mb = gdir.observations['ref_mb']['value']
+        ref_mb_unit = gdir.observations['ref_mb']['unit']
         ref_mb_err = gdir.observations['ref_mb']['err']
         ref_mb_period = gdir.observations['ref_mb']['period']
         # provided and file observations the same without overwriting should work
         tasks.mb_calibration_from_scalar_mb(
             gdir, observations_filesuffix='', overwrite_observations=False,
-            ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+            ref_mb=ref_mb, ref_mb_unit=ref_mb_unit, ref_mb_err=ref_mb_err,
             ref_mb_period=ref_mb_period, ref_mb_years=None,
             write_to_gdir=False,
         )

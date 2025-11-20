@@ -4,6 +4,8 @@
 import logging
 import os
 import inspect
+from datetime import date, timedelta
+import calendar
 # External libs
 import cftime
 import numpy as np
@@ -3160,6 +3162,7 @@ def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='',
 
     gdir.observations['ref_mb'] = {
         'value': mbdf['ANNUAL_BALANCE'].mean(),
+        'unit': 'kg m-2 yr-1',
         'years': mbdf.index.values,
     }
 
@@ -3301,6 +3304,7 @@ def mb_calibration_from_hugonnet_mb(gdir, *,
 
         ref_mb_use = {
             'value': ref_mb,
+            'unit': 'kg m-2 yr-1',
             'period': ref_mb_period,
             'err': ref_mb_err,
         }
@@ -3376,12 +3380,85 @@ def mb_calibration_from_hugonnet_mb(gdir, *,
                                              )
 
 
+def _floatyears_from_ref_mb_period(ref_mb_period):
+    """Helper function to detect the time resolution required by the `mb_model`
+    and to provide all necessary dates in the floatyear convention.
+
+    - If the period starts on January 1st and ends on January 1st or December
+      31st, an annual mass balance and a yearly timeseries can be used.
+    - If the period starts on the first day of a month and ends on the first day
+      of another month or the last day of a month, a monthly mass balance and a
+      monthly timeseries can be used.
+    - If the period starts or ends on an arbitrary day, a daily mass balance and
+      a daily timeseries are used.
+    """
+
+    date0, date1 = ref_mb_period.split('_')
+    y0, m0, d0 = [int(i) for i in date0.split('-')]
+    y1, m1, d1 = [int(i) for i in date1.split('-')]
+
+    start_date = date(y0, m0, d0)
+    end_date = date(y1, m1, d1)
+
+    # Check which resolution we need to use within the mb_model:
+    # annual: period starts 01.01.y0 and ends with 01.01.y1 (exclude y1) or
+    #         31.12.y1 (include y1)
+    if (start_date == date(y0, 1, 1) and
+            (end_date == date(y1, 1, 1) or end_date == date(y1, 12, 31))):
+        time_resolution = 'annual'
+        if end_date == date(y1, 1, 1):
+            floatyears = np.arange(y0, y1)
+        else:
+            floatyears = np.arange(y0, y1 + 1)
+
+    # monthly: period starts with 01.m0.y0 and ends with 01.m1.y1 (exclude
+    #          m1) or with the last day of m1 (include m1)
+    elif (start_date.day == 1 and
+          (end_date.day == 1 or
+           end_date.day == calendar.monthrange(y1, m1)[1])):
+        time_resolution = 'monthly'
+        if end_date.day == 1:
+            dates = np.arange(
+                np.datetime64(start_date, 'M'),
+                np.datetime64(end_date, 'M'),
+                dtype='datetime64[M]'
+            )
+        else:
+            dates = np.arange(
+                np.datetime64(start_date, 'M'),
+                np.datetime64(end_date + timedelta(days=1), 'M'),
+                dtype='datetime64[M]'
+            )
+        floatyears = date_to_floatyear(
+            y=dates.astype('datetime64[Y]').astype(int) + 1970,
+            m=(dates.astype('datetime64[M]').astype(int) % 12) + 1)
+
+    # daily: all the rest, the end day is always included
+    else:
+        time_resolution = 'daily'
+        dates = np.arange(
+            np.datetime64(start_date, 'D'),
+            np.datetime64(end_date + timedelta(days=1), 'D'),
+            dtype='datetime64[D]'
+        )
+
+        floatyears = date_to_floatyear(
+            y=dates.astype('datetime64[Y]').astype(int) + 1970,
+            m=(dates.astype('datetime64[M]').astype(int) % 12) + 1,
+            d=(dates - dates.astype('datetime64[M]').astype('datetime64[D]')
+               ).astype(int) + 1
+        )
+
+    return time_resolution, floatyears
+
+
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_scalar_mb(gdir, *,
                                   settings_filesuffix='',
                                   observations_filesuffix='',
                                   overwrite_observations=False,
                                   ref_mb=None,
+                                  ref_mb_unit='kg m-2 yr-1',
                                   ref_mb_err=None,
                                   ref_mb_period=None,
                                   ref_mb_years=None,
@@ -3418,7 +3495,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
     calibration.
 
     This task can be called by other, "higher level" tasks, for example
-    :py:func:`oggm.core.massbalance.mb_calibration_from_geodetic_mb` or
+    :py:func:`oggm.core.massbalance.mb_calibration_from_hugonnet_mb` or
     :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
 
     Note that this does not compute the apparent mass balance at
@@ -3444,10 +3521,17 @@ def mb_calibration_from_scalar_mb(gdir, *,
         If you want to overwrite already existing observation values in the
         provided observations file set this to True. Default is False.
     ref_mb : float, required
-        the reference mass balance to match (units: kg m-2 yr-1)
-        It is required here - if you want to use available observations,
-        use :py:func:`oggm.core.massbalance.mb_calibration_from_geodetic_mb`
+        The reference mass balance to match (units: kg m-2 yr-1 or kg m-2,
+        defined in ref_mb_unit) It is required here - if you want to use
+        available observations,
+        use :py:func:`oggm.core.massbalance.mb_calibration_from_hugonnet_mb`
         or :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
+    ref_mb_unit : str, optional
+        The unit of the provided `ref_mb`. Options are:
+        - 'kg m-2 yr-1': Used when the reference mass balance ref_mb corresponds
+           to full year periods.
+        - 'kg m-2': Used when the provided `ref_mb_period` does not span full
+          years.
     ref_mb_err : float, optional
         currently only used for logging - it is not used in the calibration.
     ref_mb_period : str, optional
@@ -3585,6 +3669,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
         ref_mb_use = ref_mb_in_file
     else:
         # if the provided is the same as the one stored in the file it is fine
+        # special treatment for ref_mb_unit, because we defined a default
+        ref_mb_provided['unit'] = ref_mb_unit
         if ref_mb_in_file != ref_mb_provided:
             raise InvalidWorkflowError(
                 'You provided a reference mass balance, but their is already '
@@ -3596,6 +3682,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # now we can extract the actual values we want to use
     ref_mb = ref_mb_use['value']
+    if 'unit' in ref_mb_use:
+        ref_mb_unit = ref_mb_use['unit']
     if 'err' in ref_mb_use:
         ref_mb_err = ref_mb_use['err']
     if 'period' in ref_mb_use:
@@ -3605,8 +3693,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Let's go
     # Climate period
-    # TODO: doesn't support hydro years
     if ref_mb_years is not None:
+        time_resolution = 'annual'
         if len(ref_mb_years) > 2:
             years = np.asarray(ref_mb_years)
             ref_mb_period = 'custom'
@@ -3615,13 +3703,19 @@ def mb_calibration_from_scalar_mb(gdir, *,
             ref_mb_period = f'{ref_mb_years[0]}-01-01_{ref_mb_years[1]}-01-01'
         gdir.observations['ref_mb']['period'] = ref_mb_period
     elif ref_mb_period is not None:
-        y0, y1 = ref_mb_period.split('_')
-        y0 = int(y0.split('-')[0])
-        y1 = int(y1.split('-')[0])
-        years = np.arange(y0, y1)
+        time_resolution, years = _floatyears_from_ref_mb_period(ref_mb_period)
     else:
         raise InvalidParamsError('One of `ref_mb_years` or `ref_mb_period` '
                                  'is required for calibration.')
+
+    # check that ref_mb_unit fits to time_resolution
+    if time_resolution != 'annual' and ref_mb_unit == 'kg m-2 yr-1':
+        raise InvalidParamsError(
+            "When the reference mass balance period does not correspond to full "
+            f"calendar years (your provided `ref_mb_period` is {ref_mb_period}), "
+            "the mass balance must be provided in 'kg m-2' instead of"
+            "'kg m-2 yr-1'. Please set the correct unit using the `ref_mb_unit` "
+            "parameter and make sure `ref_mb` is provided correctly.")
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
@@ -3685,9 +3779,22 @@ def mb_calibration_from_scalar_mb(gdir, *,
         # Set the new attr value
         setattr(mb_mod, model_attr, x)
         if use_2d_mb:
-            out = mb_mod.get_specific_mb(heights=heights, widths=widths, year=years).mean()
+            out = mb_mod.get_specific_mb(
+                heights=heights, widths=widths, year=years,
+                time_resolution=time_resolution)
         else:
-            out = mb_mod.get_specific_mb(fls=fls, year=years).mean()
+            out = mb_mod.get_specific_mb(
+                fls=fls, year=years, time_resolution=time_resolution)
+
+        if ref_mb_unit == 'kg m-2 yr-1':
+            out = out.mean()
+        elif ref_mb_unit == 'kg m-2':
+            out = out.sum()
+        else:
+            raise NotImplementedError(
+                f"ref_mb_unit '{ref_mb_unit}' not implemented. Options are "
+                f"'kg m-2 yr-1' or 'kg m-2'.")
+
         return np.mean(out - ref_mb)
 
     try:
