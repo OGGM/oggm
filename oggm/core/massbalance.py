@@ -3639,6 +3639,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
     ref_mb_provided = {}
     if ref_mb is not None:
         ref_mb_provided['value'] = ref_mb
+    if ref_mb_unit is not None:
+        ref_mb_provided['unit'] = ref_mb_unit
     if ref_mb_err is not None:
         ref_mb_provided['err'] = ref_mb_err
     if ref_mb_period is not None:
@@ -3664,13 +3666,11 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                     overwrite_observations):
         gdir.observations['ref_mb'] = ref_mb_provided
         ref_mb_use = ref_mb_provided
-    elif ref_mb_in_file is not None and ref_mb_provided == {}:
+    elif ref_mb_in_file is not None and set(ref_mb_provided.keys()) == {"unit"}:
         # only provided in file, this is ok so continue
         ref_mb_use = ref_mb_in_file
     else:
         # if the provided is the same as the one stored in the file it is fine
-        # special treatment for ref_mb_unit, because we defined a default
-        ref_mb_provided['unit'] = ref_mb_unit
         if ref_mb_in_file != ref_mb_provided:
             raise InvalidWorkflowError(
                 'You provided a reference mass balance, but their is already '
