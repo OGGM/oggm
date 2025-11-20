@@ -1338,7 +1338,7 @@ def get_temp_bias_dataframe(dataset='w5e5'):
 
     # fetch the file online
     base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
-                'w5e5_rgi6_perglacier_temp_bias_v2025.6.csv')
+                'w5e5_rgi6_perglacier_temp_bias_v2025.6.2.csv')
 
     file_path = file_downloader(base_url)
 
