@@ -3653,8 +3653,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
     else:
         ref_mb_in_file = None
 
-    # if nothing is provided raise an error
-    if (ref_mb_provided == {}) and (ref_mb_in_file is None):
+    # if nothing is provided raise an error, 'unit' has a default value
+    if (set(ref_mb_provided.keys()) == {"unit"}) and (ref_mb_in_file is None):
         raise InvalidWorkflowError(
             'You have not provided an reference mass balance! Either add it to '
             'the observations file '
