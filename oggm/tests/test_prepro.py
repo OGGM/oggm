@@ -22,10 +22,11 @@ from oggm.core import (gis, inversion, climate, centerlines,
 from oggm.shop import gcm_climate
 import oggm.cfg as cfg
 from oggm import utils, tasks
-from oggm.utils import get_demo_file, tuple2int
+from oggm.utils import get_demo_file, tuple2int, get_days_of_year
 from oggm.tests.funcs import get_test_dir
 from oggm import workflow
-from oggm.exceptions import InvalidWorkflowError
+from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
+from oggm.shop.w5e5 import process_gswp3_w5e5_data
 
 pytestmark = pytest.mark.test_env("prepro")
 
@@ -1732,6 +1733,122 @@ class TestClimate(unittest.TestCase):
         assert pdf['temp_bias'] == gdir.settings['temp_bias_min']
         assert pdf['melt_f'] < cfg.PARAMS['melt_f']
         assert pdf['prcp_fac'] == gdir.settings['prcp_fac_max']
+
+        # Test custom ref_mb_period, e.g. useful for using hydro years
+
+        # first test creation of floatyear timeseries depending on ref_mb_period
+        # and the definition of the time resolution needed by the mb_model
+        from oggm.core.massbalance import _floatyears_from_ref_mb_period
+
+        ref_mb_period_full_years = '2000-01-01_2020-01-01'
+        tr_full_years, years_full_years = _floatyears_from_ref_mb_period(
+            ref_mb_period_full_years
+        )
+        assert tr_full_years == 'annual'
+        assert len(years_full_years) == 20
+
+        ref_mb_period_full_years_2 = '2000-01-01_2019-12-31'
+        tr_full_years_2, years_full_years_2 = _floatyears_from_ref_mb_period(
+            ref_mb_period_full_years_2
+        )
+        assert tr_full_years_2 == 'annual'
+        np.testing.assert_allclose(years_full_years, years_full_years_2)
+
+        ref_mb_period_full_months = '2000-03-01_2019-11-01'
+        tr_full_months, years_full_months = _floatyears_from_ref_mb_period(
+            ref_mb_period_full_months
+        )
+        assert tr_full_months == 'monthly'
+        # months of 20 years minus four months (starting in MAR, ending in OCT)
+        assert len(years_full_months) == 20 * 12 - 4
+
+        ref_mb_period_full_months_2 = '2000-03-01_2019-10-31'
+        tr_full_months_2, years_full_months_2 = _floatyears_from_ref_mb_period(
+            ref_mb_period_full_months_2
+        )
+        assert tr_full_months_2 == 'monthly'
+        np.testing.assert_allclose(years_full_months, years_full_months_2)
+
+        ref_mb_period_daily = '2000-01-10_2001-12-31'
+        tr_daily, years_daily = _floatyears_from_ref_mb_period(
+            ref_mb_period_daily
+        )
+        assert tr_daily == 'daily'
+        assert len(years_daily) == (
+                get_days_of_year(2000, use_leap_years=True) - 9 +  # starting 10.01.2000
+                get_days_of_year(2001, use_leap_years=True)
+        )
+
+        # test different ref_mb_units, kg m-2 yr-1 and kg m-2
+        reset_observation_file(gdir)
+        ref_mb_mean = mbdf.ANNUAL_BALANCE.mean()
+        ref_mb_sum = mbdf.ANNUAL_BALANCE.sum()
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+
+        mb_calibration_from_scalar_mb(gdir,
+                                      settings_filesuffix='_mean',
+                                      observations_filesuffix='_mean',
+                                      ref_mb=ref_mb_mean,
+                                      ref_mb_unit='kg m-2 yr-1',
+                                      ref_mb_period=ref_mb_period,
+                                      calibrate_param1='prcp_fac',
+                                      calibrate_param2='melt_f',
+                                      calibrate_param3='temp_bias',
+                                      )
+        mb_calibration_from_scalar_mb(gdir,
+                                      settings_filesuffix='_sum',
+                                      observations_filesuffix='_sum',
+                                      ref_mb=ref_mb_sum,
+                                      ref_mb_unit='kg m-2',
+                                      ref_mb_period=ref_mb_period,
+                                      calibrate_param1='prcp_fac',
+                                      calibrate_param2='melt_f',
+                                      calibrate_param3='temp_bias',
+                                      )
+        # compare results when providing ref_mb in different units
+        gdir.settings_filesuffix = '_mean'
+        melt_f_mean = gdir.settings['melt_f']
+        prcp_fac_mean = gdir.settings['prcp_fac']
+        temp_bias_mean = gdir.settings['temp_bias']
+        gdir.settings_filesuffix = '_sum'
+        np.testing.assert_allclose(gdir.settings['melt_f'], melt_f_mean)
+        np.testing.assert_allclose(gdir.settings['prcp_fac'], prcp_fac_mean)
+        np.testing.assert_allclose(gdir.settings['temp_bias'], temp_bias_mean)
+
+        # test using a daily period, by providing fictive measurement dates
+        ref_mb_period_custom = f'{mbdf.index[0] - 1}-09-10_{mbdf.index[-1]-1}-09-25'
+        with pytest.raises(InvalidParamsError):
+            # wrong unit
+            reset_observation_file(gdir)
+            mb_calibration_from_scalar_mb(gdir,
+                                          settings_filesuffix='_custom_period',
+                                          ref_mb=ref_mb_mean,
+                                          ref_mb_unit='kg m-2 yr-1',
+                                          ref_mb_period=ref_mb_period_custom,
+                                          )
+        with pytest.raises(NotImplementedError):
+            # using MonthlyTIModel, but we need daily with a period provided
+            # with daily precision
+            reset_observation_file(gdir)
+            mb_calibration_from_scalar_mb(gdir,
+                                          settings_filesuffix='_custom_period',
+                                          ref_mb=ref_mb_mean,
+                                          ref_mb_unit='kg m-2',
+                                          ref_mb_period=ref_mb_period_custom,
+                                          )
+        # this should work
+        reset_observation_file(gdir)
+        workflow.execute_entity_task(
+            gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
+        )
+        # if this runs without an error this is enough
+        mb_calibration_from_scalar_mb(gdir,
+                                      settings_filesuffix='_custom_period',
+                                      ref_mb=ref_mb_mean,
+                                      ref_mb_unit='kg m-2',
+                                      ref_mb_period=ref_mb_period_custom,
+                                      mb_model_class=massbalance.DailyTIModel,
+                                      )
 
         # Test the use of gridded data(2D) instead of flowline data(1D) for the calibration
         reset_observation_file(gdir)
