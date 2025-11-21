@@ -138,7 +138,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -231,7 +231,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
-        min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+        min_ice_thickness = cfg.PARAMS['min_ice_thick_for_area']
 
     # check provided maximum start year here, and change min_spinup_period
     if spinup_start_yr_max is not None:
@@ -443,7 +443,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 geom_path=geom_path,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
-                dynamic_spinup_min_ice_thick=min_ice_thickness,
+                min_ice_thick_for_area=min_ice_thickness,
                 fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 store_monthly_step=store_monthly_step,
             )
@@ -453,9 +453,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
             if delete_area_min_h:
                 ovars.remove('area_min_h')
 
-            if type(ds) == tuple:
+            if isinstance(ds, tuple):
                 ds = ds[0]
-            model_area_km2 = ds.area_m2_min_h.loc[target_yr].values * 1e-6
+            model_area_km2 = ds.area_min_h_m2.loc[target_yr].values * 1e-6
             model_volume_km3 = ds.volume_m3.loc[target_yr].values * 1e-9
         else:
             # only run to rgi date and extract values
@@ -1047,7 +1047,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1332,7 +1332,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.

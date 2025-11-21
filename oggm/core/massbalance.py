@@ -1630,9 +1630,9 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     temp_bias = 0
     if cfg.PARAMS['use_temp_bias_from_file']:
         climinfo = gdir.get_climate_info()
-        if 'w5e5' not in climinfo['baseline_climate_source'].lower():
-            raise InvalidWorkflowError('use_temp_bias_from_file currently '
-                                       'only available for W5E5 data.')
+        # if 'w5e5' not in climinfo['baseline_climate_source'].lower():
+        #     raise InvalidWorkflowError('use_temp_bias_from_file currently '
+        #                                'only available for W5E5 data.')
         bias_df = get_temp_bias_dataframe()
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']

@@ -1433,6 +1433,15 @@ class TestClimate(unittest.TestCase):
         centerlines.fixed_dx_elevation_band_flowline(gdir)
         climate.process_custom_climate_data(gdir)
 
+        from oggm.ignore.lmr_forcing import process_mira_data
+        process_mira_data(gdir, filesuffix='mira')
+
+        with xr.open_dataset(gdir.get_filepath('climate_historical')) as dsc:
+            dsc = dsc.load()
+
+        with xr.open_dataset(gdir.get_filepath('climate_historical', filesuffix='mira')) as dse:
+            dse = dse.load()
+
         mbdf = gdir.get_ref_mb_data()
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
@@ -3030,6 +3039,7 @@ class TestGCMClimate(unittest.TestCase):
             np.testing.assert_allclose(scru.temp, scesm.temp, rtol=1e-3)
             np.testing.assert_allclose(scru.prcp, scesm.prcp, rtol=1e-3)
 
+    @pytest.mark.slow
     def test_process_lmr(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -3046,7 +3056,7 @@ class TestGCMClimate(unittest.TestCase):
         fpath_temp = get_demo_file('air_MCruns_ensemble_mean_LMRv2.1.nc')
         fpath_precip = get_demo_file('prate_MCruns_ensemble_mean_LMRv2.1.nc')
 
-        for ensemble_member in [None, 0]:
+        for ensemble_member, boost in zip([None, 0], [False, True]):
 
             fs = '_CCSM4'
             if ensemble_member is not None:
@@ -3056,6 +3066,7 @@ class TestGCMClimate(unittest.TestCase):
                                          ensemble_member=ensemble_member,
                                          fpath_temp=fpath_temp,
                                          fpath_precip=fpath_precip,
+                                         variance_boost=boost,
                                          output_filesuffix=fs)
 
             fh = gdir.get_filepath('climate_historical')
@@ -3077,7 +3088,8 @@ class TestGCMClimate(unittest.TestCase):
                 # is preserved over 31 years
                 _scru = scru.groupby('time.month').std(dim='time')
                 _scesm = scesm.groupby('time.month').std(dim='time')
-                np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=0.2)
+                rtol = 0.08 if boost else 0.11
+                np.testing.assert_allclose(_scru.temp, _scesm.temp, rtol=rtol)
 
                 # And also the annual cycle
                 scru = scru.groupby('time.month').mean(dim='time')
