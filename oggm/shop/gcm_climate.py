@@ -246,8 +246,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
     else:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/'
     
-    path = f'{gcm_server}/cmip6/isimip3b/flat/2025.11/monthly/'
-    add = '_global_monthly_flat_glaciers.nc'
+    path = f'{gcm_server}/cmip6/isimip3b/flat/2025.11.25/monthly/'
+    add = '_global_monthly_flat_glaciers_v2025.11.25.nc'
 
     fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
     fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
