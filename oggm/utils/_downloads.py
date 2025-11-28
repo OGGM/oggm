@@ -1316,17 +1316,19 @@ def get_geodetic_mb_dataframe(file_path=None):
 
 
 def get_temp_bias_dataframe(dataset='w5e5'):
-    """Fetches the reference geodetic dataframe for calibration.
+    """Fetches the temperature bias dataframe created by the OGGM>=v16 pre-calibration
+    (further explained in the OGGM mass balance tutorial: 
+    https:// tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html).
+    The data preparation script is available at 
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/1.6.1/prepare_bias_map.ipynb
 
-    Currently, that's the data from Hughonnet et al. (2021), corrected for
-    outliers and with void filled. The data preparation script is
-    available at
-    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
-
+    The file differs between climate datasets and OGGM versions. For W5E5 and OGGM v162, it is e.g.
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_temp_bias_v2023.4.csv
+    
     Parameters
     ----------
-    file_path : str
-        in case you have your own file to parse (check the format first!)
+    dataset : str
+        climate dataset used to choose temperature bias dataframe (currently only w5e5 available)
 
     Returns
     -------
