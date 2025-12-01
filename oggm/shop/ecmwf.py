@@ -174,7 +174,12 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         prcp = ds['tp'].data * 1000 * ds['time.daysinmonth']
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
         _check_ds_validity(ds)
-        ds = ds.isel(time=0)
+        try:
+            ds = ds.isel(time=0)
+        except (ValueError):
+            # new inv flattening files do not have any
+            # time dependencies anymore
+            pass
         try:
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
         except (ValueError, KeyError):
