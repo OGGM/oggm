@@ -1315,32 +1315,38 @@ def get_geodetic_mb_dataframe(file_path=None):
     return df
 
 
-def get_temp_bias_dataframe(dataset='w5e5'):
-    """Fetches the temperature bias dataframe created by the OGGM>=v16 pre-calibration
-    (further explained in the OGGM mass balance tutorial: 
-    https:// tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html).
-    The data preparation script is available at 
+def get_temp_bias_dataframe(dataset):
+    """Fetches the temperature bias dataframe.
+
+    The dataframe was created by the OGGM>=v16 pre-calibration
+    (further explained in the `OGGM mass balance tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_
+
+    The data preparation script is available at
     https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/1.6.1/prepare_bias_map.ipynb
 
     The file differs between climate datasets and OGGM versions. For W5E5 and OGGM v162, it is e.g.
     https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_temp_bias_v2023.4.csv
-    
+
     Parameters
     ----------
     dataset : str
-        climate dataset used to choose temperature bias dataframe (currently only w5e5 available)
+        climate dataset used to choose temperature bias dataframe
+        (currently only w5e5 and era5 are available)
 
     Returns
     -------
     a DataFrame with the data.
     """
 
-    if dataset != 'w5e5':
+    if dataset not in ['w5e5', 'era5']:
         raise NotImplementedError(f'No such dataset available yet: {dataset}')
 
     # fetch the file online
-    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
-                'w5e5_rgi6_perglacier_temp_bias_v2025.6.2.csv')
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
+    if dataset == 'w5e5':
+        base_url += 'w5e5_rgi6_perglacier_temp_bias_v2025.6.2.csv'
+    if dataset == 'era5':
+        base_url += 'era5_rgi6_perglacier_temp_bias_v2025.6.2.csv'
 
     file_path = file_downloader(base_url)
 

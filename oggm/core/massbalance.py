@@ -1642,11 +1642,19 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     temp_bias = 0
     if informed_threestep:
         climinfo = gdir.get_climate_info()
-        bias_df = get_temp_bias_dataframe()
+        climsource = climinfo['baseline_climate_source']
+        if 'w5e5' in climsource.lower():
+            bias_df = get_temp_bias_dataframe('w5e5')
+        elif 'era5' in climsource.lower():
+            bias_df = get_temp_bias_dataframe('era5')
+        else:
+            raise InvalidWorkflowError('Dataset not suitable for '
+                                       f'informed 3-steps: {climsource}')
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
         # Take nearest
         dis = ((bias_df.lon_val - ref_lon)**2 + (bias_df.lat_val - ref_lat)**2)**0.5
+        assert dis.min() < 1, 'Somethings wrong with lons'
         sel_df = bias_df.iloc[np.argmin(dis)]
         temp_bias = sel_df['median_temp_bias_w_err_grouped']
         assert np.isfinite(temp_bias), 'Temp bias not finite?'

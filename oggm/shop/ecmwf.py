@@ -158,6 +158,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         temp = ds['t2m'].data - 273.15
         time = ds.time.data
         ref_lon = float(ds['longitude'])
+        # That's actually not how it should be - but it's too late to change
         ref_lon = ref_lon - 360 if ref_lon > 180 else ref_lon
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
