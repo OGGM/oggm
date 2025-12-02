@@ -630,6 +630,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
         utils.get_temp_bias_dataframe(dataset='w5e5')
+        utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='era5')
 
         use_regional_avg = False

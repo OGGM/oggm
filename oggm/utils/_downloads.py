@@ -1315,7 +1315,7 @@ def get_geodetic_mb_dataframe(file_path=None):
     return df
 
 
-def get_temp_bias_dataframe(dataset):
+def get_temp_bias_dataframe(dataset, regional=False):
     """Fetches the temperature bias dataframe.
 
     The dataframe was created by the OGGM>=v16 pre-calibration
@@ -1343,10 +1343,11 @@ def get_temp_bias_dataframe(dataset):
 
     # fetch the file online
     base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
+    calibtype = 'regional' if regional else 'perglacier'
     if dataset == 'w5e5':
-        base_url += 'w5e5_rgi6_perglacier_temp_bias_v2025.6.2.csv'
+        base_url += f'w5e5_rgi6_{calibtype}_temp_bias_v2025.6.2.csv'
     if dataset == 'era5':
-        base_url += 'era5_rgi6_perglacier_temp_bias_v2025.6.2.csv'
+        base_url += f'era5_rgi6_{calibtype}_temp_bias_v2025.6.2.csv'
 
     file_path = file_downloader(base_url)
 
