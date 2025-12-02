@@ -531,10 +531,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
-    PARAMS['use_winter_prcp_fac'] = cp.as_bool('use_winter_prcp_fac')
 
-    k = 'winter_prcp_fac_ab'
-    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     k = 'free_board_marine_terminating'
@@ -585,9 +582,9 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run',
-           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_fac',
+           'tidewater_type', 'store_model_geometry',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_fac_ab',
+           'geodetic_mb_period', 'store_fl_diagnostics',
            'prcp_fac', 'downstream_line_shape', 'keep_multipolygon_outlines']
     for k in ltr:
         cp.pop(k, None)

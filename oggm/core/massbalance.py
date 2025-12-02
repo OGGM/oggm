@@ -1450,13 +1450,11 @@ def calving_mb(gdir):
 
 
 def decide_winter_precip_factor(gdir):
-    """Utility function to decide on a precip factor based on winter precip."""
+    """Utility function to decide on a precip factor based on winter precip.
 
-    # We have to decide on a precip factor
-    if 'W5E5' not in cfg.PARAMS['baseline_climate']:
-        raise InvalidWorkflowError('prcp_fac from_winter_prcp is only '
-                                   'compatible with the W5E5 climate '
-                                   'dataset!')
+    The values here are hardcoded as OGGM evolves - there should be an
+    easy way to change it if people need more flexibility one day.
+    """
 
     # get non-corrected winter daily mean prcp (kg m-2 day-1)
     # it is easier to get this directly from the raw climate files
@@ -1480,10 +1478,24 @@ def decide_winter_precip_factor(gdir):
         assert len(ds_pr_winter.time) == 41 * 7, text
         w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
 
-    # from MB sandbox calibration to winter MB
-    # using t_melt=-1, cte lapse rate, monthly resolution
-    a, b = cfg.PARAMS['winter_prcp_fac_ab']
-    prcp_fac = a * np.log(w_prcp) + b
+    climsource = gdir.get_climate_info()['baseline_climate_source']
+    if 'w5e5' in climsource.lower():
+        # from OGGM calibration to winter MB, LOG
+        # repeated by Lily in November 2025 with newest gdirs
+        # using t_melt=-1, cte lapse rate, monthly resolution
+        a, b = -1.0614, 3.9200
+        prcp_fac = a * np.log(w_prcp) + b
+    elif 'era5' in climsource.lower():
+        # from OGGM calibration to winter MB, LINEAR
+        # repeated by Lily in November 2025 with newest gdirs
+        # using t_melt=-1, cte lapse rate, monthly resolution
+        a, b = -0.09078476, 2.43505368
+        prcp_fac = a * w_prcp + b
+    else:
+        msg = (f'Baseline climate {climsource} not suitable for'
+               'decide_winter_precip_factor(). Set prcp_fac.')
+        raise InvalidWorkflowError(msg)
+
     # don't allow extremely low/high prcp. factors!!!
     return clip_scalar(prcp_fac,
                        cfg.PARAMS['prcp_fac_min'],
@@ -1630,9 +1642,6 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     temp_bias = 0
     if informed_threestep:
         climinfo = gdir.get_climate_info()
-        if 'w5e5' not in climinfo['baseline_climate_source'].lower():
-            raise InvalidWorkflowError('only for W5E5 data.')
-
         bias_df = get_temp_bias_dataframe()
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
@@ -1642,9 +1651,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         temp_bias = sel_df['median_temp_bias_w_err_grouped']
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
-        if not cfg.PARAMS['use_winter_prcp_fac']:
-            raise InvalidParamsError('With `informed_threestep` you need to '
-                                     'set `use_winter_prcp_fac`.')
+        if cfg.PARAMS['prcp_fac'] is not None:
+            raise InvalidParamsError('With `informed_threestep` you cannot use '
+                                     'a preset prcp_fac - we need to rely on '
+                                     'decide_winter_precip_factor().')
 
         # Some magic heuristics - we just decide to calibrate
         # precip -> melt_f -> temp but informed by previous data.
@@ -1880,17 +1890,10 @@ def mb_calibration_from_scalar_mb(gdir, *,
         melt_f = cfg.PARAMS['melt_f']
 
     if prcp_fac is None:
-        if cfg.PARAMS['use_winter_prcp_fac']:
-            # Some sanity check
-            if cfg.PARAMS['prcp_fac'] is not None:
-                raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
-                                           "if using PARAMS['winter_prcp_factor'].")
+        if cfg.PARAMS['prcp_fac'] is None:
             prcp_fac = decide_winter_precip_factor(gdir)
         else:
             prcp_fac = cfg.PARAMS['prcp_fac']
-            if prcp_fac is None:
-                raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
-                                           "or PARAMS['winter_prcp_factor'].")
 
     if temp_bias is None:
         temp_bias = 0
