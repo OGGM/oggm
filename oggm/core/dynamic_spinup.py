@@ -1678,12 +1678,12 @@ def run_dynamic_melt_f_calibration(
         the glacier directory to process
     ref_dmdtda : float or None
         The reference geodetic mass balance to match (units: kg m-2 yr-1). If
-        None the data from Hugonnet 2021 is used.
+        None the data from mb_calib.json is used
         Default is None
     err_ref_dmdtda : float or None
         The error of the reference geodetic mass balance to match (unit: kg m-2
-        yr-1). Must always be a positive number. If None the data from Hugonett
-        2021 is used.
+        yr-1). Must always be a positive number. If None the data from
+        mb_calib.json is used
         Default is None
     err_dmdtda_scaling_factor : float
         The error of the geodetic mass balance is multiplied by this factor.
@@ -1807,17 +1807,16 @@ def run_dynamic_melt_f_calibration(
         raise RuntimeError('If you provide a reference geodetic mass balance '
                            '(ref_dmdtda) you must also provide an error for it '
                            '(err_ref_dmdtda), and vice versa!')
+
     # Get the reference geodetic mb and error if not given
     if ref_dmdtda is None:
-        df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
-        # reference geodetic mass balance from Hugonnet 2021
-        ref_dmdtda = float(sel['dmdtda'])
-        # dmdtda: in meters water-equivalent per year -> we convert
-        ref_dmdtda *= 1000  # kg m-2 yr-1
-        # error of reference geodetic mass balance from Hugonnet 2021
-        err_ref_dmdtda = float(sel['err_dmdtda'])
-        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+        df = gdir.read_json('mb_calib')
+        ref_period = df['reference_period']
+        # Should already be in proper units
+        # (see massbalance.py->calib from geodetic mb)
+        ref_dmdtda = df['reference_mb']
+        err_ref_dmdtda = df['reference_mb_err']
+        # Scale the error to match
         err_ref_dmdtda *= err_dmdtda_scaling_factor
 
     if err_ref_dmdtda <= 0:
