@@ -3483,8 +3483,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
 
-    This calibrates the mass balance parameters using a reference average
-    MB data over a given period (e.g. average in-situ SMB or geodetic MB).
+    This calibrates the mass balance parameters using reference MB data over a
+    given period (annual average or cumulative in-situ SMB or geodetic MB).
     This flexible calibration allows to calibrate three parameters one after
     another. The first parameter is varied between two chosen values (a range)
     until the ref MB value is matched. If this fails, the second parameter
@@ -3521,17 +3521,16 @@ def mb_calibration_from_scalar_mb(gdir, *,
         If you want to overwrite already existing observation values in the
         provided observations file set this to True. Default is False.
     ref_mb : float, required
-        The reference mass balance to match (units: kg m-2 yr-1 or kg m-2,
-        defined in ref_mb_unit) It is required here - if you want to use
-        available observations,
-        use :py:func:`oggm.core.massbalance.mb_calibration_from_hugonnet_mb`
-        or :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
+        The reference mass balance to match, either provided as an annual
+        average (kg m-2 yr-1) or as a cumulative value (kg m-2) over the
+        provided ref_mb_period. The correct unit must be set in ref_mb_unit.
+        To use available observations, see
+        :py:func:`oggm.core.massbalance.mb_calibration_from_hugonnet_mb` or
+        :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
     ref_mb_unit : str, optional
-        The unit of the provided `ref_mb`. Options are:
-        - 'kg m-2 yr-1': Used when the reference mass balance ref_mb corresponds
-           to full year periods.
-        - 'kg m-2': Used when the provided `ref_mb_period` does not span full
-          years.
+        The unit of ref_mb`. Options are:
+        - 'kg m-2 yr-1': annual average MB over a full-year ref_mb_period.
+        - 'kg m-2': cumulative MB over any ref_mb_period.
     ref_mb_err : float, optional
         currently only used for logging - it is not used in the calibration.
     ref_mb_period : str, optional
