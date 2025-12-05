@@ -200,9 +200,10 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         append a suffix to the filename (useful for ensemble experiments).
         If it is not set, we create a filesuffix with applied ensemble and ssp
     member : str
-        ensemble member gcm that you want to process
+        ensemble member gcm that you want to process (five primary gcms, additional nine secondary gcms available)
     ssp : str
-        ssp scenario to process ('ssp126', 'ssp370' or 'ssp585' are available for the primary GCMs, additional ones are available for the secondary GCMs)
+        ssp scenario to process ('ssp126', 'ssp370' or 'ssp585' are available for all GCMs,
+        additional ssps are available for some GCMs)
     year_range : tuple of str
         the year range for which the anomalies are computed
         (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')`
