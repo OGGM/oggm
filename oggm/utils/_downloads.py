@@ -68,7 +68,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '9bfeb6dfea9513f790877819d9a6cbd2c7b61611'
+SAMPLE_DATA_COMMIT = '00fca8809eeb6e087ba34ac0e3e713e7b185eca3'
 
 CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
 CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
@@ -1270,7 +1270,7 @@ def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
     return tar_base
 
 
-def get_geodetic_mb_dataframe(file_path=None):
+def get_geodetic_mb_dataframe(file_path=None, regional=False):
     """Fetches the reference geodetic dataframe for calibration.
 
     Currently that's the data from Hughonnet et al 2021, corrected for
@@ -1282,6 +1282,8 @@ def get_geodetic_mb_dataframe(file_path=None):
     ----------
     file_path : str
         in case you have your own file to parse (check the format first!)
+    regional : bool
+        to fetch the regional file instead - this is a different format!
 
     Returns
     -------
@@ -1291,8 +1293,12 @@ def get_geodetic_mb_dataframe(file_path=None):
     # fetch the file online or read custom file
     if file_path is None:
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
-        file_path = file_downloader(base_url + file_name)
+        if regional:
+            file_name = 'hugonnet_2021_regional_avg.csv'
+            file_path = file_downloader(base_url + file_name)
+        else:
+            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+            file_path = file_downloader(base_url + file_name)
 
     # Did we open it yet?
     if file_path in cfg.DATA:
@@ -1301,7 +1307,7 @@ def get_geodetic_mb_dataframe(file_path=None):
     # If not let's go
     extension = os.path.splitext(file_path)[1]
     if extension == '.csv':
-        df = pd.read_csv(file_path, index_col=0)
+        df = pd.read_csv(file_path)
     elif extension == '.hdf':
         df = pd.read_hdf(file_path)
 

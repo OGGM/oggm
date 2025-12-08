@@ -1159,10 +1159,9 @@ class TestPreproCLI(unittest.TestCase):
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-        dfh = pd.read_csv(utils.get_demo_file(dfh))
+        dfh = utils.get_geodetic_mb_dataframe(regional=True)
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
-        smb_ref = dfh.loc[11, 'dmdtda']
+        smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=200)  # Whole Alps
 
         odf = pd.DataFrame(dfm.loc[2000:2019].mean(), columns=['SMB'])
@@ -1326,10 +1325,9 @@ class TestPreproCLI(unittest.TestCase):
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-        dfh = pd.read_csv(utils.get_demo_file(dfh))
+        dfh = utils.get_geodetic_mb_dataframe(regional=True)
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
-        smb_ref = dfh.loc[11, 'dmdtda']
+        smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=150)  # Whole Alps
 
         odf = pd.DataFrame(dfm.loc[2000:2009].mean(), columns=['SMB'])

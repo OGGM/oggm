@@ -1621,12 +1621,11 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     # Get the reference data
     ref_mb_err = np.nan
     if use_regional_avg:
-        ref_mb_df = 'table_hugonnet_regions_10yr_20yr_ar6period.csv'
-        ref_mb_df = pd.read_csv(get_demo_file(ref_mb_df))
+        ref_mb_df = get_geodetic_mb_dataframe(regional=True)
         ref_mb_df = ref_mb_df.loc[ref_mb_df.period == ref_period].set_index('reg')
-        # dmdtda already in kg m-2 yr-1
-        ref_mb = ref_mb_df.loc[int(gdir.rgi_region), 'dmdtda']
-        ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda']
+        # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
+        ref_mb = ref_mb_df.loc[int(gdir.rgi_region), 'dmdtda'] * 1000
+        ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda'] * 1000
     else:
         try:
             ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
