@@ -1723,6 +1723,44 @@ class TestClimate(unittest.TestCase):
         # the calibration results for the melt factor should be close to each other (+/- 5% are tolerated)
         np.testing.assert_allclose(mb_calib_2d['melt_f'], mb_calib_1d['melt_f'], rtol=0.05)
 
+    def test_mb_calibration_to_rmsd(self):
+        from oggm.core.massbalance import mb_calibration_to_rmsd
+        from functools import partial
+        
+        mb_calibration_to_rmsd = partial(mb_calibration_to_rmsd,
+                                         overwrite_gdir = True)
+        
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
+        climate.process_custom_climate_data(gdir)
+
+        mbdf = gdir.get_ref_mb_data()
+        mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
+        ref_mb = mbdf.ANNUAL_BALANCE.mean()
+        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+
+        # Default is to calibrate melt_f
+        mb_calibration_to_rmsd(gdir,
+                                ref_mb=ref_mb,
+                                ref_period=ref_period)
+
+        h, w = gdir.get_inversion_flowline_hw()
+        mb_new = massbalance.MonthlyTIModel(gdir)
+        mbdf['melt_mb'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
+
+        # Check that results are all the same
+        np.testing.assert_allclose(ref_mb, mbdf['melt_mb'].mean())
+        # Yeah, it correlates but also not too crazy
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb']].corr(),
+                                   atol=0.35)
+
+
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
 
