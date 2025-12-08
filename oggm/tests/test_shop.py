@@ -313,7 +313,7 @@ class Test_w5e5:
             # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/
             # ~lschuster/example_ipynb/flatten_glacier_gridpoint_tests.ipynb
             if d == 'GSWP3_W5E5':
-                res = 0.5
+                res = 0.5  # 0.5° resolution
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
                     dinv = dinv.load()
             else:
@@ -328,11 +328,24 @@ class Test_w5e5:
                           (51.495, 30.9010),  # RGI60-12.01691
                           (0, 0),  # random gridpoint not near to a glacier
                           ( -141.670274+360, 69.166921),  # in RGI7C, not in RGI6
-                          (-66.855668+360, -67.535551)  # only in RGI7G, not in RGI6 or in RGI 7C
+                          (-66.855668+360, -67.535551), # only in RGI7G, not in RGI6 or in RGI 7C
+                          (-0.039683+360, 42.695419 ),  # RGI60-11.03228 also check glacier near longitude 0
+                          (-179.915527+360, 66.276108)  # RGI60-10.05049 	(near -180 longitude)
                           ]:
                 lon, lat = coord
                 # get the distances to the glacier coordinate
-                c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
+
+                #this does not work if it is flattened...
+                # res = float(dinv.longitude[1] - dinv.longitude[0])  # grid resolution
+                wrap_limit = 360 - res / 2
+                lon_sp = lon
+                if (lon > wrap_limit) and np.any(dinv.longitude==0):
+                    # there is an ERA5 gridpoint at longitude 0 (i.e., equal to 360)
+                    # we want to actually select longitude 0 if we are near to 360, so we reconvert it
+                    lon_sp = lon - 360
+                    # W5E5 gridpoints are only at 0.25°, 0.75°..., not exactly at 0 and do not encounter that issue
+                    assert d != 'GSWP3-W5E5'
+                c = (dinv.longitude - lon_sp) ** 2 + (dinv.latitude - lat) ** 2
                 c = c.to_dataframe('distance').sort_values('distance')
                 # select the nearest climate point from the flattened glacier gridpoint
                 lat_near, lon_near, dist = c.iloc[0]
@@ -343,13 +356,12 @@ class Test_w5e5:
                         assert np.abs(lon_near - lon) <= res/2
                         assert dist <= ((res/2) ** 2 + (res/2)** 2) ** 0.5
                 # for glaciers the next gridpoint should be the nearest
-                # (GSWP3-W5E5 resolution is 0.5°)
                 else:
                     assert np.abs(lat_near - lat) <= res/2
-                    assert np.abs(lon_near - lon) <= res/2
+                    assert np.abs(lon_near - lon_sp) <= res/2
                     assert dist <= ((res/2) ** 2 + (res/2) ** 2) ** 0.5
 
-            # this only contains data for five glaciers, let's still check some basics
+            # this only contains data for a few glaciers, let's still check some basics
             # both glaciers are not at latitude or longitude 0
             if d == 'GSWP3_W5E5':
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:

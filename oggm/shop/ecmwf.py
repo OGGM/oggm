@@ -134,7 +134,6 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     if dataset is None:
         dataset = cfg.PARAMS['baseline_climate']
 
-    # Use xarray to read the data
     lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon
     lat = gdir.cenlat
     with xr.open_dataset(get_ecmwf_file(dataset, 'tmp')) as ds:
@@ -147,13 +146,20 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             assert ds['time.month'][-1] == 5
             y1 -= 1
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+        lon_sp = lon
+        if np.any(ds.longitude==0):
+            res = float(360-ds.longitude[-1])  # ("flattened") grid resolution
+            wrap_limit = 360 - res / 2
+            if lon > wrap_limit:
+                lon_sp = lon - 360
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
         try:
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+            ds = ds.sel(longitude=lon_sp, latitude=lat, method='nearest')
         except (ValueError, KeyError):
             # Flattened ERA5
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+            # there is an ERA5 gridpoint at longitude 0 (i.e., equal to 360)
+            c =  (ds.longitude - lon_sp) ** 2 + (ds.latitude - lat) ** 2
             ds = ds.isel(points=np.argmin(c.data))
         temp = ds['t2m'].data - 273.15
         time = ds.time.data
@@ -163,17 +169,29 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
         _check_ds_validity(ds)
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+        lon_sp = lon
+        if np.any(ds.longitude==0):
+            res = float(360-ds.longitude[-1])  # ("flattened") grid resolution
+            wrap_limit = 360 - res / 2
+            if lon > wrap_limit:
+                lon_sp = lon - 360
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
         try:
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+            ds = ds.sel(longitude=lon_sp, latitude=lat, method='nearest')
         except (ValueError, KeyError):
             # Flattened ERA5
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+            c =  (ds.longitude - lon_sp) ** 2 + (ds.latitude - lat) ** 2
             ds = ds.isel(points=np.argmin(c.data))
         prcp = ds['tp'].data * 1000 * ds['time.daysinmonth']
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
         _check_ds_validity(ds)
+        lon_sp = lon
+        if np.any(ds.longitude==0):
+            res = float(360-ds.longitude[-1])  # ("flattened") grid resolution
+            wrap_limit = 360 - res / 2
+            if lon > wrap_limit:
+                lon_sp = lon - 360
         try:
             ds = ds.isel(time=0)
         except (ValueError):
@@ -181,10 +199,10 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
             # time dependencies anymore
             pass
         try:
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+            ds = ds.sel(longitude=lon_sp, latitude=lat, method='nearest')
         except (ValueError, KeyError):
             # Flattened ERA5
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+            c =  (ds.longitude - lon_sp) ** 2 + (ds.latitude - lat) ** 2
             ds = ds.isel(points=np.argmin(c.data))
         hgt = ds['z'].data / cfg.G
 
@@ -194,10 +212,22 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         with xr.open_dataset(get_ecmwf_file(dataset, 'lapserates')) as ds:
             _check_ds_validity(ds)
             ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+            lon_sp = lon
+            if np.any(ds.longitude == 0):
+                res = float(360 - ds.longitude[-1])  # ("flattened") grid resolution
+                wrap_limit = 360 - res / 2
+                if lon > wrap_limit:
+                    lon_sp = lon - 360
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
 
         with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
             _check_ds_validity(ds)
+            lon_sp = lon
+            if np.any(ds.longitude == 0):
+                res = float(360 - ds.longitude[-1])  # ("flattened") grid resolution
+                wrap_limit = 360 - res / 2
+                if lon > wrap_limit:
+                    lon_sp = lon - 360
             ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             temp_std = ds['t2m_std'].data
