@@ -362,7 +362,7 @@ class Test_w5e5:
                     assert dist <= ((res/2) ** 2 + (res/2) ** 2) ** 0.5
 
             # this only contains data for a few glaciers, let's still check some basics
-            # both glaciers are not at latitude or longitude 0
+            # both glaciers are not at latitude or longitude 0, but for one glacier we need to pick longitude 0
             if d == 'GSWP3_W5E5':
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
                     assert np.all(dtemp_std.latitude != 0)
@@ -373,7 +373,7 @@ class Test_w5e5:
             else:
                 with xr.open_dataset(ecmwf.get_ecmwf_file('ERA5', 'tmp')) as dtemp:
                     assert np.all(dtemp.latitude != 0)
-                    assert np.all(dtemp.longitude != 0)
+                    assert np.all(dtemp.longitude >= 0)
                     assert dtemp.isel(time=0).t2m.std() > 0
                     assert dtemp.longitude.std() > 0
                     assert dtemp.latitude.std() > 0
