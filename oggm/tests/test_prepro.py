@@ -1823,9 +1823,19 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(ref_mb.mean(), mbdf['pf_tb_mb_rmsd'].mean(), atol=10)
         np.testing.assert_allclose(ref_mb.mean(), mbdf['all_mb_rmsd'].mean(), atol=10)
 
-        # # Yeah, it correlates but also not too crazy
-        # np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb']].corr(),
-        #                            atol=0.35)
+        # Check that there is a relatively strong correlation with simulated values
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'melt_mb_rmsd']].corr(),
+                                   atol=0.35)
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'prcp_fac_mb_rmsd']].corr(),
+                                   atol=0.35)
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'temp_bias_mb_rmsd']].corr(),
+                                   atol=0.35)
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'mf_pf_mb_rmsd']].corr(),
+                                   atol=0.35)
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'pf_tb_mb_rmsd']].corr(),
+                                   atol=0.35)
+        np.testing.assert_allclose(1, mbdf[['ref_mb', 'all_mb_rmsd']].corr(),
+                                   atol=0.35)
 
         # Set up and run the scalar calibration to compare the RMSD from the two runs
         mb_calibration_from_scalar_mb = partial(mb_calibration_from_scalar_mb,
