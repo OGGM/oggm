@@ -2010,7 +2010,15 @@ class TestClimate(unittest.TestCase):
                 calibrate_params=('temp_bias',),
                 temp_bias_min=-np.inf,
                 temp_bias_max=np.inf, )
-
+            
+        # Test for an acceptibly small bias
+        np.testing.assert_allclose(0, (mbdf['melt_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
+        np.testing.assert_allclose(0, (mbdf['prcp_fac_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
+        np.testing.assert_allclose(0, (mbdf['temp_bias_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
+        np.testing.assert_allclose(0, (mbdf['mf_tb_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
+        np.testing.assert_allclose(0, (mbdf['mf_pf_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
+        np.testing.assert_allclose(0, (mbdf['pf_tb_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
+        np.testing.assert_allclose(0, (mbdf['all_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
 
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
