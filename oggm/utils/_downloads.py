@@ -1350,10 +1350,11 @@ def get_temp_bias_dataframe(dataset, regional=False):
     # fetch the file online
     base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
     calibtype = 'regional' if regional else 'perglacier'
+    version = '3' if regional else '2'
     if dataset == 'w5e5':
-        base_url += f'w5e5_rgi6_{calibtype}_temp_bias_v2025.6.2.csv'
+        base_url += f'w5e5_rgi6_{calibtype}_temp_bias_v2025.6.{version}.csv'
     if dataset == 'era5':
-        base_url += f'era5_rgi6_{calibtype}_temp_bias_v2025.6.2.csv'
+        base_url += f'era5_rgi6_{calibtype}_temp_bias_v2025.6.{version}.csv'
 
     file_path = file_downloader(base_url)
 

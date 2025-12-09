@@ -1655,7 +1655,12 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         dis = ((bias_df.lon_val - ref_lon)**2 + (bias_df.lat_val - ref_lat)**2)**0.5
         assert dis.min() < 1, 'Somethings wrong with lons'
         sel_df = bias_df.iloc[np.argmin(dis)]
-        temp_bias = sel_df['median_temp_bias_w_err_grouped']
+        # Which bias central value to use?
+        if use_regional_avg:
+            centralval = 'median_temp_bias_w_area_grouped'
+        else:
+            centralval = 'median_temp_bias_w_err_grouped'
+        temp_bias = sel_df[centralval]
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
         if cfg.PARAMS['prcp_fac'] is not None:
