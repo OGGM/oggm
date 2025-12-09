@@ -1707,6 +1707,8 @@ def mb_calibration_to_rmsd(gdir, *,
     try:
         res = optimize.differential_evolution(rmsd_cost_function,
                                        bounds = bounds, # Use the default ranges set in the OGGM
+                                       tol=1e-8,
+                                       maxiter=5000, 
                                        args=(calibrate_params), # Pass the parameters to calibrate
                                        )
         
