@@ -1841,6 +1841,7 @@ class TestClimate(unittest.TestCase):
         mb_calibration_from_scalar_mb = partial(mb_calibration_from_scalar_mb,
                                                 overwrite_gdir=True)
 
+        # Start from scratch to avoid any overwritten values that could affect this run
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
