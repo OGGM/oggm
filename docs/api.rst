@@ -32,6 +32,7 @@ Tools to set-up and run OGGM.
     workflow.inversion_tasks
     workflow.merge_glacier_tasks
     workflow.calibrate_inversion_from_consensus
+    workflow.invert_from_params
 
 Troubleshooting
 ===============

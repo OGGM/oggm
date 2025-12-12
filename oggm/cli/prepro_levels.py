@@ -664,10 +664,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             # Inversion: we match the consensus
             filter = border >= 20
-            workflow.calibrate_inversion_from_consensus(gdirs,
-                                                        apply_fs_on_mismatch=True,
-                                                        error_on_mismatch=False,
-                                                        filter_inversion_output=filter)
+
+            if rgi_version == '70G':
+                purl = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
+                        'oggm_v1.6/inv_rgi7/rgi6_regional_inv_params_2025.1.csv')
+                params_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
+                workflow.invert_from_params(gdirs,
+                                            params_df=params_df,
+                                            filter_inversion_output=filter)
+            else:
+                workflow.calibrate_inversion_from_consensus(gdirs,
+                                                            apply_fs_on_mismatch=True,
+                                                            error_on_mismatch=False,
+                                                            filter_inversion_output=filter)
 
             # We get ready for modelling
             if border >= 20:

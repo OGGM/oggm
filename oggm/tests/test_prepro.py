@@ -2008,6 +2008,24 @@ class TestInversion(unittest.TestCase):
                                                          apply_fs_on_mismatch=True)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
 
+        # Try with params
+        diags = gdir.get_diagnostics()
+
+        dfo = workflow.invert_from_params(gdir,
+                                          glen_a=diags['inversion_glen_a'],
+                                          fs=diags['inversion_fs'])
+        np.testing.assert_allclose(df.vol_itmix_m3, dfo.vol_oggm_m3, rtol=0.01)
+
+        dfi = pd.DataFrame()
+        dfi.index = [11]
+        dfi.loc[11, 'inversion_glen_a'] = diags['inversion_glen_a']
+        dfi.loc[11, 'inversion_fs'] = diags['inversion_fs']
+
+        dfo = workflow.invert_from_params(gdir, params_df=dfi)
+        np.testing.assert_allclose(df.vol_itmix_m3, dfo.vol_oggm_m3, rtol=0.01)
+
+
+
     @pytest.mark.slow
     def test_invert_hef_shapes(self):
 

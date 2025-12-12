@@ -589,6 +589,7 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
                                        volume_m3_reference=None,
+                                       use_params_file=None,
                                        add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
@@ -719,6 +720,65 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             add_to_log_file=add_to_log_file)
     return df
+
+
+@global_task(log)
+def invert_from_params(gdirs,
+                       params_df=None,
+                       fs=None, glen_a=None,
+                       filter_inversion_output=True,
+                       add_to_log_file=True):
+    """instead of optimising the parameters, get them from a file.
+
+    Useful e.g. for pre computed parameters for RGI7.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    params_df : str
+        the dataframe to use (currently regional)
+    glen_a : float
+        if params file is not provided, use this value
+        (defaults to cfg.params)
+    fs : float
+        if params file is not provided, use this value
+    filter_inversion_output : bool
+        whether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
+
+    Returns
+    -------
+    a dataframe with the individual glacier volumes
+    """
+
+    gdirs = utils.tolist(gdirs)
+
+    df = pd.DataFrame({
+        'rgi_region': [gd.rgi_region for gd in gdirs]
+    }, index=[gd.rgi_id for gd in gdirs])
+    df.index.name = 'rgi_id'
+
+    if params_df is not None:
+        rgi_regs = set(df.rgi_region)
+        if len(rgi_regs) > 1:
+            raise InvalidParamsError('Glaciers from multiple RGI regions '
+                                     'are not supported.')
+        rgi_reg = int(rgi_regs.pop())
+        glen_a = params_df.loc[rgi_reg, 'inversion_glen_a']
+        fs = params_df.loc[rgi_reg, 'inversion_fs']
+
+    log.workflow(f'Applying A factor = {glen_a/cfg.PARAMS['glen_a']} '
+                 f'and fs = {fs}')
+
+    # Compute the final volume with the correct A
+    inversion_tasks(gdirs, glen_a=glen_a, fs=fs,
+                    filter_inversion_output=filter_inversion_output,
+                    add_to_log_file=add_to_log_file)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            add_to_log_file=add_to_log_file)
+    return df
+
 
 
 @global_task(log)
