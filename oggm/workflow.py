@@ -768,8 +768,8 @@ def invert_from_params(gdirs,
         glen_a = params_df.loc[rgi_reg, 'inversion_glen_a']
         fs = params_df.loc[rgi_reg, 'inversion_fs']
 
-    log.workflow(f'Applying A factor = {glen_a/cfg.PARAMS['glen_a']} '
-                 f'and fs = {fs}')
+    log.workflow(f"Applying A factor = {glen_a/cfg.PARAMS['glen_a']} "
+                 f"and fs = {fs}")
 
     # Compute the final volume with the correct A
     inversion_tasks(gdirs, glen_a=glen_a, fs=fs,
