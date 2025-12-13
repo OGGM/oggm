@@ -1621,8 +1621,11 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     # Get the reference data
     ref_mb_err = np.nan
     if use_regional_avg:
-        ref_mb_df = get_geodetic_mb_dataframe(regional=True)
-        ref_mb_df = ref_mb_df.loc[ref_mb_df.period == ref_period].set_index('reg')
+        ref_mb_df_o = get_geodetic_mb_dataframe(regional=True)
+        ref_mb_df = ref_mb_df_o.loc[ref_mb_df_o.period == ref_period].set_index('reg')
+        if len(ref_mb_df) == 0:
+            raise InvalidParamsError(f'Ref period {ref_period} not found in file: '
+                                     f'{ref_mb_df_o.period.unique()}')
         # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
         ref_mb = ref_mb_df.loc[int(gdir.rgi_region), 'dmdtda'] * 1000
         ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda'] * 1000
