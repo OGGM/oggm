@@ -3970,8 +3970,8 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     New glacier directories from the copied folders
     """
     base_dir = os.path.abspath(base_dir)
-    new_dir = os.path.join(base_dir, gdir.rgi_id[:8], gdir.rgi_id[:11],
-                           gdir.rgi_id)
+    new_dir = os.path.join(base_dir, gdir.rgi_id[:-6],
+                           gdir.rgi_id[:-3], gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'mb_calib', 'climate_historical', 'glacier_grid',
