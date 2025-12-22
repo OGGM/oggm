@@ -638,16 +638,18 @@ class TestMassBalanceModels:
             - filename: climate_historical_daily
             - input_filesuffix: 
             - bias: 0.0
+            - ys: 2000
+            - ye: 2019
             - aging_frequency: annual
             - climate_resolution: annual
             - spinup_years: 6
             - save_spinup_mbs: False
-            - ys: 2000
             - tau_e: 1.0
             - melt_f_ratio: 0.5
             - melt_f_change: neg_exp
             - store_buckets: False
             - use_previous_mbs: False
+            - nr_timesteps: 20
             - mb_buckets_year: 2000
         """)
         mb_mod = massbalance.SfcTypeTIModel(hef_gdir,

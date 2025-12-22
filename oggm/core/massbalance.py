@@ -1585,19 +1585,19 @@ class SfcTypeTIModel(MassBalanceModel):
         if self.save_spinup_mbs:
             first_year -= self.spinup_years
         if self.climate_resolution == 'annual':
-            self.max_timesteps = len(range(first_year, self.ye + 1))
+            self.nr_timesteps = len(range(first_year, self.ye + 1))
         elif self.climate_resolution == 'monthly':
-            self.max_timesteps = len(float_years_timeseries(
+            self.nr_timesteps = len(float_years_timeseries(
                 y0=first_year, y1=self.ye, include_last_year=True, ))
         elif self.climate_resolution == 'daily':
-            self.max_timesteps = len(float_years_timeseries(
+            self.nr_timesteps = len(float_years_timeseries(
                 y0=first_year, y1=self.ye, include_last_year=True,
                 daily=True))
         else:
             raise NotImplementedError(
                 f"climate_resolution {self.climate_resolution}")
 
-        output_shape = (self.max_timesteps,  # nr of maximum timesteps
+        output_shape = (self.nr_timesteps,  # total nr of timesteps
                         len(self.buckets_grid_point_label))  # nr of grid points
         self._climatic_mb = np.empty(output_shape)  # kg m-2
         self._ice_mb = np.empty(output_shape)  # kg m-2
