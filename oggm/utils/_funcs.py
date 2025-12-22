@@ -764,7 +764,7 @@ def date_to_floatyear(y, m, d=None):
     return y.astype(np.float64) + (doy - 1) / days_in_year
 
 
-def floatyear_to_date(yr, months_only=True):
+def floatyear_to_date(yr, return_day=False):
     """Converts a float year to an actual (year, month) pair or
     (year, month, day).
 
@@ -775,9 +775,9 @@ def floatyear_to_date(yr, months_only=True):
     ----------
     yr : float or array_like
         The floating year
-    months_only : bool, optional
-        If you True a tuple (year, month) will be returned, if False a tuple
-        (year, month, day) will be returned. Default is True.
+    return_day : bool, optional
+        If False a tuple (year, month) will be returned, if True a tuple
+        (year, month, day) will be returned. Default is False.
     """
     yr = np.asarray(yr, dtype=np.float64)
     y = np.floor(yr).astype(np.int64)
@@ -796,7 +796,7 @@ def floatyear_to_date(yr, months_only=True):
     m_idx = np.searchsorted(_BASE_CUM_END, adj, side='left')  # 0..11
     month = (m_idx + 1).astype(np.int64)
 
-    if months_only:
+    if not return_day:
         return y, month
 
     prev_end = np.where(m_idx > 0, _BASE_CUM_END[m_idx - 1], 0)
@@ -1065,7 +1065,7 @@ def get_seconds_of_month(year: float = None, use_leap_years: bool = False) -> in
 
 
 def float_years_timeseries(y0, y1=None, ny=None, include_last_year=False,
-                           monthly=True):
+                           daily=False):
     """Creates a timeseries in units of float years in monthly or daily
     resolution.
 
@@ -1081,9 +1081,9 @@ def float_years_timeseries(y0, y1=None, ny=None, include_last_year=False,
         Default is None.
     include_last_year : bool
         If the last year should be included. Default is False.
-    monthly : bool
-        If True the resulting timeseries will be in monthly resolution. If False
-        it will be in daily resolution. Default is True.
+    daily : bool
+        If True the resulting timeseries will be in daily resolution. If False
+        it will be in monthly resolution. Default is False.
 
     """
 
@@ -1102,19 +1102,7 @@ def float_years_timeseries(y0, y1=None, ny=None, include_last_year=False,
     y0 = int(np.floor(y0))
     y1 = int(np.floor(y1))
 
-    if monthly:
-        if include_last_year:
-            y1 += 1
-            end_month = '01'  # last date is ignored by np.arange
-        else:
-            end_month = '02'  # last date is ignored by np.arange
-        dates = np.arange(np.datetime64(f'{y0}-01', 'M'),
-                          np.datetime64(f'{y1}-{end_month}', 'M'),
-                          dtype='datetime64[M]')
-        years = dates.astype('datetime64[Y]').astype(int) + 1970
-        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
-        days = None
-    else:
+    if daily:
         if include_last_year:
             end_date = np.datetime64(f'{y1 + 1}-01-01', 'D')
         else:
@@ -1126,6 +1114,18 @@ def float_years_timeseries(y0, y1=None, ny=None, include_last_year=False,
         months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
         mstart = dates.astype('datetime64[M]').astype('datetime64[D]')
         days = (dates - mstart).astype(int) + 1
+    else:
+        if include_last_year:
+            y1 += 1
+            end_month = '01'  # last date is ignored by np.arange
+        else:
+            end_month = '02'  # last date is ignored by np.arange
+        dates = np.arange(np.datetime64(f'{y0}-01', 'M'),
+                          np.datetime64(f'{y1}-{end_month}', 'M'),
+                          dtype='datetime64[M]')
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        days = None
 
     out = date_to_floatyear(y=years, m=months, d=days)
     return out

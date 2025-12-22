@@ -1179,7 +1179,7 @@ class DailyTIModel(MonthlyTIModel):
             Temperatures, melt temperatures, total precipitation, and
             solid precipitation.
         """
-        y, m, d = floatyear_to_date(year, months_only=False)
+        y, m, d = floatyear_to_date(year, return_day=True)
         y = self.validate_year(year=y)
         pok = np.where((self.years == y) &
                        (self.months == m) &
@@ -1592,7 +1592,7 @@ class SfcTypeTIModel(MassBalanceModel):
         elif self.climate_resolution == 'daily':
             self.max_timesteps = len(float_years_timeseries(
                 y0=first_year, y1=self.ye, include_last_year=True,
-                monthly=False))
+                daily=True))
         else:
             raise NotImplementedError(
                 f"climate_resolution {self.climate_resolution}")
@@ -1637,7 +1637,7 @@ class SfcTypeTIModel(MassBalanceModel):
                     y0=spinup_start_year, y1=self.ys)[:-1]
             elif self.climate_resolution == 'daily':
                 spinup_steps = float_years_timeseries(
-                    y0=spinup_start_year, y1=self.ys, monthly=False)[:-1]
+                    y0=spinup_start_year, y1=self.ys, daily=True)[:-1]
             else:
                 raise NotImplementedError(
                     f"climate_resolution {self.climate_resolution}")
@@ -1900,14 +1900,14 @@ class SfcTypeTIModel(MassBalanceModel):
             self.mb_buckets_year = date_to_floatyear(buckets_yr, buckets_month)
         elif self.climate_resolution == 'daily':
             buckets_yr, buckets_month, buckets_day = floatyear_to_date(
-                float(year), months_only=False)
+                float(year), return_day=True)
             # date_to_floatyear can deal with monthly and yearly overflows
             # (e.g. 32.01. == 01.02., and 32.12.2000 == 01.01.2001)
             self.mb_buckets_year = date_to_floatyear(
                 buckets_yr, buckets_month, buckets_day + 1)
             # finally we get the values without the overflow for aging below
             buckets_yr, buckets_month, buckets_day = floatyear_to_date(
-                self.mb_buckets_year, months_only=False
+                self.mb_buckets_year, return_day=True
             )
         else:
             raise NotImplementedError(
@@ -2038,11 +2038,11 @@ class SfcTypeTIModel(MassBalanceModel):
             if mb_resolution == 'annual':
                 missing_float_years = float_years_timeseries(
                     y0=np.floor(self.mb_buckets_year), y1=year,
-                    include_last_year=True, monthly=False)
+                    include_last_year=True, daily=True)
             elif mb_resolution == 'monthly':
                 missing_float_years = float_years_timeseries(
                     y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1,
-                    monthly=False
+                    daily=True
                 )
                 # only keep those actually needed
                 y, m = floatyear_to_date(year)
@@ -2053,10 +2053,10 @@ class SfcTypeTIModel(MassBalanceModel):
             elif mb_resolution == 'daily':
                 missing_float_years = float_years_timeseries(
                     y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1,
-                    monthly=False
+                    daily=True
                 )
                 # only keep those actually needed
-                y, m, d = floatyear_to_date(year, months_only=False)
+                y, m, d = floatyear_to_date(year, return_day=True)
                 missing_float_years = [yr for yr in missing_float_years
                                        # date_to_floatyear can handle overflows
                                        # e.g. 32.12.2000 == 01.01.2001
@@ -2134,12 +2134,12 @@ class SfcTypeTIModel(MassBalanceModel):
             annual_mb = mbs[self._year_to_index[year]]
         elif self.climate_resolution == 'monthly':
             float_months = float_years_timeseries(y0=year, y1=year+1,
-                                                  monthly=True)[:-1]
+                                                  daily=False)[:-1]
             idx = [self._year_to_index[yr] for yr in float_months]
             annual_mb = np.sum(mbs[idx], axis=0)
         elif self.climate_resolution == 'daily':
             float_days = float_years_timeseries(y0=year, y1=year+1,
-                                                monthly=False)[:-1]
+                                                daily=True)[:-1]
             idx = [self._year_to_index[yr] for yr in float_days]
             annual_mb = np.sum(mbs[idx], axis=0)
         else:
@@ -2222,9 +2222,9 @@ class SfcTypeTIModel(MassBalanceModel):
             monthly_mb = mbs[self._year_to_index[year]]
         elif self.climate_resolution == 'daily':
             y_start, m_start, d_start = floatyear_to_date(year,
-                                                          months_only=False)
+                                                          return_day=True)
             float_days = float_years_timeseries(
-                y0=year, y1=year + 1, monthly=False)[:-1]
+                y0=year, y1=year + 1, daily=True)[:-1]
             # only keep days larger equal than the start of the month
             float_days = [day for day in float_days
                           if day >= date_to_floatyear(y_start, m_start, 1)]

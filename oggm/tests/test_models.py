@@ -902,7 +902,7 @@ class TestMassBalanceModels:
 
             if is_daily_model(model):
                 # daily resolution
-                years_d = utils.float_years_timeseries(ys, ye, monthly=False,
+                years_d = utils.float_years_timeseries(ys, ye, daily=True,
                                                        include_last_year=True)
                 smb_daily = mb_mod.get_specific_mb(year=years_d, fls=fls,
                                                    heights=heights,
@@ -1462,7 +1462,7 @@ class TestMassBalanceModels:
             for yr in mb_buckets:
                 # check snow bucket is empty after aging
                 should_be_empty = False
-                y, m, d = floatyear_to_date(yr, months_only=False)
+                y, m, d = floatyear_to_date(yr, return_day=True)
                 if aging == 'annual' and m == 1 and d == 1:
                     should_be_empty = True
                 elif aging == 'monthly' and d == 1:

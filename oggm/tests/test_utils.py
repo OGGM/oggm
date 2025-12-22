@@ -117,7 +117,7 @@ class TestFuncs(object):
         np.testing.assert_array_equal(m, [12, 12])
 
         # test a leap year
-        y, m, d = utils.floatyear_to_date(1980.1612021857923, months_only=False)
+        y, m, d = utils.floatyear_to_date(1980.1612021857923, return_day=True)
         assert y == 1980
         assert m == 2
         assert d == 29
@@ -176,29 +176,29 @@ class TestFuncs(object):
 
         # test daily timeseries
         time = pd.date_range('1/1/1800', periods=365.25 * 299, freq='D')
-        myr = utils.float_years_timeseries(1800, 2099, monthly=False)
-        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        myr = utils.float_years_timeseries(1800, 2099, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
         np.testing.assert_array_equal(d, time.day)
 
-        myr = utils.float_years_timeseries(1800, ny=300, monthly=False)
-        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        myr = utils.float_years_timeseries(1800, ny=300, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
         np.testing.assert_array_equal(d, time.day)
 
         time = pd.period_range('0001-01', '6000-1', freq='D')
-        myr = utils.float_years_timeseries(1, 6000, monthly=False)
-        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        myr = utils.float_years_timeseries(1, 6000, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
         np.testing.assert_array_equal(d, time.day)
 
         time = pd.period_range('0001-01-01', '6000-12-31', freq='D')
-        myr = utils.float_years_timeseries(1, 6000, monthly=False,
+        myr = utils.float_years_timeseries(1, 6000, daily=True,
                                            include_last_year=True)
-        y, m, d = utils.floatyear_to_date(myr, months_only=False)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
         np.testing.assert_array_equal(d, time.day)
@@ -217,7 +217,7 @@ class TestFuncs(object):
         ok = (years == y2) & (months == m2)
         assert sum(~ok) == 0
 
-        y2, m2, d2 = utils.floatyear_to_date(fy, months_only=False)
+        y2, m2, d2 = utils.floatyear_to_date(fy, return_day=True)
         ok = (years == y2) & (months == m2) & ([d == 1 for d in d2])
         assert sum(~ok) == 0
 
@@ -232,7 +232,7 @@ class TestFuncs(object):
         days = (dates - mstart).astype(int) + 1
 
         fy = utils.date_to_floatyear(years, months, days)
-        y2, m2, d2 = utils.floatyear_to_date(fy, months_only=False)
+        y2, m2, d2 = utils.floatyear_to_date(fy, return_day=True)
 
         ok = (years == y2) & (months == m2) & (days == d2)
         assert sum(~ok) == 0
