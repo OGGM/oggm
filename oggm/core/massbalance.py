@@ -1350,6 +1350,8 @@ class SfcTypeTIModel(MassBalanceModel):
         store_buckets: bool or str = False,
         store_buckets_dates: ArrayLike = None,
         use_previous_mbs: bool = False,
+        store_snowline: bool = False,
+        store_snowline_start_month: str = 'Oct',
         **kwargs,
     ):
         """Surface type temperature index model.
@@ -1432,6 +1434,16 @@ class SfcTypeTIModel(MassBalanceModel):
             mb_models work, because with surface tracking we have included a
             memory of the past. If False and you try to revisit a past year and
             error is raised.
+        store_snowline: bool, default False
+            Experimental: save the snowline in the climate_resolution. For this
+            the lowest elevation where the bucket is not zero is set as the
+            snowline. Older buckets are considered starting from
+            store_snowline_start_month.
+        store_snowline_start_month: str, default 'Oct'
+            Experimental: the start month of buckets used for the derivation of
+            the snowline. E.g. with the default 'Oct', if you want to derive the
+            snowline at Mar, all buckets starting from the previous Oct are
+            considered.
         **kwargs:
             keyword arguments to pass to the mb_model_class
         """
@@ -1574,6 +1586,20 @@ class SfcTypeTIModel(MassBalanceModel):
         # if the user wants to return previously calculated mb values
         self.use_previous_mbs = use_previous_mbs
 
+        # snowline stuff
+        self.store_snowline = store_snowline
+        if self.store_snowline:
+            # how many buckets we need to add for the snowline buckets
+            self._snowline_start_month = {
+                "Jan": 11, "Feb": 10, "Mar": 9, "Apr": 8, "May": 7, "Jun": 6,
+                "Jul": 5, "Aug": 4, "Sep": 3, "Oct": 2, "Nov": 1, "Dec": 0,
+            }[store_snowline_start_month]
+            self._snowline = []
+            self._snowline_year = []
+            # this are the height values for the special cases fully snow
+            # covered or fully snow free
+            self.snowline_inf_values = {}
+
         # Initialise buckets and conduct a potential spinup
         self._init_buckets()
 
@@ -1681,6 +1707,14 @@ class SfcTypeTIModel(MassBalanceModel):
             pd_dict[year] = self._mb_heights[[self._year_to_index[year]]][0]
         return pd.DataFrame(pd_dict,
                             index=self.buckets_grid_point_label)
+
+    @property
+    def snowline(self):
+        return np.array(self._snowline)
+
+    @property
+    def snowline_year(self):
+        return np.array(self._snowline_year)
 
     @property
     def melt_f(self):
@@ -1969,6 +2003,32 @@ class SfcTypeTIModel(MassBalanceModel):
                     self.mb_buckets_np[:, :-1].copy(),
                     index=self.buckets_grid_point_label,
                     columns=self.buckets[:-1],)
+
+        # store snowline
+        if self.store_snowline:
+            if self.mb_buckets_year not in self._snowline_year:
+                number_buckets = buckets_month + self._snowline_start_month
+                # + 1 is for the snow bucket
+                not_melted_layers = np.any(
+                    self.mb_buckets_np[:, :number_buckets + 1] > 0, axis=1)
+
+                # check if completely snow free
+                if not np.any(not_melted_layers):
+                    self._snowline.append(np.inf)
+                    # store a height value for snow free case
+                    if np.inf not in self.snowline_inf_values:
+                        self.snowline_inf_values[np.inf] = np.max(heights) + 50
+                # check if fully snow covered
+                elif np.all(not_melted_layers):
+                    self._snowline.append(-np.inf)
+
+                    if -np.inf not in self.snowline_inf_values:
+                        # store a height value for fully snow covered case
+                        self.snowline_inf_values[-np.inf] = np.min(heights) - 50
+                # otherwise get the lowest elevation band with snow cover
+                else:
+                    self._snowline.append(heights[not_melted_layers][-1])
+                self._snowline_year.append(self.mb_buckets_year)
 
         # nothing to return as every thing is stored is some variables
         return None
