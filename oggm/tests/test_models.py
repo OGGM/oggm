@@ -649,6 +649,7 @@ class TestMassBalanceModels:
             - melt_f_change: neg_exp
             - store_buckets: False
             - use_previous_mbs: False
+            - store_snowline: False
             - nr_timesteps: 20
             - mb_buckets_year: 2000
         """)
