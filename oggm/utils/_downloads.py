@@ -1346,6 +1346,8 @@ def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
 
     if dataset not in ['w5e5', 'era5']:
         raise NotImplementedError(f'No such dataset available yet: {dataset}')
+    if rgi_version == '60':
+        rgi_version = '62'
     if rgi_version not in ['62', '70G']:
         raise NotImplementedError(f'RGI version not available yet: {rgi_version}')
 
