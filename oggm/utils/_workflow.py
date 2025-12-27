@@ -2925,6 +2925,10 @@ class GlacierDirectory(object):
         rgi_date = int(rgi_datestr[0:4])
         if rgi_date < 0:
             rgi_date = RGI_DATE[self.rgi_region]
+        if rgi_date >= 2020:
+            log.warning(f'{self.rgi_id}: rgi_date {rgi_date} modified '
+                        'to 2019 for workflow reasons.')
+            rgi_date = 2019
         self.rgi_date = rgi_date
         # Root directory
         self.base_dir = os.path.normpath(base_dir)
