@@ -2024,7 +2024,38 @@ class TestInversion(unittest.TestCase):
         dfo = workflow.invert_from_params(gdir, params_df=dfi)
         np.testing.assert_allclose(df.vol_itmix_m3, dfo.vol_oggm_m3, rtol=0.01)
 
+        df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
 
+        # Works with Series
+        out = workflow.calibrate_inversion_from_volume(gdir,
+                                                       vol_ref_m3=df['vol_itmix_m3'])
+
+        df = df.loc[gdir.rgi_id]
+        np.testing.assert_allclose(df.vol_itmix_m3,
+                                   out['vol_oggm_m3'],
+                                   rtol=0.01)
+        assert out['fs'] == 0
+
+        # Works with float
+        out = workflow.calibrate_inversion_from_volume(gdir,
+                                                       vol_ref_m3=df.vol_itmix_m3)
+
+        np.testing.assert_allclose(df.vol_itmix_m3,
+                                   out['vol_oggm_m3'],
+                                   rtol=0.01)
+        assert out['fs'] == 0
+
+        # test user provided volume is working
+        delta_volume_m3 = 100000000
+        user_provided_volume_m3 = df.vol_itmix_m3 - delta_volume_m3
+        out = workflow.calibrate_inversion_from_volume(
+              gdir,
+              apply_fs_on_mismatch=True,
+              vol_ref_m3=user_provided_volume_m3)
+        np.testing.assert_allclose(user_provided_volume_m3,
+                                   out['vol_oggm_m3'],
+                                   rtol=0.01)
+        assert out['fs'] > 0
 
     @pytest.mark.slow
     def test_invert_hef_shapes(self):

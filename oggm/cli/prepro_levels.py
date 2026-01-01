@@ -673,6 +673,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 workflow.invert_from_params(gdirs,
                                             params_df=params_df,
                                             filter_inversion_output=filter)
+            elif rgi_version == '70C':
+                purl = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
+                        'oggm_v1.6/inv_rgi7/rgi7c_glacier_inv_ref_2025.1.csv')
+                ref_vol_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
+                # Small optim
+                ref_vol_df = ref_vol_df.loc[ref_vol_df.rgi_region == int(rgi_reg)]
+                ref_vol_df = ref_vol_df['inv_volume_km3'] * 1e-9
+                workflow.execute_entity_task(tasks.calibrate_inversion_from_volume,
+                                             gdirs,
+                                             vol_ref_m3=ref_vol_df,
+                                             apply_fs_on_mismatch=True,
+                                             error_on_mismatch=False,
+                                             filter_inversion_output=filter)
             else:
                 workflow.calibrate_inversion_from_consensus(gdirs,
                                                             apply_fs_on_mismatch=True,
