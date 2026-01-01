@@ -680,7 +680,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 # Small optim
                 ref_vol_df = ref_vol_df.loc[ref_vol_df.rgi_region == int(rgi_reg)]
                 ref_vol_df = ref_vol_df['inv_volume_km3'] * 1e-9
-                workflow.execute_entity_task(tasks.calibrate_inversion_from_volume,
+                workflow.execute_entity_task(workflow.calibrate_inversion_from_volume,
                                              gdirs,
                                              vol_ref_m3=ref_vol_df,
                                              apply_fs_on_mismatch=True,
