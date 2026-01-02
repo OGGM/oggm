@@ -2732,7 +2732,8 @@ class GlacierDirectory(object):
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
                  from_tar=False, delete_tar=False, settings_filesuffix='',
-                 observations_filesuffix=''):
+                 observations_filesuffix='',
+                 add_default_values_to_settings=True):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2754,6 +2755,9 @@ class GlacierDirectory(object):
             a filesuffix for a settings file to use
         observations_filesuffix : str, default=''
             a filesuffix for a observations file to use
+        add_default_values_to_settings : bool, default=True
+            if True and a settings value is read from the default settings file
+            this value is also added to the current settings file
         """
 
         if base_dir is None:
@@ -2832,6 +2836,7 @@ class GlacierDirectory(object):
             raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # define the initial settings for this gdir
+        self.add_default_values_to_settings = add_default_values_to_settings
         self._settings_filesuffix = settings_filesuffix
         self.settings = self.get_settings(settings_filesuffix=settings_filesuffix)
 
@@ -4073,8 +4078,9 @@ class GlacierDirectory(object):
         self.settings = self.get_settings(settings_filesuffix=value)
 
     def get_settings(self, settings_filesuffix):
-        return ModelSettings(self, filesuffix=settings_filesuffix,
-                             always_reload_data=False)
+        return ModelSettings(
+            self, filesuffix=settings_filesuffix, always_reload_data=False,
+            add_default_values=self.add_default_values_to_settings)
 
     @property
     def observations_filesuffix(self):
@@ -4432,7 +4438,7 @@ class YAMLFileObject(object):
 class ModelSettings(YAMLFileObject):
     def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
                  reset_parent_filesuffix=False, allow_empty=True,
-                 always_reload_data=True,
+                 always_reload_data=True, add_default_values=True,
                  ):
         path = gdir.get_filepath('settings', filesuffix=filesuffix)
 
@@ -4468,8 +4474,10 @@ class ModelSettings(YAMLFileObject):
                                           # check if parent exists
                                           allow_empty=False,
                                           always_reload_data=always_reload_data,
+                                          add_default_values=add_default_values,
                                           )
         self.gdir = gdir
+        self.add_default_values = add_default_values
 
     def get(self, key):
         if self.always_reload_data:
@@ -4483,7 +4491,8 @@ class ModelSettings(YAMLFileObject):
             # this is for backwards compatibility when mb_calib files was used
             try:
                 value = self.gdir.read_json('mb_calib')[key]
-                self.set(key, value)
+                if self.add_default_values:
+                    self.set(key, value)
                 return value
             except FileNotFoundError:
                 pass
@@ -4494,7 +4503,8 @@ class ModelSettings(YAMLFileObject):
             # stored in the diagnostics
             try:
                 value = self.gdir.get_diagnostics()[key]
-                self.set(key, value)
+                if self.add_default_values:
+                    self.set(key, value)
                 return value
             except KeyError:
                 pass
@@ -4502,7 +4512,8 @@ class ModelSettings(YAMLFileObject):
         try:
             # if a key is used from defaults, also add it to the settings file
             value = self.defaults[key]
-            self.set(key, value)
+            if self.add_default_values:
+                self.set(key, value)
             return value
         except KeyError:
             raise KeyError(f"Key '{key}' not found!")
