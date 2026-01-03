@@ -681,7 +681,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 ref_vol_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
                 # Small optim
                 ref_vol_df = ref_vol_df.loc[ref_vol_df.rgi_region == int(rgi_reg)]
-                ref_vol_df = ref_vol_df['inv_volume_km3'] * 1e-9
+                ref_vol_df = ref_vol_df['inv_volume_km3'] * 1e9
                 workflow.execute_entity_task(workflow.calibrate_inversion_from_volume,
                                              gdirs,
                                              vol_ref_m3=ref_vol_df,
