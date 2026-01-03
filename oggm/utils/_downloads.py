@@ -1348,13 +1348,13 @@ def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
         raise NotImplementedError(f'No such dataset available yet: {dataset}')
     if rgi_version == '60':
         rgi_version = '62'
-    if rgi_version not in ['62', '70G']:
+    if rgi_version not in ['62', '70G', '70C']:
         raise NotImplementedError(f'RGI version not available yet: {rgi_version}')
 
     # fetch the file online
     base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
     calibtype = 'regional' if regional else 'perglacier'
-    if rgi_version == '70G':
+    if rgi_version in ['70G', '70C']:
         file_version = '1'
     if rgi_version == '62':
         file_version = '3' if regional else '2'

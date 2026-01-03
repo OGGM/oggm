@@ -629,9 +629,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
+        utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
         utils.get_temp_bias_dataframe(dataset='w5e5')
         utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
+        utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70C', regional=True)
         utils.get_temp_bias_dataframe(dataset='era5')
 
         use_regional_avg = False
