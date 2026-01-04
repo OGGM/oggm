@@ -12,6 +12,7 @@ import argparse
 import time
 import logging
 import json
+import importlib
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -86,6 +87,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False, add_bedmachine=False,
                       add_glathida=False,
+                      custom_climate_task=None,
+                      custom_climate_task_kwargs=None,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
@@ -169,6 +172,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     add_glathida : bool
         adds (reprojects) the glathida thickness data to the glacier
         directories. Data points are stored as csv files.
+    custom_climate_task : str
+        optional import path to a custom climate task in the form
+        "module_path:function_name". If provided, it will be called instead of
+        the default process_climate_data.
+    custom_climate_task_kwargs : dict
+        optional kwargs passed to the custom climate task when it is executed.
     start_level : int
         the pre-processed level to start from (default is to start from
         scratch). If set, you'll need to indicate start_base_url as well.
@@ -629,7 +638,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
 
         # Climate
-        workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+        climate_kwargs = custom_climate_task_kwargs or {}
+        if custom_climate_task:
+            try:
+                mod_path, func_name = custom_climate_task.rsplit(':', 1)
+            except ValueError:
+                raise InvalidParamsError('custom_climate_task must be of the form "module:function"')
+            try:
+                mod = importlib.import_module(mod_path)
+            except ModuleNotFoundError as err:
+                raise InvalidParamsError(f'Cannot import module {mod_path}') from err
+            try:
+                custom_task_func = getattr(mod, func_name)
+            except AttributeError as err:
+                raise InvalidParamsError(f'Module {mod_path} has no attribute {func_name}') from err
+            workflow.execute_entity_task(custom_task_func, gdirs, **climate_kwargs)
+        else:
+            workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
@@ -946,6 +971,11 @@ def parse_args(args):
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
                              'The data points are stored as csv.')
+    parser.add_argument('--custom-climate-task', type=str, default=None,
+                        help='Custom climate task import path in the form module:function. '
+                            'If provided, it replaces the default process_climate_data.')
+    parser.add_argument('--custom-climate-task-kwargs', type=json.loads, default=None,
+                        help='JSON dict of kwargs passed to the custom climate task.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -1036,6 +1066,8 @@ def parse_args(args):
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 add_bedmachine=args.add_bedmachine,
                 add_glathida=args.add_glathida,
+                custom_climate_task=args.custom_climate_task,
+                custom_climate_task_kwargs=args.custom_climate_task_kwargs,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
