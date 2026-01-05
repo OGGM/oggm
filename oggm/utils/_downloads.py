@@ -1333,12 +1333,16 @@ def get_temp_bias_dataframe(dataset='w5e5'):
     a DataFrame with the data.
     """
 
-    if dataset != 'w5e5':
-        raise NotImplementedError(f'No such dataset available yet: {dataset}')
+    # if dataset != 'w5e5':
+    #     raise NotImplementedError(f'No such dataset available yet: {dataset}')
 
     # fetch the file online
-    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
-                'w5e5_temp_bias_v2023.4.csv')
+    if dataset == 'w5e5':
+        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
+                    'w5e5_temp_bias_v2023.4.csv')
+    elif dataset == 'lmr_mira':
+        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/'
+                    'exps/lmr_mira_alps/mira_temp_bias_v2025.1.csv')
 
     file_path = file_downloader(base_url)
 
