@@ -190,7 +190,8 @@ def secure_url_retrieve(url, *args, **kwargs):
             base_extra_v14.format('L1') in url or
             base_extra_v14.format('L2') in url or
             base_extra_v14l3.format('L3') in url or
-            base_extra_l3 in url
+            base_extra_l3 in url or
+            'lmr' in url
             )
     return oggm_urlretrieve(url, *args, **kwargs)
 

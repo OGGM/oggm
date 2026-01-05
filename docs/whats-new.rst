@@ -51,6 +51,11 @@ Enhancements
   ``workflow.merge_gridded_data``. If no grid is provided, the default is to
   merge all grids of the provided gdirs (:pull:`1779`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- `min_area_h` is now a default diagnostic variable output: this is
+  glacier area trying to avoid spikes due to interannual variability
+  in snowfall (:pull:`1791`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Patrick Schmitt <https://github.com/pat-schmitt>`_.
 - Flowlines shapefiles output now have more attributes and are easier to
   use (:pull:`1786`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
@@ -64,6 +69,7 @@ Enhancements
 - Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
+
 Bug fixes
 ~~~~~~~~~
 
@@ -73,6 +79,7 @@ Bug fixes
 - `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
+
 
 v1.6.2 (August 25, 2024)
 ------------------------
