@@ -555,7 +555,7 @@ class Test_ecmwf:
             ci = gdir.get_climate_info('CERA_repl')
             assert ci['baseline_climate_source'] == 'CERA+ERA5'
             assert ci['baseline_yr_0'] == 1901
-            assert ci['baseline_yr_1'] == 2024
+            assert ci['baseline_yr_1'] == 2025
 
             # Climate on common period
             sref = ref.sel(time=slice(ref.time[0], his.time[-1]))
