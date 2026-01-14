@@ -134,9 +134,9 @@ def patch_data_urls(monkeypatch):
 
     basenames = {
         'ERA5': {
-            'inv': 'era5/monthly/v1.2/flattened/era5_glacier_invariant_flat_v2025.11.25.nc',
-            'pre': 'era5/monthly/v1.2/flattened/era5_tp_global_monthly_1940_2024_flat_glaciers_v2025.11.25.nc',
-            'tmp': 'era5/monthly/v1.2/flattened/era5_t2m_global_monthly_1940_2024_flat_glaciers_v2025.11.25.nc'
+            'inv': 'era5/monthly/v1.2/flattened/era5_glacier_invariant_flat_v2026.01.14.nc',
+            'pre': 'era5/monthly/v1.2/flattened/era5_tp_global_monthly_1940_2025_flat_glaciers_v2026.01.14.nc',
+            'tmp': 'era5/monthly/v1.2/flattened/era5_t2m_global_monthly_1940_2025_flat_glaciers_v2026.01.14.nc'
         },
         'ERA5L': {
             'inv': 'era5-land/monthly/v1.0/era5_land_invariant_flat.nc',
