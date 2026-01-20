@@ -49,6 +49,7 @@ its features:
 
     Community
       Welcoming community of users and developers: :ref:`get in touch <contact>` and join us!
+      Check out our `community website <https://community.oggm.org/welcome.html>`_.
 
 Example workflow
 ~~~~~~~~~~~~~~~~

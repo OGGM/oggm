@@ -51,7 +51,7 @@ complexes as if they were single glacier entities.**
 Data structures and glacier directories
 ---------------------------------------
 
-The fundamental data structure used in OGGM is the so-called **Glacier Directory**.
+The fundamental data structure used in OGGM is the so-called **Glacier Directory** (gdirs).
 :ref:`glacierdir` are simple folders on disk which store the input and output
 data for a single glacier during a run. OGGM offers an interface
 to access and store these files programmatically.
@@ -94,8 +94,8 @@ downloading and extracting these data locally:
     @savefig plot_example_inversion.png width=100%
     graphics.plot_distributed_thickness(gdirs[0])
 
-See also the documentation page for :doc:`shop` for more examples of
-the kind of data that can be added to glacier directories.
+See also the documentation page for :doc:`shop` for a description of all current preprocessed glacier directories
+and for more examples of the kind of data that can be added to glacier directories.
 
 .. admonition:: More details: pros and cons of glacier directories
     :class: note, dropdown

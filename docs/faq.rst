@@ -4,8 +4,8 @@
 FAQ and Troubleshooting
 ***********************
 
-We list here some of the questions we get most often, either on our Slack
-workspace or on `github <https://github.com/OGGM/oggm>`_.
+We list here some of the questions we get most often, either on our
+`Slack workspace <https://community.oggm.org/guides/slack-intro.html>`_ or on `github <https://github.com/OGGM/oggm>`_.
 
 What is the difference between OGGM and other glacier models?
 -------------------------------------------------------------
@@ -78,12 +78,17 @@ progress.
 I have a question about OGGM, can we talk about it per email/phone?
 -------------------------------------------------------------------
 
-Thanks for your interest in OGGM! Usually, we prefer to keep
-usage questions on `github issues <https://github.com/OGGM/oggm/issues>`_
-so that everybody can learn from all questions and their answers.
-You can also join our Slack discussion channel if you want a
-more interactive forum. Keep in touch with us if you'd
-like to join, we are a very open community!
+Thanks for your interest in OGGM! The best place to ask questions is in
+our interactive forum, the `Slack #support channel <https://community.oggm.org/guides/slack-intro.html>`_ so that
+everybody can learn from all questions and their answers. More
+information on how to join the Slack can be found `here <https://community.oggm.org/guides/slack-intro.html#how-to-join>`_.
+We also have a `community guideline <https://community.oggm.org/guides/error-guide.html>`_ how to best raise your
+question or find the error in your code. Keep in touch with us if you'd like to join, we are a very open community!
+
+If you are working on OGGM code development
+or encounter a bug in the codebase, raising an issue on GitHub in one of the OGGM repositories may be more appropriate.
+For example, `here <https://github.com/OGGM/oggm/issues>`_ for the main OGGM code.
+
 
 
 Can I export OGGM centerlines to a shapefile?
@@ -171,7 +176,8 @@ default :math:`A`). This is best shown by this figure from
     and parabolic bed shapes only (instead of the default mixed
     parabolic/rectangular). In addition, we plotted the estimates from
     standard volume–area scaling (VAS, :math:`V = 0.034 S^{1.375}`),
-    Huss and Farinotti (2012) (HF2012) and Grinsted (2013) (G2013).
+    `Huss and Farinotti (2012) (HF2012) <https://doi.org/10.1029/2012JF002523>`_
+    and `Grinsted (2013) (G2013) <https://doi.org/10.5194/tc-7-141-2013>`_.
     The latter two estimates are provided for indication only as they
     are based on a different glacier inventory
 
@@ -195,14 +201,20 @@ Some glaciers exit with errors. What should I do?
 -------------------------------------------------
 
 Many things can go wrong when simulating all the world glaciers with a single
-model. We've tried our best, but still many glaciers cannot be simulated
-automatically. Possible reasons include complex glacier geometries that cannot
+model. We've tried our best, but still some glaciers cannot be simulated
+automatically. Possible reasons include outdated outlines, complex glacier geometries that cannot
 be simulated by flowlines, very cold climates which don't allow melting to
-occur, or numerical instabilities during the simulation. Altogether, 4218
-glaciers (3.6% of the total area worldwide) could not be modelled by
-OGGM in the
-`standard global simulations <https://www.geosci-model-dev.net/12/909/2019/>`_.
-Some regions experience more errors than others (see the paper).
+occur, numerical instabilities during the simulation, or glaciers exceeding the domain boundary. In the
+`OGGM v1.6.3 Standard Projections <https://github.com/OGGM/oggm-standard-projections-csv-files/tree/main/notebooks/1.6.3/missing_glacier_area_stats.png>`_,
+less than 0.3% of the total glacier area worldwide (and 1.5% of the glaciers) could not be modelled until the year
+2100 by OGGM. Projections until 2300 result in more failing glacier area (~1%) and glaciers (~4%), because glaciers may
+regrow in some scenarios and "flow" out of the boundaries (see :ref:`glacier-exceeds-domain-boundaries`).
+Using better glacier outlines (RGI7 instead of RGI6) reduces drastically the failing glaciers in some regions (see
+`this blogpost <https://oggm.org/TODO/oggm_v16-gdirs-and-projection-options>`_).
+For comparison, in the first
+`global OGGM simulations from Maussion et al. (2019) <https://www.geosci-model-dev.net/12/909/2019/>`_,
+3.6% of the total area worldwide could not be modelled by OGGM.
+Some regions experience more errors than others (see the paper or the blogpost).
 
 When you experience errors, you have to decide if they are due to an error
 in your code or a problem in OGGM itself. The number and type of errors
@@ -216,17 +228,20 @@ studies will upscale diagnostic quantities using power laws or interpolation:
 for example, use volume-area-scaling to compute the volume of glaciers that
 are missing after an OGGM run. Importantly, you have to always be aware that
 these quantities will be missing from the compiled run outputs, and should
-be accounted for in quantitative analyses.
+be accounted for in quantitative analyses. In addition, some glaciers may fail
+in one climate model / scenario, but not for another. Therefore, we recommend to
+analyse the commonly running glaciers over the entire climate model and scenario ensemble, as e.g.
+done in the `OGGM standard projections csv files <https://github.com/OGGM/oggm-standard-projections-csv-files>`_.
 
-
+.. _glacier-exceeds-domain-boundaries:
 What does the "`Glacier exceeds domain boundaries`" error mean?
 ---------------------------------------------------------------
 
 This happens when a glacier grows larger than the original map boundaries.
 We recommend to increase the glacier map in this case, by setting
-`cfg.PARAMS['border']` to a larger value, e.g. 100 or 200. The larger this
-value, the larger the glacier can grow (the drawback is that simulations
-become slower and hungrier in memory because the number of grid points
+`cfg.PARAMS['border']` to a larger value. Since OGGM v1.6, the standard border value for the preprocessed gdirs is 160
+if the gdirs are used for projections. The larger this value, the larger the glacier can grow
+(the drawback is that simulations become slower and hungrier in memory because the number of grid points
 increases as well). We do not recommend to go larger than 250. However,
 for these cases it is likely that something else is wrong in your workflow
 or OGGM itself.

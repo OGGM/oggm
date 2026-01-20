@@ -1,11 +1,18 @@
 Reference mass balance data
 ===========================
 
+
+
+.. _shop-in-situ-mb-data:
+
 Traditional in-situ MB data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In-situ mass balance data are used by OGGM to calibrate and validate the
-first generation mass balance model.
+first generation mass balance model. Since OGGMv1.6, the MB model calibration uses only the winter mass-balance data
+from :ref:`shop-in-situ-mb-data`_ (together with the :ref:`shop-geod`_) to infer a relationship between winter
+precipitation of a glacier and the first guess of a precipitation factor (see more at
+`this MB calibration tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_).
 We rely on mass balance observations provided by the
 World Glacier Monitoring Service (`WGMS`_).
 The `Fluctuations of Glaciers (FoG)`_ database contains annual mass balance
@@ -72,6 +79,8 @@ The original, raw data have been modified in three ways
   larger than 3 :math:`\Sigma` at the RGI region level are filtered out
 - all missing data (including outliers) are attributed with the regional average.
 
+
+
 You can access the table with:
 
 .. ipython:: python
@@ -89,6 +98,9 @@ for three reference periods (2000-2010, 2010-2020, 2000-2020):
     mbdf['dmdtda'].loc[mbdf.period=='2010-01-01_2020-01-01'].plot.hist(bins=100, alpha=0.5, label='2010-2020');
     @savefig plot_hugonnet_mbdata.png width=100%
     plt.xlabel(''); plt.xlim(-3, 3); plt.legend();
+
+Since OGGMv1.6, the per-glacier 20-year average mass-balance is used during the MB calibration of
+all preprocessed glacier directories.
 
 Just for fun, here is a comparison of both products at Hintereisferner:
 

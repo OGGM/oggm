@@ -152,6 +152,7 @@ Get in touch
 - View the source code `on GitHub`_.
 - Report bugs or share your ideas on the `issue tracker`_, and improve
   the model by submitting a `pull request`_.
+- Check out our `OGGM community guidelines <https://community.oggm.org/guides/index.html>`_
 - Chat with us on `Slack`_! (just send us an `e-mail`_ so we can add you)
 - Participate to our regular `meeting`_. (`reach out`_  if you want to join in)
 - Or you can always send us an `e-mail`_ the good old way.

@@ -24,13 +24,14 @@ concepts, random samples or simplifications of the more realistic ones.
     OGGM team have worked extensively to make PyGEM's MB model
     compatible with the OGGM workflow, resulting in this
     `global PyGEM-OGGM study published in Science <https://doi.org/10.1126/science.abo1324>`_.
-    The capacity to run OGGM with PyGEM as mass balance model is now available
-    on the PyGEM repository.
+    The capacity to run OGGM with PyGEM as mass balance model and calibration tool is now available
+    on the `PyGEM repository <https://github.com/PyGEM-Community/PyGEM>`_ and described in the
+    `PyGEM documentation <https://pygem.readthedocs.io/en/latest/index.html>`_.
 
     `OGGM's massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_
     is the future generation of OGGM's climatic MB models. They are currently
     in the development and testing phase, but they can readily be used with
-    a recent OGGM version.
+    the OGGM v1.5.3 version.
 
 Check out the following resources for more information:
 

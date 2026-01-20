@@ -25,8 +25,8 @@ solid precipitation is based on the monthly mean temperature: all solid below
 (default: 2°C), linear change in between. Total precipitation is obtained from
 the climate dataset, multiplied by a precipitation correction factor :math:`P_f`.
 The parameter :math:`d_f` indicates the temperature sensitivity of the
-glacier, and it needs to be calibrated. The model needs to compute the
-temperature and precipitation at the altitude :math:`z` of the glacier
+glacier, and it needs to be calibrated. :math:`d_f` is called ``melt_f`` (melt factor) in the OGGM code.
+The model needs to compute the temperature and precipitation at the altitude :math:`z` of the glacier
 grid points. The default is to use a fixed lapse rate of
 -6.5K km :math:`^{-1}` and no gradient for precipitation.
 
@@ -54,6 +54,6 @@ residual parameter :math:`\epsilon`), more physical approaches are possible.
 Importantly, we need to take the uncertainty estimates into account, and
 we need to tackle the issue of daily data for hydrological models.
 
-More exigent users might have a look at `PyGEM <https://github.com/drounce/PyGEM>`_
+More exigent users might have a look at `PyGEM <https://github.com/PyGEM-Community/PyGEM>`_
 or `OGGM sandbox <https://github.com/OGGM/massbalance-sandbox>`_, which are
 offering clever ways to deal with these issues.
