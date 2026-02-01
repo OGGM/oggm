@@ -1876,13 +1876,31 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None, output_folder=None):
     fname : str
         output file name (should end with `tif`), default is `varname.tif`
     output_folder : str
-        optional path to write the geotiff file. If None, writes to gdir.dir
+        optional path to write the geotiff file. If None, writes to gdir.dir.
+        If provided, files will be organized into subfolders based on RGI ID
+        (e.g., RGI60-11/RGI60-11.00/RGI60-11.00897_varname.tif)
     """
 
     # Assign the output path
     if fname is None:
         fname = f'{gdir.rgi_id}_{varname}.tif'
-    base_dir = output_folder if output_folder is not None else gdir.dir
+
+    if output_folder is not None:
+        # Create subfolder structure based on RGI ID
+        # RGI6: RGI60-11.00897 -> RGI60-11 (8 chars) / RGI60-11.00 (11 chars)
+        # RGI7: RGI2000-v7.0-G-01-00001 -> RGI2000-v7.0-G-01 (17 chars) / RGI2000-v7.0-G-01-00 (20 chars)
+        rid = gdir.rgi_id
+        # Determine folder structure based on RGI ID length
+        if len(rid) <= 14:
+            # RGI6 format
+            base_dir = os.path.join(output_folder, rid[:8], rid[:11])
+        else:
+            # RGI7 format
+            base_dir = os.path.join(output_folder, rid[:17], rid[:20])
+        utils.mkdir(base_dir)
+    else:
+        base_dir = gdir.dir
+
     outpath = os.path.join(base_dir, fname)
 
     # Locate gridded_data.nc file and read it

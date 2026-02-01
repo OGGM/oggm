@@ -1292,8 +1292,25 @@ class TestPreproCLI(unittest.TestCase):
                                      'distributed_thickness')
         assert os.path.isdir(thickness_dir)
 
-        # Check that at least one GeoTIFF file exists with the correct naming
-        geotiff_files = [f for f in os.listdir(thickness_dir) if f.endswith('.tif')]
+        # Check that files are organized in subfolders by RGI ID pattern
+        # Get first RGI ID to check structure
+        rid = rgidf.iloc[0].RGIId
+        # Files should be in thickness_dir/RGI61-11/RGI61-11.00/ for RGI6
+        # Note: base_dir_to_tar will tar the RGI61-11.00 subdirectories
+        subfolder_path = os.path.join(thickness_dir, rid[:8], rid[:11])
+        subfolder_tar = subfolder_path + '.tar'
+
+        # Either the directory or the tar should exist
+        assert os.path.isdir(subfolder_path) or os.path.isfile(subfolder_tar)
+
+        # If it's a tar file, we need to extract it first to check the contents
+        if os.path.isfile(subfolder_tar) and not os.path.isdir(subfolder_path):
+            import tarfile
+            with tarfile.open(subfolder_tar, 'r') as tar:
+                tar.extractall(path=os.path.dirname(subfolder_path))
+
+        # Check that at least one GeoTIFF file exists in the subfolder
+        geotiff_files = [f for f in os.listdir(subfolder_path) if f.endswith('.tif')]
         assert len(geotiff_files) > 0
 
         # Verify the GeoTIFF file has correct naming pattern (RGI_ID_distributed_thickness.tif)
@@ -1302,7 +1319,7 @@ class TestPreproCLI(unittest.TestCase):
             assert fname.startswith('RGI')
 
         # Check that we can read one of the GeoTIFF files and it has data
-        gtiff_path = os.path.join(thickness_dir, geotiff_files[0])
+        gtiff_path = os.path.join(subfolder_path, geotiff_files[0])
         gtiff_ds = rioxr.open_rasterio(gtiff_path)
         assert gtiff_ds.isel(band=0).sum() > 0
 
