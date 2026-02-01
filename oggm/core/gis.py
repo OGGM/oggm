@@ -1862,10 +1862,10 @@ def merged_glacier_masks(gdir, geometry):
 
 
 @entity_task(log)
-def gridded_data_var_to_geotiff(gdir, varname, fname=None):
+def gridded_data_var_to_geotiff(gdir, varname, fname=None, output_folder=None):
     """Writes a NetCDF variable to a georeferenced geotiff file.
 
-    The geotiff file will be written in the gdir directory.
+    The geotiff file will be written in the gdir directory or a specified folder.
 
     Parameters
     ----------
@@ -1875,12 +1875,15 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None):
         variable name in gridded_data.nc
     fname : str
         output file name (should end with `tif`), default is `varname.tif`
+    output_folder : str
+        optional path to write the geotiff file. If None, writes to gdir.dir
     """
 
     # Assign the output path
     if fname is None:
-        fname = varname+'.tif'
-    outpath = os.path.join(gdir.dir, fname)
+        fname = f'{gdir.rgi_id}_{varname}.tif'
+    base_dir = output_folder if output_folder is not None else gdir.dir
+    outpath = os.path.join(base_dir, fname)
 
     # Locate gridded_data.nc file and read it
     nc_path = gdir.get_filepath('gridded_data')

@@ -85,7 +85,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False, add_bedmachine=False,
-                      add_glathida=False,
+                      add_glathida=False, add_distributed_thickness=False,
+                      add_export_thickness_geotiff=False,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
@@ -169,6 +170,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     add_glathida : bool
         adds (reprojects) the glathida thickness data to the glacier
         directories. Data points are stored as csv files.
+    add_distributed_thickness : bool
+        adds a thickness field to gridded_data using
+        distribute_thickness_per_altitude.
+    add_export_thickness_geotiff : bool
+        exports the distributed thickness field to GeoTIFF files in a
+        subfolder of the L3 summary directory.
     start_level : int
         the pre-processed level to start from (default is to start from
         scratch). If set, you'll need to indicate start_base_url as well.
@@ -694,6 +701,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                             error_on_mismatch=False,
                                                             filter_inversion_output=filter)
 
+            # Distribute thickness per altitude for gridded data
+            if add_distributed_thickness:
+                workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
+
             # We get ready for modelling
             if border >= 20:
                 workflow.execute_entity_task(tasks.init_present_time_glacier, gdirs)
@@ -703,6 +714,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Glacier stats
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
+
+        # Export thickness to GeoTIFF if requested
+        if add_export_thickness_geotiff and add_distributed_thickness:
+            thickness_dir = os.path.join(sum_dir, 'distributed_thickness')
+            utils.mkdir(thickness_dir)
+            workflow.execute_entity_task(tasks.gridded_data_var_to_geotiff, gdirs,
+                                         varname='distributed_thickness',
+                                         output_folder=thickness_dir)
         opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
         utils.compile_climate_statistics(gdirs, path=opath)
         opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
@@ -969,6 +988,13 @@ def parse_args(args):
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
                              'The data points are stored as csv.')
+    parser.add_argument('--add-distributed-thickness', nargs='?', const=True, default=False,
+                        help='adds a thickness field to gridded_data using '
+                             'distribute_thickness_per_altitude.')
+    parser.add_argument('--add-export-thickness-geotiff', nargs='?', const=True, default=False,
+                        help='exports the distributed thickness field to '
+                             'GeoTIFF files in a subfolder of the L3 summary '
+                             'directory. Requires --add-distributed-thickness.')
     parser.add_argument('--demo', nargs='?', const=True, default=False,
                         help='if you want to run the prepro for the '
                              'list of demo glaciers.')
@@ -1059,6 +1085,8 @@ def parse_args(args):
                 add_hugonnet_dhdt=args.add_hugonnet_dhdt,
                 add_bedmachine=args.add_bedmachine,
                 add_glathida=args.add_glathida,
+                add_distributed_thickness=args.add_distributed_thickness,
+                add_export_thickness_geotiff=args.add_export_thickness_geotiff,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,

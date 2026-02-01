@@ -1261,6 +1261,52 @@ class TestPreproCLI(unittest.TestCase):
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
+    def test_distributed_thickness_and_geotiff_export(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+        import rioxarray as rioxr
+
+        inter, rgidf = _read_shp()
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
+
+        # Test with distributed thickness enabled and geotiff export
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          test_rgidf=rgidf, disable_mp=True,
+                          test_intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          max_level=3,
+                          add_distributed_thickness=True,
+                          add_export_thickness_geotiff=True,
+                          override_params={}
+                          )
+
+        # Check that GeoTIFF files were created
+        thickness_dir = os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
+                                     'distributed_thickness')
+        assert os.path.isdir(thickness_dir)
+
+        # Check that at least one GeoTIFF file exists with the correct naming
+        geotiff_files = [f for f in os.listdir(thickness_dir) if f.endswith('.tif')]
+        assert len(geotiff_files) > 0
+
+        # Verify the GeoTIFF file has correct naming pattern (RGI_ID_distributed_thickness.tif)
+        for fname in geotiff_files:
+            assert fname.endswith('_distributed_thickness.tif')
+            assert fname.startswith('RGI')
+
+        # Check that we can read one of the GeoTIFF files and it has data
+        gtiff_path = os.path.join(thickness_dir, geotiff_files[0])
+        gtiff_ds = rioxr.open_rasterio(gtiff_path)
+        assert gtiff_ds.isel(band=0).sum() > 0
+
+    @pytest.mark.slow
     def test_full_run_cru_centerlines(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels

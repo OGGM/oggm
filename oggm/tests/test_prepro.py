@@ -523,7 +523,7 @@ class TestGIS(unittest.TestCase):
         gis.glacier_masks(gdir)
         target_var = 'topo'
         gis.gridded_data_var_to_geotiff(gdir, varname=target_var)
-        gtiff_path = os.path.join(gdir.dir, target_var+'.tif')
+        gtiff_path = os.path.join(gdir.dir, f'{gdir.rgi_id}_{target_var}.tif')
         assert os.path.exists(gtiff_path)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
