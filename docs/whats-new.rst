@@ -63,6 +63,9 @@ Enhancements
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been deprecated since Python 3.12.
+  Reimplements ``strtobool`` natively.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
