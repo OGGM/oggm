@@ -61,11 +61,6 @@ Enhancements
   ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
   ``flux_divergence`` (:pull:`1792`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-- Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been deprecated since Python 3.12.
-  Reimplements ``strtobool`` natively.
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
@@ -76,6 +71,11 @@ Bug fixes
 - `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been deprecated since Python 3.12.
+  Reimplements ``strtobool`` natively.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 v1.6.2 (August 25, 2024)
 ------------------------
