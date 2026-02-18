@@ -141,6 +141,7 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         _check_ds_validity(ds)
         diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
         # resolution: diffs[diffs > 0].min() (necessary approach due to flattened files)
+        # thresh should not be above 0 (could be because of some regional data...)
         thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
         lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
         yrs = ds['time.year'].data
