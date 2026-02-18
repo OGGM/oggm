@@ -195,7 +195,7 @@ v1.6.1 (August 27, 2023)
 A new minor release of the OGGM with several improvements and bug fixes.
 We recommend all users currently using 1.6.0 to switch to this version if they
 are still in the testing/learning phase. If you rely on your results
-staying stricly the same, you should stick to the version you are currently
+staying strictly the same, you should stick to the version you are currently
 running.
 
 
@@ -903,7 +903,7 @@ Bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Nominal glaciers now error early in the processing chain (:issue:`832`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.
-- Specific MB (not used operationaly) was wrongly computer for zero ice
+- Specific MB (not used operationally) was wrongly computer for zero ice
   thickness rectangular or parabolic sections. This is now corrected
   (:issue:`828`).
   By `Fabien Maussion <https://github.com/fmaussion>`_.

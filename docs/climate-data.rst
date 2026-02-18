@@ -20,8 +20,8 @@ GSWP3-W5E5
 ~~~~~~~~~~
 
 As of v1.6, GSWP3-W5E5 [Lange_et_al_2021]_ is the standard baseline climate dataset used by OGGM
-for almost all preprocessed directories. GSWP3-W5E5 is a combination of W5E5 v2.0 [Lange_et_al_2021]_ for
-1979-2019 with GSWP3 v1.09 [Kim_2017]_ homogenized to W5E5 for 1901-1978. Note that the baseline
+for almost all :ref:`preprocessed directories <preprodir>`. GSWP3-W5E5 is a combination of W5E5 v2.0
+[Lange_et_al_2021]_ for 1979-2019 with GSWP3 v1.09 [Kim_2017]_ homogenized to W5E5 for 1901-1978. Note that the baseline
 url file paths are only named `W5E5` to make it shorter, however they include both, GSWP3 and W5E5 data.
 
 GSWP3-W5E5 has a spatial resolution of 0.5° over the entire globe and is also the observational

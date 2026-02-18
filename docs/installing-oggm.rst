@@ -25,7 +25,7 @@ fine there as well.
     we recommend to install the free
     `Windows subsystem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_ (WSL)
     and install and run OGGM from there. Though we don't offer support for installation, documentation
-    of a succesfull installation can be found here:
+    of a successful installation can be found here:
 
     .. toctree::
         :maxdepth: 1

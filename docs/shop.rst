@@ -240,7 +240,7 @@ Recommended level 3-5 configurations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Our `tutorials <https://tutorials.oggm.org>`_ provide examples of applications based on some
-of the preprocessed glacier directories. Below we describe the most commonly used `oggm_v1.6/L3-L5_files` glacier directories (all with :ref:`eb-flowlines` and border 160). We analysed the glacier directory and test projection differences in this `OGGM blogpost <TODO>`__. 
+of the preprocessed glacier directories. Below we describe the most commonly used `oggm_v1.6/L3-L5_files` glacier directories (all with :ref:`eb-flowlines` and border 160). We analysed the glacier directory and test projection differences in this `OGGM blogpost <https://oggm.org/2026/02/18/oggm_v16-gdirs-and-projection-options>`__.
 
 - **OGGM v1.6.1 standard projections**
   (`2023.3/../W5E5_spinup/RGI62/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2023.3/elev_bands/W5E5_spinup/RGI62/b_160>`__)
@@ -260,7 +260,8 @@ of the preprocessed glacier directories. Below we describe the most commonly use
 
   - Identical to the OGGM v1.6.3 standard projections, but using :ref:`ERA5 <climate-era5>` instead of :ref:`climate-w5e5` as
     baseline climate for the calibration. ERA5 has a higher spatial resolution (0.25° × 0.25°) than W5E5 (0.5°). 
-  - For the precipitation factor initial guess, we use a linear fit to the winter precipitation instead of a logarithmic fit that was used for W5E5. Details are in `this MB calibration tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_ and `this jupyter notebook <https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/_notebooks/oggm_v16_winter_mb_match_to_prescribe_prcp_fac/match_winter_mb_w5e5_era5.ipynb>`_ that estimated the fit using in-situ winter mass-balance data. 
+  - For the precipitation factor initial guess, we use a linear fit to the winter precipitation instead of a logarithmic
+    fit that was used for W5E5. Details are in `this MB calibration tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_ and `this jupyter notebook <https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/_notebooks/oggm_v16_winter_mb_match_to_prescribe_prcp_fac/match_winter_mb_w5e5_era5.ipynb>`_ that estimated the fit using in-situ winter mass-balance data.
 
 - **Regional calibration (RGI62)**
   (`2025.6/../W5E5/regional_spinup/RGI62/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/W5E5/regional_spinup/RGI62/b_160/>`__)
@@ -274,7 +275,8 @@ of the preprocessed glacier directories. Below we describe the most commonly use
 
   - Same regional calibration strategy as above, but using the RGI70G glacier inventory
     instead of RGI62. Differences between RGI versions are described in the
-    `RGI documentation <https://www.glims.org/rgi_user_guide/04_revisions.html>`_. The specific RGI7.0 calibration strategy can be found at TODO. 
+    `RGI documentation <https://www.glims.org/rgi_user_guide/04_revisions.html>`_. The specific RGI7.0 calibration
+    strategy can be found below.
 
 - **Regional calibration with RGI 7.0C (glacier complexes)**
   (`2025.6/../W5E5/regional_spinup/RGI70C/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/W5E5/regional_spinup/RGI70C/b_160/>`__)
@@ -282,6 +284,24 @@ of the preprocessed glacier directories. Below we describe the most commonly use
   - Uses the glacier complex product (RGI70C; 
     `more details here <https://www.glims.org/rgi_user_guide/products/glacier_complex_product.html>`_),
     resulting in fewer modeled glacier entities compared to individual glaciers.
+
+.. admonition:: **New 2025.6 RGI 7.0 initialisation and calibration!**
+
+    - We used the same input datasets (climate, topography, etc.) to generate OGGM glacier directories for RGI6, RGI7G,
+      and RGI7C.
+    - Since RGI7 currently has no mass-balance observations, we calibrated OGGM for all versions using the same regional
+      mass-balance estimates from `Hugonnet et al., 2021`_, assuming these are the same for all glaciers in a
+      region (like in `Zekollari et al., 2024 <https://doi.org/10.5194/tc-18-5045-2024>`_) and do not change
+      between RGI6 and RGI7. This is a strong assumption, but it has limited influence on the inversion itself
+      (more so on projections).
+    - We applied the OGGM inversion to RGI6, tuning glenA to match the regional ice-volume estimates from the
+      [Farinotti_etal_2019]_ consensus.
+    - The regionally tuned glenA parameters from RGI6 were then applied to RGI7G. As a result, any volume differences
+      between RGI6 and RGI7 arise solely from updated glacier outlines, not data or methods changes.
+    - Finally (less critical, but useful), we aggregated the RGI7G results to the glacier-complex level and re-ran the
+      inversion on RGI7C, tuning it to match the RGI7G totals. This allows us to produce ice-thickness maps at
+      the glacier complex scale without artefacts.
+
 
 
 Directory structure and naming conventions for all levels
@@ -334,7 +354,7 @@ Explanation of the naming convention for the folder name extensions:
     make your own, visit :py:func:`cli.prepro_levels.run_prepro_levels`
     or this `file on github <https://github.com/OGGM/oggm/blob/master/oggm/cli/prepro_levels.py>`_).
 
-    The urls used by OGGM per default are in the following ftp servor:
+    The urls used by OGGM per default are in the following ftp server:
 
     `https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/ <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/>`_ :
 

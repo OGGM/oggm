@@ -299,7 +299,7 @@ it in detail, but for a summary:
 - the old algorithm was flawed, but did not result in significant errors
   at large scales
 - the new algorithm is faster and more likely to be stable
-- we don't guarantee statibility in 100% of the cases, but when the model
+- we don't guarantee stability in 100% of the cases, but when the model
   becomes unstable it will raise an error.
 
 **We test OGGM for mass-conservation in several use cases**. What might happen,
