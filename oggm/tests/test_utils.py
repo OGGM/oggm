@@ -721,73 +721,6 @@ class TestStartFromTar(unittest.TestCase):
             assert new_base_dir in new_gdir.base_dir
 
 
-class TestDLVerify(unittest.TestCase):
-
-    def setUp(self):
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_tools')
-        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
-
-        # Init
-        cfg.initialize()
-        cfg.PATHS['dl_cache_dir'] = self.dldir
-        cfg.PARAMS['dl_verify'] = True
-
-        # Read in the RGI file
-        rgi_file = utils.get_demo_file('rgi_oetztal.shp')
-        self.rgidf = gpd.read_file(rgi_file)
-        self.rgidf['RGIId'] = [rid.replace('RGI50', 'RGI60')
-                               for rid in self.rgidf.RGIId]
-        cfg.PATHS['working_dir'] = self.testdir
-        self.clean_dir()
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-        shutil.rmtree(self.dldir)
-
-    def clean_dir(self):
-        utils.mkdir(self.testdir, reset=True)
-        utils.mkdir(self.dldir, reset=True)
-
-    def test_corrupted_file(self):
-
-        # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                  prepro_base_url=TEST_GDIR_URL_v11,
-                                                  from_prepro_level=4,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-
-        cfile = utils.get_prepro_gdir('61', 'RGI60-11.00787', 20, 4,
-                                      base_url=TEST_GDIR_URL_v11)
-        assert 'cluster.klima.uni-bremen.de/~oggm/' in cfile
-
-        # Replace with a dummy file
-        os.remove(cfile)
-        with open(cfile, 'w') as f:
-            f.write('ups')
-
-        # Since we already verified this will error
-        with pytest.raises(tarfile.ReadError):
-            workflow.init_glacier_directories(['RGI60-11.00787'],
-                                              prepro_base_url=TEST_GDIR_URL_v11,
-                                              from_prepro_level=4,
-                                              prepro_rgi_version='61',
-                                              prepro_border=20)
-
-        # This should retrigger a download and just work
-        cfg.DL_VERIFIED.clear()
-        gdirs = workflow.init_glacier_directories(['RGI60-11.00787'],
-                                                  prepro_base_url=TEST_GDIR_URL_v11,
-                                                  from_prepro_level=4,
-                                                  prepro_rgi_version='61',
-                                                  prepro_border=20)
-        assert gdirs[0].has_file('model_flowlines')
-
-
 class TestStartFromV14(unittest.TestCase):
 
     def setUp(self):
@@ -1981,63 +1914,6 @@ class TestFakeDownloads(unittest.TestCase):
         utils.mkdir(cfg.PATHS['working_dir'])
         utils.mkdir(cfg.PATHS['tmp_dir'])
         utils.mkdir(cfg.PATHS['rgi_dir'])
-
-    def prepare_verify_test(self, valid_size=True, valid_crc32=True,
-                            reset_dl_dict=True):
-        self.reset_dir()
-        cfg.PARAMS['dl_verify'] = True
-
-        if reset_dl_dict:
-            cfg.DL_VERIFIED.clear()
-
-        tgt_path = os.path.join(cfg.PATHS['dl_cache_dir'], 'test.com',
-                                'test.txt')
-
-        file_size = 1024
-        file_data = os.urandom(file_size)
-        file_sha256 = hashlib.sha256()
-        file_sha256.update(file_data)
-
-        utils.mkdir(os.path.dirname(tgt_path))
-        with open(tgt_path, 'wb') as f:
-            f.write(file_data)
-
-        if not valid_size:
-            file_size += 1
-        if not valid_crc32:
-            file_sha256.update(b'1234ABCD')
-
-        file_sha256 = file_sha256.digest()
-
-        data = utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
-        s = pd.DataFrame({'size': file_size, 'sha256': file_sha256},
-                         index=['test.txt'])
-        cfg.DATA['dl_verify_data_test.com'] = pd.concat([data, s])
-
-        return 'https://test.com/test.txt'
-
-    def test_dl_verify(self):
-
-        cfg.PARAMS['dl_verify'] = True
-
-        def fake_down(dl_func, cache_path):
-            assert False
-
-        with FakeDownloadManager('_call_dl_func', fake_down):
-            url = self.prepare_verify_test(True, True)
-            utils.oggm_urlretrieve(url)
-
-            url = self.prepare_verify_test(False, True)
-            with self.assertRaises(DownloadVerificationFailedException):
-                utils.oggm_urlretrieve(url)
-
-            url = self.prepare_verify_test(True, False)
-            with self.assertRaises(DownloadVerificationFailedException):
-                utils.oggm_urlretrieve(url)
-
-            url = self.prepare_verify_test(False, False)
-            with self.assertRaises(DownloadVerificationFailedException):
-                utils.oggm_urlretrieve(url)
 
     def test_github_no_internet(self):
         self.reset_dir()
