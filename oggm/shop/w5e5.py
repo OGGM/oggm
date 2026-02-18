@@ -105,6 +105,10 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
     # first temperature dataset
     with xr.open_dataset(path_tmp) as ds:
         assert ds.longitude.min() >= 0
+        # check that W5E5 gridpoints do not cross the "0" line (i.e. longitude cell is (0, res) )
+        diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
+        res_lon = diffs[diffs > 0].min()
+        np.testing.assert_allclose(ds.longitude.min(), res_lon / 2)
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1

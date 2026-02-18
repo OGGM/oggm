@@ -127,18 +127,22 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
     output_filesuffix : str
-        this add a suffix to the output file (useful to avoid overwriting
+        this adds a suffix to the output file (useful to avoid overwriting
         previous experiments)
     """
 
     if dataset is None:
         dataset = cfg.PARAMS['baseline_climate']
 
-    # Use xarray to read the data
-    lon = gdir.cenlon + 360 if gdir.cenlon < 0 else gdir.cenlon
     lat = gdir.cenlat
+    # Use xarray to read the data
+    # lon depends on the dataset and its resolution
     with xr.open_dataset(get_ecmwf_file(dataset, 'tmp')) as ds:
         _check_ds_validity(ds)
+        diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
+        # resolution: diffs[diffs > 0].min() (necessary approach due to flattened files)
+        thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
+        lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1
@@ -162,6 +166,9 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
         _check_ds_validity(ds)
+        diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
+        thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
+        lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
         if dataset == 'CERA':
             ds = ds.sel(number=ensemble_member)
@@ -174,6 +181,9 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         prcp = ds['tp'].data * 1000 * ds['time.daysinmonth']
     with xr.open_dataset(get_ecmwf_file(dataset, 'inv')) as ds:
         _check_ds_validity(ds)
+        diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
+        thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
+        lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
         try:
             ds = ds.isel(time=0)
         except (ValueError):
@@ -192,12 +202,19 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
 
     if dataset == 'ERA5dr':
         with xr.open_dataset(get_ecmwf_file(dataset, 'lapserates')) as ds:
+            # todo: lapse rate code could be removed, as it is not included in monthly_climate_file anyways ...
+            diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
+            thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
+            lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
             _check_ds_validity(ds)
             ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
 
         with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
             _check_ds_validity(ds)
+            diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
+            thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
+            lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
             ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             temp_std = ds['t2m_std'].data
