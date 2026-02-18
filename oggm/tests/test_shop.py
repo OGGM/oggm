@@ -334,12 +334,13 @@ class Test_w5e5:
                           (-179.915527 + 360, 66.276108)  # RGI60-10.05049 	(near -180 longitude)
                           ]:
                 lon, lat = coord
-                # for ERA5, there is a grid cell at longitudes (-0.125,0.125) with center 0
+                # for ERA5, all glaciers with longitudes (-0.125, 0.125) should take the longitude 0 data
                 # for glaciers between (-0.125 and 0) longitude, we do not want to transform to +360!!!
                 lon = lon + 360 if lon < dinv.longitude.min() - res / 2 else lon
                 if d == 'GSWP3_W5E5':
-                    # in case of GSWP3_W5E5, we have the grid cell at longitudes (0,1) with center at 0.5,
-                    # therefore, we only have th 0,360 transformation issue for ERA5
+                    # in case of GSWP3_W5E5, all glaciers with longitudes (0,1) will use the 0.5 gridpoint,
+                    # and those within (-1,0) use the 359.5 point
+                    # therefore, we only have the 0,360 transformation issue for ERA5
                     np.testing.assert_allclose(dinv.longitude.min() - res / 2, 0)
 
                 # get the distances to the glacier coordinate
