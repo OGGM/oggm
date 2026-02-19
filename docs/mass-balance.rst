@@ -28,17 +28,16 @@ concepts, random samples or simplifications of the more realistic ones.
     on the `PyGEM repository <https://github.com/PyGEM-Community/PyGEM>`_ and described in the
     `PyGEM documentation <https://pygem.readthedocs.io/en/latest/index.html>`_.
 
-    `OGGM's massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_
-    is the future generation of OGGM's climatic MB models. They are currently
-    in the development and testing phase, but they can readily be used with
-    the OGGM v1.5.3 version.
+    OGGM v1.7 will include different climatic MB models. Experienced OGGM users can already test them via the `OGGM dev branch <https://github.com/OGGM/oggm/tree/dev>`_ (some example use cases are available at the 
+    `digital twin component for glaciers notebooks <https://notebooks.dtcglaciers.org/welcome.html>`_). 
+    The OGGM dev branch MB model options are based on the `OGGM's massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_. 
 
 Check out the following resources for more information:
 
 * :doc:`mass-balance-monthly`
 * :doc:`mass-balance-16guide`
 * :doc:`mass-balance-toys`
-* The `massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_ repository
+
 
 
 .. toctree::
@@ -48,4 +47,4 @@ Check out the following resources for more information:
     mass-balance-monthly.rst
     mass-balance-16guide.rst
     mass-balance-toys.rst
-    massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>
+

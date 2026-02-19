@@ -55,5 +55,5 @@ Importantly, we need to take the uncertainty estimates into account, and
 we need to tackle the issue of daily data for hydrological models.
 
 More exigent users might have a look at `PyGEM <https://github.com/PyGEM-Community/PyGEM>`_
-or `OGGM sandbox <https://github.com/OGGM/massbalance-sandbox>`_, which are
+or the `OGGM dev branch <https://github.com/OGGM/oggm/tree/dev>`_ (included parts of the features of the `OGGM massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_) which are
 offering clever ways to deal with these issues.
