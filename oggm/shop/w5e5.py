@@ -107,7 +107,7 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         # sanity checks, safeguarding for unwanted future side effects
         # we do it only for temp and assume no mistake on the data prep side
         info = utils.climate_file_info(ds)
-        assert info['lon_bounds'] >= 0
+        assert info['lon_bounds'][0] >= 0
         assert info['is_flat']
 
         yrs = ds['time.year'].data

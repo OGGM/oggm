@@ -203,10 +203,9 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
     temp_std = None
     if dataset == 'ERA5dr':
         with xr.open_dataset(get_ecmwf_file(dataset, 'tempstd')) as ds:
-            _check_ds_validity(ds)
-            diffs = np.sort(ds.longitude)[1:] - np.sort(ds.longitude)[:-1]
-            thresh = max(ds.longitude.min() - diffs[diffs > 0].min() / 2, 0)
-            lon = gdir.cenlon + 360 if gdir.cenlon < thresh else gdir.cenlon
+            info = _check_ds_validity(ds)
+            # Longitude correction - we take the grid boundary, not the grid point center
+            lon = gdir.cenlon + 360 if gdir.cenlon < info['lon_bounds'][0] else gdir.cenlon
             ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
             ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
             temp_std = ds['t2m_std'].data

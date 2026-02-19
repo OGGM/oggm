@@ -73,6 +73,8 @@ Bug fixes
 - `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed small bug in which ERA5 data was missatributed for two Pyrenean glaciers (:pull:`1843`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
 
 v1.6.2 (August 25, 2024)
 ------------------------
