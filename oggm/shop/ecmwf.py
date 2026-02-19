@@ -101,7 +101,7 @@ def _check_ds_validity(ds):
                                              'month': ds['time.month'],
                                              'day': 1})
     info = utils.climate_file_info(ds)
-    assert info['lon_range'] >= 0
+    assert info['lon_range'][0] >= 0
     return info
 
 
