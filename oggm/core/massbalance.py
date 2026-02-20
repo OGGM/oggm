@@ -1535,7 +1535,7 @@ def mb_calibration_to_rmsd(gdir, *,
                             temp_bias_max=None,
                             mb_model_class=MonthlyTIModel,
                             filesuffix='',):
-    """Determine the mass balance parameters from a scalar mass-balance value.
+    """Determine the mass balance parameters by minimising RMSD to a reference MB timeseries
 
         This calibrates the mass balance parameters using interannual MB data from the
         WGMS data over a given period. This calibration uses differential evolution to 
