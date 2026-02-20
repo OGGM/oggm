@@ -57,7 +57,7 @@ jobs:
           echo "sanitized_name=${SANITIZED_NAME}" >> $GITHUB_OUTPUT
       - name: Upload pytest-mpl artifacts
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: "${{ steps.sanitize-name.outputs.sanitized_name }}"
           path: /tmp/oggm-mpl-results/

@@ -310,8 +310,8 @@ class Test_w5e5:
             # downloaded for the HEF gridpoints as they would be too large otherwise.
             # However, the same test and other tests are done for all files
             # (also ISIMIP3b) and all glaciers in this notebook:
-            # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/
-            # ~lschuster/example_ipynb/flatten_glacier_gridpoint_tests.ipynb
+            # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/
+            # climate/notebooks/flatten_glacier_gridpoint_tests.ipynb
             if d == 'GSWP3_W5E5':
                 res = 0.5
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
@@ -321,16 +321,28 @@ class Test_w5e5:
                 with xr.open_dataset(ecmwf.get_ecmwf_file('ERA5', 'inv')) as dinv:
                     dinv = dinv.load()
 
-                # select five glaciers where two failed in the
+            diffs = np.sort(dinv.longitude)[1:] - np.sort(dinv.longitude)[:-1]
+            np.testing.assert_allclose(diffs[diffs > 0].min(), res)
             # previous gswp3_w5e5 version, and two are only necessary for RGI7
             for coord in [(10.7584, 46.8003),  # HEF
-                          (-70.8931 + 360, -72.4474),  # RGI60-19.00124
+                          (-70.8931, -72.4474),  # RGI60-19.00124
                           (51.495, 30.9010),  # RGI60-12.01691
                           (0, 0),  # random gridpoint not near to a glacier
-                          ( -141.670274+360, 69.166921),  # in RGI7C, not in RGI6
-                          (-66.855668+360, -67.535551)  # only in RGI7G, not in RGI6 or in RGI 7C
+                          ( -141.670274, 69.166921),  # in RGI7C, not in RGI6
+                          (-66.855668, -67.535551),  # only in RGI7G, not in RGI6 or in RGI 7C
+                          (-0.039683, 42.695419),  ## glacier near 0
+                          (-179.915527 + 360, 66.276108)  # RGI60-10.05049 	(near -180 longitude)
                           ]:
                 lon, lat = coord
+                # for ERA5, all glaciers with longitudes (-0.125, 0.125) should take the longitude 0 data
+                # for glaciers between (-0.125 and 0) longitude, we do not want to transform to +360!!!
+                lon = lon + 360 if lon < dinv.longitude.min() - res / 2 else lon
+                if d == 'GSWP3_W5E5':
+                    # in case of GSWP3_W5E5, all glaciers with longitudes (0,1) will use the 0.5 gridpoint,
+                    # and those within (-1,0) use the 359.5 point
+                    # therefore, we only have the 0,360 transformation issue for ERA5
+                    np.testing.assert_allclose(dinv.longitude.min() - res / 2, 0)
+
                 # get the distances to the glacier coordinate
                 c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
                 c = c.to_dataframe('distance').sort_values('distance')
@@ -349,8 +361,8 @@ class Test_w5e5:
                     assert np.abs(lon_near - lon) <= res/2
                     assert dist <= ((res/2) ** 2 + (res/2) ** 2) ** 0.5
 
-            # this only contains data for five glaciers, let's still check some basics
-            # both glaciers are not at latitude or longitude 0
+            # this only contains data for a few glaciers, let's still check some basics
+            # both glaciers are not at latitude or longitude 0, but for one glacier we need to pick longitude 0
             if d == 'GSWP3_W5E5':
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
                     assert np.all(dtemp_std.latitude != 0)
@@ -361,13 +373,13 @@ class Test_w5e5:
             else:
                 with xr.open_dataset(ecmwf.get_ecmwf_file('ERA5', 'tmp')) as dtemp:
                     assert np.all(dtemp.latitude != 0)
-                    assert np.all(dtemp.longitude != 0)
+                    assert np.all(dtemp.longitude >= 0)
                     assert dtemp.isel(time=0).t2m.std() > 0
                     assert dtemp.longitude.std() > 0
                     assert dtemp.latitude.std() > 0
-                    # check being and end date (this is already tested for GSWP3-W5E5)
+                    # check begin and end date (this is already tested for GSWP3-W5E5)
                     assert dtemp.isel(time=0).time.values == np.datetime64('1940-01-01')
-                    assert dtemp.isel(time=-1).time.values == np.datetime64('2024-12-01')
+                    assert dtemp.isel(time=-1).time.values == np.datetime64('2025-12-01')
 
     def test_process_w5e5_data(self, class_case_dir):
 
@@ -554,7 +566,7 @@ class Test_ecmwf:
             ci = gdir.get_climate_info('CERA_repl')
             assert ci['baseline_climate_source'] == 'CERA+ERA5'
             assert ci['baseline_yr_0'] == 1901
-            assert ci['baseline_yr_1'] == 2024
+            assert ci['baseline_yr_1'] == 2025
 
             # Climate on common period
             sref = ref.sel(time=slice(ref.time[0], his.time[-1]))

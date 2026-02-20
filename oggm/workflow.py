@@ -421,9 +421,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_directories from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
-            # Read the hash dictionary before we use multiproc
-            if cfg.PARAMS['dl_verify']:
-                utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
