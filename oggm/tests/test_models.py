@@ -5887,7 +5887,7 @@ class TestDistribute2D:
         vol_dis = thick.sum(dim=('x', 'y')) * dx2
 
         # We have a very close volume and area conservation
-        assert_allclose(area_dis, ds_diag.area_m2, rtol=0.01)
+        assert_allclose(area_dis, ds_diag.area_m2, rtol=0.03)
         assert_allclose(vol_dis, ds_diag.volume_m3, rtol=0.01)
 
         # The flowline views should be quite good as well

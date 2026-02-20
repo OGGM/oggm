@@ -321,7 +321,7 @@ def test_thick_elev_bands():
     fig, ax = plt.subplots()
     gdir = init_columbia_eb(dir_name='test_thick_eb')
     workflow.inversion_tasks(utils.tolist(gdir))
-    inversion.distribute_thickness_per_altitude(gdir)
+    inversion.distribute_thickness_per_altitude(gdir, smooth_radius=None)
     graphics.plot_distributed_thickness(gdir, ax=ax)
     fig.tight_layout()
     return fig

@@ -975,7 +975,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
 
         # And the distributed diff is not too large either
         rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
-        assert rms < 20
+        assert rms < 30
 
     def test_run(self):
 

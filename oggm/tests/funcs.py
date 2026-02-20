@@ -482,7 +482,8 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
 
     if flowline_type == 'centerlines':
         inversion.distribute_thickness_interp(gdir, varname_suffix='_interp')
-    inversion.distribute_thickness_per_altitude(gdir, varname_suffix='_alt')
+    inversion.distribute_thickness_per_altitude(gdir, smooth_radius=None,
+                                                varname_suffix='_alt')
 
     flowline.init_present_time_glacier(gdir)
 

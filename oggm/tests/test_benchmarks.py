@@ -272,6 +272,7 @@ class TestSouthGlacier(unittest.TestCase):
         # We use the default parameters for this run
         execute_entity_task(tasks.mass_conservation_inversion, gdirs)
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs,
+                            smooth_radius=None,
                             varname_suffix='_alt')
         execute_entity_task(tasks.distribute_thickness_interp, gdirs,
                             varname_suffix='_int')
@@ -358,7 +359,7 @@ class TestSouthGlacier(unittest.TestCase):
             tasks.mass_conservation_inversion(gdir,
                                               glen_a=glen_a * x[0],
                                               fs=fs * x[1])
-            tasks.distribute_thickness_per_altitude(gdir)
+            tasks.distribute_thickness_per_altitude(gdir, smooth_radius=None)
             with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
                 thick = ds.distributed_thickness.isel(x=('z', df['i']),
                                                       y=('z', df['j']))
@@ -372,7 +373,8 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.mass_conservation_inversion, gdirs,
                             glen_a=glen_a*opti['x'][0],
                             fs=0)
-        execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
+        execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs,
+                            smooth_radius=None)
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             df['oggm'] = ds.distributed_thickness.isel(x=('z', df['i']),
