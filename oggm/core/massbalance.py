@@ -1541,6 +1541,14 @@ def mb_calibration_to_rmsd(gdir, *,
         WGMS data over a given period. This calibration uses differential evolution to 
         calibrate all given parameters to minimize the RMSD as much as possible.
 
+        This function is useful to calibrate all three parameters at once, on glaciers where 
+        WGMS or other in-situ observations are available. This is achieved by minimising the RMSD 
+        between the reference MB timeseries and the modelled MB timeseries over the period of available 
+        observations. The minimisiation technique chosen here is differential evolution, which is a global 
+        optimization technique that does not require the function to be differentiable. This makes it 
+        suitable for our problem, where the relationship between the parameters and the MB timeseries 
+        can be complex and non-linear, and we are able to calibrate all three parameters at once.
+        
         Note that this does not compute the apparent mass balance at
         the same time - users need to run `apparent_mb_from_any_mb after`
         calibration.
@@ -1692,7 +1700,7 @@ def mb_calibration_to_rmsd(gdir, *,
         elif param == 'temp_bias':
             bounds.append((temp_bias_min, temp_bias_max))
     
-    # Firstly, fix the precipitation factor, prcp_fac and calibrate this to optimise the rmsd
+    # Optimises all three mass balance parameters at the same time to minimize the RMSD between the simulated and reference MB timeseries
     def rmsd_cost_function(x, *model_attrs: tuple):
         for i, model_attr in enumerate(model_attrs):
             setattr(mb_mod, model_attr, x[i])
