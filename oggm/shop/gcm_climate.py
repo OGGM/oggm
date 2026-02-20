@@ -200,9 +200,10 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         append a suffix to the filename (useful for ensemble experiments).
         If it is not set, we create a filesuffix with applied ensemble and ssp
     member : str
-        ensemble member gcm that you want to process
+        ensemble member gcm that you want to process (five primary gcms, additional nine secondary gcms available)
     ssp : str
-        ssp scenario to process (only 'ssp126', 'ssp370' or 'ssp585' are available)
+        ssp scenario to process ('ssp126', 'ssp370' or 'ssp585' are available for all GCMs,
+        additional ssps are available for some GCMs)
     year_range : tuple of str
         the year range for which the anomalies are computed
         (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')`
@@ -245,9 +246,9 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
     else:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/'
-
-    path = f'{gcm_server}/cmip6/isimip3b/flat/2023.2/monthly/'
-    add = '_global_monthly_flat_glaciers.nc'
+    
+    path = f'{gcm_server}/cmip6/isimip3b/flat/2025.11.25/monthly/'
+    add = '_global_monthly_flat_glaciers_v2025.11.25.nc'
 
     fpath_spec = path + '{}_w5e5_'.format(member) + '{ssp}_{var}' + add
     fpath_temp = fpath_spec.format(var='tasAdjust', ssp=ssp)
@@ -259,6 +260,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         fpath_temp_h = utils.file_downloader(fpath_temp_h)
         fpath_precip = utils.file_downloader(fpath_precip)
         fpath_precip_h = utils.file_downloader(fpath_precip_h)
+              
 
     # Read the GCM files
     with xr.open_dataset(fpath_temp_h, use_cftime=True) as tempds_hist, \
@@ -282,10 +284,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         temp_a_gcm = tempds_gcm.isel(points=np.argmin(c.data))
         temp_a_hist = tempds_hist.isel(points=np.argmin(c.data))
         # merge historical with gcm together
-        # TODO: change to drop_conflicts when xarray version v0.17.0 can
-        #  be used with salem
-        temp_a = xr.merge([temp_a_gcm, temp_a_hist],
-                          combine_attrs='override')
+        temp_a = xr.merge([temp_a_gcm, temp_a_hist], compat='no_conflicts',
+                          combine_attrs='drop_conflicts', join='outer')
         temp = temp_a.tasAdjust
         temp['lon'] = temp_a.longitude
         temp['lat'] = temp_a.latitude
@@ -303,8 +303,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
              (precipds_gcm.latitude - glat) ** 2)
         precip_a_gcm = precipds_gcm.isel(points=np.argmin(c.data))
         precip_a_hist = precipds_hist.isel(points=np.argmin(c.data))
-        precip_a = xr.merge([precip_a_gcm, precip_a_hist],
-                            combine_attrs='override')
+        precip_a = xr.merge([precip_a_gcm, precip_a_hist], compat='no_conflicts',
+                            combine_attrs='drop_conflicts', join='outer')
 
         precip = precip_a.prAdjust
         precip['lon'] = precip_a.longitude
@@ -319,6 +319,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         assert r == 0
         dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
         precip = precip * dimo * (60 * 60 * 24)
+
 
     process_gcm_data(gdir, output_filesuffix=output_filesuffix,
                      prcp=precip, temp=temp,

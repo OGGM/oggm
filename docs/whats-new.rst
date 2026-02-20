@@ -61,9 +61,14 @@ Enhancements
   ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
   ``flux_divergence`` (:pull:`1792`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+<<<<<<< rmsd_calibration
 - Added a new way to calibrate the mass balance model with MB
   timeseries (:pull:`1827`).
   By `Chloe Hancock <https://github.com/chloe-hancock>`_
+=======
+- Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+>>>>>>> master
 
 Bug fixes
 ~~~~~~~~~
@@ -74,6 +79,8 @@ Bug fixes
 - `apparent_mb_from_any_mb` no longer computes mass-balance twice (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
+- Fixed small bug in which ERA5 data was missatributed for two Pyrenean glaciers (:pull:`1843`).
+  By `Lilian Schuster <https://github.com/lilianschuster>`_
 
 v1.6.2 (August 25, 2024)
 ------------------------

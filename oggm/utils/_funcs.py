@@ -401,6 +401,22 @@ def clip_scalar(value, vmin, vmax):
     return vmin if value < vmin else vmax if value > vmax else value
 
 
+def climate_file_info(ds, varname='longitude'):
+    """Provides simple info on a climate file - useful for shop tools."""
+    lons = np.unique(np.sort(ds[varname].data))
+    # Assumption below is that at least two grid points in the file are
+    # at 1 grid point distance
+    dx = np.min(lons[1:] - lons[:-1])
+    lon_range = (np.min(lons), np.max(lons))
+    lon_bounds = (lon_range[0] - dx/2, lon_range[1] + dx/2)
+    return {
+        'dx': dx,
+        'lon_range': lon_range,
+        'lon_bounds': lon_bounds,
+        'is_flat': varname not in ds.dims,
+    }
+
+
 def weighted_average_1d(data, weights):
     """A faster weighted average without dimension checks.
 

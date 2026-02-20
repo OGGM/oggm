@@ -70,10 +70,6 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
 SAMPLE_DATA_COMMIT = '9bfeb6dfea9513f790877819d9a6cbd2c7b61611'
 
-CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
-CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
-CHECKSUM_LIFETIME = 24 * 60 * 60
-
 # Recommended url for runs
 DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
                     'L3-L5_files/2023.3/elev_bands/W5E5_spinup')
@@ -180,88 +176,6 @@ def get_lock():
     return lock
 
 
-def get_dl_verify_data(section):
-    """Returns a pandas DataFrame with all known download object hashes.
-
-    The returned dictionary resolves str: cache_obj_name (without section)
-    to a tuple int(size) and bytes(sha256)
-    """
-
-    verify_key = 'dl_verify_data_' + section
-    if verify_key in cfg.DATA:
-        return cfg.DATA[verify_key]
-
-    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
-
-    def verify_file(force=False):
-        """Check the hash file's own hash"""
-        if not cfg.PARAMS['has_internet']:
-            return
-
-        if not force and os.path.isfile(verify_file_path) and \
-           os.path.getmtime(verify_file_path) + CHECKSUM_LIFETIME > time.time():
-            return
-
-        logger.info('Checking the download verification file checksum...')
-        try:
-            with requests.get(CHECKSUM_VALIDATION_URL) as req:
-                req.raise_for_status()
-                verify_file_sha256 = req.text.split(maxsplit=1)[0]
-                verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
-        except Exception as e:
-            verify_file_sha256 = None
-            logger.warning('Failed getting verification checksum: ' + repr(e))
-
-        if os.path.isfile(verify_file_path) and verify_file_sha256:
-            sha256 = hashlib.sha256()
-            with open(verify_file_path, 'rb') as f:
-                for b in iter(lambda: f.read(0xFFFF), b''):
-                    sha256.update(b)
-            if sha256.digest() != verify_file_sha256:
-                logger.warning('%s changed or invalid, deleting.'
-                               % (verify_file_path))
-                os.remove(verify_file_path)
-            else:
-                os.utime(verify_file_path)
-
-    if not np.any(['dl_verify_data_' in k for k in cfg.DATA.keys()]):
-        # We check the hash file only once per session
-        # no need to do it at each call
-        verify_file()
-
-    if not os.path.isfile(verify_file_path):
-        if not cfg.PARAMS['has_internet']:
-            return pd.DataFrame()
-
-        logger.info('Downloading %s to %s...'
-                    % (CHECKSUM_URL, verify_file_path))
-
-        with requests.get(CHECKSUM_URL, stream=True) as req:
-            if req.status_code == 200:
-                mkdir(os.path.dirname(verify_file_path))
-                with open(verify_file_path, 'wb') as f:
-                    for b in req.iter_content(chunk_size=0xFFFF):
-                        if b:
-                            f.write(b)
-
-        logger.info('Done downloading.')
-
-        verify_file(force=True)
-
-    if not os.path.isfile(verify_file_path):
-        logger.warning('Downloading and verifying checksums failed.')
-        return pd.DataFrame()
-
-    try:
-        data = pd.read_hdf(verify_file_path, key=section)
-    except KeyError:
-        data = pd.DataFrame()
-
-    cfg.DATA[verify_key] = data
-
-    return data
-
-
 def _call_dl_func(dl_func, cache_path):
     """Helper so the actual call to downloads can be overridden
     """
@@ -330,44 +244,6 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         raise
 
     return cache_path
-
-
-def _verified_download_helper(cache_obj_name, dl_func, reset=False):
-    """Helper function for downloads.
-
-    Verifies the size and hash of the downloaded file against the included
-    list of known static files.
-    Uses _cached_download_helper to perform the actual download.
-    """
-    path = _cached_download_helper(cache_obj_name, dl_func, reset)
-
-    dl_verify = cfg.PARAMS.get('dl_verify', False)
-
-    if dl_verify and path and cache_obj_name not in cfg.DL_VERIFIED:
-        cache_section, cache_path = cache_obj_name.split('/', 1)
-        data = get_dl_verify_data(cache_section)
-        if cache_path not in data.index:
-            logger.info('No known hash for %s' % cache_obj_name)
-            cfg.DL_VERIFIED[cache_obj_name] = True
-        else:
-            # compute the hash
-            sha256 = hashlib.sha256()
-            with open(path, 'rb') as f:
-                for b in iter(lambda: f.read(0xFFFF), b''):
-                    sha256.update(b)
-            sha256 = sha256.digest()
-            size = os.path.getsize(path)
-
-            # check
-            data = data.loc[cache_path]
-            if data['size'] != size or bytes(data['sha256']) != sha256:
-                err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path, size, sha256.hex(), data.iloc[0], data.iloc[1].hex())
-                raise DownloadVerificationFailedException(msg=err, path=path)
-            logger.info('%s verified successfully.' % path)
-            cfg.DL_VERIFIED[cache_obj_name] = True
-
-    return path
 
 
 def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
@@ -512,7 +388,7 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
                      reporthook=None, auth=None, timeout=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
-    Instead of accepting a destination path, it decided where to store the file
+    Instead of accepting a destination path, it decides where to store the file
     and returns the local path.
 
     auth is expected to be either a tuple of ('username', 'password') or None.
@@ -533,7 +409,7 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
                                      timeout)
         return cache_path
 
-    return _verified_download_helper(cache_obj_name, _dlf, reset)
+    return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
 def _progress_urlretrieve(url, cache_name=None, reset=False,
@@ -595,7 +471,7 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     def _dlf(cache_path):
         raise NotImplementedError("Downloads from AWS are no longer supported")
 
-    return _verified_download_helper(cache_obj_name, _dlf, reset)
+    return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
 def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
@@ -793,7 +669,7 @@ def download_with_authentication(wwwfile, key):
         return None
 
     cache_obj_name = _get_url_cache_name(wwwfile)
-    dest_file = _verified_download_helper(cache_obj_name, _always_none)
+    dest_file = _cached_download_helper(cache_obj_name, _always_none)
 
     # Grab auth parameters
     if not dest_file:
@@ -1317,14 +1193,14 @@ def get_geodetic_mb_dataframe(file_path=None):
 
 def get_temp_bias_dataframe(dataset='w5e5'):
     """Fetches the temperature bias dataframe created by the OGGM>=v16 pre-calibration
-    (further explained in the OGGM mass balance tutorial: 
+    (further explained in the OGGM mass balance tutorial:
     https:// tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html).
-    The data preparation script is available at 
+    The data preparation script is available at
     https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/1.6.1/prepare_bias_map.ipynb
 
     The file differs between climate datasets and OGGM versions. For W5E5 and OGGM v162, it is e.g.
     https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_temp_bias_v2023.4.csv
-    
+
     Parameters
     ----------
     dataset : str
