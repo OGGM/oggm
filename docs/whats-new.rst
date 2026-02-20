@@ -61,6 +61,9 @@ Enhancements
   ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
   ``flux_divergence`` (:pull:`1792`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added a new way to calibrate the mass balance model with MB
+  timeseries (:pull:`1827`).
+  By `Chloe Hancock <https://github.com/chloe-hancock>`_
 
 Bug fixes
 ~~~~~~~~~

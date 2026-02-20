@@ -1519,100 +1519,104 @@ def mb_calibration_from_wgms_mb(gdir, **kwargs):
 
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_to_rmsd(gdir, *,
-                            ref_df=None,
-                            write_to_gdir=True,
-                            overwrite_gdir=False,
-                            use_2d_mb=False,
-                            calibrate_params=('melt_f',),
-                            melt_f=None,
-                            melt_f_min=None,
-                            melt_f_max=None,
-                            prcp_fac=None,
-                            prcp_fac_min=None,
-                            prcp_fac_max=None,
-                            temp_bias=None,
-                            temp_bias_min=None,
-                            temp_bias_max=None,
-                            mb_model_class=MonthlyTIModel,
-                            filesuffix='',):
-    """Determine the mass balance parameters by minimising RMSD to a reference MB timeseries
+                           ref_df=None,
+                           write_to_gdir=True,
+                           overwrite_gdir=False,
+                           use_2d_mb=False,
+                           calibrate_params=('melt_f',),
+                           melt_f=None,
+                           melt_f_min=None,
+                           melt_f_max=None,
+                           prcp_fac=None,
+                           prcp_fac_min=None,
+                           prcp_fac_max=None,
+                           temp_bias=None,
+                           temp_bias_min=None,
+                           temp_bias_max=None,
+                           mb_model_class=MonthlyTIModel,
+                           filesuffix='',):
+    """Determine the MB parameters by minimising RMSD to a reference timeseries
 
-        This calibrates the mass balance parameters using interannual MB data from the
-        WGMS data over a given period. This calibration uses differential evolution to 
-        calibrate all given parameters to minimize the RMSD as much as possible.
+    This calibrates the mass balance parameters using interannual
+    MB data from the WGMS data over a given period. This calibration uses
+    differential evolution to calibrate all given parameters to minimize
+    the RMSD as much as possible.
 
-        This function is useful to calibrate all three parameters at once, on glaciers where 
-        WGMS or other in-situ observations are available. This is achieved by minimising the RMSD 
-        between the reference MB timeseries and the modelled MB timeseries over the period of available 
-        observations. The minimisiation technique chosen here is differential evolution, which is a global 
-        optimization technique that does not require the function to be differentiable. This makes it 
-        suitable for our problem, where the relationship between the parameters and the MB timeseries 
-        can be complex and non-linear, and we are able to calibrate all three parameters at once.
-        
-        Note that this does not compute the apparent mass balance at
-        the same time - users need to run `apparent_mb_from_any_mb after`
-        calibration.
+    This function is useful to calibrate all three parameters at once,
+    on glaciers where WGMS or other in-situ observations are available.
+    This is achieved by minimising the RMSD between the reference MB
+    timeseries and the modelled MB timeseries over the period of available
+    observations. The minimisiation technique chosen here is differential
+    evolution, which is a global optimization technique that does not
+    require the function to be differentiable. This makes it
+    suitable for our problem, where the relationship between the parameters
+    and the MB timeseries can be complex and non-linear, and we are able
+    to calibrate all three parameters at once.
 
-        Parameters
-        ----------
-        gdir : :py:class:`oggm.GlacierDirectory`
-            the glacier directory to calibrate
-        ref_df : pandas dataframe, required
-            the dataframe of annual mass balance values from the wgms data 
-            (units: kg m-2 yr-1).
-            It is required here - if you want to use available observations,
-        write_to_gdir : bool
-            whether to write the results of the calibration to the glacier
-            directory. If True (the default), this will be saved as `mb_calib.json`
-            and be used by the MassBalanceModel class as parameters in subsequent
-            tasks.
-        overwrite_gdir : bool
-            if a `mb_calib.json` exists, this task won't overwrite it per default.
-            Set this to True to enforce overwriting (i.e. with consequences for the
-            future workflow).
-        use_2d_mb : bool
-            Set to True if the mass balance calibration has to be done of the 2D mask
-            of the glacier (for fully distributed runs only).
-        mb_model_class : MassBalanceModel class
-            the MassBalanceModel to use for the calibration. Needs to use the
-            same parameters as MonthlyTIModel (the default): melt_f,
-            temp_bias, prcp_fac.
-        calibrate_params : tuple
-            the parameter(s) that will be used in the calibration, it must be at least one of:
-              'melt_f', 'temp_bias', 'prcp_fac'. Defaults to ('melt_f',)
-        melt_f: float
-            the default value to use as melt factor (or the starting value when
-            optimizing MB). Defaults to cfg.PARAMS['melt_f'].
-        melt_f_min: float
-            the minimum accepted value for the melt factor during optimisation.
-            Defaults to cfg.PARAMS['melt_f_min'].
-        melt_f_max: float
-            the maximum accepted value for the melt factor during optimisation.
-            Defaults to cfg.PARAMS['melt_f_max'].
-        prcp_fac: float
-            the default value to use as precipitation scaling factor
-            (or the starting value when optimizing MB). Defaults to the method
-            chosen in `params.cfg` (winter prcp or global factor).
-        prcp_fac_min: float
-            the minimum accepted value for the precipitation scaling factor during
-            optimisation. Defaults to cfg.PARAMS['prcp_fac_min'].
-        prcp_fac_max: float
-            the maximum accepted value for the precipitation scaling factor during
-            optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
-        temp_bias: float
-            the default value to use as temperature bias (or the starting value when
-            optimizing MB). Defaults to 0.
-        temp_bias_min: float
-            the minimum accepted value for the temperature bias during optimisation.
-            Defaults to cfg.PARAMS['temp_bias_min'].
-        temp_bias_max: float
-            the maximum accepted value for the temperature bias during optimisation.
-            Defaults to cfg.PARAMS['temp_bias_max'].
-        filesuffix: str
-            add a filesuffix to mb_calib.json. This could be useful for sensitivity
-            analyses with MB models, if they need to fetch other sets of params for
-            example.
-        """
+    Note that this does not compute the apparent mass balance at
+    the same time - users need to run `apparent_mb_from_any_mb after`
+    calibration.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to calibrate
+    ref_df : pandas dataframe, required
+        the dataframe of annual mass balance values from the wgms data
+        (units: kg m-2 yr-1).
+        It is required here - if you want to use available observations,
+    write_to_gdir : bool
+        whether to write the results of the calibration to the glacier
+        directory. If True (the default), this will be saved as `mb_calib.json`
+        and be used by the MassBalanceModel class as parameters in subsequent
+        tasks.
+    overwrite_gdir : bool
+        if a `mb_calib.json` exists, this task won't overwrite it per default.
+        Set this to True to enforce overwriting (i.e. with consequences for the
+        future workflow).
+    use_2d_mb : bool
+        Set to True if the mass balance calibration has to be done of the 2D mask
+        of the glacier (for fully distributed runs only).
+    mb_model_class : MassBalanceModel class
+        the MassBalanceModel to use for the calibration. Needs to use the
+        same parameters as MonthlyTIModel (the default): melt_f,
+        temp_bias, prcp_fac.
+    calibrate_params : tuple
+        the parameter(s) that will be used in the calibration, it must be at least one of:
+            'melt_f', 'temp_bias', 'prcp_fac'. Defaults to ('melt_f',)
+    melt_f: float
+        the default value to use as melt factor (or the starting value when
+        optimizing MB). Defaults to cfg.PARAMS['melt_f'].
+    melt_f_min: float
+        the minimum accepted value for the melt factor during optimisation.
+        Defaults to cfg.PARAMS['melt_f_min'].
+    melt_f_max: float
+        the maximum accepted value for the melt factor during optimisation.
+        Defaults to cfg.PARAMS['melt_f_max'].
+    prcp_fac: float
+        the default value to use as precipitation scaling factor
+        (or the starting value when optimizing MB). Defaults to the method
+        chosen in `params.cfg` (winter prcp or global factor).
+    prcp_fac_min: float
+        the minimum accepted value for the precipitation scaling factor during
+        optimisation. Defaults to cfg.PARAMS['prcp_fac_min'].
+    prcp_fac_max: float
+        the maximum accepted value for the precipitation scaling factor during
+        optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
+    temp_bias: float
+        the default value to use as temperature bias (or the starting value when
+        optimizing MB). Defaults to 0.
+    temp_bias_min: float
+        the minimum accepted value for the temperature bias during optimisation.
+        Defaults to cfg.PARAMS['temp_bias_min'].
+    temp_bias_max: float
+        the maximum accepted value for the temperature bias during optimisation.
+        Defaults to cfg.PARAMS['temp_bias_max'].
+    filesuffix: str
+        add a filesuffix to mb_calib.json. This could be useful for sensitivity
+        analyses with MB models, if they need to fetch other sets of params for
+        example.
+    """
 
     # Param constraints
     if melt_f_min is None:
@@ -1643,7 +1647,7 @@ def mb_calibration_to_rmsd(gdir, *,
     # Climate period
     ref_mb_years = ref_df.index.values
     years = ref_mb_years
-    
+
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
     if cmb != 0:
@@ -1689,7 +1693,7 @@ def mb_calibration_to_rmsd(gdir, *,
         if param not in ('melt_f', 'prcp_fac', 'temp_bias'):
             raise InvalidParamsError("calibrate_params must be a tuple with any of "
                                      "'melt_f', 'prcp_fac', 'temp_bias'")
-        
+
     # Set the bounds for the optimization
     bounds = []
     for param in calibrate_params:
@@ -1699,7 +1703,7 @@ def mb_calibration_to_rmsd(gdir, *,
             bounds.append((melt_f_min, melt_f_max))
         elif param == 'temp_bias':
             bounds.append((temp_bias_min, temp_bias_max))
-    
+
     # Optimises all three mass balance parameters at the same time to minimize the RMSD between the simulated and reference MB timeseries
     def rmsd_cost_function(x, *model_attrs: tuple):
         for i, model_attr in enumerate(model_attrs):
@@ -1714,13 +1718,13 @@ def mb_calibration_to_rmsd(gdir, *,
 
     try:
         res = optimize.differential_evolution(rmsd_cost_function,
-                                       bounds = bounds, # Use the default ranges set in the OGGM
-                                       tol=1e-8,
-                                       maxiter=5000, 
-                                       args=(calibrate_params), # Pass the parameters to calibrate
-                                       )
-        
-        calib_params = res.x 
+                                              bounds=bounds,
+                                              tol=1e-8,
+                                              maxiter=5000,
+                                              args=(calibrate_params),
+                                              )
+
+        calib_params = res.x
 
         # Assign parameters
         for i, param in enumerate(calibrate_params):
@@ -1733,7 +1737,7 @@ def mb_calibration_to_rmsd(gdir, *,
 
     except ValueError:
         raise RuntimeError(f'{gdir.rgi_id}: could not minimise the rmsd. '
-                            f'Try another technique.')
+                           f'Try another technique.')
 
     # Store parameters
     df = gdir.read_json('mb_calib', allow_empty=True)

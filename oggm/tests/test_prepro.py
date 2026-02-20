@@ -1724,13 +1724,13 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(mb_calib_2d['melt_f'], mb_calib_1d['melt_f'], rtol=0.05)
 
     def test_mb_calibration_to_rmsd(self):
+
         from oggm.core.massbalance import mb_calibration_to_rmsd, mb_calibration_from_scalar_mb
         from functools import partial
-        from oggm.utils._funcs import rmsd
-        
+
         mb_calibration_to_rmsd = partial(mb_calibration_to_rmsd,
-                                         overwrite_gdir = True)
-        
+                                         overwrite_gdir=True)
+
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
@@ -1747,8 +1747,7 @@ class TestClimate(unittest.TestCase):
 
         # Firstly, calibrate just the melt_f
         # Default is to calibrate melt_f
-        mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb)
+        mb_calibration_to_rmsd(gdir, ref_df=ref_mb)
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1756,8 +1755,8 @@ class TestClimate(unittest.TestCase):
 
         # Calibrate just prcp_fac
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('prcp_fac',))
+                               ref_df=ref_mb,
+                               calibrate_params=('prcp_fac',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1765,8 +1764,8 @@ class TestClimate(unittest.TestCase):
 
         # Calibrate just temp_bias
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('temp_bias',))
+                               ref_df=ref_mb,
+                               calibrate_params=('temp_bias',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1774,8 +1773,8 @@ class TestClimate(unittest.TestCase):
 
         # Calibrate melt_f and prcp_fac
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('melt_f', 'prcp_fac',))
+                               ref_df=ref_mb,
+                               calibrate_params=('melt_f', 'prcp_fac',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1783,8 +1782,8 @@ class TestClimate(unittest.TestCase):
 
         # Calibrate melt_f and temp_bias
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('melt_f', 'temp_bias',))
+                               ref_df=ref_mb,
+                               calibrate_params=('melt_f', 'temp_bias',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1792,17 +1791,17 @@ class TestClimate(unittest.TestCase):
 
         # Calibrate prcp_fac and temp_bias
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('prcp_fac', 'temp_bias',))
+                               ref_df=ref_mb,
+                               calibrate_params=('prcp_fac', 'temp_bias',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['pf_tb_mb_rmsd'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-    
+
         # Calibrate all parameters together
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('melt_f', 'prcp_fac', 'temp_bias',))
+                               ref_df=ref_mb,
+                               calibrate_params=('melt_f', 'prcp_fac', 'temp_bias',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1883,51 +1882,50 @@ class TestClimate(unittest.TestCase):
         mb_new = massbalance.MonthlyTIModel(gdir)
         mbdf['temp_bias_mb_scalar'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
 
-        # Since we are now calibrating to rmsd rather than the mean, let's check that the RMSD has been reduced between the 
+        # Since we are now calibrating to rmsd rather than the mean, let's check that the RMSD has been reduced between the
         # RMSD calibration technique vs the scalar calibration technique
 
         # Unless the calibration for one parameter fails (which it wont in this case), for scalar it is equivalent
         # to just test this to having one parameter calibrated, since it will only ever calibrate one parameter at a time
-        
+
         # Check that RMSD has been reduced for calibrating melt_f, compare to scalar for when melt_f is calibrated
         # Just melt_f
-        np.testing.assert_array_less(rmsd(mbdf['melt_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
-        
+        np.testing.assert_array_less(utils.rmsd(mbdf['melt_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
+
         # melt_f and prcp_fac
-        np.testing.assert_array_less(rmsd(mbdf['mf_pf_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
-        
+        np.testing.assert_array_less(utils.rmsd(mbdf['mf_pf_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
+
         # melt_f and temp_bias
-        np.testing.assert_array_less(rmsd(mbdf['mf_tb_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
-        
+        np.testing.assert_array_less(utils.rmsd(mbdf['mf_tb_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
+
         # all parameters
-        np.testing.assert_array_less(rmsd(mbdf['all_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
-        
+        np.testing.assert_array_less(utils.rmsd(mbdf['all_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['melt_mb_scalar'], mbdf['ref_mb']))
+
         # Check that RMSD has been reduced for calibrating prcp_fac
         # Just prcp_fac
-        np.testing.assert_array_less(rmsd(mbdf['prcp_fac_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['prcp_fac_mb_scalar'], mbdf['ref_mb']))
+        np.testing.assert_array_less(utils.rmsd(mbdf['prcp_fac_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['prcp_fac_mb_scalar'], mbdf['ref_mb']))
 
         # prcp_fac and temp_bias
-        np.testing.assert_array_less(rmsd(mbdf['pf_tb_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['prcp_fac_mb_scalar'], mbdf['ref_mb']))
+        np.testing.assert_array_less(utils.rmsd(mbdf['pf_tb_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['prcp_fac_mb_scalar'], mbdf['ref_mb']))
 
         # Check that RMSD has been reduced for calibrating temp_bias
         # Just temp_bias
-        np.testing.assert_array_less(rmsd(mbdf['temp_bias_mb_rmsd'], mbdf['ref_mb']), 
-                                     rmsd(mbdf['temp_bias_mb_scalar'], mbdf['ref_mb']))
+        np.testing.assert_array_less(utils.rmsd(mbdf['temp_bias_mb_rmsd'], mbdf['ref_mb']),
+                                     utils.rmsd(mbdf['temp_bias_mb_scalar'], mbdf['ref_mb']))
 
-    
+
         # Now check that the order of parameters added into the  calibration does not affact the result
 
         # Calibrate with parameters inserted in all possible permutations
         # mf, pf, tb
-        mb_calibration_to_rmsd(gdir,
-                            ref_df=ref_mb,
-                            calibrate_params=('melt_f', 'prcp_fac', 'temp_bias'),)
+        mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                               calibrate_params=('melt_f', 'prcp_fac', 'temp_bias'),)
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1935,8 +1933,8 @@ class TestClimate(unittest.TestCase):
 
         # mf, tb, pf
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('melt_f', 'temp_bias', 'prcp_fac',))
+                               ref_df=ref_mb,
+                               calibrate_params=('melt_f', 'temp_bias', 'prcp_fac',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1944,8 +1942,8 @@ class TestClimate(unittest.TestCase):
 
         # pf, mf, tb
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('prcp_fac', 'melt_f', 'temp_bias',))
+                               ref_df=ref_mb,
+                               calibrate_params=('prcp_fac', 'melt_f', 'temp_bias',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1953,8 +1951,8 @@ class TestClimate(unittest.TestCase):
 
         # pf, tb, mf
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('prcp_fac', 'temp_bias', 'melt_f',))
+                               ref_df=ref_mb,
+                               calibrate_params=('prcp_fac', 'temp_bias', 'melt_f',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1962,8 +1960,8 @@ class TestClimate(unittest.TestCase):
 
         # tb, mf, pf
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('temp_bias', 'melt_f', 'prcp_fac',))
+                               ref_df=ref_mb,
+                               calibrate_params=('temp_bias', 'melt_f', 'prcp_fac',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1971,8 +1969,8 @@ class TestClimate(unittest.TestCase):
 
         # tb, pf, mf
         mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('temp_bias', 'prcp_fac', 'melt_f',))
+                               ref_df=ref_mb,
+                               calibrate_params=('temp_bias', 'prcp_fac', 'melt_f',))
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir)
@@ -1990,27 +1988,26 @@ class TestClimate(unittest.TestCase):
         # This will force differential evolution to fail
 
         with pytest.raises(RuntimeError):
-            mb_calibration_to_rmsd(gdir,
-                                ref_df=ref_mb,
-                                calibrate_params=('melt_f',),
-                                melt_f_min = np.nan)
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                   calibrate_params=('melt_f',),
+                                   melt_f_min = np.nan)
 
         # Some invalid bounds since max > min
         with pytest.raises(RuntimeError):
             mb_calibration_to_rmsd(gdir,
-                ref_df=ref_mb,
-                calibrate_params=('temp_bias',),
-                temp_bias_min=2.0,
-                temp_bias_max=-1.0, )
-            
+                                   ref_df=ref_mb,
+                                   calibrate_params=('temp_bias',),
+                                   temp_bias_min=2.0,
+                                   temp_bias_max=-1.0, )
+
         # Impose infinite bounds, which will cause DE to fail
         with pytest.raises(RuntimeError):
             mb_calibration_to_rmsd(gdir,
-                ref_df=ref_mb,
-                calibrate_params=('temp_bias',),
-                temp_bias_min=-np.inf,
-                temp_bias_max=np.inf, )
-            
+                                   ref_df=ref_mb,
+                                   calibrate_params=('temp_bias',),
+                                   temp_bias_min=-np.inf,
+                                   temp_bias_max=np.inf, )
+
         # Test for an acceptibly small bias
         np.testing.assert_allclose(0, (mbdf['melt_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
         np.testing.assert_allclose(0, (mbdf['prcp_fac_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
