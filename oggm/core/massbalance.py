@@ -17,7 +17,7 @@ from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         monthly_timeseries, ncDataset, get_temp_bias_dataframe,
                         clip_min, clip_max, clip_array, clip_scalar,
-                        weighted_average_1d, lazy_property, set_array_type, _funcs)
+                        weighted_average_1d, lazy_property, set_array_type, rmsd)
 from oggm.exceptions import (InvalidWorkflowError, InvalidParamsError,
                              MassBalanceCalibrationError)
 from oggm import entity_task
@@ -1702,7 +1702,7 @@ def mb_calibration_to_rmsd(gdir, *,
         else:
             sim_out = mb_mod.get_specific_mb(fls=fls, year=years)
 
-        return _funcs.rmsd(ref_df, sim_out)
+        return rmsd(ref_df, sim_out)
 
     try:
         res = optimize.differential_evolution(rmsd_cost_function,
