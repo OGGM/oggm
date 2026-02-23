@@ -1672,17 +1672,10 @@ def mb_calibration_to_rmsd(gdir, *,
         melt_f = cfg.PARAMS['melt_f']
 
     if prcp_fac is None:
-        if cfg.PARAMS['use_winter_prcp_fac']:
-            # Some sanity check
-            if cfg.PARAMS['prcp_fac'] is not None:
-                raise InvalidWorkflowError("Set PARAMS['prcp_fac'] to None "
-                                           "if using PARAMS['winter_prcp_factor'].")
+        if cfg.PARAMS['prcp_fac'] is None:
             prcp_fac = decide_winter_precip_factor(gdir)
         else:
             prcp_fac = cfg.PARAMS['prcp_fac']
-            if prcp_fac is None:
-                raise InvalidWorkflowError("Set either PARAMS['use_winter_prcp_fac'] "
-                                           "or PARAMS['winter_prcp_factor'].")
 
     if temp_bias is None:
         temp_bias = 0

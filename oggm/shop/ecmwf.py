@@ -166,6 +166,8 @@ def process_ecmwf_data(gdir, dataset=None, ensemble_member=0,
         time = ds.time.data
         ref_lon = float(ds['longitude'])
         # That's actually not how it should be - but it's too late to change
+        # Its not how it should be because the file is in 0-360 so this may
+        # stay as well. Note that the bias files expect this to be like this
         ref_lon = ref_lon - 360 if ref_lon > 180 else ref_lon
         ref_lat = float(ds['latitude'])
     with xr.open_dataset(get_ecmwf_file(dataset, 'pre')) as ds:
