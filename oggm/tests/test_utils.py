@@ -437,7 +437,7 @@ class TestInitialize(unittest.TestCase):
 
     def test_default_url(self):
         from oggm import DEFAULT_BASE_URL
-        assert '2023.3' in DEFAULT_BASE_URL
+        assert '2025.6' in DEFAULT_BASE_URL
 
 
 class TestWorkflowTools(unittest.TestCase):
