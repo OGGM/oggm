@@ -56,7 +56,6 @@ Enhancements
   ``climatic_mb_myr`` -> ``climatic_mb`` and ``flux_divergence_myr`` ->
   ``flux_divergence`` (:pull:`1792`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
-<<<<<<< rgidem
 - New `workflow.invert_from_params` task which allows to specify which (regional)
   glen A and sliding parameters to use. This is useful if you don't have any
   data to calibrate to (:pull:`1816`).
@@ -72,16 +71,10 @@ Enhancements
   `calibrate_inversion_from_consensus`. It finds the "best Glen A" to match
   the reference volume for a single glacier. (:pull:`1816`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-=======
-<<<<<<< rmsd_calibration
 - Added a new way to calibrate the mass balance model with MB
   timeseries (:pull:`1827`).
   By `Chloe Hancock <https://github.com/chloe-hancock>`_
-=======
-- Fixed ``TimeoutError`` when running tests when urlopen hangs on DNS lookup (:pull:`1813`).
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
->>>>>>> master
->>>>>>> master
+
 
 Bug fixes
 ~~~~~~~~~
