@@ -3445,18 +3445,7 @@ class GlacierDirectory(object):
             if cfg.PARAMS['use_compression']:
                 fp += '.gz'
 
-        retries = 5
-        delay = 0.1
-        for attempt in range(retries):
-            try:
-                shp = gpd.read_file(fp)
-                break
-            except (ValueError, IndexError, OSError) as err:
-                if attempt < retries - 1:
-                    logging.debug(f"Retrying read_file due to: {err} (attempt {attempt + 1})")
-                    time.sleep(delay)
-                else:
-                    raise
+        shp = gpd.read_file(fp)
 
         # .properties file is created for compressed shapefiles. github: #904
         _properties = fp.replace('tar://', '') + '.properties'
