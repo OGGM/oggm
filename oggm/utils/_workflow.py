@@ -930,32 +930,6 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
-def demo_glacier_id(key):
-    """Get the RGI id of a glacier by name or key: None if not found."""
-
-    df = cfg.DATA['demo_glaciers']
-
-    # Is the name in key?
-    s = df.loc[df.Key.str.lower() == key.lower()]
-    if len(s) == 1:
-        return s.index[0]
-
-    # Is the name in name?
-    s = df.loc[df.Name.str.lower() == key.lower()]
-    if len(s) == 1:
-        return s.index[0]
-
-    # Is the name in Ids?
-    try:
-        s = df.loc[[key]]
-        if len(s) == 1:
-            return s.index[0]
-    except KeyError:
-        pass
-
-    return None
-
-
 class compile_to_netcdf(object):
     """Decorator for common compiling NetCDF files logic.
 

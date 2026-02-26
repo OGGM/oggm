@@ -512,16 +512,6 @@ class TestWorkflowTools(unittest.TestCase):
         np.testing.assert_allclose(df['1970-2000_avg_prcpsol_max_elev'],
                                    2811, atol=200)
 
-    def test_demo_glacier_id(self):
-
-        cfg.initialize()
-        assert utils.demo_glacier_id('hef') == 'RGI60-11.00897'
-        assert utils.demo_glacier_id('HeF') == 'RGI60-11.00897'
-        assert utils.demo_glacier_id('HintereisFerner') == 'RGI60-11.00897'
-        assert utils.demo_glacier_id('Mer de Glace') == 'RGI60-11.03643'
-        assert utils.demo_glacier_id('RGI60-11.03643') == 'RGI60-11.03643'
-        assert utils.demo_glacier_id('Mer Glace') is None
-
     def test_ref_data_manager(self):
 
         workflow.init_mp_pool()
