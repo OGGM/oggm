@@ -3185,7 +3185,12 @@ class TestGCMClimate(unittest.TestCase):
 
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, use_cftime=True) as cesm:
+        try:
+            decode_times = xr.coders.CFDatetimeCoder(use_cftime=True)
+            cftime_kwargs = {'decode_times': decode_times}
+        except AttributeError:
+            cftime_kwargs = {'use_cftime': True}
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, **cftime_kwargs) as cesm:
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))

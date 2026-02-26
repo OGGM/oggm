@@ -19,6 +19,13 @@ from oggm.exceptions import InvalidParamsError
 log = logging.getLogger(__name__)
 
 
+def _get_xr_cftime_kwargs():
+    try:
+        return {'decode_times': xr.coders.CFDatetimeCoder(use_cftime=True)}
+    except AttributeError:
+        return {'use_cftime': True}
+
+
 @entity_task(log, writes=['gcm_data'])
 def process_gcm_data(gdir, prcp=None, temp=None,
                      year_range=('1961', '1990'), scale_stddev=True,
@@ -260,11 +267,10 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         fpath_temp_h = utils.file_downloader(fpath_temp_h)
         fpath_precip = utils.file_downloader(fpath_precip)
         fpath_precip_h = utils.file_downloader(fpath_precip_h)
-              
 
     # Read the GCM files
-    with xr.open_dataset(fpath_temp_h, use_cftime=True) as tempds_hist, \
-            xr.open_dataset(fpath_temp, use_cftime=True) as tempds_gcm:
+    with xr.open_dataset(fpath_temp_h, **_get_xr_cftime_kwargs()) as tempds_hist, \
+            xr.open_dataset(fpath_temp, **_get_xr_cftime_kwargs()) as tempds_gcm:
         # make processing faster
         if y0 is not None:
             tempds_hist = tempds_hist.sel(time=slice(str(y0), None))
@@ -292,8 +298,8 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
 
         temp.lon.values = temp.lon if temp.lon <= 180 else temp.lon - 360
 
-    with xr.open_dataset(fpath_precip_h, use_cftime=True) as precipds_hist, \
-            xr.open_dataset(fpath_precip, use_cftime=True) as precipds_gcm:
+    with xr.open_dataset(fpath_precip_h, **_get_xr_cftime_kwargs()) as precipds_hist, \
+            xr.open_dataset(fpath_precip, **_get_xr_cftime_kwargs()) as precipds_gcm:
         # make processing faster
         if y0 is not None:
             precipds_hist = precipds_hist.sel(time=slice(str(y0), None))
@@ -319,7 +325,6 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         assert r == 0
         dimo = [cfg.DAYS_IN_MONTH[m - 1] for m in temp['time.month']]
         precip = precip * dimo * (60 * 60 * 24)
-
 
     process_gcm_data(gdir, output_filesuffix=output_filesuffix,
                      prcp=precip, temp=temp,
@@ -377,9 +382,9 @@ def process_cesm_data(gdir, fpath_temp=None, fpath_precc=None,
     if Version(xr.__version__) < Version('0.11'):
         raise ImportError('This task needs xarray v0.11 or newer to run.')
 
-    tempds = xr.open_dataset(fpath_temp, use_cftime=True)
-    precpcds = xr.open_dataset(fpath_precc, use_cftime=True)
-    preclpds = xr.open_dataset(fpath_precl, use_cftime=True)
+    tempds = xr.open_dataset(fpath_temp, **_get_xr_cftime_kwargs())
+    precpcds = xr.open_dataset(fpath_precc, **_get_xr_cftime_kwargs())
+    preclpds = xr.open_dataset(fpath_precl, **_get_xr_cftime_kwargs())
 
     # Get the time right - i.e. from time bounds
     # Fix for https://github.com/pydata/xarray/issues/2565
@@ -481,8 +486,8 @@ def process_cmip_data(gdir, fpath_temp=None, fpath_precip=None, y0=None, y1=None
     if y1 is not None:
         y1 = str(y1)
     # Read the GCM files
-    with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
-            xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
+    with xr.open_dataset(fpath_temp, **_get_xr_cftime_kwargs()) as tempds, \
+            xr.open_dataset(fpath_precip, **_get_xr_cftime_kwargs()) as precipds:
 
         # only process and save the gcm data selected --> saves some time!
         if (y0 is not None) or (y1 is not None):
@@ -600,8 +605,8 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
 
     # Read the GCM files
     if version == 'v2.1':
-        with xr.open_dataset(fpath_temp, use_cftime=True) as tempds, \
-                xr.open_dataset(fpath_precip, use_cftime=True) as precipds:
+        with xr.open_dataset(fpath_temp, **_get_xr_cftime_kwargs()) as tempds, \
+                xr.open_dataset(fpath_precip, **_get_xr_cftime_kwargs()) as precipds:
 
             # Check longitude conventions
             if tempds.lon.min() >= 0 and glon <= 0:
@@ -622,7 +627,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
                 precip = precip.mean(dim='MCrun')
 
     elif version == 'online':
-        with xr.open_dataset(fpath_temp, use_cftime=True) as ods:
+        with xr.open_dataset(fpath_temp, **_get_xr_cftime_kwargs()) as ods:
             # Check longitude conventions
             if ods.lon.min() >= 0 and glon <= 0:
                 glon += 360
@@ -748,8 +753,8 @@ def process_modera_data(gdir, fpath_temp=None, fpath_precip=None,
                 fpath_precip = utils.file_downloader(base_url + file_url)
 
     # Read the GCM files
-    with xr.open_dataarray(fpath_temp, use_cftime=True) as tempds, \
-            xr.open_dataarray(fpath_precip, use_cftime=True) as precipds:
+    with xr.open_dataarray(fpath_temp, **_get_xr_cftime_kwargs()) as tempds, \
+            xr.open_dataarray(fpath_precip, **_get_xr_cftime_kwargs()) as precipds:
 
         # only process and save the gcm data selected --> saves some time!
         if (y0 is not None) or (y1 is not None):
