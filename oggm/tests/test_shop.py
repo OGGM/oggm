@@ -662,8 +662,8 @@ class Test_climate_datasets:
                 assert ds.ref_pix_dis < 30000
                 dft.append(ds.temp.to_series())
                 dfp.append(ds.prcp.to_series())
-        dft = pd.concat(dft, axis=1, keys=exps)
-        dfp = pd.concat(dfp, axis=1, keys=exps)
+        dft = pd.concat(dft, axis=1, keys=exps, sort=True)
+        dfp = pd.concat(dfp, axis=1, keys=exps, sort=True)
 
         # Common period
         dfy = dft.resample('YS').mean().dropna().iloc[1:]

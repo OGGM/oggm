@@ -49,7 +49,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
         # val_phi = numpy.maximum(0,numpy.minimum(1,r))
 
         # superbee limiter Eq. 29
-        val_phi = np.maximum(0, np.minimum(2*r, 1), np.minimum(r, 2))
+        val_phi = np.maximum(np.maximum(0, np.minimum(2 * r, 1)), np.minimum(r, 2))
 
         return val_phi
 

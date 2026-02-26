@@ -312,6 +312,10 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
 def _isdir(path):
     """os.path.isdir, returning False instead of an error on non-string/path-like objects
     """
+    if isinstance(path, bool):
+        return False
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return False
     try:
         return os.path.isdir(path)
     except TypeError:
