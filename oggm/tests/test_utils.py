@@ -910,7 +910,7 @@ class TestPreproCLI(unittest.TestCase):
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
-        kwargs = prepro_levels.parse_args(['--demo',
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
@@ -923,11 +923,10 @@ class TestPreproCLI(unittest.TestCase):
         assert 'local' in kwargs['output_folder']
         assert 'dir/params.cfg' in kwargs['params_file']
         assert kwargs['rgi_version'] is None
-        assert kwargs['rgi_reg'] == '00'
+        assert kwargs['rgi_reg'] == '01'
         assert kwargs['dem_source'] == ''
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
-        assert kwargs['demo']
         assert not kwargs['disable_mp']
         assert not kwargs['skip_inversion']
         assert kwargs['max_level'] == 5
@@ -1574,7 +1573,7 @@ class TestPreproCLI(unittest.TestCase):
                         dss_implicit.area,
                         rtol=0.02)
 
-    @pytest.mark.slow
+    # @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
