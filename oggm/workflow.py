@@ -590,7 +590,6 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
                                        volume_m3_reference=None,
-                                       use_params_file=None,
                                        add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 

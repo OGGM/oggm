@@ -624,11 +624,6 @@ def initialize(file=None, logging_level='INFO', params=None):
     from oggm.utils import download_oggm_files
     download_oggm_files()
 
-    # Read in the demo glaciers
-    file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                        'data', 'demo_glaciers.csv')
-    DATA['demo_glaciers'] = pd.read_csv(file, index_col=0)
-
     # Add other things
     if 'dem_grids' not in DATA:
         grids = {}

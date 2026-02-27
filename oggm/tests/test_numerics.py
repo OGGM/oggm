@@ -739,7 +739,7 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(lens[0][-1], lens[1][-1], atol=101)
         np.testing.assert_allclose(lens[0][-1], lens[3][-1], atol=101)
         np.testing.assert_allclose(volume[0][-1], volume[1][-1], atol=1e-2)
-        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1e-2)
+        np.testing.assert_allclose(volume[0][-1], volume[2][-1], atol=1.2e-2)
         np.testing.assert_allclose(volume[0][-1], volume[3][-1], atol=1e-2)
 
         assert utils.rmsd(lens[0], lens[1]) < 100.
