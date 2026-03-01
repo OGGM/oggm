@@ -22,4 +22,4 @@ Currently, OGGM has four geometry evolution models:
 * :doc:`ice-dynamics`: the default!
 * :doc:`igm`: the future!
 * :doc:`mass-redistribution`: an implementation of the "delta-h" model by `Huss & Hock (2015) <https://www.frontiersin.org/articles/10.3389/feart.2015.00054/full>`_. It works quite well for short simulations of the glacier retreat phase.
-* `OGGM-VAS (volume-area scaling) <https://github.com/OGGM/oggm-vas>`_: a python re-write of `Ben Marzeion's 2012 model <https://tc.copernicus.org/articles/6/1295/2012/>`_. See Moritz Oberrauch's `thesis <https://diglib.uibk.ac.at/ulbtirolhs/content/titleinfo/5878449>`_ for more information.
+* `OGGM-VAS (volume-area scaling) <https://github.com/OGGM/oggm-vas>`_: a python re-write of `Ben Marzeion's 2012 model <https://tc.copernicus.org/articles/6/1295/2012/>`_ (currently only works with OGGM v1.5.3). See Moritz Oberrauch's `thesis <https://diglib.uibk.ac.at/ulbtirolhs/content/titleinfo/5878449>`_ for more information.
