@@ -384,6 +384,23 @@ def _get_url_cache_name(url):
     return res.netloc.split(':', 1)[0] + res.path
 
 
+def _assert_url_in_allowlist(url):
+    """Fail if a URL is not in the optional download allowlist."""
+
+    allowlist = cfg.PARAMS.get('download_url_allowlist')
+    if not allowlist:
+        return
+
+    if isinstance(allowlist, str):
+        allowlist = [allowlist]
+
+    if any(entry in url for entry in allowlist):
+        return
+
+    raise InvalidParamsError('URL is not in cfg.PARAMS["download_url_allowlist"]: '
+                             f'{url}')
+
+
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
                      reporthook=None, auth=None, timeout=None):
     """Wrapper around urlretrieve, to implement our caching logic.
@@ -393,6 +410,8 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
 
     auth is expected to be either a tuple of ('username', 'password') or None.
     """
+
+    _assert_url_in_allowlist(url)
 
     if cache_obj_name is None:
         cache_obj_name = _get_url_cache_name(url)

@@ -1064,6 +1064,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          continue_on_error=False,
                           override_params={}
                           )
 
@@ -1223,6 +1224,7 @@ class TestPreproCLI(unittest.TestCase):
                           max_level=3,
                           add_distributed_thickness=True,
                           add_export_thickness_geotiff=True,
+                          continue_on_error=False,
                           override_params={}
                           )
 
@@ -1281,8 +1283,9 @@ class TestPreproCLI(unittest.TestCase):
                           mb_calibration_strategy='melt_temp',
                           test_intersects_file=inter,
                           test_topofile=topof,
-                          disable_mp=self.on_mac,
+                          disable_mp=False,
                           centerlines=True,
+                          continue_on_error=False,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
@@ -1573,7 +1576,7 @@ class TestPreproCLI(unittest.TestCase):
                         dss_implicit.area,
                         rtol=0.02)
 
-    # @pytest.mark.slow
+    @pytest.mark.slow
     def test_geodetic_per_glacier_and_massredis_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
@@ -1600,7 +1603,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           override_params=params,
-                          disable_mp=self.on_mac,
+                          disable_mp=False,
                           mb_calibration_strategy='melt_temp',
                           test_topofile=topof, elev_bands=True)
 
@@ -1695,7 +1698,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           mb_calibration_strategy='melt_temp',
-                          disable_mp=True,  # Until CRU is fixed we just disable mp
+                          disable_mp=False,
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',

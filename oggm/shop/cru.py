@@ -31,16 +31,22 @@ CRU_CL = ('https://cluster.klima.uni-bremen.de/~oggm/climate/cru/'
           'cru_cl2.nc.zip')
 
 
-def set_cru_url(url):
-    """If you want to use a different server for CRU (for testing, etc)."""
-    global CRU_SERVER
-    CRU_SERVER = url
+def _get_cru_server():
+    return cfg.PARAMS.get('cru_server', CRU_SERVER)
+
+
+def _get_cru_base():
+    return cfg.PARAMS.get('cru_base', CRU_BASE)
+
+
+def _get_cru_cl():
+    return cfg.PARAMS.get('cru_cl', CRU_CL)
 
 
 @utils.locked_func
 def get_cru_cl_file():
     """Returns the path to the unpacked CRU CL file."""
-    return utils.file_extractor(utils.file_downloader(CRU_CL))
+    return utils.file_extractor(utils.file_downloader(_get_cru_cl()))
 
 
 @utils.locked_func
@@ -66,8 +72,8 @@ def get_cru_file(var=None):
         raise InvalidParamsError('CRU variable {} does not exist!'.format(var))
 
     # Download
-    cru_filename = CRU_BASE.format(var)
-    cru_url = CRU_SERVER + '{}/'.format(var) + cru_filename + '.gz'
+    cru_filename = _get_cru_base().format(var)
+    cru_url = _get_cru_server() + '{}/'.format(var) + cru_filename + '.gz'
     return utils.file_extractor(utils.file_downloader(cru_url))
 
 

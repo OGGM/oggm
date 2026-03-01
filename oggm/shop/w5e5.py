@@ -35,6 +35,14 @@ BASENAMES = {
 }
 
 
+def _get_w5e5_server():
+    return cfg.PARAMS.get('gswp3_w5e5_server', GSWP3_W5E5_SERVER)
+
+
+def _get_w5e5_basenames():
+    return cfg.PARAMS.get('gswp3_w5e5_basenames', BASENAMES)
+
+
 def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
     """Returns the path to the desired GSWP3-W5E5 baseline climate file.
 
@@ -54,13 +62,15 @@ def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
         but this is the same for a shorter time period, and we only use it for testing)
     """
     # check if input makes sense
-    if var not in BASENAMES[dataset].keys():
+    basenames = _get_w5e5_basenames()
+
+    if var not in basenames[dataset].keys():
         raise InvalidParamsError('GSWP3-W5E5 variable {} not '
                                  'in {}'.format(var,
-                                                BASENAMES[dataset].keys()))
+                                                basenames[dataset].keys()))
 
     # File to look for
-    return utils.file_downloader(GSWP3_W5E5_SERVER + BASENAMES[dataset][var])
+    return utils.file_downloader(_get_w5e5_server() + basenames[dataset][var])
 
 
 @entity_task(log, writes=['climate_historical'])
