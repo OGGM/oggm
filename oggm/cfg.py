@@ -621,12 +621,11 @@ def initialize(file=None, logging_level='INFO', params=None):
     PARAMS.do_log = False
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files
+    from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
 
     # Add other things
     if 'dem_grids' not in DATA:
-        from utils import get_demo_file
         grids = {}
         for grid_json in ['gimpdem_90m_v01.1.json',
                           'arcticdem_mosaic_100m_v3.0.json',
