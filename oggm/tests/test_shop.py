@@ -474,7 +474,7 @@ class Test_ecmwf:
 
     def test_get_ecmwf_file(self):
         from oggm.shop import ecmwf
-        for d, vars in ecmwf.BASENAMES.items():
+        for d, vars in ecmwf._get_ecmwf_basenames().items():
             for v, _ in vars.items():
                 assert os.path.isfile(ecmwf.get_ecmwf_file(d, v))
 
