@@ -398,6 +398,23 @@ class TestFuncs(object):
         assert_allclose(df.cenlon, cgidf['Glc_Long'])
         assert_allclose(df.rgi_area_km2, cgidf['Glc_Area'] * 1e-6, rtol=1e-3)
 
+    def test_strtobool(self):
+        trues = {"yes", "true", "t", "y", "on", "1"}
+        falses = {"no", "false", "f", "n", "off", "0"}
+        for value in trues:
+            assert isinstance(cfg.strtobool(value=value), bool)
+            assert cfg.strtobool(value=value)
+            assert cfg.strtobool(value=value.upper())
+
+        for value in falses:
+            assert isinstance(cfg.strtobool(value=value), bool)
+            assert not cfg.strtobool(value=value)
+            assert not cfg.strtobool(value=value.upper())
+
+        for value in {"ft", None, 2, True, False}:
+            with pytest.raises(ValueError):
+                cfg.strtobool(value=value)
+
 
 class TestInitialize(unittest.TestCase):
 

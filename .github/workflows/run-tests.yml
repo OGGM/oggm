@@ -25,10 +25,11 @@ jobs:
           - graphics-mpl
         container:
           - ghcr.io/oggm/untested_base:20231004
-          - ghcr.io/oggm/untested_base:py3.10
-          - ghcr.io/oggm/untested_base:py3.9
+          - ghcr.io/oggm/untested_base:20260223
+          - ghcr.io/oggm/untested_base:py3.12
+          - ghcr.io/oggm/untested_base:py3.14
         include:
-          - container: python:3.11-slim
+          - container: python:3.14-slim
             test-env: minimal
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}

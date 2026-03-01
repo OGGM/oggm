@@ -1,6 +1,5 @@
 import os
 import shutil
-from distutils.util import strtobool
 import hashlib
 
 import numpy as np
@@ -331,7 +330,7 @@ def patch_minimal_download_oggm_files(*args, **kwargs):
 
 def use_multiprocessing():
     try:
-        return strtobool(os.getenv("OGGM_TEST_MULTIPROC", "False"))
+        return cfg.strtobool(os.getenv("OGGM_TEST_MULTIPROC", "False"))
     except BaseException:
         return False
 
