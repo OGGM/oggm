@@ -512,16 +512,6 @@ class TestWorkflowTools(unittest.TestCase):
         np.testing.assert_allclose(df['1970-2000_avg_prcpsol_max_elev'],
                                    2811, atol=200)
 
-    def test_demo_glacier_id(self):
-
-        cfg.initialize()
-        assert utils.demo_glacier_id('hef') == 'RGI60-11.00897'
-        assert utils.demo_glacier_id('HeF') == 'RGI60-11.00897'
-        assert utils.demo_glacier_id('HintereisFerner') == 'RGI60-11.00897'
-        assert utils.demo_glacier_id('Mer de Glace') == 'RGI60-11.03643'
-        assert utils.demo_glacier_id('RGI60-11.03643') == 'RGI60-11.03643'
-        assert utils.demo_glacier_id('Mer Glace') is None
-
     def test_ref_data_manager(self):
 
         workflow.init_mp_pool()
@@ -920,7 +910,7 @@ class TestPreproCLI(unittest.TestCase):
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
-        kwargs = prepro_levels.parse_args(['--demo',
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
                                            '--working-dir', 'local/work',
@@ -933,11 +923,10 @@ class TestPreproCLI(unittest.TestCase):
         assert 'local' in kwargs['output_folder']
         assert 'dir/params.cfg' in kwargs['params_file']
         assert kwargs['rgi_version'] is None
-        assert kwargs['rgi_reg'] == '00'
+        assert kwargs['rgi_reg'] == '01'
         assert kwargs['dem_source'] == ''
         assert kwargs['border'] == 160
         assert not kwargs['is_test']
-        assert kwargs['demo']
         assert not kwargs['disable_mp']
         assert not kwargs['skip_inversion']
         assert kwargs['max_level'] == 5
@@ -1075,6 +1064,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          continue_on_error=False,
                           override_params={}
                           )
 
@@ -1234,6 +1224,7 @@ class TestPreproCLI(unittest.TestCase):
                           max_level=3,
                           add_distributed_thickness=True,
                           add_export_thickness_geotiff=True,
+                          continue_on_error=False,
                           override_params={}
                           )
 
@@ -1292,8 +1283,9 @@ class TestPreproCLI(unittest.TestCase):
                           mb_calibration_strategy='melt_temp',
                           test_intersects_file=inter,
                           test_topofile=topof,
-                          disable_mp=self.on_mac,
+                          disable_mp=False,
                           centerlines=True,
+                          continue_on_error=False,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
@@ -1611,7 +1603,7 @@ class TestPreproCLI(unittest.TestCase):
                           output_folder=odir, working_dir=wdir, is_test=True,
                           test_rgidf=rgidf, test_intersects_file=inter,
                           override_params=params,
-                          disable_mp=self.on_mac,
+                          disable_mp=False,
                           mb_calibration_strategy='melt_temp',
                           test_topofile=topof, elev_bands=True)
 
@@ -1706,7 +1698,7 @@ class TestPreproCLI(unittest.TestCase):
                           test_rgidf=rgidf, test_intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           mb_calibration_strategy='melt_temp',
-                          disable_mp=True,  # Until CRU is fixed we just disable mp
+                          disable_mp=False,
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',

@@ -343,7 +343,10 @@ def test_model_section_calving():
     fig = plt.figure(figsize=(12, 6))
     ax = fig.add_axes([0.07, 0.08, 0.7, 0.84])
     graphics.plot_modeloutput_section(model=model, ax=ax)
-    fig.tight_layout()
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=UserWarning,
+                                message=r'.*not compatible with tight_layout.*')
+        fig.tight_layout()
     return fig
 
 

@@ -11,13 +11,11 @@ import pytest
 import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 
-from oggm.shop import cru, histalp, ecmwf, w5e5
 from oggm import cfg, tasks
 from oggm.core import flowline
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils
-from oggm.utils import mkdir, _downloads
-from oggm.utils import oggm_urlretrieve
+from oggm.utils import mkdir
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 from oggm.workflow import reset_multiprocessing
 
@@ -123,14 +121,9 @@ def restore_oggm_class_cfg():
 
 
 @pytest.fixture(autouse=True)
-def patch_data_urls(monkeypatch):
+def patch_data_urls():
     """This makes sure we never download the big files with our tests"""
     url = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
-    monkeypatch.setattr(w5e5, 'GSWP3_W5E5_SERVER', url)
-    monkeypatch.setattr(cru, 'CRU_SERVER', url + 'cru/')
-    monkeypatch.setattr(cru, 'CRU_BASE', 'cru_ts3.23.1901.2014.{}.dat.nc')
-    monkeypatch.setattr(histalp, 'HISTALP_SERVER', url + 'histalp/')
-    monkeypatch.setattr(ecmwf, 'ECMWF_SERVER', url)
 
     basenames = {
         'ERA5': {
@@ -157,15 +150,22 @@ def patch_data_urls(monkeypatch):
             'pre': 'era5/monthly/vdr/ERA5_totalprecip_monthly.nc',
         }
     }
-    monkeypatch.setattr(ecmwf, 'BASENAMES', basenames)
+    old_do_log = cfg.PARAMS.do_log
+    cfg.PARAMS.do_log = False
+    cfg.PARAMS['gswp3_w5e5_server'] = url
+    cfg.PARAMS['cru_server'] = url + 'cru/'
+    cfg.PARAMS['cru_base'] = 'cru_ts3.23.1901.2014.{}.dat.nc'
+    cfg.PARAMS['histalp_server'] = url + 'histalp/'
+    cfg.PARAMS['ecmwf_server'] = url
+    cfg.PARAMS['ecmwf_basenames'] = basenames
+    cfg.PARAMS.do_log = old_do_log
 
 
-def secure_url_retrieve(url, *args, **kwargs):
-    """A simple patch to OGGM's download function to make sure we don't
-    download elsewhere than expected."""
+@pytest.fixture(autouse=True)
+def patch_download_url_allowlist():
 
-    # We added a few extra glaciers recently - this really needs to be
-    # handled better
+    # We added a few extra glaciers recently -
+    # this really needs to be handled better
     base_extra_l3 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
                      'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/RGI62/'
                      'b_160/L3/')
@@ -178,26 +178,24 @@ def secure_url_retrieve(url, *args, **kwargs):
                         'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
                         'no_match/RGI62/b_040/{}/RGI60-15/RGI60-15.13.tar')
 
-    assert ('github' in url or
-            'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_climate/' in url or
-            'cluster.klima.uni-bremen.de/~oggm/test_files/' in url or
-            'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip' in url or
-            'klima.uni-bremen.de/~oggm/geodetic_ref_mb' in url or
-            'RGI2000-v7.0-regions.zip' in url or
-            base_extra_v14.format('L1') in url or
-            base_extra_v14.format('L2') in url or
-            base_extra_v14l3.format('L3') in url or
-            base_extra_l3 in url
-            )
-    return oggm_urlretrieve(url, *args, **kwargs)
-
-
-@pytest.fixture(autouse=True)
-def patch_url_retrieve(monkeypatch):
-    monkeypatch.setattr(_downloads, 'oggm_urlretrieve', secure_url_retrieve)
+    old_do_log = cfg.PARAMS.do_log
+    cfg.PARAMS.do_log = False
+    cfg.PARAMS['download_url_allowlist'] = [
+        'github',
+        'cluster.klima.uni-bremen.de/~oggm/ref_mb_params/',
+        'cluster.klima.uni-bremen.de/~oggm/test_gdirs/',
+        'cluster.klima.uni-bremen.de/~oggm/demo_gdirs/',
+        'cluster.klima.uni-bremen.de/~oggm/test_climate/',
+        'cluster.klima.uni-bremen.de/~oggm/test_files/',
+        'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
+        'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
+        'RGI2000-v7.0-regions.zip',
+        base_extra_v14.format('L1'),
+        base_extra_v14.format('L2'),
+        base_extra_v14l3.format('L3'),
+        base_extra_l3,
+    ]
+    cfg.PARAMS.do_log = old_do_log
 
 
 @pytest.fixture()

@@ -54,6 +54,14 @@ BASENAMES = {
 }
 
 
+def _get_ecmwf_server():
+    return cfg.PARAMS.get('ecmwf_server', ECMWF_SERVER)
+
+
+def _get_ecmwf_basenames():
+    return cfg.PARAMS.get('ecmwf_basenames', BASENAMES)
+
+
 def set_ecmwf_url(url):
     """If you want to use a different server for ECMWF (for testing, etc)."""
     global ECMWF_SERVER
@@ -82,16 +90,18 @@ def get_ecmwf_file(dataset='ERA5', var=None):
     """
 
     # Be sure input makes sense
-    if dataset not in BASENAMES.keys():
+    basenames = _get_ecmwf_basenames()
+
+    if dataset not in basenames.keys():
         raise InvalidParamsError('ECMWF dataset {} not '
-                                 'in {}'.format(dataset, BASENAMES.keys()))
-    if var not in BASENAMES[dataset].keys():
+                                 'in {}'.format(dataset, basenames.keys()))
+    if var not in basenames[dataset].keys():
         raise InvalidParamsError('ECMWF variable {} not '
                                  'in {}'.format(var,
-                                                BASENAMES[dataset].keys()))
+                                                basenames[dataset].keys()))
 
     # File to look for
-    return utils.file_downloader(ECMWF_SERVER + BASENAMES[dataset][var])
+    return utils.file_downloader(_get_ecmwf_server() + basenames[dataset][var])
 
 
 def _check_ds_validity(ds):

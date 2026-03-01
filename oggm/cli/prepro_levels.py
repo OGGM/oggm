@@ -75,7 +75,7 @@ def _rename_dem_folder(gdir, source=''):
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
-                      is_test=False, test_ids=None, demo=False, test_rgidf=None,
+                      is_test=False, test_ids=None, test_rgidf=None,
                       test_intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
@@ -118,8 +118,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         to test on a couple of glaciers only!
     test_ids : list
         if is_test: list of ids to process
-    demo : bool
-        to run the prepro for the list of demo glaciers
     test_rgidf : shapefile
         for testing purposes only
     test_intersects_file : shapefile
@@ -291,9 +289,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
-    if demo:
-        rgidf = utils.get_rgi_glacier_entities(cfg.DATA['demo_glaciers'].index)
-    elif test_rgidf is None:
+    if test_rgidf is None:
 
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
@@ -995,9 +991,6 @@ def parse_args(args):
                         help='exports the distributed thickness field to '
                              'GeoTIFF files in a subfolder of the L3 summary '
                              'directory. Requires --add-distributed-thickness.')
-    parser.add_argument('--demo', nargs='?', const=True, default=False,
-                        help='if you want to run the prepro for the '
-                             'list of demo glaciers.')
     parser.add_argument('--test', nargs='?', const=True, default=False,
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
@@ -1031,15 +1024,13 @@ def parse_args(args):
 
     # Check input
     rgi_reg = args.rgi_reg
-    if args.demo:
-        rgi_reg = 0
-    if not rgi_reg and not args.demo:
+    if not rgi_reg:
         rgi_reg = os.environ.get('OGGM_RGI_REG', None)
         if rgi_reg is None:
             raise InvalidParamsError('--rgi-reg is required!')
     rgi_reg = '{:02}'.format(int(rgi_reg))
     ok_regs = ['{:02}'.format(int(r)) for r in range(1, 20)]
-    if not args.demo and rgi_reg not in ok_regs:
+    if rgi_reg not in ok_regs:
         raise InvalidParamsError('--rgi-reg should range from 01 to 19!')
 
     rgi_version = args.rgi_version
@@ -1069,7 +1060,7 @@ def parse_args(args):
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_ids=args.test_ids,
-                demo=args.demo, dem_source=args.dem_source,
+                dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 max_level=args.max_level, disable_mp=args.disable_mp,
                 logging_level=args.logging_level,

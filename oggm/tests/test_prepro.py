@@ -3185,7 +3185,12 @@ class TestGCMClimate(unittest.TestCase):
 
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, use_cftime=True) as cesm:
+        try:
+            decode_times = xr.coders.CFDatetimeCoder(use_cftime=True)
+            cftime_kwargs = {'decode_times': decode_times}
+        except AttributeError:
+            cftime_kwargs = {'use_cftime': True}
+        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, **cftime_kwargs) as cesm:
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -3658,8 +3663,13 @@ class TestGCMClimate(unittest.TestCase):
         f1 = os.path.join(cfg.PATHS['working_dir'],
                           'climate_input_cesm.nc')
         f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
+        try:
+            decode_times = xr.coders.CFDatetimeCoder(use_cftime=True)
+            cftime_kwargs = {'decode_times': decode_times}
+        except AttributeError:
+            cftime_kwargs = {'use_cftime': True}
         with xr.open_dataset(f1) as clim_cesm1, \
-                xr.open_dataset(f2) as clim_cesm2:
+                xr.open_dataset(f2, **cftime_kwargs) as clim_cesm2:
             np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
                                        clim_cesm2.prcp)
             np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),

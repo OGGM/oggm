@@ -72,6 +72,13 @@ from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 
+def _get_xr_cftime_kwargs():
+    try:
+        return {'decode_times': xr.coders.CFDatetimeCoder(use_cftime=True)}
+    except AttributeError:
+        return {'use_cftime': True}
+
+
 # Default RGI date (median per region in RGI6)
 RGI_DATE = {'01': 2009,
             '02': 2004,
@@ -930,32 +937,6 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     _write_shape_to_disk(odf, path, to_tar=to_tar)
 
 
-def demo_glacier_id(key):
-    """Get the RGI id of a glacier by name or key: None if not found."""
-
-    df = cfg.DATA['demo_glaciers']
-
-    # Is the name in key?
-    s = df.loc[df.Key.str.lower() == key.lower()]
-    if len(s) == 1:
-        return s.index[0]
-
-    # Is the name in name?
-    s = df.loc[df.Name.str.lower() == key.lower()]
-    if len(s) == 1:
-        return s.index[0]
-
-    # Is the name in Ids?
-    try:
-        s = df.loc[[key]]
-        if len(s) == 1:
-            return s.index[0]
-    except KeyError:
-        pass
-
-    return None
-
-
 class compile_to_netcdf(object):
     """Decorator for common compiling NetCDF files logic.
 
@@ -1399,14 +1380,14 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             pgdir = gdirs[i]
             ppath = pgdir.get_filepath(filename=filename,
                                        filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath) as ds_clim:
+            with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
                 ds_clim.time.values
             # If this worked, we have a valid gdir
             break
         except BaseException:
             i += 1
 
-    with xr.open_dataset(ppath) as ds_clim:
+    with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
         cyrs = ds_clim['time.year']
         cmonths = ds_clim['time.month']
         sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
@@ -1448,7 +1429,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
         try:
             ppath = gdir.get_filepath(filename=filename,
                                       filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath) as ds_clim:
+            with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
                 prcp[:, i] = ds_clim.prcp.values
                 temp[:, i] = ds_clim.temp.values
                 ref_hgt[i] = ds_clim.ref_hgt

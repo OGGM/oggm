@@ -312,6 +312,10 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
 def _isdir(path):
     """os.path.isdir, returning False instead of an error on non-string/path-like objects
     """
+    if isinstance(path, bool):
+        return False
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return False
     try:
         return os.path.isdir(path)
     except TypeError:
@@ -586,7 +590,6 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
                                        volume_m3_reference=None,
-                                       use_params_file=None,
                                        add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
