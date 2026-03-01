@@ -432,11 +432,12 @@ def distribute_thickness_from_simulation(gdir,
                        (rank_per_band >= (npix - pix_cov))
                 vol_orig = np.where(mask, orig_distrib_thick, 0).sum() * dx2
                 area_dis = mask.sum() * dx2
-                thick_cor = (vol_orig - band_volume) / area_dis
-                area_cov += area_dis
-                new_thick[mask] = orig_distrib_thick[mask] - thick_cor
-                # Make sure all glacier covered cells have the minimum thickness
-                new_thick[mask] = utils.clip_min(new_thick[mask], 1)
+                if ~np.isclose(area_dis, 0):
+                    thick_cor = (vol_orig - band_volume) / area_dis
+                    area_cov += area_dis
+                    new_thick[mask] = orig_distrib_thick[mask] - thick_cor
+                    # Make sure all glacier covered cells have the minimum thickness
+                    new_thick[mask] = utils.clip_min(new_thick[mask], 1)
 
         this_glacier_mask = new_thick > 0
         this_vol = dgy.volume_m3.values.sum()

@@ -626,6 +626,7 @@ def initialize(file=None, logging_level='INFO', params=None):
 
     # Add other things
     if 'dem_grids' not in DATA:
+        from utils import get_demo_file
         grids = {}
         for grid_json in ['gimpdem_90m_v01.1.json',
                           'arcticdem_mosaic_100m_v3.0.json',
@@ -633,8 +634,7 @@ def initialize(file=None, logging_level='INFO', params=None):
                           'AntarcticDEM_wgs84.json',
                           'REMA_100m_dem.json']:
             if grid_json not in grids:
-                fp = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                                  'data', grid_json)
+                fp = get_demo_file(grid_json)
                 try:
                     grids[grid_json] = salem.Grid.from_json(fp)
                 except NameError:
