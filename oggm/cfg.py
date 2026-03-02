@@ -621,13 +621,8 @@ def initialize(file=None, logging_level='INFO', params=None):
     PARAMS.do_log = False
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files
+    from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
-
-    # Read in the demo glaciers
-    file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                        'data', 'demo_glaciers.csv')
-    DATA['demo_glaciers'] = pd.read_csv(file, index_col=0)
 
     # Add other things
     if 'dem_grids' not in DATA:
@@ -638,8 +633,7 @@ def initialize(file=None, logging_level='INFO', params=None):
                           'AntarcticDEM_wgs84.json',
                           'REMA_100m_dem.json']:
             if grid_json not in grids:
-                fp = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                                  'data', grid_json)
+                fp = get_demo_file(grid_json)
                 try:
                     grids[grid_json] = salem.Grid.from_json(fp)
                 except NameError:

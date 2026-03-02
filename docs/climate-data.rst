@@ -1,36 +1,38 @@
 Climate data
 ============
 
-Here are the various climate datasets that OGGM can handle automatically, using the for instance
-one of the following functions to pre-process the climate data:
+Baseline climate data used for calibration
+------------------------------------------
+
+Here are the various historical baseline climate datasets that OGGM can handle automatically, using,
+for instance, one of the following functions to pre-process the climate data:
 
 .. code-block:: python
 
     from oggm.tasks import process_w5e5_data
+    from oggm.tasks import import process_ecmwf_data
     from oggm.tasks import import process_cru_data
     from oggm.tasks import import process_histalp_data
-    from oggm.tasks import import process_ecmwf_data
 
 .. _climate-w5e5:
-
-W5E5
-~~~~
 
 GSWP3-W5E5
 ~~~~~~~~~~
 
 As of v1.6, GSWP3-W5E5 [Lange_et_al_2021]_ is the standard baseline climate dataset used by OGGM
-for all preprocessed directories. GSWP3-W5E5 is a combination of W5E5 v2.0 [Lange_et_al_2021]_ for
-1979-2019 with GSWP3 v1.09 [Kim_2017]_ homogenized to W5E5 for 1901-1978. Note that the baseline
+for almost all :ref:`preprocessed directories <preprodir>`. GSWP3-W5E5 is a combination of W5E5 v2.0
+[Lange_et_al_2021]_ for 1979-2019 with GSWP3 v1.09 [Kim_2017]_ homogenized to W5E5 for 1901-1978. Note that the baseline
 url file paths are only named `W5E5` to make it shorter, however they include both, GSWP3 and W5E5 data.
 
 GSWP3-W5E5 has a spatial resolution of 0.5° over the entire globe and is also the observational
 climate input data for the impact assessments in phase 3a of the Inter-Sectoral Impact Model
-Intercomparison Project ` ISIMIP3a <https://www.isimip.org/protocol/3>`_. Over land, W5E5 uses
+Intercomparison Project `ISIMIP3a <https://www.isimip.org/protocol/3>`_. Over land, W5E5 uses
 the WATCH Forcing Data methodology version 2 which they applied on ERA5 data
-(WFDE5; Weedon et al., 2014, [Cuchi_2020]_). W5E5 precipitation is based on WFDE5 rainfall and
+(WFDE5; `Weedon et al., 2014 <https://doi.org/10.1002/2014WR015638>`_, [Cuchi_2020]_).
+W5E5 precipitation is based on WFDE5 rainfall and
 snowfall bias-adjusted using version 2.3 of the Global Precipitation Climatology Project
-(GPCP; Adler et al., 2003) monthly precipitation.
+(GPCP; `Adler et al., 2003 <https://doi.org/10.1175/1525-7541(2003)004%3C1147:TVGPCP%3E2.0.CO;2>`_)
+monthly precipitation.
 
 One of the reasons, why we chose W5E5 for all preprocessed directories is that the climate input data for the
 `ISIMIP3b CMIP6 GCMs <https://www.isimip.org/protocol/3>`_ have been bias-corrected using this dataset.
@@ -39,7 +41,7 @@ used for model calibration. If we use W5E5 for the calibration of the mass-balan
 GCMs for projections, no additional bias-correction from OGGM is needed, as the statistically downscaled GCMs
 from ISIMIP3b (0.5° resolution) are already internally bias-adjusted to W5E5 over the period
 1979–2014 [Lange_2019]_. This is a big advantage, as their quantile-mapping bias correction
-approach is more robust for extreme values than the "delta-methof" commonly applied in OGGM.
+approach is more robust for extreme values than the "delta-method" commonly applied in OGGM.
 
 **When using this data, please refer to the original providers:**
 
@@ -62,29 +64,35 @@ and Implications for Our Perception of the Land Surface. Bulletin of the America
 .. [Kim_2017] Kim, H. (2017). Global Soil Wetness Project Phase 3 Atmospheric Boundary Conditions (Experiment 1)
    [Data set]. Data Integration and Analysis System (DIAS). https://doi.org/10.20783/DIAS.501
 
-*for more info:*
+*for more info on the GCM bias-adjustment:*
 
 .. [Lange_2019] Trend-preserving bias adjustment and statistical downscaling
    with ISIMIP3BASD (v1.0). Geoscientific Model Development 12(7), 3055–3070.
    https://doi:10.5194/gmd-12-3055-2019
 
+.. _climate-era5:
 
-GCM data
-~~~~~~~~
+ERA5 and CERA-20C
+~~~~~~~~~~~~~~~~~
 
-On of the main applications is to use climate model output to drive the mass balance model. In
-this case we still rely on gridded observations (e.g. W5E5) for the reference
-climatology and apply the GCM anomalies computed from a preselected reference
-period. This method is often called the
-`delta method <http://www.ciesin.org/documents/Downscaling_CLEARED_000.pdf>`_.
+Since OGGM v1.4, users can also use reanalysis data from the ECMWF, the
+European Centre for Medium-Range Weather Forecasts based in Reading, UK. OGGM v1.6.3 also has a `preprocessed glacier
+directory <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/ERA5/per_glacier_spinup/>`_
+that uses ERA5 for the dynamical spinup and calibration. OGGM can use the
+`ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1940-2025, 0.25° resolution) and
+`CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
+datasets as baseline. One can also apply a combination of both, for example
+by applying the CERA-20C anomalies to the reference ERA5 for example
+(useful only in some circumstances).
 
-Visit our online tutorials to see how this can be done
-(`OGGM run with GCM tutorial <https://tutorials.oggm.org/master/notebooks/10minutes/run_with_gcm.html>`_).
+**When using these data, please refer to the original provider:**
 
-Paleo data
-~~~~~~~~~~
+For example for ERA5:
 
-Check out :ref:`apishop` for the latest fancy datasets.
+Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A., Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R.,
+Rozum, I., Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2023): ERA5 monthly averaged data on single
+levels from 1940 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS),
+DOI: 10.24381/cds.f17050d7 (Accessed on 14-01-2025)
 
 CRU
 ~~~
@@ -133,29 +141,6 @@ scaled (fractional) anomalies for precipitation.
    data set of surface climate over global land areas. Climate Research, 21(715),
    1–25. https://doi.org/10.3354/cr021001
 
-ERA5 and CERA-20C
-~~~~~~~~~~~~~~~~~
-
-Since OGGM v1.4, users can also use reanalysis data from the ECMWF, the
-European Centre for Medium-Range Weather Forecasts based in Reading, UK.
-OGGM can use the
-`ERA5 <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/era5>`_ (1979-2019, 0.25° resolution) and
-`CERA-20C <https://www.ecmwf.int/en/forecasts/datasets/reanalysis-datasets/cera-20c>`_  (1900-2010, 1.25° resolution)
-datasets as baseline. One can also apply a combination of both, for example
-by applying the CERA-20C anomalies to the reference ERA5 for example
-(useful only in some circumstances).
-
-**When using these data, please refer to the original provider:**
-
-For example for ERA5:
-
-Hersbach, H., Bell, B., Berrisford, P., Biavati, G., Horányi, A.,
-Muñoz Sabater, J., Nicolas, J., Peubey, C., Radu, R., Rozum, I.,
-Schepers, D., Simmons, A., Soci, C., Dee, D., Thépaut, J-N. (2019):
-ERA5 monthly averaged data on single levels from 1979 to present.
-Copernicus Climate Change Service (C3S) Climate Data Store (CDS).
-(Accessed on < 01-12-2020 >), 10.24381/cds.f17050d7
-
 HISTALP
 ~~~~~~~
 
@@ -185,8 +170,51 @@ recommend to use data from 1850 onwards.
     @savefig plot_temp_ts.png width=100%
     example_plot_temp_ts()
 
+
+.. _gcm-data:
+
+Climate model (GCM) data
+------------------------
+
+One of the main applications is to use climate model (GCM) output to drive the mass balance model. In
+this case we still rely on gridded reanalysis datasets (e.g. W5E5) for the reference
+climatology and apply the climate model anomalies computed from a preselected reference
+period. This method is often called the delta method.
+
+Visit our online tutorials to see how this can be done
+(`OGGM run with GCM tutorial <https://tutorials.oggm.org/master/notebooks/10minutes/run_with_gcm.html>`_).
+
+Available GCMs:
+
+- CMIP6
+  `until 2100 <https://cluster.klima.uni-bremen.de/~oggm/cmip6/gcm_table_2100.html>`__ or
+  `until 2300 <https://cluster.klima.uni-bremen.de/~oggm/cmip6/gcm_table_2300.html>`__.
+
+  - All 14 ISIMIP3b GCMs available (monthly or daily resolution; already bias-adjusted, see [Lange_2019]_)
+
+- CMIP5
+  `until 2100 <https://cluster.klima.uni-bremen.de/~oggm/cmip5/gcm_table_2100.html>`__ or
+  `until 2300 <https://cluster.klima.uni-bremen.de/~oggm/cmip5/gcm_table_2300.html>`__.
+
+
+Paleo data
+~~~~~~~~~~
+
+Check out :ref:`apishop` for the latest fancy datasets.
+
+Climate data preprocessing
+--------------------------
+Some notebooks/scripts used to download or preprocess the baseline climate data can be found in
+`this folder <https://cluster.klima.uni-bremen.de/~oggm/climate/notebooks/>`__,
+and for the climate models (only ISIMIP3b so far) in
+`this folder <https://cluster.klima.uni-bremen.de/~oggm/cmip6/notebooks/isimip3b/>`__.
+Some baseline climate datasets or climate models have been flattened, which means the longitude / latitude dimension
+was converted to a single "points" dimension. After the flattening, only the points with glaciers nearby (from RGI6 and RGI7)
+were selected. This approach speeds up the climate processing. For ERA5 data, this has been e.g. done in
+`this notebook <https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/climate/notebooks/era5_both/_scripts/flatten_era5_daily_monthly_rgi6_7.ipynb>`_.
+
 Any other climate dataset
-~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------
 
 It is fairly easy to force OGGM with other datasets too. Recent publications have used
 plenty of options, from ERA5-Land to regional reanalyses or more.

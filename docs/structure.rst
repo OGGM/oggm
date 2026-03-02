@@ -22,8 +22,8 @@ The glacier centric approach is used by most large-scale glacier models to date.
 Alternative strategies include global gridded approaches, where all glaciers
 in a model grid cell are added together and possibly organized into elevation bins.
 Another approach would be to handle entire glacier complexes as one single body of ice ("ice caps").
-**With the release of RGI7 (early 2022), OGGM will also be able to consider glacier
-complexes as if they were single glacier entities.**
+**With the release of RGI7 and as of v1.6.3, OGGM is able to consider glacier
+complexes as if they were single glacier entities** (see :doc:`preprodirlist`).
 
 .. admonition:: More details on the glacier centric approach
     :class: note, dropdown
@@ -51,7 +51,7 @@ complexes as if they were single glacier entities.**
 Data structures and glacier directories
 ---------------------------------------
 
-The fundamental data structure used in OGGM is the so-called **Glacier Directory**.
+The fundamental data structure used in OGGM is the so-called **Glacier Directory** (gdirs).
 :ref:`glacierdir` are simple folders on disk which store the input and output
 data for a single glacier during a run. OGGM offers an interface
 to access and store these files programmatically.
@@ -78,24 +78,21 @@ downloading and extracting these data locally:
 
     cfg.PATHS['working_dir'] = utils.gettempdir('structure')
 
-    # Where to fetch the pre-processed directories - this can be changed
-    base_url = DEFAULT_BASE_URL
-
 .. ipython:: python
 
-    from oggm import workflow, tasks, graphics
+    from oggm import workflow, tasks, graphics, DEFAULT_BASE_URL
 
     rgi_ids = ['RGI60-11.00897']
     gdirs = workflow.init_glacier_directories(rgi_ids,  # glaciers to download
                                               from_prepro_level=4,  # pre-processing level
                                               prepro_border=80,  # pre-processing map size
-                                              prepro_base_url=base_url)  # online repository
+                                              prepro_base_url=DEFAULT_BASE_URL)  # online repository
     workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs);
     @savefig plot_example_inversion.png width=100%
     graphics.plot_distributed_thickness(gdirs[0])
 
-See also the documentation page for :doc:`shop` for more examples of
-the kind of data that can be added to glacier directories.
+See also the documentation page for :doc:`shop` for a description of all current preprocessed glacier directories
+and for more examples of the kind of data that can be added to glacier directories.
 
 .. admonition:: More details: pros and cons of glacier directories
     :class: note, dropdown
