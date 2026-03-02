@@ -93,11 +93,7 @@ exclude = [
 include = [
     "pytest.ini",
     "oggm/params.cfg",
-    "oggm/data/demo_glaciers.csv",
-    "oggm/data/AntarcticDEM_wgs84.json",
-    "oggm/data/arcticdem_mosaic_100m_v3.0.json",
-    "oggm/data/gimpdem_90m_v01.1.json",
-    "oggm/data/REMA_100m_dem.json",
+    "oggm/data/dem_sources.txt",
 ]
 # fallback if include group doesn't work as intended
 force-include = {"pytest.ini" = "pytest.ini"} 
@@ -110,11 +106,7 @@ packages = ["oggm"]
 include = [
     "pytest.ini",
     "oggm/params.cfg",
-    "oggm/data/demo_glaciers.csv",
-    "oggm/data/AntarcticDEM_wgs84.json",
-    "oggm/data/arcticdem_mosaic_100m_v3.0.json",
-    "oggm/data/gimpdem_90m_v01.1.json",
-    "oggm/data/REMA_100m_dem.json",
+    "oggm/data/dem_sources.txt",
 ]
 # fallback if include group doesn't work as intended
 force-include = {"pytest.ini" = "pytest.ini"} 
