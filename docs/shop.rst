@@ -1,7 +1,7 @@
 .. currentmodule:: oggm
 
-OGGM Shop
-=========
+OGGM Shop and Glacier Directories
+=================================
 
 .. figure:: _static/logos/logo_shop.png
     :width: 100%
@@ -235,6 +235,7 @@ This is the URL that was used to generate the OGGM 1.6.3 standard projections
 - "informed three-step" mass balance model calibration (see :ref:`mb-calib`)
 - :ref:`dynamic-spinup` with dynamic melt factor calibration and spinup to match the area at the RGI date
 
+.. _preprodirlist:
 
 Recommended level 3-5 configurations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -259,7 +260,7 @@ of the preprocessed glacier directories. Below we describe the most commonly use
   (`2025.6/../ERA5/per_glacier_spinup/RGI62/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/ERA5/per_glacier_spinup/RGI62/b_160/>`__)
 
   - Identical to the OGGM v1.6.3 standard projections, but using :ref:`ERA5 <climate-era5>` instead of :ref:`climate-w5e5` as
-    baseline climate for the calibration. ERA5 has a higher spatial resolution (0.25° × 0.25°) than W5E5 (0.5°). 
+    baseline climate for the calibration. ERA5 has a higher spatial resolution (0.25° × 0.25°) than W5E5 (0.5°).
   - For the precipitation factor initial guess, we use a linear fit to the winter precipitation instead of a logarithmic
     fit that was used for W5E5. Details are in `this MB calibration tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_ and `this jupyter notebook <https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/_notebooks/oggm_v16_winter_mb_match_to_prescribe_prcp_fac/match_winter_mb_w5e5_era5.ipynb>`_ that estimated the fit using in-situ winter mass-balance data.
 
@@ -281,7 +282,7 @@ of the preprocessed glacier directories. Below we describe the most commonly use
 - **Regional calibration with RGI 7.0C (glacier complexes)**
   (`2025.6/../W5E5/regional_spinup/RGI70C/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/W5E5/regional_spinup/RGI70C/b_160/>`__)
 
-  - Uses the glacier complex product (RGI70C; 
+  - Uses the glacier complex product (RGI70C;
     `more details here <https://www.glims.org/rgi_user_guide/products/glacier_complex_product.html>`_),
     resulting in fewer modeled glacier entities compared to individual glaciers.
 
@@ -307,16 +308,16 @@ of the preprocessed glacier directories. Below we describe the most commonly use
 Directory structure and naming conventions for all levels
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Within `cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_, there are multiple options to choose from and we describe the folder structure in the following: 
+Within `cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6 <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6>`_, there are multiple options to choose from and we describe the folder structure in the following:
 
 - **Step 1**:
    - L1_L2_files: here the directories with pre-processing level 1 and 2 can be found.
    - L3_L5_files: here the directories with pre-processing level 3 to 5 can be found.
 - **Step 2**: select a version of the directories (e.g. 2025.6 (uses OGGM v1.6.3) or 2023.3 (uses OGGM v1.6.1))
 - **Step 3**: select the flowline type, centerlines or elevation band flowlines (elev_bands), optionally with the extension of your choice when using L1_L2_files.
-- **Step 4**: this is only needed when taking the L3_L5_files route. The folder name starts with the name of the baseline climate (e.g. W5E5) that has been used. For the 2023.3 glacier directories, additional folder name extensions exist. 
-- **Step 5** (*only for the 2025.6 glacier directories within the L3_L5_files route*): select the calibration option choice `per_glacier`, i.e. matching `Hugonnet et al., 2021`_ for every glacier individually (approach used for the `2023.3` gdirs) or `regional`, i.e. calibrating every glacier to the regional mass-balance estimate and additional folder name extensions exist. 
-- **Step 6**: select the Randolph Glacier Inventory (RGI) version. In OGGM v1.6.1, only RGI62 was available. In OGGM v1.6.3, for some directories also RGI70G or RGI70C available. 
+- **Step 4**: this is only needed when taking the L3_L5_files route. The folder name starts with the name of the baseline climate (e.g. W5E5) that has been used. For the 2023.3 glacier directories, additional folder name extensions exist.
+- **Step 5** (*only for the 2025.6 glacier directories within the L3_L5_files route*): select the calibration option choice `per_glacier`, i.e. matching `Hugonnet et al., 2021`_ for every glacier individually (approach used for the `2023.3` gdirs) or `regional`, i.e. calibrating every glacier to the regional mass-balance estimate and additional folder name extensions exist.
+- **Step 6**: select the Randolph Glacier Inventory (RGI) version. In OGGM v1.6.1, only RGI62 was available. In OGGM v1.6.3, for some directories also RGI70G or RGI70C available.
 - **Step 7**: select the border option (see :ref:`prepro_border`)
 
 Explanation of the naming convention for the folder name extensions:

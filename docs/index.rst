@@ -9,12 +9,12 @@ The model framework features several glacier evolution models, including an flow
 dynamics module accounting for frontal ablation, and several mass-balance models, including
 a pre-calibrated temperature-index model.
 
-OGGM is above all a modular platform that supports novel modelling workflows,
+OGGM is a modular platform that supports novel modelling workflows,
 **encouraging researchers to create unique model chains for their research**.
 Our framework is designed to be flexible and adaptable, making it an
 ideal tool for a wide range of applications in glaciology and related fields.
 
-**This webpage is for the software documentation for version 1.6.x (unreleased)**:
+**This webpage is for the software documentation for version 1.6.3 (to be released)**:
 
 - check-out :doc:`whats-new` to read about the updates in this version
 - check-out `docs.oggm.org/en/stable <https://docs.oggm.org/en/stable>`_ for the stable version
@@ -42,8 +42,7 @@ presentation from April 2020:
 
     <iframe width="672" height="378" src="https://www.youtube.com/embed/ttJMxcwXUjw?start=1270" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-Disclaimer: If you don't have access to youtube from your location, you won't be able to see this video.
-*Slides available* `here <https://oggm.org/framework_talk>`_
+*Require Youtube. Slides available* `here <https://oggm.org/framework_talk>`_
 
 
 Overview
@@ -162,7 +161,7 @@ Get in touch
 .. _on GitHub: https://github.com/OGGM/oggm
 .. _issue tracker: https://github.com/OGGM/oggm/issues
 .. _pull request: https://github.com/OGGM/oggm/pulls
-.. _meeting: https://oggm.org/meetings/
+.. _meeting: https://community.oggm.org/meetings.html
 .. _reach out: info@oggm.org
 
 
@@ -222,19 +221,11 @@ About
 
     .. image:: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml/badge.svg?branch=master
         :target: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
-        :alt: Linux build status
-
-    .. image:: https://img.shields.io/badge/Cross-validation-blue.svg
-        :target: https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.4/crossval.html
-        :alt: Mass balance cross validation
+        :alt: Build status
 
     .. image:: https://readthedocs.org/projects/oggm/badge/?version=latest
         :target: http://docs.oggm.org/en/latest
         :alt: Documentation status
-
-    .. image:: https://img.shields.io/badge/benchmarked%20by-asv-green.svg?style=flat
-        :target: https://cluster.klima.uni-bremen.de/~github/asv/
-        :alt: Benchmark status
 
 :License:
     .. image:: https://img.shields.io/pypi/l/oggm.svg
