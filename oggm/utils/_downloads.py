@@ -72,7 +72,7 @@ SAMPLE_DATA_COMMIT = '905430969c704c3ccd459c153f25bc1b9340af5b'
 
 # Recommended url for runs
 DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
-                    'L3-L5_files/2025.6/elev_bands/W5E5_spinup')
+                    'L3-L5_files/2025.6/elev_bands/W5E5/per_glacier_spinup/')
 
 # Web mercator proj constants
 WEB_N_PIX = 256
