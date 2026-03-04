@@ -15,7 +15,7 @@ are not trivial to install. The instructions below provide all the required
 details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
 if something goes wrong.
 
-OGGM is fully `tested`_ with Python versions 3.11 to 3.13 on Linux.
+OGGM is fully `tested`_ with Python versions 3.9 to 3.11 on Linux.
 We do not test OGGM automatically on Mac OSX, but it should probably run
 fine there as well.
 
@@ -33,7 +33,9 @@ fine there as well.
         installing-oggm-windows.rst
 
 
-For most users we recommend to install Python and the package dependencies with the :ref:`conda package manager <conda-install>`, in particular with ``mamba`` and ``conda-forge``.
+For most users we recommend to
+install Python and the package dependencies with the :ref:`conda package manager <conda-install>`,
+in particular with ``mamba`` and ``conda-forge``.
 
 .. _tested: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
 .. _conda: https://conda.io/projects/conda/en/latest/user-guide/index.html
@@ -41,25 +43,49 @@ For most users we recommend to install Python and the package dependencies with 
 .. _mamba: https://mamba.readthedocs.io
 
 
-OGGM can be installed:
-- as a library, if you don't want to modify its source code.This is recommended for most users.
-    - **stable**: this is the latest official release and has a fixed
-      version number (e.g. v1.6.2).
-    - **dev**: this is the development version.
-      It may contain new features and bug fixes, but will continue changing until its release.
-- as an editable, if you want to make changes or develop the model. This is recommended for developers.
-
-OGGM now supports installation with `pip`, `conda`, and `uv`.
-
 Dependencies
 ------------
 
-A full installation of OGGM requires GDAL.
-The easiest way is:
-.. code-block:: bash
+Here is a list of *all* dependencies of the OGGM model. If you want to use
+OGGM's numerical models only (i.e. no GIS or preprocessing tools), refer to
+`Install a minimal OGGM environment`_ below.
 
-    sudo apt-get install gdal-bin libgdal-dev  # Linux (Debian distros)
-    brew install gdal  # MacOS
+Standard SciPy stack:
+    - numpy
+    - scipy
+    - scikit-image
+    - pillow
+    - matplotlib
+    - pandas
+    - xarray
+    - dask
+    - joblib
+
+Configuration file parsing tool:
+    - configobj
+
+I/O:
+    - netcdf4
+    - pytables
+
+GIS tools:
+    - shapely
+    - pyproj
+    - rasterio
+    - rioxarray
+    - geopandas
+
+Testing:
+    - pytest
+    - pytest-mpl (for image tests only: `OGGM fork <https://github.com/OGGM/pytest-mpl>`_ required)
+
+Other libraries:
+    - `salem <https://github.com/fmaussion/salem>`_
+    - `motionless <https://github.com/ryancox/motionless>`_
+
+Optional:
+    - progressbar2 (displays the download progress)
+    - bottleneck (might speed up some xarray operations)
 
 .. _conda-install:
 
@@ -86,8 +112,9 @@ which explains how to install ``mambaforge`` and
 `this one <https://fabienmaussion.info/intro_to_programming/week_05/01-install-packages.html>`_
 for installing packages.
 
-We recommend to use `mamba`_ over conda as an installation command.
-Mamba is a drop-in replacement for all conda commands. If you feel like it, install mamba in your conda
+We recommend to use `mamba`_ over conda as an
+installation command. Mamba is a drop-in
+replacement for all conda commands. If you feel like it, install mamba in your conda
 environment (``conda install -c conda-forge mamba``)
 and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
@@ -101,54 +128,24 @@ and replace all occurrences of ``conda`` with ``mamba`` in the instructions belo
 .. _miniconda: http://conda.pydata.org/miniconda.html
 .. _mambaforge: https://github.com/conda-forge/miniforge#mambaforge
 
-The fastest way: `uv` tool
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+The simplest way: with an environment file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For users who just want to run a notebook and don't need a dedicated environment.
-This includes users who want to test OGGM before installing it, and teaching staff who want to use OGGM in a classroom.
+Copy the content of the file below into a file called ``environment.yml`` on your system
+(alternatively, right-click -> "save as" on `this link <https://raw.githubusercontent.com/OGGM/oggm/master/docs/recommended_env.yml>`_).
 
-If you are new to Python and want to get started with OGGM as quickly as possible, we recommend using `uv`_.
-You can install and run OGGM on a Jupyter server without polluting your base system or conda environment.
+.. include:: recommended_env.yml
+   :literal:
 
-.. _uv: _https://docs.astral.sh/uv/getting-started/installation/
+From the folder where you saved the file,  run ``mamba env create -f environment.yml``.
 
-Install `uv`:
+This will create a new environment called ``oggm_env`` in your conda installation.
+For more information about conda environments, visit the
+`conda documentation on the topic <https://conda.io/projects/conda/en/latest/user-guide/concepts/environments.html>`_. Similarly,
+visit `conda documentation on environment files <https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file>`_
+for more information about how to create an environment from a ``yml`` file.
 
-.. code-block:: bash
-
-    wget -qO- https://astral.sh/uv/install.sh | sh
-
-Launch a Jupyter notebook with OGGM fully installed:
-
-.. code-block:: bash
-
-    uvx --with oggm jupyter lab
-
-This installs a minimal version of OGGM into an isolated environment and runs a Jupyter server.
-
-.. note:: This will not pollute your base system or conda environment.
-
-The comfortable way: `conda` & `pip`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-For users who don't want to use `uv` at all.
-
-Create and activate a conda environment:
-
-.. code-block:: bash
-    conda env create --n oggm_313 python=3.13
-    conda activate oggm_313
-
-Install the latest **stable** release:
-
-.. code-block:: bash
-    pip install oggm  # for a minimal install
-    pip install oggm[full]  # for a full install with all dependencies
-    uv pip install oggm  # if you already have uv installed
-
-Or install the latest **development** version:
-
-.. code-block:: bash
-    pip install --upgrade git+https://github.com/OGGM/oggm.git
+Don't forget to :ref:`test-oggm` before using it!
 
 Install OGGM itself
 ~~~~~~~~~~~~~~~~~~~
