@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "configobj",
@@ -98,9 +99,6 @@ include = [
 # fallback if include group doesn't work as intended
 force-include = {"pytest.ini" = "pytest.ini"} 
 
-# [tool.hatch.build.targets.sdist.force-include]
-# "pytest.ini" = "pytest.ini"
-
 [tool.hatch.build.targets.wheel]
 packages = ["oggm"]
 include = [
@@ -126,6 +124,7 @@ source = "vcs"
 
 # This section is for uv, but may also used by hatchling when building the package
 
+# local dependency groups for uv
 [dependency-groups]
 build = [
     "build>=1.4.0",
@@ -179,6 +178,3 @@ pytest-mpl = { git = "https://github.com/OGGM/pytest-mpl" }
 [tool.uv.build-backend]
 module-root = ""
 module-name = "oggm"
-
-[tool.uv-dynamic-versioning]
-fallback-version = "1.6.2"
