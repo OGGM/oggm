@@ -1594,20 +1594,39 @@ class TestFluxGate(unittest.TestCase):
             plt.show()
 
 
-@pytest.fixture(scope='class')
-def default_calving():
+@pytest.fixture(scope='function',
+                params=[
+                (
+                    FluxBasedModel,
+                    dict(bed_shape="rectangular"),
+                    dict(is_tidewater=True, calving_use_limiter=True,
+                         flux_gate=0.06, do_kcalving=True,
+                         calving_k=0.2
+                        ),
+                ),
+                (
+                    SemiImplicitModel,
+                    dict(bed_shape='trapezoidal', lambdas=0.0),
+                    dict(calving_use_limiter=True,
+                         flux_gate=0.06, do_calving=True,
+                         calving_k=0.2, water_level=0.0
+                    ),
+                )
+                ], ids=["FluxBased-rect", "SemiImplicit-trap"],
+                )
+def default_calving(request):
     cfg.initialize()
-    model = FluxBasedModel(bu_tidewater_bed(),
+    model_cls, bed_kwargs, model_kwargs = request.param
+
+    model = model_cls(bu_tidewater_bed(**bed_kwargs),
                            mb_model=ScalarMassBalance(),
-                           is_tidewater=True, calving_use_limiter=True,
-                           flux_gate=0.06, do_kcalving=True,
-                           calving_k=0.2)
+                           **model_kwargs)
     ds = model.run_until_and_store(3000)
     df_diag = model.get_diagnostics()
     assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                     model.flux_gate_m3_since_y0)
     assert_allclose(ds.calving_m3[-1], model.calving_m3_since_y0)
-    return model, ds, df_diag
+    return model_cls, bed_kwargs, model_kwargs, model, ds, df_diag
 
 
 @pytest.mark.usefixtures('default_calving')
@@ -1616,13 +1635,21 @@ class TestKCalving():
     @pytest.mark.slow
     def test_limiter(self, default_calving):
 
-        _, ds1, df_diag1 = default_calving
+        models_cls, bed_kwargs, _, _, ds1, df_diag1 = default_calving
 
-        model = FluxBasedModel(bu_tidewater_bed(),
+        # same model class as baseline, but limiter set as False
+        model_kwargs = dict(flux_gate=0.06, calving_k=0.2, calving_use_limiter=False)
+
+        if models_cls is FluxBasedModel:
+            model_kwargs.update(is_tidewater=True, do_kcalving=True)
+        else:
+            model_kwargs.update(do_calving=True, water_level=0.0)
+
+        model = models_cls(bu_tidewater_bed(**bed_kwargs),
                                mb_model=ScalarMassBalance(),
-                               is_tidewater=True, calving_use_limiter=False,
-                               flux_gate=0.06, do_kcalving=True,
-                               calving_k=0.2)
+                           **model_kwargs
+                           )
+
         ds2 = model.run_until_and_store(3000)
         df_diag2 = model.get_diagnostics()
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
@@ -1648,8 +1675,10 @@ class TestKCalving():
 
     @pytest.mark.slow
     def test_tributary(self, default_calving):
-
-        _, ds1, df_diag1 = default_calving
+        # This test will only work for FluxBasedModel
+        model_cls, _, _, _, ds1, df_diag1 = default_calving
+        if model_cls is not FluxBasedModel:
+            pytest.skip("Tributary test is only valid for FluxBasedModel")
 
         model = FluxBasedModel(bu_tidewater_bed(split_flowline_before_water=5),
                                mb_model=ScalarMassBalance(),
@@ -1690,14 +1719,26 @@ class TestKCalving():
     @pytest.mark.slow
     def test_water_level(self, default_calving):
 
-        _, ds_1, _ = default_calving
+        models_cls, bed_kwargs, _, _, ds_1, _ = default_calving
 
-        model = FluxBasedModel(bu_tidewater_bed(water_level=1000),
-                               mb_model=ScalarMassBalance(),
-                               is_tidewater=True, calving_use_limiter=True,
-                               flux_gate=0.06, do_kcalving=True,
-                               water_level=1000,
-                               calving_k=0.2)
+        bed_kwargs = dict(bed_kwargs, water_level=1000)
+
+        model_kwargs = dict(calving_use_limiter=True,
+                            flux_gate=0.06,
+                            calving_k=0.2,
+                            water_level=1000)
+
+        if models_cls is FluxBasedModel:
+            model_kwargs.update(is_tidewater=True, do_kcalving=True)
+        else:
+            model_kwargs.update(do_calving=True)
+
+        model = models_cls(
+            bu_tidewater_bed(**bed_kwargs),
+            mb_model=ScalarMassBalance(),
+            **model_kwargs,
+        )
+
         ds_2 = model.run_until_and_store(3000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)
@@ -1716,7 +1757,7 @@ class TestKCalving():
     @pytest.mark.slow
     def test_other_calving_law(self, default_calving):
 
-        _, ds_1, _ = default_calving
+        models_cls, bed_kwargs, base_model_kwargs, _, ds_1, _ = default_calving
 
         # We just multiply by 2 inside and divide by 2 outside, should be same
         def my_calving_law(model, flowline, last_above_wl):
@@ -1726,12 +1767,19 @@ class TestKCalving():
             q_calving = k * d * h * flowline.widths_m[last_above_wl] * 2
             return q_calving
 
-        model = FluxBasedModel(bu_tidewater_bed(),
-                               mb_model=ScalarMassBalance(),
-                               is_tidewater=True, calving_use_limiter=True,
-                               flux_gate=0.06, do_kcalving=True,
-                               calving_law=my_calving_law,
-                               calving_k=0.2 / 2)
+        # start from the baseline kwargs for THIS model, then override the calving law + k
+        model_kwargs = dict(base_model_kwargs)
+        model_kwargs.update(
+            calving_law=my_calving_law,
+            calving_k=0.2 / 2,
+        )
+
+        model = models_cls(
+            bu_tidewater_bed(**bed_kwargs),
+            mb_model=ScalarMassBalance(),
+            **model_kwargs,
+        )
+
         ds_2 = model.run_until_and_store(3000)
         assert_allclose(model.volume_m3 + model.calving_m3_since_y0,
                         model.flux_gate_m3_since_y0)

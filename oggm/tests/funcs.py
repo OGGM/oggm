@@ -15,7 +15,7 @@ from oggm.utils import (get_demo_file, mkdir, get_git_ident, get_sys_info,
 from oggm.workflow import execute_entity_task
 from oggm.core import flowline, massbalance
 from oggm import tasks
-from oggm.core.flowline import RectangularBedFlowline
+from oggm.core.flowline import RectangularBedFlowline, TrapezoidalBedFlowline
 
 _TEST_DIR = None
 
@@ -291,9 +291,68 @@ def dummy_bed_tributary_tail_to_head(map_dx=100., n_trib=1, small_cliff=False):
     return fls
 
 
+def _make_tw_flowline(bed_shape, lambdas=0.0, **kwargs):
+    """Create a single flowline instance from arrays.
+    Parameters
+    ----------
+    bed_shape : {"rectangular", "trapezoidal"}
+        Flowline geometry to construct. Use ``"rect"`` to build
+        ``RectangularBedFlowline``; use ``"trap"`` to build
+        ``TrapezoidalBedFlowline``.
+    lambdas : default most be zero
+        Trapezoid side slope parameter (only used when ``bed_shape="trap"``).
+        Set ``lambdas=0`` to obtain a rectangular cross-section while still using
+        the trapezoidal flowline class (e.g., required by ``SemiImplicitModel``).
+    kwargs: same as those pass to the regular flowline object
+    """
+    if bed_shape == "rectangular":
+        return RectangularBedFlowline(**kwargs)
+
+    if bed_shape == "trapezoidal":
+        if "lambdas" not in kwargs:
+            sh = kwargs["surface_h"]
+            kwargs["lambdas"] = np.zeros_like(sh) + float(lambdas)
+        return TrapezoidalBedFlowline(**kwargs)
+    raise ValueError(f"Unknown bed_shape={bed_shape!r} (use 'rect' or 'trap').")
+
+
 def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
                      b_0=260, alpha=0.017, b_1=350, x_0=4e4, sigma=1e4,
-                     water_level=0, split_flowline_before_water=None):
+                     water_level=0, split_flowline_before_water=None,
+                     bed_shape="rectangular",  # "rect" (default) or "trap"
+                     lambdas=0.0):
+    """
+    Bassis & Ultee bed profile, returning either rectangular or trapezoidal flowlines.
+
+    Parameters
+    ----------
+    gridsize : number of grid points (int)
+    gridlength : Total glacier domain length in meters (int)
+    widths_m : Glacier width at zero ice thickness in meters.
+    b_0 : Bed elevation intercept (meters)
+    alpha : Linear bed slope
+    b_1 : Amplitude of the Gaussian bump
+    x_0 : Center position of the Gaussian bump
+    sigma : Width (standard deviation) of the Gaussian bump (meters)
+    water_level : Reference water level in meters. Added to the bed profile
+    split_flowline_before_water : If provided, split the flowline into two
+    segments ``N`` grid cells upstream of the first grid point where
+    ``bed_h < water_level``. The upstream segment is linked to the downstream
+    segment via ``set_flows_to``.
+    bed_shape : {"rectangular", "trapezoidal"}
+        Flowline geometry to construct. Use ``"rect"`` to build
+    ``RectangularBedFlowline``; use ``"trap"`` to build
+    ``TrapezoidalBedFlowline``.
+    lambdas : float
+        Trapezoid side slope parameter (only used when ``bed_shape="trap"``).
+        Set ``lambdas=0`` to obtain a rectangular cross-section while still using
+        the trapezoidal flowline class (e.g., required by ``SemiImplicitModel``).
+    Returns
+    -------
+    list: A list containing one flowline, or two flowlines if ``split_flowline_before_water``
+    is set. The returned objects are instances of ``RectangularBedFlowline`` or
+    ``TrapezoidalBedFlowline`` depending on ``bed_shape``.
+    """
 
     # Bassis & Ultee bed profile
     dx_meter = gridlength / gridsize
@@ -305,21 +364,21 @@ def bu_tidewater_bed(gridsize=200, gridlength=6e4, widths_m=600,
 
     if split_flowline_before_water is not None:
         bs = np.min(np.nonzero(bed_h < 0)[0]) - split_flowline_before_water
-        fls = [RectangularBedFlowline(dx=1, map_dx=dx_meter,
-                                      surface_h=surface_h[:bs],
-                                      bed_h=bed_h[:bs],
-                                      widths=widths[:bs]),
-               RectangularBedFlowline(dx=1, map_dx=dx_meter,
-                                      surface_h=surface_h[bs:],
-                                      bed_h=bed_h[bs:],
-                                      widths=widths[bs:]),
+
+        fls = [_make_tw_flowline(bed_shape=bed_shape, lambdas=lambdas,
+                                 dx=1, map_dx=dx_meter, surface_h=surface_h[:bs],
+                                 bed_h=bed_h[:bs], widths=widths[:bs]),
+               _make_tw_flowline(bed_shape=bed_shape, lambdas=lambdas,
+                                 dx=1, map_dx=dx_meter, surface_h=surface_h[bs:],
+                                 bed_h=bed_h[bs:], widths=widths[bs:]),
                ]
         fls[0].set_flows_to(fls[1], check_tail=False, to_head=True)
         return fls
     else:
         return [
-            RectangularBedFlowline(dx=1, map_dx=dx_meter, surface_h=surface_h,
-                                   bed_h=bed_h, widths=widths)]
+            _make_tw_flowline(bed_shape=bed_shape, lambdas=lambdas,
+                              dx=1, map_dx=dx_meter, surface_h=surface_h,
+                              bed_h=bed_h, widths=widths)]
 
 
 def patch_minimal_download_oggm_files(*args, **kwargs):
