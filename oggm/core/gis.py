@@ -407,7 +407,20 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
     })
     profile.pop('blockxsize', None)
     profile.pop('blockysize', None)
+    profile.pop('tiled', None)
     profile.pop('compress', None)
+    profile.pop('predictor', None)
+    profile.pop('zlevel', None)
+
+    # Force lossless compression to limit storage footprint when writing many
+    # small DEM files while keeping source-independent behavior.
+    dtype = np.dtype(dem_dss[0].dtypes[0])
+    profile['compress'] = 'deflate'
+    profile['zlevel'] = 1
+    if np.issubdtype(dtype, np.floating):
+        profile['predictor'] = 3
+    elif np.issubdtype(dtype, np.integer):
+        profile['predictor'] = 2
 
     # Could be extended so that the cfg file takes all Resampling.* methods
     if cfg.PARAMS['topo_interp'] == 'bilinear':
