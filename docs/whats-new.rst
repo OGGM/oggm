@@ -74,7 +74,10 @@ Enhancements
 - Added a new way to calibrate the mass balance model with MB
   timeseries (:pull:`1827`).
   By `Chloe Hancock <https://github.com/chloe-hancock>`_
-
+- Refactored installation. Pip installations now accept optional dependencies,
+  and no longer requires setting up an environment beforehand. Added support
+  for `uv`. (:pull:`1849`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
