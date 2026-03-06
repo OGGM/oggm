@@ -71,7 +71,7 @@ docs = [
 ]
 tests = [
     "pytest",
-    "pytest-mpl-oggm",
+    "pytest-mpl-oggm>=0.180.1",
 ]
 
 [project.urls]
@@ -127,9 +127,6 @@ build = [
     "build>=1.4.0",
     "twine>=6.2.0",
 ]
-
-[tool.uv.sources]
-"pytest-mpl-oggm"= {git = "https://github.com/gampnico/pytest-mpl-oggm", branch = "update-pytest-mpl" }
 
 [tool.uv.build-backend]
 module-root = ""
