@@ -10,63 +10,51 @@ Installing OGGM
    world, and that you may not have to run OGGM for your use case?
    Visit :doc:`download-projections` for more information.
 
-OGGM itself is a pure python package, but it has several dependencies which
-are not trivial to install. The instructions below provide all the required
-details and should work on Linux and Mac OS. See :ref:`install-troubleshooting`
-if something goes wrong.
+OGGM itself is a pure python package, but some dependencies are not trivial to install.
+The instructions below should provide all the required details.
+See :ref:`install-troubleshooting` if something goes wrong.
 
-OGGM is fully `tested`_ with Python versions 3.11 to 3.13 on Linux.
-We do not test OGGM automatically on Mac OSX, but it should probably run
-fine there as well.
+OGGM is `fully tested`_ with Python versions 3.11 to 3.14 on Linux.
+MacOS is not automatically tested, but should still work.
 
 .. warning::
 
-    **OGGM does not work on Windows. However there is a workaround available**. If you are using Windows 10,
-    we recommend to install the free
-    `Windows subsystem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_ (WSL)
-    and install and run OGGM from there. Though we don't offer support for installation, documentation
-    of a successful installation can be found here:
+    **OGGM does not work natively on Windows, but there is a workaround.**
+    If you are using Windows 10 or above, install the free `Windows subsystem for Linux <https://docs.microsoft.com/en-us/windows/wsl/install-win10>`_ (WSL), then install and run OGGM from there.
+    Within WSL, the installation instructions are identical to the instructions for Linux.
 
-    .. toctree::
-        :maxdepth: 1
+OGGM now supports installation with ``pip``, ``conda``, and ``uv``.
+For most users we recommend installing Python and package dependencies with the :ref:`conda package manager <conda-install>`, in particular with ``mamba`` and ``conda-forge``.
 
-        installing-oggm-windows.rst
-
-
-For most users we recommend to install Python and the package dependencies with the :ref:`conda package manager <conda-install>`, in particular with ``mamba`` and ``conda-forge``.
-
-.. _tested: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
+.. _fully tested: https://github.com/OGGM/oggm/actions/workflows/run-tests.yml
 .. _conda: https://conda.io/projects/conda/en/latest/user-guide/index.html
 .. _pip: https://docs.python.org/3/installing/
 .. _mamba: https://mamba.readthedocs.io
 
-
 OGGM can be installed:
-- as a library, if you don't want to modify its source code.This is recommended for most users.
-    - **stable**: this is the latest official release and has a fixed
-      version number (e.g. v1.6.2).
+
+- as a library, if you don't want to modify its source code. This is recommended for most users.
+    - **stable**: this is the latest official release and has a fixed version number (e.g. v1.6.3).
     - **dev**: this is the development version.
       It may contain new features and bug fixes, but will continue changing until its release.
-    - as an editable, if you want to make changes or develop the model. This is recommended for developers.
 
-OGGM now supports installation with `pip`, `conda`, and `uv`.
+- as an **editable**: if you want to make changes, or develop the model. This is recommended for developers.
+
+Don't forget to :ref:`test-oggm` before using it!
 
 Dependencies
 ------------
 
 A full installation of OGGM requires GDAL.
-The easiest way is:
+The easiest way to get GDAL is:
+
 .. code-block:: bash
 
     sudo apt-get install gdal-bin libgdal-dev  # Linux (Debian distros)
     brew install gdal  # MacOS
 
-.. _conda-install:
-
-Install with conda (all platforms)
-----------------------------------
-
-This is the recommended way to install OGGM for most users.
+OGGM supports installation with ``conda``, ``pip``, and ``uv``.
+We recommend using ``conda`` or ``mamba`` for most users, and ``uv`` for OGGM contributors.
 
 .. note::
 
@@ -75,21 +63,12 @@ This is the recommended way to install OGGM for most users.
     you might find all of this quite confusing and overwhelming. Be patient,
     `read the docs <https://docs.conda.io>`_ and stay hydrated.
 
-Prerequisites
-~~~~~~~~~~~~~
-
-You should have a recent version of the `conda`_ package manager. Our
-recommendation is to install `mambaforge`_. If you are completely
-new to these things, check out
+You should have a recent version of the `conda`_ package manager.
+Our recommendation is `mambaforge`_. If you are completely new to these things, check out
 `this page <https://fabienmaussion.info/intro_to_programming/week_01/01-Installation.html>`_
-which explains how to install ``mambaforge`` and
+which explains how to install `mambaforge`_ and
 `this one <https://fabienmaussion.info/intro_to_programming/week_05/01-install-packages.html>`_
 for installing packages.
-
-We recommend to use `mamba`_ over conda as an installation command.
-Mamba is a drop-in replacement for all conda commands. If you feel like it, install mamba in your conda
-environment (``conda install -c conda-forge mamba``)
-and replace all occurrences of ``conda`` with ``mamba`` in the instructions below.
 
 .. warning::
 
@@ -98,19 +77,36 @@ and replace all occurrences of ``conda`` with ``mamba`` in the instructions belo
     If you have conda installed and want to switch to mamba + conda-forge,
     follow the instructions on the respective platforms.
 
+OGGM now also supports installation with `uv`_, an ultra-fast package manager which allows you to quickly switch between different installations of OGGM, and set up reproducible environments for running simulations.
+We would strongly recommend this for OGGM contributors, and users who require a stable Python environment.
+
 .. _miniconda: http://conda.pydata.org/miniconda.html
 .. _mambaforge: https://github.com/conda-forge/miniforge#mambaforge
+.. _uv: https://docs.astral.sh/uv/getting-started/features/
 
-The fastest way: `uv`
-~~~~~~~~~~~~~~~~~~~~~
+.. _conda-install:
+
+The recommended way: ``conda``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For users who don't want to use ``uv`` at all.
+
+Create and activate a conda environment:
+
+.. code-block:: bash
+
+    conda env create --n oggm python=3.13 oggm -c conda-forge -c oggm
+    conda activate oggm
+
+.. _uv-install:
+
+The fastest way: ``uv``
+~~~~~~~~~~~~~~~~~~~~~~~
 
 For users who just want to run a notebook and don't need a dedicated environment.
 This includes users who want to test OGGM before installing it, and teaching staff who want to use OGGM in a classroom.
 
 If you are new to Python and want to get started with OGGM as quickly as possible, we recommend using `uv`_.
 You can install and run OGGM on a Jupyter server without polluting your base system or conda environment.
-
-.. _uv: _https://docs.astral.sh/uv/getting-started/installation/
 
 Install `uv`:
 
@@ -128,105 +124,64 @@ This installs a minimal version of OGGM into an isolated environment and runs a 
 
 .. note:: This will not pollute your base system or conda environment.
 
-The comfortable way: `conda` & `pip`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-For users who don't want to use `uv` at all.
+.. _pip-install:
 
-Create and activate a conda environment:
+The extensible way: ``pip``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: bash
-    conda env create --n oggm_313 python=3.13
-    conda activate oggm_313
+Activate your python environment (conda or virtualenv).
 
 Install the latest **stable** release:
 
 .. code-block:: bash
+
     pip install oggm  # for a minimal install
     pip install oggm[full]  # for a full install with all dependencies
-    uv pip install oggm  # if you already have uv installed
+    uv pip install oggm  # if you have uv installed
 
 Or install the latest **development** version:
 
 .. code-block:: bash
-    pip install --upgrade git+https://github.com/OGGM/oggm.git
-
-Install OGGM itself
-~~~~~~~~~~~~~~~~~~~
-
-First, choose which version of OGGM you would like to install:
-
-- **stable**: this is the latest version officially released and has a fixed
-  version number (e.g. v1.5.3).
-- **dev**: this is the development version. It might contain new
-  features and bug fixes, but is also likely to continue to change until a
-  new release is made. This is the recommended way if you want to use the
-  latest changes to the code.
-- **dev+code**: this is the recommended way if you plan to
-  contribute to the model, and/or if you want to use the most
-  recent model updates.
-
-**‣ install the stable version:**
-
-.. note::
-
-    If you installed OGGM with the environment file above, OGGM will be installed
-    already in the latest **stable** version.
-
-In your conda environment, use pip::
-
-    pip install oggm
-
-**‣ install the dev version:**
-
-For this to work you'll need to have the `git`_ software installed on your
-system. In your conda environment, simply do::
 
     pip install --upgrade git+https://github.com/OGGM/oggm.git
 
-With this command you can also update an already installed OGGM version
-to the latest version.
+The editable way: ``pip`` or ``uv``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**‣ install the dev version + get access to the OGGM code:**
+This is recommended for contributors or if you want to make changes to the OGGM source code.
+It installs OGGM in "editable" mode, so any changes you make to the source code are immediately applied when you import OGGM.
 
-For this to work you'll need to have the `git`_ software installed on your
-system. Then, clone the latest repository version::
+You will need `git`_ installed on your system.
+Clone the latest repository version:
+
+.. code-block:: bash
 
     git clone https://github.com/OGGM/oggm.git
+    cd oggm
+    # Activate your python environment (conda or venv) here if you haven't already
+    pip install -e .  # if using pip
+    uv sync --extra full  # if using uv
 
 .. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 
-Then go to the project root directory::
-
-    cd oggm
-
-And install OGGM in development mode (this is valid for both  **pip** and
-**conda** environments)::
-
-    pip install -e .
-
-
 .. note::
 
-    Installing OGGM in development mode means that subsequent changes to this
-    code repository will be taken into account the next time you will
-    ``import oggm``. You can also update OGGM with a simple `git pull`_ from
-    the root of the cloned repository.
+    You can also update OGGM with a simple `git pull`_ from the root of the cloned repository.
 
 .. _git pull: https://git-scm.com/docs/git-pull
-
-Don't forget to :ref:`test-oggm` before using it!
 
 .. _test-oggm:
 
 Test OGGM
 ~~~~~~~~~
 
-You can test your OGGM installation by running the following command from
-anywhere (don't forget to activate your environment first)::
+Activate your python environment, and test your OGGM installation:
+
+.. code-block:: bash
 
     pytest.oggm  --disable-warnings
 
-The tests should run for 5 to 10 minutes. If everything worked fine, you should see something like::
+The tests should run for 5 to 10 minutes. If successful, you should see something like::
 
     =================================== test session starts ====================================
     platform linux -- Python 3.10.6, pytest-7.1.3, pluggy-1.0.0
@@ -253,55 +208,28 @@ The tests should run for 5 to 10 minutes. If everything worked fine, you should 
 
     ======================= 224 passed, 149 skipped in 217.03s (0:03:37) ======================
 
-
 .. important::
 
    The tests (without the ``--run-slow`` option) should run in 5 to 15 minutes.
-   If this takes too long, this may be an indication that something's wrong
+   If it takes longer, this may indicate something's wrong.
 
-This runs a comprehensive suite of tests. If you want to run the *entire* test
-suite (including graphics and slow running tests), type::
+If you want to run the *entire* test suite (including graphics and slow running tests):
+
+.. code-block:: bash
 
     pytest.oggm --run-slow --mpl
 
-**Congrats**, you are now set-up for the :doc:`getting-started` section!
+**Congratulations**, you are now set-up for the :doc:`getting-started` section!
 
 .. _install-troubleshooting:
 
 Installation troubleshooting
 ----------------------------
 
-We try to do our best to avoid issues, but experience shows that the installation
-of the necessary packages can be difficult. Typical errors are often
-related to the pyproj, fiona and GDAL packages, which are heavy and (for pyproj)
-have changed a lot in the recent past and are prone to platform specific errors.
-
-If the tests don't pass, a diagnostic of which package creates the errors
-might be necessary. Errors like ``segmentation fault`` or ``Proj Error``
-are frequent and point to errors in upstream packages, rarely in OGGM itself.
-
-If you encounter issues, please get in touch with
-us `on github <https://github.com/OGGM/oggm/issues>`_.
-
-Install a minimal OGGM environment
-----------------------------------
-
-If you plan to use only the numerical core of OGGM (that is, for idealized
-simulations or teaching), you can skip many dependencies and only
-install this shorter list:
-
-.. include:: recommended_minimal_env.yml
-   :literal:
-
-Installing them with pip or conda should be much easier.
-`Install OGGM itself`_ then as above.
-
-Running the tests in this minimal environment works the same. Simply run
-from a terminal::
-
-    pytest.oggm
-
-The number of tests will be much smaller!
+Please get in touch with us `on github <https://github.com/OGGM/oggm/issues>`_ if you encounter issues installing OGGM.
+Installations can be tricky, and typical errors are often related to the `pyproj`, `fiona`` and `GDAL`` packages, which are heavy, change often, and are prone to platform specific errors.
+It may help to diagnose which package is causing the error.
+Errors like `segmentation fault` or `Proj Error` usually point to errors in upstream packages, rarely in OGGM itself.
 
 .. _virtualenv-install:
 
