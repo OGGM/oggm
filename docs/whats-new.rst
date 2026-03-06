@@ -95,6 +95,8 @@ Bug fixes
 - Changed COPDEM data source (again) - this comes with good sides as the download
   is much easier now (:pull:`1773`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Updates installation instructions for OGGM. This includes a new section on installing with ``uv`` (:pull:`1863`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
