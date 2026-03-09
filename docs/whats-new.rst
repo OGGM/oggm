@@ -111,7 +111,10 @@ Enhancements
 - Added a new way to calibrate the mass balance model with MB
   timeseries (:pull:`1827`).
   By `Chloe Hancock <https://github.com/chloe-hancock>`_
-
+- Refactored installation. Pip installations now accept optional dependencies,
+  and no longer requires setting up an environment beforehand. Added support
+  for `uv`. (:pull:`1849`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
@@ -140,6 +143,9 @@ Bug fixes
   See also :issue:`1864` for a more pervasive continuation of the issue and
   why gdirs still remain larger *after* the fix.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been 
+  deprecated since Python 3.12. Reimplements ``strtobool`` natively.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
