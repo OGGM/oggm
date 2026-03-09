@@ -39,8 +39,11 @@ build = [
     "build>=1.4.0",
     "twine>=6.2.0",
 ]
+dev = [
+    "oggm[docs, full]",
+    ]
 full = [
-    "oggm[build, docs, tests]",
+    "oggm[build, tests]",
     "bottleneck",
     "cartopy",
     "dask",
