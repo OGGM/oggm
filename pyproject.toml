@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "oggm"
 dynamic = ["version"]
 authors = [
-{ name = "OGGM Contributors", email = "fabien.maussion@uibk.ac.at"}
+{ name = "OGGM Contributors", email = "info@oggm.org"}
 ]
 description = "Open Global Glacier Model"
 readme = "README.rst"
