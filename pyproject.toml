@@ -1,9 +1,136 @@
 [build-system]
-build-backend = 'setuptools.build_meta'
-requires = [
-    "setuptools>=61",
-    "setuptools_scm[toml]>=7.0",
-    "wheel",
+requires = ["hatchling >= 1.26", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oggm"
+dynamic = ["version"]
+authors = [
+{ name = "OGGM Contributors", email = "info@oggm.org"}
+]
+description = "Open Global Glacier Model"
+readme = "README.rst"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE.txt"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "configobj",
+    "matplotlib",
+    "netcdf4",
+    "numpy",
+    "pandas",
+    "requests",
+    "scipy",
+    "shapely",
+    "xarray",
 ]
 
-[tool.setuptools_scm]
+[project.optional-dependencies]
+build = [
+    "build>=1.4.0",
+    "twine>=6.2.0",
+]
+dev = [
+    "oggm[docs, full]",
+    ]
+full = [
+    "oggm[build, tests]",
+    "bottleneck",
+    "cartopy",
+    "dask",
+    "geopandas",
+    "ipython",
+    "joblib",
+    "motionless",
+    "netcdf4",
+    "pillow",
+    "progressbar2",
+    "pyproj",
+    "rasterio",
+    "rioxarray",
+    "salem",
+    "scikit-image",
+    "scikit-learn",
+    "seaborn",
+    "tables",
+]
+docs = [
+    "numpydoc",
+    "pydata-sphinx-theme",
+    "sphinx",
+    "sphinx-book-theme",
+    "sphinx-intl",
+    "sphinx-reredirects",
+    "sphinx-togglebutton",
+]
+tests = [
+    "pytest",
+    "pytest-mpl-oggm>=0.180.1",
+]
+
+[project.urls]
+"Homepage" = "https://oggm.org"
+"Bug Tracker" = "https://github.com/OGGM/oggm/issues"
+"Documentation" = "https://docs.oggm.org/"
+
+[project.scripts]
+oggm_prepro = "oggm.cli.prepro_levels:main"
+oggm_benchmark = "oggm.cli.benchmark:main"
+oggm_netrc_credentials = "oggm.cli.netrc_credentials:cli"
+"pytest.oggm" = "oggm.tests.__main__:main"
+
+[tool.hatch.build.targets.sdist]
+packages = ["oggm"]
+exclude = [
+    "docs",
+    ".coverage.*"
+]
+include = [
+    "pytest.ini",
+    "oggm/params.cfg",
+    "oggm/data/dem_sources.txt",
+]
+# fallback if include group doesn't work as intended
+force-include = {"pytest.ini" = "pytest.ini"} 
+
+[tool.hatch.build.targets.wheel]
+packages = ["oggm"]
+include = [
+    "pytest.ini",
+    "oggm/params.cfg",
+    "oggm/data/dem_sources.txt",
+]
+# fallback if include group doesn't work as intended
+force-include = {"pytest.ini" = "pytest.ini"} 
+
+[tool.hatch.envs.default]
+env-vars-file = ".env"
+
+[tool.hatch.version]
+path = "oggm/__init__.py"
+fallback-version = "1.6.3"
+source = "vcs"
+# workaround for potential hatchling bug
+# pattern = "(?i)^(__version__|VERSION)(?:: *str)? *= *([\\'\"])v?(?P<version>.+?)\\2"
+
+# This section is for uv, but may also used by hatchling when building the package
+
+# local dependency groups for uv
+[dependency-groups]
+build = [
+    "build>=1.4.0",
+    "twine>=6.2.0",
+]
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "oggm"
