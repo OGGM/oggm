@@ -135,8 +135,9 @@ Install the latest **stable** release:
 
 .. code-block:: bash
 
-    pip install oggm  # for a minimal install
-    pip install oggm[full]  # for a full install with all dependencies
+    pip install oggm  # for a minimal installation
+    pip install oggm[full]  # for a full installation
+    pip install oggm[dev]  # for developers, including documentation dependencies
     uv pip install oggm  # if you have uv installed
 
 Or install the latest **development** version:
@@ -159,7 +160,7 @@ Clone the latest repository version:
     git clone https://github.com/OGGM/oggm.git
     cd oggm
     # Activate your python environment (conda or venv) here if you haven't already
-    pip install -e .  # if using pip
+    pip install -e .[full]  # if using pip
     uv sync --extra full  # if using uv
 
 .. _git: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
