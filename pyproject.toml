@@ -118,8 +118,6 @@ env-vars-file = ".env"
 [tool.hatch.version]
 path = "oggm/__init__.py"
 source = "vcs"
-# workaround for potential hatchling bug
-# pattern = "(?i)^(__version__|VERSION)(?:: *str)? *= *([\\'\"])v?(?P<version>.+?)\\2"
 
 # This section is for uv, but may also used by hatchling when building the package
 
