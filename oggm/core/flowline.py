@@ -652,7 +652,7 @@ class FlowlineModel(object):
         # we keep glen_a as input, but for optimisation we stick to "fd"
         self._fd = 2. / (cfg.PARAMS['glen_n']+2) * self.glen_a
 
-        # Calving shenanigans
+        # Storage calving variables for diagnostics
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
 
@@ -1584,8 +1584,7 @@ class FluxBasedModel(FlowlineModel):
                  min_dt=None, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_law=k_calving_law,
-                 calving_use_limiter=None, calving_limiter_frac=None,
-                 water_level=None,
+                 calving_use_limiter=None, water_level=None,
                  **kwargs):
         """Instantiate the model.
 
@@ -1658,9 +1657,6 @@ class FluxBasedModel(FlowlineModel):
         calving_use_limiter : bool
             whether to switch on the calving limiter on the parameterisation
             makes the calving fronts thicker but the model is more stable
-        calving_limiter_frac : float
-            limit the front slope to a fraction of the calving front.
-            "3" means 1/3. Setting it to 0 limits the slope to sea-level.
         water_level : float
             the water level. It should be zero m a.s.l, but:
             - sometimes the frontal elevation is unrealistically high (or low).
@@ -1697,12 +1693,6 @@ class FluxBasedModel(FlowlineModel):
         if calving_use_limiter is None:
             calving_use_limiter = cfg.PARAMS['calving_use_limiter']
         self.calving_use_limiter = calving_use_limiter
-        if calving_limiter_frac is None:
-            calving_limiter_frac = cfg.PARAMS['calving_limiter_frac']
-        if calving_limiter_frac > 0:
-            raise NotImplementedError('calving limiter other than 0 not '
-                                      'implemented yet')
-        self.calving_limiter_frac = calving_limiter_frac
 
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
@@ -2173,7 +2163,7 @@ class SemiImplicitModel(FlowlineModel):
                  inplace=False, fixed_dt=None, cfl_number=0.5, min_dt=None,
                  flux_gate=None, flux_gate_thickness=None, flux_gate_build_up=int(100),
                  do_calving=None, calving_k=None, calving_law=k_calving_law,
-                 calving_use_limiter=None, calving_limiter_frac=None, water_level=0.0,
+                 calving_use_limiter=None, water_level=0.0,
                  **kwargs):
         """Instantiate the model.
 
@@ -2232,9 +2222,6 @@ class SemiImplicitModel(FlowlineModel):
         calving_use_limiter : bool
             whether to switch on the calving limiter on the parameterisation
             makes the calving fronts thicker but the model is more stable
-        calving_limiter_frac : float
-            limit the front slope to a fraction of the calving front.
-            "3" means 1/3. Setting it to 0 limits the slope to sea-level.
         water_level : float
             the water level. It should be zero m a.s.l, but:
             - sometimes the frontal elevation is unrealistically high (or low).
@@ -2306,16 +2293,6 @@ class SemiImplicitModel(FlowlineModel):
         if calving_use_limiter is None:
             calving_use_limiter = cfg.PARAMS['calving_use_limiter']
         self.calving_use_limiter = calving_use_limiter
-        if calving_limiter_frac is None:
-            calving_limiter_frac = cfg.PARAMS['calving_limiter_frac']
-        if calving_limiter_frac > 0:
-            raise NotImplementedError('calving limiter other than 0 not '
-                                      'implemented yet')
-        self.calving_limiter_frac = calving_limiter_frac
-
-        # Storage variables for diagnostics
-        self.calving_m3_since_y0 = 0
-        self.calving_rate_myr = 0
 
         # Flux gate bookkeeping
         self.flux_gate_m3_since_y0 = 0
