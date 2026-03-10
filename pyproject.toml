@@ -71,6 +71,7 @@ docs = [
     "sphinx-intl",
     "sphinx-reredirects",
     "sphinx-togglebutton",
+    "sphinx-design",
 ]
 tests = [
     "pytest",
@@ -100,7 +101,7 @@ include = [
     "oggm/data/dem_sources.txt",
 ]
 # fallback if include group doesn't work as intended
-force-include = {"pytest.ini" = "pytest.ini"} 
+force-include = {"pytest.ini" = "pytest.ini"}
 
 [tool.hatch.build.targets.wheel]
 packages = ["oggm"]
@@ -110,7 +111,7 @@ include = [
     "oggm/data/dem_sources.txt",
 ]
 # fallback if include group doesn't work as intended
-force-include = {"pytest.ini" = "pytest.ini"} 
+force-include = {"pytest.ini" = "pytest.ini"}
 
 [tool.hatch.envs.default]
 env-vars-file = ".env"
