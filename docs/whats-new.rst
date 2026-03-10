@@ -143,8 +143,9 @@ Bug fixes
   See also :issue:`1864` for a more pervasive continuation of the issue and
   why gdirs still remain larger *after* the fix.
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been 
+- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been
   deprecated since Python 3.12. Reimplements ``strtobool`` natively.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
