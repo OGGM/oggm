@@ -123,6 +123,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx_reredirects',
     'sphinx_togglebutton',
+    "sphinx_design",
     'IPython.sphinxext.ipython_directive',
     'IPython.sphinxext.ipython_console_highlighting',
 ]
