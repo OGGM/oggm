@@ -1,8 +1,6 @@
 Reference mass balance data
 ===========================
 
-
-
 .. _shop-in-situ-mb-data:
 
 Traditional in-situ MB data
@@ -10,7 +8,7 @@ Traditional in-situ MB data
 
 In-situ mass balance data are used by OGGM to calibrate and validate the
 first generation mass balance model. Since OGGMv1.6, the MB model calibration uses only the winter mass-balance data
-from :ref:`shop-in-situ-mb-data`_ (together with the :ref:`shop-geod`_) to infer a relationship between winter
+from :ref:`shop-in-situ-mb-data` (together with the :ref:`shop-geod`) to infer a relationship between winter
 precipitation of a glacier and the first guess of a precipitation factor (see more at
 `this MB calibration tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_).
 We rely on mass balance observations provided by the

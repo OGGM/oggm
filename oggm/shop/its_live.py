@@ -206,9 +206,9 @@ def itslive_velocity_to_gdir(gdir, add_error=False):
     """Reproject the its_live files to the given glacier directory.
 
     The data source used is https://its-live.jpl.nasa.gov/#data
-    Currently the only data downloaded is the 120m composite for both
+    Currently the only data downloaded is the v2 120m composite for both
     (u, v) and their uncertainty. The composite is computed from the
-    1985 to 2018 average.
+    [2014-2022] average according to the NetCDF metadata.
 
     Variables are added to the gridded_data nc file.
 
