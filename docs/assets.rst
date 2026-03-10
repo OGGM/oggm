@@ -1,4 +1,4 @@
-Other datasets
+Useful outputs
 ==============
 
 This page lists some datasets that are either generated or used by OGGM and

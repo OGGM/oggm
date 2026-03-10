@@ -234,6 +234,7 @@ analyse the commonly running glaciers over the entire climate model and scenario
 done in the `OGGM standard projections csv files <https://github.com/OGGM/oggm-standard-projections-csv-files>`_.
 
 .. _glacier-exceeds-domain-boundaries:
+
 What does the "`Glacier exceeds domain boundaries`" error mean?
 ---------------------------------------------------------------
 
