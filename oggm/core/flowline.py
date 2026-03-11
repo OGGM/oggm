@@ -652,7 +652,7 @@ class FlowlineModel(object):
         # we keep glen_a as input, but for optimisation we stick to "fd"
         self._fd = 2. / (cfg.PARAMS['glen_n']+2) * self.glen_a
 
-        # Calving shenanigans
+        # Storage calving variables for diagnostics
         self.calving_m3_since_y0 = 0.  # total calving since time y0
         self.calving_rate_myr = 0.
 
@@ -1584,8 +1584,7 @@ class FluxBasedModel(FlowlineModel):
                  min_dt=None, flux_gate_thickness=None,
                  flux_gate=None, flux_gate_build_up=100,
                  do_kcalving=None, calving_k=None, calving_law=k_calving_law,
-                 calving_use_limiter=None, calving_limiter_frac=None,
-                 water_level=None,
+                 calving_use_limiter=None, water_level=None,
                  **kwargs):
         """Instantiate the model.
 
@@ -1658,9 +1657,6 @@ class FluxBasedModel(FlowlineModel):
         calving_use_limiter : bool
             whether to switch on the calving limiter on the parameterisation
             makes the calving fronts thicker but the model is more stable
-        calving_limiter_frac : float
-            limit the front slope to a fraction of the calving front.
-            "3" means 1/3. Setting it to 0 limits the slope to sea-level.
         water_level : float
             the water level. It should be zero m a.s.l, but:
             - sometimes the frontal elevation is unrealistically high (or low).
@@ -1697,12 +1693,6 @@ class FluxBasedModel(FlowlineModel):
         if calving_use_limiter is None:
             calving_use_limiter = cfg.PARAMS['calving_use_limiter']
         self.calving_use_limiter = calving_use_limiter
-        if calving_limiter_frac is None:
-            calving_limiter_frac = cfg.PARAMS['calving_limiter_frac']
-        if calving_limiter_frac > 0:
-            raise NotImplementedError('calving limiter other than 0 not '
-                                      'implemented yet')
-        self.calving_limiter_frac = calving_limiter_frac
 
         # Flux gate
         self.flux_gate = utils.tolist(flux_gate, length=len(self.fls))
@@ -2171,6 +2161,9 @@ class SemiImplicitModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  inplace=False, fixed_dt=None, cfl_number=0.5, min_dt=None,
+                 flux_gate=None, flux_gate_thickness=None, flux_gate_build_up=int(100),
+                 do_calving=None, calving_k=None, calving_law=k_calving_law,
+                 calving_use_limiter=None, water_level=0.0,
                  **kwargs):
         """Instantiate the model.
 
@@ -2202,6 +2195,43 @@ class SemiImplicitModel(FlowlineModel):
             At high velocities, time steps can become very small and your
             model might run very slowly. In production, it might be useful to
             set a limit below which the model will just error.
+        flux_gate : float or callable or sequence of float/callable
+            flux of ice from the left domain boundary (and tributaries)
+            (unit: m3 of ice per second). If set to a high value, consider
+            changing the flux_gate_buildup time. You can also provide
+            a function (or an array of functions) returning the flux
+            (unit: m3 of ice per second) as a function of time.
+            This is overridden by `flux_gate_thickness` if provided.
+        flux_gate_thickness : float or array
+            flux of ice from the left domain boundary (and tributaries).
+            Units of m of ice thickness. Note that unrealistic values won't be
+            met by the model, so this is really just a rough guidance.
+            It's better to use `flux_gate` instead.
+        flux_gate_buildup : int
+            number of years used to build up the flux gate to full value
+        do_calving : bool
+            switch on the k-calving parameterisation.
+            Ignored if not a tidewater glacier. Use the option from PARAMS per default
+        calving_law : func
+             option to use another calving law. This is a temporary workaround
+             to test other calving laws, and the system might be improved in
+             future OGGM versions.
+        calving_k : float
+            the calving proportionality constant (units: yr-1). Use the
+            one from PARAMS per default
+        calving_use_limiter : bool
+            whether to switch on the calving limiter on the parameterisation
+            makes the calving fronts thicker but the model is more stable
+        water_level : float
+            the water level. It should be zero m a.s.l, but:
+            - sometimes the frontal elevation is unrealistically high (or low).
+            - lake terminating glaciers
+            - other uncertainties
+            The default is 0. For lake terminating glaciers,
+            it is inferred from PARAMS['free_board_lake_terminating'].
+            The best way to set the water level for real glaciers is to use
+            the same as used for the inversion (this is what
+            `flowline_model_run` does for you)
         kwargs : dict
             Further keyword arguments for FlowlineModel
 
@@ -2209,7 +2239,9 @@ class SemiImplicitModel(FlowlineModel):
 
         super(SemiImplicitModel, self).__init__(flowlines, mb_model=mb_model,
                                                 y0=y0, glen_a=glen_a, fs=fs,
-                                                inplace=inplace, **kwargs)
+                                                inplace=inplace,
+                                                water_level=water_level,
+                                                **kwargs)
 
         if len(self.fls) > 1:
             raise ValueError('Implicit model does not work with '
@@ -2237,12 +2269,6 @@ class SemiImplicitModel(FlowlineModel):
                              'along the flowline possible (lambda=0 is'
                              'rectangular).')
 
-        if cfg.PARAMS['use_kcalving_for_run']:
-            raise NotImplementedError("Calving is not implemented in the"
-                                      "SemiImplicitModel! Set "
-                                      "cfg.PARAMS['use_kcalving_for_run'] = "
-                                      "False or use a FluxBasedModel.")
-
         self.fixed_dt = fixed_dt
         if min_dt is None:
             min_dt = cfg.PARAMS['cfl_min_dt']
@@ -2255,6 +2281,66 @@ class SemiImplicitModel(FlowlineModel):
                                      "cfl numbers in the order of 0.1 - 0.5 "
                                      f"(you set {cfl_number}).")
         self.cfl_number = cfl_number
+
+        # Calving params
+        if do_calving is None:
+            do_calving = cfg.PARAMS['use_kcalving_for_run']
+        self.calving_law = calving_law
+        self.do_calving = do_calving
+        if calving_k is None:
+            calving_k = cfg.PARAMS['calving_k']
+        self.calving_k = calving_k / cfg.SEC_IN_YEAR
+        if calving_use_limiter is None:
+            calving_use_limiter = cfg.PARAMS['calving_use_limiter']
+        self.calving_use_limiter = calving_use_limiter
+
+        # Flux gate bookkeeping
+        self.flux_gate_m3_since_y0 = 0
+        self._flux_gate_current_m3s = 0.0  # what will
+        # record what enters as BC (influx) ever time step
+        self.flux_gate = None
+
+        # optional thickness->flux conversion (mirrors FluxBasedModel)
+        if flux_gate_thickness is not None:
+            # Compute the theoretical ice flux from the slope at the top
+            fl = copy.deepcopy(self.fls[0])
+            fl.thick = fl.thick * 0 + flux_gate_thickness
+            slope = (fl.surface_h[0] - fl.surface_h[1]) / fl.dx_meter
+            if slope == 0:
+                raise ValueError("Need a slope to compute flux from flux_gate_thickness.")
+
+            shape = fl.shape_str[0]
+            if shape == "trapezoid":
+                # For TrapezoidalBedFlowline, lambda==0 => rectangular physics
+                # (sia_thickness only supports rectangular/parabolic)
+                if np.allclose(fl._lambdas[~np.isnan(fl._lambdas)], 0):
+                    shape = "rectangular"
+                else:
+                    raise ValueError(
+                        "flux_gate_thickness conversion needs rectangular/parabolic. "
+                        "Got trapezoid with non-zero lambda."
+                    )
+
+            flux_gate = find_sia_flux_from_thickness(
+                slope,
+                fl.widths_m[0],
+                flux_gate_thickness,
+                shape=shape,
+                glen_a=self.glen_a,
+                fs=self.fs,
+            )
+
+        # Convert float->build-up callable; accept callable directly
+        if flux_gate is not None:
+            try:
+                flux_gate(self.yr)  # type: ignore[misc]
+                self.flux_gate = flux_gate  # type: ignore[assignment]
+            except TypeError:
+                self.flux_gate = partial(
+                    flux_gate_with_build_up,
+                    flux_value=float(flux_gate),
+                    flux_gate_yr=(flux_gate_build_up + self.y0),
+                )
 
         # Special output
         self._surf_vel_fac = (self.glen_n + 2) / (self.glen_n + 1)
@@ -2361,6 +2447,17 @@ class SemiImplicitModel(FlowlineModel):
         N = self.glen_n
         rhog = self.rhog
 
+        if self.do_calving and self.calving_use_limiter:
+            # We lower the max possible ice deformation
+            # by clipping the surface slope here. It is completely
+            # arbitrary but reduces ice deformation at the calving front.
+            # I think that in essence, it is also partly
+            # a "calving process", because this ice deformation must
+            # be less at the calving front. The result is that calving
+            # front "free boards" are quite high.
+            # Note that 0 is arbitrary, it could be any value below SL
+            surface_h = utils.clip_min(surface_h, self.water_level)
+
         # calculate staggered variables
         width_stag = (width[0:-1] + width[1:]) / 2
         w0_stag = self.w0_stag
@@ -2425,11 +2522,92 @@ class SemiImplicitModel(FlowlineModel):
         smb = self.get_mb(surface_h, self.yr, fl_id=0, fls=self.fls)
         rhs = thick + smb * dt + dt / width * (b_corr[:-1] - b_corr[1:]) / dx
 
+        # Upstream flux gate (Neumann BC) which adds ice in the upper
+        # boundary q_in is m3/s of ice. Like in the FluxBasedModel
+        # we convert this to thickness to add it to the first cell:
+        # dh/dt = q_in / (w0 * dx)  => rhs[0] += dt * q_in / (w0 * dx)
+
+        if self.flux_gate is not None:
+            q_in = float(self.flux_gate(self.yr))
+            self._flux_gate_current_m3s = q_in
+            self.flux_gate_m3_since_y0 += q_in * dt
+            if q_in != 0.0:
+                rhs[0] += dt * q_in / (width[0] * dx)
+
         # solve matrix and update flowline thickness
         thick_new = utils.clip_min(
             solve_banded((1, 1), self.d_matrix_banded, rhs),
             0)
         fl.thick = thick_new
+
+        # Retreat-based calving parametrization (adapted from FluxBasedModel)
+        # We need here less "if" statements as we dont deal with tributaries
+        self.calving_rate_myr = 0.
+
+        if self.do_calving and fl.has_ice():
+
+            indices = np.nonzero((fl.surface_h > self.water_level) &
+                                 (fl.thick > 0))[0]
+
+            if indices.size != 0:
+                # Identify last glacier grid cell with ice above water level
+                last_above_wl = int(indices[-1])
+
+                # Proceed only if terminus bed is below water (marine-terminating)
+                if fl.bed_h[last_above_wl] <= self.water_level:
+
+                    # OK, we're really calving
+                    section = fl.section
+
+                    # Calving law
+                    q_calving = self.calving_law(self, fl, last_above_wl)
+
+                    # Add to the bucket and the diagnostics
+                    fl.calving_bucket_m3 += q_calving * dt
+                    self.calving_m3_since_y0 += q_calving * dt
+
+                    if section[last_above_wl] > 0:
+                        self.calving_rate_myr = (q_calving / section[last_above_wl]) * cfg.SEC_IN_YEAR
+
+                    # See if we have ice below sea-water to clean out first
+                    below_sl = (fl.surface_h < self.water_level) & (fl.thick > 0)
+                    to_remove = np.sum(section[below_sl]) * fl.dx_meter
+                    if 0 < to_remove < fl.calving_bucket_m3:
+                        # This is easy, we remove everything
+                        section[below_sl] = 0
+                        fl.calving_bucket_m3 -= to_remove
+                    elif to_remove > 0:
+                        # the conditions below I had to change them
+                        # to prevent index out-of-bounds errors
+                        # when updating the ice thickness near the calving front
+                        # NEEDS checking!
+                        section[below_sl] = 0
+                        if (last_above_wl + 1) < len(section):
+                            section[last_above_wl + 1] = ((to_remove - fl.calving_bucket_m3)
+                                                          / fl.dx_meter)
+                        else:
+                            section[last_above_wl] = max(
+                                section[last_above_wl] - (to_remove - fl.calving_bucket_m3) / fl.dx_meter, 0)
+                        fl.calving_bucket_m3 = 0
+
+                    # The rest of the bucket might calve an entire grid point (or more?)
+                    vol_last = section[last_above_wl] * fl.dx_meter
+                    while fl.calving_bucket_m3 > vol_last:
+                        fl.calving_bucket_m3 -= vol_last
+                        section[last_above_wl] = 0
+
+                        # OK check if we need to continue (unlikely)
+                        last_above_wl -= 1
+
+                        if last_above_wl < 0:
+                            # All ice is removed; no further calving possible
+                            fl.calving_bucket_m3 = 0
+                            break
+
+                        vol_last = section[last_above_wl] * fl.dx_meter
+
+                    # We update the glacier with our changes
+                    fl.section = section
 
         # Next step
         self.t += dt
@@ -2476,6 +2654,8 @@ class SemiImplicitModel(FlowlineModel):
         var = self.u_stag[fl_id]
         df['ice_velocity'] = (var[1:nx+1] + var[:nx])/2
         df['surface_ice_velocity'] = df['ice_velocity'] * self._surf_vel_fac
+        df['calving_flux'] = self.calving_m3_since_y0 / self.t  # Average calving flux
+        df['calving_rate'] = self.calving_rate_myr
 
         return df
 
