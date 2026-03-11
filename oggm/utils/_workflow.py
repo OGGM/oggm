@@ -237,7 +237,6 @@ def show_versions(logger=None):
     out.append("## Packages info:")
     for k, stat in deps_blob:
         out.append("    %s: %s" % (k, stat))
-    out.append("    OGGM git identifier: " + get_git_ident())
 
     if logger is not None:
         logger.workflow('\n'.join(out))

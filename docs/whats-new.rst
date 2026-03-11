@@ -3,8 +3,45 @@
 Version history
 ===============
 
-v1.6.x (not released)
----------------------
+v1.6.3 (almost released)
+------------------------
+
+This is the final minor release in the 1.6.x series. It is a backwards-compatible
+update with several bug fixes and improvements listed below.
+
+The main addition in this release is a new set of preprocessed glacier directories,
+including fully operational RGI7 directories and ERA5-calibrated directories with
+data extended to 2025. The various options are described in :ref:`preprodir`.
+Here we focus on updates to the "standard" directories, i.e. what changed between
+the 1.6.1 and 1.6.3 directories.
+
+.. _preprodirupdates:
+
+New preprocessed directories
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The new default directories are mostly a data-quality and "behind-the-scenes"
+improvement over the previous ones, but with some notable differences:
+
+- the map projection was changed from "local mercator" to UTM. This has a
+  very minor influence on glacier grids and geometries (with slightly larger
+  distortions near UTM zone boundaries)
+- the topography dataset is now COPDEM (almost) globally
+  (previously NASADEM in mid-latitudes)
+- ERA5 directories now include data up to 2025
+- RGI7 directories are now available with a full workflow
+- the ``_w_data`` folders now include additional datasets: ITS_LIVE v2,
+  Cook et al. (2023, Alps only), and GlaThiDa. Bugs in some datasets
+  (Hugonnet, Millan) have also been corrected
+- other general enhancements and bug fixes that are listed below
+
+By design, the new directories lead to very similar results to the previous
+(OGGM v1.6.1) ones, with small differences mainly due to topography updates
+and bug fixes. Larger differences may arise when using the new ERA5 or RGI7
+directories, but these remain much smaller than those resulting from different
+calibration choices or model structures. See
+`this blogpost <https://oggm.org/2026/01/07/oggm_v16-gdirs-and-projection-options/>`_
+for a summary.
 
 Enhancements
 ~~~~~~~~~~~~
@@ -32,7 +69,7 @@ Enhancements
   it's just a placeholder (:pull:`1757`).
   By `Dan Goldberg <https://github.com/dngoldberg>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_.
-- Added the ability to use an incomplete version of the full params.cfg file
+- Added the ability to use an incomplete version of the full `params.cfg` file
   to override some default parameter values. This can be done by providing the
   file during initialization with ``cfg.initialize(file=mini_params_filepath)``
   (:pull:`1776`).
@@ -74,6 +111,10 @@ Enhancements
 - Added a new way to calibrate the mass balance model with MB
   timeseries (:pull:`1827`).
   By `Chloe Hancock <https://github.com/chloe-hancock>`_
+- Refactored installation. Pip installations now accept optional dependencies,
+  and no longer requires setting up an environment beforehand. Added support
+  for `uv`. (:pull:`1849`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - Added CI workflow for new releases (:pull:`1867`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
@@ -96,6 +137,17 @@ Bug fixes
 - Changed COPDEM data source (again) - this comes with good sides as the download
   is much easier now (:pull:`1773`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Fixed an issue in how we stored the `dem.tif` files in the pre-procecessed
+  directories, which meant that some files could take as much as 4 times more
+  space as necessary (:issue:`1856`). In total this leads to pre-processed
+  files roughly 20-40% larger than the previous versions, which unfortunately
+  impacts some of the glacier directories created for this release.
+  See also :issue:`1864` for a more pervasive continuation of the issue and
+  why gdirs still remain larger *after* the fix.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been
+  deprecated since Python 3.12. Reimplements ``strtobool`` natively.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -105,8 +157,9 @@ break some code, but remain minor in nature:
 
 - `PARAMS['use_winter_prcp_fac']` `cfg.PARAMS['use_temp_bias_from_file']` have been replaced
   by explicit calls in code (:pull:`1816`). In general, parameters that indicate whether
-  an action should be taken or not in a workflow should not be a parameter in the first place.
-  There are several other instances of this in OGGM, to be reviewed.
+  an action should be taken or not in a workflow should never have been a parameter
+  in the first place. There are several other instances of this in OGGM, that will be
+  reviewed in 1.7.
   By `Fabien Maussion <https://github.com/fmaussion>`_.
 - Changed to the default in `distribute_thickness_per_altitude` to *not* smooth the
   resulting thickness fields. This would yield to weird effects at glacier boundaries
@@ -124,7 +177,7 @@ full reproducibility of existing results. The previous 1.6 preprocessed
 directories are still compatible and can be used with this version.
 Some bugs have been fixed however (see below), and if they matter to you,
 you may have to reprocess the data yourself or be patient (we aim to
-publish a "final" 1.6.X release before the end of the year, which will comprise
+publish a "final" 1.6.X release sometime soon, which will comprise
 updated preprocessed repositories, including a working version of RGI7
 repositories).
 

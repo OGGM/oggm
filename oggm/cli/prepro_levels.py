@@ -311,7 +311,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 'RGI60-09.00958',
                 'RGI60-09.00957',
             ]
-            rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = '1'
+            rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = 1
 
             # In AA almost all large ice bodies are actually ice caps
             if rgi_reg == '19':
