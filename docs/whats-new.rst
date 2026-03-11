@@ -45,7 +45,8 @@ for a summary.
 
 Enhancements
 ~~~~~~~~~~~~
-
+- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
+  By `Brandon Tober <https://github.com/btobers>`_
 - Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
   calculate quantiles from multiple fl_diagnostic files. It enables users to
   compute metrics such as the median flowline across various GCM projections
