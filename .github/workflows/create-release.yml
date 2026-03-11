@@ -1,4 +1,4 @@
-name: Release new OGGM version
+name: Build and release on PyPI and GitHub
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build distribution
+    name: Build Distribution
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
