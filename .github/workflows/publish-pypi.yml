@@ -39,7 +39,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: 
-      name: pypi
+      name: pypi-release  # configure to require manual approval
       url: https://pypi.org/p/oggm
     permissions:
       id-token: write  # for OIDC
@@ -57,7 +57,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
+      name: testpypi-release
       url: https://test.pypi.org/p/oggm
     permissions:
       id-token: write
@@ -71,3 +71,58 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+
+  draft-release:
+    name: Draft GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, publish-pypi]  # do not release if PyPI upload fails
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required to create/edit releases
+    outputs:
+      release-id: ${{ steps.create-draft.outputs.id }}
+      upload-url: ${{ steps.create-draft.outputs.upload_url }}
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Create draft release
+        id: create-draft
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.version }}
+          draft: true
+          generate_release_notes: true
+          files: dist/*
+          body: |
+            A new minor release of the OGGM with several improvements and bug fixes.
+
+            See [What's New](https://docs.oggm.org/en/latest/whats-new.html) in the documentation for more information.
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: draft-release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-release
+      url: ${{ format('https://github.com/{0}/releases/tag/{1}', github.repository, github.ref_name) }}
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft as release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: "${{ needs.draft-release.outputs.release-id }}",
+              draft: false,
+            });
