@@ -1,0 +1,97 @@
+name: Build and release on PyPI and GitHub
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # workaround for https://github.com/ofek/hatch-vcs/issues/72
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Install build dependencies
+        run: python3 -m pip install build --user
+      - name: Build sdist and wheel
+        run: python -m build
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-pypi:
+    name: Publish to PyPI
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: 
+      name: pypi-release  # configure to require manual approval
+      url: https://pypi.org/p/oggm
+    permissions:
+      id-token: write  # for OIDC
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi-release
+      url: https://test.pypi.org/p/oggm
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, publish-pypi]  # do not release if PyPI upload fails
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: ${{ format('https://github.com/{0}/releases/tag/{1}', github.repository, github.ref_name) }}
+    permissions:
+      contents: write  # required to create/edit releases
+    outputs:
+      release-id: ${{ steps.create-release.outputs.id }}
+      upload-url: ${{ steps.create-release.outputs.upload_url }}
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Create and publish release
+        id: create-release
+        run: gh release create ${{ steps.version.outputs.version }} --target master --verify-tag --generate-notes --title "${{ steps.version.outputs.version }}" --notes "A new minor release of the OGGM with several improvements and bug fixes. See [What's New](https://docs.oggm.org/en/latest/whats-new.html) in the documentation for more information." --repo ${{ github.repository }} ./dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
