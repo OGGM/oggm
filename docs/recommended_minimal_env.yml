@@ -2,7 +2,7 @@ name: oggm_minimal
 channels:
   - conda-forge
 dependencies:
-  - numpy<2.0
+  - numpy
   - scipy
   - pandas
   - matplotlib
@@ -15,5 +15,6 @@ dependencies:
   - pytest
   # For oggm-edu
   - seaborn
-  pip:
+  - pip
+  - pip:
     - oggm
