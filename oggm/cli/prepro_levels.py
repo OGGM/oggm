@@ -372,8 +372,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
                              'ref_mb_params/oggm_v1.6/inv_rgi7/'
                              'rgi7c_rgi_year_2025.1.csv')
-        src_date = pd.read_csv(fp, index_col=0)['rgi_year'].astype(str)
-        rgidf['src_date'] = src_date + '-01-01 00:00:00'
+        rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
+        rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
 
     # Add a new default source
     if not dem_source:
