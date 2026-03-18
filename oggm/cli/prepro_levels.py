@@ -367,7 +367,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
     # Try to avoid concurrency
-    utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
+    if rgi_version == '70C':
+        utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
+        fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                             'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                             'rgi7c_rgi_year_2025.1.csv')
+        src_date = pd.read_csv(fp, index_col=0)['rgi_year'].astype(str)
+        rgidf['src_date'] = src_date + '-01-01 00:00:00'
 
     # Add a new default source
     if not dem_source:

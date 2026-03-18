@@ -2785,8 +2785,9 @@ class GlacierDirectory(object):
 
         if is_glacier_complex:
             rgi_entity['glac_name'] = ''
-            rgi_year = get_rgi70C_year(self.rgi_id)
-            rgi_entity['src_date'] = f'{rgi_year}-01-01 00:00:00'
+            if 'src_date' not in rgi_entity:
+                rgi_year = get_rgi70C_year(self.rgi_id)
+                rgi_entity['src_date'] = f'{rgi_year}-01-01 00:00:00'
             if 'dem_source' not in rgi_entity:
                 rgi_entity['dem_source'] = None
             rgi_entity['term_type'] = 9
