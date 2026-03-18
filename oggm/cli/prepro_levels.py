@@ -366,6 +366,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
+    # Try to avoid concurrency
+    utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
+
     # Add a new default source
     if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
@@ -689,7 +692,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
-        utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
         utils.get_temp_bias_dataframe(dataset='w5e5')
         utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)

@@ -642,12 +642,13 @@ def get_rgi70C_year(rgi_id):
 
     key = 'RGI70C_rgi_year'
     if key not in cfg.DATA:
-        from oggm.utils._downloads import file_downloader
-        fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
-                             'ref_mb_params/oggm_v1.6/inv_rgi7/'
-                             'rgi7c_rgi_year_2025.1.csv')
-
-        cfg.DATA[key] = pd.read_csv(fp, index_col=0)['rgi_year']
+        from oggm.utils._downloads import get_lock, file_downloader
+        with get_lock():
+            if key not in cfg.DATA:
+                fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                                     'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                                     'rgi7c_rgi_year_2025.1.csv')
+                cfg.DATA[key] = pd.read_csv(fp, index_col=0)['rgi_year']
 
     return int(cfg.DATA[key].loc[rgi_id])
 
