@@ -78,7 +78,7 @@ Install OGGM and its dependencies
 
         .. code-block:: console
 
-            mamba env create --n oggm_env python=3.13 oggm -c conda-forge -c oggm
+            mamba env create -n oggm_env python=3.13 oggm[full] -c conda-forge -c oggm
             conda activate oggm
 
         You are now ready to :ref:`test-oggm`!
@@ -98,10 +98,19 @@ Install OGGM and its dependencies
 
             uvx --with oggm jupyter lab
 
-
         This installs a minimal version of OGGM into an isolated environment
         and runs a Jupyter server without polluting your base system or
         conda environment.
+
+        Or you can install OGGM into a virtual environment:
+
+        .. code-block:: console
+
+            uv init  # run if the current directory has no pyproject.toml file
+            uv venv  # create a virtual environment
+            source .venv/bin/activate
+            uv add oggm[full]
+            uv sync
 
     .. tab-item:: conda
 
@@ -109,7 +118,7 @@ Install OGGM and its dependencies
 
         .. code-block:: console
 
-            conda env create --n oggm_env python=3.13 oggm -c conda-forge -c oggm
+            conda env create -n oggm_env python=3.13 oggm[full] -c conda-forge -c oggm
             conda activate oggm
 
         You are now ready to :ref:`test-oggm`!
@@ -119,7 +128,7 @@ Install OGGM and its dependencies
 Test OGGM
 ~~~~~~~~~
 
-We **strongly** recommend to test OGGM prior to running it.
+We **strongly** recommend testing OGGM prior to running it.
 To test OGGM, activate your python environment, and run the tests:
 
 .. code-block:: console
@@ -175,7 +184,7 @@ Installation troubleshooting
 ----------------------------
 
 Please get in touch with us `on github <https://github.com/OGGM/oggm/issues>`_
-if you encounter issues installing OGGM. Before that, though, a method that
+if you encounter issues installing OGGM. Before doing so, a method that
 has proven effective in the past is to use a conda environment file.
 
 Download the conda environment file
@@ -205,14 +214,14 @@ From github (library)
 ~~~~~~~~~~~~~~~~~~~~~
 
 To install the latest **development** version (from github) as a **library**,
-activate your conda environment first, **and uninstall oggm using conda first**
-(important):
+activate your conda environment first, **and uninstall oggm if it is already installed
+(important)**:
 
 .. code-block:: console
 
     conda/mamba uninstall oggm
 
-Then, install from latest version on github:
+Then, install the latest version from github:
 
 .. code-block:: console
 
@@ -232,7 +241,7 @@ Clone the latest repository version:
 
     git clone https://github.com/OGGM/oggm.git
     cd oggm
-    # Activate your python environment (conda or venv) here if you havent already
+    # Activate your python environment (conda or venv) here if you haven't already
     pip install -e .[full]  # if using pip
     uv sync --extra full  # if using uv
 
