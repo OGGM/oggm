@@ -20,7 +20,7 @@ import geopandas as gpd
 import oggm.cfg as cfg
 from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
-from oggm.exceptions import InvalidParamsError, InvalidDEMError
+from oggm.exceptions import InvalidParamsError, InvalidDEMError, InvalidWorkflowError
 
 # Module logger
 from oggm.utils import get_prepro_base_url, file_downloader
@@ -73,6 +73,27 @@ def _rename_dem_folder(gdir, source=''):
     gdir.log('{},DEM SOURCE,{}'.format(gdir.rgi_id, source))
 
 
+@utils.entity_task(log)
+def _move_hypsometry_to_dem_folder(gdir, source=''):
+    """Move the hypsometry file to the DEM source folder if it exists.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+    source : str
+        the DEM source
+    """
+
+    hypso_f = gdir.get_filepath('hypsometry')
+    if not os.path.exists(hypso_f):
+        return
+
+    out = os.path.join(gdir.dir, source)
+    if not os.path.exists(out):
+        raise InvalidWorkflowError('We should not be there')
+    os.rename(hypso_f, os.path.join(out, os.path.basename(hypso_f)))
+
+
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, test_rgidf=None,
@@ -86,7 +107,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False, add_bedmachine=False,
                       add_glathida=False, add_distributed_thickness=False,
-                      add_export_thickness_geotiff=False,
+                      add_export_thickness_geotiff=False, compute_hypsometry=False,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
@@ -174,6 +195,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     add_export_thickness_geotiff : bool
         exports the distributed thickness field to GeoTIFF files in a
         subfolder of the L3 summary directory.
+    compute_hypsometry : bool
+        Compute the hypsometry tables for all glaciers,
+        added to the glacier directory and compiled in
+        the summary folder.
     start_level : int
         the pre-processed level to start from (default is to start from
         scratch). If set, you'll need to indicate start_base_url as well.
@@ -341,6 +366,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
+    # Try to avoid concurrency
+    if rgi_version == '70C':
+        utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
+        fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                             'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                             'rgi7c_rgi_year_2025.1.csv')
+        rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
+        rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
+
     # Add a new default source
     if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
@@ -418,6 +452,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
             utils.compile_glacier_statistics(gdirs, path=opath)
 
+            # Add hypsometry files
+            if compute_hypsometry:
+                for dem_source in utils.DEM_SOURCES:
+                    from oggm.shop.rgitopo import select_dem_from_dir
+                    workflow.execute_entity_task(select_dem_from_dir, gdirs,
+                                                 dem_source=dem_source,
+                                                 keep_dem_folders=True)
+                    workflow.execute_entity_task(tasks.rasterio_glacier_mask, gdirs,
+                                                 no_nunataks=True,
+                                                 overwrite=False)
+                    workflow.execute_entity_task(tasks.rasterio_glacier_exterior_mask,
+                                                 gdirs,
+                                                 overwrite=False)
+                    workflow.execute_entity_task(tasks.compute_hypsometry_attributes, gdirs)
+                    opath = os.path.join(sum_dir, f'hypsometry_{rgi_reg}_{dem_source}.csv')
+                    utils.compile_glacier_hypsometry(gdirs, path=opath,
+                                                     add_column=('dem_source', dem_source))
+                    workflow.execute_entity_task(_move_hypsometry_to_dem_folder,
+                                                 gdirs, source=dem_source)
+
             # L1 OK - compress all in output directory
             log.workflow('L1 done. Writing to tar...')
             level_base_dir = os.path.join(output_base_dir, 'L1')
@@ -435,9 +489,21 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                      source=source)
 
-        # Glacier stats
+        # Summaries
         sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
         utils.mkdir(sum_dir)
+
+        # Add hypsometry files
+        if compute_hypsometry:
+            for dem_source in utils.DEM_SOURCES:
+                workflow.execute_entity_task(tasks.rasterio_glacier_mask, gdirs,
+                                             no_nunataks=True)
+                workflow.execute_entity_task(tasks.rasterio_glacier_exterior_mask, gdirs)
+                workflow.execute_entity_task(tasks.compute_hypsometry_attributes, gdirs)
+                opath = os.path.join(sum_dir, f'hypsometry_{rgi_reg}.csv')
+                utils.compile_glacier_hypsometry(gdirs, path=opath)
+
+        # Glacier stats
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
         utils.compile_glacier_statistics(gdirs, path=opath)
 
@@ -632,7 +698,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Small optim to avoid concurrency
         utils.get_geodetic_mb_dataframe()
-        utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
         utils.get_temp_bias_dataframe(dataset='w5e5')
         utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
@@ -991,6 +1056,10 @@ def parse_args(args):
                         help='exports the distributed thickness field to '
                              'GeoTIFF files in a subfolder of the L3 summary '
                              'directory. Requires --add-distributed-thickness.')
+    parser.add_argument('--compute-hypsometry', nargs='?', const=True, default=False,
+                        help='Compute the hypsometry tables for all glaciers, '
+                             'added to the glacier directory and compiled in '
+                             'the summary folder')
     parser.add_argument('--test', nargs='?', const=True, default=False,
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
@@ -1078,6 +1147,7 @@ def parse_args(args):
                 add_glathida=args.add_glathida,
                 add_distributed_thickness=args.add_distributed_thickness,
                 add_export_thickness_geotiff=args.add_export_thickness_geotiff,
+                compute_hypsometry=args.compute_hypsometry,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
