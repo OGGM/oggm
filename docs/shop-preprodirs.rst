@@ -256,7 +256,7 @@ this `OGGM blogpost <https://oggm.org/2026/02/18/oggm_v16-gdirs-and-projection-o
   - Each glacier is calibrated to match the regionally averaged specific mass balance
     (`regional_spinup`) instead of the individual glacier-specific estimates (similar to
     `Zekollari et al., 2024 <https://doi.org/10.5194/tc-18-5045-2024>`_). The purpose
-    of this experiment is to provide a baseline to which the experia
+    of this experiment is to provide a baseline for experiments.
 
 - **Regional calibration with RGI 7.0G**
   (`2025.6/../W5E5/regional_spinup/RGI70G/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/W5E5/regional_spinup/RGI70G/>`__)
@@ -264,7 +264,7 @@ this `OGGM blogpost <https://oggm.org/2026/02/18/oggm_v16-gdirs-and-projection-o
   - Same as above, but using the RGI70G glacier inventory
     instead of RGI62. Differences between RGI versions are described in the
     `RGI documentation <https://www.glims.org/rgi_user_guide/04_revisions.html>`_.
-    The calibration strategy developped for RGI7 is described below.
+    The calibration strategy developed for RGI7 is described below.
 
 - **Regional calibration with RGI 7.0C (glacier complexes)**
   (`2025.6/../W5E5/regional_spinup/RGI70C/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/W5E5/regional_spinup/RGI70C/>`__)

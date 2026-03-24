@@ -1,7 +1,7 @@
 Frontal ablation
 ================
 
-OGGM has a simple parameterisation for frontal ablation that can be used
+OGGM has a simple parameterization for frontal ablation that can be used
 during the ice volume estimation and for dynamical runs. These features
 are still in the testing phase and are switched off per default.
 
