@@ -146,6 +146,9 @@ Bug fixes
 - Fixed ``ModuleNotFoundError`` caused by calling ``distutils`` which has been
   deprecated since Python 3.12. Reimplements ``strtobool`` natively.
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Removed deprecated ``pkg_resources`` module as this was removed from
+  Python 3.12 and setuptools 82.0 (:pull:`1875`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
