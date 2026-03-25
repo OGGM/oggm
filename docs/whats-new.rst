@@ -115,6 +115,8 @@ Enhancements
   and no longer requires dedicated yaml files. Added support for `uv`.
   (:pull:`1849`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added CI workflow for new releases (:pull:`1867`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
