@@ -56,4 +56,8 @@ More exigent users might have a look at
 `PyGEM <https://github.com/PyGEM-Community/PyGEM>`_
 or the `OGGM dev branch <https://github.com/OGGM/oggm/tree/dev>`_
 (which includes features from the `OGGM massbalance-sanbox <https://github.com/OGGM/massbalance-sandbox>`_)
-which are offering clever ways to deal with daily data, snow cover processes, etc.
+which are offering clever ways to deal with daily data, snow cover processes, etc. 
+
+Avalanche maps have recently been added to the new OGGM glacier directories, to be able to account for the contribution 
+of avalanches to glacier mass balance - check out the `new OGGM tutorial <https://github.com/OGGM/tutorials/tree/master/notebooks/tutorials>`_ 
+or directly the `OGGM avalanche repo <https://github.com/OGGM/Snowslide>`_ to get more insights on this!

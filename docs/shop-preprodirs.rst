@@ -242,6 +242,12 @@ this `OGGM blogpost <https://oggm.org/2026/02/18/oggm_v16-gdirs-and-projection-o
   - Same as above, but with all shop datasets added to the directories per default.
     See :doc:`shop-datasets` for a full list.
 
+- **OGGM v1.6.3 standard directories with avalanches**
+  (`global_snowslide_maps_oggm_2025.6/global_whypso/.. <https://cluster.klima.uni-bremen.de/~mkneib/global_snowslide_maps_oggm_2025.6/global_whypso/>`_)
+
+  - Identical to the OGGM v1.6.3 standard projections, but with avalanche maps (snowslide_1m) added to gridded_data and to 1D elevation band data. 
+    Check out the `OGGM/Snowslide <https://github.com/OGGM/Snowslide>`_ for more information.
+
 - **ERA5-based calibration**
   (`2025.6/../ERA5/per_glacier_spinup/RGI62/.. <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/ERA5/per_glacier_spinup/>`__)
 
