@@ -115,6 +115,9 @@ Enhancements
   and no longer requires dedicated yaml files. Added support for `uv`.
   (:pull:`1849`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Added the option to compute hypsometries as part of the preprocessing CLI.
+  Previously this would have been a separate step (:pull:`1872`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Bug fixes
 ~~~~~~~~~

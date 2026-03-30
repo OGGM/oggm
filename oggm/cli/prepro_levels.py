@@ -368,7 +368,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Try to avoid concurrency
     if rgi_version == '70C':
-        utils.get_rgi70C_year('RGI2000-v7.0-C-01-00001')
         fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
                              'ref_mb_params/oggm_v1.6/inv_rgi7/'
                              'rgi7c_rgi_year_2025.1.csv')
