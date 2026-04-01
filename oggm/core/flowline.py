@@ -2161,7 +2161,7 @@ class SemiImplicitModel(FlowlineModel):
 
     def __init__(self, flowlines, mb_model=None, y0=0., glen_a=None, fs=0.,
                  inplace=False, fixed_dt=None, cfl_number=0.5, min_dt=None,
-                 flux_gate=None, flux_gate_thickness=None, flux_gate_build_up=int(100),
+                 flux_gate=None, flux_gate_thickness=None, flux_gate_build_up=100,
                  do_calving=None, calving_k=None, calving_law=k_calving_law,
                  calving_use_limiter=None, water_level=0.0,
                  **kwargs):
@@ -2309,23 +2309,18 @@ class SemiImplicitModel(FlowlineModel):
             if slope == 0:
                 raise ValueError("Need a slope to compute flux from flux_gate_thickness.")
 
-            shape = fl.shape_str[0]
-            if shape == "trapezoid":
-                # For TrapezoidalBedFlowline, lambda==0 => rectangular physics
-                # (sia_thickness only supports rectangular/parabolic)
-                if np.allclose(fl._lambdas[~np.isnan(fl._lambdas)], 0):
-                    shape = "rectangular"
-                else:
-                    raise ValueError(
-                        "flux_gate_thickness conversion needs rectangular/parabolic. "
-                        "Got trapezoid with non-zero lambda."
-                    )
+            # For TrapezoidalBedFlowline, lambda==0 => rectangular physics
+            # (sia_thickness only supports rectangular/parabolic)
+            if not np.allclose(fl._lambdas[0], 0):
+                raise ValueError(
+                    "flux_gate_thickness conversion needs rectangular shape. "
+                    "Got trapezoid with non-zero lambda."
+                )
 
             flux_gate = find_sia_flux_from_thickness(
                 slope,
                 fl.widths_m[0],
                 flux_gate_thickness,
-                shape=shape,
                 glen_a=self.glen_a,
                 fs=self.fs,
             )
