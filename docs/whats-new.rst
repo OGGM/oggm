@@ -123,6 +123,9 @@ Enhancements
 - Added the option to compute hypsometries as part of the preprocessing CLI.
   Previously this would have been a separate step (:pull:`1872`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Generated and documented new preprocessed directories including
+  contributions from avalanches (:pull:`1877`).
+  By `Marin Kneib <https://github.com/MarinKneib>`_
 
 Bug fixes
 ~~~~~~~~~
