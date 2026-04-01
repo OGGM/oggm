@@ -1,3 +1,0 @@
-include pytest.ini
-include oggm/params.cfg
-include oggm/data/dem_sources.txt

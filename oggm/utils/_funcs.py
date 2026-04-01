@@ -28,7 +28,10 @@ from scipy.interpolate import interp1d
 import shapely.geometry as shpg
 from shapely.ops import linemerge
 from shapely.validation import make_valid
-from salem.gis import Grid
+try:
+    from salem.gis import Grid
+except ImportError:
+    pass
 
 # Optional libs
 try:

@@ -107,6 +107,9 @@ Datasets and downloads
 All the things that OGGM has on offer.
 
 * :doc:`shop`
+* :doc:`shop-preprodirs`
+* :doc:`shop-datasets`
+* :doc:`other-datasets`
 * :doc:`climate-data`
 * :doc:`reference-mass-balance-data`
 * :doc:`rgitopo`
@@ -119,6 +122,9 @@ All the things that OGGM has on offer.
     :caption: Datasets and downloads
 
     shop.rst
+    shop-preprodirs.rst
+    shop-datasets.rst
+    other-datasets.rst
     climate-data.rst
     reference-mass-balance-data.rst
     rgitopo.rst

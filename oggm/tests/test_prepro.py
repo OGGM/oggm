@@ -153,6 +153,11 @@ class TestGIS(unittest.TestCase):
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
 
+        with rasterio.open(gdir.get_filepath('dem'), 'r',
+                           driver='GTiff') as ds:
+            assert not ds.profile.get('tiled', False)
+            assert ds.profile.get('compress', '').lower() == 'deflate'
+
         fn = 'resampled_dem'
         cfg.BASENAMES[fn] = ('res_dem.tif', 'for testing')
         gis.rasterio_to_gdir(gdir, get_demo_file('hef_srtm.tif'), fn)

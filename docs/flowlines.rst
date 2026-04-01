@@ -40,8 +40,8 @@ the changes in glacier width with thickness changes.
       and routing algorithms. This was the single option in OGGM before v1.4.
    2. via binned **elevation bands flowlines**, which are computed by the binning and
       averaging of 2D slopes into a "bulk" flowline glacier. This is the method
-      first developed and applied by [Huss_Farinotti_2012]_. This is the standard method
-      since OGGM v1.6.
+      first developed and applied by [Huss_Farinotti_2012]_. **This is the standard method
+      since OGGM v1.6.**
 
 
 Both methods have strengths and weaknesses, which we discuss in more depth
@@ -317,16 +317,16 @@ References
 ----------
 
 .. [Huss_Farinotti_2012] Huss, M. and Farinotti, D.: Distributed ice thickness
-and volume of all glaciers around the globe, J. Geophys. Res. Earth Surf.,
-117(4), F04010, doi:10.1029/2012JF002523, 2012.
+  and volume of all glaciers around the globe, J. Geophys. Res. Earth Surf.,
+  117(4), F04010, doi:10.1029/2012JF002523, 2012.
 
 .. [Huss_Hock_2015] Huss, M. and Hock, R.: A new model for global glacier
-change and sea-level rise, Front. Earth Sci., 3(September), 1–22,
-doi:10.3389/feart.2015.00054, 2015.
+  change and sea-level rise, Front. Earth Sci., 3(September), 1-22,
+  doi:10.3389/feart.2015.00054, 2015.
 
 .. [Werder_et_al_2019] Werder, M. A., Huss, M., Paul, F., Dehecq, A. and
-Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
-applications, J. Glaciol., 1–16, doi:10.1017/jog.2019.93, 2019.
+  Farinotti, D.: A Bayesian ice thickness estimation model for large-scale
+  applications, J. Glaciol., 1-16, doi:10.1017/jog.2019.93, 2019.
 
 Implementation details
 ----------------------

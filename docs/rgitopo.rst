@@ -7,8 +7,9 @@ our `tutorials <https://tutorials.oggm.org>`_ if you want to learn how to do thi
 
 **Non-OGGM users can access the data by themselves at the following links**:
 
-- RGI v6.0: https://cluster.klima.uni-bremen.de/data/gdirs/dems_v2/default/RGI62/b_010/L1
-- RGI v7.0: https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2023.1/RGI70/b_010/L1/
+- RGI v6.0: https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2026.1/RGI62/b_010/L1/
+- RGI v7.0 Glaciers: https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2026.1/RG70G/b_010/L1/
+- RGI v7.0 Complexes: https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2026.1/RG70C/b_010/L1/
 
 .. figure:: _static/malaspina_topo.png
     :width: 100%

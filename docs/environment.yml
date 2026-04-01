@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - numpy<2.0
+  - numpy
   - scipy
   - pandas
   - shapely
@@ -34,10 +34,10 @@ dependencies:
   - seaborn
   - sphinx-intl
   - sphinx-reredirects
+  - sphinx-togglebutton
+  - sphinx-design
   - pip:
     - joblib
     - progressbar2
-    - sphinx-togglebutton
-    - git+https://github.com/OGGM/pytest-mpl
     # relative to this file. Needs to be editable to be accepted.
     - -e ..
