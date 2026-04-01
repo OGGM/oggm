@@ -494,6 +494,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Add hypsometry files
         if compute_hypsometry:
+            workflow.execute_entity_task(tasks.rasterio_glacier_mask, gdirs)
             workflow.execute_entity_task(tasks.rasterio_glacier_mask, gdirs,
                                          no_nunataks=True)
             workflow.execute_entity_task(tasks.rasterio_glacier_exterior_mask, gdirs)
