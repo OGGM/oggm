@@ -494,13 +494,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # Add hypsometry files
         if compute_hypsometry:
-            for dem_source in utils.DEM_SOURCES:
-                workflow.execute_entity_task(tasks.rasterio_glacier_mask, gdirs,
-                                             no_nunataks=True)
-                workflow.execute_entity_task(tasks.rasterio_glacier_exterior_mask, gdirs)
-                workflow.execute_entity_task(tasks.compute_hypsometry_attributes, gdirs)
-                opath = os.path.join(sum_dir, f'hypsometry_{rgi_reg}.csv')
-                utils.compile_glacier_hypsometry(gdirs, path=opath)
+            workflow.execute_entity_task(tasks.rasterio_glacier_mask, gdirs,
+                                         no_nunataks=True)
+            workflow.execute_entity_task(tasks.rasterio_glacier_exterior_mask, gdirs)
+            workflow.execute_entity_task(tasks.compute_hypsometry_attributes, gdirs)
+            opath = os.path.join(sum_dir, f'hypsometry_{rgi_reg}.csv')
+            utils.compile_glacier_hypsometry(gdirs, path=opath)
 
         # Glacier stats
         opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
