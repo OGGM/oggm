@@ -146,6 +146,18 @@ class TestGIS(unittest.TestCase):
 
         assert gdir.status == 'Glacier or ice cap'
 
+        # If we start from workdir there used to be a bug
+        # It should also work like this
+        cfg.PARAMS['use_rgi_area'] = False
+        gdir = oggm.GlacierDirectory('RGI50-11.00897', base_dir=self.testdir)
+        # Close but not same
+        assert gdir.rgi_area_km2 != prev_area
+        assert gdir.cenlon != prev_lon
+        assert gdir.cenlat != prev_lat
+        np.testing.assert_allclose(gdir.rgi_area_km2, prev_area, atol=0.01)
+        np.testing.assert_allclose(gdir.cenlon, prev_lon, atol=1e-2)
+        np.testing.assert_allclose(gdir.cenlat, prev_lat, atol=1e-2)
+
     def test_reproject(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')

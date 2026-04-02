@@ -2756,20 +2756,15 @@ class GlacierDirectory(object):
                 _shp = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
-            crs = salem.check_crs(rgi_entity.crs)
-            rgi_entity = rgi_entity.iloc[0]
-            g = rgi_entity['geometry']
-            xx, yy = salem.transform_proj(crs, salem.wgs84,
-                                          [g.bounds[0], g.bounds[2]],
-                                          [g.bounds[1], g.bounds[3]])
+            rgi_entity = rgi_entity.to_crs('wgs84').iloc[0]
             write_shp = False
         else:
-            g = rgi_entity['geometry']
-            xx, yy = ([g.bounds[0], g.bounds[2]],
-                      [g.bounds[1], g.bounds[3]])
             write_shp = True
 
         # Extent of the glacier in lon/lat
+        g = rgi_entity['geometry']
+        xx, yy = ([g.bounds[0], g.bounds[2]],
+                  [g.bounds[1], g.bounds[3]])
         self.extent_ll = [xx, yy]
 
         is_rgi7 = False
