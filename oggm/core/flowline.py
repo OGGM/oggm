@@ -16,7 +16,7 @@ import warnings
 import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
-from scipy.linalg import solve_banded
+from scipy.linalg import solveh_banded
 
 # Optional libs
 try:
@@ -2531,7 +2531,7 @@ class SemiImplicitModel(FlowlineModel):
 
         # solve matrix and update flowline thickness
         thick_new = utils.clip_min(
-            solve_banded((1, 1), self.d_matrix_banded, rhs),
+            solveh_banded((1, 1), self.d_matrix_banded, rhs),
             0)
         fl.thick = thick_new
 
