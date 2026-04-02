@@ -714,10 +714,6 @@ def oggm_static_paths():
             os.makedirs(PATHS['dl_cache_dir'])
 
 
-# Always call this one!
-oggm_static_paths()
-
-
 def get_lru_handler(tmpdir=None, maxsize=None, ending='.tif'):
     """LRU handler for a given temporary directory (singleton).
 
@@ -923,3 +919,7 @@ def strtobool(value: str) -> bool:
             return False
 
     raise ValueError('Expected "%s"' % '", "'.join(trues | falses))
+
+
+# Always call this one!
+oggm_static_paths()
