@@ -1928,15 +1928,33 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
     add_column : tuple
-        if you feel like adding a key - value pair to the compiled dataframe
+        if you feel like adding a key - value pair to the compiled dataframe.
     """
     from oggm.workflow import execute_entity_task
 
     out_df = execute_entity_task(read_glacier_hypsometry, gdirs)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    # Sort only hypsometry bin columns (named as ints) while preserving the
+    # position of all non-bin columns.
+    cols = list(out.columns)
+    bin_pos = []
+    bin_cols = []
+    for i, c in enumerate(cols):
+        try:
+            int(c)
+            bin_pos.append(i)
+            bin_cols.append(c)
+        except (ValueError, TypeError):
+            pass
+    for i, c in zip(bin_pos, sorted(bin_cols, key=int)):
+        cols[i] = c
+    out = out[cols].copy()
+
     if add_column is not None:
         out[add_column[0]] = add_column[1]
+
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],

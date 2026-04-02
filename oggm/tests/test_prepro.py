@@ -369,7 +369,7 @@ class TestGIS(unittest.TestCase):
         gis.rasterio_glacier_exterior_mask(gdir)
         gis.compute_hypsometry_attributes(gdir)
 
-        dfh = pd.read_csv(gdir.get_filepath('hypsometry'))
+        dfh = pd.read_csv(gdir.get_filepath('hypsometry'), index_col=0)
 
         np.testing.assert_allclose(dfh['slope_deg'], entity.Slope, atol=0.5)
         np.testing.assert_allclose(dfh['aspect_deg'], entity.Aspect, atol=5)
@@ -381,6 +381,9 @@ class TestGIS(unittest.TestCase):
         # From google map checks
         np.testing.assert_allclose(dfh['terminus_lon'], 10.80, atol=0.01)
         np.testing.assert_allclose(dfh['terminus_lat'], 46.81, atol=0.01)
+
+        dfh_c = utils.compile_glacier_hypsometry([gdir])
+        assert dfh.equals(dfh_c)
 
         bins = []
         for c in dfh.columns:
