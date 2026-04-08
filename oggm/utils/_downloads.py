@@ -1814,9 +1814,9 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     if version == '50':
         dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
     elif version == '60':
-        dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+        raise InvalidParamsError('You should use RGI62 instead of 60.')
     elif version == '61':
-        dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
+        raise InvalidParamsError('You should use RGI62 instead of 61.')
     elif version == '62':
         dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62.zip'
     elif version == '70G':
@@ -1898,7 +1898,8 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     rgi_ids : list of str
         the glaciers you want the outlines for
     version : str
-        the rgi version ('62', '70G', '70C')
+        the rgi version ('62', '70G', '70C'). Defaults to
+        cfg.PARAMS if unsure.
 
     Returns
     -------
@@ -1909,7 +1910,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     if version is None:
         if len(rgi_ids[0]) == 14:
             # RGI6
-            version = rgi_ids[0].split('-')[0][-2:]
+            version = cfg.PARAMS['rgi_version']
         else:
             # RGI7 RGI2000-v7.0-G-02-00003
             assert rgi_ids[0].split('-')[1] == 'v7.0'
