@@ -2003,7 +2003,8 @@ class TestFakeDownloads(unittest.TestCase):
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi50_manifest.txt')
 
         def down_check(url, *args, **kwargs):
-            expected = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/'
+                        'rgi/www.glims.org/RGI/rgi50_files/rgi50.zip')
             self.assertEqual(url, expected)
             return rgi_f
 
@@ -2022,7 +2023,8 @@ class TestFakeDownloads(unittest.TestCase):
         rgi_f = make_fake_zipdir(rgi_dir, fakefile='000_rgi60_manifest.txt')
 
         def down_check(url, *args, **kwargs):
-            expected = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+            expected = ('https://cluster.klima.uni-bremen.de/~oggm/'
+                        'rgi/www.glims.org/RGI/rgi60_files/rgi60.zip')
             self.assertEqual(url, expected)
             return rgi_f
 
