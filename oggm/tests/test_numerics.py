@@ -1212,6 +1212,45 @@ class TestIdealisedCases(unittest.TestCase):
             model.run_until(300)
         assert 'exceeds domain boundaries' in str(excinfo.value)
 
+    @pytest.mark.slow
+    def test_save_output_on_boundary_exceeded(self):
+        """When error_when_glacier_reaches_boundaries=False, run_until_and_store
+        should save full-length output with NaN for remaining timesteps."""
+
+        # With error enabled (default), it should raise
+        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = True
+        fls = dummy_constant_bed()
+        mb = LinearMassBalance(2000.)
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               glen_a=self.glen_a,
+                               fs=self.fs)
+        with pytest.raises(RuntimeError, match='domain boundaries'):
+            model.run_until_and_store(300)
+
+        # With error disabled, it should save partial output with NaN
+        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
+        fls = dummy_constant_bed()
+        mb = LinearMassBalance(2000.)
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.,
+                               glen_a=self.glen_a,
+                               fs=self.fs)
+
+        diag_ds = model.run_until_and_store(300)
+
+        # Should have the full requested time length (annual steps: 301 points
+        # from year 0 to 300 inclusive)
+        assert len(diag_ds.time) == 301
+        # Should have the boundary exceeded attribute
+        assert diag_ds.attrs.get('exceeded_domain_boundaries') == 1
+        # volume_m3 should have valid data at start
+        assert not np.isnan(diag_ds.volume_m3.values[0])
+        # volume_m3 should have NaN at the end (after failure)
+        assert np.any(np.isnan(diag_ds.volume_m3.values))
+        # The last value should be NaN
+        assert np.isnan(diag_ds.volume_m3.values[-1])
+
+        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = True
+
     def test_raise_cfl(self):
 
         fls = dummy_constant_bed()

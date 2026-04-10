@@ -1291,12 +1291,27 @@ class FlowlineModel(object):
 
         # Run
         prev_state = None  # for the stopping criterion
+        exceeded_boundaries = False
+        # Always check boundaries so we can catch and handle gracefully
+        original_check = self.check_for_boundaries
+        self.check_for_boundaries = True
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
 
             if yr > self.yr:
                 # Here we model run - otherwise (for spinup) we
                 # constantly store the same data
-                self.run_until(yr)
+                try:
+                    self.run_until(yr)
+                except RuntimeError as e:
+                    if 'domain boundaries' in str(e):
+                        if original_check:
+                            raise
+                        log.warning('Glacier exceeded domain boundaries at '
+                                    'year %d. Saving partial output with NaN '
+                                    'for remaining timesteps.', int(yr))
+                        exceeded_boundaries = True
+                        break
+                    raise
 
             # Glacier geometry
             if do_geom or do_fl_diag:
@@ -1447,6 +1462,12 @@ class FlowlineModel(object):
         if stop_criterion is not None:
             # Remove probable nans
             diag_ds = diag_ds.dropna('time', subset=['volume_m3'])
+
+        if exceeded_boundaries:
+            diag_ds.attrs['exceeded_domain_boundaries'] = 1
+
+        # Restore original boundary check setting
+        self.check_for_boundaries = original_check
 
         # write output?
         if do_fl_diag:

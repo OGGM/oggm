@@ -602,6 +602,52 @@ class TestWorkflowUtils:
                                         input_filesuffix=filesuffix)
         check_result(ds_2)
 
+    @pytest.mark.slow
+    def test_compile_run_output_with_boundary_exceeded(self, hef_gdir,
+                                                       hef_copy_gdir):
+        """Test compile_run_output works when one glacier exceeds boundaries."""
+
+        filesuffix = '_boundary_compile_test'
+        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
+
+        # Run first glacier normally (short run, won't exceed)
+        flowline.run_constant_climate(hef_gdir, y0=1985, nyears=10,
+                                      output_filesuffix=filesuffix)
+
+        # Run second glacier so it exceeds boundaries
+        # Use a very negative temperature bias to force rapid growth
+        flowline.run_constant_climate(hef_copy_gdir, y0=1985, nyears=500,
+                                      temperature_bias=-5,
+                                      output_filesuffix=filesuffix)
+
+        # Check that the second glacier actually exceeded boundaries
+        fp = hef_copy_gdir.get_filepath('model_diagnostics',
+                                        filesuffix=filesuffix)
+        with xr.open_dataset(fp) as ds:
+            assert ds.attrs.get('exceeded_domain_boundaries') == 1
+            # Should have full time length with NaN after failure
+            assert np.any(np.isnan(ds.volume_m3.values))
+
+        # compile_run_output should work without errors
+        ds = utils.compile_run_output([hef_gdir, hef_copy_gdir],
+                                      input_filesuffix=filesuffix)
+
+        # Both glaciers should be present
+        assert len(ds.rgi_id) == 2
+
+        # The successful glacier should have valid data within its range
+        # Note: compile_run_output strips _m3 suffix from variable names
+        gdir1_vol = ds.sel(rgi_id=hef_gdir.rgi_id).volume.values
+        assert not np.isnan(gdir1_vol[0])
+
+        # The boundary-exceeded glacier should have NaN after failure point
+        gdir2_vol = ds.sel(rgi_id=hef_copy_gdir.rgi_id).volume.values
+        assert not np.isnan(gdir2_vol[0])
+        assert np.any(np.isnan(gdir2_vol))
+
+        ds.close()
+        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = True
+
 
 class TestStartFromTar(unittest.TestCase):
 
