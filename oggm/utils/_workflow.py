@@ -1977,7 +1977,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 
     """Compiles a table of specific mass balance timeseries for all glaciers.
 
-    The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
+    The file is stored in a parquet file (not csv) per default. Use pd.read_parquet
     to open it.
 
     Parameters
@@ -1991,7 +1991,7 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         Set to a path to store the file to your chosen location (file
         extension matters)
     csv : bool
-        Set to store the data in csv instead of hdf.
+        Set to store the data in csv instead of parquet.
     use_inversion_flowlines : bool
         whether to use the inversion flowlines or the model flowlines
     ys : int
@@ -2038,13 +2038,13 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
             if csv:
                 out.to_csv(fpath + '.csv')
             else:
-                out.to_hdf(fpath + '.hdf', key='df')
+                out.to_parquet(fpath + '.parquet')
         else:
             ext = os.path.splitext(path)[-1]
             if ext.lower() == '.csv':
                 out.to_csv(path)
-            elif ext.lower() == '.hdf':
-                out.to_hdf(path, key='df')
+            elif ext.lower() == '.parquet':
+                out.to_parquet(path)
     return out
 
 
@@ -2056,7 +2056,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     """Compiles a table of ELA timeseries for all glaciers for a given years,
     using the mb_model_class (default MonthlyTIModel).
 
-    The file is stored in a hdf file (not csv) per default. Use pd.read_hdf
+    The file is stored in a parquet file (not csv) per default. Use pd.read_parquet
     to open it.
 
     Parameters
@@ -2070,7 +2070,7 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
         Set to a path to store the file to your chosen location (file
         extension matters)
     csv: bool
-        Set to store the data in csv instead of hdf.
+        Set to store the data in csv instead of parquet.
     ys : int
         start year
     ye : int
@@ -2118,13 +2118,13 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
             if csv:
                 out.to_csv(fpath + '.csv')
             else:
-                out.to_hdf(fpath + '.hdf', key='df')
+                out.to_parquet(fpath + '.parquet')
         else:
             ext = os.path.splitext(path)[-1]
             if ext.lower() == '.csv':
                 out.to_csv(path)
-            elif ext.lower() == '.hdf':
-                out.to_hdf(path, key='df')
+            elif ext.lower() == '.parquet':
+                out.to_parquet(path)
     return out
 
 
