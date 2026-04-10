@@ -3083,6 +3083,13 @@ class TestELAComputation(unittest.TestCase):
 
         fpath = os.path.join(cfg.PATHS['working_dir'], 'ELA.csv')
         ela1 = pd.read_csv(fpath, index_col=0)
-        ela2 = pd.read_parquet(fpath.replace('.csv', '.parquet'))
+        # Read non-csv format (parquet if pyarrow available, else hdf)
+        non_csv_path = fpath.replace('.csv', '.parquet')
+        if not os.path.exists(non_csv_path):
+            non_csv_path = fpath.replace('.csv', '.hdf')
+        if non_csv_path.endswith('.parquet'):
+            ela2 = pd.read_parquet(non_csv_path)
+        else:
+            ela2 = pd.read_hdf(non_csv_path)
 
         assert_allclose(ela1, ela2, rtol=1e-3)

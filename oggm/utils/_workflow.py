@@ -1965,6 +1965,26 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
     return out
 
 
+def _save_df_non_csv(df, fpath):
+    """Save DataFrame in parquet format, falling back to HDF if pyarrow
+    is not available."""
+    try:
+        df.to_parquet(fpath + '.parquet')
+    except ImportError:
+        df.to_hdf(fpath + '.hdf', key='df')
+
+
+def _read_df_non_csv(fpath):
+    """Read DataFrame saved by _save_df_non_csv."""
+    parquet_path = fpath + '.parquet'
+    hdf_path = fpath + '.hdf'
+    if os.path.exists(parquet_path):
+        return pd.read_parquet(parquet_path)
+    elif os.path.exists(hdf_path):
+        return pd.read_hdf(hdf_path)
+    raise FileNotFoundError(f'No parquet or hdf file found at {fpath}')
+
+
 @global_task(log)
 def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
                                         path=True, csv=False,
@@ -2038,13 +2058,13 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
             if csv:
                 out.to_csv(fpath + '.csv')
             else:
-                out.to_parquet(fpath + '.parquet')
+                _save_df_non_csv(out, fpath)
         else:
             ext = os.path.splitext(path)[-1]
             if ext.lower() == '.csv':
                 out.to_csv(path)
-            elif ext.lower() == '.parquet':
-                out.to_parquet(path)
+            else:
+                _save_df_non_csv(out, os.path.splitext(path)[0])
     return out
 
 
@@ -2118,13 +2138,13 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
             if csv:
                 out.to_csv(fpath + '.csv')
             else:
-                out.to_parquet(fpath + '.parquet')
+                _save_df_non_csv(out, fpath)
         else:
             ext = os.path.splitext(path)[-1]
             if ext.lower() == '.csv':
                 out.to_csv(path)
-            elif ext.lower() == '.parquet':
-                out.to_parquet(path)
+            else:
+                _save_df_non_csv(out, os.path.splitext(path)[0])
     return out
 
 
