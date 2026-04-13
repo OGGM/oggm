@@ -447,6 +447,9 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
             dst_nodata=nodata,
             # Configuration
             resampling=resampling)
+        # Round float DEMs to nearest meter for better compression (#1864)
+        if np.issubdtype(dst_array.dtype, np.floating):
+            np.round(dst_array, out=dst_array)
         dest.write(dst_array, 1)
 
     for dem_ds in dem_dss:
@@ -873,6 +876,12 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
         with open(os.path.join(fpath, 'dem_diagnostics.json'), 'w') as f:
             json.dump(diagnostics_dict, f)
 
+    # Round DEM data to nearest meter for better compression (#1864)
+    # COPDEM stores elevations as floats, but meter precision is sufficient
+    # and rounding dramatically improves netCDF compression ratios.
+    dem = np.round(dem)
+    smoothed_dem = np.round(smoothed_dem)
+
     # Write to file
     with GriddedNcdfFile(gdir=gdir, grid=dem_grid, fpath=fpath,
                          basename=output_filename, reset=True) as nc:
@@ -1109,6 +1118,8 @@ def simple_glacier_masks(gdir):
     glacier_ext = np.where(glacier_mask_nonuna, glacier_ext, 0)
 
     dem = read_geotiff_dem(gdir)
+    # Round DEM to nearest meter for better compression (#1864)
+    dem = np.round(dem)
 
     # Last sanity check based on the masked dem
     tmp_max = np.nanmax(dem[glacier_mask])
