@@ -30,7 +30,7 @@ from oggm import __version__
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
-from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError, DomainBoundariesError, DomainBoundariesError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    MonthlyTIModel,
@@ -910,8 +910,8 @@ class FlowlineModel(object):
             # Check for domain bounds
             if self.check_for_boundaries:
                 if self.fls[-1].thick[-1] > 10:
-                    raise RuntimeError('Glacier exceeds domain boundaries, '
-                                       'at year: {}'.format(self.yr))
+                    raise DomainBoundariesError('Glacier exceeds domain boundaries, '
+                                              'at year: {}'.format(self.yr))
 
             # Check for nans
             for fl in self.fls:
@@ -1302,16 +1302,15 @@ class FlowlineModel(object):
                 # constantly store the same data
                 try:
                     self.run_until(yr)
-                except RuntimeError as e:
-                    if 'domain boundaries' in str(e):
-                        if original_check:
-                            raise
-                        log.warning('Glacier exceeded domain boundaries at '
-                                    'year %d. Saving partial output with NaN '
-                                    'for remaining timesteps.', int(yr))
-                        exceeded_boundaries = True
-                        break
-                    raise
+                except DomainBoundariesError:
+                    if original_check:
+                        self.check_for_boundaries = original_check
+                        raise
+                    log.warning('Glacier exceeded domain boundaries at '
+                                'year %d. Saving partial output with NaN '
+                                'for remaining timesteps.', int(yr))
+                    exceeded_boundaries = True
+                    break
 
             # Glacier geometry
             if do_geom or do_fl_diag:
@@ -1465,6 +1464,9 @@ class FlowlineModel(object):
 
         if exceeded_boundaries:
             diag_ds.attrs['exceeded_domain_boundaries'] = 1
+            if do_fl_diag:
+                for ds in fl_diag_dss:
+                    ds.attrs['exceeded_domain_boundaries'] = 1
 
         # Restore original boundary check setting
         self.check_for_boundaries = original_check

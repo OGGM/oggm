@@ -23,6 +23,10 @@ class GeometryError(RuntimeError):
     pass
 
 
+class DomainBoundariesError(RuntimeError):
+    pass
+
+
 class NoInternetException(Exception):
     pass
 

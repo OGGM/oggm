@@ -4,6 +4,7 @@ import xarray as xr
 import os
 
 from oggm import cfg, utils
+from oggm.exceptions import DomainBoundariesError
 from oggm.cfg import G, SEC_IN_YEAR, SEC_IN_DAY
 
 
@@ -184,7 +185,7 @@ class Model2D(object):
                         np.any(self.ice_thick[-1, :] > 10) or
                         np.any(self.ice_thick[:, 0] > 10) or
                         np.any(self.ice_thick[:, -1] > 10)):
-                    raise RuntimeError('Glacier exceeds boundaries')
+                    raise DomainBoundariesError('Glacier exceeds domain boundaries')
             if self.ice_thick_filter is not None:
                 self.ice_thick = self.ice_thick_filter(self.ice_thick)
 

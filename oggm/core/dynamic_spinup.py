@@ -13,7 +13,7 @@ from scipy import interpolate
 import oggm.cfg as cfg
 from oggm import utils
 from oggm import entity_task
-from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError, DomainBoundariesError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    MonthlyTIModel,
@@ -627,9 +627,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                     else:
                         is_ice_free_end = False
 
-                except RuntimeError as e:
+                except (RuntimeError, DomainBoundariesError) as e:
                     # check if glacier grow to large
-                    if 'Glacier exceeds domain boundaries, at year:' in f'{e}':
+                    if isinstance(e, DomainBoundariesError) or 'Glacier exceeds domain boundaries, at year:' in f'{e}':
                         # ok we where outside the domain, therefore we search
                         # for a new lower limit for t_spinup in 0.1 °C steps
                         is_out_of_domain = True

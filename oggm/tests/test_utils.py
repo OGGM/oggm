@@ -604,11 +604,12 @@ class TestWorkflowUtils:
 
     @pytest.mark.slow
     def test_compile_run_output_with_boundary_exceeded(self, hef_gdir,
-                                                       hef_copy_gdir):
+                                                       hef_copy_gdir,
+                                                       monkeypatch):
         """Test compile_run_output works when one glacier exceeds boundaries."""
 
         filesuffix = '_boundary_compile_test'
-        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = False
+        monkeypatch.setitem(cfg.PARAMS, 'error_when_glacier_reaches_boundaries', False)
 
         # Run first glacier normally (short run, won't exceed)
         flowline.run_constant_climate(hef_gdir, y0=1985, nyears=10,
@@ -646,7 +647,6 @@ class TestWorkflowUtils:
         assert np.any(np.isnan(gdir2_vol))
 
         ds.close()
-        cfg.PARAMS['error_when_glacier_reaches_boundaries'] = True
 
 
 class TestStartFromTar(unittest.TestCase):
