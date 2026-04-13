@@ -3,17 +3,38 @@
 Version history
 ===============
 
-v1.6.3 (almost released)
-------------------------
+v1.6.3 (April 13, 2026)
+-----------------------
 
-This is the final minor release in the 1.6.x series. It is a backwards-compatible
-update with several bug fixes and improvements listed below.
+This is the final release in the 1.6.x series. It is fully backwards-compatible
+and brings a range of bug fixes, improvements, as well as new and updated
+standard projections. Thanks to the 8 contributors who made this release possible!
 
-The main addition in this release is a new set of preprocessed glacier directories,
-including fully operational RGI7 directories and ERA5-calibrated directories with
-data extended to 2025. The various options are described in :ref:`preprodir`.
-Here we focus on updates to the "standard" directories, i.e. what changed between
-the 1.6.1 and 1.6.3 directories.
+The main highlight is a new generation of preprocessed glacier directories,
+including fully operational RGI7 support and ERA5-calibrated directories with climate
+data extending to 2025. New directories including
+`avalanche maps <https://github.com/OGGM/Snowslide>`_ are also available.
+
+Model improvements are plenty: highlights include calving support in the default
+dynamical solver (``SemiImplicitModel``),
+`Glacier3dViz <https://glacier3dviz.oggm.org>`_
+and its ice thickness distribution algorithm, and RGI7 support. See below for a
+comprehensive list of changes.
+
+We also added two new `tutorials <https://tutorials.oggm.org>`_ showcasing the
+new directories, and a third one for glacier runoff sensitivity analysis.
+
+This release was designed to produce only small changes to the standard projections
+released a couple of years ago (v1.6.1), before more substancial changes are coming with 1.7
+and GlacierMIP4.
+See
+`this blogpost <https://oggm.org/2026/01/07/oggm_v16-gdirs-and-projection-options/>`_
+for a broader discussion on new glacier directories and the new projections.
+
+While 1.6.3 was just released, **v1.7 is around the corner.** Several major
+developments are `already in progress <https://github.com/OGGM/oggm/tree/dev>`_,
+including the move of the daily mass balance model to core OGGM and improved
+parameter handling. Stay tuned for more coming soon!
 
 .. _preprodirupdates:
 
@@ -26,13 +47,14 @@ improvement over the previous ones, but with some notable differences:
 - the map projection was changed from "local mercator" to UTM. This has a
   very minor influence on glacier grids and geometries (with slightly larger
   distortions near UTM zone boundaries)
-- the topography dataset is now COPDEM (almost) globally
+- the default topography dataset is now COPDEM (almost) globally
   (previously NASADEM in mid-latitudes)
 - ERA5 directories now include data up to 2025
 - RGI7 directories are now available with a full workflow
 - the ``_w_data`` folders now include additional datasets: ITS_LIVE v2,
   Cook et al. (2023, Alps only), and GlaThiDa. Bugs in some datasets
   (Hugonnet, Millan) have also been corrected
+- new directories including avalanche maps are available
 - other general enhancements and bug fixes that are listed below
 
 By design, the new directories lead to very similar results to the previous

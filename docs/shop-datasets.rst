@@ -119,3 +119,13 @@ with :py:func:`shop.cook23.cook23_to_gdir`.
     :align: left
 
     Example of the reprojected Cook et al thickness products at Aletsch glacier
+
+
+Bedmachine ice thickness
+------------------------
+
+``from oggm.shop import bedmachine`` gives you access to BedMachine
+`Antarctica (v3) <https://nsidc.org/data/nsidc-0756/versions/3>`_
+and `Greenland (v5) <https://nsidc.org/data/idbmg4/versions/5>`_
+for glaciers where these products are available.
+Refer to the original product pages on NSIDC for reference.
