@@ -3303,7 +3303,9 @@ def mb_calibration_to_rmsd(gdir, *,
                            temp_bias_min=None,
                            temp_bias_max=None,
                            mb_model_class=MonthlyTIModel,
-                           filesuffix='',):
+                           filesuffix='',
+                           climate_filename='climate_historical',
+                           climate_input_filesuffix='',):
     """Determine the MB parameters by minimising RMSD to a reference timeseries
 
     This calibrates the mass balance parameters using interannual
@@ -3439,6 +3441,8 @@ def mb_calibration_to_rmsd(gdir, *,
 
     # Create the MB model we will calibrate
     mb_mod = mb_model_class(gdir,
+                            filename=climate_filename,
+                            input_filesuffix=climate_input_filesuffix,
                             melt_f=melt_f,
                             temp_bias=temp_bias,
                             prcp_fac=prcp_fac,
@@ -3516,7 +3520,9 @@ def mb_calibration_to_rmsd(gdir, *,
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
     df['mb_global_params'] = {k: cfg.PARAMS[k] for k in MB_GLOBAL_PARAMS}
-    df['baseline_climate_source'] = gdir.get_climate_info()['baseline_climate_source']
+    df['baseline_climate_source'] = gdir.get_climate_info(
+        input_filesuffix=climate_input_filesuffix
+    )['baseline_climate_source']
     # Write
     if write_to_gdir:
         if gdir.has_file('mb_calib', filesuffix=filesuffix) and not overwrite_gdir:
@@ -3544,6 +3550,8 @@ def mb_calibration_from_hugonnet_mb(gdir, *,
                                     calibrate_param2=None,
                                     calibrate_param3=None,
                                     mb_model_class=MonthlyTIModel,
+                                    climate_filename='climate_historical',
+                                    climate_input_filesuffix='',
                                     **kwargs: dict,
                                     ):
     """Calibrate for geodetic MB data from Hugonnet et al., 2021.
@@ -3671,7 +3679,7 @@ def mb_calibration_from_hugonnet_mb(gdir, *,
 
     temp_bias = 0
     if informed_threestep:
-        climinfo = gdir.get_climate_info()
+        climinfo = gdir.get_climate_info(input_filesuffix=climate_input_filesuffix)
         climsource = climinfo['baseline_climate_source']
         if 'w5e5' in climsource.lower():
             bias_df = get_temp_bias_dataframe('w5e5',
@@ -3730,6 +3738,8 @@ def mb_calibration_from_hugonnet_mb(gdir, *,
                                              prcp_fac_max=prcp_fac_max,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
+                                             climate_filename=climate_filename,
+                                             climate_input_filesuffix=climate_input_filesuffix,
                                              **kwargs
                                              )
 
@@ -3745,6 +3755,8 @@ def mb_calibration_from_hugonnet_mb(gdir, *,
                                              calibrate_param3=calibrate_param3,
                                              temp_bias=temp_bias,
                                              mb_model_class=mb_model_class,
+                                             climate_filename=climate_filename,
+                                             climate_input_filesuffix=climate_input_filesuffix,
                                              **kwargs
                                              )
 
@@ -3848,6 +3860,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                   temp_bias_max=None,
                                   mb_model_class=MonthlyTIModel,
                                   return_mb_model=False,
+                                  climate_filename='climate_historical',
+                                  climate_input_filesuffix='',
                                   **kwargs: dict,
                                   ):
     """Determine the mass balance parameters from a scalar mass-balance value.
@@ -4113,6 +4127,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
     # Create the MB model we will calibrate
     mb_mod = mb_model_class(
         gdir=gdir,
+        filename=climate_filename,
+        input_filesuffix=climate_input_filesuffix,
         melt_f=melt_f,
         temp_bias=temp_bias,
         prcp_fac=prcp_fac,
