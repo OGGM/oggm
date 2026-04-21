@@ -238,6 +238,11 @@ html_theme_options = {
     "path_to_docs": "docs",
     # "home_page_in_toc": True,
     "toc_title": 'On this page',
+    "announcement": (
+        '<p>How do you use OGGM? Tell us by filling '
+        '<a href="https://forms.office.com/e/ZDBCwj3vFb" target="_blank">this short survey</a> '
+        '(open until May 17). Thanks for your contribution!</p>'
+    ),
     # 'display_version': False,
 }
 
