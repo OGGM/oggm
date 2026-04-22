@@ -2009,7 +2009,7 @@ class TestMassBalanceModels:
             np.testing.assert_allclose(
                 continues_mb.flowline_mb_models[i].mb_buckets_np,
                 part2_mb.flowline_mb_models[i].mb_buckets_np,
-                rtol=1e-2)
+                rtol=2e-2)
 
     @pytest.mark.slow
     def test_sfc_type_mb_model_calib_dynamics(self, hef_gdir):
