@@ -565,3 +565,72 @@ def test_rgi7_complex_glacier_dirs():
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
+
+
+class TestZarrWorkflow:
+    """Tests for any Zarr operations called via workflow or _workflow."""
+
+    def test_pickle_warnings(self, hef_gdir):
+        """Test that read_pickle raises a warning if the file is not found."""
+        gdir = hef_gdir
+
+        with pytest.warns(
+            PendingDeprecationWarning,
+            match="gdir.read_pickle is deprecated and will be replaced by gdir.read_zarr in a future OGGM release.",
+        ):
+            gdir.read_pickle(filename="inversion_input")
+
+    def test_read_zarr_fallback(self, hef_gdir):
+        """Test read_zarr falls back to read_pickle if zarr is not found."""
+        gdir = hef_gdir
+
+        with pytest.warns(
+            Warning,
+            match="Zarr not found, attempting to read pickle file instead.",
+        ):
+            ds_read = gdir.read_zarr(filename="inversion_input")
+        assert not isinstance(ds_read, xr.DataTree)
+        assert isinstance(ds_read, list)
+
+    @pytest.mark.parametrize("arg_filesuffix", ["", "_exp01"])
+    def test_write_zarr(tmp_path, hef_gdir, arg_filesuffix):
+        """Create a zarr store at the expected path."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        ds = xr.Dataset(
+            {
+                "temperature": xr.DataArray(
+                    np.array([1.0, 2.0, 3.0]), dims=["time"]
+                )
+            }
+        )
+        data_tree = xr.DataTree(dataset=ds)
+
+        gdir.write_zarr(
+            data_tree=data_tree,
+            filename="pickle_jar",
+            filesuffix=arg_filesuffix,
+        )
+
+        fp = gdir.get_filepath(filename="pickle_jar", filesuffix=arg_filesuffix)
+        assert os.path.exists(fp)
+
+        with xr.open_zarr(fp, consolidated=True) as ds_read:
+            np.testing.assert_array_equal(
+                ds_read["temperature"].values, [1.0, 2.0, 3.0]
+            )
+
+        # Test that overwrite=True replaces existing zarr content
+
+        ds_new = xr.Dataset(
+            {"val": xr.DataArray(np.array([9.0, 8.0]), dims=["n"])}
+        )
+        gdir.write_zarr(
+            xr.DataTree(dataset=ds_new), "pickle_jar", overwrite=True
+        )
+
+        fp = gdir.get_filepath("pickle_jar")
+        with xr.open_zarr(fp, consolidated=True) as ds_read:
+            np.testing.assert_array_equal(ds_read["val"].values, [9.0, 8.0])

@@ -3277,6 +3277,13 @@ class GlacierDirectory(object):
         An object read from the pickle
         """
 
+        warnings.warn(
+            "gdir.read_pickle is deprecated and will be replaced "
+            "by gdir.read_zarr in a future OGGM release.",
+            PendingDeprecationWarning,
+            stacklevel=2,
+        )
+
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
@@ -3305,6 +3312,45 @@ class GlacierDirectory(object):
 
         return out
 
+    def read_zarr(self, filename: str, filesuffix="", *kwargs) -> xr.DataTree:
+        """Reads a zarr file located in the directory.
+
+        The location of the zarr store for a given RGI-ID is invariant.
+        The zarr store is expected to have a group named `filename`
+        (without suffix). If the zarr store is not found, falls back to
+        reading a pickle file with the same name (and suffix).
+
+        Parameters
+        ----------
+        filename : str or None
+            File name (must be listed in cfg.BASENAMES). If `None`, the
+            entire zarr store is read.
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to xarray.open_zarr().
+
+        Returns
+        -------
+        An xarray.DataTree read from the zarr store.
+        """
+
+        fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
+        if filename == "pickle_jar":
+            filename = None
+        try:
+            out = xr.open_zarr(
+                fp.replace(".pkl", ".zarr"), group=filename, *kwargs
+            )
+        except FileNotFoundError:  # fallback to pickle if zarr not found
+            warnings.warn(
+            "Zarr not found, attempting to read pickle file instead.")
+            out = self.read_pickle(
+                filename=filename, use_compression=None, filesuffix=filesuffix
+            )
+
+        return out
+
     def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
@@ -3320,12 +3366,56 @@ class GlacierDirectory(object):
         filesuffix : str
             append a suffix to the filename (useful for experiments).
         """
+
+        warnings.warn(
+            "gdir.write_pickle is deprecated and will be replaced "
+            "by gdir.write_zarr in a future OGGM release.",
+            PendingDeprecationWarning,
+            stacklevel=2,
+        )
+
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with _open(fp, 'wb') as f:
             pickle.dump(var, f, protocol=4)
+
+    def write_zarr(
+        self,
+        data_tree: xr.DataTree,
+        filename: str,
+        filesuffix: str = "",
+        overwrite: bool = True,
+        zarr_format: int = 2,
+        encoding: dict = None,
+    ) -> None:
+        """Write a datatree to Zarr.
+
+        Parameters
+        ----------
+        data_tree : xarray.DataTree
+            The datatree to write to Zarr.
+        filename : str
+            Path to write the Zarr data.
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        overwrite : bool, default True
+            Whether to overwrite existing Zarr contents in the target
+            location.
+        zarr_format : int, default 2
+            Zarr format version to use (2 or 3).
+        encoding : dict, optional
+            A dictionary specifying encoding options for the Zarr output.
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        data_tree.to_zarr(
+            fp,
+            mode="w" if overwrite else "a",
+            consolidated=True,
+            zarr_format=zarr_format,
+            encoding=encoding,
+        )
 
     def read_json(self, filename, filesuffix='', allow_empty=False):
         """Reads a JSON file located in the directory.

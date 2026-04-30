@@ -32,6 +32,8 @@ dependencies = [
     "scipy",
     "shapely",
     "xarray",
+    "xvec>=0.5.2",
+    "zarr",
 ]
 
 [project.optional-dependencies]
