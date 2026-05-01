@@ -301,7 +301,7 @@ _doc = "The outlines of this glacier complex sub-entities (for RGI7C only!)."
 BASENAMES['complex_sub_entities'] = ('complex_sub_entities.shp', _doc)
 
 _doc = "A zarr store containing previous pickled data."
-BASENAMES['pickle_jar'] = ('pickle_jar.zarr', _doc)
+BASENAMES['data_store'] = ('data_store.zarr', _doc)
 
 
 

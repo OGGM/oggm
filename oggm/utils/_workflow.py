@@ -3340,7 +3340,7 @@ class GlacierDirectory(object):
         """
 
         fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
-        if filename == "pickle_jar":
+        if filename == "data_store":
             filename = None
         out = xr.open_zarr(fp.replace(".pkl", ".zarr"), group=filename, *kwargs)
 

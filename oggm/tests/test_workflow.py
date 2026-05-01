@@ -599,11 +599,11 @@ class TestZarrWorkflow:
 
         gdir.write_zarr(
             data_tree=data_tree,
-            filename="pickle_jar",
+            filename="data_store",
             filesuffix=arg_filesuffix,
         )
 
-        fp = gdir.get_filepath(filename="pickle_jar", filesuffix=arg_filesuffix)
+        fp = gdir.get_filepath(filename="data_store", filesuffix=arg_filesuffix)
         assert os.path.exists(fp)
 
         with xr.open_zarr(fp, consolidated=True) as ds_read:
@@ -617,10 +617,10 @@ class TestZarrWorkflow:
             {"val": xr.DataArray(np.array([9.0, 8.0]), dims=["n"])}
         )
         gdir.write_zarr(
-            xr.DataTree(dataset=ds_new), "pickle_jar", overwrite=True
+            xr.DataTree(dataset=ds_new), "data_store", overwrite=True
         )
 
-        fp = gdir.get_filepath("pickle_jar")
+        fp = gdir.get_filepath("data_store")
         with xr.open_zarr(fp, consolidated=True) as ds_read:
             np.testing.assert_array_equal(ds_read["val"].values, [9.0, 8.0])
 
