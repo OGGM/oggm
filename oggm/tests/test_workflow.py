@@ -4,6 +4,7 @@ import unittest
 import pickle
 import pytest
 import json
+import shapely
 import numpy as np
 import xarray as xr
 from numpy.testing import assert_allclose
@@ -576,21 +577,9 @@ class TestZarrWorkflow:
 
         with pytest.warns(
             PendingDeprecationWarning,
-            match="gdir.read_pickle is deprecated and will be replaced by gdir.read_zarr in a future OGGM release.",
+            match="gdir.read_pickle is deprecated and will be replaced by gdir.read_store in a future OGGM release.",
         ):
             gdir.read_pickle(filename="inversion_input")
-
-    def test_read_zarr_fallback(self, hef_gdir):
-        """Test read_zarr falls back to read_pickle if zarr is not found."""
-        gdir = hef_gdir
-
-        with pytest.warns(
-            Warning,
-            match="Zarr not found, attempting to read pickle file instead.",
-        ):
-            ds_read = gdir.read_zarr(filename="inversion_input")
-        assert not isinstance(ds_read, xr.DataTree)
-        assert isinstance(ds_read, list)
 
     @pytest.mark.parametrize("arg_filesuffix", ["", "_exp01"])
     def test_write_zarr(tmp_path, hef_gdir, arg_filesuffix):
@@ -634,3 +623,82 @@ class TestZarrWorkflow:
         fp = gdir.get_filepath("pickle_jar")
         with xr.open_zarr(fp, consolidated=True) as ds_read:
             np.testing.assert_array_equal(ds_read["val"].values, [9.0, 8.0])
+
+    @pytest.mark.xfail(reason="zarr is not yet in oggm-sample-data")
+    def test_read_store(self, tmp_path, hef_gdir):
+        """Test that read_store returns xr.DataTree when zarr store exists."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        ds = xr.Dataset(
+            {"flux": xr.DataArray(np.array([1.0, 2.0, 3.0]), dims=["time"])}
+        )
+        data_tree = xr.DataTree()
+        data_tree["inversion_input"] = xr.DataTree.from_dict(
+            name="inversion_input", data=ds
+        )
+        # until this is included via oggm-sample-data
+        gdir.write_zarr(
+            data_tree=data_tree, filename="inversion_input", overwrite=True
+        )
+
+        result = gdir.read_store(filename="inversion_input")
+
+        assert isinstance(result, xr.DataTree)
+        np.testing.assert_array_equal(result["flux"].values, [1.0, 2.0, 3.0])
+
+    def test_read_store_fallback(self, hef_gdir):
+        """Test read_store falls back to read_pickle if zarr is not found."""
+        gdir = hef_gdir
+
+        with pytest.warns(
+            Warning,
+            match="Zarr not found, attempting to read pickle file instead.",
+        ):
+            ds_read = gdir.read_store(filename="inversion_input")
+        assert not isinstance(ds_read, xr.DataTree)
+        assert isinstance(ds_read, list)
+
+    def test_validate_store(self, hef_gdir):
+        gdir = hef_gdir
+
+        ds = xr.Dataset(
+            {"flux": xr.DataArray(np.array([100.0, 200.0, 300.0]), dims=["x"])}
+        )
+        data_tree = xr.DataTree(dataset=ds, name="inversion_input")
+
+        result = gdir._validate_store(data_tree=data_tree)
+
+        assert isinstance(result, xr.DataTree)
+        np.testing.assert_array_equal(
+            result["flux"].values, [100.0, 200.0, 300.0]
+        )
+
+    def test_validate_store_logic(self, hef_gdir):
+        """Test that _validate_store modifies the data_tree as expected."""
+        gdir = hef_gdir
+        downstream_line = gdir.read_pickle("downstream_line")["downstream_line"]
+        assert isinstance(downstream_line, shapely.LineString)
+
+        # Create a DataTree with a downstream_line variable
+        ds = xr.DataTree()
+        ds = xr.Dataset(
+            {
+                "downstream_line": xr.DataArray(
+                    np.array(
+                        shapely.geometry.mapping(downstream_line)["coordinates"]
+                    ),
+                    dims=["x", "y"],
+                )
+            }
+        )
+        data_tree = xr.DataTree(dataset=ds, name="downstream_line")
+        assert data_tree.name == "downstream_line"
+
+        result = gdir._validate_store(data_tree=data_tree)
+
+        assert isinstance(result, xr.DataTree)
+        assert "downstream_line" in result
+        assert isinstance(result.downstream_line, shapely.LineString)
+        assert result.downstream_line.equals(downstream_line)

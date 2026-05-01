@@ -31,6 +31,7 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import xarray as xr
+import shapely
 import shapely.geometry as shpg
 import shapely.affinity as shpa
 from shapely.ops import transform as shp_trafo
@@ -3279,7 +3280,7 @@ class GlacierDirectory(object):
 
         warnings.warn(
             "gdir.read_pickle is deprecated and will be replaced "
-            "by gdir.read_zarr in a future OGGM release.",
+            "by gdir.read_store in a future OGGM release.",
             PendingDeprecationWarning,
             stacklevel=2,
         )
@@ -3312,8 +3313,10 @@ class GlacierDirectory(object):
 
         return out
 
-    def read_zarr(self, filename: str, filesuffix="", *kwargs) -> xr.DataTree:
-        """Reads a zarr file located in the directory.
+    def read_zarr(
+        self, filename: str, filesuffix: str = "", *kwargs
+    ) -> xr.DataTree:
+        """Reads a zarr file located in the glacier directory.
 
         The location of the zarr store for a given RGI-ID is invariant.
         The zarr store is expected to have a group named `filename`
@@ -3332,24 +3335,85 @@ class GlacierDirectory(object):
 
         Returns
         -------
-        An xarray.DataTree read from the zarr store.
+        xr.DataTree
+            An xarray.DataTree read from the zarr store.
         """
 
         fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
         if filename == "pickle_jar":
             filename = None
+        out = xr.open_zarr(fp.replace(".pkl", ".zarr"), group=filename, *kwargs)
+
+        return out
+
+    def read_store(
+        self, filename: str, filesuffix: str = "", *kwargs
+    ) -> xr.DataTree | dict:
+        """Reads a data store located in the glacier directory.
+
+        Supports pickle and zarr. The location of a zarr store for a
+        given RGI-ID is invariant. A zarr store is expected to have a
+        group named `filename` (without suffix). If the zarr store is
+        not found, automatically falls back to reading a pickle file
+        with the same name (and suffix).
+
+        Parameters
+        ----------
+        filename : str or None
+            File name (must be listed in cfg.BASENAMES). If `None`, the
+            entire zarr store is read.
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to xarray.open_zarr().
+
+        Returns
+        -------
+        xr.DataTree or dict
+            An xarray.DataTree or dictionary read from the zarr store.
+        """
+
         try:
-            out = xr.open_zarr(
-                fp.replace(".pkl", ".zarr"), group=filename, *kwargs
+            out = self.read_zarr(
+                filename=filename, filesuffix=filesuffix, *kwargs
             )
+            out: xr.DataTree = self._validate_store(data_tree=out)
         except FileNotFoundError:  # fallback to pickle if zarr not found
             warnings.warn(
-            "Zarr not found, attempting to read pickle file instead.")
+                "Zarr not found, attempting to read pickle file instead."
+            )
             out = self.read_pickle(
                 filename=filename, use_compression=None, filesuffix=filesuffix
             )
 
         return out
+
+    def _validate_store(self, data_tree: xr.DataTree) -> xr.DataTree:
+        """Ensure data structures in a data tree are OGGM-compatible.
+
+        Some data structures used by the old pickle infrastructure
+        cannot be directly written to zarr via xarray. This method
+        ensures data structures within a data tree are compatible with
+        the types expected from older pickle files.
+
+        Parameters
+        ----------
+        data_tree : xarray.DataTree
+            The DataTree to reconstruct into a pickle-compatible dictionary.
+
+        Returns
+        -------
+        xr.DataTree
+            A dictionary reconstructed from the zarr DataTree,
+            compatible with the structure expected by older pickle files.
+        """
+
+        if "downstream_line" in data_tree.name:
+            # Note: downstream_line contains a variable named downstream_line
+            if not isinstance(data_tree.downstream_line, shapely.LineString):
+                data_tree.downstream_line = shapely.LineString(data_tree.downstream_line)
+
+        return data_tree
 
     def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
