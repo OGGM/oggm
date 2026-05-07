@@ -1060,8 +1060,8 @@ class TestPreproCLI(unittest.TestCase):
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, disable_mp=True,  # increase cov for now
-                          test_intersects_file=inter,
+                          rgi_file=rgidf, disable_mp=True,  # increase cov for now
+                          intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
                           continue_on_error=False,
@@ -1217,8 +1217,8 @@ class TestPreproCLI(unittest.TestCase):
         # Test with distributed thickness enabled and geotiff export
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, disable_mp=True,
-                          test_intersects_file=inter,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
                           max_level=3,
@@ -1279,9 +1279,9 @@ class TestPreproCLI(unittest.TestCase):
         ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf,
+                          rgi_file=rgidf,
                           mb_calibration_strategy='melt_temp',
-                          test_intersects_file=inter,
+                          intersects_file=inter,
                           test_topofile=topof,
                           disable_mp=False,
                           centerlines=True,
@@ -1444,8 +1444,8 @@ class TestPreproCLI(unittest.TestCase):
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
-                              dynamic_spinup='area/dmdtda', test_rgidf=rgidf,
-                              test_intersects_file=inter,
+                              dynamic_spinup='area/dmdtda', rgi_file=rgidf,
+                              intersects_file=inter,
                               store_fl_diagnostics=True,
                               continue_on_error=False,
                               mb_calibration_strategy='melt_temp',
@@ -1601,7 +1601,7 @@ class TestPreproCLI(unittest.TestCase):
 
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter,
+                          rgi_file=rgidf, intersects_file=inter,
                           override_params=params,
                           disable_mp=False,
                           mb_calibration_strategy='melt_temp',
@@ -1695,7 +1695,7 @@ class TestPreproCLI(unittest.TestCase):
         ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter,
+                          rgi_file=rgidf, intersects_file=inter,
                           start_level=1, start_base_url=base_url,
                           mb_calibration_strategy='melt_temp',
                           disable_mp=False,
@@ -1723,7 +1723,7 @@ class TestPreproCLI(unittest.TestCase):
         with pytest.raises(InvalidParamsError):
             run_prepro_levels(rgi_version=None, rgi_reg='11', border=20,
                               output_folder=odir, working_dir=wdir, is_test=True,
-                              test_rgidf=rgidf, test_intersects_file=inter,
+                              rgi_file=rgidf, intersects_file=inter,
                               start_level=2, max_level=4)
 
     def test_source_run(self):
@@ -1743,7 +1743,7 @@ class TestPreproCLI(unittest.TestCase):
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
-                          test_rgidf=rgidf, test_intersects_file=inter,
+                          rgi_file=rgidf, intersects_file=inter,
                           logging_level='INFO',
                           test_topofile=topof, dem_source='ALL')
 

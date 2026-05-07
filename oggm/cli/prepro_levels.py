@@ -96,8 +96,8 @@ def _move_hypsometry_to_dem_folder(gdir, source=''):
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
-                      is_test=False, test_ids=None, test_rgidf=None,
-                      test_intersects_file=None, test_topofile=None,
+                      is_test=False, test_ids=None, rgi_file=None,
+                      intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
@@ -139,10 +139,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         to test on a couple of glaciers only!
     test_ids : list
         if is_test: list of ids to process
-    test_rgidf : shapefile
-        for testing purposes only
-    test_intersects_file : shapefile
-        for testing purposes only
+    rgi_file : str or geopandas.GeoDataFrame, optional
+        path to an RGI shapefile or a GeoDataFrame to use instead of
+        the default RGI region file. Useful to override the default RGI
+        files for custom runs as well as for testing.
+    intersects_file : str or geopandas.GeoDataFrame, optional
+        path to an intersects shapefile or a GeoDataFrame to use instead of
+        the default RGI intersects file. Can also be None to skip setting
+        the intersects database.
     test_topofile : str
         for testing purposes only
     test_crudir : str
@@ -314,15 +318,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
-    if test_rgidf is None:
+    if rgi_file is None:
 
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
         # We use intersects
         if rgi_version != '70C':
-            rgif = utils.get_rgi_intersects_region_file(rgi_reg,
-                                                        version=rgi_version)
+            if intersects_file is None:
+                rgif = utils.get_rgi_intersects_region_file(rgi_reg,
+                                                            version=rgi_version)
+            else:
+                rgif = intersects_file
             cfg.set_intersects_db(rgif)
 
         if rgi_version == '62':
@@ -346,8 +353,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             if rgi_reg == '05':
                 rgidf = rgidf.loc[rgidf['Connect'] != 2]
     else:
-        rgidf = test_rgidf
-        cfg.set_intersects_db(test_intersects_file)
+        if isinstance(rgi_file, str):
+            rgidf = gpd.read_file(rgi_file)
+        else:
+            rgidf = rgi_file
+        cfg.set_intersects_db(intersects_file)
 
     if is_test:
         if test_ids is not None:
@@ -1065,6 +1075,12 @@ def parse_args(args):
     parser.add_argument('--test-ids', nargs='+',
                         help='if --test, specify the RGI ids to run separated '
                              'by a space (default: 4 randomly selected).')
+    parser.add_argument('--rgi-file', type=str, default=None,
+                        help='path to an RGI shapefile to use instead of '
+                             'the default RGI region file.')
+    parser.add_argument('--intersects-file', type=str, default=None,
+                        help='path to an intersects shapefile to use instead '
+                             'of the default RGI intersects file.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic-spinup', type=str, default='',
@@ -1128,6 +1144,8 @@ def parse_args(args):
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_ids=args.test_ids,
+                rgi_file=args.rgi_file,
+                intersects_file=args.intersects_file,
                 dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 max_level=args.max_level, disable_mp=args.disable_mp,
