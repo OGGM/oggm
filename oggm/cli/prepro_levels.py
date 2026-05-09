@@ -103,6 +103,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
                       mb_calibration_strategy='informed_threestep',
+                      geodetic_mb_file_path=None,
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
@@ -167,6 +168,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'temp_melt'
         Add the `_regional` suffix to use regional values instead,
         for example `informed_threestep_regional`
+    geodetic_mb_file_path : str
+        optional path or URL to a custom geodetic MB file, passed to
+        utils.get_geodetic_mb_dataframe and
+        tasks.mb_calibration_from_geodetic_mb.
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -731,7 +736,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
         # Small optim to avoid concurrency
-        utils.get_geodetic_mb_dataframe()
+        utils.get_geodetic_mb_dataframe(file_path=geodetic_mb_file_path)
         utils.get_temp_bias_dataframe(dataset='w5e5')
         utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
@@ -747,19 +752,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          informed_threestep=True,
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias',
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'temp_melt':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f',
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         else:
             raise InvalidParamsError('mb_calibration_strategy not understood: '
                                      f'{mb_calibration_strategy}')
@@ -1128,6 +1136,9 @@ def parse_args(args):
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
+    parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
+                        help='optional path or URL to a custom geodetic MB '
+                             'file passed to MB calibration.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1201,6 +1212,7 @@ def parse_args(args):
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 mb_calibration_strategy=args.mb_calibration_strategy,
+                geodetic_mb_file_path=args.geodetic_mb_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 override_params=args.override_params,
                 )
