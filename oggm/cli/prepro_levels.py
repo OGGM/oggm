@@ -12,6 +12,7 @@ import argparse
 import time
 import logging
 import json
+import importlib
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -102,12 +103,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
                       mb_calibration_strategy='informed_threestep',
+                      geodetic_mb_file_path=None,
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False, add_bedmachine=False,
                       add_glathida=False, add_distributed_thickness=False,
                       add_export_thickness_geotiff=False, compute_hypsometry=False,
+                      custom_climate_task=None,
+                      custom_climate_task_kwargs=None,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
@@ -164,6 +168,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'temp_melt'
         Add the `_regional` suffix to use regional values instead,
         for example `informed_threestep_regional`
+    geodetic_mb_file_path : str
+        optional path or URL to a custom geodetic MB file, passed to
+        utils.get_geodetic_mb_dataframe and
+        tasks.mb_calibration_from_geodetic_mb.
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -203,6 +211,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         Compute the hypsometry tables for all glaciers,
         added to the glacier directory and compiled in
         the summary folder.
+    custom_climate_task : str
+        optional import path to a custom climate task in the form
+        "module_path:function_name". If provided, it will be called instead of
+        the default process_climate_data.
+    custom_climate_task_kwargs : dict
+        optional kwargs passed to the custom climate task when it is executed.
     start_level : int
         the pre-processed level to start from (default is to start from
         scratch). If set, you'll need to indicate start_base_url as well.
@@ -703,10 +717,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
 
         # Climate
-        workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+        climate_kwargs = custom_climate_task_kwargs or {}
+        if custom_climate_task:
+            try:
+                mod_path, func_name = custom_climate_task.rsplit(':', 1)
+            except ValueError:
+                raise InvalidParamsError('custom_climate_task must be of the form "module:function"')
+            try:
+                mod = importlib.import_module(mod_path)
+            except ModuleNotFoundError as err:
+                raise InvalidParamsError(f'Cannot import module {mod_path}') from err
+            try:
+                custom_task_func = getattr(mod, func_name)
+            except AttributeError as err:
+                raise InvalidParamsError(f'Module {mod_path} has no attribute {func_name}') from err
+            workflow.execute_entity_task(custom_task_func, gdirs, **climate_kwargs)
+        else:
+            workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
         # Small optim to avoid concurrency
-        utils.get_geodetic_mb_dataframe()
+        utils.get_geodetic_mb_dataframe(file_path=geodetic_mb_file_path)
         utils.get_temp_bias_dataframe(dataset='w5e5')
         utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
@@ -722,19 +752,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          informed_threestep=True,
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias',
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'temp_melt':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f',
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         else:
             raise InvalidParamsError('mb_calibration_strategy not understood: '
                                      f'{mb_calibration_strategy}')
@@ -1058,6 +1091,11 @@ def parse_args(args):
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
                              'The data points are stored as csv.')
+    parser.add_argument('--custom-climate-task', type=str, default=None,
+                        help='Custom climate task import path in the form module:function. '
+                            'If provided, it replaces the default process_climate_data.')
+    parser.add_argument('--custom-climate-task-kwargs', type=json.loads, default=None,
+                        help='JSON dict of kwargs passed to the custom climate task.')
     parser.add_argument('--add-distributed-thickness', nargs='?', const=True, default=False,
                         help='adds a thickness field to gridded_data using '
                              'distribute_thickness_per_altitude.')
@@ -1098,6 +1136,9 @@ def parse_args(args):
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
+    parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
+                        help='optional path or URL to a custom geodetic MB '
+                             'file passed to MB calibration.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1165,10 +1206,13 @@ def parse_args(args):
                 add_distributed_thickness=args.add_distributed_thickness,
                 add_export_thickness_geotiff=args.add_export_thickness_geotiff,
                 compute_hypsometry=args.compute_hypsometry,
+                custom_climate_task=args.custom_climate_task,
+                custom_climate_task_kwargs=args.custom_climate_task_kwargs,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 mb_calibration_strategy=args.mb_calibration_strategy,
+                geodetic_mb_file_path=args.geodetic_mb_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 override_params=args.override_params,
                 )

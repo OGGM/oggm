@@ -3031,7 +3031,7 @@ class GlacierDirectory(object):
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
         if len(self.rgi_id) == 23 and (not geometry.is_valid or
-                                       type(geometry) != shpg.Polygon):
+                                       not isinstance(geometry, shpg.Polygon)):
             # In RGI7 we know that the geometries are valid in the source file,
             # so we have to validate them after projection them as well
             # Try buffer first
@@ -3041,7 +3041,12 @@ class GlacierDirectory(object):
                 if len(correct) != 1:
                     raise RuntimeError('Cant correct this geometry')
                 geometry = correct[0]
-            if type(geometry) != shpg.Polygon:
+            if isinstance(geometry, shpg.MultiPolygon):
+                geoms = list(geometry.geoms)
+                if not geoms or not all(isinstance(g, shpg.Polygon) for g in geoms):
+                    raise ValueError(f'{self.rgi_id}: geometry not valid')
+                geometry = max(geoms, key=lambda g: g.area)
+            if not isinstance(geometry, shpg.Polygon):
                 raise ValueError(f'{self.rgi_id}: geometry not valid')
         elif not cfg.PARAMS['keep_multipolygon_outlines']:
             geometry = multipolygon_to_polygon(geometry, gdir=self)

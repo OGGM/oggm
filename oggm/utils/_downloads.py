@@ -1176,7 +1176,8 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
     Parameters
     ----------
     file_path : str
-        in case you have your own file to parse (check the format first!)
+        in case you have your own file to parse (check the format first!).
+        Can be a url as well
     regional : bool
         to fetch the regional file instead - this is a different format!
 
@@ -1194,6 +1195,9 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
         else:
             file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
             file_path = file_downloader(base_url + file_name)
+
+    if file_path.startswith('http'):
+        file_path = file_downloader(file_path)
 
     # Did we open it yet?
     if file_path in cfg.DATA:
