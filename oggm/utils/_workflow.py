@@ -3325,8 +3325,7 @@ class GlacierDirectory(object):
 
         The location of the zarr store for a given RGI-ID is invariant.
         The zarr store is expected to have a group named `filename`
-        (without suffix). If the zarr store is not found, falls back to
-        reading a pickle file with the same name (and suffix).
+        (without suffix).
 
         Parameters
         ----------
