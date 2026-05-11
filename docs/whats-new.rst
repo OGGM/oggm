@@ -9,6 +9,10 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- `run_prepro_levels` now allows to set a custom climate data processing
+  module and custom geodetic data file to create glacier directories (:pull:`1910`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 Bug fixes
 ~~~~~~~~~
 
