@@ -2923,7 +2923,6 @@ class ConstantMassBalance(MassBalanceModel):
         """
 
         super().__init__()
-        self.mbmod = mb_model_class(gdir=gdir, **kwargs)
 
         if y0 is None:
             raise InvalidParamsError('Please set `y0` explicitly')
@@ -2951,6 +2950,11 @@ class ConstantMassBalance(MassBalanceModel):
         self.halfsize = halfsize
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
         self.hemisphere = gdir.hemisphere
+
+        if isinstance(mb_model_class, SfcTypeTIModel):
+            self.mbmod = mb_model_class(gdir=gdir, hbins=self.hbins, **kwargs)
+        else:
+            self.mbmod = mb_model_class(gdir=gdir, **kwargs)
 
     @property
     def temp_bias(self):
