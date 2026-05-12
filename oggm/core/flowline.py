@@ -927,7 +927,11 @@ class FlowlineModel(object):
             return self._mb_model
 
     def _get_along_fl_thickness_firn_m(self, fl_id):
-        return self._get_fl_mb_model(fl_id).columns_thickness_m
+        fl_mb_model = self._get_fl_mb_model(fl_id)
+        if hasattr(fl_mb_model, 'columns_thickness_m'):
+            return fl_mb_model.columns_thickness_m
+        else:
+            return np.zeros(self.fls[fl_id].thick.shape)
 
     def _get_along_fl_volume_firn_m3(self, fl_id):
         # we assume the firn/snow is just a box on top without considering any
