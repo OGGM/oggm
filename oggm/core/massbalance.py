@@ -6,6 +6,7 @@ import os
 import inspect
 from datetime import date, timedelta
 import calendar
+from functools import partial
 # External libs
 import cftime
 import numpy as np
@@ -2951,7 +2952,12 @@ class ConstantMassBalance(MassBalanceModel):
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
         self.hemisphere = gdir.hemisphere
 
-        if isinstance(mb_model_class, SfcTypeTIModel):
+        if isinstance(mb_model_class, partial):
+            mb_model_name = mb_model_class.func.__name__
+        else:
+            mb_model_name = mb_model_class.__name__
+
+        if mb_model_name in ['SfcTypeTIModel']:
             self.mbmod = mb_model_class(gdir=gdir, hbins=self.hbins, **kwargs)
         else:
             self.mbmod = mb_model_class(gdir=gdir, **kwargs)
