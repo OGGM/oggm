@@ -1599,6 +1599,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             min_ys=yr_clim_min, ye=ye,
             output_filesuffix=output_filesuffix,
             climate_input_filesuffix=climate_input_filesuffix,
+            mb_model=mb_model_historical,
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             init_model_fls=fls_init, evolution_model=evolution_model,
