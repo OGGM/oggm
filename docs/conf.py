@@ -241,7 +241,7 @@ html_theme_options = {
     "announcement": (
         '<p>How do you use OGGM? Tell us by filling '
         '<a href="https://forms.office.com/e/ZDBCwj3vFb" target="_blank">this short survey</a> '
-        '(open until May 17). Thanks for your contribution!</p>'
+        '(open until May 20). Thanks for your contribution!</p>'
     ),
     # 'display_version': False,
 }
