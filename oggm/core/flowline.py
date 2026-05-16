@@ -1346,8 +1346,9 @@ class FlowlineModel(object):
                                 val * fac_sec)
                             surface_h_previous[fl_id] = fl.surface_h
                         if 'flux_divergence' in ovars_fl and (yr > self.y0):
-                            # calculated after the formula dhdt = mb + flux_div
-                            val = ds['dhdt'].data[i, :] - ds['climatic_mb'].data[i, :]
+                            # calculated after the formula mb = dhdt + flux_div
+                            # Cogley et al. (2010) Glossary of Glacier Mass Balance
+                            val = ds['climatic_mb'].data[i, :] - ds['dhdt'].data[i, :]
                             # special treatment for retreating: If the glacier
                             # terminus is getting ice free it means the
                             # climatic mass balance is more negative than the
