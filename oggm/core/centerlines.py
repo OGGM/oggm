@@ -905,7 +905,7 @@ def compute_centerlines(gdir, heads=None):
         raise InvalidParamsError('`force_one_flowline` is deprecated')
 
     # open
-    geom = gdir.read_pickle('geometries')
+    geom = gdir.read_store('geometries')
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
         # Variables
@@ -1009,7 +1009,7 @@ def compute_downstream_line(gdir):
     # Look for the starting points
     try:
         # Normal OGGM flowlines
-        p = gdir.read_pickle('centerlines')[-1].tail
+        p = gdir.read_store('centerlines')[-1].tail
         head = (int(p.y), int(p.x))
     except FileNotFoundError:
         # Squeezes lines
@@ -1050,7 +1050,7 @@ def compute_downstream_line(gdir):
     if line is None:
         raise GeometryError('Downstream line not found')
 
-    cl = gdir.read_pickle('inversion_flowlines')[-1]
+    cl = gdir.read_store('inversion_flowlines')[-1]
     if cl.line is not None:
         # normal OGGM lines
         lline, dline = _line_extend(cl.line, line, cl.dx)
@@ -1282,8 +1282,8 @@ def compute_downstream_bedshape(gdir):
         return
 
     # We make a flowline out of the downstream for simplicity
-    tpl = gdir.read_pickle('inversion_flowlines')[-1]
-    cl = gdir.read_pickle('downstream_line')['downstream_line']
+    tpl = gdir.read_store('inversion_flowlines')[-1]
+    cl = gdir.read_store('downstream_line')['downstream_line']
     cl = Centerline(cl, dx=tpl.dx, map_dx=gdir.grid.dx)
 
     # Topography
@@ -1316,7 +1316,7 @@ def compute_downstream_bedshape(gdir):
     assert np.all(w0s >= w0_min), 'np.all(w0s >= w0_min)'
 
     # write output
-    out = gdir.read_pickle('downstream_line')
+    out = gdir.read_store('downstream_line')
     out['bedshapes'] = bs
     out['surface_h'] = hgts
     out['w0s'] = w0s
@@ -1562,8 +1562,8 @@ def catchment_area(gdir):
     """
 
     # Variables
-    cls = gdir.read_pickle('centerlines')
-    geom = gdir.read_pickle('geometries')
+    cls = gdir.read_store('centerlines')
+    geom = gdir.read_store('geometries')
     glacier_pix = geom['polygon_pix']
     fpath = gdir.get_filepath('gridded_data')
     with utils.ncDataset(fpath) as nc:
@@ -1676,7 +1676,7 @@ def catchment_intersections(gdir):
         where to write the data
     """
 
-    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
+    catchment_indices = gdir.read_store('geometries')['catchment_indices']
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -1722,7 +1722,7 @@ def initialize_flowlines(gdir):
     """
 
     # variables
-    cls = gdir.read_pickle('centerlines')
+    cls = gdir.read_store('centerlines')
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
@@ -1831,8 +1831,8 @@ def catchment_width_geom(gdir):
     """
 
     # variables
-    flowlines = gdir.read_pickle('inversion_flowlines')
-    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
+    flowlines = gdir.read_store('inversion_flowlines')
+    catchment_indices = gdir.read_store('geometries')['catchment_indices']
 
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
@@ -1949,8 +1949,8 @@ def catchment_width_correction(gdir):
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines')
-    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
+    fls = gdir.read_store('inversion_flowlines')
+    catchment_indices = gdir.read_store('geometries')['catchment_indices']
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
@@ -2099,7 +2099,7 @@ def terminus_width_correction(gdir, new_width=None):
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_store('inversion_flowlines')
     fl = fls[-1]
     mapdx = gdir.grid.dx
 
@@ -2152,7 +2152,7 @@ def intersect_downstream_lines(gdir, candidates=None):
     buffer = cfg.PARAMS['kbuffer']
 
     # get main glacier downstream line and CRS
-    dline = gdir.read_pickle('downstream_line')['full_line']
+    dline = gdir.read_store('downstream_line')['full_line']
     crs = gdir.grid
 
     # return list
@@ -2165,7 +2165,7 @@ def intersect_downstream_lines(gdir, candidates=None):
             continue
 
         # get tributary glacier downstream line and CRS
-        _dline = trib.read_pickle('downstream_line')['full_line']
+        _dline = trib.read_store('downstream_line')['full_line']
         _crs = trib.grid
 
         # use salem to transform the grids

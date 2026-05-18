@@ -317,7 +317,7 @@ class TestFullRun(unittest.TestCase):
             from oggm.core.massbalance import LinearMassBalance
             from oggm.core.flowline import FluxBasedModel
             mb_mod = LinearMassBalance(ela_h=2500)
-            fls = gd.read_pickle('model_flowlines')
+            fls = gd.read_store('model_flowlines')
             model = FluxBasedModel(fls, mb_model=mb_mod)
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
@@ -579,7 +579,7 @@ class TestZarrWorkflow:
             PendingDeprecationWarning,
             match="gdir.read_pickle is deprecated and will be replaced by gdir.read_store in a future OGGM release.",
         ):
-            gdir.read_pickle(filename="inversion_input")
+            gdir.read_store(filename="inversion_input")
 
     @pytest.mark.parametrize("arg_filesuffix", ["", "_exp01"])
     def test_write_zarr(tmp_path, hef_gdir, arg_filesuffix):
@@ -670,19 +670,17 @@ class TestZarrWorkflow:
 
         result = gdir._validate_store(data_tree=data_tree)
 
-        assert isinstance(result, xr.DataTree)
-        np.testing.assert_array_equal(
-            result["flux"].values, [100.0, 200.0, 300.0]
-        )
+        assert isinstance(result, dict)
+        np.testing.assert_array_equal(result["flux"], [100.0, 200.0, 300.0])
 
     def test_validate_store_logic(self, hef_gdir):
         """Test that _validate_store modifies the data_tree as expected."""
         gdir = hef_gdir
-        downstream_line = gdir.read_pickle("downstream_line")["downstream_line"]
+        downstream_line = gdir.read_store("downstream_line")["downstream_line"]
         assert isinstance(downstream_line, shapely.LineString)
 
         # Create a DataTree with a downstream_line variable
-        ds = xr.DataTree()
+        data_tree = xr.DataTree()
         ds = xr.Dataset(
             {
                 "downstream_line": xr.DataArray(
@@ -698,7 +696,7 @@ class TestZarrWorkflow:
 
         result = gdir._validate_store(data_tree=data_tree)
 
-        assert isinstance(result, xr.DataTree)
-        assert "downstream_line" in result
-        assert isinstance(result.downstream_line, shapely.LineString)
-        assert result.downstream_line.equals(downstream_line)
+        assert isinstance(result, dict)
+        assert "downstream_line" in result.keys()
+        assert isinstance(result["downstream_line"], np.ndarray)
+        assert shapely.LineString(result["downstream_line"]).equals(downstream_line)

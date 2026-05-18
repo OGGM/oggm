@@ -3208,11 +3208,11 @@ def init_present_time_glacier(gdir, filesuffix='',
     """
 
     # Some vars
-    invs = gdir.read_pickle('inversion_output')
+    invs = gdir.read_store('inversion_output')
 
     map_dx = gdir.grid.dx
     def_lambda = cfg.PARAMS['trapezoid_lambdas']
-    cls = gdir.read_pickle('inversion_flowlines')
+    cls = gdir.read_store('inversion_flowlines')
 
     # Fill the tributaries
     new_fls = []
@@ -3272,7 +3272,7 @@ def init_present_time_glacier(gdir, filesuffix='',
         if not gdir.is_tidewater and inv['is_last']:
             # for valley glaciers, simply add the downstream line, depending on
             # selected shape parabola or trapezoidal
-            dic_ds = gdir.read_pickle('downstream_line')
+            dic_ds = gdir.read_store('downstream_line')
             if cfg.PARAMS['downstream_line_shape'] == 'parabola':
                 bed_shape = np.append(bed_shape, dic_ds['bedshapes'])
                 lambdas = np.append(lambdas, dic_ds['bedshapes'] * np.nan)
@@ -3500,7 +3500,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                                   delete=True)
 
     if init_model_fls is None:
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
     else:
         fls = copy.deepcopy(init_model_fls)
     if zero_initial_glacier:
@@ -4516,13 +4516,13 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
     """
 
     # read flowlines of the Main glacier
-    fls = main.read_pickle('model_flowlines')
+    fls = main.read_store('model_flowlines')
     mfl = fls.pop(-1)  # remove main line from list and treat separately
 
     for trib in tribs:
 
         # read tributary flowlines and append to list
-        tfls = trib.read_pickle('model_flowlines')
+        tfls = trib.read_store('model_flowlines')
 
         # copy climate file and calib to new gdir
         # if we have a merge-merge situation we need to copy multiple files
@@ -4615,7 +4615,7 @@ def clean_merged_flowlines(gdir, buffer=None):
     # Number of pixels to arbitrarily remove at junctions
     lid = int(cfg.PARAMS['flowline_junction_pix'])
 
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
 
     # separate the main main flowline
     mainfl = fls.pop(-1)

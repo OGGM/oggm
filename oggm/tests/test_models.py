@@ -82,8 +82,8 @@ class TestInitPresentDayFlowline:
         cfg.PARAMS['downstream_line_shape'] = downstream_line_shape
         init_present_time_glacier(gdir)
 
-        fls = gdir.read_pickle('model_flowlines')
-        inv = gdir.read_pickle('inversion_output')
+        fls = gdir.read_store('model_flowlines')
+        inv = gdir.read_store('inversion_output')
 
         assert gdir.rgi_date == 2003
         assert len(fls) == 3
@@ -174,7 +174,7 @@ class TestInitPresentDayFlowline:
 
         tasks.init_present_time_glacier(gdir, filesuffix='_consensus',
                                         use_binned_thickness_data=vn)
-        fl_consensus = gdir.read_pickle('model_flowlines',
+        fl_consensus = gdir.read_store('model_flowlines',
                                         filesuffix='_consensus')[0]
 
         # check that resulting flowline has the same volume as observation
@@ -187,7 +187,7 @@ class TestInitPresentDayFlowline:
 
         # test that we can use fl in an dynamic model run without an error
         mb = LinearMassBalance(3000.)
-        model_ref = FluxBasedModel(gdir.read_pickle('model_flowlines'),
+        model_ref = FluxBasedModel(gdir.read_store('model_flowlines'),
                                    mb_model=mb)
         model_ref.run_until(100)
         model_consensus = FluxBasedModel([fl_consensus], mb_model=mb)
@@ -203,7 +203,7 @@ class TestInitPresentDayFlowline:
                                                     index_col=0)
 
         # Check consistency between csv and flowline object
-        fl_inv = gdir.read_pickle('inversion_flowlines')[0]
+        fl_inv = gdir.read_store('inversion_flowlines')[0]
         assert fl_inv.nx == len(df_fixed_dx)
         assert fl_inv.dx_meter == (df_fixed_dx.index[1] - df_fixed_dx.index[0])
         np.testing.assert_allclose(fl_inv.dx_meter * np.arange(fl_inv.nx), df_fixed_dx.index)
@@ -216,7 +216,7 @@ class TestInitPresentDayFlowline:
 
         tasks.init_present_time_glacier(gdir, filesuffix='_consensus_rect',
                                         use_binned_thickness_data=vn)
-        fl_consensus_rect = gdir.read_pickle('model_flowlines',
+        fl_consensus_rect = gdir.read_store('model_flowlines',
                                              filesuffix='_consensus_rect')[0]
 
         np.testing.assert_allclose(fl_consensus_rect.volume_m3, ref_vol_rect)
@@ -229,7 +229,7 @@ class TestInitPresentDayFlowline:
 
         mb_mod = massbalance.MonthlyTIModel(gdir)
 
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         glacier = FlowlineModel(fls)
 
         mbdf = gdir.get_ref_mb_data()
@@ -350,20 +350,20 @@ class TestInitFlowlineOtherGlacier:
         init_present_time_glacier(gdir)
 
         myarea = 0.
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx ** 2)
 
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
 
         myarea = 0.
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             myarea += np.sum(cl.widths * cl.dx * gdir.grid.dx ** 2)
 
         np.testing.assert_allclose(myarea, gdir.rgi_area_m2, rtol=1e-2)
 
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         if cfg.PARAMS['grid_dx_method'] == 'square':
             assert len(fls) == 3
         vol = 0.
@@ -464,7 +464,7 @@ class TestMassBalanceModels:
         assert_allclose(mb[50], mb[-50])
 
         # Go for glacier wide now
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         mb_gw_mod = massbalance.MultipleFlowlineMassBalance(gdir, fls=fls,
                                                             repeat=True,
                                                             ys=1901, ye=1950)
@@ -567,7 +567,7 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         h = np.array([])
         w = np.array([])
         for fl in fls:
@@ -653,7 +653,7 @@ class TestMassBalanceModels:
         gdir = hef_gdir
         init_present_time_glacier(gdir)
 
-        test_fls = gdir.read_pickle("model_flowlines")
+        test_fls = gdir.read_store("model_flowlines")
         assert len(test_fls) > 1
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir, fls=test_fls, mb_model_class=massbalance.MonthlyTIModel
@@ -665,7 +665,7 @@ class TestMassBalanceModels:
 
         # Compare to old function
         flowline_models = mb_mod.flowline_mb_models
-        fls = gdir.read_pickle("model_flowlines")
+        fls = gdir.read_store("model_flowlines")
         year = ref_year
         mbs = []
         widths = []
@@ -693,7 +693,7 @@ class TestMassBalanceModels:
         ye = 2019
         years = np.arange(ys, ye + 1)
 
-        fls = gdir.read_pickle("inversion_flowlines")
+        fls = gdir.read_store("inversion_flowlines")
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir,
             fls=fls,
@@ -731,7 +731,7 @@ class TestMassBalanceModels:
         ye = 2019
         years = np.arange(ys, ye + 1)
 
-        fls = gdir.read_pickle("inversion_flowlines")
+        fls = gdir.read_store("inversion_flowlines")
         mb_mod = massbalance.MultipleFlowlineMassBalance(
             gdir,
             fls=fls,
@@ -2127,7 +2127,7 @@ class TestIO():
 
         init_present_time_glacier(hef_gdir)
 
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         model = FluxBasedModel(fls)
 
         model.to_geometry_netcdf(p)
@@ -2143,7 +2143,7 @@ class TestIO():
             assert fl.flows_to_indice == fl_.flows_to_indice
 
         # mixed flowline
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         model = FluxBasedModel(fls)
 
         p = os.path.join(class_case_dir, 'grp_hef_mix.nc')
@@ -2190,7 +2190,7 @@ def inversion_gdir(class_case_dir):
 
 class TestIdealisedInversion():
     def simple_plot(self, model, gdir):  # pragma: no cover
-        ocls = gdir.read_pickle('inversion_output')
+        ocls = gdir.read_store('inversion_output')
         ithick = ocls[-1]['thick']
         pg = np.where((model.fls[-1].thick > 0) & (model.fls[-1].widths_m > 1))
         plt.figure()
@@ -2206,7 +2206,7 @@ class TestIdealisedInversion():
         plt.show()
 
     def double_plot(self, model, gdir):  # pragma: no cover
-        ocls = gdir.read_pickle('inversion_output')
+        ocls = gdir.read_store('inversion_output')
         f, axs = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
         for i, ax in enumerate(axs):
             ithick = ocls[i]['thick']
@@ -2250,7 +2250,7 @@ class TestIdealisedInversion():
         mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
         flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
 
-        inv_out = inversion_gdir.read_pickle('inversion_input')
+        inv_out = inversion_gdir.read_store('inversion_input')
         inv_flux = inv_out[0]['flux']
 
         slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
@@ -2283,7 +2283,7 @@ class TestIdealisedInversion():
                 utils.rmsd(est_h_ofl[25:95], mod_h[25:95]))
 
         # And with our current inversion?
-        inv_out = inversion_gdir.read_pickle('inversion_output')
+        inv_out = inversion_gdir.read_store('inversion_output')
         our_h = inv_out[0]['thick']
         assert_allclose(est_h[25:75], our_h[25:75], rtol=0.01)
 
@@ -2357,7 +2357,7 @@ class TestIdealisedInversion():
         v = inversion.mass_conservation_inversion(inversion_gdir)
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        inv = inversion_gdir.read_pickle('inversion_output')[-1]
+        inv = inversion_gdir.read_store('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / \
                        (flo.widths * inversion_gdir.grid.dx) ** 2
         bed_shape_ref = (4 * fl.thick[pg] /
@@ -2367,7 +2367,7 @@ class TestIdealisedInversion():
         mb_on_z = mb.get_annual_mb(fl.surface_h[pg])
         flux = np.cumsum(fl.widths_m[pg] * fl.dx_meter * mb_on_z)
 
-        inv_out = inversion_gdir.read_pickle('inversion_input')
+        inv_out = inversion_gdir.read_store('inversion_input')
         inv_flux = inv_out[0]['flux']
 
         slope = - np.gradient(fl.surface_h[pg], fl.dx_meter)
@@ -2397,7 +2397,7 @@ class TestIdealisedInversion():
                 utils.rmsd(est_h_ofl[25:95], mod_h[25:95]))
 
         # And with our current inversion?
-        inv_out = inversion_gdir.read_pickle('inversion_output')
+        inv_out = inversion_gdir.read_store('inversion_output')
         our_h = inv_out[0]['thick']
         assert_allclose(est_h[25:75], our_h[25:75], rtol=0.01)
 
@@ -2555,7 +2555,7 @@ class TestIdealisedInversion():
 
         # expected errors
         assert v > model.volume_m3
-        ocls = inversion_gdir.read_pickle('inversion_output')
+        ocls = inversion_gdir.read_store('inversion_output')
         ithick = ocls[0]['thick']
         assert np.mean(ithick) > np.mean(model.fls[0].thick) * 1.1
         if do_plot:  # pragma: no cover
@@ -2586,7 +2586,7 @@ class TestIdealisedInversion():
 
         assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        inv = inversion_gdir.read_pickle('inversion_output')[-1]
+        inv = inversion_gdir.read_store('inversion_output')[-1]
         bed_shape_gl = 4 * inv['thick'] / (flo.widths * inversion_gdir.grid.dx) ** 2
 
         ithick = inv['thick']
@@ -2666,7 +2666,7 @@ class TestHEFNonPolluted:
         init_present_time_glacier(hef_gdir)
 
         mb_mod = massbalance.ScalarMassBalance()
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         for fl in fls:
             fl.thick = fl.thick * 0
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
@@ -2906,7 +2906,7 @@ class TestHEF:
                                               glen_a=inversion_params['inversion_glen_a'])
         init_present_time_glacier(hef_gdir)
 
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['inversion_fs'],
                                glen_a=inversion_params['inversion_glen_a'],
@@ -2938,7 +2938,7 @@ class TestHEF:
 
         mb_mod = massbalance.ConstantMassBalance(hef_gdir, y0=2002 - 15)
 
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['inversion_fs'],
                                glen_a=inversion_params['inversion_glen_a'])
@@ -2953,9 +2953,9 @@ class TestHEF:
 
         init_present_time_glacier(hef_gdir)
 
-        glacier = hef_gdir.read_pickle('model_flowlines')
+        glacier = hef_gdir.read_store('model_flowlines')
 
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         model = FluxBasedModel(fls, mb_model=mb_mod, y0=0.,
                                fs=inversion_params['inversion_fs'],
                                glen_a=inversion_params['inversion_glen_a'])
@@ -3085,7 +3085,7 @@ class TestHEF:
         init_present_time_glacier(hef_gdir)
         cfg.PARAMS['store_model_geometry'] = True
 
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         vol = 0
         area = 0
         for fl in fls:
@@ -3116,7 +3116,7 @@ class TestHEF:
         init_present_time_glacier(hef_gdir)
         cfg.PARAMS['store_model_geometry'] = True
 
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         vol = 0
         area = 0
         for fl in fls:
@@ -3402,7 +3402,7 @@ class TestDynamicSpinup:
     def test_run_dynamic_spinup(self, hef_gdir, minimise_for):
 
         # value we want to match after dynamic spinup
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         ref_value = 0
         if minimise_for == 'area':
             unit = 'km2'
@@ -3546,7 +3546,7 @@ class TestDynamicSpinup:
         # spinup function and if 'ignore_errors' works
 
         # create a flowline with zero ice
-        fls_zero_ice = hef_gdir.read_pickle('model_flowlines')
+        fls_zero_ice = hef_gdir.read_store('model_flowlines')
         for i in range(len(fls_zero_ice)):
             fls_zero_ice[i].section = np.zeros(len(fls_zero_ice[i].section))
 
@@ -3844,7 +3844,7 @@ class TestDynamicSpinup:
 
         # value we want to match after dynamic melt_f calibration with dynamic
         # spinup
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         ref_value_dynamic_spinup = 0
         if minimise_for == 'area':
             unit = 'km2'
@@ -3932,7 +3932,7 @@ class TestDynamicSpinup:
                            np.all(getattr(fl_prev, 'bed_h') ==
                                   getattr(fl_now, 'bed_h'))
                            for fl_prev, fl_now in
-                           zip(fls, gdir.read_pickle('model_flowlines'))])
+                           zip(fls, gdir.read_store('model_flowlines'))])
 
         # test that error is raised if ignore_error=False
         reset_melt_f()
@@ -3999,7 +3999,7 @@ class TestDynamicSpinup:
             dynamic_melt_f_run_with_dynamic_spinup_fallback(
                 gdir,
                 melt_f=gdir.read_json('mb_calib')['melt_f'],
-                fls_init=gdir.read_pickle('model_flowlines'),
+                fls_init=gdir.read_store('model_flowlines'),
                 ys=gdir.get_climate_info()['baseline_yr_0'],
                 ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
                 local_variables=None,
@@ -4032,7 +4032,7 @@ class TestDynamicSpinup:
 
         # value we want to match after dynamic melt_f calibration with dynamic
         # spinup
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         ref_value_dynamic_spinup = 0
         if minimise_for == 'area':
             unit = 'km2'
@@ -4239,11 +4239,11 @@ class TestDynamicSpinup:
         dynamic_melt_f_run_with_dynamic_spinup_fallback(
             gdir,
             melt_f=original_melt_f,
-            fls_init=gdir.read_pickle('model_flowlines'),
+            fls_init=gdir.read_store('model_flowlines'),
             ys=gdir.get_climate_info()['baseline_yr_0'],
             ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
             local_variables={'vol_m3_ref':
-                                 gdir.read_pickle('model_flowlines')[0].volume_m3},
+                                 gdir.read_store('model_flowlines')[0].volume_m3},
             minimise_for=minimise_for
         )
         assert original_melt_f == gdir.read_json('mb_calib')['melt_f']
@@ -5478,7 +5478,7 @@ class TestMergedHEF:
                                               main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=0)
         assert 'RGI50-11.00897' == np.unique([fl.rgi_id for fl in
-                                              merge0.read_pickle(
+                                              merge0.read_store(
                                                   'model_flowlines')])[0]
 
         # merge, but with 50 buffer. overlapping glaciers should be excluded
@@ -5486,9 +5486,9 @@ class TestMergedHEF:
                                               main_rgi_id='RGI50-11.00897',
                                               glcdf=glcdf, buffer=50)
         assert 'RGI50-11.00719_d01' in [fl.rgi_id for fl in
-                                        merge1.read_pickle('model_flowlines')]
+                                        merge1.read_store('model_flowlines')]
         assert 'RGI50-11.00779' not in [fl.rgi_id for fl in
-                                        merge1.read_pickle('model_flowlines')]
+                                        merge1.read_store('model_flowlines')]
 
         # merge HEF and Vernagt, include Gepatsch but it should not be merged
         gdir_merged = workflow.merge_glacier_tasks(gdirs,
@@ -5496,7 +5496,7 @@ class TestMergedHEF:
                                                    glcdf=glcdf)
 
         # test flowlines
-        fls = gdir_merged.read_pickle('model_flowlines')
+        fls = gdir_merged.read_store('model_flowlines')
 
         # check for gepatsch, should not be there
         assert 'RGI50-11.00746' not in [fl.rgi_id for fl in fls]
@@ -5570,7 +5570,7 @@ class TestSemiImplicitModel:
         # year 1930 is used with equilibrium climate period in mind (old t*)
         mb_mod = massbalance.ConstantMassBalance(hef_elev_gdir, y0=1930)
 
-        fls = hef_elev_gdir.read_pickle('model_flowlines')
+        fls = hef_elev_gdir.read_store('model_flowlines')
         model = SemiImplicitModel(fls, mb_model=mb_mod, y0=0,
                                   fs=inversion_params['inversion_fs'],
                                   glen_a=inversion_params['inversion_glen_a'],
@@ -5866,7 +5866,7 @@ class TestDistribute2D:
                                                seed=4)
         mb_mod.temp_bias = 0.5
 
-        fls = hef_elev_gdir.read_pickle('model_flowlines')
+        fls = hef_elev_gdir.read_store('model_flowlines')
         model = SemiImplicitModel(fls, mb_model=mb_mod, y0=2000,
                                   fs=inversion_params['inversion_fs'],
                                   glen_a=inversion_params['inversion_glen_a'])

@@ -520,7 +520,7 @@ class TestCoxeGlacier(unittest.TestCase):
             topo = nc.variables['topo_smoothed'][:]
         rhgt = topo[np.where(mask)][:]
 
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         hgt, widths = gdir.get_inversion_flowline_hw()
 
         bs = 100
@@ -537,7 +537,7 @@ class TestCoxeGlacier(unittest.TestCase):
 
         centerlines.terminus_width_correction(gdir, new_width=714)
 
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         hgt, widths = gdir.get_inversion_flowline_hw()
 
         # Check that the width is ok

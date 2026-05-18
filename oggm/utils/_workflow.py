@@ -31,7 +31,6 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import xarray as xr
-import shapely
 import shapely.geometry as shpg
 import shapely.affinity as shpa
 from shapely.ops import transform as shp_trafo
@@ -69,6 +68,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                recursive_valid_polygons)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
+import oggm.utils.geozarr as geozarr
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -702,9 +702,9 @@ def get_centerline_lonlat(gdir,
     a shapefile
     """
     if flowlines_output or geometrical_widths_output or corrected_widths_output:
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
     else:
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
 
     exterior = None
     if ensure_exterior_match:
@@ -1626,7 +1626,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
                 vol = []
                 vol_bsl = []
                 vol_bwl = []
-                cl = gdir.read_pickle('inversion_output')
+                cl = gdir.read_store('inversion_output')
                 for c in cl:
                     vol.extend(c['volume'])
                     vol_bsl.extend(c.get('volume_bsl', [0]))
@@ -1697,7 +1697,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # Centerlines
-            cls = gdir.read_pickle('centerlines')
+            cls = gdir.read_store('centerlines')
             longest = 0.
             for cl in cls:
                 longest = np.max([longest, cl.dis_on_line[-1]])
@@ -1711,7 +1711,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
             h = np.array([])
             widths = np.array([])
             slope = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
             dx = fls[0].dx * gdir.grid.dx
             for fl in fls:
                 hgt = fl.surface_h
@@ -2176,7 +2176,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             # Flowline related stuff
             h = np.array([])
             widths = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
             dx = fls[0].dx * gdir.grid.dx
             for fl in fls:
                 hgt = fl.surface_h
@@ -3352,7 +3352,7 @@ class GlacierDirectory(object):
 
     def read_store(
         self, filename: str, filesuffix: str = "", *kwargs
-    ) -> xr.DataTree | dict:
+    ) -> dict | list:
         """Reads a data store located in the glacier directory.
 
         Supports pickle and zarr. The location of a zarr store for a
@@ -3360,6 +3360,11 @@ class GlacierDirectory(object):
         group named `filename` (without suffix). If the zarr store is
         not found, automatically falls back to reading a pickle file
         with the same name (and suffix).
+
+        For backwards compatibility reasons, the output of this method
+        is coerced imto the data structures expected from older pickle
+        files, e.g. all datatrees are converted to flattened
+        dictionaries.
 
         Parameters
         ----------
@@ -3373,26 +3378,28 @@ class GlacierDirectory(object):
 
         Returns
         -------
-        xr.DataTree or dict
-            An xarray.DataTree or dictionary read from the zarr store.
+        list or dict
+            A list or dictionary of data read from the zarr store.
         """
 
         try:
             out = self.read_zarr(
                 filename=filename, filesuffix=filesuffix, *kwargs
             )
-            out: xr.DataTree = self._validate_store(data_tree=out)
+            out: list | dict = self._validate_store(
+                data_tree=out, group=filename
+            )
         except FileNotFoundError:  # fallback to pickle if zarr not found
             warnings.warn(
                 "Zarr not found, attempting to read pickle file instead."
             )
-            out = self.read_pickle(
+            out: list | dict = self.read_pickle(
                 filename=filename, use_compression=None, filesuffix=filesuffix
             )
 
         return out
 
-    def _validate_store(self, data_tree: xr.DataTree) -> xr.DataTree:
+    def _validate_store(self, data_tree: xr.DataTree, group: str = "") -> dict:
         """Ensure data structures in a data tree are OGGM-compatible.
 
         Some data structures used by the old pickle infrastructure
@@ -3403,21 +3410,51 @@ class GlacierDirectory(object):
         Parameters
         ----------
         data_tree : xarray.DataTree
-            The DataTree to reconstruct into a pickle-compatible dictionary.
+            The DataTree to reconstruct into a pickle-compatible
+            dictionary.
+        group : str, optional
+            The group within the zarr store that was read. This may be
+            necessary because the `name` attribute can be missing
+            depending on how the zarr store was read.
 
         Returns
         -------
-        xr.DataTree
-            A dictionary reconstructed from the zarr DataTree,
-            compatible with the structure expected by older pickle files.
+        dict | list
+            Either coerces a datatree into the dictionary, or
+            returns a list of OGGM objects to match the structures
+            expected from older pickle files.
         """
 
-        if "downstream_line" in data_tree.name:
-            # Note: downstream_line contains a variable named downstream_line
-            if not isinstance(data_tree.downstream_line, shapely.LineString):
-                data_tree.downstream_line = shapely.LineString(data_tree.downstream_line)
+        if group:
+            name = group
+        elif data_tree.name:
+            name = data_tree.name
+        else:
+            name = ""
 
-        return data_tree
+        if "downstream_line" in name:
+            # CAUTION: the downstream_line datatree contains a variable
+            # named downstream_line. Don't mix these up!
+            data_tree.downstream_line = geozarr._validate_linestring(
+                data_tree.downstream_line
+            )
+        elif "geometries" in name:
+            data_tree.polygon_hr = geozarr._validate_polygon(
+                data_tree.polygon_hr
+            )
+            data_tree.polygon_pix = geozarr._validate_polygon(
+                data_tree.polygon_pix
+            )
+        elif "model_flowline" in name:
+            flowline = geozarr.get_flowline_from_datatree(data_tree=data_tree)
+            return [flowline]
+        elif "inversion_flowlines" in name:
+            centerline = geozarr.get_centerline_from_datatree(
+                data_tree=data_tree
+            )
+            return [centerline]
+
+        return geozarr.get_dict_from_datatree(data_tree)
 
     def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
@@ -3781,7 +3818,7 @@ class GlacierDirectory(object):
 
         h = np.array([])
         w = np.array([])
-        fls = self.read_pickle('inversion_flowlines')
+        fls = self.read_store('inversion_flowlines')
         for fl in fls:
             w = np.append(w, fl.widths)
             h = np.append(h, fl.surface_h)
@@ -4215,7 +4252,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     tribs = tolist(tribs)
 
     # read flowlines of the Main glacier
-    mfls = main.read_pickle('model_flowlines')
+    mfls = main.read_store('model_flowlines')
 
     # ------------------------------
     # 0. create the new GlacierDirectory from main glaciers GeoDataFrame
@@ -4229,7 +4266,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     # add tributary geometries to maindf
     merged_geometry = maindf.loc[idx, 'geometry'].iloc[0].buffer(0)
     for trib in tribs:
-        geom = trib.read_pickle('geometries')['polygon_hr']
+        geom = trib.read_store('geometries')['polygon_hr']
         geom = salem.transform_geometry(geom, crs=trib.grid)
         merged_geometry = merged_geometry.union(geom).buffer(0)
 

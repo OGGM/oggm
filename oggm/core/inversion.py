@@ -68,7 +68,7 @@ def prepare_for_inversion(gdir,
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_store('inversion_flowlines')
 
     towrite = []
     for fl in fls:
@@ -407,7 +407,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
 
     out_volume = 0.
 
-    cls = gdir.read_pickle('inversion_input')
+    cls = gdir.read_store('inversion_input')
     for cl in cls:
         # Clip slope to avoid negative and small slopes
         slope = cl['slope_angle']
@@ -529,7 +529,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
 
     if gdir.is_tidewater:
         # No need for filter in tidewater case
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         init_vol = np.sum([np.sum(cl['volume']) for cl in cls])
         return init_vol
 
@@ -539,8 +539,8 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
                                    'compute_dowstream_line and '
                                    'compute_downstream_bedshape tasks')
 
-    dic_ds = gdir.read_pickle('downstream_line')
-    cls = gdir.read_pickle('inversion_output')
+    dic_ds = gdir.read_store('downstream_line')
+    cls = gdir.read_store('inversion_output')
     cl = cls[-1]
 
     # check that their are enough grid points for smoothing
@@ -625,7 +625,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
 @entity_task(log)
 def get_inversion_volume(gdir):
     """Small utility task to get to the volume od all glaciers."""
-    cls = gdir.read_pickle('inversion_output')
+    cls = gdir.read_store('inversion_output')
     return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
@@ -675,7 +675,7 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
         with_sliding = fs != 0
 
     # Getting the data for the main flowline
-    cls = gdir.read_pickle('inversion_output')
+    cls = gdir.read_store('inversion_output')
 
     for cl in cls:
         # vol in m3 and dx in m
@@ -774,8 +774,8 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
             slope_factor = 1.
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output')
-    fls = gdir.read_pickle('inversion_flowlines')
+    cls = gdir.read_store('inversion_output')
+    fls = gdir.read_store('inversion_flowlines')
     hs, ts, vs, xs, ys = [], [], [], [], []
     for cl, fl in zip(cls, fls):
         hs = np.append(hs, fl.surface_h)
@@ -905,8 +905,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     thick[:, -1] = 0.
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output')
-    fls = gdir.read_pickle('inversion_flowlines')
+    cls = gdir.read_store('inversion_output')
+    fls = gdir.read_store('inversion_flowlines')
     vs = []
     for cl, fl in zip(cls, fls):
         vs.extend(cl['volume'])
@@ -998,7 +998,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
         k = cfg.PARAMS['inversion_calving_k']
 
     # Read necessary data
-    fl = gdir.read_pickle('inversion_flowlines')[-1]
+    fl = gdir.read_store('inversion_flowlines')[-1]
 
     # Altitude at the terminus and frontal width
     free_board = utils.clip_min(fl.surface_h[-1], 0) - water_level
@@ -1006,7 +1006,7 @@ def calving_flux_from_depth(gdir, k=None, water_level=None, water_depth=None,
 
     # Calving formula
     if thick is None:
-        cl = gdir.read_pickle('inversion_output')[-1]
+        cl = gdir.read_store('inversion_output')[-1]
         thick = cl['thick'][-1]
     if water_depth is None:
         water_depth = thick - free_board
@@ -1077,7 +1077,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
     gdir.add_to_diagnostics('volume_before_calving', v_ref)
 
     # Get the relevant variables
-    cls = gdir.read_pickle('inversion_input')[-1]
+    cls = gdir.read_store('inversion_input')[-1]
     slope = cls['slope_angle'][-1]
     width = cls['width'][-1]
 
@@ -1158,7 +1158,7 @@ def find_inversion_calving_from_any_mb(gdir, mb_model=None, mb_years=None,
 
     out = calving_flux_from_depth(gdir, water_level=water_level)
 
-    fl = gdir.read_pickle('inversion_flowlines')[-1]
+    fl = gdir.read_store('inversion_flowlines')[-1]
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
                  cfg.PARAMS['ice_density'])
 

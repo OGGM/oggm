@@ -476,7 +476,7 @@ level 5.
                                               prepro_border=80)
     gdir = gdirs[0]  # init_glacier_directories always returns a list
 
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     fls
     [fl.order for fl in fls]
 
