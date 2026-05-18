@@ -803,7 +803,7 @@ class TestStartFromV14(unittest.TestCase):
 
         assert gdir.get_climate_info()
         # This we can read
-        gdir.read_pickle('inversion_flowlines')
+        gdir.read_store('inversion_flowlines')
 
         df = utils.compile_glacier_statistics(gdirs)
         assert 'dem_med_elev' in df

@@ -68,6 +68,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                recursive_valid_polygons)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
+import oggm.utils.geozarr as geozarr
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -701,9 +702,9 @@ def get_centerline_lonlat(gdir,
     a shapefile
     """
     if flowlines_output or geometrical_widths_output or corrected_widths_output:
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
     else:
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
 
     exterior = None
     if ensure_exterior_match:
@@ -1625,7 +1626,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
                 vol = []
                 vol_bsl = []
                 vol_bwl = []
-                cl = gdir.read_pickle('inversion_output')
+                cl = gdir.read_store('inversion_output')
                 for c in cl:
                     vol.extend(c['volume'])
                     vol_bsl.extend(c.get('volume_bsl', [0]))
@@ -1696,7 +1697,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # Centerlines
-            cls = gdir.read_pickle('centerlines')
+            cls = gdir.read_store('centerlines')
             longest = 0.
             for cl in cls:
                 longest = np.max([longest, cl.dis_on_line[-1]])
@@ -1710,7 +1711,7 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
             h = np.array([])
             widths = np.array([])
             slope = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
             dx = fls[0].dx * gdir.grid.dx
             for fl in fls:
                 hgt = fl.surface_h
@@ -2175,7 +2176,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             # Flowline related stuff
             h = np.array([])
             widths = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
             dx = fls[0].dx * gdir.grid.dx
             for fl in fls:
                 hgt = fl.surface_h
@@ -3282,6 +3283,13 @@ class GlacierDirectory(object):
         An object read from the pickle
         """
 
+        warnings.warn(
+            "gdir.read_pickle is deprecated and will be replaced "
+            "by gdir.read_store in a future OGGM release.",
+            PendingDeprecationWarning,
+            stacklevel=2,
+        )
+
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
@@ -3310,6 +3318,144 @@ class GlacierDirectory(object):
 
         return out
 
+    def read_zarr(
+        self, filename: str, filesuffix: str = "", *kwargs
+    ) -> xr.DataTree:
+        """Reads a zarr file located in the glacier directory.
+
+        The location of the zarr store for a given RGI-ID is invariant.
+        The zarr store is expected to have a group named `filename`
+        (without suffix).
+
+        Parameters
+        ----------
+        filename : str or None
+            File name (must be listed in cfg.BASENAMES). If `None`, the
+            entire zarr store is read.
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to xarray.open_zarr().
+
+        Returns
+        -------
+        xr.DataTree
+            An xarray.DataTree read from the zarr store.
+        """
+
+        fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
+        if filename == "data_store":
+            filename = None
+        out = xr.open_zarr(fp.replace(".pkl", ".zarr"), group=filename, *kwargs)
+
+        return out
+
+    def read_store(
+        self, filename: str, filesuffix: str = "", *kwargs
+    ) -> dict | list:
+        """Reads a data store located in the glacier directory.
+
+        Supports pickle and zarr. The location of a zarr store for a
+        given RGI-ID is invariant. A zarr store is expected to have a
+        group named `filename` (without suffix). If the zarr store is
+        not found, automatically falls back to reading a pickle file
+        with the same name (and suffix).
+
+        For backwards compatibility reasons, the output of this method
+        is coerced imto the data structures expected from older pickle
+        files, e.g. all datatrees are converted to flattened
+        dictionaries.
+
+        Parameters
+        ----------
+        filename : str or None
+            File name (must be listed in cfg.BASENAMES). If `None`, the
+            entire zarr store is read.
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to xarray.open_zarr().
+
+        Returns
+        -------
+        list or dict
+            A list or dictionary of data read from the zarr store.
+        """
+
+        try:
+            out = self.read_zarr(
+                filename=filename, filesuffix=filesuffix, *kwargs
+            )
+            out: list | dict = self._validate_store(
+                data_tree=out, group=filename
+            )
+        except FileNotFoundError:  # fallback to pickle if zarr not found
+            warnings.warn(
+                "Zarr not found, attempting to read pickle file instead."
+            )
+            out: list | dict = self.read_pickle(
+                filename=filename, use_compression=None, filesuffix=filesuffix
+            )
+
+        return out
+
+    def _validate_store(self, data_tree: xr.DataTree, group: str = "") -> dict:
+        """Ensure data structures in a data tree are OGGM-compatible.
+
+        Some data structures used by the old pickle infrastructure
+        cannot be directly written to zarr via xarray. This method
+        ensures data structures within a data tree are compatible with
+        the types expected from older pickle files.
+
+        Parameters
+        ----------
+        data_tree : xarray.DataTree
+            The DataTree to reconstruct into a pickle-compatible
+            dictionary.
+        group : str, optional
+            The group within the zarr store that was read. This may be
+            necessary because the `name` attribute can be missing
+            depending on how the zarr store was read.
+
+        Returns
+        -------
+        dict | list
+            Either coerces a datatree into the dictionary, or
+            returns a list of OGGM objects to match the structures
+            expected from older pickle files.
+        """
+
+        if group:
+            name = group
+        elif data_tree.name:
+            name = data_tree.name
+        else:
+            name = ""
+
+        if "downstream_line" in name:
+            # CAUTION: the downstream_line datatree contains a variable
+            # named downstream_line. Don't mix these up!
+            data_tree.downstream_line = geozarr._validate_linestring(
+                data_tree.downstream_line
+            )
+        elif "geometries" in name:
+            data_tree.polygon_hr = geozarr._validate_polygon(
+                data_tree.polygon_hr
+            )
+            data_tree.polygon_pix = geozarr._validate_polygon(
+                data_tree.polygon_pix
+            )
+        elif "model_flowline" in name:
+            flowline = geozarr.get_flowline_from_datatree(data_tree=data_tree)
+            return [flowline]
+        elif "inversion_flowlines" in name:
+            centerline = geozarr.get_centerline_from_datatree(
+                data_tree=data_tree
+            )
+            return [centerline]
+
+        return geozarr.get_dict_from_datatree(data_tree)
+
     def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
@@ -3325,12 +3471,56 @@ class GlacierDirectory(object):
         filesuffix : str
             append a suffix to the filename (useful for experiments).
         """
+
+        warnings.warn(
+            "gdir.write_pickle is deprecated and will be replaced "
+            "by gdir.write_zarr in a future OGGM release.",
+            PendingDeprecationWarning,
+            stacklevel=2,
+        )
+
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         with _open(fp, 'wb') as f:
             pickle.dump(var, f, protocol=4)
+
+    def write_zarr(
+        self,
+        data_tree: xr.DataTree,
+        filename: str,
+        filesuffix: str = "",
+        overwrite: bool = True,
+        zarr_format: int = 2,
+        encoding: dict = None,
+    ) -> None:
+        """Write a datatree to Zarr.
+
+        Parameters
+        ----------
+        data_tree : xarray.DataTree
+            The datatree to write to Zarr.
+        filename : str
+            Path to write the Zarr data.
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        overwrite : bool, default True
+            Whether to overwrite existing Zarr contents in the target
+            location.
+        zarr_format : int, default 2
+            Zarr format version to use (2 or 3).
+        encoding : dict, optional
+            A dictionary specifying encoding options for the Zarr output.
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        data_tree.to_zarr(
+            fp,
+            mode="w" if overwrite else "a",
+            consolidated=True,
+            zarr_format=zarr_format,
+            encoding=encoding,
+        )
 
     def read_json(self, filename, filesuffix='', allow_empty=False):
         """Reads a JSON file located in the directory.
@@ -3628,7 +3818,7 @@ class GlacierDirectory(object):
 
         h = np.array([])
         w = np.array([])
-        fls = self.read_pickle('inversion_flowlines')
+        fls = self.read_store('inversion_flowlines')
         for fl in fls:
             w = np.append(w, fl.widths)
             h = np.append(h, fl.surface_h)
@@ -4062,7 +4252,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     tribs = tolist(tribs)
 
     # read flowlines of the Main glacier
-    mfls = main.read_pickle('model_flowlines')
+    mfls = main.read_store('model_flowlines')
 
     # ------------------------------
     # 0. create the new GlacierDirectory from main glaciers GeoDataFrame
@@ -4076,7 +4266,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     # add tributary geometries to maindf
     merged_geometry = maindf.loc[idx, 'geometry'].iloc[0].buffer(0)
     for trib in tribs:
-        geom = trib.read_pickle('geometries')['polygon_hr']
+        geom = trib.read_store('geometries')['polygon_hr']
         geom = salem.transform_geometry(geom, crs=trib.grid)
         merged_geometry = merged_geometry.union(geom).buffer(0)
 

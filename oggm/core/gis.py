@@ -1660,13 +1660,13 @@ def gridded_mb_attributes(gdir):
 
     # Hardest part - MB per catchment
     try:
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
     except FileNotFoundError:
         return
 
     # Make everything we need flat
     # Catchment areas
-    cis = gdir.read_pickle('geometries')['catchment_indices']
+    cis = gdir.read_store('geometries')['catchment_indices']
     for j, ci in enumerate(cis):
         catchment_mask_2d[tuple(ci.T)] = j
 

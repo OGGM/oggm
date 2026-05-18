@@ -530,6 +530,7 @@ class TestGIS(unittest.TestCase):
 
         cfg.add_to_basenames('mybn', 'testfb.pkl', docstr='Some docs')
 
+        # TODO: replace read & write pickle methods
         out = {'foo': 1.5}
         gdir.write_pickle(out, 'mybn')
         assert gdir.read_pickle('mybn') == out
@@ -653,7 +654,7 @@ class TestCenterlines(unittest.TestCase):
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
 
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
         for cl in cls:
             for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
                                  cl.inflows):
@@ -684,8 +685,8 @@ class TestCenterlines(unittest.TestCase):
         centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
 
-        d = gdir.read_pickle('downstream_line')
-        cl = gdir.read_pickle('inversion_flowlines')[-1]
+        d = gdir.read_store('downstream_line')
+        cl = gdir.read_store('inversion_flowlines')[-1]
         self.assertEqual(
             len(d['full_line'].coords) - len(d['downstream_line'].coords),
             cl.nx)
@@ -707,13 +708,13 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
 
-        out = gdir.read_pickle('downstream_line')
+        out = gdir.read_store('downstream_line')
         for o, h in zip(out['bedshapes'], out['surface_h']):
             assert np.all(np.isfinite(o))
             assert np.all(np.isfinite(h))
 
-        tpl = gdir.read_pickle('inversion_flowlines')[-1]
-        c = gdir.read_pickle('downstream_line')['downstream_line']
+        tpl = gdir.read_store('inversion_flowlines')[-1]
+        c = gdir.read_store('downstream_line')['downstream_line']
         c = centerlines.Centerline(c, dx=tpl.dx)
 
         # Independent reproduction for a few points
@@ -786,7 +787,7 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
 
         assert gdir.rgi_date == 2009
 
@@ -918,7 +919,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         hgt = []
         harea = []
 
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
@@ -1008,7 +1009,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         centerlines.elevation_band_flowline(gdir)
         centerlines.fixed_dx_elevation_band_flowline(gdir)
         centerlines.compute_downstream_line(gdir)
-        dl = gdir.read_pickle('downstream_line')
+        dl = gdir.read_store('downstream_line')
         np.testing.assert_allclose(dl['downstream_line'].length, 12, atol=0.5)
         centerlines.compute_downstream_bedshape(gdir)
 
@@ -1067,7 +1068,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.catchment_area(gdir)
 
-        cis = gdir.read_pickle('geometries')['catchment_indices']
+        cis = gdir.read_store('geometries')['catchment_indices']
 
         # The catchment area must be as big as expected
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
@@ -1092,7 +1093,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
 
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
                                  cl.inflows):
@@ -1150,7 +1151,7 @@ class TestGeometry(unittest.TestCase):
         hgt = []
         harea = []
 
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
@@ -1209,7 +1210,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
 
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
         for fl in fls:
             dx = fl.dx * gdir.grid.dx
@@ -2075,7 +2076,7 @@ class TestClimate(unittest.TestCase):
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2002])
 
         # Artificially make some arms even lower to have multiple branches
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         assert fls[0].flows_to is fls[-1]
         assert fls[1].flows_to is fls[-1]
         fls[0].surface_h -= 700
@@ -2197,7 +2198,7 @@ class TestInversion(unittest.TestCase):
         # maxH = 242+-13
         inversion.prepare_for_inversion(gdir)
         # Check how many clips:
-        cls = gdir.read_pickle('inversion_input')
+        cls = gdir.read_store('inversion_input')
         nabove = 0
         maxs = 0.
         npoints = 0.
@@ -2239,8 +2240,8 @@ class TestInversion(unittest.TestCase):
                                                   write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        cls = gdir.read_pickle('inversion_output')
-        fls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_output')
+        fls = gdir.read_store('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -2252,7 +2253,7 @@ class TestInversion(unittest.TestCase):
 
         maxs = 0.
         v = 0.
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         for cl in cls:
             thick = cl['thick']
             _max = np.max(thick)
@@ -2264,7 +2265,7 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(ref_v, inversion.get_inversion_volume(gdir))
 
         # Sanity check - velocities
-        inv = gdir.read_pickle('inversion_output')[-1]
+        inv = gdir.read_store('inversion_output')[-1]
 
         # vol in m3 and dx in m -> section in m2
         section = inv['volume'] / inv['dx']
@@ -2278,7 +2279,7 @@ class TestInversion(unittest.TestCase):
         # Some reference value I just computed - see if other computers agree
         np.testing.assert_allclose(np.mean(velocity[:-1]), 42, atol=5)
         inversion.compute_inversion_velocities(gdir, fs=fs, glen_a=glen_a)
-        inv = gdir.read_pickle('inversion_output')[-1]
+        inv = gdir.read_store('inversion_output')[-1]
         np.testing.assert_allclose(velocity, inv['u_integrated'])
 
     @pytest.mark.slow
@@ -2431,7 +2432,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir, water_level=10000)
 
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         v_bwl = np.nansum([np.nansum(fl.get('volume_bwl', 0)) for fl in cls])
         n_trap = np.sum([np.sum(fl['is_trapezoid']) for fl in cls])
         np.testing.assert_allclose(v, v_bwl)
@@ -2461,7 +2462,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
 
         # Check how many clips:
-        cls = gdir.read_pickle('inversion_input')
+        cls = gdir.read_store('inversion_input')
         nabove = 0
         maxs = 0.
         npoints = 0.
@@ -2503,8 +2504,8 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        cls = gdir.read_pickle('inversion_output')
-        fls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_output')
+        fls = gdir.read_store('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -2514,7 +2515,7 @@ class TestInversion(unittest.TestCase):
 
         maxs = 0.
         v = 0.
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         for cl in cls:
             thick = cl['thick']
             _max = np.max(thick)
@@ -2541,7 +2542,7 @@ class TestInversion(unittest.TestCase):
         # Reference
         massbalance.apparent_mb_from_linear_mb(gdir)
         inversion.prepare_for_inversion(gdir)
-        cls1 = gdir.read_pickle('inversion_input')
+        cls1 = gdir.read_store('inversion_input')
         v1 = inversion.mass_conservation_inversion(gdir)
         # New should be equivalent
         mb_model = massbalance.LinearMassBalance(ela_h=1800, grad=3)
@@ -2549,7 +2550,7 @@ class TestInversion(unittest.TestCase):
                                             mb_years=np.arange(30))
         inversion.prepare_for_inversion(gdir)
         v2 = inversion.mass_conservation_inversion(gdir)
-        cls2 = gdir.read_pickle('inversion_input')
+        cls2 = gdir.read_store('inversion_input')
 
         # Now the tests
         for cl1, cl2 in zip(cls1, cls2):
@@ -2663,8 +2664,8 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        cls = gdir.read_pickle('inversion_output')
-        fls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_output')
+        fls = gdir.read_store('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -2687,7 +2688,7 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
 
         np.testing.assert_allclose(v, ref_v, rtol=0.06)
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         maxs = 0.
         for cl in cls:
             thick = cl['thick']
@@ -2697,7 +2698,7 @@ class TestInversion(unittest.TestCase):
 
         inversion.compute_inversion_velocities(gdir, fs=0, glen_a=glen_a)
 
-        inv = gdir.read_pickle('inversion_output')[-1]
+        inv = gdir.read_store('inversion_output')[-1]
 
         # In the middle section the velocities look OK and should be close
         # to the no sliding assumption
@@ -2789,13 +2790,13 @@ class TestCoxeCalving(unittest.TestCase):
 
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
-        cls1 = gdir.read_pickle('inversion_output')
+        cls1 = gdir.read_store('inversion_output')
         # Increase calving for this one
         cfg.PARAMS['inversion_calving_k'] = 1
 
         res_bef = gdir.get_diagnostics()['apparent_mb_from_any_mb_residual']
         out = inversion.find_inversion_calving_from_any_mb(gdir)
-        cls2 = gdir.read_pickle('inversion_output')
+        cls2 = gdir.read_store('inversion_output')
 
         # Calving increases the volume and adds a residual
         v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
@@ -2808,7 +2809,7 @@ class TestCoxeCalving(unittest.TestCase):
         v_new_bsl = np.sum([np.sum(fl.get('volume_bsl', 0)) for fl in cls2])
         v_new_bwl = np.sum([np.sum(fl.get('volume_bwl', 0)) for fl in cls2])
         flowline.init_present_time_glacier(gdir)
-        flsg = gdir.read_pickle('model_flowlines')
+        flsg = gdir.read_store('model_flowlines')
         for fl in flsg:
             fl.water_level = out['calving_water_level']
         v_new_bsl_g = np.sum([np.sum(fl.volume_bsl_m3) for fl in flsg])
@@ -2957,7 +2958,7 @@ class TestGrindelInvert(unittest.TestCase):
         v = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        cl = gdir.read_pickle('inversion_output')[0]
+        cl = gdir.read_store('inversion_output')[0]
         rmsd = utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])])
         assert rmsd < 10.
 
@@ -2974,7 +2975,7 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
 
         # see that we have as many catchments as flowlines
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         gdfc = gdir.read_shapefile('flowline_catchments')
         self.assertEqual(len(fls), len(gdfc))
         # and at least as many intersects
@@ -3747,10 +3748,10 @@ class TestIdealizedGdir(unittest.TestCase):
         massbalance.apparent_mb_from_linear_mb(gdir)
         inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
         v1 = inversion.mass_conservation_inversion(gdir)
-        tt1 = gdir.read_pickle('inversion_input')[0]
+        tt1 = gdir.read_store('inversion_input')[0]
         gdir1 = gdir
 
-        fl = gdir.read_pickle('inversion_flowlines')[0]
+        fl = gdir.read_store('inversion_flowlines')[0]
         map_dx = gdir.grid.dx
         gdir = utils.idealized_gdir(fl.surface_h,
                                     fl.widths * map_dx,
@@ -3761,7 +3762,7 @@ class TestIdealizedGdir(unittest.TestCase):
         inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
         v2 = inversion.mass_conservation_inversion(gdir)
 
-        tt2 = gdir.read_pickle('inversion_input')[0]
+        tt2 = gdir.read_store('inversion_input')[0]
         np.testing.assert_allclose(tt1['width'], tt2['width'])
         np.testing.assert_allclose(tt1['slope_angle'], tt2['slope_angle'])
         np.testing.assert_allclose(tt1['dx'], tt2['dx'])
@@ -3962,7 +3963,7 @@ class TestPyGEM_compat(unittest.TestCase):
                                            width_path=width_path)
 
         pygem_compat.present_time_glacier_from_bins(gdir, data=data)
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         data = data.loc[::-1]
         area = np.asarray(data['area'])
         width = np.asarray(data['width'])

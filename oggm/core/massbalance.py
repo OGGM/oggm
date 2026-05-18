@@ -757,7 +757,7 @@ class ConstantMassBalance(MassBalanceModel):
 
         # This is a quick'n dirty optimisation
         try:
-            fls = gdir.read_pickle('model_flowlines')
+            fls = gdir.read_store('model_flowlines')
             h = []
             for fl in fls:
                 # We use bed because of overdeepenings
@@ -1213,11 +1213,11 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Read in the flowlines
         if use_inversion_flowlines:
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
 
         if fls is None:
             try:
-                fls = gdir.read_pickle('model_flowlines')
+                fls = gdir.read_store('model_flowlines')
             except FileNotFoundError:
                 raise InvalidWorkflowError('Need a valid `model_flowlines` '
                                            'file. If you explicitly want to '
@@ -1645,7 +1645,7 @@ def mb_calibration_to_rmsd(gdir, *,
         temp_bias_max = cfg.PARAMS['temp_bias_max']
 
     if not use_2d_mb:
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
     else:
         # if the 2D data is used, the flowline is not needed.
         fls = None
@@ -2115,7 +2115,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                  'at the same time.')
 
     if not use_2d_mb:
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
     else:
         # if the 2D data is used, the flowline is not needed.
         fls = None
@@ -2423,7 +2423,7 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
     # For each flowline compute the apparent MB
     rho = cfg.PARAMS['ice_density']
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_store('inversion_flowlines')
     # Reset flux
     for fl in fls:
         fl.flux = np.zeros(len(fl.surface_h))
@@ -2473,7 +2473,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     is_calving = cmb != 0
 
     # For each flowline compute the apparent MB
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_store('inversion_flowlines')
 
     if mb_model is None:
         mb_model = mb_model_class(gdir)

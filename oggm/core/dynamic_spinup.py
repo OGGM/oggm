@@ -259,7 +259,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         init_model_fls = fmod.fls
 
     if init_model_fls is None:
-        fls_spinup = gdir.read_pickle('model_flowlines',
+        fls_spinup = gdir.read_store('model_flowlines',
                                       filesuffix=model_flowline_filesuffix)
     else:
         fls_spinup = copy.deepcopy(init_model_fls)
@@ -1118,7 +1118,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         # ATTENTION: it is assumed that the flowlines in gdir have the volume
         # we want to match during calibrate_inversion_from_consensus when we
         # set_local_variables
-        fls_ref = gdir.read_pickle('model_flowlines')
+        fls_ref = gdir.read_store('model_flowlines')
         local_variables['vol_m3_ref'] = np.sum([f.volume_m3 for f in fls_ref])
 
         # we are done with preparing the local_variables for the upcoming iterations
@@ -1150,7 +1150,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                        np.all(getattr(fl_prov, 'bed_h') ==
                               getattr(fl_orig, 'bed_h'))
                        for fl_prov, fl_orig in
-                       zip(fls_init, gdir.read_pickle('model_flowlines'))]):
+                       zip(fls_init, gdir.read_store('model_flowlines'))]):
             raise InvalidWorkflowError('If you want to perform a dynamic '
                                        'melt_f calibration including an '
                                        'inversion, it is not possible to '
@@ -1869,7 +1869,7 @@ def run_dynamic_melt_f_calibration(
         init_model_fls = fmod.fls
 
     if init_model_fls is None:
-        fls_init = gdir.read_pickle('model_flowlines')
+        fls_init = gdir.read_store('model_flowlines')
     else:
         fls_init = copy.deepcopy(init_model_fls)
 
