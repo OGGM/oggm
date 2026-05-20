@@ -52,7 +52,7 @@ class Flowline(Centerline):
 
     def __init__(self, line=None, dx=1, map_dx=None,
                  surface_h=None, bed_h=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, grid=None):
         """ Initialize a Flowline
 
         Parameters
@@ -71,6 +71,10 @@ class Flowline(Centerline):
             The glacier's RGI identifier
         water_level : float
             The water level (to compute volume below sea-level)
+        gdir : GlacierDirectory
+            Deprecated
+        grid : salem.Grid
+            The Grid in which the flowlines are defined
         """
 
         # This is do add flexibility for testing
@@ -79,6 +83,9 @@ class Flowline(Centerline):
         if line is None:
             coords = np.arange(len(surface_h)) * dx
             line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+        if gdir is not None:
+            grid = gdir.grid
+            # Some deprec warning here
 
         super(Flowline, self).__init__(line, dx, surface_h)
 
@@ -91,8 +98,8 @@ class Flowline(Centerline):
         self._point_lons = None
         self._point_lats = None
         self.map_trafo = None
-        if gdir is not None:
-            self.map_trafo = partial(gdir.grid.ij_to_crs, crs=salem.wgs84)
+        if grid is not None:
+            self.map_trafo = partial(grid.ij_to_crs, crs=salem.wgs84)
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
