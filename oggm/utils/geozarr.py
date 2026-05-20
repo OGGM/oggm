@@ -9,12 +9,24 @@ import shapely
 import pyproj
 from salem import Grid, wgs84
 from functools import partial
+from typing import Callable, Any
 
 
-def get_pickle_paths(gdir) -> list[Path]:
-    """Get all available pickles in the glacier directory."""
+def get_pickle_paths(directory: str | Path) -> list[Path]:
+    """Get file paths for all available pickles in a directory.
 
-    return [Path(f) for f in os.listdir(gdir.dir) if f[-4:] == ".pkl"]
+    Parameters
+    ----------
+    directory : str or Path
+        Path to the directory containing the pickles.
+
+    Returns
+    -------
+    list[Path]
+        A list of file paths to all the pickles in the directory.
+    """
+
+    return [Path(f) for f in os.listdir(directory) if f[-4:] == ".pkl"]
 
 
 def get_tranche(data: dict, type_only: bool = False) -> dict:
@@ -55,7 +67,7 @@ def get_pickle_data(pickle_files: list[Path], gdir, type_only: bool = False):
     pickle_files : list[Path]
         Paths to pickle files.
     gdir : oggm.GlacierDirectory
-        GlacierDirectory object to read the pickles from.
+        GlacierDirectory object from which the pickles are read.
     type_only : bool, default False
         If True, only the types of the data will be extracted. If False,
         the actual data will be extracted.
@@ -98,7 +110,8 @@ def get_pickle_data(pickle_files: list[Path], gdir, type_only: bool = False):
 
 def _validate_linestring(
     line: xr.DataArray | shapely.LineString,
-) -> shapely.LineString:
+) -> shapely.LineString | None:
+    """Coerce an object into a LineString."""
     if not isinstance(line, shapely.LineString) and (line is not None):
         line = shapely.LineString(line)
     return line
@@ -106,7 +119,8 @@ def _validate_linestring(
 
 def _validate_polygon(
     polygon: xr.DataArray | shapely.Polygon,
-) -> shapely.Polygon:
+) -> shapely.Polygon | None:
+    """Coerce an object into a LineString."""
     if not isinstance(polygon, shapely.Polygon) and (polygon is not None):
         polygon = shapely.Polygon(polygon)
     return polygon
@@ -193,7 +207,7 @@ def restore_projection(root: xr.DataTree) -> None:
             root.attrs["pyproj_srs"] = pyproj.Proj(crs)
 
 
-def get_grid_params_from_partial(p: partial) -> dict:
+def get_grid_params_from_partial(p: Callable) -> dict:
     grid = p.func.__self__
     grid_parameters = {
         "pyproj_srs": grid.proj.crs.to_json_dict(),
@@ -206,7 +220,7 @@ def get_grid_params_from_partial(p: partial) -> dict:
     return grid_parameters
 
 
-def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Grid:
+def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Callable:
 
     map_trafo = Grid(
         proj=data_tree.attrs["pyproj_srs"],
@@ -229,7 +243,9 @@ def convert_linestring_to_dataarray(line: shapely.LineString) -> xr.DataArray:
         )
 
 
-def convert_polygon_to_dataarray(polygon: shapely.Polygon) -> xr.DataArray:
+def convert_polygon_to_dataarray(
+    polygon: shapely.Polygon,
+) -> xr.DataArray | shapely.Polygon:
     """Convert a shapely Polygon to a DataArray of coordinates.
 
     WARNING: This function currently only supports simple Polygons
@@ -283,7 +299,7 @@ def get_downstream_line_from_pkl(pickle: dict) -> dict:
 
     Parameters
     ----------
-    data : dict
+    pickle : dict
         Data loaded directly from the ``downstream_line`` pickle.
 
     Returns
@@ -379,18 +395,18 @@ def get_model_flowlines_from_pkl(pickle: list) -> list:
     return new_pickle
 
 
-def get_inversion_flowlines_from_pkl(pickle: list) -> dict:
+def get_inversion_flowlines_from_pkl(pickle: list) -> list[dict]:
     """Convert ``inversion_flowlines`` pickle into zarr-compatible
     structure.
 
     Parameters
     ----------
-    data : dict
+    pickle : dict
         Data loaded directly from the ``inversion_flowlines`` pickle.
 
     Returns
     -------
-    dict
+    list[dict]
         Contains all the attributes necessary to reconstruct the
         original Centerline objects.
     """

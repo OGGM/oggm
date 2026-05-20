@@ -2572,7 +2572,11 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     fl = Centerline(line, dx=flowline_dx, surface_h=surface_h, map_dx=map_dx)
     fl.widths = widths_m / map_dx
     fl.is_rectangular = np.ones(fl.nx).astype(bool)
-    gdir.write_pickle([fl], 'inversion_flowlines')
+
+    # for zarr we don't need to convert to a list as this is reconstructed
+    # automatically by ``read_store()``
+    gdir.write_store(data=fl, filename="inversion_flowlines")
+    # gdir.write_pickle([fl], 'inversion_flowlines')
 
     # Idealized map
     grid = salem.Grid(nxny=(1, 1), dxdy=(map_dx, map_dx), x0y0=(0, 0))
@@ -3319,7 +3323,7 @@ class GlacierDirectory(object):
         return out
 
     def read_zarr(
-        self, filename: str, filesuffix: str = "", *kwargs
+        self, filename: str, filesuffix: str = "", chunks:dict=None,engine:str="zarr", consolidated:bool=True, decode_cf:bool=True, *kwargs
     ) -> xr.DataTree:
         """Reads a zarr file located in the glacier directory.
 
@@ -3342,11 +3346,12 @@ class GlacierDirectory(object):
         xr.DataTree
             An xarray.DataTree read from the zarr store.
         """
-
+        if chunks is None:
+            chunks = {}
         fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
         if filename == "data_store":
             filename = None
-        out = xr.open_zarr(fp.replace(".pkl", ".zarr"), group=filename, *kwargs)
+        out = xr.open_datatree(fp.replace(".pkl", ".zarr"), group=filename, chunks=chunks, engine=engine, consolidated=consolidated, decode_cf=decode_cf, *kwargs)
 
         return out
 
@@ -3435,16 +3440,22 @@ class GlacierDirectory(object):
         if "downstream_line" in name:
             # CAUTION: the downstream_line datatree contains a variable
             # named downstream_line. Don't mix these up!
-            data_tree.downstream_line = geozarr._validate_linestring(
-                data_tree.downstream_line
+            data_tree = geozarr.get_dict_from_datatree(data_tree)
+            if "downstream_line" in data_tree.keys():
+                data_tree["downstream_line"] = geozarr._validate_linestring(
+                    data_tree["downstream_line"]
             )
+            return data_tree
+            
         elif "geometries" in name:
-            data_tree.polygon_hr = geozarr._validate_polygon(
-                data_tree.polygon_hr
+            data_tree = geozarr.get_dict_from_datatree(data_tree)
+            for key in ["polygon_hr", "polygon_pix"]:
+                if key in data_tree.keys():
+                    data_tree[key] = geozarr._validate_polygon(
+                data_tree[key]
             )
-            data_tree.polygon_pix = geozarr._validate_polygon(
-                data_tree.polygon_pix
-            )
+            return data_tree
+            
         elif "model_flowline" in name:
             flowline = geozarr.get_flowline_from_datatree(data_tree=data_tree)
             return [flowline]
@@ -3495,7 +3506,7 @@ class GlacierDirectory(object):
         zarr_format: int = 2,
         encoding: dict = None,
     ) -> None:
-        """Write a datatree to Zarr.
+        """Write a datatree to Zarr file on disk.
 
         Parameters
         ----------
@@ -3513,7 +3524,10 @@ class GlacierDirectory(object):
         encoding : dict, optional
             A dictionary specifying encoding options for the Zarr output.
         """
-        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        fp:str = self.get_filepath(filename, filesuffix=filesuffix).replace(".pkl", ".zarr")
+        if not fp.endswith(".zarr"):
+            fp = f"{fp}.zarr"
+
         data_tree.to_zarr(
             fp,
             mode="w" if overwrite else "a",
@@ -3521,6 +3535,73 @@ class GlacierDirectory(object):
             zarr_format=zarr_format,
             encoding=encoding,
         )
+
+    def write_store(
+        self,
+        data,
+        filename: str,
+        filesuffix: str = "",
+        use_pickle: bool = True,
+        **kwargs,
+    ):
+        """Writes data to disk.
+
+        Parameters
+        ----------
+        data : xr.DataTree | object
+            Data or variable to write to disk
+        filename : str
+            File name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            Append a suffix to the filename (useful for experiments).
+        use_pickle : bool, default True
+            Whether to use pickle for storage. If False, attempts to
+            write to zarr, and falls back to pickle if this fails.
+        **kwargs
+            Additional keyword arguments to pass either to
+            ``write_zarr()`` or ``write_pickle()``.
+        """
+
+        if not use_pickle:
+            try:
+                if not isinstance(data, xr.DataTree):
+                    warnings.warn(
+                        "Data is not an xr.DataTree." \
+                        "Will attempt automatic conversion." \
+                        "If this fails consider using a helper function in utils.geozarr."
+                    )
+                else:
+                    zarr_path = self.get_filepath(filename=filename, filesuffix=filesuffix)
+                    if os.path.exists(f"{zarr_path}.zarr"):
+                        data_tree = xr.open_zarr(f"{zarr_path}.zarr", group=f"{filename}_{filesuffix}")
+                    else:
+                        data_tree = xr.DataTree()
+
+                    data_tree = geozarr.add_datacube(
+                        data_tree=data_tree,
+                        datacubes=data,
+                        datacube_name=f"{filename}_{filesuffix}",
+                        overwrite=True,
+                    )
+                    self.write_zarr(
+                        data_tree=data,
+                        filename=filename,
+                        filesuffix=filesuffix,
+                        **kwargs,
+                    )
+            except:
+                warnings.warn(
+                    "Failed to write zarr store, falling back to pickle.",
+                    RuntimeWarning,
+                )
+                # zarr-specific kwargs aren't compatible with pickle
+                self.write_pickle(
+                    var=data, filename=filename, filesuffix=filesuffix
+                )
+        else:
+            self.write_pickle(
+                var=data, filename=filename, filesuffix=filesuffix, **kwargs
+            )
 
     def read_json(self, filename, filesuffix='', allow_empty=False):
         """Reads a JSON file located in the directory.
