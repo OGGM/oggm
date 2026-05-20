@@ -3348,10 +3348,19 @@ class GlacierDirectory(object):
         """
         if chunks is None:
             chunks = {}
-        fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
+        fp = self.get_filepath("data_store")
         if filename == "data_store":
-            filename = None
-        out = xr.open_datatree(fp.replace(".pkl", ".zarr"), group=filename, chunks=chunks, engine=engine, consolidated=consolidated, decode_cf=decode_cf, *kwargs)
+            group = None
+        else:
+            group = "_".join(filter(None,(filename, filesuffix)))
+        out = xr.open_datatree(
+            fp.replace(".pkl", ".zarr"),
+            group=group,
+            chunks=chunks,
+            engine=engine,
+            consolidated=consolidated,
+            decode_cf=decode_cf,
+            *kwargs)
 
         return out
 
@@ -3436,7 +3445,7 @@ class GlacierDirectory(object):
             name = data_tree.name
         else:
             name = ""
-
+        
         if "downstream_line" in name:
             # CAUTION: the downstream_line datatree contains a variable
             # named downstream_line. Don't mix these up!
@@ -3524,12 +3533,17 @@ class GlacierDirectory(object):
         encoding : dict, optional
             A dictionary specifying encoding options for the Zarr output.
         """
-        fp:str = self.get_filepath(filename, filesuffix=filesuffix).replace(".pkl", ".zarr")
+        # fp:str = self.get_filepath(filename, filesuffix=filesuffix).replace(".pkl", ".zarr")
+        fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
         if not fp.endswith(".zarr"):
             fp = f"{fp}.zarr"
+        group = "_".join(filter(None,(filename, filesuffix)))
+        if not group:
+            group = "data_store"
 
         data_tree.to_zarr(
             fp,
+            # group=group,
             mode="w" if overwrite else "a",
             consolidated=True,
             zarr_format=zarr_format,
@@ -3539,7 +3553,7 @@ class GlacierDirectory(object):
     def write_store(
         self,
         data,
-        filename: str,
+        filename: str= "",
         filesuffix: str = "",
         use_pickle: bool = True,
         **kwargs,
@@ -3564,34 +3578,37 @@ class GlacierDirectory(object):
 
         if not use_pickle:
             try:
-                if not isinstance(data, xr.DataTree):
+                if not all(isinstance(node, xr.DataTree) for node in data.values()):
                     warnings.warn(
                         "Data is not an xr.DataTree." \
                         "Will attempt automatic conversion." \
                         "If this fails consider using a helper function in utils.geozarr."
                     )
                 else:
-                    zarr_path = self.get_filepath(filename=filename, filesuffix=filesuffix)
+                    # it makes more sense to r/w to a single store
+                    zarr_path = self.get_filepath(filename="data_store")
+                    group = "_".join(filter(None,(filename, filesuffix)))
                     if os.path.exists(f"{zarr_path}.zarr"):
-                        data_tree = xr.open_zarr(f"{zarr_path}.zarr", group=f"{filename}_{filesuffix}")
+                        data_tree = xr.open_datatree(f"{zarr_path}.zarr", group="")
                     else:
                         data_tree = xr.DataTree()
 
+                    
                     data_tree = geozarr.add_datacube(
                         data_tree=data_tree,
                         datacubes=data,
-                        datacube_name=f"{filename}_{filesuffix}",
+                        datacube_name=group,
                         overwrite=True,
                     )
                     self.write_zarr(
-                        data_tree=data,
-                        filename=filename,
-                        filesuffix=filesuffix,
+                        data_tree=data_tree,
+                        filename=zarr_path,
+                        # filesuffix=filesuffix,
                         **kwargs,
                     )
-            except:
+            except Exception as e:
                 warnings.warn(
-                    "Failed to write zarr store, falling back to pickle.",
+                    f"{e} Failed to write zarr store, falling back to pickle.",
                     RuntimeWarning,
                 )
                 # zarr-specific kwargs aren't compatible with pickle

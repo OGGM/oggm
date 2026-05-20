@@ -698,5 +698,5 @@ class TestZarrWorkflow:
 
         assert isinstance(result, dict)
         assert "downstream_line" in result.keys()
-        assert isinstance(result["downstream_line"], np.ndarray)
+        assert isinstance(result["downstream_line"], shapely.LineString)
         assert shapely.LineString(result["downstream_line"]).equals(downstream_line)

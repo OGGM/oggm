@@ -208,6 +208,7 @@ def restore_projection(root: xr.DataTree) -> None:
 
 
 def get_grid_params_from_partial(p: Callable) -> dict:
+    # TODO: Convert from glacier_grid instead of partial.
     grid = p.func.__self__
     grid_parameters = {
         "pyproj_srs": grid.proj.crs.to_json_dict(),
@@ -221,7 +222,7 @@ def get_grid_params_from_partial(p: Callable) -> dict:
 
 
 def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Callable:
-
+    # TODO: Move to change flowline object instead to take a Grid object instead of a gdir.
     map_trafo = Grid(
         proj=data_tree.attrs["pyproj_srs"],
         nxny=(data_tree.attrs["nxny"]),
@@ -287,8 +288,8 @@ def get_dict_from_datatree(data_tree: xr.DataTree) -> dict:
         if isinstance(child, xr.DataTree):
             if child.is_empty:
                 data[name] = None
-            # else:
-            #     data[name] = get_dict_from_datatree(child)
+            else:
+                data[name] = get_dict_from_datatree(child)
         else:
             data[name] = child
     return data
