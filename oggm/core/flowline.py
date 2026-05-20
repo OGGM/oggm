@@ -610,7 +610,7 @@ class FlowlineModel(object):
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
                  water_level=None, required_model_steps='monthly',
-                 include_mb_model_heights=False, include_firn_outputs=False, ):
+                 include_mb_model_heights=True, include_firn_outputs=False, ):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -659,7 +659,7 @@ class FlowlineModel(object):
             only annual updates are required. You may want to change this
             for optimisation reasons for models that don't require adaptive
             steps (for example the deltaH method).
-        include_mb_model_heights : bool, default False
+        include_mb_model_heights : bool, default True
             If True we add the snow/firn height of the current mb_model (if
             available) to include this in the elevation feedback of the mb
             calculation.
