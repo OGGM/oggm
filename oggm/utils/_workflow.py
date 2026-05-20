@@ -3323,7 +3323,7 @@ class GlacierDirectory(object):
         return out
 
     def read_zarr(
-        self, filename: str, filesuffix: str = "", *kwargs
+        self, filename: str, filesuffix: str = "", chunks:dict=None,engine:str="zarr", consolidated:bool=True, decode_cf:bool=True, *kwargs
     ) -> xr.DataTree:
         """Reads a zarr file located in the glacier directory.
 
@@ -3346,11 +3346,12 @@ class GlacierDirectory(object):
         xr.DataTree
             An xarray.DataTree read from the zarr store.
         """
-
+        if chunks is None:
+            chunks = {}
         fp = self.get_filepath(filename=filename, filesuffix=filesuffix)
         if filename == "data_store":
             filename = None
-        out = xr.open_zarr(fp.replace(".pkl", ".zarr"), group=filename, *kwargs)
+        out = xr.open_datatree(fp.replace(".pkl", ".zarr"), group=filename, chunks=chunks, engine=engine, consolidated=consolidated, decode_cf=decode_cf, *kwargs)
 
         return out
 
@@ -3439,16 +3440,22 @@ class GlacierDirectory(object):
         if "downstream_line" in name:
             # CAUTION: the downstream_line datatree contains a variable
             # named downstream_line. Don't mix these up!
-            data_tree.downstream_line = geozarr._validate_linestring(
-                data_tree.downstream_line
+            data_tree = geozarr.get_dict_from_datatree(data_tree)
+            if "downstream_line" in data_tree.keys():
+                data_tree["downstream_line"] = geozarr._validate_linestring(
+                    data_tree["downstream_line"]
             )
+            return data_tree
+            
         elif "geometries" in name:
-            data_tree.polygon_hr = geozarr._validate_polygon(
-                data_tree.polygon_hr
+            data_tree = geozarr.get_dict_from_datatree(data_tree)
+            for key in ["polygon_hr", "polygon_pix"]:
+                if key in data_tree.keys():
+                    data_tree[key] = geozarr._validate_polygon(
+                data_tree[key]
             )
-            data_tree.polygon_pix = geozarr._validate_polygon(
-                data_tree.polygon_pix
-            )
+            return data_tree
+            
         elif "model_flowline" in name:
             flowline = geozarr.get_flowline_from_datatree(data_tree=data_tree)
             return [flowline]
@@ -3517,7 +3524,7 @@ class GlacierDirectory(object):
         encoding : dict, optional
             A dictionary specifying encoding options for the Zarr output.
         """
-        fp:str = self.get_filepath(filename, filesuffix=filesuffix)
+        fp:str = self.get_filepath(filename, filesuffix=filesuffix).replace(".pkl", ".zarr")
         if not fp.endswith(".zarr"):
             fp = f"{fp}.zarr"
 
