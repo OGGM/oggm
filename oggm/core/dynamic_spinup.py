@@ -2496,8 +2496,15 @@ def run_dynamic_melt_f_calibration(
 
                 # there where some successful runs so we return the one with the
                 # smallest mismatch of dmdtda
-                min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
-                melt_f_best = np.array(melt_f_guesses)[min_mismatch_index]
+                try:
+                    min_mismatch_index = np.nanargmin(np.abs(mismatch_dmdtda))
+                    melt_f_best = np.array(melt_f_guesses)[min_mismatch_index]
+                except ValueError as e:
+                    if "All-NaN slice encountered" in str(e):
+                        # nothing worked, just provide initial melt_f again
+                        melt_f_best = melt_f_initial
+                    else:
+                        raise
 
                 # check if the first guess was the best guess
                 only_first_guess = False
