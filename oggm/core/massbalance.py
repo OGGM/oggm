@@ -5257,7 +5257,7 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
                             input_filesuffix='',
                             output_filesuffix=None,
                             mb_model=None,
-                            mb_model_class=MonthlyTIModel,
+                            mb_model_class=None,
                             mb_years=None,
                             include_mb_model_heights=True,
                             ):
@@ -5309,6 +5309,9 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
 
     if output_filesuffix is None:
         output_filesuffix = settings_filesuffix
+
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
