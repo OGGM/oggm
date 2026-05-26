@@ -57,7 +57,6 @@ pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
-pytestmark = pytest.mark.test_env("models")
 do_plot = False
 
 DOM_BORDER = 80
@@ -83,6 +82,7 @@ def is_daily_model(model):
     )
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestInitPresentDayFlowline:
 
     @pytest.mark.parametrize('downstream_line_shape', ['parabola', 'trapezoidal'])
@@ -344,6 +344,7 @@ def other_glacier_cfg():
 
 
 @pytest.mark.usefixtures('other_glacier_cfg')
+@pytest.mark.test_env("models_dynamics")
 class TestInitFlowlineOtherGlacier:
     def test_define_divides(self, class_case_dir):
 
@@ -419,6 +420,7 @@ class TestInitFlowlineOtherGlacier:
         np.testing.assert_allclose(v * 1e-9, vol, rtol=rtol)
 
 
+@pytest.mark.test_env("models_mb")
 class TestMassBalanceModels:
     def test_past_mb_model(self, hef_gdir):
 
@@ -1349,6 +1351,9 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(ds_daily.volume[-1], ds_monthly.volume[-1],
                                    atol=3e7)
 
+
+@pytest.mark.test_env("models_sfctype")
+class TestSfcTypeMBModels:
     @pytest.mark.slow
     def test_sfc_type_mb_model(self, hef_gdir):
 
@@ -2373,6 +2378,9 @@ class TestMassBalanceModels:
             plot_runoff('_daily_hydro', 'DailyTIModel')
             plot_runoff('_daily_sfc_hydro', 'SfcTypeTIModel with DailyTIModel')
 
+
+@pytest.mark.test_env("models_mb")
+class TestConstantRandomMBModels:
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
@@ -2808,6 +2816,7 @@ class TestMassBalanceModels:
             pytest.skip('Allowed failure')
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestModelFlowlines():
 
     def test_rectangular(self):
@@ -3349,6 +3358,7 @@ def io_init_gdir(hef_gdir):
 
 
 @pytest.mark.usefixtures('io_init_gdir')
+@pytest.mark.test_env("models_dynamics")
 class TestIO():
     glen_a = 2.4e-24
 
@@ -3829,6 +3839,7 @@ def inversion_gdir(class_case_dir):
     return gdir
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestLeapYears:
     """Tests for leap-year-aware time conversion in FlowlineModel."""
 
@@ -3999,6 +4010,7 @@ class TestLeapYears:
         assert mb_multi_noleap.use_leap_years is False
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestIdealisedInversion():
     def simple_plot(self, model, gdir):  # pragma: no cover
         ocls = gdir.read_pickle('inversion_output')
@@ -4465,6 +4477,7 @@ def inversion_params(hef_gdir):
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestHEFNonPolluted:
     """The tests are so convoluted that this does not work when all class
     tests are run"""
@@ -4596,6 +4609,7 @@ class TestHEFNonPolluted:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestHEF:
 
     @pytest.mark.slow
@@ -5212,6 +5226,7 @@ class TestHEF:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestDynamicSpinup:
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -6470,6 +6485,7 @@ class TestDynamicSpinup:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestHydro:
 
     @pytest.mark.slow
@@ -7198,6 +7214,7 @@ class TestHydro:
         assert_allclose(odf_ma['runoff'].idxmax(), 8)
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestMassRedis:
 
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
@@ -7345,6 +7362,7 @@ def merged_hef_cfg(class_case_dir):
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
+@pytest.mark.test_env("models_dynamics")
 class TestMergedHEF:
 
     @pytest.mark.slow
@@ -7461,6 +7479,7 @@ class TestMergedHEF:
                 ds_merged.area.isel(time=200))
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestSemiImplicitModel:
 
     @pytest.mark.slow
@@ -7750,6 +7769,7 @@ class TestSemiImplicitModel:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestDistribute2D:
 
     @pytest.mark.slow
