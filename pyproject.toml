@@ -75,8 +75,6 @@ docs = [
 ]
 tests = [
     "pytest",
-    "pytest-xdist",
-    "ilock",
     "pytest-mpl-oggm>=0.180.1",
 ]
 
