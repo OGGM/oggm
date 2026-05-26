@@ -1823,7 +1823,7 @@ class TestIO():
                     np.isclose(model.fls[0].thick, 0.),
                     dhdt_ref[-1] < 0.)
                 flux_divergence_ref.append(
-                    (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                    (climatic_mb_ref[-1] - dhdt_ref[-1]) *
                     np.where(has_become_ice_free, 0.1, 1.))
             if int(yr) == 500:
                 secfortest = model.fls[0].section
