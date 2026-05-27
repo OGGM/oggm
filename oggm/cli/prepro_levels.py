@@ -367,7 +367,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             # In AA almost all large ice bodies are actually ice caps
             if rgi_reg == '19':
-                rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
+                rgidf.loc[rgidf.Area > 100, 'Form'] = 1
 
             # For greenland we omit connectivity level 2
             if rgi_reg == '05':
@@ -1149,7 +1149,7 @@ def parse_args(args):
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
     parser.add_argument('--dynamic-spinup-periods-to-try', nargs='*',
-                        default=list(range(30, 110, 10)),
+                        default=[30, 40, 50, 60, 70, 80, 90, 100],
                         help="if --dynamic-spinup is set, define additional "
                              "spinup periods to try, if the spinup starting "
                              "from --dynamic-spinup-year is not successful. If"

@@ -819,6 +819,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     else:
         # add initial and minimum spinup period
         spinup_periods_to_run = [spinup_period_initial,
+                                 (spinup_period_initial + min_spinup_period) / 2,
                                  min_spinup_period]
     if spinup_periods_to_try is not None:
         for spn_prd in spinup_periods_to_try:
