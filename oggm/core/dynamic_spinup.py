@@ -863,7 +863,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         except RuntimeError as e:
             # if the last spinup period was min_spinup_period the dynamic
             # spinup failed
-            if spinup_period == spinup_periods_to_try[-1]:
+            if spinup_period == spinup_periods_to_run[-1]:
                 log.warning('No dynamic spinup could be conducted and the '
                             'original model with no spinup is saved using the '
                             f'provided output_filesuffix "{output_filesuffix}". '
