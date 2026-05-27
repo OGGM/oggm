@@ -1203,7 +1203,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     if 'dynamic_spinup_period' in gdir.get_diagnostics():
         last_spinup_period = gdir.get_diagnostics()['dynamic_spinup_period']
         spinup_periods_to_try_forward = [last_spinup_period]
-        spinup_periods_to_try_forward.extend(spinup_periods_to_try)
+        if spinup_periods_to_try is not None:
+            spinup_periods_to_try_forward.extend(spinup_periods_to_try)
     else:
         spinup_periods_to_try_forward = spinup_periods_to_try
 
