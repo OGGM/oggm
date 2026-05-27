@@ -1351,9 +1351,6 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(ds_daily.volume[-1], ds_monthly.volume[-1],
                                    atol=3e7)
 
-
-@pytest.mark.test_env("models_sfctype")
-class TestSfcTypeMBModels:
     @pytest.mark.slow
     def test_sfc_type_mb_model(self, hef_gdir):
 
@@ -2378,9 +2375,6 @@ class TestSfcTypeMBModels:
             plot_runoff('_daily_hydro', 'DailyTIModel')
             plot_runoff('_daily_sfc_hydro', 'SfcTypeTIModel with DailyTIModel')
 
-
-@pytest.mark.test_env("models_mb")
-class TestConstantRandomMBModels:
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']

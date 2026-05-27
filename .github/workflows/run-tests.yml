@@ -21,7 +21,6 @@ jobs:
           - numerics
           - models_mb
           - models_dynamics
-          - models_sfctype
           - benchmark
           - utils
           - workflow-single
