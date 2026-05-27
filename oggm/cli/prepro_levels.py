@@ -116,6 +116,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
+                      dynamic_spinup_periods_to_try=None,
                       continue_on_error=True, store_fl_diagnostics=False):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -239,6 +240,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
+    dynamic_spinup_periods_to_try : list or None
+        If the spinup_period defined by rgi_date - dynamic_spinup_start_yr was
+        not successful, you can provide here a list of spinup periods which
+        should be tried in order.
+        Default is None
     continue_on_error : bool
         if True the workflow continues if a task raises an error. For operational
         runs it should be set to True (the default).
@@ -902,9 +908,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
                 melt_f_max=melt_f_max,
-                kwargs_run_function={'minimise_for': minimise_for},
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'spinup_periods_to_try':
+                                         dynamic_spinup_periods_to_try
+                                     },
                 ignore_errors=True,
-                kwargs_fallback_function={'minimise_for': minimise_for},
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'spinup_periods_to_try':
+                                              dynamic_spinup_periods_to_try
+                                          },
                 output_filesuffix='_spinup_historical',)
             # Now compile the output
             opath = os.path.join(sum_dir, f'spinup_historical_run_output_{rgi_reg}.nc')
@@ -1125,7 +1137,7 @@ def parse_args(args):
                         help="include a dynamic spinup for matching glacier area "
                              "('area/dmdtda') OR volume ('volume/dmdtda') at "
                              "the RGI-date, AND mass-change from Hugonnet "
-                             "in the period 2000-2020 (dynamic mu* "
+                             "in the period 2000-2020 (dynamic melt_f "
                              "calibration).")
     parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=0.2,
                         help="scaling factor to account for correlated "
@@ -1136,6 +1148,14 @@ def parse_args(args):
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
+    parser.add_argument('--dynamic-spinup-periods-to-try', nargs='*',
+                        default=list(range(30, 110, 10)),
+                        help="if --dynamic-spinup is set, define additional "
+                             "spinup periods to try, if the spinup starting "
+                             "from --dynamic-spinup-year is not successful. If"
+                             "you do not want to use set"
+                             "'--dynamic-spinup-periods-to-try none' in the"
+                             "terminal.")
     parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')
@@ -1180,6 +1200,9 @@ def parse_args(args):
 
     dynamic_spinup = False if args.dynamic_spinup == '' else args.dynamic_spinup
 
+    if args.dynamic_spinup_periods_to_try == ['none']:
+        args.dynamic_spinup_periods_to_try = None
+
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
@@ -1211,6 +1234,7 @@ def parse_args(args):
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
+                dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
