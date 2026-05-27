@@ -4480,7 +4480,7 @@ def inversion_params(hef_gdir):
 @pytest.mark.test_env("models_dynamics")
 class TestHEFNonPolluted:
     """The tests are so convoluted that this does not work when all class
-    tests are run"""
+    tests are run """
 
     @pytest.mark.slow
     def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
