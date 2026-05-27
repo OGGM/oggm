@@ -2108,6 +2108,7 @@ class TestMassBalanceModels:
             ys=1980, ye=2020,
             store_model_geometry=True, store_fl_diagnostics=True,
             store_monthly_step=True, mb_elev_feedback='monthly',
+            include_mb_model_heights=False,
             output_filesuffix='_daily_sfc')
         ds_daily_sfc = utils.compile_run_output(gdir,
                                                 input_filesuffix='_daily_sfc')
@@ -2159,7 +2160,7 @@ class TestMassBalanceModels:
             store_model_geometry=True, store_fl_diagnostics=True,
             store_monthly_step=True, mb_elev_feedback='monthly',
             output_filesuffix='_daily_sfc_firn_output',
-            include_firn_outputs=True,
+            include_firn_outputs=True, include_mb_model_heights=False,
         )
         ds_daily_sfc_firn = utils.compile_run_output(
             gdir, input_filesuffix='_daily_sfc_firn_output')
