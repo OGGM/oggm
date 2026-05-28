@@ -240,8 +240,8 @@ html_theme_options = {
     "toc_title": 'On this page',
     "announcement": (
         '<p>How do you use OGGM? Tell us by filling '
-        '<a href="https://forms.office.com/e/ZDBCwj3vFb" target="_blank">this short survey</a> '
-        '(open until May 20). Thanks for your contribution!</p>'
+        '<a href="https://forms.office.com/e/ZDBCwj3vFb" target="_blank">this short survey</a>.'
+        'Thanks for your contribution!</p>'
     ),
     # 'display_version': False,
 }
