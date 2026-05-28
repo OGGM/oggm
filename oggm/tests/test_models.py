@@ -2374,6 +2374,68 @@ class TestMassBalanceModels:
             plot_runoff('_daily_hydro', 'DailyTIModel')
             plot_runoff('_daily_sfc_hydro', 'SfcTypeTIModel with DailyTIModel')
 
+        # test sfc_type model with dynamic melt_f calibration
+        kwargs_sfc_type = {
+            'mb_model_class': massbalance.MonthlyTIModel,
+            'climate_resolution': "monthly",
+            'aging_frequency': "monthly",
+            'ys': 1979,
+            'spinup_years': 6,
+            'use_previous_mbs': True,
+        }
+
+        # With the bucketsystem we need to know the number of grid points
+        MySfcTypeTIModel_inv = partial(
+            massbalance.SfcTypeTIModel,
+            use_main_fl_from='inversion_flowlines',
+            **kwargs_sfc_type,
+        )
+
+        MySfcTypeTIModel_dyn = partial(
+            massbalance.SfcTypeTIModel,
+            use_main_fl_from='model_flowlines',
+            **kwargs_sfc_type,
+        )
+        mb_model_historical = massbalance.MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix='',
+            mb_model_class=MySfcTypeTIModel_dyn,
+            filename='climate_historical')
+        mb_model_spinup = massbalance.MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix='',
+            mb_model_class=partial(
+                massbalance.ConstantMassBalance,
+                mb_model_class=MySfcTypeTIModel_dyn,
+                y0=2001, halfsize=10,
+            ),
+            filename='climate_historical')
+        dyn_models = workflow.execute_entity_task(
+            tasks.run_dynamic_melt_f_calibration,
+            gdir,
+            ys=1979,
+            ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
+            ignore_errors=True,
+            ref_mb_err_scaling_factor=0.2,
+            maxiter=10,
+            kwargs_run_function={
+                'maxiter': 10,
+                'overwrite_observations': False,
+                'mb_model_historical': mb_model_historical,
+                'mb_model_spinup': mb_model_spinup,
+                'include_mb_model_heights': True,
+                'include_firn_outputs': True,
+                'mb_model_class_apparent_mb': MySfcTypeTIModel_inv,
+            },
+            output_filesuffix='_spinup_historical',
+        )
+        # if the above runs without an error it is fine, but still check a few
+        # things
+        assert isinstance(dyn_models[0].volume_m3, float)
+        assert gdir.get_diagnostics()['used_spinup_option'] in [
+            'dynamic melt_f calibration (full success)',
+            'dynamic melt_f calibration (part success)',
+            'dynamic spinup only',
+        ]
+
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']

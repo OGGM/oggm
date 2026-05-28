@@ -994,8 +994,12 @@ class FlowlineModel(object):
         return self.mass_ice_kg * 1e-9
 
     def _get_along_fl_mass_firn_kg(self, fl_id):
-        return (self._get_fl_mb_model(fl_id).columns_mass_kg_per_sqm *
-                self.fls[fl_id].bin_area_m2)
+        fl_mb_model = self._get_fl_mb_model(fl_id)
+        if hasattr(fl_mb_model, 'columns_mass_kg_per_sqm'):
+            return (fl_mb_model.columns_mass_kg_per_sqm *
+                    self.fls[fl_id].bin_area_m2)
+        else:
+            return np.zeros(self.fls[fl_id].thick.shape)
 
     @property
     def mass_firn_kg(self):
