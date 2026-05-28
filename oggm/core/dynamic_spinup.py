@@ -919,12 +919,13 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     for spinup_period in spinup_periods_to_try:
         yr_spinup = target_yr - spinup_period
 
+        y0_spinup = (yr_spinup + target_yr) / 2
+        halfsize_spinup = target_yr - y0_spinup
+
         if not provided_mb_model_spinup:
             # define spinup MassBalance
             # spinup is running for 'target_yr - yr_spinup' years, using a
             # ConstantMassBalance
-            y0_spinup = (yr_spinup + target_yr) / 2
-            halfsize_spinup = target_yr - y0_spinup
             mb_model_spinup = MultipleFlowlineMassBalance(
                 gdir, settings_filesuffix=settings_filesuffix,
                 mb_model_class=ConstantMassBalance,
@@ -1044,6 +1045,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
         spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
+        mb_model_class_apparent_mb=None,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1186,6 +1188,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
+    mb_model_class_apparent_mb : py:class:`core.MassBalanceModel`
+        The mass balance model class which should be used to define the apparent
+        mb for the inversion.
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1277,6 +1282,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             apparent_mb_from_any_mb(gdir,
                                     settings_filesuffix=settings_filesuffix,
                                     add_to_log_file=False,  # dont write to log
+                                    mb_model_class=mb_model_class_apparent_mb,
                                     )
             # do inversion with A calibration to current volume
             calibrate_inversion_from_volume(
@@ -1357,7 +1363,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
-        add_fixed_geometry_spinup=True, **kwargs):
+        add_fixed_geometry_spinup=True, mb_model_class_apparent_mb=None,
+        **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run_with_dynamic_spinup', which are provided
@@ -1478,6 +1485,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
+    mb_model_class_apparent_mb : py:class:`core.MassBalanceModel`
+        The mass balance model class which should be used to define the apparent
+        mb for the inversion.
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1501,6 +1511,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             with utils.DisableLogger():
                 apparent_mb_from_any_mb(gdir,
                                         settings_filesuffix=settings_filesuffix,
+                                        mb_model_class=mb_model_class_apparent_mb,
                                         add_to_log_file=False)
                 calibrate_inversion_from_volume(
                     [gdir], settings_filesuffix=settings_filesuffix,
@@ -1598,6 +1609,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             min_ys=yr_clim_min, ye=ye,
             output_filesuffix=output_filesuffix,
             climate_input_filesuffix=climate_input_filesuffix,
+            mb_model=mb_model_historical,
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             init_model_fls=fls_init, evolution_model=evolution_model,
@@ -2494,8 +2506,15 @@ def run_dynamic_melt_f_calibration(
 
                 # there where some successful runs so we return the one with the
                 # smallest mismatch of dmdtda
-                min_mismatch_index = np.argmin(np.abs(mismatch_dmdtda))
-                melt_f_best = np.array(melt_f_guesses)[min_mismatch_index]
+                try:
+                    min_mismatch_index = np.nanargmin(np.abs(mismatch_dmdtda))
+                    melt_f_best = np.array(melt_f_guesses)[min_mismatch_index]
+                except ValueError as e:
+                    if "All-NaN slice encountered" in str(e):
+                        # nothing worked, just provide initial melt_f again
+                        melt_f_best = melt_f_initial
+                    else:
+                        raise
 
                 # check if the first guess was the best guess
                 only_first_guess = False
