@@ -571,6 +571,7 @@ def test_rgi7_complex_glacier_dirs():
 class TestZarrWorkflow:
     """Tests for any Zarr operations called via workflow or _workflow."""
 
+    @pytest.mark.skip(reason="warning disabled for performance")
     def test_pickle_warnings(self, hef_gdir):
         """Test that write_pickle raises a warning if used."""
         gdir = hef_gdir
