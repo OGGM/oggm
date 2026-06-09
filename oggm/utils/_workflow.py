@@ -3474,9 +3474,64 @@ class GlacierDirectory(object):
             )
             return data_tree
         elif "model_flowline" in name:
+            child_keys = list(data_tree.children.keys())
+            if child_keys and all(k.isdigit() for k in child_keys):
+                sorted_keys = sorted(child_keys, key=int)
+                fls = [
+                    geozarr.get_flowline_from_datatree(data_tree[k])
+                    for k in sorted_keys
+                ]
+                # Restore flows_to connections
+                for i, k in enumerate(sorted_keys):
+                    idx_da = geozarr.get_datatree_value(
+                        data_tree[k], "_flows_to_list_idx"
+                    )
+                    if idx_da is not None:
+                        idx = int(idx_da)
+                        if 0 <= idx < len(fls):
+                            fls[i].set_flows_to(fls[idx])
+                return fls
+            # Legacy single-flowline flat structure
             flowline = geozarr.get_flowline_from_datatree(data_tree=data_tree)
             return [flowline]
+        elif "centerlines" in name and "inversion" not in name:
+            child_keys = list(data_tree.children.keys())
+            if child_keys and all(k.isdigit() for k in child_keys):
+                sorted_keys = sorted(child_keys, key=int)
+                fls = [
+                    geozarr.get_centerline_from_datatree(data_tree[k])
+                    for k in sorted_keys
+                ]
+                for i, k in enumerate(sorted_keys):
+                    idx_da = geozarr.get_datatree_value(
+                        data_tree[k], "_flows_to_list_idx"
+                    )
+                    if idx_da is not None:
+                        idx = int(idx_da)
+                        if 0 <= idx < len(fls):
+                            fls[i].set_flows_to(fls[idx])
+                return fls
+            # Single centerline (legacy flat)
+            return [geozarr.get_centerline_from_datatree(data_tree=data_tree)]
         elif "inversion_flowlines" in name:
+            child_keys = list(data_tree.children.keys())
+            if child_keys and all(k.isdigit() for k in child_keys):
+                sorted_keys = sorted(child_keys, key=int)
+                fls = [
+                    geozarr.get_centerline_from_datatree(data_tree[k])
+                    for k in sorted_keys
+                ]
+                # Restore flows_to connections
+                for i, k in enumerate(sorted_keys):
+                    idx_da = geozarr.get_datatree_value(
+                        data_tree[k], "_flows_to_list_idx"
+                    )
+                    if idx_da is not None:
+                        idx = int(idx_da)
+                        if 0 <= idx < len(fls):
+                            fls[i].set_flows_to(fls[idx])
+                return fls
+            # Legacy single-flowline flat structure
             centerline = geozarr.get_centerline_from_datatree(
                 data_tree=data_tree
             )
@@ -3649,17 +3704,24 @@ class GlacierDirectory(object):
                         "If this fails consider using a helper function "
                         "in utils.geozarr."
                     )
-                    # Distinguish between single and multi-flowline lists
+                    # Distinguish between supported and unsupported list types
                     if (
                         isinstance(data, list)
                         and data
                         and not isinstance(data[0], dict)
                     ):
-                        is_single_flowline = (
-                            "inversion_flowlines" in group
-                            or "model_flowlines" in group
-                        ) and len(data) == 1
-                        if not is_single_flowline:
+                        from oggm import Centerline
+                        from oggm.core.flowline import MixedBedFlowline
+                        _supported = (Centerline, MixedBedFlowline)
+                        _supported_groups = (
+                            "inversion_flowlines",
+                            "model_flowlines",
+                            "centerlines",
+                        )
+                        is_supported_flowline_list = all(
+                            isinstance(item, _supported) for item in data
+                        ) and any(kw in group for kw in _supported_groups)
+                        if not is_supported_flowline_list:
                             raise NotImplementedError(
                                 f"Cannot auto-convert list of "
                                 f"{type(data[0]).__name__} to zarr. "
@@ -4395,7 +4457,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
-        _remove_zarr_store(new_dir, "data_store.zarr")
+        _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'mb_calib', 'climate_historical', 'glacier_grid',
@@ -4404,7 +4466,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
-        _remove_zarr_store(new_dir, "data_store.zarr")
+        _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
     elif setup == 'all':
         shutil.copytree(gdir.dir, new_dir)
     else:
@@ -4431,6 +4493,30 @@ def _remove_zarr_store(new_dir: str, store: str = "data_store.zarr") -> str:
     if os.path.exists(zarr_store):
         shutil.rmtree(zarr_store)
     return zarr_store
+
+
+def _replace_zarr_store(src_dir: str, new_dir: str,
+                        store: str = "data_store.zarr") -> None:
+    """Replace an incomplete zarr store copy with a full copy from source.
+
+    ``include_patterns`` in ``copy_to_basedir`` copies the zarr store
+    directory hierarchy but not the data chunk files inside it (because
+    chunk files don't match the include patterns).  This function removes
+    that empty shell and copies the full store from *src_dir*.
+
+    Parameters
+    ----------
+    src_dir : str
+        The source glacier directory containing the zarr store.
+    new_dir : str
+        The destination glacier directory where the zarr store was copied.
+    store : str, default "data_store.zarr"
+        Name of the zarr store subdirectory.
+    """
+    dst_zarr = _remove_zarr_store(new_dir, store)
+    src_zarr = os.path.join(src_dir, store)
+    if os.path.exists(src_zarr):
+        shutil.copytree(src_zarr, dst_zarr)
 
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,

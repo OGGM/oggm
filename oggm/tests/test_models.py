@@ -148,7 +148,7 @@ class TestInitPresentDayFlowline:
 
         # test if providing a filesuffix is working
         init_present_time_glacier(gdir, filesuffix='_test')
-        assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
+        assert gdir.has_file('model_flowlines', filesuffix='_test')
 
         cfg.PARAMS['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
