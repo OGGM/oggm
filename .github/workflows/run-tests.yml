@@ -32,7 +32,7 @@ jobs:
           - container: python:3.14-slim
             test-env: minimal
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
     container: ${{ matrix.container }}
     continue-on-error: ${{ contains(matrix.container, 'py3') }}
     steps:
