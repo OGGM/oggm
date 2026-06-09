@@ -133,7 +133,7 @@ def get_datatree_value(
         if isinstance(getattr(data_tree, attribute), xr.DataTree):
             if getattr(data_tree, attribute).is_empty:
                 return None
-        return getattr(data_tree, attribute).values
+        return getattr(data_tree, attribute).values.copy()
     return None
 
 
@@ -142,7 +142,7 @@ def get_flowline_from_datatree(data_tree: xr.DataTree):
     from oggm.core.flowline import MixedBedFlowline
 
     flowline = MixedBedFlowline(
-        line=_validate_linestring(get_datatree_value(data_tree, "line").values),
+        line=_validate_linestring(get_datatree_value(data_tree, "line")),
         dx=get_datatree_value(data_tree, "dx"),
         map_dx=get_datatree_value(data_tree, "map_dx"),
         surface_h=get_datatree_value(data_tree, "surface_h"),
@@ -161,7 +161,7 @@ def get_flowline_from_datatree(data_tree: xr.DataTree):
         "_sqrt_bed",
         "_w0_m",
     ]:
-        setattr(flowline, attribute, getattr(data_tree, attribute))
+        setattr(flowline, attribute, get_datatree_value(data_tree, attribute))
 
     # reconstruct Grid partial
     map_trafo = get_map_trafo_from_grid(data_tree)
@@ -179,7 +179,7 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
     from oggm import Centerline
 
     centerline = Centerline(
-        line=_validate_linestring(get_datatree_value(data_tree, "line").values),
+        line=_validate_linestring(get_datatree_value(data_tree, "line")),
         dx=np.array(get_datatree_value(data_tree, "dx")),
         surface_h=get_datatree_value(data_tree, "surface_h"),
         orig_head=get_datatree_value(data_tree, "orig_head"),
@@ -195,7 +195,8 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
         "flux",
         "flux_out",
     ]:
-        setattr(centerline, attribute, getattr(data_tree, attribute))
+        val = get_datatree_value(data_tree, attribute)
+        setattr(centerline, attribute, val)
 
     return centerline
 
@@ -208,6 +209,7 @@ def restore_projection(root: xr.DataTree) -> None:
 
 
 def get_grid_params_from_partial(p: Callable) -> dict:
+    # TODO: Convert from glacier_grid instead of partial.
     grid = p.func.__self__
     grid_parameters = {
         "pyproj_srs": grid.proj.crs.to_json_dict(),
@@ -221,7 +223,7 @@ def get_grid_params_from_partial(p: Callable) -> dict:
 
 
 def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Callable:
-
+    # TODO: Move to change flowline object instead to take a Grid object instead of a gdir.
     map_trafo = Grid(
         proj=data_tree.attrs["pyproj_srs"],
         nxny=(data_tree.attrs["nxny"]),
@@ -280,15 +282,15 @@ def get_dict_from_datatree(data_tree: xr.DataTree) -> dict:
     """
     data = {}
     for coord in data_tree.coords:
-        data[coord] = data_tree.coords[coord].values
+        data[coord] = data_tree.coords[coord].values.copy()
     for var in data_tree.data_vars:
-        data[var] = data_tree[var].values
+        data[var] = data_tree[var].values.copy()
     for name, child in data_tree.children.items():
         if isinstance(child, xr.DataTree):
             if child.is_empty:
                 data[name] = None
-            # else:
-            #     data[name] = get_dict_from_datatree(child)
+            else:
+                data[name] = get_dict_from_datatree(child)
         else:
             data[name] = child
     return data
@@ -323,6 +325,11 @@ def get_downstream_line_from_pkl(pickle: dict) -> dict:
             "The pickle must contain a 'downstream_line' key."
             "Check the contents of the pickle."
         )
+    # Work on a shallow copy so the original dict is not mutated.  If we
+    # modified the caller's dict in-place the original_data reference in
+    # write_store would also be changed, causing the pickle fallback to
+    # store a DataArray instead of the original shapely geometry.
+    pickle = dict(pickle)
     coordinates = convert_linestring_to_dataarray(downstream_line)
     pickle["downstream_line"] = coordinates
 
@@ -427,6 +434,8 @@ def get_inversion_flowlines_from_pkl(pickle: list) -> list[dict]:
                 "rgi_id": pickle[0].rgi_id,
                 "map_dx": pickle[0].map_dx,
             }
+            if isinstance(data["line"], shapely.LineString):
+                data["line"] = convert_linestring_to_dataarray(data["line"])
             # These cannot be passed via Centerline.__init__
             for attribute in [
                 "order",
@@ -455,18 +464,33 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
     for name, pickle in pickle_data.items():
         try:
             # These are the pickles that require special handling.
-            if name == "downstream_line":
+            if "downstream_line" in name:
                 data = get_downstream_line_from_pkl(pickle)
-            elif name == "inversion_flowlines":
+            elif "inversion_flowlines" in name:
                 data = get_inversion_flowlines_from_pkl(pickle)[0]
-            elif name == "model_flowlines":
-                data = get_model_flowlines_from_pkl(pickle)
+            elif "model_flowlines" in name:
+                data = get_model_flowlines_from_pkl(pickle)[0]
                 if data["map_trafo"] is not None:
-                    for k, v in get_grid_params_from_partial(data["map_trafo"]):
+                    for k, v in get_grid_params_from_partial(data["map_trafo"]).items():
                         data_tree.attrs[k] = v
                     data.pop("map_trafo", None)
 
             # Fallback for implicitly supported pickles
+            elif isinstance(pickle, list) and all(
+                isinstance(item, dict) for item in pickle
+            ):
+                # List of dicts (e.g. inversion_input/output with multiple
+                # flowlines): store each dict as a numbered child group.
+                sub_tree = xr.DataTree()
+                for i, item in enumerate(pickle):
+                    sub_tree = add_datacube(
+                        data_tree=sub_tree,
+                        datacubes=item,
+                        datacube_name=str(i),
+                        overwrite=True,
+                    )
+                data_tree[name] = sub_tree
+                data = None  # skip add_datacube below
             elif isinstance(pickle, list):
                 data = pickle[0]
             elif isinstance(pickle, dict):
@@ -480,8 +504,8 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
                     datacube_name=name,
                     overwrite=True,
                 )
-            if name == "model_flowlines":
-                data_tree.model_flowline.attrs = data_tree.attrs
+            if "model_flowlines" in name:
+                data_tree.model_flowlines.attrs = data_tree.attrs
         except NotImplementedError as e:
             print(f"Pickle '{name}' is unsupported and was skipped: {e}")
 

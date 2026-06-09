@@ -52,7 +52,7 @@ class Flowline(Centerline):
 
     def __init__(self, line=None, dx=1, map_dx=None,
                  surface_h=None, bed_h=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, grid=None):
         """ Initialize a Flowline
 
         Parameters
@@ -71,6 +71,7 @@ class Flowline(Centerline):
             The glacier's RGI identifier
         water_level : float
             The water level (to compute volume below sea-level)
+        grid : :py:class:`salem.Grid`
         """
 
         # This is do add flexibility for testing
@@ -79,6 +80,8 @@ class Flowline(Centerline):
         if line is None:
             coords = np.arange(len(surface_h)) * dx
             line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+        if gdir is not None:
+            grid = gdir.grid
 
         super(Flowline, self).__init__(line, dx, surface_h)
 
@@ -91,8 +94,8 @@ class Flowline(Centerline):
         self._point_lons = None
         self._point_lats = None
         self.map_trafo = None
-        if gdir is not None:
-            self.map_trafo = partial(gdir.grid.ij_to_crs, crs=salem.wgs84)
+        if grid is not None:
+            self.map_trafo = partial(grid.ij_to_crs, crs=salem.wgs84)
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
@@ -458,7 +461,7 @@ class MixedBedFlowline(Flowline):
     def __init__(self, *, line=None, dx=None, map_dx=None, surface_h=None,
                  bed_h=None, section=None, bed_shape=None,
                  is_trapezoid=None, lambdas=None, widths_m=None, rgi_id=None,
-                 water_level=None, gdir=None):
+                 water_level=None, gdir=None, grid=None):
         """ Instantiate.
 
         Parameters
@@ -472,7 +475,7 @@ class MixedBedFlowline(Flowline):
                                                bed_h=bed_h.copy(),
                                                rgi_id=rgi_id,
                                                water_level=water_level,
-                                               gdir=gdir)
+                                               gdir=gdir, grid=grid)
 
         # To speedup calculations if no trapezoid bed is present
         self._do_trapeze = np.any(is_trapezoid)
@@ -3336,7 +3339,7 @@ def init_present_time_glacier(gdir, filesuffix='',
         fl.order = line_order(fl)
 
     # Write the data
-    gdir.write_pickle(new_fls, 'model_flowlines', filesuffix=filesuffix)
+    gdir.write_store(new_fls, 'model_flowlines', filesuffix=filesuffix)
 
 
 def decide_evolution_model(evolution_model=None):
@@ -4589,7 +4592,7 @@ def merge_to_one_glacier(main, tribs, filename='climate_historical',
     fls = fls + [mfl]
 
     # Finally write the flowlines
-    main.write_pickle(fls, 'model_flowlines')
+    main.write_store(fls, 'model_flowlines')
 
 
 def clean_merged_flowlines(gdir, buffer=None):
@@ -4773,7 +4776,7 @@ def clean_merged_flowlines(gdir, buffer=None):
     assert allfls[-1] == mainfl
 
     # Finally write the flowlines
-    gdir.write_pickle(allfls, 'model_flowlines')
+    gdir.write_store(allfls, 'model_flowlines')
 
 
 @entity_task(log)

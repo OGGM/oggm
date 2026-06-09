@@ -2435,9 +2435,9 @@ def apparent_mb_from_linear_mb(gdir, mb_gradient=3., ela_h=None):
 
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
-    gdir.write_pickle(fls, 'inversion_flowlines')
-    gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
-                      'linear_mb_params')
+    gdir.write_store(fls, 'inversion_flowlines')
+    gdir.write_store({'ela_h': ela_h, 'grad': mb_gradient},
+                     'linear_mb_params')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -2537,7 +2537,7 @@ def apparent_mb_from_any_mb(gdir, mb_model=None,
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
     gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    gdir.write_store(fls, 'inversion_flowlines')
 
 
 @entity_task(log)
