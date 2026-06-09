@@ -532,8 +532,8 @@ class TestGIS(unittest.TestCase):
 
         # TODO: replace read & write pickle methods
         out = {'foo': 1.5}
-        gdir.write_pickle(out, 'mybn')
-        assert gdir.read_pickle('mybn') == out
+        gdir.write_store(out, 'mybn')
+        assert gdir.read_store('mybn') == out
 
     def test_gridded_data_var_to_geotiff(self):
 
@@ -2081,7 +2081,7 @@ class TestClimate(unittest.TestCase):
         assert fls[1].flows_to is fls[-1]
         fls[0].surface_h -= 700
         fls[1].surface_h -= 700
-        gdir.write_pickle(fls, 'inversion_flowlines')
+        gdir.write_store(fls, 'inversion_flowlines')
 
         mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                         ref_period=ref_period)
@@ -2954,7 +2954,7 @@ class TestGrindelInvert(unittest.TestCase):
             towrite.append(cl_dic)
 
         # Write out
-        gdir.write_pickle(towrite, 'inversion_input')
+        gdir.write_store(towrite, 'inversion_input')
         v = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 

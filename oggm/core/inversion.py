@@ -140,7 +140,7 @@ def prepare_for_inversion(gdir,
         towrite.append(cl_dic)
 
     # Write out
-    gdir.write_pickle(towrite, 'inversion_input')
+    gdir.write_store(towrite, 'inversion_input')
 
 
 def _inversion_poly(a3, a0):
@@ -495,7 +495,7 @@ def mass_conservation_inversion(gdir, glen_a=None, fs=None, write=True,
         out_volume += np.sum(volume)
 
     if write:
-        gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
+        gdir.write_store(cls, 'inversion_output', filesuffix=filesuffix)
         gdir.add_to_diagnostics('inversion_glen_a', glen_a)
         gdir.add_to_diagnostics('inversion_fs', fs)
 
@@ -616,7 +616,7 @@ def filter_inversion_output(gdir, n_smoothing=5, min_ice_thick=1.,
     cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
     cl['volume'][n_smoothing:] = new_volume
 
-    gdir.write_pickle(cls, 'inversion_output')
+    gdir.write_store(cls, 'inversion_output')
 
     # Return volume for convenience
     return np.sum([np.sum(cl['volume']) for cl in cls])
@@ -722,7 +722,7 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
         cl['u_basal'] = u_basal
         cl['u_deformation'] = u_deformation
 
-    gdir.write_pickle(cls, 'inversion_output', filesuffix=filesuffix)
+    gdir.write_store(cls, 'inversion_output', filesuffix=filesuffix)
 
 
 @entity_task(log, writes=['gridded_data'])

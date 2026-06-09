@@ -89,7 +89,7 @@ class TestZarrUtilities:
         class _MockGDir:
             dir = str(tmp_path)
 
-        paths = oggmzarr.get_pickle_paths(_MockGDir())
+        paths = oggmzarr.get_pickle_paths(_MockGDir().dir)
         assert all(isinstance(p, Path) for p in paths)
         assert all(str(p).endswith(".pkl") for p in paths)
         assert len(paths) == 2
@@ -98,7 +98,7 @@ class TestZarrUtilities:
         class _MockGDir:
             dir = str(tmp_path)
 
-        assert oggmzarr.get_pickle_paths(_MockGDir()) == []
+        assert not oggmzarr.get_pickle_paths(_MockGDir().dir)
 
     def test_get_pickle_data_reads_dict_pickle(self, tmp_path):
         payload = {"array": np.array([1.0, 2.0]), "val": 42}

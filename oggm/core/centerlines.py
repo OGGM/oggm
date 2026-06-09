@@ -974,7 +974,7 @@ def compute_centerlines(gdir, heads=None):
                             'found!'.format(gdir.rgi_id))
 
     # Write the data
-    gdir.write_pickle(cls, 'centerlines')
+    gdir.write_store(cls, 'centerlines')
 
     if is_first_call:
         # For diagnostics of filtered centerlines
@@ -1060,7 +1060,7 @@ def compute_downstream_line(gdir):
         _, dline = _line_extend(shpg.LineString(), line, cl.dx)
         out = dict(full_line=None, downstream_line=dline)
 
-    gdir.write_pickle(out, 'downstream_line')
+    gdir.write_store(out, 'downstream_line')
 
 
 def _approx_parabola(x, y, y0=0):
@@ -1320,7 +1320,7 @@ def compute_downstream_bedshape(gdir):
     out['bedshapes'] = bs
     out['surface_h'] = hgts
     out['w0s'] = w0s
-    gdir.write_pickle(out, 'downstream_line')
+    gdir.write_store(out, 'downstream_line')
 
 
 def _mask_to_polygon(mask, gdir=None):
@@ -1811,7 +1811,7 @@ def initialize_flowlines(gdir):
         fl.set_flows_to(fls[cls.index(cl.flows_to)])
 
     # Write the data
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    gdir.write_store(fls, 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'centerlines')
     if do_filter:
         out = diag_n_bad_slopes/diag_n_pix
@@ -1928,8 +1928,8 @@ def catchment_width_geom(gdir):
         fl.geometrical_widths = wlines
         fl.is_rectangular = is_rectangular
 
-    # Overwrite pickle
-    gdir.write_pickle(flowlines, 'inversion_flowlines')
+    # Overwrite
+    gdir.write_store(flowlines, 'inversion_flowlines')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -2077,8 +2077,8 @@ def catchment_width_correction(gdir):
     for fl in fls:
         fl.widths *= fac
 
-    # Overwrite centerlines
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    # Overwrite
+    gdir.write_store(fls, 'inversion_flowlines')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -2120,8 +2120,8 @@ def terminus_width_correction(gdir, new_width=None):
     width[:-5] = width[:-5] * cor_factor
     fl.widths = width
 
-    # Overwrite centerlines
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    # Overwrite
+    gdir.write_store(fls, 'inversion_flowlines')
 
 
 def intersect_downstream_lines(gdir, candidates=None):
@@ -2449,5 +2449,5 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
         fl.is_rectangular[-5:] = True
         fl.is_trapezoid[-5:] = False
 
-    gdir.write_pickle([fl], 'inversion_flowlines')
+    gdir.write_store([fl], 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'elevation_band')
