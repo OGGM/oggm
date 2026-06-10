@@ -110,6 +110,15 @@ def restore_oggm_cfg():
     reset_multiprocessing()
     yield
     cfg.unpack_config(old_cfg)
+    # Flush zarr's background async I/O thread so that any zarr stores written
+    # during the test are fully closed before the next test's setUp runs
+    # shutil.rmtree.  Without this, zarr 3.x can leave open handles that cause
+    # ENOTEMPTY on the next setUp's directory reset.
+    try:
+        from zarr.core.sync import cleanup_resources
+        cleanup_resources()
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope='class', autouse=True)
