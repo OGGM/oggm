@@ -981,7 +981,7 @@ def glacier_masks(gdir):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    gdir.write_pickle(geometries, 'geometries')
+    gdir.write_store(geometries, 'geometries', use_pickle=True)
 
     # write out the grids in the netcdf file
     with GriddedNcdfFile(gdir) as nc:
@@ -1871,7 +1871,7 @@ def merged_glacier_masks(gdir, geometry):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    gdir.write_pickle(geometries, 'geometries')
+    gdir.write_store(geometries, 'geometries', use_pickle=True)
 
 
 @entity_task(log)
