@@ -2093,9 +2093,8 @@ class TestIO():
         np.testing.assert_allclose(model.fls[0].section,
                                    fmodel.fls[0].section)
 
-    def test_gdir_copy(self, hef_gdir):
-
-        new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
+    def test_gdir_copy(self, hef_gdir, tmpdir):
+        new_dir = tmpdir.mkdir('tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
         new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,

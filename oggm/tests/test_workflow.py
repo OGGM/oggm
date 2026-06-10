@@ -658,14 +658,15 @@ class TestZarrWorkflow:
         """Test read_store falls back to read_pickle if zarr is not found."""
         gdir = hef_gdir
 
-        # inversion_flowlines is written by write_pickle (not yet ported to
-        # write_store), so it only exists as a pickle file and exercises the
-        # zarr-to-pickle fallback path in read_store.
+        gdir.write_pickle(
+            var=[{"flux": [1.0, 2.0, 3.0]}],
+            filename="inversion_input",filesuffix="test_pickle")
+        
         with pytest.warns(
             Warning,
             match="Zarr data not found, attempting to read pickle file instead.",
         ):
-            ds_read = gdir.read_store(filename="inversion_flowlines")
+            ds_read = gdir.read_store("inversion_input", "test_pickle")
         assert not isinstance(ds_read, xr.DataTree)
         assert isinstance(ds_read, list)
 
