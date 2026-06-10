@@ -2237,7 +2237,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2311,7 +2311,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
 
@@ -2349,7 +2349,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2427,7 +2427,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = fl.is_trapezoid[pg]
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2456,7 +2456,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2483,7 +2483,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2514,7 +2514,7 @@ class TestIdealisedInversion():
 
         fls[0].set_flows_to(fls[1])
 
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2546,7 +2546,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2577,7 +2577,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
