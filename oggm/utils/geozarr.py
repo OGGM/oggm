@@ -210,6 +210,23 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
         val = get_datatree_value(data_tree, attribute)
         setattr(centerline, attribute, val)
 
+    # For widths from (N,2,2) array to MultiLineString
+    # Matches original structure by converting NaN row to emtpy MLS
+    gw_data = get_datatree_value(data_tree, "geometrical_widths")
+    if gw_data is not None:
+        gw_array = np.array(gw_data)
+        widths = []
+        for i in range(len(gw_array)):
+            if np.any(np.isnan(gw_array[i])):
+                widths.append(shapely.geometry.MultiLineString())
+            else:
+                widths.append(
+                    shapely.geometry.MultiLineString(
+                        [shapely.geometry.LineString(gw_array[i])]
+                    )
+                )
+        centerline.geometrical_widths = widths
+
     return centerline
 
 
@@ -490,6 +507,31 @@ def get_inversion_flowlines_from_pkl(pickle: list) -> list[dict]:
                 if flows_to is not None
                 else -1
             )
+            gw = getattr(fl, "geometrical_widths", None)
+            if gw is not None:
+                nan_row = np.full((2, 2), np.nan, dtype=np.float64)
+                gw_rows = []
+                for w in gw:
+                    if w is None or w.is_empty:
+                        gw_rows.append(nan_row)
+                    elif hasattr(w, "geoms"):
+                        # MultiLineString: take the first (only) member
+                        sub = list(w.geoms)
+                        if sub:
+                            gw_rows.append(
+                                np.array(list(sub[0].coords), dtype=np.float64)
+                            )
+                        else:
+                            gw_rows.append(nan_row)
+                    else:
+                        # Plain LineString
+                        gw_rows.append(
+                            np.array(list(w.coords), dtype=np.float64)
+                        )
+                data["geometrical_widths"] = xr.DataArray(
+                    np.array(gw_rows, dtype=np.float64),
+                    dims=["width_idx", "vertex", "coord"],
+                )
             # so xarray can infer dtypes for each variable
             data = {k: v for k, v in data.items() if v is not None}
             new_pickle.append(data)
