@@ -392,27 +392,32 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Try to avoid concurrency
     if rgi_version == '70C':
-        fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
-                             'ref_mb_params/oggm_v1.6/inv_rgi7/'
-                             'rgi7c_rgi_year_2025.1.csv')
-        rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
-        rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
+        from oggm.utils._downloads import get_lock
+        with get_lock():
+            fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                                'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                                'rgi7c_rgi_year_2025.1.csv')
+            rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
+            rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
 
     # Add a new default source
     if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
         if rgi_version == '62':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
         if rgi_version == '70G':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
         if rgi_version == '70C':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_sourc`e'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
     # L0 - go
     if start_level == 0:
