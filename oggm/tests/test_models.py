@@ -2094,7 +2094,8 @@ class TestIO():
                                    fmodel.fls[0].section)
 
     def test_gdir_copy(self, hef_gdir, tmpdir):
-        new_dir = tmpdir.mkdir('tmp_testcopy')
+
+        new_dir = tmpdir.join('tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
         new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
@@ -3873,8 +3874,7 @@ class TestDynamicSpinup:
             # only important if inversion is included, so original
             # model_flowlines are unchagned (to be able to conduct more dynamic
             # calibration runs in the same gdir)
-            assert not os.path.isfile(
-                os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
+            assert not gdir.has_file('model_flowlines', '_dyn_melt_f_calib')
 
         # conduct a run including a dynamic spinup and inversion
         melt_f_max = 1000 * 12 / 365
@@ -3924,8 +3924,7 @@ class TestDynamicSpinup:
         if do_inversion:
             # after the run, check that the dyn model flowlines exists and that
             # the original model flowlines are unchanged
-            assert os.path.isfile(
-                os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
+            assert gdir.has_file('model_flowlines', '_dyn_melt_f_calib')
             assert np.all([np.all(getattr(fl_prev, 'surface_h') ==
                                   getattr(fl_now, 'surface_h')) and
                            np.all(getattr(fl_prev, 'bed_h') ==
