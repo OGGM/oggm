@@ -3,6 +3,7 @@
 import logging
 import copy
 import os
+import shutil
 import warnings
 
 # External libs
@@ -1400,6 +1401,16 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                                    'model_flowlines_dyn_melt_f_calib.pkl')):
         os.remove(os.path.join(gdir.dir,
                                'model_flowlines_dyn_melt_f_calib.pkl'))
+    zarr_fp = gdir.get_filepath("data_store").replace(".pkl", ".zarr")
+    zarr_group = os.path.join(zarr_fp, "model_flowlines__dyn_melt_f_calib")
+    if os.path.exists(zarr_group):
+        shutil.rmtree(zarr_group)
+        try:
+            import zarr as _zarr
+
+            _zarr.consolidate_metadata(zarr_fp)
+        except Exception:
+            pass
 
     if target_yr is None:
         target_yr = gdir.rgi_date + 1  # + 1 converted to hydro years

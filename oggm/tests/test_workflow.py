@@ -288,7 +288,10 @@ class TestFullRun(unittest.TestCase):
         utils.mkdir(base_dir, reset=True)
         gdirs = workflow.execute_entity_task(utils.copy_to_basedir, gdirs,
                                              base_dir=base_dir, setup='all')
-        os.remove(gdirs[0].get_filepath('centerlines'))
+        path_centerline = gdirs[0].get_filepath('centerlines')
+        for path in [path_centerline,path_centerline.replace(".pkl", ".zarr")]:
+            if os.path.exists(path):
+                os.remove(path)
         cfg.PARAMS['continue_on_error'] = True
         write_centerlines_to_shape(gdirs)
 
@@ -657,15 +660,20 @@ class TestZarrWorkflow:
     def test_read_store_fallback(self, hef_gdir):
         """Test read_store falls back to read_pickle if zarr is not found."""
         gdir = hef_gdir
-
-        # inversion_flowlines is written by write_pickle (not yet ported to
-        # write_store), so it only exists as a pickle file and exercises the
-        # zarr-to-pickle fallback path in read_store.
+        # Force the use of pickle or this test will never pass once
+        # switched to zarr
+        gdir.write_pickle(
+            var=[1, 2, 3],
+            filename="inversion_flowlines",
+            filesuffix="test_pickle",
+        )
         with pytest.warns(
             Warning,
             match="Zarr data not found, attempting to read pickle file instead.",
         ):
-            ds_read = gdir.read_store(filename="inversion_flowlines")
+            ds_read = gdir.read_store(
+                filename="inversion_flowlines", filesuffix="test_pickle"
+            )
         assert not isinstance(ds_read, xr.DataTree)
         assert isinstance(ds_read, list)
 

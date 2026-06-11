@@ -3405,10 +3405,16 @@ class GlacierDirectory(object):
             FileNotFoundError,
             KeyError,
             ValueError,
-        ):  # fallback to pickle if zarr not found
+        ) as e:  # fallback to pickle if zarr not found
             warnings.warn(
                 "Zarr data not found, attempting to read pickle file instead."
             )
+            fp = self.get_filepath(filename, filesuffix=filesuffix)
+            if not os.path.exists(fp):
+                raise FileNotFoundError(
+                    f"{e}\nNo zarr or pickle found for {fp}"
+                )
+
             out: list | dict = self.read_pickle(
                 filename=filename, use_compression=None, filesuffix=filesuffix
             )
@@ -3698,12 +3704,6 @@ class GlacierDirectory(object):
                 # Save original data in case of fallback to pickle
                 original_data = data
                 if not isinstance(data, xr.DataTree):
-                    warnings.warn(
-                        "Data is not an xr.DataTree. "
-                        "Will attempt automatic conversion. "
-                        "If this fails consider using a helper function "
-                        "in utils.geozarr."
-                    )
                     # Distinguish between supported and unsupported list types
                     if (
                         isinstance(data, list)

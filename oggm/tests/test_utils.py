@@ -836,7 +836,9 @@ def _read_shp():
     return inter, rgidf
 
 
-class TestPreproCLI(unittest.TestCase):
+class TestPreproCLI:
+
+    on_mac = platform.system() == 'Darwin'    
 
     def setUp(self):
         from _pytest.monkeypatch import MonkeyPatch
@@ -849,8 +851,10 @@ class TestPreproCLI(unittest.TestCase):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
 
-    def reset_dir(self):
-        utils.mkdir(self.testdir, reset=True)
+    @pytest.fixture(scope="function", autouse=True)
+    def reset_dir(self, tmpdir):
+        utils.mkdir(tmpdir, reset=True)
+        # self.tearDown()
 
     def test_parse_args(self):
 
@@ -1047,16 +1051,16 @@ class TestPreproCLI(unittest.TestCase):
             assert kwargs['border'] == 120
 
     @pytest.mark.slow
-    def test_full_run_defaults(self):
+    def test_full_run_defaults(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
+        wdir = tmpdir.mkdir("wd")
+        utils.mkdir(wdir, reset=True)
+        odir = tmpdir.mkdir("my_levs")
+        topof = utils.get_demo_file("srtm_oetztal.tif")
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
@@ -1201,16 +1205,15 @@ class TestPreproCLI(unittest.TestCase):
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_distributed_thickness_and_geotiff_export(self):
+    def test_distributed_thickness_and_geotiff_export(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
         import rioxarray as rioxr
 
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
 
@@ -1265,16 +1268,15 @@ class TestPreproCLI(unittest.TestCase):
         assert gtiff_ds.isel(band=0).sum() > 0
 
     @pytest.mark.slow
-    def test_full_run_cru_centerlines(self):
+    def test_full_run_cru_centerlines(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
+        topof = utils.get_demo_file("srtm_oetztal.tif")
         np.random.seed(0)
         ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
@@ -1289,6 +1291,7 @@ class TestPreproCLI(unittest.TestCase):
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
+                                           'use_mp_spawn': True,
                                            }
                           )
 
@@ -1420,7 +1423,7 @@ class TestPreproCLI(unittest.TestCase):
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
+    def test_elev_bands_and_spinup_run_with_different_evolution_models(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1430,10 +1433,9 @@ class TestPreproCLI(unittest.TestCase):
             # Read in the RGI file
             inter, rgidf = _read_shp()
 
-            wdir = os.path.join(self.testdir, 'wd')
-            utils.mkdir(wdir, reset=True)
-            odir = os.path.join(self.testdir, 'my_levs')
-            topof = utils.get_demo_file('srtm_oetztal.tif')
+            wdir = tmpdir.mkdir(f"wd_{evolution_model}")
+            odir = tmpdir.mkdir(f"my_levs_{evolution_model}")
+            topof = utils.get_demo_file("srtm_oetztal.tif")
             np.random.seed(0)
             border = 80
             bstr = 'b_080'
@@ -1455,6 +1457,7 @@ class TestPreproCLI(unittest.TestCase):
                                                'evolution_model': evolution_model,
                                                'downstream_line_shape': downstream_line_shape,
                                                'prcp_fac': 2.5,
+                                               'use_mp_spawn': True,
                                                })
 
             df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
@@ -1577,17 +1580,16 @@ class TestPreproCLI(unittest.TestCase):
                         rtol=0.02)
 
     @pytest.mark.slow
-    def test_geodetic_per_glacier_and_massredis_run(self):
+    def test_geodetic_per_glacier_and_massredis_run(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
+        topof = utils.get_demo_file("srtm_oetztal.tif")
         np.random.seed(0)
 
         params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
@@ -1602,7 +1604,7 @@ class TestPreproCLI(unittest.TestCase):
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf, intersects_file=inter,
-                          override_params=params,
+                          override_params={**params, 'use_mp_spawn': True},
                           disable_mp=False,
                           mb_calibration_strategy='melt_temp',
                           test_topofile=topof, elev_bands=True)
@@ -1679,7 +1681,7 @@ class TestPreproCLI(unittest.TestCase):
         np.testing.assert_allclose(ds.hydro_month, 4)
         np.testing.assert_allclose(ds.calendar_month, 1)
 
-    def test_start_from_prepro(self):
+    def test_start_from_prepro(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1688,9 +1690,8 @@ class TestPreproCLI(unittest.TestCase):
 
         # Read in the RGI file
         inter, rgidf = _read_shp()
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
         np.random.seed(0)
         ref_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
@@ -1703,6 +1704,7 @@ class TestPreproCLI(unittest.TestCase):
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
+                                           'use_mp_spawn': True,
                                            }
                           )
 
@@ -1726,9 +1728,9 @@ class TestPreproCLI(unittest.TestCase):
                               rgi_file=rgidf, intersects_file=inter,
                               start_level=2, max_level=4)
 
-    def test_source_run(self):
+    def test_source_run(self, tmpdir, monkeypatch):
 
-        self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
+        monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1736,9 +1738,8 @@ class TestPreproCLI(unittest.TestCase):
         inter, rgidf = _read_shp()
         rgidf = rgidf.iloc[:4]
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
