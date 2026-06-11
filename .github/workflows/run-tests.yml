@@ -32,7 +32,6 @@ jobs:
           - container: python:3.14-slim
             test-env: minimal
     runs-on: ubuntu-latest
-    timeout-minutes: 180
     container: ${{ matrix.container }}
     continue-on-error: ${{ contains(matrix.container, 'py3') }}
     steps:
@@ -44,7 +43,7 @@ jobs:
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
-        run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
+        run: timeout 60m ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
         env:
           STATIC_MAP_API_KEY: ${{ secrets.STATIC_MAP_API_KEY }}
       - name: Normalize Artifact Name
