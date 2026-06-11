@@ -126,6 +126,18 @@ def _validate_polygon(
     return polygon
 
 
+def _validate_point(
+    point: xr.DataArray | np.ndarray | shapely.Point | None,
+) -> shapely.Point | None:
+    """Coerce a stored DataArray/ndarray back to a shapely Point."""
+    if point is None:
+        return None
+    if isinstance(point, (xr.DataArray, np.ndarray)):
+        coords = np.asarray(point).flatten()
+        return shapely.geometry.Point(coords)
+    return point
+
+
 def get_datatree_value(
     data_tree: xr.DataTree, attribute: str
 ) -> xr.DataArray | None:
@@ -182,7 +194,7 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
         line=_validate_linestring(get_datatree_value(data_tree, "line")),
         dx=np.array(get_datatree_value(data_tree, "dx")),
         surface_h=get_datatree_value(data_tree, "surface_h"),
-        orig_head=get_datatree_value(data_tree, "orig_head"),
+        orig_head=_validate_point(get_datatree_value(data_tree, "orig_head")),
         rgi_id=get_datatree_value(data_tree, "rgi_id"),
         map_dx=get_datatree_value(data_tree, "map_dx"),
     )
@@ -197,6 +209,23 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
     ]:
         val = get_datatree_value(data_tree, attribute)
         setattr(centerline, attribute, val)
+
+    # For widths from (N,2,2) array to MultiLineString
+    # Matches original structure by converting NaN row to emtpy MLS
+    gw_data = get_datatree_value(data_tree, "geometrical_widths")
+    if gw_data is not None:
+        gw_array = np.array(gw_data)
+        widths = []
+        for i in range(len(gw_array)):
+            if np.any(np.isnan(gw_array[i])):
+                widths.append(shapely.geometry.MultiLineString())
+            else:
+                widths.append(
+                    shapely.geometry.MultiLineString(
+                        [shapely.geometry.LineString(gw_array[i])]
+                    )
+                )
+        centerline.geometrical_widths = widths
 
     return centerline
 
@@ -243,6 +272,18 @@ def convert_linestring_to_dataarray(line: shapely.LineString) -> xr.DataArray:
             np.array(shapely.geometry.mapping(line)["coordinates"]),
             dims=["x", "y"],
         )
+
+
+def convert_point_to_dataarray(
+    point: shapely.Point | None,
+) -> xr.DataArray | None:
+    """Convert a shapely Point to a 1-D DataArray of coordinates."""
+    if point is None:
+        return None
+    if not isinstance(point, shapely.Point):
+        return point
+    coords = np.array(shapely.get_coordinates(point)).flatten()
+    return xr.DataArray(coords, dims=["xy"])
 
 
 def convert_polygon_to_dataarray(
@@ -340,102 +381,113 @@ def get_model_flowlines_from_pkl(pickle: list) -> list:
     """Convert ``model_flowlines`` pickle into zarr-compatible structure.
 
     Note that ``map_trafo`` is a partial and cannot be directly
-    serialised to zarr.
+    serialised to zarr; it is stored separately as group attrs.
+    ``gdir`` is a GlacierDirectory and cannot be serialised either;
+    it is omitted (``map_trafo`` is reconstructed from the stored grid
+    params instead).
 
     Parameters
     ----------
-    pickle : dict
+    pickle : list
         Data loaded directly from the ``model_flowlines`` pickle.
 
     Returns
     -------
-    dict
-        Contains all the attributes necessary to reconstruct the
-        original Flowline objects.
+    list[dict]
+        One dict per flowline with the attributes needed to reconstruct
+        the original :py:class:`oggm.core.flowline.MixedBedFlowline`.
     """
     from oggm.core.flowline import MixedBedFlowline
 
     new_pickle = []
-    if isinstance(pickle, list):
-        if not pickle:
-            return new_pickle
-        try:
-            assert all(
-                isinstance(flowline, MixedBedFlowline) for flowline in pickle
-            )
-            # Get all attributes necessary for reconstructing a Flowline
+    if not isinstance(pickle, list) or not pickle:
+        return new_pickle
+    try:
+        assert all(isinstance(fl, MixedBedFlowline) for fl in pickle)
+        fl_id_to_idx = {id(fl): i for i, fl in enumerate(pickle)}
+        for fl in pickle:
             data = {
-                "line": getattr(pickle[0], "line", None),
-                "dx": getattr(pickle[0], "dx", None),
-                "map_dx": getattr(pickle[0], "map_dx", None),
-                "surface_h": getattr(pickle[0], "surface_h", None),
-                "bed_h": getattr(pickle[0], "bed_h", None),
-                "section": getattr(pickle[0], "section", None),
-                "bed_shape": getattr(pickle[0], "bed_shape", None),
-                "is_trapezoid": getattr(pickle[0], "is_trapezoid", None),
-                "widths_m": getattr(pickle[0], "widths_m", None),
-                "rgi_id": getattr(pickle[0], "rgi_id", None),
-                "water_level": getattr(pickle[0], "water_level", None),
-                "gdir": getattr(pickle[0], "gdir", None),
-                "orig_head": getattr(pickle[0], "orig_head", None),
-                "order": getattr(pickle[0], "order", None),
-                "map_trafo": getattr(pickle[0], "map_trafo", None),
-                "_sqrt_bed": getattr(pickle[0], "_sqrt_bed", None),
-                "_w0_m": getattr(pickle[0], "_w0_m", None),
+                "line": convert_linestring_to_dataarray(
+                    getattr(fl, "line", None)
+                ),
+                "dx": getattr(fl, "dx", None),
+                "map_dx": getattr(fl, "map_dx", None),
+                "surface_h": getattr(fl, "surface_h", None),
+                "bed_h": getattr(fl, "bed_h", None),
+                "section": getattr(fl, "section", None),
+                "bed_shape": getattr(fl, "bed_shape", None),
+                "is_trapezoid": getattr(fl, "is_trapezoid", None),
+                "widths_m": getattr(fl, "widths_m", None),
+                "rgi_id": getattr(fl, "rgi_id", None),
+                "water_level": getattr(fl, "water_level", None),
+                "order": getattr(fl, "order", None),
+                "map_trafo": getattr(fl, "map_trafo", None),
+                "_sqrt_bed": getattr(fl, "_sqrt_bed", None),
+                "_w0_m": getattr(fl, "_w0_m", None),
             }
-            lambdas = getattr(pickle[0], "lambdas", None)
-            if lambdas is None:
-                # fallback to _lambdas
-                data["lambdas"] = getattr(pickle[0], "_lambdas", None)
-            else:
-                data["lambdas"] = lambdas
-
-            data["line"] = convert_linestring_to_dataarray(data["line"])
-            new_pickle.append(data)
-
-        except AssertionError:
-            raise TypeError(
-                "All items in the pickle list must be of type Centerline."
-                "Check the contents of the pickle."
+            lambdas = getattr(fl, "lambdas", None)
+            data["lambdas"] = (
+                getattr(fl, "_lambdas", None) if lambdas is None else lambdas
             )
+            # Store the index of the flowline this one flows into (-1 = None).
+            flows_to = getattr(fl, "flows_to", None)
+            data["_flows_to_list_idx"] = np.int64(
+                fl_id_to_idx.get(id(flows_to), -1)
+                if flows_to is not None
+                else -1
+            )
+            # Drop non-serialisable and None values so xarray can infer dtypes
+            data = {
+                k: v
+                for k, v in data.items()
+                if v is not None and k != "map_trafo"
+            }
+            new_pickle.append(data)
+    except AssertionError:
+        raise TypeError(
+            "All items in the pickle list must be MixedBedFlowline instances."
+        )
 
     return new_pickle
 
 
 def get_inversion_flowlines_from_pkl(pickle: list) -> list[dict]:
-    """Convert ``inversion_flowlines`` pickle into zarr-compatible
-    structure.
+    """Convert ``inversion_flowlines`` (or ``centerlines``) pickle into
+    zarr-compatible structure.
 
     Parameters
     ----------
-    pickle : dict
-        Data loaded directly from the ``inversion_flowlines`` pickle.
+    pickle : list
+        Data loaded directly from the pickle – a list of
+        :py:class:`oggm.Centerline` objects.
 
     Returns
     -------
     list[dict]
-        Contains all the attributes necessary to reconstruct the
-        original Centerline objects.
+        One dict per flowline with the attributes needed to reconstruct
+        the original Centerline objects.
     """
     from oggm import Centerline
 
     new_pickle = []
-    if isinstance(pickle, list):
-        if not pickle:
-            return new_pickle
-        try:
-            assert all(isinstance(flowline, Centerline) for flowline in pickle)
-            # Get all attributes necessary for reconstructing a Centerline
+    if not isinstance(pickle, list) or not pickle:
+        return new_pickle
+    try:
+        assert all(isinstance(fl, Centerline) for fl in pickle)
+        # Build an id-to-index map so we can store the flows_to list index
+        fl_id_to_idx = {id(fl): i for i, fl in enumerate(pickle)}
+        for fl in pickle:
             data = {
-                "line": pickle[0].line,
-                "dx": pickle[0].dx,
-                "surface_h": pickle[0].surface_h,
-                "orig_head": pickle[0].orig_head,
-                "rgi_id": pickle[0].rgi_id,
-                "map_dx": pickle[0].map_dx,
+                "line": convert_linestring_to_dataarray(fl.line),
+                "dx": fl.dx,
+                "surface_h": fl.surface_h,
+                # convert orig_head from shapely Point to DataArray
+                "orig_head": convert_point_to_dataarray(
+                    getattr(fl, "orig_head", None)
+                ),
+                "rgi_id": getattr(fl, "rgi_id", None),
+                "map_dx": getattr(fl, "map_dx", None),
             }
-            if isinstance(data["line"], shapely.LineString):
-                data["line"] = convert_linestring_to_dataarray(data["line"])
             # These cannot be passed via Centerline.__init__
             for attribute in [
                 "order",
@@ -446,16 +498,58 @@ def get_inversion_flowlines_from_pkl(pickle: list) -> list[dict]:
                 "flux",
                 "flux_out",
             ]:
-                data[attribute] = getattr(pickle[0], attribute, None)
-            new_pickle.append(data)
-
-        except AssertionError:
-            raise TypeError(
-                "All items in the pickle list must be of type Centerline."
-                "Check the contents of the pickle."
+                data[attribute] = getattr(fl, attribute, None)
+            # Store index of flowline it flows into (-1 = None)
+            # Reconstruct flows_to connections after deserialisation.
+            flows_to = getattr(fl, "flows_to", None)
+            data["_flows_to_list_idx"] = np.int64(
+                fl_id_to_idx.get(id(flows_to), -1)
+                if flows_to is not None
+                else -1
             )
+            gw = getattr(fl, "geometrical_widths", None)
+            if gw is not None:
+                nan_row = np.full((2, 2), np.nan, dtype=np.float64)
+                gw_rows = []
+                for w in gw:
+                    if w is None or w.is_empty:
+                        gw_rows.append(nan_row)
+                    elif hasattr(w, "geoms"):
+                        # MultiLineString: take the first (only) member
+                        sub = list(w.geoms)
+                        if sub:
+                            gw_rows.append(
+                                np.array(list(sub[0].coords), dtype=np.float64)
+                            )
+                        else:
+                            gw_rows.append(nan_row)
+                    else:
+                        # Plain LineString
+                        gw_rows.append(
+                            np.array(list(w.coords), dtype=np.float64)
+                        )
+                data["geometrical_widths"] = xr.DataArray(
+                    np.array(gw_rows, dtype=np.float64),
+                    dims=["width_idx", "vertex", "coord"],
+                )
+            # so xarray can infer dtypes for each variable
+            data = {k: v for k, v in data.items() if v is not None}
+            new_pickle.append(data)
+    except AssertionError:
+        raise TypeError(
+            "All items in the pickle list must be Centerline instances."
+        )
 
     return new_pickle
+
+
+def get_centerlines_from_pkl(pickle: list) -> list[dict]:
+    """Convert a ``centerlines`` pickle to zarr-compatible structure.
+
+    Reuses the same format as ``inversion_flowlines`` since both store
+    lists of :py:class:`oggm.Centerline` objects.
+    """
+    return get_inversion_flowlines_from_pkl(pickle)
 
 
 def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
@@ -466,17 +560,59 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
             # These are the pickles that require special handling.
             if "downstream_line" in name:
                 data = get_downstream_line_from_pkl(pickle)
-            elif "inversion_flowlines" in name:
-                data = get_inversion_flowlines_from_pkl(pickle)[0]
-            elif "model_flowlines" in name:
-                data = get_model_flowlines_from_pkl(pickle)[0]
-                if data["map_trafo"] is not None:
-                    for k, v in get_grid_params_from_partial(data["map_trafo"]).items():
-                        data_tree.attrs[k] = v
-                    data.pop("map_trafo", None)
+                data_tree = add_datacube(
+                    data_tree=data_tree,
+                    datacubes=data,
+                    datacube_name=name,
+                    overwrite=True,
+                )
+                continue
+
+            # Centerline lists: centerlines, inversion_flowlines
+            if "inversion_flowlines" in name or (
+                "centerlines" in name and "inversion" not in name
+            ):
+                dicts = (
+                    get_inversion_flowlines_from_pkl(pickle)
+                    if "inversion_flowlines" in name
+                    else get_centerlines_from_pkl(pickle)
+                )
+                sub_tree = xr.DataTree()
+                for i, d in enumerate(dicts):
+                    sub_tree = add_datacube(
+                        data_tree=sub_tree,
+                        datacubes=d,
+                        datacube_name=str(i),
+                        overwrite=True,
+                    )
+                data_tree[name] = sub_tree
+                continue
+
+            if "model_flowlines" in name:
+                dicts = get_model_flowlines_from_pkl(pickle)
+                sub_tree = xr.DataTree()
+                for i, d in enumerate(dicts):
+                    # map_trafo already filtered out
+                    # retrieve from original flowline to get grid params.
+                    from oggm.core.flowline import MixedBedFlowline
+                    if isinstance(pickle, list) and i < len(pickle) and isinstance(pickle[i], MixedBedFlowline):
+                        map_trafo = getattr(pickle[i], "map_trafo", None)
+                    else:
+                        map_trafo = None
+                    sub_tree = add_datacube(
+                        data_tree=sub_tree,
+                        datacubes=d,
+                        datacube_name=str(i),
+                        overwrite=True,
+                    )
+                    if map_trafo is not None:
+                        grid_params = get_grid_params_from_partial(map_trafo)
+                        sub_tree[str(i)].attrs.update(grid_params)
+                data_tree[name] = sub_tree
+                continue
 
             # Fallback for implicitly supported pickles
-            elif isinstance(pickle, list) and all(
+            if isinstance(pickle, list) and all(
                 isinstance(item, dict) for item in pickle
             ):
                 # List of dicts (e.g. inversion_input/output with multiple
@@ -490,13 +626,15 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
                         overwrite=True,
                     )
                 data_tree[name] = sub_tree
-                data = None  # skip add_datacube below
-            elif isinstance(pickle, list):
+                continue
+
+            if isinstance(pickle, list):
                 data = pickle[0]
             elif isinstance(pickle, dict):
                 data = pickle
             else:
                 raise NotImplementedError
+
             if isinstance(data, dict):
                 data_tree = add_datacube(
                     data_tree=data_tree,
@@ -504,8 +642,8 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
                     datacube_name=name,
                     overwrite=True,
                 )
-            if "model_flowlines" in name:
-                data_tree.model_flowlines.attrs = data_tree.attrs
+            # if "model_flowlines" in name:
+            #     data_tree.model_flowlines.attrs = data_tree.attrs
         except NotImplementedError as e:
             print(f"Pickle '{name}' is unsupported and was skipped: {e}")
 

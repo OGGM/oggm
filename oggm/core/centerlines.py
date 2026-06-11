@@ -1320,6 +1320,8 @@ def compute_downstream_bedshape(gdir):
     out['bedshapes'] = bs
     out['surface_h'] = hgts
     out['w0s'] = w0s
+    from oggm.utils.geozarr import convert_pickles_to_datatree
+    convert_pickles_to_datatree({'downstream_line': gdir.read_store('downstream_line')})
     gdir.write_store(out, 'downstream_line')
 
 
@@ -1576,7 +1578,7 @@ def catchment_area(gdir):
     if len(cls) == 1:
         cl_catchments = [np.array(np.nonzero(glacier_mask == 1)).T]
         geom['catchment_indices'] = cl_catchments
-        gdir.write_pickle(geom, 'geometries')
+        gdir.write_store(geom, 'geometries', use_pickle=True)
         return
 
     # Cost array
@@ -1659,7 +1661,7 @@ def catchment_area(gdir):
 
     # Write the data
     geom['catchment_indices'] = cl_catchments
-    gdir.write_pickle(geom, 'geometries')
+    gdir.write_store(geom, 'geometries', use_pickle=True)
 
 
 @entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])

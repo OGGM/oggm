@@ -148,7 +148,7 @@ class TestInitPresentDayFlowline:
 
         # test if providing a filesuffix is working
         init_present_time_glacier(gdir, filesuffix='_test')
-        assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
+        assert gdir.has_file('model_flowlines', filesuffix='_test')
 
         cfg.PARAMS['downstream_line_shape'] = 'free_shape'
         with pytest.raises(InvalidParamsError):
@@ -2093,9 +2093,9 @@ class TestIO():
         np.testing.assert_allclose(model.fls[0].section,
                                    fmodel.fls[0].section)
 
-    def test_gdir_copy(self, hef_gdir):
+    def test_gdir_copy(self, hef_gdir, tmpdir):
 
-        new_dir = os.path.join(get_test_dir(), 'tmp_testcopy')
+        new_dir = tmpdir.join('tmp_testcopy')
         if os.path.exists(new_dir):
             shutil.rmtree(new_dir)
         new_gdir = tasks.copy_to_basedir(hef_gdir, base_dir=new_dir,
@@ -2238,7 +2238,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2312,7 +2312,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
 
@@ -2350,7 +2350,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2428,7 +2428,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = fl.is_trapezoid[pg]
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2457,7 +2457,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2484,7 +2484,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2515,7 +2515,7 @@ class TestIdealisedInversion():
 
         fls[0].set_flows_to(fls[1])
 
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2547,7 +2547,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.ones(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -2578,7 +2578,7 @@ class TestIdealisedInversion():
             flo.widths = fl.widths[pg]
             flo.is_rectangular = np.zeros(flo.nx).astype(bool)
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
 
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
         inversion.prepare_for_inversion(inversion_gdir)
@@ -3874,8 +3874,7 @@ class TestDynamicSpinup:
             # only important if inversion is included, so original
             # model_flowlines are unchagned (to be able to conduct more dynamic
             # calibration runs in the same gdir)
-            assert not os.path.isfile(
-                os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
+            assert not gdir.has_file('model_flowlines', '_dyn_melt_f_calib')
 
         # conduct a run including a dynamic spinup and inversion
         melt_f_max = 1000 * 12 / 365
@@ -3925,8 +3924,7 @@ class TestDynamicSpinup:
         if do_inversion:
             # after the run, check that the dyn model flowlines exists and that
             # the original model flowlines are unchanged
-            assert os.path.isfile(
-                os.path.join(gdir.dir, 'model_flowlines_dyn_melt_f_calib.pkl'))
+            assert gdir.has_file('model_flowlines', '_dyn_melt_f_calib')
             assert np.all([np.all(getattr(fl_prev, 'surface_h') ==
                                   getattr(fl_now, 'surface_h')) and
                            np.all(getattr(fl_prev, 'bed_h') ==
