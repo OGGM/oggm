@@ -1175,6 +1175,8 @@ class TestPreproCLI:
                                             filesuffix='_historical'))
         assert model.y0 == 2004
         assert model.last_yr == 2020
+
+        assert gdir.has_file('model_geometry', filesuffix='_historical')
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)

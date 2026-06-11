@@ -3405,14 +3405,15 @@ class GlacierDirectory(object):
             FileNotFoundError,
             KeyError,
             ValueError,
-        ) as e:  # fallback to pickle if zarr not found
-            warnings.warn(
-                "Zarr data not found, attempting to read pickle file instead."
-            )
+        ):  # fallback to pickle if zarr not found
             fp = self.get_filepath(filename, filesuffix=filesuffix)
-            if not os.path.exists(fp):
+            if os.path.exists(fp):
+                warnings.warn(
+                    "Zarr data not found, attempting to read pickle file instead."
+                )
+            else:
                 raise FileNotFoundError(
-                    f"{e}\nNo zarr or pickle found for {fp}"
+                    f"No zarr or pickle found for {fp}"
                 )
 
             out: list | dict = self.read_pickle(
@@ -4446,9 +4447,11 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         """
         include_patterns never ignores directories, so data_store.zarr
         is copied without internal files, resulting in empty store.
-        Remove it so next tasks can create a fresh store.
+        Here we remove it so next tasks can create a fresh store.
         """
-        _remove_zarr_store(new_dir, "data_store.zarr")
+        _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
+        _keep_zarr_groups(new_dir, "data_store.zarr",
+                          groups_to_keep=['model_flowlines'])
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
@@ -4467,6 +4470,8 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
         _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
+        _keep_zarr_groups(new_dir, "data_store.zarr",
+                          groups_to_keep=['model_flowlines'])
     elif setup == 'all':
         shutil.copytree(gdir.dir, new_dir)
     else:
@@ -4517,6 +4522,46 @@ def _replace_zarr_store(src_dir: str, new_dir: str,
     src_zarr = os.path.join(src_dir, store)
     if os.path.exists(src_zarr):
         shutil.copytree(src_zarr, dst_zarr)
+
+
+def _keep_zarr_groups(
+    new_dir: str, store: str = "data_store.zarr", groups_to_keep: list = None
+) -> None:
+    """Remove zarr groups from a store that are not in groups_to_keep.
+
+    A group name matches a keep pattern if it equals the pattern or starts
+    with ``pattern + '_'`` (to handle filesuffix variants).
+
+    Parameters
+    ----------
+    new_dir : str
+        The directory containing the zarr store.
+    store : str, default "data_store.zarr"
+        Name of the zarr store subdirectory.
+    groups_to_keep : list of str, optional
+        Group name prefixes to retain. All other groups are removed.
+        If None or empty, nothing is removed.
+    """
+    if not groups_to_keep:
+        return
+    zarr_store = os.path.join(new_dir, store)
+    if not os.path.exists(zarr_store):
+        return
+    removed = False
+    for name in list(os.listdir(zarr_store)):
+        group_path = os.path.join(zarr_store, name)
+        if not os.path.isdir(group_path):
+            continue
+        if not any(
+            name == kw or name.startswith(kw + "_") for kw in groups_to_keep
+        ):
+            shutil.rmtree(group_path)
+            removed = True
+    if removed:
+        try:
+            zarr.consolidate_metadata(zarr_store)
+        except Exception:
+            pass
 
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,
