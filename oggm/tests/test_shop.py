@@ -771,7 +771,7 @@ class Test_bedtopo:
         assert utils.rmsd(ref, mine) < 2
 
         # Check vol
-        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        cdf = pd.read_parquet(utils.get_demo_file('rgi62_itmix_df.parquet'))
         ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
         my_vol = mine.sum() * gdir.grid.dx**2
         np.testing.assert_allclose(my_vol, ref_vol)
