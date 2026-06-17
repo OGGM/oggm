@@ -630,7 +630,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     gdirs = utils.tolist(gdirs)
 
     # Get the ref data for the glaciers we have
-    df = pd.read_parquet(utils.get_demo_file('rgi62_itmix_df.parquet'))
+    dl_path = "https://cluster.klima.uni-bremen.de/~oggm/g2ti/rgi62_itmix_df_v20260617.parquet"
+    df = pd.read_parquet(utils.file_downloader(dl_path))
     rids = [gdir.rgi_id for gdir in gdirs]
 
     found_ids = df.index.intersection(rids)
