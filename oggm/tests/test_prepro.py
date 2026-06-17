@@ -2338,7 +2338,7 @@ class TestInversion(unittest.TestCase):
         dfo = workflow.invert_from_params(gdir, params_df=dfi)
         np.testing.assert_allclose(df.vol_itmix_m3, dfo.vol_oggm_m3, rtol=0.01)
 
-        df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        df = pd.read_parquet(utils.get_demo_file('rgi62_itmix_df.parquet'))
 
         # Works with Series
         out = workflow.calibrate_inversion_from_volume(gdir,

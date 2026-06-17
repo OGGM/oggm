@@ -62,6 +62,7 @@ full = [
     "scikit-learn",
     "seaborn",
     "tables",
+    "pyarrow",
 ]
 docs = [
     "numpydoc",
