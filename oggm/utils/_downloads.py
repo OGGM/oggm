@@ -1195,7 +1195,7 @@ def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
 
     if extension == ".csv":
         df = pd.read_csv(file_path, **kwargs)
-    elif extension == ".hdf":
+    elif extension in [".hdf", ".h5"]:
         warnings.warn(
             "Reading directly from hdf files will be removed in a future"
             "release and replaced with geoparquet.",
