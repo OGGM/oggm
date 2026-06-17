@@ -1200,7 +1200,7 @@ def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
             "Reading directly from hdf files will be removed in a future"
             "release and replaced with geoparquet.",
             DeprecationWarning,
-            stack_level=2,
+            stacklevel=2,
         )
         df = pd.read_hdf(file_path, **kwargs)
     elif extension == ".parquet":
