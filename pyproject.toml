@@ -32,6 +32,7 @@ dependencies = [
     "scipy",
     "shapely",
     "xarray",
+    "pyarrow",
 ]
 
 [project.optional-dependencies]
@@ -62,7 +63,6 @@ full = [
     "scikit-learn",
     "seaborn",
     "tables",
-    "pyarrow",
 ]
 docs = [
     "numpydoc",
