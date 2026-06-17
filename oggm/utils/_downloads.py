@@ -69,8 +69,8 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for
 # all sample data
-SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data/tree/feat-ON-44-convert-csv-to-parquet'
-SAMPLE_DATA_COMMIT = '8af40f89620c6bd72f3485a777a018dcacb99d94'
+SAMPLE_DATA_GH_REPO = 'gampnico/oggm-sample-data'
+SAMPLE_DATA_COMMIT = 'f34067916f4986287749d054da45fd19869765fb'
 
 # Recommended url for runs
 DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
