@@ -19,6 +19,10 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- Support for reading and writing HDF files with pytables is deprecated. Files
+  should instead use parquet with ZSTD compression. Adds pyarrow as a
+  dependency (:pull:`1924`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 v1.6.3 (April 13, 2026)
 -----------------------
