@@ -25,6 +25,8 @@ import ftplib
 import ssl
 import tarfile
 import json
+import warnings
+from pathlib import Path
 
 # External libs
 import pandas as pd
@@ -67,7 +69,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # Github repository and commit hash/branch name/tag name on that repository
 # The given commit will be downloaded from github and used as source for
 # all sample data
-SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
+SAMPLE_DATA_GH_REPO = 'gampnico/oggm-sample-data/tree/feat-ON-44-convert-csv-to-parquet'
 SAMPLE_DATA_COMMIT = '8af40f89620c6bd72f3485a777a018dcacb99d94'
 
 # Recommended url for runs
@@ -1204,11 +1206,7 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
         return cfg.DATA[file_path]
 
     # If not let's go
-    extension = os.path.splitext(file_path)[1]
-    if extension == '.csv':
-        df = pd.read_csv(file_path)
-    elif extension == '.hdf':
-        df = pd.read_hdf(file_path)
+    df = get_dataframe_from_file(file_path)
 
     # Check for missing data (old files)
     if len(df.loc[df['dmdtda'].isnull()]) > 0:
@@ -1217,6 +1215,50 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
                                  'that). Delete the file at '
                                  f'{file_path} and start again.')
     cfg.DATA[file_path] = df
+    return df
+
+
+def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
+    """Fetches a dataframe from a file.
+
+    Parameters
+    ----------
+    file_path : str or Path
+        Path to the file to read. Supports csv and parquet files, with
+        deprecation warning for hdf files.
+    **kwargs
+        Additional keyword arguments to pass to the pandas read function.
+
+    Returns
+    -------
+    pd.DataFrame
+        The dataframe read from the file.
+
+    Raises
+    ------
+    NotImplementedError
+        If the file extension is not supported.
+    DeprecationWarning
+        If reading from hdf files, a warning is raised that support will
+        be removed in a future release.
+    """
+    extension = Path(file_path).suffix.lower()
+
+    if extension == ".csv":
+        df = pd.read_csv(file_path, **kwargs)
+    elif extension == ".hdf":
+        warnings.warn(
+            "Reading directly from hdf files will be removed in a future"
+            "release and replaced with geoparquet.",
+            DeprecationWarning,
+            stack_level=2,
+        )
+        df = pd.read_hdf(file_path, **kwargs)
+    elif extension == ".parquet":
+        df = pd.read_parquet(file_path, engine="pyarrow", **kwargs)
+    else:
+        raise NotImplementedError(f"File type not supported: {extension}")
+
     return df
 
 
@@ -1270,11 +1312,7 @@ def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
         return cfg.DATA[file_path]
 
     # If not let's go
-    extension = os.path.splitext(file_path)[1]
-    if extension == '.csv':
-        df = pd.read_csv(file_path, index_col=0)
-    elif extension == '.hdf':
-        df = pd.read_hdf(file_path)
+    df = get_dataframe_from_file(file_path, index_col=0)
 
     cfg.DATA[file_path] = df
     return df

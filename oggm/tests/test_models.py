@@ -178,7 +178,7 @@ class TestInitPresentDayFlowline:
                                         filesuffix='_consensus')[0]
 
         # check that resulting flowline has the same volume as observation
-        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        cdf = pd.read_parquet(utils.get_demo_file('rgi62_itmix_df.parquet'))
         ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
         np.testing.assert_allclose(fl_consensus.volume_m3, ref_vol)
 

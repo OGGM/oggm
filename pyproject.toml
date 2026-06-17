@@ -28,6 +28,7 @@ dependencies = [
     "netcdf4",
     "numpy",
     "pandas",
+    "pyarrow>=24.0.0",
     "requests",
     "scipy",
     "shapely",
