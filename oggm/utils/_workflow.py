@@ -3641,6 +3641,14 @@ class GlacierDirectory(object):
         if not fp.endswith(".zarr"):
             fp = f"{fp}.zarr"
 
+        if cfg.PARAMS["zarr_format"] == 3 and zarr_format == 2:
+            zarr_format = 3
+        elif zarr_format != 2:
+            raise ValueError(
+                f"Invalid zarr_format {zarr_format}. Must be 2 or 3. "
+                "Can be set in params.cfg under `zarr_format`."
+            )
+
         if overwrite:
             data_tree.to_zarr(
                 fp,
