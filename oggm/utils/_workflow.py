@@ -945,7 +945,7 @@ class compile_to_netcdf(object):
     """
 
     def __init__(self, log):
-        """Decorator syntax: ``@compile_to_netcdf(log, n_tmp_files=1000)``
+        """Decorator syntax: ``@compile_to_netcdf(log, n_tmp_files=100)``
 
         Parameters
         ----------
@@ -963,7 +963,7 @@ class compile_to_netcdf(object):
         def _compile_to_netcdf(gdirs, input_filesuffix='',
                                output_filesuffix='',
                                path=True,
-                               tmp_file_size=1000,
+                               tmp_file_size=100,
                                **kwargs):
 
             if not output_filesuffix:
@@ -1827,7 +1827,7 @@ def _write_fl_diagnostics(gdir, input_filesuffix='', folder_map=None):
 @global_task(log)
 def compile_fl_diagnostics(gdirs, *,
                            path=True,
-                           group_size=1000,
+                           group_size=100,
                            input_filesuffix='',
                            compress=True,
                            delete_folders=False):
@@ -4202,7 +4202,7 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
 
 
 def base_dir_to_tar(base_dir=None, delete=True):
-    """Merge the directories into 1000 bundles as tar files.
+    """Merge the directories into 100 bundles as tar files.
 
     The tar file is located at the same location of the original directory.
 
