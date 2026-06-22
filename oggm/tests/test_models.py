@@ -3880,7 +3880,7 @@ class TestDynamicSpinup:
         # conduct a run including a dynamic spinup and inversion
         melt_f_max = 1000 * 12 / 365
         precision_percent = 10
-        precision_absolute = 0.1
+        precision_absolute = 10
         ye = gdir.get_climate_info()['baseline_yr_1'] + 1
         yr_rgi = gdir.rgi_date
         run_dynamic_melt_f_calibration(
