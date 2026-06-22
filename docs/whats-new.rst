@@ -16,7 +16,7 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
-- GH workflows will timeout after three hours to prevent hanging tests from
+- GH workflows will timeout after one hour to prevent hanging tests from
   blocking runners or reaching usage limits (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
