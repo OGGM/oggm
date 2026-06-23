@@ -12,6 +12,12 @@ Enhancements
 - `run_prepro_levels` now allows to set a custom climate data processing
   module and custom geodetic data file to create glacier directories (:pull:`1910`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Supports bundling glaciers in sets other than 1000. The new default for
+  `base_dir_to_tar` is 100. Downloading from existing base URLs will still use
+  the 1k bundles, but new URLs will use bundles of 100 by default which should
+  be faster. `robust_tar_extract` will handle different bundle sizes
+  automatically. (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
