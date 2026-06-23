@@ -19,7 +19,8 @@ jobs:
         test-env:
           - prepro
           - numerics
-          - models
+          - models_mb
+          - models_dynamics
           - benchmark
           - utils
           - workflow-single

@@ -57,7 +57,6 @@ pytest.importorskip('geopandas')
 pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
-pytestmark = pytest.mark.test_env("models")
 do_plot = False
 
 DOM_BORDER = 80
@@ -83,6 +82,7 @@ def is_daily_model(model):
     )
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestInitPresentDayFlowline:
 
     @pytest.mark.parametrize('downstream_line_shape', ['parabola', 'trapezoidal'])
@@ -344,6 +344,7 @@ def other_glacier_cfg():
 
 
 @pytest.mark.usefixtures('other_glacier_cfg')
+@pytest.mark.test_env("models_dynamics")
 class TestInitFlowlineOtherGlacier:
     def test_define_divides(self, class_case_dir):
 
@@ -419,6 +420,7 @@ class TestInitFlowlineOtherGlacier:
         np.testing.assert_allclose(v * 1e-9, vol, rtol=rtol)
 
 
+@pytest.mark.test_env("models_mb")
 class TestMassBalanceModels:
     def test_past_mb_model(self, hef_gdir):
 
@@ -2108,6 +2110,7 @@ class TestMassBalanceModels:
             ys=1980, ye=2020,
             store_model_geometry=True, store_fl_diagnostics=True,
             store_monthly_step=True, mb_elev_feedback='monthly',
+            include_mb_model_heights=False,
             output_filesuffix='_daily_sfc')
         ds_daily_sfc = utils.compile_run_output(gdir,
                                                 input_filesuffix='_daily_sfc')
@@ -2159,7 +2162,7 @@ class TestMassBalanceModels:
             store_model_geometry=True, store_fl_diagnostics=True,
             store_monthly_step=True, mb_elev_feedback='monthly',
             output_filesuffix='_daily_sfc_firn_output',
-            include_firn_outputs=True,
+            include_firn_outputs=True, include_mb_model_heights=False,
         )
         ds_daily_sfc_firn = utils.compile_run_output(
             gdir, input_filesuffix='_daily_sfc_firn_output')
@@ -2372,6 +2375,68 @@ class TestMassBalanceModels:
 
             plot_runoff('_daily_hydro', 'DailyTIModel')
             plot_runoff('_daily_sfc_hydro', 'SfcTypeTIModel with DailyTIModel')
+
+        # test sfc_type model with dynamic melt_f calibration
+        kwargs_sfc_type = {
+            'mb_model_class': massbalance.MonthlyTIModel,
+            'climate_resolution': "monthly",
+            'aging_frequency': "monthly",
+            'ys': 1979,
+            'spinup_years': 6,
+            'use_previous_mbs': True,
+        }
+
+        # With the bucketsystem we need to know the number of grid points
+        MySfcTypeTIModel_inv = partial(
+            massbalance.SfcTypeTIModel,
+            use_main_fl_from='inversion_flowlines',
+            **kwargs_sfc_type,
+        )
+
+        MySfcTypeTIModel_dyn = partial(
+            massbalance.SfcTypeTIModel,
+            use_main_fl_from='model_flowlines',
+            **kwargs_sfc_type,
+        )
+        mb_model_historical = massbalance.MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix='',
+            mb_model_class=MySfcTypeTIModel_dyn,
+            filename='climate_historical')
+        mb_model_spinup = massbalance.MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix='',
+            mb_model_class=partial(
+                massbalance.ConstantMassBalance,
+                mb_model_class=MySfcTypeTIModel_dyn,
+                y0=2001, halfsize=10,
+            ),
+            filename='climate_historical')
+        dyn_models = workflow.execute_entity_task(
+            tasks.run_dynamic_melt_f_calibration,
+            gdir,
+            ys=1979,
+            ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
+            ignore_errors=True,
+            ref_mb_err_scaling_factor=0.2,
+            maxiter=10,
+            kwargs_run_function={
+                'maxiter': 10,
+                'overwrite_observations': False,
+                'mb_model_historical': mb_model_historical,
+                'mb_model_spinup': mb_model_spinup,
+                'include_mb_model_heights': True,
+                'include_firn_outputs': True,
+                'mb_model_class_apparent_mb': MySfcTypeTIModel_inv,
+            },
+            output_filesuffix='_spinup_historical',
+        )
+        # if the above runs without an error it is fine, but still check a few
+        # things
+        assert isinstance(dyn_models[0].volume_m3, float)
+        assert gdir.get_diagnostics()['used_spinup_option'] in [
+            'dynamic melt_f calibration (full success)',
+            'dynamic melt_f calibration (part success)',
+            'dynamic spinup only',
+        ]
 
     def test_constant_mb_model(self, hef_gdir):
 
@@ -2808,6 +2873,7 @@ class TestMassBalanceModels:
             pytest.skip('Allowed failure')
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestModelFlowlines():
 
     def test_rectangular(self):
@@ -3349,6 +3415,7 @@ def io_init_gdir(hef_gdir):
 
 
 @pytest.mark.usefixtures('io_init_gdir')
+@pytest.mark.test_env("models_dynamics")
 class TestIO():
     glen_a = 2.4e-24
 
@@ -3829,6 +3896,7 @@ def inversion_gdir(class_case_dir):
     return gdir
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestLeapYears:
     """Tests for leap-year-aware time conversion in FlowlineModel."""
 
@@ -3999,6 +4067,7 @@ class TestLeapYears:
         assert mb_multi_noleap.use_leap_years is False
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestIdealisedInversion():
     def simple_plot(self, model, gdir):  # pragma: no cover
         ocls = gdir.read_pickle('inversion_output')
@@ -4465,9 +4534,10 @@ def inversion_params(hef_gdir):
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestHEFNonPolluted:
     """The tests are so convoluted that this does not work when all class
-    tests are run"""
+    tests are run """
 
     @pytest.mark.slow
     def test_flux_gate_on_hef(self, hef_gdir, inversion_params):
@@ -4596,6 +4666,7 @@ class TestHEFNonPolluted:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestHEF:
 
     @pytest.mark.slow
@@ -5212,6 +5283,7 @@ class TestHEF:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestDynamicSpinup:
 
     @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
@@ -6470,6 +6542,7 @@ class TestDynamicSpinup:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestHydro:
 
     @pytest.mark.slow
@@ -7198,6 +7271,7 @@ class TestHydro:
         assert_allclose(odf_ma['runoff'].idxmax(), 8)
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestMassRedis:
 
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
@@ -7345,6 +7419,7 @@ def merged_hef_cfg(class_case_dir):
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
+@pytest.mark.test_env("models_dynamics")
 class TestMergedHEF:
 
     @pytest.mark.slow
@@ -7461,6 +7536,7 @@ class TestMergedHEF:
                 ds_merged.area.isel(time=200))
 
 
+@pytest.mark.test_env("models_dynamics")
 class TestSemiImplicitModel:
 
     @pytest.mark.slow
@@ -7750,6 +7826,7 @@ class TestSemiImplicitModel:
 
 
 @pytest.mark.usefixtures('with_class_wd')
+@pytest.mark.test_env("models_dynamics")
 class TestDistribute2D:
 
     @pytest.mark.slow
