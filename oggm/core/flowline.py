@@ -927,6 +927,7 @@ class FlowlineModel(object):
                             stop_criterion=None,
                             fixed_geometry_spinup_yr=None,
                             dynamic_spinup_min_ice_thick=None,
+                            store_output_on_error=None,
                             ):
         """Runs the model and returns intermediate steps in xarray datasets.
 
@@ -985,6 +986,12 @@ class FlowlineModel(object):
             area or the total volume. This is useful to smooth out yearly
             fluctuations when matching to observations. The names of this new
             variables include the suffix _min_h (e.g. 'area_m2_min_h')
+        store_output_on_error : bool or None
+            if the run fails mid-simulation (e.g. a domain boundary or
+            numerical error), still write the output files truncated to the
+            last successfully completed time step, then re-raise the error.
+            Such files carry a `partial_output = True` global attribute. The
+            default (None) follows cfg.PARAMS['store_output_on_error'].
 
         Returns
         -------
@@ -1006,6 +1013,9 @@ class FlowlineModel(object):
             raise InvalidParamsError('run_until_and_store needs a '
                                      'mass balance model with an unambiguous '
                                      'hemisphere.')
+
+        if store_output_on_error is None:
+            store_output_on_error = cfg.PARAMS['store_output_on_error']
 
         # Do we have a spinup?
         do_fixed_spinup = fixed_geometry_spinup_yr is not None
@@ -1291,12 +1301,26 @@ class FlowlineModel(object):
 
         # Run
         prev_state = None  # for the stopping criterion
+        run_error = None  # set if the run fails and we still want output
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
 
             if yr > self.yr:
                 # Here we model run - otherwise (for spinup) we
                 # constantly store the same data
-                self.run_until(yr)
+                try:
+                    self.run_until(yr)
+                except Exception as e:
+                    if not store_output_on_error:
+                        raise
+                    # Keep the data stored so far (rows 0..i-1) and write it
+                    # out below, truncated to the last completed step. The
+                    # error is re-raised once the files are written.
+                    run_error = e
+                    log.workflow('run_until_and_store: the run failed at year '
+                                 '%s (%s). Writing output truncated to the '
+                                 'last completed step before re-raising.',
+                                 yr, repr(e))
+                    break
 
             # Glacier geometry
             if do_geom or do_fl_diag:
@@ -1399,6 +1423,22 @@ class FlowlineModel(object):
                 if stop:
                     break
 
+        # On early termination (stop criterion or a caught run error) the
+        # output arrays still have a trailing block of nans which we drop
+        # before writing. We truncate by the number of steps actually stored
+        # rather than dropping nans on a specific variable, so this does not
+        # depend on which diagnostic variables are enabled. On error the
+        # failing step `i` was not stored (n = i); for a stop criterion or a
+        # normal completion step `i` was stored (n = i + 1). `i` is captured
+        # here because the write loops below reuse it.
+        do_truncate = stop_criterion is not None or run_error is not None
+        n_stored = i if run_error is not None else i + 1
+
+        if run_error is not None and n_stored == 0:
+            # Nothing useful was stored (the run failed on the very first
+            # step) - re-raise without writing empty files.
+            raise run_error
+
         # to datasets
         geom_ds = None
         if do_geom:
@@ -1430,9 +1470,9 @@ class FlowlineModel(object):
                 ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
                                                           coords=varcoords)
 
-                if stop_criterion is not None:
-                    # Remove probable nans
-                    ds = ds.dropna('time', subset=['ts_section'])
+                if do_truncate:
+                    # Keep only the steps actually stored
+                    ds = ds.isel(time=slice(0, n_stored))
 
                 geom_ds.append(ds)
 
@@ -1444,9 +1484,18 @@ class FlowlineModel(object):
                                           'not implemented yet.')
             diag_ds['volume_m3'].data[:] += spinup_vol
 
-        if stop_criterion is not None:
-            # Remove probable nans
-            diag_ds = diag_ds.dropna('time', subset=['volume_m3'])
+        if do_truncate:
+            # Keep only the steps actually stored
+            diag_ds = diag_ds.isel(time=slice(0, n_stored))
+
+        if run_error is not None:
+            # Flag the truncated files so downstream tools (and users) can
+            # tell that they are incomplete. netcdf attrs don't store bools,
+            # hence the strings (as done for the mb_model attrs above).
+            err_msg = repr(run_error)
+            for ds in [diag_ds] + (geom_ds or []) + (fl_diag_dss or []):
+                ds.attrs['partial_output'] = 'True'
+                ds.attrs['error_during_run'] = err_msg
 
         # write output?
         if do_fl_diag:
@@ -1457,9 +1506,9 @@ class FlowlineModel(object):
                 # These variables are always there (see above)
                 ds['volume_m3'] = ds['volume_m3'] * dx
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
-                if stop_criterion is not None:
-                    # Remove probable nans
-                    fl_diag_dss[i] = ds.dropna('time', subset=['volume_m3'])
+                if do_truncate:
+                    # Keep only the steps actually stored
+                    fl_diag_dss[i] = ds.isel(time=slice(0, n_stored))
 
             # Write out?
             if fl_diag_path not in [True, None]:
@@ -1497,6 +1546,11 @@ class FlowlineModel(object):
 
         if diag_path not in [True, None]:
             diag_ds.to_netcdf(diag_path)
+
+        if run_error is not None:
+            # The (truncated) output is now written - the run is still a
+            # failure, so we re-raise the original error.
+            raise run_error
 
         # Decide on what to give back
         out = [diag_ds]
