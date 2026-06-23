@@ -1549,7 +1549,10 @@ class FlowlineModel(object):
 
         if run_error is not None:
             # The (truncated) output is now written - the run is still a
-            # failure, so we re-raise the original error.
+            # failure, so we re-raise the original error. We attach the model
+            # to the exception so that callers which want to keep working with
+            # the partial result (e.g. run_with_hydro) can recover it.
+            run_error.partial_run_model = self
             raise run_error
 
         # Decide on what to give back
@@ -3423,6 +3426,7 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        water_level=None,
                        evolution_model=None, stop_criterion=None,
                        init_model_filesuffix=None, init_model_yr=None,
+                       _return_model_on_error=False,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -3585,13 +3589,24 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     with warnings.catch_warnings():
         # For operational runs we ignore the warnings
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        model.run_until_and_store(ye,
-                                  geom_path=geom_path,
-                                  diag_path=diag_path,
-                                  fl_diag_path=fl_diag_path,
-                                  store_monthly_step=store_monthly_step,
-                                  fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
-                                  stop_criterion=stop_criterion)
+        try:
+            model.run_until_and_store(ye,
+                                      geom_path=geom_path,
+                                      diag_path=diag_path,
+                                      fl_diag_path=fl_diag_path,
+                                      store_monthly_step=store_monthly_step,
+                                      fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
+                                      stop_criterion=stop_criterion)
+        except Exception as e:
+            # If the run failed mid-simulation but partial output was written
+            # (store_output_on_error), some callers want to keep working with
+            # the truncated result rather than letting the error propagate
+            # (e.g. run_with_hydro). They opt in via _return_model_on_error.
+            if _return_model_on_error and \
+                    getattr(e, 'partial_run_model', None) is not None:
+                model.run_error = e
+                return model
+            raise
 
     return model
 
@@ -4051,11 +4066,28 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     if fixed_geometry_spinup_yr is not None:
         kwargs['fixed_geometry_spinup_yr'] = fixed_geometry_spinup_yr
 
+    # If the dynamic run fails mid-simulation but partial output was written
+    # (store_output_on_error), we still want to add the hydro diagnostics to
+    # the truncated files before letting the error propagate - just like a
+    # simple run does. Opt the underlying run into returning the (partial)
+    # model instead of raising so we can compute hydro here, then re-raise
+    # at the end.
+    kwargs['_return_model_on_error'] = True
+
     out = run_task(gdir, **kwargs)
 
     if out is None:
         raise InvalidWorkflowError('The run task ({}) did not run '
                                    'successfully.'.format(run_task.__name__))
+
+    # Was the dynamic run truncated by an error? If so, we still compute the
+    # hydro output over the available years, then re-raise the error at the
+    # end (the files carry a `partial_output` flag in the meantime).
+    run_error = getattr(out, 'run_error', None)
+    if run_error is not None:
+        log.workflow('run_with_hydro: the dynamic run was truncated by an '
+                     'error (%s). Adding hydro diagnostics over the available '
+                     'years before re-raising.', repr(run_error))
 
     do_spinup = fixed_geometry_spinup_yr is not None
     if do_spinup:
@@ -4420,6 +4452,11 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # Append the output to the existing diagnostics
     fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
     ods.to_netcdf(fpath, mode='a')
+
+    if run_error is not None:
+        # The (truncated) output now also has the hydro diagnostics - the run
+        # is still a failure, so we re-raise, just like a simple run does.
+        raise run_error
 
 
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):

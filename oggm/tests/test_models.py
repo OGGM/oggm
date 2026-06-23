@@ -5327,6 +5327,70 @@ class TestHydro:
         # Runoff peak should follow a temperature curve
         assert_allclose(odf_ma['runoff'].idxmax(), 8)
 
+    @pytest.mark.slow
+    def test_hydro_with_stop_criterion(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        cfg.PARAMS['store_model_geometry'] = True
+
+        init_present_time_glacier(gdir)
+
+        # Constant climate reaches equilibrium well before nyears, so the
+        # stop criterion truncates the run.
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             store_monthly_hydro=False,
+                             y0=1985, nyears=300,
+                             stop_criterion=equilibrium_stop_criterion,
+                             output_filesuffix='_stop')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_stop')) as ds:
+            # The run stopped early (a full run would have 301 steps)
+            assert ds['time'].size < 300
+            # Both dynamic and hydro variables are present and aligned
+            assert 'volume_m3' in ds
+            assert 'melt_on_glacier' in ds
+            assert ds['melt_on_glacier'].size == ds['volume_m3'].size
+            # Hydro was actually computed over the truncated period (the very
+            # last year is always NaN by design - "last year is never good")
+            assert ds['melt_on_glacier'].isel(time=slice(0, -1)).isnull().sum() == 0
+
+    @pytest.mark.slow
+    def test_hydro_partial_output_on_error(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_output_on_error'] = True
+
+        init_present_time_glacier(gdir)
+
+        # Ask for a run that goes beyond the available climate data: the
+        # dynamic run fails mid-simulation once the climate runs out. With
+        # store_output_on_error this writes the truncated output, then
+        # run_with_hydro adds the hydro diagnostics and re-raises (like a
+        # simple run does).
+        with pytest.raises(ValueError, match='time bounds'):
+            tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 store_monthly_hydro=False,
+                                 ys=2000, ye=2050,
+                                 continue_on_error=False,
+                                 output_filesuffix='_partial')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_partial')) as ds:
+            # Truncated to the last year with climate data (well before 2050)
+            assert int(ds['time'][-1]) < 2050
+            # Both dynamic and hydro variables are present and aligned
+            assert 'volume_m3' in ds
+            assert 'melt_on_glacier' in ds
+            assert ds['melt_on_glacier'].size == ds['volume_m3'].size
+            # Flagged as partial output
+            assert ds.attrs['partial_output'] == 'True'
+
 
 class TestMassRedis:
 
