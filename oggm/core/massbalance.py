@@ -6,6 +6,7 @@ import os
 import inspect
 from datetime import date, timedelta
 import calendar
+from functools import partial
 # External libs
 import cftime
 import numpy as np
@@ -2923,7 +2924,6 @@ class ConstantMassBalance(MassBalanceModel):
         """
 
         super().__init__()
-        self.mbmod = mb_model_class(gdir=gdir, **kwargs)
 
         if y0 is None:
             raise InvalidParamsError('Please set `y0` explicitly')
@@ -2951,6 +2951,16 @@ class ConstantMassBalance(MassBalanceModel):
         self.halfsize = halfsize
         self.years = np.arange(y0-halfsize, y0+halfsize+1)
         self.hemisphere = gdir.hemisphere
+
+        if isinstance(mb_model_class, partial):
+            mb_model_name = mb_model_class.func.__name__
+        else:
+            mb_model_name = mb_model_class.__name__
+
+        if mb_model_name in ['SfcTypeTIModel']:
+            self.mbmod = mb_model_class(gdir=gdir, hbins=self.hbins, **kwargs)
+        else:
+            self.mbmod = mb_model_class(gdir=gdir, **kwargs)
 
     @property
     def temp_bias(self):
@@ -5247,8 +5257,10 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
                             input_filesuffix='',
                             output_filesuffix=None,
                             mb_model=None,
-                            mb_model_class=MonthlyTIModel,
-                            mb_years=None):
+                            mb_model_class=None,
+                            mb_years=None,
+                            include_mb_model_heights=True,
+                            ):
     """Compute apparent mb from an arbitrary mass balance profile.
 
     This searches for a mass balance residual to add to the mass balance
@@ -5286,6 +5298,10 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         between this range, excluding the last one.
         If None, the method will use all the years from the reference
         geodetic mass balance period ``gdir.settings['geodetic_mb_period']``.
+    include_mb_model_heights : bool, default True
+        If True we add the snow/firn height of the current mb_model (if
+        available) to include this in the elevation feedback of the mb
+        calculation.
     """
 
     if input_filesuffix is None:
@@ -5293,6 +5309,9 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
 
     if output_filesuffix is None:
         output_filesuffix = settings_filesuffix
+
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
@@ -5330,7 +5349,14 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         mbz = 0
         smb = 0
         for yr in mb_years:
-            amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr)
+            # some models have a climatic and ice mb (e.g. SfcTIModel), for
+            # inversion we want ice; if not available it is ignored; Similarly
+            # some models include a bucket height, and we can add this height on
+            # top to the ice surface height
+            amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr,
+                                         climatic_mb_or_ice_mb='ice_mb',
+                                         include_mb_model_heights=include_mb_model_heights
+                                         )
             amb *= mb_model.sec_in_year(year=yr) * rho
             mbz += amb
             smb += weighted_average_1d(amb, widths)

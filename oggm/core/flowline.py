@@ -610,7 +610,7 @@ class FlowlineModel(object):
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
                  water_level=None, required_model_steps='monthly',
-                 include_mb_model_heights=False, include_firn_outputs=False, ):
+                 include_mb_model_heights=True, include_firn_outputs=False, ):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -659,7 +659,7 @@ class FlowlineModel(object):
             only annual updates are required. You may want to change this
             for optimisation reasons for models that don't require adaptive
             steps (for example the deltaH method).
-        include_mb_model_heights : bool, default False
+        include_mb_model_heights : bool, default True
             If True we add the snow/firn height of the current mb_model (if
             available) to include this in the elevation feedback of the mb
             calculation.
@@ -927,7 +927,11 @@ class FlowlineModel(object):
             return self._mb_model
 
     def _get_along_fl_thickness_firn_m(self, fl_id):
-        return self._get_fl_mb_model(fl_id).columns_thickness_m
+        fl_mb_model = self._get_fl_mb_model(fl_id)
+        if hasattr(fl_mb_model, 'columns_thickness_m'):
+            return fl_mb_model.columns_thickness_m
+        else:
+            return np.zeros(self.fls[fl_id].thick.shape)
 
     def _get_along_fl_volume_firn_m3(self, fl_id):
         # we assume the firn/snow is just a box on top without considering any
@@ -990,8 +994,12 @@ class FlowlineModel(object):
         return self.mass_ice_kg * 1e-9
 
     def _get_along_fl_mass_firn_kg(self, fl_id):
-        return (self._get_fl_mb_model(fl_id).columns_mass_kg_per_sqm *
-                self.fls[fl_id].bin_area_m2)
+        fl_mb_model = self._get_fl_mb_model(fl_id)
+        if hasattr(fl_mb_model, 'columns_mass_kg_per_sqm'):
+            return (fl_mb_model.columns_mass_kg_per_sqm *
+                    self.fls[fl_id].bin_area_m2)
+        else:
+            return np.zeros(self.fls[fl_id].thick.shape)
 
     @property
     def mass_firn_kg(self):
