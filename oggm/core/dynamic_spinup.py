@@ -1048,7 +1048,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         settings_filesuffix='', output_filesuffix=None, evolution_model=None,
         mb_model_historical=None, mb_model_spinup=None,
         model_flowlines_filesuffix='',
-        minimise_for='area', climate_input_filesuffix='', spinup_period_inital=20,
+        minimise_for='area', climate_input_filesuffix='', spinup_period_initial=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
         precision_absolute=1, min_ice_thickness=None,
         first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
