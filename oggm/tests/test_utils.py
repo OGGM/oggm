@@ -655,7 +655,7 @@ class TestStartFromTar:
             assert os.path.exists(gdir.dir + ".tar.gz")
 
     @pytest.mark.slow
-    @pytest.mark.parametrize("arg_bundle_size", [1000, 100])
+    @pytest.mark.parametrize("arg_bundle_size", [1000, 100, 10, 5])
     def test_to_and_from_basedir_tar(self, arg_bundle_size):
 
         test_dir = cfg.PATHS["working_dir"]
@@ -1755,8 +1755,14 @@ class TestPreproCLI(unittest.TestCase):
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:8] + '.00.tar')
+        tarf = os.path.join(
+            odir,
+            "RGI61",
+            "b_020",
+            "L1",
+            rid[:8],
+            rid[:8] + f".{rid[-5:-2]}.tar",  # bundle_size=100
+        )
         assert os.path.isfile(tarf)
 
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',

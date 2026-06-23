@@ -263,10 +263,19 @@ def gdir_from_tar(entity, from_tar):
     except AttributeError:
         rgi_id = entity
 
-    from_tar = os.path.join(from_tar, '{}'.format(rgi_id[:8]),
-                            '{}.tar' .format(rgi_id[:11]))
-    assert os.path.exists(from_tar), 'tarfile does not exist'
-    from_tar = os.path.join(from_tar.replace('.tar', ''), rgi_id + '.tar.gz')
+    # TODO: add support for bundle sizes of 10 and 1
+    new_bundle = rgi_id[:-6] + "." + rgi_id[-5:-2]
+    new_path = os.path.join(from_tar, rgi_id[:8], new_bundle + ".tar")
+    old_path = os.path.join(from_tar, rgi_id[:8], rgi_id[:11] + ".tar")
+    if os.path.exists(new_path):
+        from_tar = new_path
+    elif os.path.exists(old_path):
+        from_tar = old_path
+    else:
+        raise FileNotFoundError(
+            "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
+        )
+    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
