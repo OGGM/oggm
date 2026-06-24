@@ -45,6 +45,15 @@ from oggm.cfg import G, GAUSSIAN_KERNEL
 # Module logger
 log = logging.getLogger(__name__)
 
+# Internal flag: when True, `flowline_model_run` returns a partially completed
+# model (with `.run_error` set) instead of re-raising on a mid-run error.
+# Only `run_with_hydro` sets this (around its `run_task` call) so it can add
+# the hydro diagnostics to the truncated output before re-raising itself. It
+# is a module global rather than a kwarg because `run_task` can be any of the
+# `run_*` tasks (incl. dynamic spinup), which do not all forward kwargs to
+# `flowline_model_run`. OGGM runs one glacier per process, so this is safe.
+_RETURN_MODEL_ON_ERROR = False
+
 
 class Flowline(Centerline):
     """A Centerline with additional properties: input to the FlowlineModel
@@ -3426,7 +3435,6 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
                        water_level=None,
                        evolution_model=None, stop_criterion=None,
                        init_model_filesuffix=None, init_model_yr=None,
-                       _return_model_on_error=False,
                        **kwargs):
     """Runs a model simulation with the default time stepping scheme.
 
@@ -3601,8 +3609,8 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
             # If the run failed mid-simulation but partial output was written
             # (store_output_on_error), some callers want to keep working with
             # the truncated result rather than letting the error propagate
-            # (e.g. run_with_hydro). They opt in via _return_model_on_error.
-            if _return_model_on_error and \
+            # (e.g. run_with_hydro, which sets _RETURN_MODEL_ON_ERROR).
+            if _RETURN_MODEL_ON_ERROR and \
                     getattr(e, 'partial_run_model', None) is not None:
                 model.run_error = e
                 return model
@@ -4069,12 +4077,18 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # If the dynamic run fails mid-simulation but partial output was written
     # (store_output_on_error), we still want to add the hydro diagnostics to
     # the truncated files before letting the error propagate - just like a
-    # simple run does. Opt the underlying run into returning the (partial)
-    # model instead of raising so we can compute hydro here, then re-raise
-    # at the end.
-    kwargs['_return_model_on_error'] = True
-
-    out = run_task(gdir, **kwargs)
+    # simple run does. We set a module flag so that flowline_model_run returns
+    # the (partial) model (with .run_error set) instead of raising, then we
+    # compute hydro here and re-raise at the end. Using a flag rather than a
+    # kwarg keeps run_task signatures (incl. the dynamic spinup tasks, which
+    # don't go through flowline_model_run) untouched.
+    global _RETURN_MODEL_ON_ERROR
+    _prev_return_model_on_error = _RETURN_MODEL_ON_ERROR
+    _RETURN_MODEL_ON_ERROR = True
+    try:
+        out = run_task(gdir, **kwargs)
+    finally:
+        _RETURN_MODEL_ON_ERROR = _prev_return_model_on_error
 
     if out is None:
         raise InvalidWorkflowError('The run task ({}) did not run '
