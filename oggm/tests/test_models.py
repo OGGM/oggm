@@ -2875,6 +2875,99 @@ class TestHEF:
         assert_allclose(ds.area_m2.T, ds2.area)
         assert_allclose(ds.calving_m3.T, ds2.calving)
 
+    def test_compile_run_output_different_lengths(self, hef_gdir,
+                                                  hef_copy_gdir,
+                                                  inversion_params):
+        # compile_run_output must merge runs of different length (which
+        # happens with store_output_on_error) onto a common (union) time axis.
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+
+        # Two runs that end at different years
+        run_from_climate_data(hef_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_dl')
+        run_from_climate_data(hef_copy_gdir, ys=1985, ye=1995,
+                              output_filesuffix='_dl')
+
+        long_id = hef_gdir.rgi_id
+        short_id = hef_copy_gdir.rgi_id
+
+        # Both orders, so the short file is also exercised as the template
+        for order in ([hef_gdir, hef_copy_gdir], [hef_copy_gdir, hef_gdir]):
+            ds = utils.compile_run_output(order, input_filesuffix='_dl',
+                                          path=False)
+            # Union time spans the longer run
+            assert ds['time'].values[0] == 1985
+            assert ds['time'].values[-1] == 2000
+            vlong = ds.volume.sel(rgi_id=long_id)
+            vshort = ds.volume.sel(rgi_id=short_id)
+            # Long run is finite everywhere
+            assert vlong.notnull().all()
+            # Short run is finite up to 1995 then NaN
+            assert vshort.sel(time=slice(1985, 1995)).notnull().all()
+            assert vshort.sel(time=slice(1996, 2000)).isnull().all()
+            # Status vars are always present; neither run errored
+            assert float(ds['is_partial_output'].sel(rgi_id=long_id)) == 0
+            assert float(ds['is_partial_output'].sel(rgi_id=short_id)) == 0
+            assert str(ds['error_during_run'].sel(rgi_id=short_id).values) == ''
+
+    def test_compile_run_output_with_partial(self, hef_gdir, hef_copy_gdir,
+                                             inversion_params, monkeypatch):
+        # A run truncated by a mid-run error (store_output_on_error) must
+        # compile, with its tail NaN and the error recorded in the output.
+        import tempfile
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['store_output_on_error'] = True
+        cfg.PARAMS['evolution_model'] = 'FluxBased'
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+
+        # Full run first (before monkeypatching)
+        run_from_climate_data(hef_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_pp')
+
+        # Now make the dynamic run fail mid-simulation at 1992
+        from oggm.core.flowline import FluxBasedModel
+        orig_run_until = FluxBasedModel.run_until
+
+        def failing_run_until(self, y1):
+            if y1 > 1992:
+                raise RuntimeError('Glacier exceeds domain boundaries, '
+                                   'at year: {}'.format(y1))
+            return orig_run_until(self, y1)
+
+        monkeypatch.setattr(FluxBasedModel, 'run_until', failing_run_until)
+        # continue_on_error so the partial file is written and the error
+        # swallowed (the file still carries the error in its attributes)
+        run_from_climate_data(hef_copy_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_pp', continue_on_error=True)
+
+        full_id = hef_gdir.rgi_id
+        part_id = hef_copy_gdir.rgi_id
+
+        # Write to disk too, to exercise the (string) error var encoding
+        tmpdir = tempfile.mkdtemp()
+        try:
+            out = os.path.join(tmpdir, 'compiled_pp.nc')
+            utils.compile_run_output([hef_gdir, hef_copy_gdir],
+                                     input_filesuffix='_pp', path=out)
+            with xr.open_dataset(out) as ds:
+                assert ds['time'].values[-1] == 2000
+                vpart = ds.volume.sel(rgi_id=part_id)
+                assert vpart.sel(time=slice(1985, 1992)).notnull().all()
+                assert bool(vpart.sel(time=2000).isnull())
+                assert ds.volume.sel(rgi_id=full_id).notnull().all()
+                # Status recorded
+                assert float(ds['is_partial_output'].sel(rgi_id=part_id)) == 1
+                assert float(ds['is_partial_output'].sel(rgi_id=full_id)) == 0
+                assert 'domain boundaries' in str(
+                    ds['error_during_run'].sel(rgi_id=part_id).values)
+                assert str(
+                    ds['error_during_run'].sel(rgi_id=full_id).values) == ''
+        finally:
+            shutil.rmtree(tmpdir)
+
     @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
 
