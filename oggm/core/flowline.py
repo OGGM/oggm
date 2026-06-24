@@ -1319,17 +1319,17 @@ class FlowlineModel(object):
                             ds['volume_bsl_m3'].data[i, :] = fl.volume_bsl_m3
                         if 'volume_bwl' in ovars_fl:
                             ds['volume_bwl_m3'].data[i, :] = fl.volume_bwl_m3
-                        if 'ice_velocity' in ovars_fl and (yr > self.y0):
+                        if 'ice_velocity' in ovars_fl and (yr > self.y0) and (i != 0):
                             # Velocity can only be computed with dynamics
                             var = self.u_stag[fl_id]
                             val = (var[1:fl.nx + 1] + var[:fl.nx]) / 2 * self._surf_vel_fac
                             ds['ice_velocity_myr'].data[i, :] = val * cfg.SEC_IN_YEAR
-                        if 'dhdt' in ovars_fl and (yr > self.y0):
+                        if 'dhdt' in ovars_fl and (yr > self.y0) and (i != 0):
                             # dhdt can only be computed after one step
                             val = fl.thick - thickness_previous_dhdt[fl_id]
                             ds['dhdt'].data[i, :] = val
                             thickness_previous_dhdt[fl_id] = fl.thick
-                        if 'climatic_mb' in ovars_fl and (yr > self.y0):
+                        if 'climatic_mb' in ovars_fl and (yr > self.y0) and (i != 0):
                             # yr - 1 to use the mb which lead to the current
                             # state, also using previous surface height
                             val = self.get_mb(surface_h_previous[fl_id],
@@ -1345,7 +1345,7 @@ class FlowlineModel(object):
                                 0.,
                                 val * fac_sec)
                             surface_h_previous[fl_id] = fl.surface_h
-                        if 'flux_divergence' in ovars_fl and (yr > self.y0):
+                        if 'flux_divergence' in ovars_fl and (yr > self.y0) and (i != 0):
                             # calculated after the formula dhdt = mb + flux_div
                             val = ds['dhdt'].data[i, :] - ds['climatic_mb'].data[i, :]
                             # special treatment for retreating: If the glacier
