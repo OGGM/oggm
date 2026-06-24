@@ -5,24 +5,14 @@ Copyright: OGGM e.V. and OGGM Contributors
 License: BSD-3-Clause
 """
 # flake8: noqa
+from importlib.metadata import version, PackageNotFoundError
 try:
-    from importlib.metadata import version, PackageNotFoundError
-    try:
-        __version__ = version(__name__)
-    except PackageNotFoundError:
-        # package is not installed
-        pass
-    finally:
-        del version, PackageNotFoundError
-except ModuleNotFoundError:
-    from pkg_resources import get_distribution, DistributionNotFound
-    try:
-        __version__ = get_distribution(__name__).version
-    except DistributionNotFound:
-        # package is not installed
-        pass
-    finally:
-        del get_distribution, DistributionNotFound
+    __version__ = version(__name__)
+except PackageNotFoundError:
+    # package is not installed
+    pass
+finally:
+    del version, PackageNotFoundError
 
 try:
     from oggm.mpi import _init_oggm_mpi

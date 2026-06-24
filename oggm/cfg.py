@@ -8,7 +8,6 @@ import shutil
 import sys
 import glob
 from collections import OrderedDict
-from distutils.util import strtobool
 
 import numpy as np
 import pandas as pd
@@ -516,7 +515,6 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PARAMS['use_tar_shapefiles'] = cp.as_bool('use_tar_shapefiles')
     PARAMS['keep_multipolygon_outlines'] = cp.as_bool('keep_multipolygon_outlines')
     PARAMS['clip_tidewater_border'] = cp.as_bool('clip_tidewater_border')
-    PARAMS['dl_verify'] = cp.as_bool('dl_verify')
     PARAMS['use_kcalving_for_inversion'] = cp.as_bool('use_kcalving_for_inversion')
     PARAMS['use_kcalving_for_run'] = cp.as_bool('use_kcalving_for_run')
     PARAMS['calving_use_limiter'] = cp.as_bool('calving_use_limiter')
@@ -531,11 +529,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     PARAMS['hydro_month_nh'] = cp.as_int('hydro_month_nh')
     PARAMS['hydro_month_sh'] = cp.as_int('hydro_month_sh')
     PARAMS['geodetic_mb_period'] = cp['geodetic_mb_period']
-    PARAMS['use_winter_prcp_fac'] = cp.as_bool('use_winter_prcp_fac')
-    PARAMS['use_temp_bias_from_file'] = cp.as_bool('use_temp_bias_from_file')
 
-    k = 'winter_prcp_fac_ab'
-    PARAMS[k] = [float(vk) for vk in cp.as_list(k)]
     k = 'ref_mb_valid_window'
     PARAMS[k] = [int(vk) for vk in cp.as_list(k)]
     k = 'free_board_marine_terminating'
@@ -575,20 +569,20 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
            'grid_dx_method', 'compress_climate_netcdf', 'by_bin_dx',
            'mp_processes', 'use_multiprocessing', 'clip_dem_to_zero',
            'topo_interp', 'use_compression', 'bed_shape', 'continue_on_error',
-           'use_multiple_flowlines', 'border', 'use_temp_bias_from_file',
+           'use_multiple_flowlines', 'border',
            'mpi_recv_buf_size', 'map_proj', 'evolution_model',
            'hydro_month_sh', 'hydro_month_nh', 'by_bin_bins',
            'use_intersects', 'filter_min_slope', 'clip_tidewater_border',
            'auto_skip_task', 'ref_mb_valid_window',
-           'rgi_version', 'dl_verify', 'use_mp_spawn', 'calving_use_limiter',
+           'rgi_version', 'use_mp_spawn', 'calving_use_limiter',
            'use_rgi_area', 'baseline_climate',
            'calving_line_extension', 'use_kcalving_for_run', 'lru_maxsize',
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run',
-           'tidewater_type', 'store_model_geometry', 'use_winter_prcp_fac',
+           'tidewater_type', 'store_model_geometry',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
-           'geodetic_mb_period', 'store_fl_diagnostics', 'winter_prcp_fac_ab',
+           'geodetic_mb_period', 'store_fl_diagnostics',
            'prcp_fac', 'downstream_line_shape', 'keep_multipolygon_outlines']
     for k in ltr:
         cp.pop(k, None)
@@ -627,13 +621,8 @@ def initialize(file=None, logging_level='INFO', params=None):
     PARAMS.do_log = False
 
     # Make sure we have a proper cache dir
-    from oggm.utils import download_oggm_files
+    from oggm.utils import download_oggm_files, get_demo_file
     download_oggm_files()
-
-    # Read in the demo glaciers
-    file = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                        'data', 'demo_glaciers.csv')
-    DATA['demo_glaciers'] = pd.read_csv(file, index_col=0)
 
     # Add other things
     if 'dem_grids' not in DATA:
@@ -644,17 +633,12 @@ def initialize(file=None, logging_level='INFO', params=None):
                           'AntarcticDEM_wgs84.json',
                           'REMA_100m_dem.json']:
             if grid_json not in grids:
-                fp = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                                  'data', grid_json)
+                fp = get_demo_file(grid_json)
                 try:
                     grids[grid_json] = salem.Grid.from_json(fp)
                 except NameError:
                     pass
         DATA['dem_grids'] = grids
-
-    # Trigger a one time check of the hash file
-    from oggm.utils import get_dl_verify_data
-    get_dl_verify_data('dummy_section')
 
     # OK
     PARAMS.do_log = True
@@ -724,10 +708,6 @@ def oggm_static_paths():
     if not os.path.exists(PATHS['dl_cache_dir']):
         if not PARAMS['dl_cache_readonly']:
             os.makedirs(PATHS['dl_cache_dir'])
-
-
-# Always call this one!
-oggm_static_paths()
 
 
 def get_lru_handler(tmpdir=None, maxsize=None, ending='.tif'):
@@ -901,3 +881,41 @@ def add_to_basenames(basename, filename, docstr=''):
     if '.' not in filename:
         raise ValueError('The filename needs a proper file suffix!')
     BASENAMES[basename] = (filename, docstr)
+
+
+def strtobool(value: str) -> bool:
+    """Convert a string representation of truth to True or False.
+
+    Reimplementation of distutils's ``strtobool``, which is deprecated
+    from Python 3.12.
+
+    Parameters
+    ----------
+    value : bool
+        Any value to convert.
+
+    Returns
+    -------
+    bool
+        True for "y", "yes", "t", "true", "on", and "1"; False for "n", "no", "f", "false", "off", and "0".
+
+    Raises
+    ------
+    ValueError if ``value`` is anything else.
+    """
+
+    trues = {"yes", "true", "t", "y", "on", "1"}
+    falses = {"no", "false", "f", "n", "off", "0"}
+
+    if isinstance(value, str):
+        value = value.lower()
+        if value in trues:
+            return True
+        if value in falses:
+            return False
+
+    raise ValueError('Expected "%s"' % '", "'.join(trues | falses))
+
+
+# Always call this one!
+oggm_static_paths()

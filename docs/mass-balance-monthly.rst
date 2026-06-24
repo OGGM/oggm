@@ -25,8 +25,8 @@ solid precipitation is based on the monthly mean temperature: all solid below
 (default: 2°C), linear change in between. Total precipitation is obtained from
 the climate dataset, multiplied by a precipitation correction factor :math:`P_f`.
 The parameter :math:`d_f` indicates the temperature sensitivity of the
-glacier, and it needs to be calibrated. The model needs to compute the
-temperature and precipitation at the altitude :math:`z` of the glacier
+glacier, and it needs to be calibrated. :math:`d_f` is called ``melt_f`` (melt factor) in the OGGM code.
+The model needs to compute the temperature and precipitation at the altitude :math:`z` of the glacier
 grid points. The default is to use a fixed lapse rate of
 -6.5K km :math:`^{-1}` and no gradient for precipitation.
 
@@ -43,17 +43,21 @@ Calibration
    order to adapt it for their own purposes.
 
 Visit the new `mass balance calibration tutorial <https://tutorials.oggm.org/master/notebooks/tutorials/massbalance_calibration.html>`_
-for an overview.
+for a complete overview.
 
 Notes
 -----
 
-Although this mass balance model is a clear improvement to previous OGGM versions
+Although the 1.6 mass balance model is a clear improvement to previous OGGM versions
 (mostly, for better using observations and for getting rid of the
 residual parameter :math:`\epsilon`), more physical approaches are possible.
-Importantly, we need to take the uncertainty estimates into account, and
-we need to tackle the issue of daily data for hydrological models.
 
-More exigent users might have a look at `PyGEM <https://github.com/drounce/PyGEM>`_
-or `OGGM sandbox <https://github.com/OGGM/massbalance-sandbox>`_, which are
-offering clever ways to deal with these issues.
+More exigent users might have a look at
+`PyGEM <https://github.com/PyGEM-Community/PyGEM>`_
+or the `OGGM dev branch <https://github.com/OGGM/oggm/tree/dev>`_
+(which includes features from the `OGGM massbalance-sanbox <https://github.com/OGGM/massbalance-sandbox>`_)
+which are offering clever ways to deal with daily data, snow cover processes, etc. 
+
+Avalanche maps have recently been added to the new OGGM glacier directories, to be able to account for the contribution 
+of avalanches to glacier mass balance - check out the `new OGGM tutorial <https://github.com/OGGM/tutorials/tree/master/notebooks/tutorials>`_ 
+or directly the `OGGM avalanche repo <https://github.com/OGGM/Snowslide>`_ to get more insights on this!

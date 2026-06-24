@@ -82,22 +82,5 @@ Installing OGGM
 ---------------
 
 After successfully setting up Linux as a Windows subsystem, you can proceed with the OGGM
-installation process. There are multiple approaches available for `installing OGGM <https://docs.oggm.org/en/stable/installing-oggm.html>`_,
-and all of them should work with WSL. However, we are aware that this may not always be
-the case. Here, we provide an example of steps that have resulted in a successful installation.
-
-1. Install the `prerequisites <https://docs.oggm.org/en/stable/installing-oggm.html#prerequisites>`_
-for creating a python environment.
-
-2. Create a `python environment <https://docs.oggm.org/en/stable/installing-oggm.html#the-simplest-way-with-an-environment-file>`_
-using a yml file.
-
-3. `Install OGGM <https://docs.oggm.org/en/stable/installing-oggm.html#install-oggm-itself>`_
-with ``pip install oggm``
-
-4. `Test <https://docs.oggm.org/en/stable/installing-oggm.html#test-oggm>`_ if the installation was successful.
-
-5. **Congrats**, you are now set-up for the `getting started <https://docs.oggm.org/en/stable/getting-started.html>`_ section!
-
-If you encounter problems, check out the
-`trouble shooting <https://docs.oggm.org/en/stable/installing-oggm.html#install-troubleshooting>`_ documentation.
+installation process. There are multiple approaches available for
+:doc:`installing-oggm`, and all of them should work with WSL.

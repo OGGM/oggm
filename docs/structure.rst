@@ -22,8 +22,8 @@ The glacier centric approach is used by most large-scale glacier models to date.
 Alternative strategies include global gridded approaches, where all glaciers
 in a model grid cell are added together and possibly organized into elevation bins.
 Another approach would be to handle entire glacier complexes as one single body of ice ("ice caps").
-**With the release of RGI7 (early 2022), OGGM will also be able to consider glacier
-complexes as if they were single glacier entities.**
+**With the release of RGI7 and as of v1.6.3, OGGM is able to consider glacier
+complexes as if they were single glacier entities** (see :ref:`preprodirlist`).
 
 .. admonition:: More details on the glacier centric approach
     :class: note, dropdown
@@ -64,9 +64,9 @@ and has many advantages as outlined below.
 
 Here is an example of how glacier directories work in practice. The user
 indicates a repository (``base_url``, here leading to
-`this online folder <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.4/L3-L5_files/CRU/centerlines/qc3/pcp2.5/no_match>`_)
+`this online folder <https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L3-L5_files/2025.6/elev_bands/W5E5/per_glacier_spinup/>`_)
 from which they want to fetch the data,
-and a list of glacier IDs they’d like to start from. The
+and a list of glacier IDs they'd like to start from. The
 :py:func:`workflow.init_glacier_directories` task performs the action of
 downloading and extracting these data locally:
 
@@ -78,24 +78,22 @@ downloading and extracting these data locally:
 
     cfg.PATHS['working_dir'] = utils.gettempdir('structure')
 
-    # Where to fetch the pre-processed directories - this can be changed
-    base_url = DEFAULT_BASE_URL
-
 .. ipython:: python
 
-    from oggm import workflow, tasks, graphics
+    from oggm import workflow, tasks, graphics, DEFAULT_BASE_URL
 
+    print(DEFAULT_BASE_URL)
     rgi_ids = ['RGI60-11.00897']
     gdirs = workflow.init_glacier_directories(rgi_ids,  # glaciers to download
                                               from_prepro_level=4,  # pre-processing level
                                               prepro_border=80,  # pre-processing map size
-                                              prepro_base_url=base_url)  # online repository
+                                              prepro_base_url=DEFAULT_BASE_URL)  # online repository
     workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs);
     @savefig plot_example_inversion.png width=100%
     graphics.plot_distributed_thickness(gdirs[0])
 
-See also the documentation page for :doc:`shop` for more examples of
-the kind of data that can be added to glacier directories.
+See also the documentation page for :doc:`shop` for a description of all current preprocessed glacier directories
+and for more examples of the kind of data that can be added to glacier directories.
 
 .. admonition:: More details: pros and cons of glacier directories
     :class: note, dropdown
@@ -186,8 +184,8 @@ Modularity in OGGM is achieved in two major ways:
   are the ``FlowlineModel`` and ``MassBalanceModel`` classes which are use
   to couple the two models without enforcing any particular way to solve the
   glacier geometry evolution or the climatic mass balance.
-- **persistence on disk with Glacier Directories**: as explained in the previous
-  chapter, :ref:`tasks can be interchanged <fl_compat>` during a processing
+- **persistence on disk with Glacier Directories**: as explained later,
+  :ref:`tasks can be interchanged <fl_compat>` during a processing
   workflow, allowing modularity as long as all tasks agree on the format
   of the file written on disk.
 
@@ -200,8 +198,8 @@ codebase.
 Preprocessing
 -------------
 
-If you are looking for only ONE reason to use OGGM and create your own model
-on top of it, the OGGM pre-processing capabilities are probably it.
+**If you are looking for only ONE reason to use OGGM and create your own model
+on top of it, the OGGM pre-processing capabilities are probably it.**
 
 OGGM is designed for large-scale applications, i.e. we have pre-downloaded and
 pre-processed a large number of datasets that are ready to use from within the

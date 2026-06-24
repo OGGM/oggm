@@ -32,6 +32,7 @@ Tools to set-up and run OGGM.
     workflow.inversion_tasks
     workflow.merge_glacier_tasks
     workflow.calibrate_inversion_from_consensus
+    workflow.invert_from_params
 
 Troubleshooting
 ===============
@@ -174,7 +175,6 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.mass_conservation_inversion
     tasks.filter_inversion_output
     tasks.get_inversion_volume
-    tasks.compute_velocities
     tasks.compute_inversion_velocities
     tasks.distribute_thickness_per_altitude
     tasks.distribute_thickness_interp
@@ -264,8 +264,8 @@ Glacier directories
 
 Glacier directories (see also: :py:class:`~oggm.GlacierDirectory`) are folders
 on disk which store the input and output data **for a single glacier** during
-an OGGM run. The data are on disk to be persistent, i.e. they won't be deleted
-unless you ask OGGM to. You can start a run from an existing directory,
+an OGGM run (see :ref:`preprocessed directories documentation <preprodir>`). The data are on disk to be persistent,
+i.e. they won't be deleted unless you ask OGGM to. You can start a run from an existing directory,
 avoiding to re-do unnecessary computations.
 
 Initialising a glacier directory

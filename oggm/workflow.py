@@ -16,7 +16,7 @@ import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate, gis
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-from oggm.utils import global_task
+from oggm.utils import global_task, entity_task
 
 # MPI
 try:
@@ -312,6 +312,10 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
 def _isdir(path):
     """os.path.isdir, returning False instead of an error on non-string/path-like objects
     """
+    if isinstance(path, bool):
+        return False
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return False
     try:
         return os.path.isdir(path)
     except TypeError:
@@ -421,9 +425,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
             log.workflow('init_glacier_directories from prepro level {} on '
                          '{} glaciers.'.format(from_prepro_level,
                                                len(entities)))
-            # Read the hash dictionary before we use multiproc
-            if cfg.PARAMS['dl_verify']:
-                utils.get_dl_verify_data('cluster.klima.uni-bremen.de')
             gdirs = execute_entity_task(gdir_from_prepro, entities,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
@@ -719,6 +720,182 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             add_to_log_file=add_to_log_file)
     return df
+
+
+@global_task(log)
+def invert_from_params(gdirs,
+                       params_df=None,
+                       fs=None, glen_a=None,
+                       filter_inversion_output=True,
+                       add_to_log_file=True):
+    """instead of optimising the parameters, get them from a file.
+
+    Useful e.g. for pre computed parameters for RGI7.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    params_df : str
+        the dataframe to use (currently regional)
+    glen_a : float
+        if params file is not provided, use this value
+        (defaults to cfg.params)
+    fs : float
+        if params file is not provided, use this value
+    filter_inversion_output : bool
+        whether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
+
+    Returns
+    -------
+    a dataframe with the individual glacier volumes
+    """
+
+    gdirs = utils.tolist(gdirs)
+
+    df = pd.DataFrame({
+        'rgi_region': [gd.rgi_region for gd in gdirs]
+    }, index=[gd.rgi_id for gd in gdirs])
+    df.index.name = 'rgi_id'
+
+    if params_df is not None:
+        rgi_regs = set(df.rgi_region)
+        if len(rgi_regs) > 1:
+            raise InvalidParamsError('Glaciers from multiple RGI regions '
+                                     'are not supported.')
+        rgi_reg = int(rgi_regs.pop())
+        glen_a = params_df.loc[rgi_reg, 'inversion_glen_a']
+        fs = params_df.loc[rgi_reg, 'inversion_fs']
+
+    log.workflow(f"Applying A factor = {glen_a/cfg.PARAMS['glen_a']} "
+                 f"and fs = {fs}")
+
+    # Compute the final volume with the correct A
+    inversion_tasks(gdirs, glen_a=glen_a, fs=fs,
+                    filter_inversion_output=filter_inversion_output,
+                    add_to_log_file=add_to_log_file)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            add_to_log_file=add_to_log_file)
+    return df
+
+
+@entity_task(log, writes=['inversion_output'])
+def calibrate_inversion_from_volume(gdir, vol_ref_m3=None,
+                                    fs=0, a_bounds=(0.1, 10),
+                                    apply_fs_on_mismatch=False,
+                                    error_on_mismatch=True,
+                                    filter_inversion_output=True):
+    """Fit the volume of a single glacier to a reference volume estimate.
+
+    This is the entity task version of calibrate_inversion_from_consensus.
+    It finds the "best Glen A" to match the reference volume for a single glacier.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    vol_ref_m3 : float
+        the reference volume in m3 to match. If float, take it,
+        if pd.Series, select the glacier, if None, error.
+    fs : float
+        invert with sliding (default: no)
+    a_bounds: tuple
+        factor to apply to default A
+    apply_fs_on_mismatch: bool
+        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
+        Oerlemans) and try to optimize A again.
+    error_on_mismatch: bool
+        sometimes the given bounds do not allow to find a zero mismatch:
+        this will normally raise an error, but you can switch this off,
+        use the closest value instead and move on.
+    filter_inversion_output : bool
+        whether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
+
+    Returns
+    -------
+    dict with the glacier volume and the calibrated parameters
+    """
+
+    if vol_ref_m3 is None:
+        raise InvalidParamsError('vol_ref_m3 must be provided (float or Series).')
+
+    if isinstance(vol_ref_m3, pd.Series):
+        try:
+            vol_ref_m3 = vol_ref_m3.loc[gdir.rgi_id]
+        except KeyError:
+            raise InvalidParamsError(f'vol_ref_m3 series has no entry '
+                                     f'for {gdir.rgi_id}.')
+
+    # Optimize the diff to ref
+    def_a = cfg.PARAMS['inversion_glen_a']
+
+    if cfg.PARAMS['use_kcalving_for_inversion']:
+        raise NotImplementedError('Calving not implemented yet')
+
+    def compute_vol(x):
+        # Run inversion tasks for this glacier
+        tasks.prepare_for_inversion(gdir, add_to_log_file=False)
+        tasks.mass_conservation_inversion(gdir, glen_a=x*def_a, fs=fs,
+                                          add_to_log_file=False)
+        if filter_inversion_output:
+            tasks.filter_inversion_output(gdir, add_to_log_file=False)
+        vol = tasks.get_inversion_volume(gdir, add_to_log_file=False)
+        return vol
+
+    def to_minimize(x):
+        log.info(f'Volume calibration for {gdir.rgi_id} with '
+                 f'A factor: {x} and fs: {fs}')
+        vol = compute_vol(x)
+        return vol_ref_m3 - vol
+
+    try:
+        out_fac, r = optimization.brentq(to_minimize, *a_bounds,
+                                         rtol=1e-2,
+                                         full_output=True)
+        if r.converged:
+            log.info(f'calibrate_inversion_from_volume for {gdir.rgi_id} '
+                     f'converged after {r.iterations} iterations and fs={fs}. The '
+                     f'resulting Glen A factor is {out_fac}.')
+        else:
+            raise ValueError('Unexpected error in optimization.brentq')
+    except ValueError:
+        # Ok can't find an A. Log for debug:
+        vol1 = compute_vol(a_bounds[0])
+        vol2 = compute_vol(a_bounds[1])
+        msg = (f'calibration from volume CAN\'T converge for {gdir.rgi_id} with fs={fs}.\n'
+               f'Bound values (m3):\nRef={vol_ref_m3:.0f} OGGM={vol1:.0f} for A factor {a_bounds[0]}\n'
+               f'Ref={vol_ref_m3:.0f} OGGM={vol2:.0f} for A factor {a_bounds[1]}')
+        if apply_fs_on_mismatch and fs == 0 and vol2 > vol_ref_m3:
+            return calibrate_inversion_from_volume(gdir,
+                                                   vol_ref_m3=vol_ref_m3,
+                                                   fs=5.7e-20, a_bounds=a_bounds,
+                                                   apply_fs_on_mismatch=False,
+                                                   error_on_mismatch=error_on_mismatch,
+                                                   filter_inversion_output=filter_inversion_output)
+        if error_on_mismatch:
+            raise ValueError(msg)
+
+        out_fac = a_bounds[int(abs(vol_ref_m3 - vol1) >
+                               abs(vol_ref_m3 - vol2))]
+        log.info(msg)
+        log.info(f'We use A factor = {out_fac} and fs = {fs} and move on.')
+
+    # Compute the final volume with the correct A
+    tasks.prepare_for_inversion(gdir)
+    tasks.mass_conservation_inversion(gdir, glen_a=out_fac*def_a, fs=fs)
+    if filter_inversion_output:
+        tasks.filter_inversion_output(gdir)
+
+    final_vol = tasks.get_inversion_volume(gdir)
+
+    return {
+        'vol_oggm_m3': final_vol,
+        'glen_a': out_fac * def_a,
+        'fs': fs,
+        'a_factor': out_fac
+    }
 
 
 @global_task(log)

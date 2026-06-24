@@ -72,6 +72,13 @@ from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 
+def _get_xr_cftime_kwargs():
+    try:
+        return {'decode_times': xr.coders.CFDatetimeCoder(use_cftime=True)}
+    except AttributeError:
+        return {'use_cftime': True}
+
+
 # Default RGI date (median per region in RGI6)
 RGI_DATE = {'01': 2009,
             '02': 2004,
@@ -230,7 +237,6 @@ def show_versions(logger=None):
     out.append("## Packages info:")
     for k, stat in deps_blob:
         out.append("    %s: %s" % (k, stat))
-    out.append("    OGGM git identifier: " + get_git_ident())
 
     if logger is not None:
         logger.workflow('\n'.join(out))
@@ -630,6 +636,23 @@ def get_ref_mb_glaciers(gdirs, y0=None, y1=None):
     return ref_gdirs
 
 
+def get_rgi70C_year(rgi_id):
+    """Temporary function to fetch the rgi outline year for RGI70C ids.
+    """
+
+    key = 'RGI70C_rgi_year'
+    if key not in cfg.DATA:
+        from oggm.utils._downloads import get_lock, file_downloader
+        with get_lock():
+            if key not in cfg.DATA:
+                fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                                     'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                                     'rgi7c_rgi_year_2025.1.csv')
+                cfg.DATA[key] = pd.read_csv(fp, index_col=0)['rgi_year']
+
+    return int(cfg.DATA[key].loc[rgi_id])
+
+
 def _chaikins_corner_cutting(line, refinements=5):
     """Some magic here.
 
@@ -912,32 +935,6 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
                 raise RuntimeError('Some geometries are non-empty GeometryCollection '
                                    f'at RGI Ids: {errdf.RGIID.values}')
     _write_shape_to_disk(odf, path, to_tar=to_tar)
-
-
-def demo_glacier_id(key):
-    """Get the RGI id of a glacier by name or key: None if not found."""
-
-    df = cfg.DATA['demo_glaciers']
-
-    # Is the name in key?
-    s = df.loc[df.Key.str.lower() == key.lower()]
-    if len(s) == 1:
-        return s.index[0]
-
-    # Is the name in name?
-    s = df.loc[df.Name.str.lower() == key.lower()]
-    if len(s) == 1:
-        return s.index[0]
-
-    # Is the name in Ids?
-    try:
-        s = df.loc[[key]]
-        if len(s) == 1:
-            return s.index[0]
-    except KeyError:
-        pass
-
-    return None
 
 
 class compile_to_netcdf(object):
@@ -1383,14 +1380,14 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             pgdir = gdirs[i]
             ppath = pgdir.get_filepath(filename=filename,
                                        filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath) as ds_clim:
+            with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
                 ds_clim.time.values
             # If this worked, we have a valid gdir
             break
         except BaseException:
             i += 1
 
-    with xr.open_dataset(ppath) as ds_clim:
+    with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
         cyrs = ds_clim['time.year']
         cmonths = ds_clim['time.month']
         sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
@@ -1432,7 +1429,7 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
         try:
             ppath = gdir.get_filepath(filename=filename,
                                       filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath) as ds_clim:
+            with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
                 prcp[:, i] = ds_clim.prcp.values
                 temp[:, i] = ds_clim.temp.values
                 ref_hgt[i] = ds_clim.ref_hgt
@@ -1931,15 +1928,33 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
         Set to "True" in order  to store the info in the working directory
         Set to a path to store the file to your chosen location
     add_column : tuple
-        if you feel like adding a key - value pair to the compiled dataframe
+        if you feel like adding a key - value pair to the compiled dataframe.
     """
     from oggm.workflow import execute_entity_task
 
     out_df = execute_entity_task(read_glacier_hypsometry, gdirs)
 
     out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    # Sort only hypsometry bin columns (named as ints) while preserving the
+    # position of all non-bin columns.
+    cols = list(out.columns)
+    bin_pos = []
+    bin_cols = []
+    for i, c in enumerate(cols):
+        try:
+            int(c)
+            bin_pos.append(i)
+            bin_cols.append(c)
+        except (ValueError, TypeError):
+            pass
+    for i, c in zip(bin_pos, sorted(bin_cols, key=int)):
+        cols[i] = c
+    out = out[cols].copy()
+
     if add_column is not None:
         out[add_column[0]] = add_column[1]
+
     if path:
         if path is True:
             out.to_csv(os.path.join(cfg.PATHS['working_dir'],
@@ -2741,20 +2756,15 @@ class GlacierDirectory(object):
                 _shp = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity, 'outlines.shp')
             rgi_entity = self._read_shapefile_from_path(_shp)
-            crs = salem.check_crs(rgi_entity.crs)
-            rgi_entity = rgi_entity.iloc[0]
-            g = rgi_entity['geometry']
-            xx, yy = salem.transform_proj(crs, salem.wgs84,
-                                          [g.bounds[0], g.bounds[2]],
-                                          [g.bounds[1], g.bounds[3]])
+            rgi_entity = rgi_entity.to_crs('wgs84').iloc[0]
             write_shp = False
         else:
-            g = rgi_entity['geometry']
-            xx, yy = ([g.bounds[0], g.bounds[2]],
-                      [g.bounds[1], g.bounds[3]])
             write_shp = True
 
         # Extent of the glacier in lon/lat
+        g = rgi_entity['geometry']
+        xx, yy = ([g.bounds[0], g.bounds[2]],
+                  [g.bounds[1], g.bounds[3]])
         self.extent_ll = [xx, yy]
 
         is_rgi7 = False
@@ -2788,7 +2798,9 @@ class GlacierDirectory(object):
 
         if is_glacier_complex:
             rgi_entity['glac_name'] = ''
-            rgi_entity['src_date'] = '2000-01-01 00:00:00'
+            if 'src_date' not in rgi_entity:
+                rgi_year = get_rgi70C_year(self.rgi_id)
+                rgi_entity['src_date'] = f'{rgi_year}-01-01 00:00:00'
             if 'dem_source' not in rgi_entity:
                 rgi_entity['dem_source'] = None
             rgi_entity['term_type'] = 9
@@ -2925,6 +2937,10 @@ class GlacierDirectory(object):
         rgi_date = int(rgi_datestr[0:4])
         if rgi_date < 0:
             rgi_date = RGI_DATE[self.rgi_region]
+        if rgi_date >= 2020:
+            log.warning(f'{self.rgi_id}: rgi_date {rgi_date} modified '
+                        'to 2019 for workflow reasons.')
+            rgi_date = 2019
         self.rgi_date = rgi_date
         # Root directory
         self.base_dir = os.path.normpath(base_dir)
@@ -3015,7 +3031,7 @@ class GlacierDirectory(object):
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
         if len(self.rgi_id) == 23 and (not geometry.is_valid or
-                                       type(geometry) != shpg.Polygon):
+                                       not isinstance(geometry, shpg.Polygon)):
             # In RGI7 we know that the geometries are valid in the source file,
             # so we have to validate them after projection them as well
             # Try buffer first
@@ -3025,7 +3041,12 @@ class GlacierDirectory(object):
                 if len(correct) != 1:
                     raise RuntimeError('Cant correct this geometry')
                 geometry = correct[0]
-            if type(geometry) != shpg.Polygon:
+            if isinstance(geometry, shpg.MultiPolygon):
+                geoms = list(geometry.geoms)
+                if not geoms or not all(isinstance(g, shpg.Polygon) for g in geoms):
+                    raise ValueError(f'{self.rgi_id}: geometry not valid')
+                geometry = max(geoms, key=lambda g: g.area)
+            if not isinstance(geometry, shpg.Polygon):
                 raise ValueError(f'{self.rgi_id}: geometry not valid')
         elif not cfg.PARAMS['keep_multipolygon_outlines']:
             geometry = multipolygon_to_polygon(geometry, gdir=self)
@@ -3970,8 +3991,8 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     New glacier directories from the copied folders
     """
     base_dir = os.path.abspath(base_dir)
-    new_dir = os.path.join(base_dir, gdir.rgi_id[:8], gdir.rgi_id[:11],
-                           gdir.rgi_id)
+    new_dir = os.path.join(base_dir, gdir.rgi_id[:-6],
+                           gdir.rgi_id[:-3], gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'mb_calib', 'climate_historical', 'glacier_grid',

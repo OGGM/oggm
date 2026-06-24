@@ -630,15 +630,6 @@ def get_inversion_volume(gdir):
 
 
 @entity_task(log, writes=['inversion_output'])
-def compute_velocities(*args, **kwargs):
-    """Deprecated - use compute_inversion_velocities instead."""
-    warnings.warn("`compute_velocities` has been renamed to "
-                  "`compute_inversion_velocities`. Prefer to use the new"
-                  "name from now on.")
-    return compute_inversion_velocities(*args, **kwargs)
-
-
-@entity_task(log, writes=['inversion_output'])
 def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
                                  with_sliding=None):
     """Surface velocities along the flowlines from inverted ice thickness.
@@ -737,7 +728,7 @@ def compute_inversion_velocities(gdir, glen_a=None, fs=None, filesuffix='',
 @entity_task(log, writes=['gridded_data'])
 def distribute_thickness_per_altitude(gdir, add_slope=True,
                                       topo_variable='topo_smoothed',
-                                      smooth_radius=None,
+                                      smooth_radius=0,
                                       dis_from_border_exp=0.25,
                                       varname_suffix=''):
     """Compute a thickness map by redistributing mass along altitudinal bands.
@@ -755,7 +746,7 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
         the topography to read from `gridded_data.nc` (could be smoothed, or
         smoothed differently).
     smooth_radius : int
-        pixel size of the gaussian smoothing. Default is to use
+        pixel size of the gaussian smoothing. None is to use
         cfg.PARAMS['smooth_window'] (i.e. a size in meters). Set to zero to
         suppress smoothing.
     dis_from_border_exp : float

@@ -28,7 +28,10 @@ from scipy.interpolate import interp1d
 import shapely.geometry as shpg
 from shapely.ops import linemerge
 from shapely.validation import make_valid
-from salem.gis import Grid
+try:
+    from salem.gis import Grid
+except ImportError:
+    pass
 
 # Optional libs
 try:
@@ -399,6 +402,22 @@ def clip_scalar(value, vmin, vmax):
     See https://github.com/numpy/numpy/issues/14281
     """
     return vmin if value < vmin else vmax if value > vmax else value
+
+
+def climate_file_info(ds, varname='longitude'):
+    """Provides simple info on a climate file - useful for shop tools."""
+    lons = np.unique(np.sort(ds[varname].data))
+    # Assumption below is that at least two grid points in the file are
+    # at 1 grid point distance
+    dx = np.min(lons[1:] - lons[:-1])
+    lon_range = (np.min(lons), np.max(lons))
+    lon_bounds = (lon_range[0] - dx/2, lon_range[1] + dx/2)
+    return {
+        'dx': dx,
+        'lon_range': lon_range,
+        'lon_bounds': lon_bounds,
+        'is_flat': varname not in ds.dims,
+    }
 
 
 def weighted_average_1d(data, weights):

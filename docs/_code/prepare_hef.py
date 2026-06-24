@@ -35,8 +35,6 @@ tasks.catchment_width_correction(gdir)
 tasks.compute_downstream_line(gdir)
 tasks.compute_downstream_bedshape(gdir)
 cfg.PARAMS['baseline_climate'] = 'HISTALP'
-cfg.PARAMS['use_winter_prcp_fac'] = False
-cfg.PARAMS['use_temp_bias_from_file'] = False
 cfg.PARAMS['prcp_fac'] = 2.5
 tasks.process_histalp_data(gdir)
 tasks.mb_calibration_from_wgms_mb(gdir)

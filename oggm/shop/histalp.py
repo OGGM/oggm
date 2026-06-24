@@ -24,6 +24,10 @@ log = logging.getLogger(__name__)
 HISTALP_SERVER = 'http://www.zamg.ac.at/histalp/download/grid5m/'
 
 
+def _get_histalp_server():
+    return cfg.PARAMS.get('histalp_server', HISTALP_SERVER)
+
+
 def set_histalp_url(url):
     """If you want to use a different server for HISTALP (for testing, etc)."""
     global HISTALP_SERVER
@@ -59,7 +63,7 @@ def get_histalp_file(var=None):
     else:
         bname = 'HISTALP_precipitation_all_abs_1801-2014.nc'
 
-    h_url = HISTALP_SERVER + bname + '.bz2'
+    h_url = _get_histalp_server() + bname + '.bz2'
     return utils.file_extractor(utils.file_downloader(h_url))
 
 

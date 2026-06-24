@@ -407,7 +407,20 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
     })
     profile.pop('blockxsize', None)
     profile.pop('blockysize', None)
+    profile.pop('tiled', None)
     profile.pop('compress', None)
+    profile.pop('predictor', None)
+    profile.pop('zlevel', None)
+
+    # Force lossless compression to limit storage footprint when writing many
+    # small DEM files while keeping source-independent behavior.
+    dtype = np.dtype(dem_dss[0].dtypes[0])
+    profile['compress'] = 'deflate'
+    profile['zlevel'] = 1
+    if np.issubdtype(dtype, np.floating):
+        profile['predictor'] = 3
+    elif np.issubdtype(dtype, np.integer):
+        profile['predictor'] = 2
 
     # Could be extended so that the cfg file takes all Resampling.* methods
     if cfg.PARAMS['topo_interp'] == 'bilinear':
@@ -1862,10 +1875,10 @@ def merged_glacier_masks(gdir, geometry):
 
 
 @entity_task(log)
-def gridded_data_var_to_geotiff(gdir, varname, fname=None):
+def gridded_data_var_to_geotiff(gdir, varname, fname=None, output_folder=None):
     """Writes a NetCDF variable to a georeferenced geotiff file.
 
-    The geotiff file will be written in the gdir directory.
+    The geotiff file will be written in the gdir directory or a specified folder.
 
     Parameters
     ----------
@@ -1875,12 +1888,33 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None):
         variable name in gridded_data.nc
     fname : str
         output file name (should end with `tif`), default is `varname.tif`
+    output_folder : str
+        optional path to write the geotiff file. If None, writes to gdir.dir.
+        If provided, files will be organized into subfolders based on RGI ID
+        (e.g., RGI60-11/RGI60-11.00/RGI60-11.00897_varname.tif)
     """
 
     # Assign the output path
     if fname is None:
-        fname = varname+'.tif'
-    outpath = os.path.join(gdir.dir, fname)
+        fname = f'{gdir.rgi_id}_{varname}.tif'
+
+    if output_folder is not None:
+        # Create subfolder structure based on RGI ID
+        # RGI6: RGI60-11.00897 -> RGI60-11 (8 chars) / RGI60-11.00 (11 chars)
+        # RGI7: RGI2000-v7.0-G-01-00001 -> RGI2000-v7.0-G-01 (17 chars) / RGI2000-v7.0-G-01-00 (20 chars)
+        rid = gdir.rgi_id
+        # Determine folder structure based on RGI ID length
+        if len(rid) <= 14:
+            # RGI6 format
+            base_dir = os.path.join(output_folder, rid[:8], rid[:11])
+        else:
+            # RGI7 format
+            base_dir = os.path.join(output_folder, rid[:17], rid[:20])
+        utils.mkdir(base_dir)
+    else:
+        base_dir = gdir.dir
+
+    outpath = os.path.join(base_dir, fname)
 
     # Locate gridded_data.nc file and read it
     nc_path = gdir.get_filepath('gridded_data')

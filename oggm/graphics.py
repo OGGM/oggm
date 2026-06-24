@@ -23,6 +23,7 @@ OGGM_CMAPS = dict()
 from oggm.core.flowline import FileModel
 from oggm import cfg, utils
 from oggm.core import gis
+from oggm.exceptions import InvalidWorkflowError
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -354,6 +355,9 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
         filename = 'inversion_flowlines'
 
     gdir = gdirs[0]
+    if gdir.get_diagnostics().get('flowline_type', '') == 'elevation_band':
+        raise InvalidWorkflowError('Elevation-band flowlines cannot be '
+                                   'plotted on a map')
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
@@ -411,6 +415,9 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     """
 
     gdir = gdirs[0]
+    if gdir.get_diagnostics().get('flowline_type', '') == 'elevation_band':
+        raise InvalidWorkflowError('Elevation-band flowlines cannot be '
+                                   'plotted on a map')
     if len(gdirs) > 1:
         raise NotImplementedError('Cannot plot a list of gdirs (yet)')
 
@@ -457,6 +464,11 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
     """
 
     gdir = gdirs[0]
+
+    if gdir.get_diagnostics().get('flowline_type', '') == 'elevation_band':
+        raise InvalidWorkflowError('Elevation-band flowlines cannot be '
+                                   'plotted on a map')
+
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
     # Dirty optim
@@ -532,6 +544,11 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
        for velocity (m/yr)."""
 
     gdir = gdirs[0]
+
+    if gdir.get_diagnostics().get('flowline_type', '') == 'elevation_band':
+        raise InvalidWorkflowError('Elevation-band flowlines cannot be '
+                                   'plotted on a map')
+
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
@@ -669,6 +686,11 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
     """
 
     gdir = gdirs[0]
+
+    if gdir.get_diagnostics().get('flowline_type', '') == 'elevation_band':
+        raise InvalidWorkflowError('Elevation-band flowlines cannot be '
+                                   'plotted on a map')
+
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 

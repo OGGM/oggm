@@ -51,7 +51,6 @@ from oggm.core.inversion import prepare_for_inversion
 from oggm.core.inversion import mass_conservation_inversion
 from oggm.core.inversion import filter_inversion_output
 from oggm.core.inversion import get_inversion_volume
-from oggm.core.inversion import compute_velocities
 from oggm.core.inversion import compute_inversion_velocities
 from oggm.core.inversion import distribute_thickness_per_altitude
 from oggm.core.inversion import distribute_thickness_interp

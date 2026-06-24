@@ -105,7 +105,7 @@ Trapezoidal
 Trapezoidal shape with two degrees of freedom. The width change with thickness
 depends on :math:`\lambda`. The angle :math:`\beta` of the side wall
 (as defined from the horizontal plane, i.e.
-:math:`\lambda = 0 \rightarrow \beta = 90^{\circ}``) is defined by:
+:math:`\lambda = 0 \rightarrow \beta = 90^{\circ}`) is defined by:
 
 .. math::
 

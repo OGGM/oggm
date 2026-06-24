@@ -98,8 +98,6 @@ def up_to_climate(reset=False, use_mp=None, params_file=None):
     cfg.PARAMS['geodetic_mb_period'] = '2000-01-01_2010-01-01'
     cfg.PARAMS['use_kcalving_for_run'] = True
     cfg.PARAMS['store_model_geometry'] = True
-    cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['baseline_climate'] = 'CRU'
     cfg.PARAMS['evolution_model'] = 'FluxBased'
     cfg.PARAMS['downstream_line_shape'] = 'parabola'

@@ -18,7 +18,7 @@ Why would I add my model to the OGGM framework?
 ==================================================
 
 We envision OGGM as a **modular tool** to model glacier behavior. We do not
-want to force anyone towards a certain set-up or paramaterization that we choose.
+want to force anyone towards a certain set-up or parameterization that we choose.
 However, we believe that the OGGM capabilities are useful to a
 wide range of applications, and also to you.
 

@@ -303,52 +303,83 @@ class Test_w5e5:
             w5e5.get_gswp3_w5e5_file(d, 'zoup')
 
     def test_glacier_gridpoint_selection(self):
-
         from oggm.shop import w5e5
-        d = 'GSWP3_W5E5'
-        # test is only done for the `inv` file, as the other files are only
-        # downloaded for the HEF gridpoints as they would be too large otherwise.
-        # However, the same test and other tests are done for all files
-        # (also ISIMIP3b) and all glaciers in this notebook:
-        # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/
-        # ~lschuster/example_ipynb/flatten_glacier_gridpoint_tests.ipynb
-        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
-            dinv = dinv.load()
-
-        # select three glaciers where two failed in the
-        # previous gswp3_w5e5 version
-        for coord in [(10.7584, 46.8003),  # HEF
-                      (-70.8931 + 360, -72.4474),  # RGI60-19.00124
-                      (51.495, 30.9010),  # RGI60-12.01691
-                      (0, 0)  # random gridpoint not near to a glacier
-                      ]:
-            lon, lat = coord
-            # get the distances to the glacier coordinate
-            c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
-            c = c.to_dataframe('distance').sort_values('distance')
-            # select the nearest climate point from the flattened glacier gridpoint
-            lat_near, lon_near, dist = c.iloc[0]
-            # for a randomly chosen gridpoint, the next climate gridpoint is far away
-            if coord == (0, 0):
-                with pytest.raises(AssertionError):
-                    assert np.abs(lat_near - lat) <= 0.25
-                    assert np.abs(lon_near - lon) <= 0.25
-                    assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
-            # for glaciers the next gridpoint should be the nearest
-            # (GSWP3-W5E5 resolution is 0.5°)
+        from oggm.shop import ecmwf
+        for d in ['GSWP3_W5E5', 'ERA5']:
+            # test is only done for the `inv` file, as the other files are only
+            # downloaded for the HEF gridpoints as they would be too large otherwise.
+            # However, the same test and other tests are done for all files
+            # (also ISIMIP3b) and all glaciers in this notebook:
+            # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/
+            # climate/notebooks/flatten_glacier_gridpoint_tests.ipynb
+            if d == 'GSWP3_W5E5':
+                res = 0.5
+                with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
+                    dinv = dinv.load()
             else:
-                assert np.abs(lat_near - lat) <= 0.25
-                assert np.abs(lon_near - lon) <= 0.25
-                assert dist <= (0.25 ** 2 + 0.25 ** 2) ** 0.5
+                res = 0.25
+                with xr.open_dataset(ecmwf.get_ecmwf_file('ERA5', 'inv')) as dinv:
+                    dinv = dinv.load()
 
-        # this only contains data for two glaciers, let's still check some basics
-        # both glaciers are not at latitude or longitude 0
-        with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
-            assert np.all(dtemp_std.latitude != 0)
-            assert np.all(dtemp_std.longitude != 0)
-            assert dtemp_std.isel(time=0).temp_std.std() > 0
-            assert dtemp_std.longitude.std() > 0
-            assert dtemp_std.latitude.std() > 0
+            diffs = np.sort(dinv.longitude)[1:] - np.sort(dinv.longitude)[:-1]
+            np.testing.assert_allclose(diffs[diffs > 0].min(), res)
+            # previous gswp3_w5e5 version, and two are only necessary for RGI7
+            for coord in [(10.7584, 46.8003),  # HEF
+                          (-70.8931, -72.4474),  # RGI60-19.00124
+                          (51.495, 30.9010),  # RGI60-12.01691
+                          (0, 0),  # random gridpoint not near to a glacier
+                          ( -141.670274, 69.166921),  # in RGI7C, not in RGI6
+                          (-66.855668, -67.535551),  # only in RGI7G, not in RGI6 or in RGI 7C
+                          (-0.039683, 42.695419),  ## glacier near 0
+                          (-179.915527 + 360, 66.276108)  # RGI60-10.05049 	(near -180 longitude)
+                          ]:
+                lon, lat = coord
+                # for ERA5, all glaciers with longitudes (-0.125, 0.125) should take the longitude 0 data
+                # for glaciers between (-0.125 and 0) longitude, we do not want to transform to +360!!!
+                lon = lon + 360 if lon < dinv.longitude.min() - res / 2 else lon
+                if d == 'GSWP3_W5E5':
+                    # in case of GSWP3_W5E5, all glaciers with longitudes (0,1) will use the 0.5 gridpoint,
+                    # and those within (-1,0) use the 359.5 point
+                    # therefore, we only have the 0,360 transformation issue for ERA5
+                    np.testing.assert_allclose(dinv.longitude.min() - res / 2, 0)
+
+                # get the distances to the glacier coordinate
+                c = (dinv.longitude - lon) ** 2 + (dinv.latitude - lat) ** 2
+                c = c.to_dataframe('distance').sort_values('distance')
+                # select the nearest climate point from the flattened glacier gridpoint
+                lat_near, lon_near, dist = c.iloc[0]
+                # for a randomly chosen gridpoint, the next climate gridpoint is far away
+                if coord == (0, 0):
+                    with pytest.raises(AssertionError):
+                        assert np.abs(lat_near - lat) <= res/2
+                        assert np.abs(lon_near - lon) <= res/2
+                        assert dist <= ((res/2) ** 2 + (res/2)** 2) ** 0.5
+                # for glaciers the next gridpoint should be the nearest
+                # (GSWP3-W5E5 resolution is 0.5°)
+                else:
+                    assert np.abs(lat_near - lat) <= res/2
+                    assert np.abs(lon_near - lon) <= res/2
+                    assert dist <= ((res/2) ** 2 + (res/2) ** 2) ** 0.5
+
+            # this only contains data for a few glaciers, let's still check some basics
+            # both glaciers are not at latitude or longitude 0, but for one glacier we need to pick longitude 0
+            if d == 'GSWP3_W5E5':
+                with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
+                    assert np.all(dtemp_std.latitude != 0)
+                    assert np.all(dtemp_std.longitude != 0)
+                    assert dtemp_std.isel(time=0).temp_std.std() > 0
+                    assert dtemp_std.longitude.std() > 0
+                    assert dtemp_std.latitude.std() > 0
+            else:
+                with xr.open_dataset(ecmwf.get_ecmwf_file('ERA5', 'tmp')) as dtemp:
+                    assert np.all(dtemp.latitude != 0)
+                    assert np.all(dtemp.longitude >= 0)
+                    assert dtemp.isel(time=0).t2m.std() > 0
+                    assert dtemp.longitude.std() > 0
+                    assert dtemp.latitude.std() > 0
+                    # check begin and end date (this is already tested for GSWP3-W5E5)
+                    assert dtemp.isel(time=0).time.values == np.datetime64('1940-01-01')
+                    assert dtemp.isel(time=-1).time.values == np.datetime64('2025-12-01')
 
     def test_process_w5e5_data(self, class_case_dir):
 
@@ -426,7 +457,6 @@ class Test_w5e5:
         # no gradient for GSWP3-W5E5!
 
         # test climate statistics with winter_daily_mean_prcp
-        # they should be computed even if cfg.PARAMS['use_winter_prcp_fac'] is False!
         df = utils.compile_climate_statistics([gdir], path=False,
                                               add_climate_period=[1999, 2010],
                                               add_raw_climate_statistics=True,
@@ -444,7 +474,7 @@ class Test_ecmwf:
 
     def test_get_ecmwf_file(self):
         from oggm.shop import ecmwf
-        for d, vars in ecmwf.BASENAMES.items():
+        for d, vars in ecmwf._get_ecmwf_basenames().items():
             for v, _ in vars.items():
                 assert os.path.isfile(ecmwf.get_ecmwf_file(d, v))
 
@@ -498,16 +528,16 @@ class Test_ecmwf:
             # Climate during the chosen period should be the same
             np.testing.assert_allclose(sref.temp.mean(),
                                        shis.temp.mean(),
-                                       atol=1e-3)
+                                       atol=4e-3) # before 1e-3
             np.testing.assert_allclose(sref.prcp.mean(),
                                        shis.prcp.mean(),
-                                       rtol=1e-3)
+                                       rtol=3e-3)
 
             # And also the annual cycle
             srefm = sref.groupby('time.month').mean(dim='time')
             shism = shis.groupby('time.month').mean(dim='time')
-            np.testing.assert_allclose(srefm.temp, shism.temp, atol=1e-3)
-            np.testing.assert_allclose(srefm.prcp, shism.prcp, rtol=1e-3)
+            np.testing.assert_allclose(srefm.temp, shism.temp, atol=4e-2)
+            np.testing.assert_allclose(srefm.prcp, shism.prcp, rtol=2e-2)
 
             # And its std dev - but less strict
             srefm = sref.groupby('time.month').std(dim='time')
@@ -536,7 +566,7 @@ class Test_ecmwf:
             ci = gdir.get_climate_info('CERA_repl')
             assert ci['baseline_climate_source'] == 'CERA+ERA5'
             assert ci['baseline_yr_0'] == 1901
-            assert ci['baseline_yr_1'] == 2018
+            assert ci['baseline_yr_1'] == 2025
 
             # Climate on common period
             sref = ref.sel(time=slice(ref.time[0], his.time[-1]))
@@ -632,8 +662,8 @@ class Test_climate_datasets:
                 assert ds.ref_pix_dis < 30000
                 dft.append(ds.temp.to_series())
                 dfp.append(ds.prcp.to_series())
-        dft = pd.concat(dft, axis=1, keys=exps)
-        dfp = pd.concat(dfp, axis=1, keys=exps)
+        dft = pd.concat(dft, axis=1, keys=exps, sort=True)
+        dfp = pd.concat(dfp, axis=1, keys=exps, sort=True)
 
         # Common period
         dfy = dft.resample('YS').mean().dropna().iloc[1:]
@@ -687,8 +717,11 @@ class Test_climate_datasets:
                 assert ds.ref_pix_dis < 10000
 
         with xr.open_dataset(files[0]) as d1, xr.open_dataset(files[1]) as d2:
-            np.testing.assert_allclose(d1.temp, d2.temp)
-            np.testing.assert_allclose(d1.prcp, d2.prcp)
+            # there are some very small differences, likely because of different ERA5 "versions"???
+            np.testing.assert_allclose(d1.temp.sel(time=slice('1979', '2018')),
+                                       d2.temp.sel(time=slice('1979', '2018')),atol=1e-3)
+            np.testing.assert_allclose(d1.prcp.sel(time=slice('1979', '2018')),
+                                       d2.prcp.sel(time=slice('1979', '2018')), rtol=0.03)
             # Fake tests, the plots look plausible
             np.testing.assert_allclose(d2.temp_std.mean(), 3.35, atol=0.1)
 

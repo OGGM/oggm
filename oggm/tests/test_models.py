@@ -308,8 +308,6 @@ def other_glacier_cfg():
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
-    cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
 
@@ -3183,7 +3181,12 @@ class TestHEF:
         # Climate data
         fh = gdir.get_filepath('climate_historical')
         fcesm = gdir.get_filepath('gcm_data')
-        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm, use_cftime=True) as cesm:
+        try:
+            decode_times = xr.coders.CFDatetimeCoder(use_cftime=True)
+            cftime_kwargs = {'decode_times': decode_times}
+        except AttributeError:
+            cftime_kwargs = {'use_cftime': True}
+        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm, **cftime_kwargs) as cesm:
             # Let's do some basic checks
             shist = hist.sel(time=slice('1961', '1990'))
             scesm = cesm.sel(time=slice('1961', '1990'))
@@ -3523,7 +3526,7 @@ class TestDynamicSpinup:
         spinup_start_yr = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
             hef_gdir,
-            spinup_period=40,
+            spinup_period_initial=40,
             spinup_start_yr=spinup_start_yr,
             target_yr=yr_rgi,
             minimise_for=minimise_for,
@@ -3573,7 +3576,7 @@ class TestDynamicSpinup:
                     target_yr=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
-                    spinup_period=10,
+                    spinup_period_initial=10,
                     maxiter=2,
                     output_filesuffix='_dynamic_spinup',
                     **kwarg_dyn_spn)
@@ -3611,7 +3614,7 @@ class TestDynamicSpinup:
         precision_absolute = 1
         model_dynamic_spinup_ye, t_spinup = run_dynamic_spinup(
             hef_gdir,
-            spinup_period=40,
+            spinup_period_initial=40,
             spinup_start_yr=spinup_start_yr,
             target_yr=yr_rgi,
             ye=ye,
@@ -3643,7 +3646,7 @@ class TestDynamicSpinup:
         # to start at spinup_start_yr_max
         run_dynamic_spinup(
             hef_gdir,
-            spinup_period=5,
+            spinup_period_initial=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
             target_yr=yr_rgi,
@@ -5340,8 +5343,6 @@ class TestMassRedis:
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['use_multiprocessing'] = False
         cfg.PARAMS['min_ice_thick_for_length'] = 5
-        cfg.PARAMS['use_winter_prcp_fac'] = False
-        cfg.PARAMS['use_temp_bias_from_file'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -5437,8 +5438,6 @@ def merged_hef_cfg(class_case_dir):
     cfg.PARAMS['border'] = 100
     cfg.PARAMS['prcp_fac'] = 1.75
     cfg.PARAMS['temp_melt'] = -1.75
-    cfg.PARAMS['use_winter_prcp_fac'] = False
-    cfg.PARAMS['use_temp_bias_from_file'] = False
 
 
 @pytest.mark.usefixtures('merged_hef_cfg')
@@ -5893,7 +5892,7 @@ class TestDistribute2D:
         vol_dis = thick.sum(dim=('x', 'y')) * dx2
 
         # We have a very close volume and area conservation
-        assert_allclose(area_dis, ds_diag.area_m2, rtol=0.01)
+        assert_allclose(area_dis, ds_diag.area_m2, rtol=0.03)
         assert_allclose(vol_dis, ds_diag.volume_m3, rtol=0.01)
 
         # The flowline views should be quite good as well

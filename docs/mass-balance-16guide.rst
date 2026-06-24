@@ -8,7 +8,7 @@ in OGGM. At the same time, we changed a few other aspects of the mass-balance
 model. Here is an incomplete list of all the changes:
 
 - the :math:`\mu^*` parameter (``mu_star`` in code) has been renamed to ``melt_f``
-- its unit is now kg w.e. d:math:`^{-1}` day:math:`^{-1}` (instead on per month), regardless if the model is monthly or not (the conversion is done internally)
+- its unit is now :math:`\mathrm{kg\ m^{-2}\ K^{-1}\ day^{-1}}` (instead on per month), regardless if the model is monthly or not (the conversion is done internally)
 - we implemented a new, flexible calibration strategy. We apply it as explained in the tutorials, but allow for many more options for calibration
 - we simplified the internal code a lot. Now all mass balance code can be found in the mass balance module (previously, mass balance calibration and application were separate).
 - ... and much more.

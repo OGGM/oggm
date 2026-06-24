@@ -68,15 +68,11 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '9bfeb6dfea9513f790877819d9a6cbd2c7b61611'
-
-CHECKSUM_URL = 'https://cluster.klima.uni-bremen.de/data/downloads.sha256.hdf'
-CHECKSUM_VALIDATION_URL = CHECKSUM_URL + '.sha256'
-CHECKSUM_LIFETIME = 24 * 60 * 60
+SAMPLE_DATA_COMMIT = '8af40f89620c6bd72f3485a777a018dcacb99d94'
 
 # Recommended url for runs
 DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
-                    'L3-L5_files/2023.3/elev_bands/W5E5_spinup')
+                    'L3-L5_files/2025.6/elev_bands/W5E5/per_glacier_spinup/')
 
 # Web mercator proj constants
 WEB_N_PIX = 256
@@ -180,88 +176,6 @@ def get_lock():
     return lock
 
 
-def get_dl_verify_data(section):
-    """Returns a pandas DataFrame with all known download object hashes.
-
-    The returned dictionary resolves str: cache_obj_name (without section)
-    to a tuple int(size) and bytes(sha256)
-    """
-
-    verify_key = 'dl_verify_data_' + section
-    if verify_key in cfg.DATA:
-        return cfg.DATA[verify_key]
-
-    verify_file_path = os.path.join(cfg.CACHE_DIR, 'downloads.sha256.hdf')
-
-    def verify_file(force=False):
-        """Check the hash file's own hash"""
-        if not cfg.PARAMS['has_internet']:
-            return
-
-        if not force and os.path.isfile(verify_file_path) and \
-           os.path.getmtime(verify_file_path) + CHECKSUM_LIFETIME > time.time():
-            return
-
-        logger.info('Checking the download verification file checksum...')
-        try:
-            with requests.get(CHECKSUM_VALIDATION_URL) as req:
-                req.raise_for_status()
-                verify_file_sha256 = req.text.split(maxsplit=1)[0]
-                verify_file_sha256 = bytearray.fromhex(verify_file_sha256)
-        except Exception as e:
-            verify_file_sha256 = None
-            logger.warning('Failed getting verification checksum: ' + repr(e))
-
-        if os.path.isfile(verify_file_path) and verify_file_sha256:
-            sha256 = hashlib.sha256()
-            with open(verify_file_path, 'rb') as f:
-                for b in iter(lambda: f.read(0xFFFF), b''):
-                    sha256.update(b)
-            if sha256.digest() != verify_file_sha256:
-                logger.warning('%s changed or invalid, deleting.'
-                               % (verify_file_path))
-                os.remove(verify_file_path)
-            else:
-                os.utime(verify_file_path)
-
-    if not np.any(['dl_verify_data_' in k for k in cfg.DATA.keys()]):
-        # We check the hash file only once per session
-        # no need to do it at each call
-        verify_file()
-
-    if not os.path.isfile(verify_file_path):
-        if not cfg.PARAMS['has_internet']:
-            return pd.DataFrame()
-
-        logger.info('Downloading %s to %s...'
-                    % (CHECKSUM_URL, verify_file_path))
-
-        with requests.get(CHECKSUM_URL, stream=True) as req:
-            if req.status_code == 200:
-                mkdir(os.path.dirname(verify_file_path))
-                with open(verify_file_path, 'wb') as f:
-                    for b in req.iter_content(chunk_size=0xFFFF):
-                        if b:
-                            f.write(b)
-
-        logger.info('Done downloading.')
-
-        verify_file(force=True)
-
-    if not os.path.isfile(verify_file_path):
-        logger.warning('Downloading and verifying checksums failed.')
-        return pd.DataFrame()
-
-    try:
-        data = pd.read_hdf(verify_file_path, key=section)
-    except KeyError:
-        data = pd.DataFrame()
-
-    cfg.DATA[verify_key] = data
-
-    return data
-
-
 def _call_dl_func(dl_func, cache_path):
     """Helper so the actual call to downloads can be overridden
     """
@@ -330,44 +244,6 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         raise
 
     return cache_path
-
-
-def _verified_download_helper(cache_obj_name, dl_func, reset=False):
-    """Helper function for downloads.
-
-    Verifies the size and hash of the downloaded file against the included
-    list of known static files.
-    Uses _cached_download_helper to perform the actual download.
-    """
-    path = _cached_download_helper(cache_obj_name, dl_func, reset)
-
-    dl_verify = cfg.PARAMS.get('dl_verify', False)
-
-    if dl_verify and path and cache_obj_name not in cfg.DL_VERIFIED:
-        cache_section, cache_path = cache_obj_name.split('/', 1)
-        data = get_dl_verify_data(cache_section)
-        if cache_path not in data.index:
-            logger.info('No known hash for %s' % cache_obj_name)
-            cfg.DL_VERIFIED[cache_obj_name] = True
-        else:
-            # compute the hash
-            sha256 = hashlib.sha256()
-            with open(path, 'rb') as f:
-                for b in iter(lambda: f.read(0xFFFF), b''):
-                    sha256.update(b)
-            sha256 = sha256.digest()
-            size = os.path.getsize(path)
-
-            # check
-            data = data.loc[cache_path]
-            if data['size'] != size or bytes(data['sha256']) != sha256:
-                err = '%s failed to verify!\nis: %s %s\nexpected: %s %s' % (
-                    path, size, sha256.hex(), data.iloc[0], data.iloc[1].hex())
-                raise DownloadVerificationFailedException(msg=err, path=path)
-            logger.info('%s verified successfully.' % path)
-            cfg.DL_VERIFIED[cache_obj_name] = True
-
-    return path
 
 
 def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
@@ -508,15 +384,34 @@ def _get_url_cache_name(url):
     return res.netloc.split(':', 1)[0] + res.path
 
 
+def _assert_url_in_allowlist(url):
+    """Fail if a URL is not in the optional download allowlist."""
+
+    allowlist = cfg.PARAMS.get('download_url_allowlist')
+    if not allowlist:
+        return
+
+    if isinstance(allowlist, str):
+        allowlist = [allowlist]
+
+    if any(entry in url for entry in allowlist):
+        return
+
+    raise InvalidParamsError('URL is not in cfg.PARAMS["download_url_allowlist"]: '
+                             f'{url}')
+
+
 def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
                      reporthook=None, auth=None, timeout=None):
     """Wrapper around urlretrieve, to implement our caching logic.
 
-    Instead of accepting a destination path, it decided where to store the file
+    Instead of accepting a destination path, it decides where to store the file
     and returns the local path.
 
     auth is expected to be either a tuple of ('username', 'password') or None.
     """
+
+    _assert_url_in_allowlist(url)
 
     if cache_obj_name is None:
         cache_obj_name = _get_url_cache_name(url)
@@ -533,7 +428,7 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
                                      timeout)
         return cache_path
 
-    return _verified_download_helper(cache_obj_name, _dlf, reset)
+    return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
 def _progress_urlretrieve(url, cache_name=None, reset=False,
@@ -595,7 +490,7 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     def _dlf(cache_path):
         raise NotImplementedError("Downloads from AWS are no longer supported")
 
-    return _verified_download_helper(cache_obj_name, _dlf, reset)
+    return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
 def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
@@ -793,7 +688,7 @@ def download_with_authentication(wwwfile, key):
         return None
 
     cache_obj_name = _get_url_cache_name(wwwfile)
-    dest_file = _verified_download_helper(cache_obj_name, _always_none)
+    dest_file = _cached_download_helper(cache_obj_name, _always_none)
 
     # Grab auth parameters
     if not dest_file:
@@ -1270,7 +1165,7 @@ def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
     return tar_base
 
 
-def get_geodetic_mb_dataframe(file_path=None):
+def get_geodetic_mb_dataframe(file_path=None, regional=False):
     """Fetches the reference geodetic dataframe for calibration.
 
     Currently that's the data from Hughonnet et al 2021, corrected for
@@ -1281,7 +1176,10 @@ def get_geodetic_mb_dataframe(file_path=None):
     Parameters
     ----------
     file_path : str
-        in case you have your own file to parse (check the format first!)
+        in case you have your own file to parse (check the format first!).
+        Can be a url as well
+    regional : bool
+        to fetch the regional file instead - this is a different format!
 
     Returns
     -------
@@ -1291,8 +1189,15 @@ def get_geodetic_mb_dataframe(file_path=None):
     # fetch the file online or read custom file
     if file_path is None:
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
-        file_path = file_downloader(base_url + file_name)
+        if regional:
+            file_name = 'hugonnet_2021_regional_avg.csv'
+            file_path = file_downloader(base_url + file_name)
+        else:
+            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+            file_path = file_downloader(base_url + file_name)
+
+    if file_path.startswith('http'):
+        file_path = file_downloader(file_path)
 
     # Did we open it yet?
     if file_path in cfg.DATA:
@@ -1301,7 +1206,7 @@ def get_geodetic_mb_dataframe(file_path=None):
     # If not let's go
     extension = os.path.splitext(file_path)[1]
     if extension == '.csv':
-        df = pd.read_csv(file_path, index_col=0)
+        df = pd.read_csv(file_path)
     elif extension == '.hdf':
         df = pd.read_hdf(file_path)
 
@@ -1315,30 +1220,48 @@ def get_geodetic_mb_dataframe(file_path=None):
     return df
 
 
-def get_temp_bias_dataframe(dataset='w5e5'):
-    """Fetches the reference geodetic dataframe for calibration.
+def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
+    """Fetches the temperature bias dataframe.
 
-    Currently, that's the data from Hughonnet et al. (2021), corrected for
-    outliers and with void filled. The data preparation script is
-    available at
-    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
+    The dataframe was created by the OGGM>=v16 pre-calibration
+    (further explained in the `OGGM mass balance tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_
+
+    The data preparation script is available at
+    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/1.6.1/prepare_bias_map.ipynb
+
+    The file differs between climate datasets and OGGM versions. For W5E5 and OGGM v162, it is e.g.
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_temp_bias_v2023.4.csv
 
     Parameters
     ----------
-    file_path : str
-        in case you have your own file to parse (check the format first!)
+    dataset : str
+        climate dataset used to choose temperature bias dataframe
+        (currently only w5e5 and era5 are available)
 
     Returns
     -------
     a DataFrame with the data.
     """
 
-    if dataset != 'w5e5':
+    if dataset not in ['w5e5', 'era5']:
         raise NotImplementedError(f'No such dataset available yet: {dataset}')
+    if rgi_version == '60':
+        rgi_version = '62'
+    if rgi_version not in ['62', '70G', '70C']:
+        raise NotImplementedError(f'RGI version not available yet: {rgi_version}')
 
     # fetch the file online
-    base_url = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
-                'w5e5_temp_bias_v2023.4.csv')
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
+    calibtype = 'regional' if regional else 'perglacier'
+    if rgi_version in ['70G', '70C']:
+        file_version = '1'
+    if rgi_version == '62':
+        file_version = '3' if regional else '2'
+        rgi_version = '6'
+    if dataset == 'w5e5':
+        base_url += f'w5e5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
+    if dataset == 'era5':
+        base_url += f'era5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
 
     file_path = file_downloader(base_url)
 
@@ -1893,11 +1816,11 @@ def _get_rgi_dir_unlocked(version=None, reset=False):
     test_file = os.path.join(rgi_dir, f'*_rgi*{version}_manifest.txt')
 
     if version == '50':
-        dfile = 'http://www.glims.org/RGI/rgi50_files/rgi50.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/www.glims.org/RGI/rgi50_files/rgi50.zip'
     elif version == '60':
-        dfile = 'http://www.glims.org/RGI/rgi60_files/00_rgi60.zip'
+        dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/www.glims.org/RGI/rgi60_files/rgi60.zip'
     elif version == '61':
-        dfile = 'https://cluster.klima.uni-bremen.de/data/rgi/rgi_61.zip'
+        raise InvalidParamsError('You should use RGI62 instead of 61.')
     elif version == '62':
         dfile = 'https://cluster.klima.uni-bremen.de/~oggm/rgi/rgi62.zip'
     elif version == '70G':
@@ -1979,7 +1902,8 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     rgi_ids : list of str
         the glaciers you want the outlines for
     version : str
-        the rgi version ('62', '70G', '70C')
+        the rgi version ('62', '70G', '70C'). Tries to infer
+        from the ID and defaults to cfg.PARAMS if unsure.
 
     Returns
     -------
@@ -1990,7 +1914,7 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     if version is None:
         if len(rgi_ids[0]) == 14:
             # RGI6
-            version = rgi_ids[0].split('-')[0][-2:]
+            version = cfg.PARAMS['rgi_version']
         else:
             # RGI7 RGI2000-v7.0-G-02-00003
             assert rgi_ids[0].split('-')[1] == 'v7.0'

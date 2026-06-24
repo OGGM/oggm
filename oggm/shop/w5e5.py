@@ -23,16 +23,24 @@ log = logging.getLogger(__name__)
 
 GSWP3_W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
 
-_base = 'gswp3-w5e5/flattened/2023.2/monthly/'
+_base = 'gswp3-w5e5/flattened/2025.11.25/monthly/'
 
 BASENAMES = {
     'GSWP3_W5E5': {
-        'inv': f'{_base}gswp3-w5e5_glacier_invariant_flat.nc',
-        'tmp': f'{_base}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers.nc',
-        'temp_std': f'{_base}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers.nc',
-        'prcp': f'{_base}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers.nc'
+        'inv': f'{_base}gswp3-w5e5_glacier_invariant_flat_v2025.11.25.nc',
+        'tmp': f'{_base}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc',
+        'temp_std': f'{_base}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc',
+        'prcp': f'{_base}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc'
     }
 }
+
+
+def _get_w5e5_server():
+    return cfg.PARAMS.get('gswp3_w5e5_server', GSWP3_W5E5_SERVER)
+
+
+def _get_w5e5_basenames():
+    return cfg.PARAMS.get('gswp3_w5e5_basenames', BASENAMES)
 
 
 def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
@@ -54,13 +62,15 @@ def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
         but this is the same for a shorter time period, and we only use it for testing)
     """
     # check if input makes sense
-    if var not in BASENAMES[dataset].keys():
+    basenames = _get_w5e5_basenames()
+
+    if var not in basenames[dataset].keys():
         raise InvalidParamsError('GSWP3-W5E5 variable {} not '
                                  'in {}'.format(var,
-                                                BASENAMES[dataset].keys()))
+                                                basenames[dataset].keys()))
 
     # File to look for
-    return utils.file_downloader(GSWP3_W5E5_SERVER + BASENAMES[dataset][var])
+    return utils.file_downloader(_get_w5e5_server() + basenames[dataset][var])
 
 
 @entity_task(log, writes=['climate_historical'])
@@ -104,7 +114,12 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
     # would go faster with only netCDF -.-, but easier with xarray
     # first temperature dataset
     with xr.open_dataset(path_tmp) as ds:
-        assert ds.longitude.min() >= 0
+        # sanity checks, safeguarding for unwanted future side effects
+        # we do it only for temp and assume no mistake on the data prep side
+        info = utils.climate_file_info(ds)
+        assert info['lon_bounds'][0] >= 0
+        assert info['is_flat']
+
         yrs = ds['time.year'].data
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1
@@ -113,17 +128,14 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
             text = 'The climate files only go from 1901--2019'
             raise InvalidParamsError(text)
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
-        try:
-            # computing all the distances and choose the nearest gridpoint
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=np.argmin(c.data))
-        except ValueError:
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-            # normally if I do the flattening, this here should not occur
 
-        # because of the flattening, there is no time dependence of lon and lat anymore!
-        ds['longitude'] = ds.longitude  # .isel(time=0)
-        ds['latitude'] = ds.latitude  # .isel(time=0)
+        # computing all the distances and choose the nearest gridpoint
+        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+        ds = ds.isel(points=np.argmin(c.data))
+
+        # Feth lon and lat
+        ds['longitude'] = ds.longitude
+        ds['latitude'] = ds.latitude
 
         # temperature should be in degree Celsius for the glacier climate files
         temp = ds[tvar].data - 273.15
@@ -136,84 +148,33 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
 
     # precipitation: similar as temperature
     with xr.open_dataset(path_prcp) as ds:
-        assert ds.longitude.min() >= 0
 
         # here we take the same y0 and y1 as given from the
         # tmp dataset
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
-        try:
-            # ... prcp is also flattened
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=np.argmin(c.data))
-        except ValueError:
-            # this should not occur
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+
+        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+        ds = ds.isel(points=np.argmin(c.data))
 
         # convert kg m-2 s-1 monthly mean into monthly sum!!!
         prcp = ds[pvar].data*cfg.SEC_IN_DAY*ds['time.daysinmonth']
 
     # w5e5 invariant file
     with xr.open_dataset(path_inv) as ds:
-        assert ds.longitude.min() >= 0
         ds = ds.isel(time=0)
-        try:
-            # Flattened  (only possibility at the moment)
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=np.argmin(c.data))
-        except ValueError:
-            # this should not occur
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
+
+        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+        ds = ds.isel(points=np.argmin(c.data))
+
         # w5e5 inv ASurf/hgt is already in hgt coordinates
         hgt = ds['ASurf'].data
-
-    # here we need to use the ERA5dr data ...
-    # there are no lapse rates from W5E5 !!!
-    # TODO: use updated ERA5dr files that goes until end of 2019
-    #  and update the code accordingly !!!
-    if y0 < 1979:
-        # just don't compute lapse rates as ERA5 only starts in 1979
-        # could use the average from 1979-2019, but for the moment
-        # gradients are not used in OGGM anyway, so just ignore it:
-        gradient = None
-    else:
-        path_lapserates = ecmwf.get_ecmwf_file('ERA5dr', 'lapserates')
-        with xr.open_dataset(path_lapserates) as ds:
-            ecmwf._check_ds_validity(ds)
-
-            # this has a different time span!
-            yrs = ds['time.year'].data
-            y0 = yrs[0] if y0 is None else y0
-            y1 = yrs[-1] if y1 is None else y1
-            ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
-
-            # no flattening done for the ERA5dr gradient dataset
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-            if y1 == 2019:
-                # missing some months of ERA5dr (which only goes till middle of 2019)
-                # otherwise it will fill it with large numbers ...
-                ds = ds.sel(time=slice(f'{y0}-01-01', '2018-12-01'))
-                # take for hydrological year 2019 just the avg. lapse rates
-                # this gives in month order Jan-Dec the mean laperates,
-                mean_grad = ds.groupby('time.month').mean().lapserate
-                # fill the last year with mean gradients
-                gradient = np.concatenate((ds['lapserate'].data, mean_grad),
-                                          axis=None)
-            else:
-                # get the monthly gradient values
-                gradient = ds['lapserate'].data
 
     path_temp_std = get_gswp3_w5e5_file(dataset, 'temp_std')
     with xr.open_dataset(path_temp_std) as ds:
         ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
-        try:
-            # ... prcp is also flattened
-            c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-            ds = ds.isel(points=np.argmin(c.data))
-        except ValueError:
-            # this should not occur
-            ds = ds.sel(longitude=lon, latitude=lat, method='nearest')
-
-        temp_std = ds['temp_std'].data  # tas_std for W5E5!!!
+        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
+        ds = ds.isel(points=np.argmin(c.data))
+        temp_std = ds['temp_std'].data
 
     # OK, ready to write
     gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
