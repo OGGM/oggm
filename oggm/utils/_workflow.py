@@ -4268,12 +4268,16 @@ def base_dir_to_tar(
         bundles = {}
         for dirpath, _, filenames in os.walk(base_dir):
             for fname in sorted(filenames):
+                # TODO: Would this be easier/faster with pathlib?
                 if not fname.endswith(".tar.gz"):
                     continue
                 rgi_id = fname[:-7]
                 # TODO: RGI7 has a different ID length
                 # check for RGI, e.g. `centerlines_11` is also 14 chars long
-                if (len(rgi_id) != 14) or "RGI" not in rgi_id:
+                if not (
+                    (len(rgi_id) == 14 and "RGI" in rgi_id)
+                    or (len(rgi_id) == 23 and "RGI" in rgi_id)
+                ):
                     continue
                 # TODO: or maybe:
                 # bundle_name = f"{rgi_id[:-6]}.{int(rgi_id[-5:-2]) // bundle_size:03d}"
