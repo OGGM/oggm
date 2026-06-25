@@ -18,6 +18,8 @@ Enhancements
   be faster. `robust_tar_extract` will handle different bundle sizes
   automatically. (:pull:`1925`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Some tests have been refactored from unittest to pytest. (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
