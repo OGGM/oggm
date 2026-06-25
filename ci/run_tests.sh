@@ -35,8 +35,21 @@ export COVERAGE_RCFILE="$PWD/.coveragerc"
 
 coverage erase
 
+# --- TEMPORARY CI diagnostics (issue #1906); revert with the rest of DIAG ---
+# OGGM_DIAG_DESELECT: nodeid to drop (test if the hang is positional vs intrinsic).
+# OGGM_DIAG_FAULT_TIMEOUT: dump all-thread tracebacks for any test exceeding N s
+# (pytest's built-in faulthandler_timeout; non-fatal, repeats) to name the
+# exact blocking call. Both no-ops when the env vars are unset (normal runs).
+PYTEST_DIAG_ARGS=()
+if [[ -n "${OGGM_DIAG_DESELECT:-}" ]]; then
+    PYTEST_DIAG_ARGS+=(--deselect "$OGGM_DIAG_DESELECT")
+fi
+if [[ -n "${OGGM_DIAG_FAULT_TIMEOUT:-}" ]]; then
+    PYTEST_DIAG_ARGS+=(-o "faulthandler_timeout=${OGGM_DIAG_FAULT_TIMEOUT}")
+fi
+
 coverage run --source=./oggm --parallel-mode --module \
-    pytest --verbose --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
+    pytest --verbose --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" "${PYTEST_DIAG_ARGS[@]}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
 
 coverage combine
 coverage xml

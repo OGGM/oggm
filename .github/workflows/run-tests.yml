@@ -54,6 +54,10 @@ jobs:
           STATIC_MAP_API_KEY: ${{ secrets.STATIC_MAP_API_KEY }}
           OGGM_CI_PROFILE: '1'
           CI_TEST_TIMELINE: /tmp/ci-diag/test_timeline.csv
+          # DIAG #1906: dump all-thread tracebacks for any test > 120s (names the blocking call)
+          OGGM_DIAG_FAULT_TIMEOUT: '120'
+          # DIAG #1906: drop the hanging param in `models` to test if the hang is positional
+          OGGM_DIAG_DESELECT: ${{ matrix.test-env == 'models' && 'oggm/tests/test_models.py::TestDynamicSpinup::test_run_dynamic_melt_f_calibration_with_dynamic_spinup[area-True]' || '' }}
       - name: Stop sampler (DIAG #1906)
         if: always()
         run: kill "$(cat /tmp/ci-diag/sampler.pid)" 2>/dev/null || true
