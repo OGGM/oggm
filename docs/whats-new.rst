@@ -12,6 +12,11 @@ Enhancements
 - `run_prepro_levels` now allows to set a custom climate data processing
   module and custom geodetic data file to create glacier directories (:pull:`1910`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
+  provide a list of additional spinup periods, which are tried in order if both
+  the initially defined spinup period (`spinup_period_initial`) and the minimum
+  spinup period (`min_spinup_period`) fail (:pull:`1914`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Supports bundling glaciers in sets other than 1000. The new default for
   `base_dir_to_tar` is 100. Downloading from existing base URLs will still use
   the 1k bundles, but new URLs will use bundles of 100 by default which should
