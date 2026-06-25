@@ -843,21 +843,18 @@ def _read_shp():
     return inter, rgidf
 
 
-class TestPreproCLI(unittest.TestCase):
+class TestPreproCLI:
 
-    def setUp(self):
-        from _pytest.monkeypatch import MonkeyPatch
-        self.monkeypatch = MonkeyPatch()
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_levs')
-        self.reset_dir()
-        self.on_mac = platform.system() == 'Darwin'
+    on_mac = platform.system() == "Darwin"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
+        self.testdir = tmpdir_factory.mktemp("tmp_prepro_levs")
+        utils.mkdir(self.testdir, reset=True)
 
     def tearDown(self):
         if os.path.exists(self.testdir):
             shutil.rmtree(self.testdir)
-
-    def reset_dir(self):
-        utils.mkdir(self.testdir, reset=True)
 
     def test_parse_args(self):
 
@@ -1733,9 +1730,9 @@ class TestPreproCLI(unittest.TestCase):
                               rgi_file=rgidf, intersects_file=inter,
                               start_level=2, max_level=4)
 
-    def test_source_run(self):
+    def test_source_run(self, monkeypatch):
 
-        self.monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
+        monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
