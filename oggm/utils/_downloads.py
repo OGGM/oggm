@@ -413,6 +413,11 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
 
     _assert_url_in_allowlist(url)
 
+    if timeout is None:
+        # issue #1906: a server can accept the connection then stall mid-read;
+        # without a timeout the download hangs forever. 0 disables (legacy).
+        timeout = cfg.PARAMS.get('dl_timeout', 60) or None
+
     if cache_obj_name is None:
         cache_obj_name = _get_url_cache_name(url)
 
@@ -548,6 +553,16 @@ def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
                             "The file might have changed or is corrupted. "
                             "File deleted. Re-downloading... %s/%s" %
                             (www_path, err.msg, retry_counter, retry_max))
+            continue
+        except requests.exceptions.ReadTimeout:
+            # issue #1906: the server accepted the connection then stalled
+            # mid-transfer. A ReadTimeout is not a ConnectionError, so it needs
+            # its own branch to be retried rather than propagated. (ConnectTimeout
+            # is a ConnectionError and is still handled by the branch below.)
+            logger.info("Downloading %s failed with ReadTimeout, "
+                        "retrying in %s seconds... %s/%s" %
+                        (www_path, sleep_on_retry, retry_counter, retry_max))
+            time.sleep(sleep_on_retry)
             continue
         except requests.ConnectionError as err:
             if err.args[0].__class__.__name__ == 'MaxRetryError':

@@ -2376,6 +2376,62 @@ class TestFakeDownloads(unittest.TestCase):
         self.assertTrue('TDM1_DEM__30_N60W146_DEM.tif' in files)
         self.assertFalse('TDM1_DEM__30_N60W145_DEM.tif' in files)
 
+    def test_download_timeout_is_applied(self):
+        # issue #1906: oggm_urlretrieve must inject cfg.PARAMS['dl_timeout']
+        # when the caller passes no explicit timeout, so a stalled read can't
+        # hang forever. A 0 value disables it (legacy unbounded behaviour).
+        captured = {}
+
+        def fake_req(url, path, reporthook, auth=None, timeout=None):
+            captured['timeout'] = timeout
+            with open(path, 'w') as f:
+                f.write('hi')
+
+        self.reset_dir()
+        with FakeDownloadManager('_requests_urlretrieve', fake_req):
+            out = _downloads.oggm_urlretrieve(
+                'https://github.com/OGGM/timeout_test_a.txt',
+                cache_obj_name='timeout_test_a.txt')
+        assert out is not None
+        assert captured['timeout'] == cfg.PARAMS['dl_timeout']
+
+        old = cfg.PARAMS['dl_timeout']
+        cfg.PARAMS['dl_timeout'] = 0
+        try:
+            self.reset_dir()
+            with FakeDownloadManager('_requests_urlretrieve', fake_req):
+                _downloads.oggm_urlretrieve(
+                    'https://github.com/OGGM/timeout_test_b.txt',
+                    cache_obj_name='timeout_test_b.txt')
+        finally:
+            cfg.PARAMS['dl_timeout'] = old
+        assert captured['timeout'] is None
+
+    def test_download_readtimeout_retries(self):
+        # issue #1906: a ReadTimeout (server stalls mid-transfer) is not a
+        # ConnectionError, so file_downloader needs to retry it explicitly
+        # rather than let it propagate.
+        import requests
+
+        self.reset_dir()
+        target = os.path.join(self.dldir, 'ok.txt')
+        with open(target, 'w') as f:
+            f.write('ok')
+
+        calls = {'n': 0}
+
+        def flaky(url, *args, **kwargs):
+            calls['n'] += 1
+            if calls['n'] < 3:
+                raise requests.exceptions.ReadTimeout('stalled')
+            return target
+
+        with FakeDownloadManager('_progress_urlretrieve', flaky):
+            out = utils.file_downloader('https://github.com/OGGM/flaky.tar',
+                                        sleep_on_retry=0)
+        assert calls['n'] == 3
+        assert out == target
+
 
 class TestDataFiles(unittest.TestCase):
 
