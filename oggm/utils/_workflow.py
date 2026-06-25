@@ -797,22 +797,27 @@ def get_centerline_lonlat(gdir,
     return olist
 
 
-def _write_shape_to_disk(gdf, fpath, to_tar=False):
-    """Write a shapefile to disk with optional compression
+def _write_shape_to_disk(
+    gdf: gpd.GeoDataFrame, fpath: str | Path, to_tar: bool = False
+) -> None:
+    """Write a shapefile to disk with optional compression.
 
     Parameters
     ----------
     gdf : gpd.GeoDataFrame
-        the data to write
-    fpath : str
-        where to writ the file - should be ending in shp
-    to_tar : bool
-        put the files in a .tar file. If cfg.PARAMS['use_compression'],
-        also compress to .gz
+        The data to write
+    fpath : str or Path
+        Where to write the file - should end with .shp
+    to_tar : bool, default False
+        Put the files in a `.tar` file.
+        If `cfg.PARAMS['use_compression']`, also compress to .gz
     """
 
-    if '.shp' not in fpath:
-        raise ValueError('File ending should be .shp')
+    if isinstance(fpath, Path):
+        fpath = str(fpath)
+
+    if not fpath.endswith(".shp"):
+        raise ValueError("File ending should be .shp")
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
@@ -900,9 +905,11 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     """
     from oggm.workflow import execute_entity_task
 
-    if path is True:
-        path = os.path.join(cfg.PATHS['working_dir'],
-                            'glacier_centerlines' + filesuffix + '.shp')
+    if isinstance(path, bool) and path:
+        path = os.path.join(
+            cfg.PATHS["working_dir"],
+            "glacier_centerlines" + filesuffix + ".shp",
+        )
 
     _to_crs = salem.check_crs(to_crs)
     if not _to_crs:
@@ -4264,13 +4271,13 @@ def base_dir_to_tar(
                 if not fname.endswith(".tar.gz"):
                     continue
                 rgi_id = fname[:-7]
-                if (
-                    len(rgi_id) != 14
-                ):  # RGI6 only, RGI7 has a different ID length
+                # TODO: RGI7 has a different ID length
+                # check for RGI, e.g. `centerlines_11` is also 14 chars long
+                if (len(rgi_id) != 14) or "RGI" not in rgi_id:
                     continue
                 # TODO: or maybe:
                 # bundle_name = f"{rgi_id[:-6]}.{int(rgi_id[-5:-2]) // bundle_size:03d}"
-                bundle_name = rgi_id[:-6] + "." + rgi_id[-5:-2]
+                # this is quite brittle, non-standard filenames could slip through
                 bundle_name = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"
                 region_dir = os.path.dirname(dirpath)
                 if bundle_name not in bundles:
