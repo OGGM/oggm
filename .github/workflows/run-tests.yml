@@ -42,10 +42,27 @@ jobs:
         uses: actions/checkout@v7
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Start resource sampler (DIAG #1906)
+        run: |
+          mkdir -p /tmp/ci-diag
+          SAMPLER_OUT=/tmp/ci-diag/resource_samples.csv SAMPLER_INTERVAL=5 \
+            python3 ci/ci_resource_sampler.py &
+          echo $! > /tmp/ci-diag/sampler.pid
       - name: Test
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
         env:
           STATIC_MAP_API_KEY: ${{ secrets.STATIC_MAP_API_KEY }}
+          OGGM_CI_PROFILE: '1'
+          CI_TEST_TIMELINE: /tmp/ci-diag/test_timeline.csv
+      - name: Stop sampler (DIAG #1906)
+        if: always()
+        run: kill "$(cat /tmp/ci-diag/sampler.pid)" 2>/dev/null || true
+      - name: Upload CI diagnostics (DIAG #1906)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "ci-diag-${{ matrix.test-env }}-${{ strategy.job-index }}"
+          path: /tmp/ci-diag/
       - name: Normalize Artifact Name
         id: sanitize-name
         if: failure()

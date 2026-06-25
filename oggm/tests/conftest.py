@@ -338,3 +338,39 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
     """
     return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')
+
+
+# --- TEMPORARY CI diagnostics (issue #1906); active only with OGGM_CI_PROFILE=1 ---
+# Emits a start/finish row per test with main-process RSS so we can line up test
+# boundaries against ci/ci_resource_sampler.py. NB: ru_maxrss / VmRSS cover the
+# main process only (not OGGM multiprocessing children) - the system sampler is
+# the source of truth for aggregate memory. Revert: delete this block (PR #1906).
+if os.environ.get("OGGM_CI_PROFILE") == "1":
+    import datetime as _dt
+    import resource as _resource
+    import pathlib as _pl
+
+    _TL = _pl.Path(os.environ.get("CI_TEST_TIMELINE", "ci_test_timeline.csv"))
+    if not _TL.exists():
+        _TL.write_text("ts,phase,nodeid,maxrss_kb,vmrss_kb\n")
+
+    def _vmrss():
+        try:
+            for line in open("/proc/self/status"):
+                if line.startswith("VmRSS:"):
+                    return line.split()[1]
+        except OSError:
+            pass
+        return ""
+
+    def _emit(phase, nodeid):
+        mx = _resource.getrusage(_resource.RUSAGE_SELF).ru_maxrss  # KB on Linux
+        with open(_TL, "a") as f:
+            f.write(f"{_dt.datetime.now(_dt.timezone.utc).isoformat()},"
+                    f"{phase},{nodeid},{mx},{_vmrss()}\n")
+
+    def pytest_runtest_logstart(nodeid, location):
+        _emit("start", nodeid)
+
+    def pytest_runtest_logfinish(nodeid, location):
+        _emit("finish", nodeid)
