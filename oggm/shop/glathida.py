@@ -56,11 +56,16 @@ def glathida_to_gdir(gdir):
     base_url = GTD_BASE_URL.format(rgi_version)
     gtd_file = utils.file_downloader(base_url)
 
-    try:
-        df = pd.read_hdf(gtd_file, key=gdir.rgi_id)
-    except KeyError:
-        log.debug(f'({gdir.rgi_id}): no GlaThiDa data for this glacier')
-        return None
+    if str(gtd_file).endswith('.parquet'):
+        df = pd.read_parquet(gtd_file)
+        df = df[df['rgi_id'] == gdir.rgi_id].copy()
+        if df.empty:
+            log.debug(f'({gdir.rgi_id}): no GlaThiDa data for this glacier')
+            return None
+    else:
+        raise NotImplementedError(
+            "GlaThiDa data in HDF is no longer supported by OGGM."
+        )
 
     # OK - transform for later
     xx, yy = salem.transform_proj(salem.wgs84, gdir.grid.proj, df['longitude'], df['latitude'])
