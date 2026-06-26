@@ -1694,51 +1694,51 @@ def mb_calibration_to_rmsd(gdir, *,
                              f'[{mb_mod.ys}, {mb_mod.ye}]')
 
     # Check that the calibrate params are valid
-    for param in calibrate_params:
-        if param not in ('melt_f', 'prcp_fac', 'temp_bias'):
-            raise InvalidParamsError("calibrate_params must be a tuple with any of "
-                                     "'melt_f', 'prcp_fac', 'temp_bias'")
-
-    # Set the bounds for the optimization
+    _param_bounds = {
+        "melt_f": (melt_f_min, melt_f_max),
+        "prcp_fac": (prcp_fac_min, prcp_fac_max),
+        "temp_bias": (temp_bias_min, temp_bias_max),
+    }
     bounds = []
     for param in calibrate_params:
-        if param == 'prcp_fac':
-            bounds.append((prcp_fac_min, prcp_fac_max))
-        elif param == 'melt_f':
-            bounds.append((melt_f_min, melt_f_max))
-        elif param == 'temp_bias':
-            bounds.append((temp_bias_min, temp_bias_max))
+        if param not in _param_bounds:
+            raise InvalidParamsError(
+                "calibrate_params must be a tuple with any of "
+                "'melt_f', 'prcp_fac', 'temp_bias'"
+            )
+        bounds.append(_param_bounds[param])
 
-    # Optimises all three mass balance parameters at the same time to minimize the RMSD between the simulated and reference MB timeseries
-    def rmsd_cost_function(x, *model_attrs: tuple):
-        for i, model_attr in enumerate(model_attrs):
-            setattr(mb_mod, model_attr, x[i])
+    ref_values = ref_df.values
+
+    def rmsd_cost_function(x, *model_attrs):
+        for model_attr, val in zip(model_attrs, x):
+            setattr(mb_mod, model_attr, val)
 
         if use_2d_mb:
-            sim_out = mb_mod.get_specific_mb(heights=heights, widths=widths, year=years)
+            sim_out = mb_mod.get_specific_mb(
+                heights=heights, widths=widths, year=years
+            )
         else:
             sim_out = mb_mod.get_specific_mb(fls=fls, year=years)
 
-        return rmsd(ref_df, sim_out)
+        return rmsd(ref_values, sim_out)
 
     try:
-        res = optimize.differential_evolution(rmsd_cost_function,
-                                              bounds=bounds,
-                                              tol=1e-8,
-                                              maxiter=5000,
-                                              args=(calibrate_params),
-                                              )
+        res = optimize.differential_evolution(
+            rmsd_cost_function,
+            bounds=bounds,
+            tol=1e-8,
+            maxiter=5000,
+            args=calibrate_params,
+        )
 
-        calib_params = res.x
-
-        # Assign parameters
-        for i, param in enumerate(calibrate_params):
-            if param == 'prcp_fac':
-                prcp_fac = calib_params[i]
-            elif param == 'melt_f':
-                melt_f = calib_params[i]
-            elif param == 'temp_bias':
-                temp_bias = calib_params[i]
+        for param, val in zip(calibrate_params, res.x):
+            if param == "prcp_fac":
+                prcp_fac = val
+            elif param == "melt_f":
+                melt_f = val
+            elif param == "temp_bias":
+                temp_bias = val
 
     except ValueError:
         raise RuntimeError(f'{gdir.rgi_id}: could not minimise the rmsd. '
