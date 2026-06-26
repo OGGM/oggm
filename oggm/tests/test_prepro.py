@@ -1217,17 +1217,14 @@ class TestGeometry(unittest.TestCase):
             self.assertTrue(np.all(slope >= min_slope))
 
 
-class TestClimate(unittest.TestCase):
+class TestClimate:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_climate')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_climate_cru')
-        if not os.path.exists(self.testdir_cru):
-            os.makedirs(self.testdir_cru)
+        # test directories
+        self.testdir = tmpdir_factory.mktemp("tmp_prepro_climate")
+        self.testdir_cru = tmpdir_factory.mktemp("tmp_prepro_climate_cru")
         self.clean_dir()
 
         # Init
@@ -1245,18 +1242,15 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['prcp_fac_max'] = 5
         cfg.PARAMS['prcp_fac'] = 2.5
 
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-        shutil.rmtree(self.testdir_cru)
-
     def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
-        shutil.rmtree(self.testdir_cru)
-        os.makedirs(self.testdir_cru)
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.testdir_cru, reset=True)
+
+    def test_setup(self):
+        assert hasattr(self, "testdir")
+        assert hasattr(self, "testdir_cru")
+        assert os.path.exists(cfg.PATHS["dem_file"])
+        assert os.path.exists(cfg.PATHS["working_dir"])
 
     def test_distribute_climate(self):
 
@@ -1279,7 +1273,7 @@ class TestClimate(unittest.TestCase):
 
         f = os.path.join(gdir.dir, 'climate_historical.nc')
         with utils.ncDataset(f) as nc_r:
-            self.assertTrue(ref_h == nc_r.ref_hgt)
+            assert ref_h == nc_r.ref_hgt
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
@@ -1293,8 +1287,8 @@ class TestClimate(unittest.TestCase):
         climate.process_custom_climate_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1802)
-        self.assertEqual(ci['baseline_yr_1'], 2002)
+        assert ci['baseline_yr_0'] == 1802
+        assert ci['baseline_yr_1'] == 2002
 
         with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -1304,7 +1298,7 @@ class TestClimate(unittest.TestCase):
 
         f = os.path.join(gdir.dir, 'climate_historical.nc')
         with utils.ncDataset(f) as nc_r:
-            self.assertTrue(ref_h == nc_r.ref_hgt)
+            assert ref_h == nc_r.ref_hgt
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
@@ -1329,8 +1323,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -1342,10 +1336,10 @@ class TestClimate(unittest.TestCase):
                 # (using default gradient because better)
                 temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
                 totest = temp_cor - nc_h.temp
-                self.assertTrue(totest.mean() < 0.5)
+                assert totest.mean() < 0.5
                 # precip
                 totest = nc_c.prcp - nc_h.prcp
-                self.assertTrue(totest.mean() < 100)
+                assert totest.mean() < 100
 
     def test_distribute_climate_dummy(self):
 
@@ -1368,8 +1362,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -1414,8 +1408,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1850)
-        self.assertEqual(ci['baseline_yr_1'], 2002)
+        assert ci['baseline_yr_0'] == 1850
+        assert ci['baseline_yr_1'] == 2002
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -1935,7 +1929,6 @@ class TestClimate(unittest.TestCase):
         # Just temp_bias
         np.testing.assert_array_less(utils.rmsd(mbdf['temp_bias_mb_rmsd'], mbdf['ref_mb']),
                                      utils.rmsd(mbdf['temp_bias_mb_scalar'], mbdf['ref_mb']))
-
 
         # Now check that the order of parameters added into the  calibration does not affact the result
 
