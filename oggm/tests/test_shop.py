@@ -821,7 +821,7 @@ class Test_Glathida:
 
         # use our files
         base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
-                    'glathida/glathida_2023-11-16_rgi_{}.h5')
+                    'glathida/glathida_2023-11-16_rgi_{}.parquet')
         monkeypatch.setattr(glathida, 'GTD_BASE_URL', base_url)
 
         df = glathida.glathida_to_gdir(gdir)
