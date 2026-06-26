@@ -2164,7 +2164,7 @@ class SemiImplicitModel(FlowlineModel):
                  inplace=False, fixed_dt=None, cfl_number=0.5, min_dt=None,
                  flux_gate=None, flux_gate_thickness=None, flux_gate_build_up=100,
                  do_calving=None, calving_k=None, calving_law=k_calving_law,
-                 calving_use_limiter=None, water_level=0.0, use_thomas=False,
+                 calving_use_limiter=None, water_level=0.0, use_thomas=True,
                  **kwargs):
         """Instantiate the model.
 
