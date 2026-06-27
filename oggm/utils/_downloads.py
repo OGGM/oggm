@@ -1162,31 +1162,31 @@ def _get_prepro_gdir_unlocked(
         prepro_level=prepro_level,
         base_url=base_url,
     )
-    if len(rgi_id) == 23:
-        # RGI7
-        url += "{}/{}.tar".format(rgi_id[:17], rgi_id[:20])
-        tar_base = file_downloader(url)
-        if tar_base is None:
-            raise RuntimeError("Could not find file at " + url)
-        return tar_base
-    else:
-        # TODO: add support for bundle sizes of 10 and 1
-        # try new 3-digit suffix first, fall back to old 2-digit suffix
-        # for legacy base_urls
-        new_bundle = rgi_id[:-6] + "." + rgi_id[-5:-2]  # e.g. RGI60-07.000
-        try:
-            tar_base = file_downloader(f"{url}{rgi_id[:8]}/{new_bundle}.tar")
-            if tar_base is not None:
-                return tar_base
-        except InvalidParamsError:
-            # if new format URL not in allowlist then fall back
-            pass
-        old_url = f"{url}{rgi_id[:8]}/{rgi_id[:11]}.tar"
-        tar_base = file_downloader(old_url)
-        if tar_base is None:
-            raise RuntimeError(f"Could not find file at {old_url}")
+    # The region dir, the new 100-glacier bundle name and the old
+    # 1000-glacier bundle name can all be derived from the RGI ID with the
+    # same slices for both RGI6 (14 char IDs) and RGI7 (23 char IDs), since
+    # the glacier number is always the last 5 characters of the ID.
+    # TODO: add support for bundle sizes of 10 and 1
+    region = rgi_id[:-6]                      # RGI60-07 / RGI2000-v7.0-G-01
+    new_bundle = f"{region}.{rgi_id[-5:-2]}"  # 100-bundle, e.g. RGI60-07.000
+    old_bundle = rgi_id[:-3]                  # 1000-bundle, e.g. RGI60-07.00
 
-        return tar_base
+    # Try the new 100-glacier bundle first, fall back to the old 1000-glacier
+    # bundle for legacy base_urls.
+    try:
+        tar_base = file_downloader(f"{url}{region}/{new_bundle}.tar")
+        if tar_base is not None:
+            return tar_base
+    except InvalidParamsError:
+        # if the new format URL is not in the allowlist then fall back
+        pass
+
+    old_url = f"{url}{region}/{old_bundle}.tar"
+    tar_base = file_downloader(old_url)
+    if tar_base is None:
+        raise RuntimeError(f"Could not find file at {old_url}")
+
+    return tar_base
 
 
 def get_geodetic_mb_dataframe(file_path=None, regional=False):

@@ -263,10 +263,13 @@ def gdir_from_tar(entity, from_tar):
     except AttributeError:
         rgi_id = entity
 
+    # The region dir, the new 100-glacier bundle name and the old
+    # 1000-glacier bundle name use the same slices for RGI6 and RGI7.
     # TODO: add support for bundle sizes of 10 and 1
-    new_bundle = rgi_id[:-6] + "." + rgi_id[-5:-2]
-    new_path = os.path.join(from_tar, rgi_id[:8], new_bundle + ".tar")
-    old_path = os.path.join(from_tar, rgi_id[:8], rgi_id[:11] + ".tar")
+    region = rgi_id[:-6]
+    new_bundle = f"{region}.{rgi_id[-5:-2]}"
+    new_path = os.path.join(from_tar, region, new_bundle + ".tar")
+    old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
     if os.path.exists(new_path):
         from_tar = new_path
     elif os.path.exists(old_path):

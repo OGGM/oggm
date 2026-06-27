@@ -629,8 +629,7 @@ class TestStartFromTar:
         assert os.path.exists(cfg.PATHS["working_dir"])
 
     @pytest.mark.slow
-    @pytest.mark.parametrize("arg_bundle_size", [1000, 100])
-    def test_to_and_from_tar(self, arg_bundle_size):
+    def test_to_and_from_tar(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
@@ -655,7 +654,7 @@ class TestStartFromTar:
             assert os.path.exists(gdir.dir + ".tar.gz")
 
     @pytest.mark.slow
-    @pytest.mark.parametrize("arg_bundle_size", [1000, 100, 10, 5])
+    @pytest.mark.parametrize("arg_bundle_size", [1000, 100])
     def test_to_and_from_basedir_tar(self, arg_bundle_size):
 
         test_dir = cfg.PATHS["working_dir"]
@@ -687,6 +686,47 @@ class TestStartFromTar:
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=tar_dir)
         for gdir in gdirs:
             assert gdir.has_file("gridded_data")
+
+    @pytest.mark.parametrize("bundle_size", [100, 1000])
+    @pytest.mark.parametrize("rgi_ids", [
+        ["RGI60-11.00001", "RGI60-11.00099", "RGI60-11.00100"],
+        ["RGI2000-v7.0-G-01-00001", "RGI2000-v7.0-G-01-00099",
+         "RGI2000-v7.0-G-01-00100"],
+    ], ids=["RGI6", "RGI7"])
+    def test_bundle_tar_roundtrip(self, bundle_size, rgi_ids):
+        # Path-level round-trip of base_dir_to_tar + robust_tar_extract for
+        # both RGI6 and RGI7 IDs and both bundle sizes. Uses synthetic glacier
+        # tars so it needs no glacier data and runs fast.
+        base_dir = os.path.join(cfg.PATHS["working_dir"], "per_glacier")
+
+        def make_fake_gdir_tar(rgi_id):
+            # mirror gdir_to_tar: <region>/<subregion>/<rgi_id>.tar.gz holding
+            # <rgi_id>/dummy.txt
+            gdir_dir = os.path.join(base_dir, rgi_id[:-6], rgi_id[:-3], rgi_id)
+            utils.mkdir(gdir_dir)
+            with open(os.path.join(gdir_dir, "dummy.txt"), "w") as f:
+                f.write(rgi_id)
+            with tarfile.open(gdir_dir + ".tar.gz", "w:gz") as tar:
+                tar.add(gdir_dir, arcname=rgi_id)
+            shutil.rmtree(gdir_dir)
+
+        for rid in rgi_ids:
+            make_fake_gdir_tar(rid)
+
+        utils.base_dir_to_tar(base_dir, bundle_size=bundle_size)
+
+        for rid in rgi_ids:
+            # the path GlacierDirectory(from_tar=True) constructs
+            from_tar = os.path.join(base_dir, rid[:-6], rid[:-3],
+                                    rid + ".tar.gz")
+            to_dir = os.path.join(cfg.PATHS["working_dir"], "extracted", rid)
+            utils.mkdir(os.path.dirname(to_dir))
+            utils.robust_tar_extract(from_tar, to_dir)
+            assert os.path.exists(os.path.join(to_dir, "dummy.txt"))
+
+    def test_base_dir_to_tar_bad_bundle_size(self):
+        with pytest.raises(utils.InvalidParamsError):
+            utils.base_dir_to_tar(cfg.PATHS["working_dir"], bundle_size=10)
 
     @pytest.mark.slow
     def test_to_and_from_tar_new_dir(self):

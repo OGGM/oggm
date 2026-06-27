@@ -2646,8 +2646,9 @@ def robust_tar_extract(
             # 100-glacier bundle: RGI60-11.006.tar in the region dir
             # TODO: Really ought to consider switching to pathlib!
             rgi_id = bname[:-7]  # strip .tar.gz
-            # TODO: Check support for RGI7 as ids have a different length
-            if len(rgi_id) == 14:
+            # The bundle name slices work for both RGI6 (14 char IDs) and
+            # RGI7 (23 char IDs).
+            if len(rgi_id) in (14, 23):
                 dirbname = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"  # e.g. RGI60-11.006
                 region_dir = os.path.dirname(os.path.dirname(from_tar))
                 base_tar = os.path.join(region_dir, dirbname + ".tar")
@@ -4247,10 +4248,12 @@ def base_dir_to_tar(
     delete : bool
         Delete the original directory tars afterwards (default)
     bundle_size : int, default 100
-        Groups individual glacier .tar.gz files (from gdir_to_tar)
-        into bundles using a name derived from each glacier's RGI ID,
-        e.g. RGI60-07.000 contains glaciers 00001-00099. Currently only
-        RGI6 IDs are supported, and RGI7 is silently skipped.
+        Size of the glacier bundles to create. Must be either 100 (the new
+        default, which makes for faster downloads) or 1000 (the legacy
+        layout). With 100, the individual glacier .tar.gz files (from
+        gdir_to_tar) are grouped into bundles named from each glacier's RGI
+        ID, e.g. RGI60-07.000 contains glaciers 00000-00099. Both RGI6 and
+        RGI7 IDs are supported.
     """
 
     if base_dir is None:
@@ -4258,35 +4261,37 @@ def base_dir_to_tar(
             raise ValueError("Need a valid PATHS['working_dir']!")
         base_dir = os.path.join(cfg.PATHS["working_dir"], "per_glacier")
 
-    # TODO: get index based on the number of tens in repackage_index, e.g. 100 -> 2, 1000 -> 3, etc.
-    # index = int(np.log10(bundle_size))
+    # The read side (robust_tar_extract, gdir_from_tar, _get_prepro_gdir)
+    # only knows how to locate 100- and 1000-glacier bundles, so reject
+    # anything else rather than silently producing unreadable bundles.
+    if bundle_size not in (100, 1000):
+        raise InvalidParamsError(
+            "bundle_size must be 100 or 1000, got {}".format(bundle_size)
+        )
 
-    if bundle_size != 1000:  # stick with the established default if 1000
-        # RGI60-01.000
-        # region_dir is derived from the walk so it's correct regardless
-        # of whether base_dir points to working_dir or per_glacier directly.
+    if bundle_size == 100:
+        # Group the glacier .tar.gz files into 100-glacier bundles named from
+        # the RGI ID, e.g. RGI60-07.000 holds glaciers 00000-00099. The slices
+        # below work for both RGI6 (14 char IDs) and RGI7 (23 char IDs).
+        # region_dir is derived from the walk so it's correct regardless of
+        # whether base_dir points to working_dir or per_glacier directly.
         bundles = {}
+        src_dirs = set()
         for dirpath, _, filenames in os.walk(base_dir):
             for fname in sorted(filenames):
-                # TODO: Would this be easier/faster with pathlib?
                 if not fname.endswith(".tar.gz"):
                     continue
                 rgi_id = fname[:-7]
-                # TODO: RGI7 has a different ID length
-                # check for RGI, e.g. `centerlines_11` is also 14 chars long
-                if not (
-                    (len(rgi_id) == 14 and "RGI" in rgi_id)
-                    or (len(rgi_id) == 23 and "RGI" in rgi_id)
-                ):
+                # check for a valid RGI ID, e.g. `centerlines_11` is also
+                # 14 chars long but is not an RGI ID
+                if not (len(rgi_id) in (14, 23) and "RGI" in rgi_id):
                     continue
-                # TODO: or maybe:
-                # bundle_name = f"{rgi_id[:-6]}.{int(rgi_id[-5:-2]) // bundle_size:03d}"
-                # this is quite brittle, non-standard filenames could slip through
                 bundle_name = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"
                 region_dir = os.path.dirname(dirpath)
                 if bundle_name not in bundles:
                     bundles[bundle_name] = (region_dir, [])
                 bundles[bundle_name][1].append(os.path.join(dirpath, fname))
+                src_dirs.add(dirpath)
 
         to_delete = []
         for bundle_name, (region_dir, tar_paths) in sorted(bundles.items()):
@@ -4305,6 +4310,12 @@ def base_dir_to_tar(
 
         for tp in to_delete:
             os.remove(tp)
+        if delete:
+            # Remove the now-empty subregion directories left behind, to match
+            # the 1000-bundle behavior which removes the source dirs.
+            for d in src_dirs:
+                if os.path.isdir(d) and not os.listdir(d):
+                    os.rmdir(d)
         return
 
     to_delete = []
