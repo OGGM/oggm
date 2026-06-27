@@ -3773,7 +3773,7 @@ class TestDynamicSpinup:
         }
         gdirs = workflow.init_glacier_directories(
             rgi_ids.keys(), from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         for gdir in gdirs:
@@ -3831,7 +3831,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -4019,7 +4019,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -4289,7 +4289,7 @@ class TestDynamicSpinup:
             gdir = workflow.init_glacier_directories(
                 ['RGI60-11.00033'],
                 from_prepro_level=3, prepro_border=160,
-                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                                 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
             df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
@@ -4407,7 +4407,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -5040,7 +5040,7 @@ class TestHydro:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
@@ -5107,7 +5107,7 @@ class TestHydro:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
@@ -5961,7 +5961,7 @@ class TestDistribute2D:
 
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         # we run the first glacier with a larger temperature bias to force a
