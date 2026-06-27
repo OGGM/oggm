@@ -25,10 +25,16 @@ Bug fixes
   `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
   instead cleared the rectangular flag (:pull:`1931`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
+  This is a breaking change because the OGGM output files have now an opposite
+  sign for that variable.
+  By `Brandon Tober <https://github.com/btobers>`_
 
 v1.6.3 (April 13, 2026)
 -----------------------
@@ -107,7 +113,6 @@ Thanks to all contributors to this release:
 
 Enhancements
 ~~~~~~~~~~~~
-
 - Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
   calculate quantiles from multiple fl_diagnostic files. It enables users to
   compute metrics such as the median flowline across various GCM projections
