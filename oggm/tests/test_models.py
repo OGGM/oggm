@@ -1821,7 +1821,7 @@ class TestIO():
                     np.isclose(model.fls[0].thick, 0.),
                     dhdt_ref[-1] < 0.)
                 flux_divergence_ref.append(
-                    (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                    (climatic_mb_ref[-1] - dhdt_ref[-1]) *
                     np.where(has_become_ice_free, 0.1, 1.))
             if int(yr) == 500:
                 secfortest = model.fls[0].section
@@ -1851,6 +1851,20 @@ class TestIO():
                                    ds_fl.climatic_mb[1:])
         np.testing.assert_allclose(flux_divergence_ref,
                                    ds_fl.flux_divergence[1:])
+
+        # Physical check of the flux divergence sign, independent of the
+        # formula used above (Cogley et al., 2011: climatic_mb = dhdt +
+        # flux_divergence). At the end of the run the glacier is in steady
+        # state (dhdt ~ 0), so the flux divergence balances the climatic mass
+        # balance: it must export ice (positive) in the accumulation area and
+        # import ice (negative) in the ablation area. An inverted sign would
+        # flip both checks.
+        fdiv_end = ds_fl.flux_divergence.isel(time=-1).values
+        cmb_end = ds_fl.climatic_mb.isel(time=-1).values
+        dhdt_end = ds_fl.dhdt.isel(time=-1).values
+        np.testing.assert_allclose(cmb_end, dhdt_end + fdiv_end, atol=1e-9)
+        assert np.all(fdiv_end[cmb_end > 0] > 0)
+        assert np.all(fdiv_end[cmb_end < 0] < 0)
 
         vel = ds_fl.ice_velocity_myr.isel(time=-1)
         assert 20 < vel.max() < 40
