@@ -1821,7 +1821,7 @@ class TestIO():
                     np.isclose(model.fls[0].thick, 0.),
                     dhdt_ref[-1] < 0.)
                 flux_divergence_ref.append(
-                    (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                    (climatic_mb_ref[-1] - dhdt_ref[-1]) *
                     np.where(has_become_ice_free, 0.1, 1.))
             if int(yr) == 500:
                 secfortest = model.fls[0].section
@@ -1851,6 +1851,20 @@ class TestIO():
                                    ds_fl.climatic_mb[1:])
         np.testing.assert_allclose(flux_divergence_ref,
                                    ds_fl.flux_divergence[1:])
+
+        # Physical check of the flux divergence sign, independent of the
+        # formula used above (Cogley et al., 2011: climatic_mb = dhdt +
+        # flux_divergence). At the end of the run the glacier is in steady
+        # state (dhdt ~ 0), so the flux divergence balances the climatic mass
+        # balance: it must export ice (positive) in the accumulation area and
+        # import ice (negative) in the ablation area. An inverted sign would
+        # flip both checks.
+        fdiv_end = ds_fl.flux_divergence.isel(time=-1).values
+        cmb_end = ds_fl.climatic_mb.isel(time=-1).values
+        dhdt_end = ds_fl.dhdt.isel(time=-1).values
+        np.testing.assert_allclose(cmb_end, dhdt_end + fdiv_end, atol=1e-9)
+        assert np.all(fdiv_end[cmb_end > 0] > 0)
+        assert np.all(fdiv_end[cmb_end < 0] < 0)
 
         vel = ds_fl.ice_velocity_myr.isel(time=-1)
         assert 20 < vel.max() < 40
@@ -3526,7 +3540,7 @@ class TestDynamicSpinup:
         spinup_start_yr = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
             hef_gdir,
-            spinup_period=40,
+            spinup_period_initial=40,
             spinup_start_yr=spinup_start_yr,
             target_yr=yr_rgi,
             minimise_for=minimise_for,
@@ -3576,7 +3590,7 @@ class TestDynamicSpinup:
                     target_yr=2002,
                     ye=2002,
                     ignore_errors=ignore_errors,
-                    spinup_period=10,
+                    spinup_period_initial=10,
                     maxiter=2,
                     output_filesuffix='_dynamic_spinup',
                     **kwarg_dyn_spn)
@@ -3614,7 +3628,7 @@ class TestDynamicSpinup:
         precision_absolute = 1
         model_dynamic_spinup_ye, t_spinup = run_dynamic_spinup(
             hef_gdir,
-            spinup_period=40,
+            spinup_period_initial=40,
             spinup_start_yr=spinup_start_yr,
             target_yr=yr_rgi,
             ye=ye,
@@ -3646,7 +3660,7 @@ class TestDynamicSpinup:
         # to start at spinup_start_yr_max
         run_dynamic_spinup(
             hef_gdir,
-            spinup_period=5,
+            spinup_period_initial=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
             target_yr=yr_rgi,

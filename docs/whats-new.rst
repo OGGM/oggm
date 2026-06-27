@@ -14,6 +14,11 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
+  provide a list of additional spinup periods, which are tried in order if both
+  the initially defined spinup period (`spinup_period_initial`) and the minimum
+  spinup period (`min_spinup_period`) fail (:pull:`1914`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -21,6 +26,8 @@ Bug fixes
 - GH workflows will timeout after one hour to prevent hanging tests from
   blocking runners or reaching usage limits (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
+  By `Brandon Tober <https://github.com/btobers>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -103,7 +110,6 @@ Thanks to all contributors to this release:
 
 Enhancements
 ~~~~~~~~~~~~
-
 - Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
   calculate quantiles from multiple fl_diagnostic files. It enables users to
   compute metrics such as the median flowline across various GCM projections
