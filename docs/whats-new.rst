@@ -21,6 +21,9 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
