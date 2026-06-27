@@ -26,12 +26,16 @@ Bug fixes
 - GH workflows will timeout after one hour to prevent hanging tests from
   blocking runners or reaching usage limits (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
-  By `Brandon Tober <https://github.com/btobers>`_
+- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
+  This is a breaking change because the OGGM output files have now an opposite
+  sign for that variable.
+  By `Brandon Tober <https://github.com/btobers>`_
 
 v1.6.3 (April 13, 2026)
 -----------------------
