@@ -883,6 +883,41 @@ def _read_shp():
     return inter, rgidf
 
 
+def test_get_prepro_gdir_bundle_cache(monkeypatch):
+    # On a legacy (1000-bundle) base_url, the first glacier probes the new
+    # 100-bundle url (404) then the old one; every subsequent glacier for the
+    # same url must skip the new-format probe.
+    from oggm.utils import _downloads
+
+    calls = []
+
+    def fake_file_downloader(www_path, **kwargs):
+        calls.append(www_path)
+        # legacy server: only the old 1000-glacier bundle exists
+        if www_path.endswith(".00.tar"):
+            return "/fake/RGI60-11.00.tar"
+        return None  # new-format url -> 404
+
+    monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
+    monkeypatch.setattr(_downloads, "_prepro_bundle_format", {})
+
+    base_url = "https://example.com/gdirs/"
+    kw = dict(rgi_version="62", border=80, prepro_level=2, base_url=base_url)
+    prefix = f"{base_url}RGI62/b_080/L2/RGI60-11/"
+
+    p1 = _downloads._get_prepro_gdir_unlocked(rgi_id="RGI60-11.00001", **kw)
+    p2 = _downloads._get_prepro_gdir_unlocked(rgi_id="RGI60-11.00002", **kw)
+
+    assert p1 == "/fake/RGI60-11.00.tar"
+    assert p2 == "/fake/RGI60-11.00.tar"
+    assert calls == [
+        f"{prefix}RGI60-11.000.tar",  # 1st glacier: new probe (404)
+        f"{prefix}RGI60-11.00.tar",   # 1st glacier: old fallback (hit)
+        f"{prefix}RGI60-11.00.tar",   # 2nd glacier: straight to old, no probe
+    ]
+    assert _downloads._prepro_bundle_format[f"{base_url}RGI62/b_080/L2/"] == "old"
+
+
 class TestPreproCLI:
 
     on_mac = platform.system() == "Darwin"
