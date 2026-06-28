@@ -111,7 +111,18 @@ def get_pickle_data(pickle_files: list[Path], gdir, type_only: bool = False):
 def _validate_linestring(
     line: xr.DataArray | shapely.LineString,
 ) -> shapely.LineString | None:
-    """Coerce an object into a LineString."""
+    """Coerce an object into a LineString.
+
+    Parameters
+    ----------
+    line : xr.DataArray or shapely.LineString
+        The input object to validate.
+
+    Returns
+    -------
+    shapely.LineString or None
+        A LineString object, or None if the input is None.
+    """
     if not isinstance(line, shapely.LineString) and (line is not None):
         line = shapely.LineString(line)
     return line
@@ -180,7 +191,18 @@ def _extract_polygon_coords(geometry: shapely.Polygon) -> list[tuple]:
 def _validate_point(
     point: xr.DataArray | np.ndarray | shapely.Point | None,
 ) -> shapely.Point | None:
-    """Coerce a stored DataArray/ndarray back to a shapely Point."""
+    """Coerce a stored DataArray/ndarray back to a shapely Point.
+
+    Parameters
+    ----------
+    point : xr.DataArray, np.ndarray, shapely.Point, or None
+        The input object to validate.
+
+    Returns
+    -------
+    shapely.Point or None
+        A Point object, or None if the input is None.
+    """
     if point is None:
         return None
     if isinstance(point, (xr.DataArray, np.ndarray)):
@@ -192,6 +214,21 @@ def _validate_point(
 def get_datatree_value(
     data_tree: xr.DataTree, attribute: str
 ) -> xr.DataArray | None:
+    """Get a value from a DataTree node.
+
+    Parameters
+    ----------
+    data_tree : xr.DataTree
+        The DataTree node from which to extract the value.
+    attribute : str
+        The name of the attribute to retrieve.
+
+    Returns
+    -------
+    xr.DataArray or None
+        The value of the specified attribute, or None if the attribute
+        does not exist or is empty.
+    """
     if hasattr(data_tree, attribute):
         if isinstance(getattr(data_tree, attribute), xr.DataTree):
             if getattr(data_tree, attribute).is_empty:
@@ -437,6 +474,13 @@ def get_geometries_from_datatree(data_tree: xr.DataTree) -> dict:
 
 
 def restore_projection(root: xr.DataTree) -> None:
+    """Restore the pyproj.Proj object from the stored CRS dictionary.
+
+    Parameters
+    ----------
+    root : xr.DataTree
+        The root DataTree node containing the CRS information.
+    """
     if "pyproj_srs" in root.attrs:
         if isinstance(root.attrs["pyproj_srs"], dict):
             crs = pyproj.CRS.from_json_dict(root.attrs["pyproj_srs"])
@@ -488,21 +532,52 @@ def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Callable | None:
     return partial(map_trafo.ij_to_crs, crs=wgs84)
 
 
-def convert_linestring_to_dataarray(line: shapely.LineString) -> xr.DataArray:
-    """Convert a shapely LineString to a DataArray of coordinates."""
+def convert_linestring_to_dataarray(
+    line: shapely.LineString, dims: tuple = ("x", "y")
+) -> xr.DataArray:
+    """Convert a shapely LineString to a DataArray of coordinates.
+
+    Parameters
+    ----------
+    line : shapely.LineString
+        The line to convert. Any non-LineString input is returned
+        unchanged.
+    dims : tuple, default ("x", "y")
+        Dimension names for the (point, coord) axes. Pass distinct names
+        when several linestrings of different lengths are stored in the
+        same group, to avoid xarray dimension-size clashes.
+
+    Returns
+    -------
+    xr.DataArray
+        A 2-D DataArray of shape (n_points, 2) with the coordinates of
+        the LineString, or the input unchanged if it is not a LineString.
+    """
     if not isinstance(line, shapely.LineString):
         return line
     else:
         return xr.DataArray(
             np.array(shapely.geometry.mapping(line)["coordinates"]),
-            dims=["x", "y"],
+            dims=list(dims),
         )
 
 
 def convert_point_to_dataarray(
     point: shapely.Point | None,
 ) -> xr.DataArray | None:
-    """Convert a shapely Point to a 1-D DataArray of coordinates."""
+    """Convert a shapely Point to a 1-D DataArray of coordinates.
+
+    Parameters
+    ----------
+    point : shapely.Point or None
+        The point to convert. Any non-Point input is returned unchanged.
+
+    Returns
+    -------
+    xr.DataArray or None
+        A 1-D DataArray of shape (2,) with the coordinates of the Point,
+        or the input unchanged if it is not a Point.
+    """
     if point is None:
         return None
     if not isinstance(point, shapely.Point):
