@@ -21,6 +21,10 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a variable name bug in `prepare_for_inversion` where passing
+  `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
+  instead cleared the rectangular flag (:pull:`1931`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Fixed test runtime due to unnecessary downloads (:pull:`1934`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
