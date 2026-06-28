@@ -123,7 +123,7 @@ def prepare_for_inversion(gdir,
         if is_trapezoid is None:
             is_trapezoid = fl.is_rectangular * False
         if not invert_with_trapezoid:
-            is_rectangular[:] = False
+            is_trapezoid[:] = False
         if invert_all_trapezoid:
             is_trapezoid[:] = True
 
