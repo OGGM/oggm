@@ -41,10 +41,10 @@ pytestmark = pytest.mark.test_env("utils")
 TEST_GDIR_URL_v11 = ('https://cluster.klima.uni-bremen.de/~oggm/'
                      'test_gdirs/oggm_v1.1/')
 
-TEST_GDIR_URL_v14_L12 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+TEST_GDIR_URL_v14_L12 = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                          'oggm_v1.4/L1-L2_files/elev_bands/')
 
-TEST_GDIR_URL_v14_L35 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+TEST_GDIR_URL_v14_L35 = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                          'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
                          'no_match/')
 
