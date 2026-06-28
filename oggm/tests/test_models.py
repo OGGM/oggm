@@ -2534,7 +2534,7 @@ class TestIdealisedInversion():
             flo.is_rectangular = is_rect
             flo.is_trapezoid = is_trap
             fls.append(flo)
-        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        inversion_gdir.write_store(copy.deepcopy(fls), 'inversion_flowlines')
         massbalance.apparent_mb_from_linear_mb(inversion_gdir)
 
         ref_rect = fls[0].is_rectangular.copy()
@@ -2543,33 +2543,33 @@ class TestIdealisedInversion():
 
         # Default: both shapes are kept as is
         inversion.prepare_for_inversion(inversion_gdir)
-        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        cl = inversion_gdir.read_store('inversion_input')[0]
         np.testing.assert_array_equal(cl['is_rectangular'], ref_rect)
         np.testing.assert_array_equal(cl['is_trapezoid'], ref_trap)
 
         # No trapezoid: trapezoid flag is cleared, rectangular untouched
         inversion.prepare_for_inversion(inversion_gdir,
                                         invert_with_trapezoid=False)
-        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        cl = inversion_gdir.read_store('inversion_input')[0]
         np.testing.assert_array_equal(cl['is_rectangular'], ref_rect)
         assert not cl['is_trapezoid'].any()
 
         # No rectangular: rectangular flag is cleared, trapezoid untouched
         inversion.prepare_for_inversion(inversion_gdir,
                                         invert_with_rectangular=False)
-        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        cl = inversion_gdir.read_store('inversion_input')[0]
         assert not cl['is_rectangular'].any()
         np.testing.assert_array_equal(cl['is_trapezoid'], ref_trap)
 
         # Force all trapezoid / all rectangular
         inversion.prepare_for_inversion(inversion_gdir,
                                         invert_all_trapezoid=True)
-        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        cl = inversion_gdir.read_store('inversion_input')[0]
         assert cl['is_trapezoid'].all()
 
         inversion.prepare_for_inversion(inversion_gdir,
                                         invert_all_rectangular=True)
-        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        cl = inversion_gdir.read_store('inversion_input')[0]
         assert cl['is_rectangular'].all()
 
     def test_inversion_tributary(self, inversion_gdir):
