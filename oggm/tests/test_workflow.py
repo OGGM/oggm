@@ -2,6 +2,7 @@ import os
 import shutil
 import unittest
 import pickle
+import warnings
 import pytest
 import json
 import shapely
@@ -659,14 +660,17 @@ class TestZarrWorkflow:
 
     def test_read_store_fallback(self, hef_gdir):
         """Test read_store falls back to read_pickle if zarr is not found."""
+        from oggm.utils import _workflow
+
         gdir = hef_gdir
-        # Force the use of pickle or this test will never pass once
-        # switched to zarr
+        # Force use of pickle or this test will never pass once switched to zarr
         gdir.write_pickle(
             var=[1, 2, 3],
             filename="inversion_flowlines",
             filesuffix="test_pickle",
         )
+        # reset so test observes the first warning
+        _workflow._warn_zarr_fallback.cache_clear()
         with pytest.warns(
             Warning,
             match="Zarr data not found, attempting to read pickle file instead.",
@@ -675,6 +679,17 @@ class TestZarrWorkflow:
                 filename="inversion_flowlines", filesuffix="test_pickle"
             )
         assert not isinstance(ds_read, xr.DataTree)
+        assert isinstance(ds_read, list)
+
+        # warn-once behaviour
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            ds_read = gdir.read_store(
+                filename="inversion_flowlines", filesuffix="test_pickle"
+            )
+        assert not any(
+            "Zarr data not found" in str(r.message) for r in records
+        )
         assert isinstance(ds_read, list)
 
     def test_validate_store(self, hef_gdir):

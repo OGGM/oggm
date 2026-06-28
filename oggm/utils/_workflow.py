@@ -18,7 +18,7 @@ import pickle
 import warnings
 import itertools
 from collections import OrderedDict
-from functools import partial, wraps
+from functools import partial, wraps, lru_cache
 from time import gmtime, strftime
 import fnmatch
 import platform
@@ -105,6 +105,19 @@ RGI_DATE = {'01': 2009,
 
 # Module logger
 log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
+
+
+@lru_cache(maxsize=1)
+def _warn_zarr_fallback():
+    """Warn once per process that read_store fell back to a pickle.
+
+    During the zarr migration many stores are still pickles, so this
+    fallback is expected and floods the logs. Cached so it only fires
+    once, tests can reset it via ``cache_clear()``.
+    """
+    warnings.warn(
+        "Zarr data not found, attempting to read pickle file instead."
+    )
 
 
 def empty_cache():
@@ -3408,9 +3421,7 @@ class GlacierDirectory(object):
         ):  # fallback to pickle if zarr not found
             fp = self.get_filepath(filename, filesuffix=filesuffix)
             if os.path.exists(fp):
-                warnings.warn(
-                    "Zarr data not found, attempting to read pickle file instead."
-                )
+                _warn_zarr_fallback()
             else:
                 raise FileNotFoundError(
                     f"No zarr or pickle found for {fp}"
