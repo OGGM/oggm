@@ -569,6 +569,10 @@ def get_dict_from_datatree(data_tree: xr.DataTree) -> dict:
 def get_downstream_line_from_pkl(pickle: dict) -> dict:
     """Convert ``downstream_line`` pickle into zarr-compatible structure.
 
+    ``downstream_line`` and ``full_line`` generally differ in length, so
+    ``full_line`` is given distinct dim names to avoid clashing on a
+    shared dimension when both live in the same zarr group.
+
     Parameters
     ----------
     pickle : dict
@@ -578,8 +582,8 @@ def get_downstream_line_from_pkl(pickle: dict) -> dict:
     -------
     dict
         The same items as the input, but with the ``downstream_line``
-        key converted to a DataArray of coordinates if it was originally
-        a LineString.
+        and ``full_line`` keys converted to DataArrays of coordinates if
+        they were originally LineStrings.
     """
 
     try:
@@ -595,13 +599,20 @@ def get_downstream_line_from_pkl(pickle: dict) -> dict:
             "The pickle must contain a 'downstream_line' key."
             "Check the contents of the pickle."
         )
-    # Work on a shallow copy so the original dict is not mutated.  If we
-    # modified the caller's dict in-place the original_data reference in
-    # write_store would also be changed, causing the pickle fallback to
-    # store a DataArray instead of the original shapely geometry.
+
+    """
+    Work on a shallow copy so the original dict is not mutated.  If we
+    modified the caller's dict in-place the original_data reference in
+    write_store would also be changed, causing the pickle fallback to
+    store a DataArray instead of the original shapely geometry.
+    """
     pickle = dict(pickle)
-    coordinates = convert_linestring_to_dataarray(downstream_line)
-    pickle["downstream_line"] = coordinates
+    pickle["downstream_line"] = convert_linestring_to_dataarray(downstream_line)
+    if "full_line" in pickle:
+        # None passes through unchanged but LineStrings get distinct dims
+        pickle["full_line"] = convert_linestring_to_dataarray(
+            pickle["full_line"], dims=("full_line_point", "full_line_coord")
+        )
 
     return pickle
 

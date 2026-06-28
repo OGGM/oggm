@@ -620,5 +620,67 @@ def _write_datatree_to_zarr(data_tree, fp):
     zarr.consolidate_metadata(fp)
 
 
+def _reconstruct_downstream_line(data_tree):
+    """Replicate the _validate_store downstream_line branch."""
+    out = oggmzarr.get_dict_from_datatree(data_tree)
+    if "downstream_line" in out:
+        out["downstream_line"] = oggmzarr._validate_linestring(
+            out["downstream_line"]
+        )
+    out["full_line"] = oggmzarr._validate_linestring(out.get("full_line"))
+    return out
+
+
+class TestDownstreamLineZarr:
+    """downstream_line must round-trip to zarr, including a full_line
+    LineString of a different length than downstream_line."""
+
+    def test_downstream_line_with_full_line_on_disk(self, tmp_path):
+        dline = shpg.LineString([(0, 0), (1, 1), (2, 2)])
+        # Deliberately a different length than downstream_line.
+        lline = shpg.LineString([(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)])
+        out = {
+            "full_line": lline,
+            "downstream_line": dline,
+            "bedshapes": np.arange(3.0),
+            "surface_h": np.arange(3.0),
+        }
+
+        data_tree = oggmzarr.convert_pickles_to_datatree(
+            {"downstream_line": out}
+        )
+        fp = os.path.join(str(tmp_path), "data_store.zarr")
+        _write_datatree_to_zarr(data_tree, fp)
+
+        back = xr.open_datatree(
+            fp, group="downstream_line", engine="zarr", consolidated=True
+        )
+        result = _reconstruct_downstream_line(back)
+        assert result["downstream_line"].equals(dline)
+        assert result["full_line"].equals(lline)
+        assert_allclose(result["bedshapes"], out["bedshapes"])
+
+    def test_downstream_line_full_line_none(self, tmp_path):
+        dline = shpg.LineString([(0, 0), (1, 1), (2, 2)])
+        out = {"full_line": None, "downstream_line": dline}
+
+        data_tree = oggmzarr.convert_pickles_to_datatree(
+            {"downstream_line": out}
+        )
+        fp = os.path.join(str(tmp_path), "data_store.zarr")
+        _write_datatree_to_zarr(data_tree, fp)
+
+        back = xr.open_datatree(
+            fp, group="downstream_line", engine="zarr", consolidated=True
+        )
+        result = _reconstruct_downstream_line(back)
+        assert result["downstream_line"].equals(dline)
+        assert result["full_line"] is None
+
+
+def _reconstruct_model_flowlines(data_tree):
+    """Replicate the _validate_store model_flowline branch (numbered
+    child groups -> list of reconstructed Flowlines)."""
+    keys = sorted(data_tree.children, key=int)
     return [oggmzarr.get_flowline_from_datatree(data_tree[k]) for k in keys]
 
