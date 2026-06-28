@@ -201,34 +201,66 @@ def get_datatree_value(
 
 
 def get_flowline_from_datatree(data_tree: xr.DataTree):
-    """Reconstruct a Flowline object from a DataTree."""
-    from oggm.core.flowline import MixedBedFlowline
+    """Reconstruct a Flowline object from a DataTree.
 
-    flowline = MixedBedFlowline(
+    The concrete subclass is read from the ``_flowline_class`` node attr
+    (defaulting to ``MixedBedFlowline`` for stores written before
+    multi-class support, preserving backward compatibility).
+    """
+    from oggm.core.flowline import (
+        MixedBedFlowline,
+        ParabolicBedFlowline,
+        RectangularBedFlowline,
+        TrapezoidalBedFlowline,
+    )
+
+    cls_name = data_tree.attrs.get("_flowline_class", "MixedBedFlowline")
+
+    # kwargs common to every Flowline subclass constructor
+    base = dict(
         line=_validate_linestring(get_datatree_value(data_tree, "line")),
         dx=get_datatree_value(data_tree, "dx"),
         map_dx=get_datatree_value(data_tree, "map_dx"),
         surface_h=get_datatree_value(data_tree, "surface_h"),
         bed_h=get_datatree_value(data_tree, "bed_h"),
-        section=get_datatree_value(data_tree, "section"),
-        bed_shape=get_datatree_value(data_tree, "bed_shape"),
-        is_trapezoid=get_datatree_value(data_tree, "is_trapezoid"),
-        lambdas=get_datatree_value(data_tree, "lambdas"),
-        widths_m=get_datatree_value(data_tree, "widths_m"),
         rgi_id=get_datatree_value(data_tree, "rgi_id"),
         water_level=get_datatree_value(data_tree, "water_level"),
-        gdir=get_datatree_value(data_tree, "gdir"),
     )
-    for attribute in [
-        "order",
-        "_sqrt_bed",
-        "_w0_m",
-    ]:
-        setattr(flowline, attribute, get_datatree_value(data_tree, attribute))
 
-    # reconstruct Grid partial
-    map_trafo = get_map_trafo_from_grid(data_tree)
-    setattr(flowline, "map_trafo", map_trafo)
+    if cls_name == "ParabolicBedFlowline":
+        flowline = ParabolicBedFlowline(
+            bed_shape=get_datatree_value(data_tree, "bed_shape"), **base
+        )
+    elif cls_name == "RectangularBedFlowline":
+        flowline = RectangularBedFlowline(
+            widths=get_datatree_value(data_tree, "widths"), **base
+        )
+    elif cls_name == "TrapezoidalBedFlowline":
+        flowline = TrapezoidalBedFlowline(
+            widths=get_datatree_value(data_tree, "widths"),
+            lambdas=get_datatree_value(data_tree, "lambdas"),
+            **base,
+        )
+    else:  # MixedBedFlowline (default / legacy stores)
+        flowline = MixedBedFlowline(
+            section=get_datatree_value(data_tree, "section"),
+            bed_shape=get_datatree_value(data_tree, "bed_shape"),
+            is_trapezoid=get_datatree_value(data_tree, "is_trapezoid"),
+            lambdas=get_datatree_value(data_tree, "lambdas"),
+            widths_m=get_datatree_value(data_tree, "widths_m"),
+            gdir=get_datatree_value(data_tree, "gdir"),
+            **base,
+        )
+        # Mixed-only cached arrays; restore exactly as stored.
+        for attribute in ["_sqrt_bed", "_w0_m"]:
+            setattr(
+                flowline, attribute, get_datatree_value(data_tree, attribute)
+            )
+
+    setattr(flowline, "order", get_datatree_value(data_tree, "order"))
+
+    # reconstruct Grid partial (None when no grid params were stored)
+    setattr(flowline, "map_trafo", get_map_trafo_from_grid(data_tree))
     return flowline
 
 
@@ -425,8 +457,27 @@ def get_grid_params_from_partial(p: Callable) -> dict:
     return grid_parameters
 
 
-def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Callable:
+def get_map_trafo_from_grid(data_tree: xr.DataTree) -> Callable | None:
+    """Get a partial function for the map transformation from a DataTree.
+
+    Flowlines created without a gdir/grid (e.g. the PyGEM sandbox) have
+    no stored grid params, so reconstruct these without map_trafo.
+
+    Parameters
+    ----------
+    data_tree : xr.DataTree
+        The DataTree node containing the grid parameters.
+
+    Returns
+    -------
+    Callable or None
+        A partial function for the map transformation, or None if grid
+        parameters are not available.
+    """
+
     # TODO: Move to change flowline object instead to take a Grid object instead of a gdir.
+    if "pyproj_srs" not in data_tree.attrs:
+        return None
     map_trafo = Grid(
         proj=data_tree.attrs["pyproj_srs"],
         nxny=(data_tree.attrs["nxny"]),
@@ -635,17 +686,26 @@ def get_model_flowlines_from_pkl(pickle: list) -> list:
     -------
     list[dict]
         One dict per flowline with the attributes needed to reconstruct
-        the original :py:class:`oggm.core.flowline.MixedBedFlowline`.
+        the original :py:class:`oggm.core.flowline.Flowline` (any of the
+        four subclasses). The concrete class is recorded separately as a
+        node attr by :func:`convert_pickles_to_datatree`.
     """
-    from oggm.core.flowline import MixedBedFlowline
+    from oggm.core.flowline import (
+        Flowline,
+        MixedBedFlowline,
+        ParabolicBedFlowline,
+        RectangularBedFlowline,
+        TrapezoidalBedFlowline,
+    )
 
     new_pickle = []
     if not isinstance(pickle, list) or not pickle:
         return new_pickle
     try:
-        assert all(isinstance(fl, MixedBedFlowline) for fl in pickle)
+        assert all(isinstance(fl, Flowline) for fl in pickle)
         fl_id_to_idx = {id(fl): i for i, fl in enumerate(pickle)}
         for fl in pickle:
+            # Attributes common to every Flowline subclass.
             data = {
                 "line": convert_linestring_to_dataarray(
                     getattr(fl, "line", None)
@@ -654,21 +714,37 @@ def get_model_flowlines_from_pkl(pickle: list) -> list:
                 "map_dx": getattr(fl, "map_dx", None),
                 "surface_h": getattr(fl, "surface_h", None),
                 "bed_h": getattr(fl, "bed_h", None),
-                "section": getattr(fl, "section", None),
-                "bed_shape": getattr(fl, "bed_shape", None),
-                "is_trapezoid": getattr(fl, "is_trapezoid", None),
-                "widths_m": getattr(fl, "widths_m", None),
                 "rgi_id": getattr(fl, "rgi_id", None),
                 "water_level": getattr(fl, "water_level", None),
                 "order": getattr(fl, "order", None),
-                "map_trafo": getattr(fl, "map_trafo", None),
-                "_sqrt_bed": getattr(fl, "_sqrt_bed", None),
-                "_w0_m": getattr(fl, "_w0_m", None),
             }
-            lambdas = getattr(fl, "lambdas", None)
-            data["lambdas"] = (
-                getattr(fl, "_lambdas", None) if lambdas is None else lambdas
-            )
+            # Per-class bed parameters (match each constructor's kwargs).
+            if isinstance(fl, MixedBedFlowline):
+                lambdas = getattr(fl, "lambdas", None)
+                data.update(
+                    {
+                        "section": getattr(fl, "section", None),
+                        "bed_shape": getattr(fl, "bed_shape", None),
+                        "is_trapezoid": getattr(fl, "is_trapezoid", None),
+                        "widths_m": getattr(fl, "widths_m", None),
+                        "lambdas": (
+                            getattr(fl, "_lambdas", None)
+                            if lambdas is None
+                            else lambdas
+                        ),
+                        "_sqrt_bed": getattr(fl, "_sqrt_bed", None),
+                        "_w0_m": getattr(fl, "_w0_m", None),
+                    }
+                )
+            elif isinstance(fl, ParabolicBedFlowline):
+                data["bed_shape"] = getattr(fl, "bed_shape", None)
+            elif isinstance(fl, RectangularBedFlowline):
+                data["widths"] = getattr(fl, "_widths", None)
+            elif isinstance(fl, TrapezoidalBedFlowline):
+                # Trapezoid reconstructs _w0_m from widths and lambdas, so
+                # store the width property (= widths_m / map_dx) and lambdas.
+                data["widths"] = getattr(fl, "widths", None)
+                data["lambdas"] = getattr(fl, "_lambdas", None)
             # Store the index of the flowline this one flows into (-1 = None).
             flows_to = getattr(fl, "flows_to", None)
             data["_flows_to_list_idx"] = np.int64(
@@ -676,16 +752,12 @@ def get_model_flowlines_from_pkl(pickle: list) -> list:
                 if flows_to is not None
                 else -1
             )
-            # Drop non-serialisable and None values so xarray can infer dtypes
-            data = {
-                k: v
-                for k, v in data.items()
-                if v is not None and k != "map_trafo"
-            }
+            # Drop None values so xarray can infer dtypes.
+            data = {k: v for k, v in data.items() if v is not None}
             new_pickle.append(data)
     except AssertionError:
         raise TypeError(
-            "All items in the pickle list must be MixedBedFlowline instances."
+            "All items in the pickle list must be Flowline instances."
         )
 
     return new_pickle
@@ -862,19 +934,29 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
                 dicts = get_model_flowlines_from_pkl(pickle)
                 sub_tree = xr.DataTree()
                 for i, d in enumerate(dicts):
-                    # map_trafo already filtered out
-                    # retrieve from original flowline to get grid params.
-                    from oggm.core.flowline import MixedBedFlowline
-                    if isinstance(pickle, list) and i < len(pickle) and isinstance(pickle[i], MixedBedFlowline):
-                        map_trafo = getattr(pickle[i], "map_trafo", None)
-                    else:
-                        map_trafo = None
+                    # map_trafo can't be serialised
+                    from oggm.core.flowline import Flowline
+
+                    fl = (
+                        pickle[i]
+                        if isinstance(pickle, list) and i < len(pickle)
+                        else None
+                    )
+                    map_trafo = (
+                        getattr(fl, "map_trafo", None)
+                        if isinstance(fl, Flowline)
+                        else None
+                    )
                     sub_tree = add_datacube(
                         data_tree=sub_tree,
                         datacubes=d,
                         datacube_name=str(i),
                         overwrite=True,
                     )
+                    if isinstance(fl, Flowline):
+                        sub_tree[str(i)].attrs["_flowline_class"] = type(
+                            fl
+                        ).__name__
                     if map_trafo is not None:
                         grid_params = get_grid_params_from_partial(map_trafo)
                         sub_tree[str(i)].attrs.update(grid_params)

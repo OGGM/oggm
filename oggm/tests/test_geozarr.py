@@ -77,6 +77,47 @@ def _make_mixed_bed_flowline(n=5):
     )
 
 
+def _flowline_base_kwargs(n=5):
+    """Common kwargs for a minimal Flowline with non-zero thickness."""
+    coords = np.arange(n, dtype=float)
+    line = shpg.LineString(np.vstack([coords, np.zeros(n)]).T)
+    surface_h = np.linspace(3000.0, 2000.0, n)
+    bed_h = surface_h - 50.0  # 50 m thick everywhere
+    return dict(
+        line=line,
+        dx=1.0,
+        map_dx=100.0,
+        surface_h=surface_h,
+        bed_h=bed_h,
+        rgi_id="RGI60-11.00897",
+    )
+
+
+def _make_parabolic_flowline(n=5):
+    from oggm.core.flowline import ParabolicBedFlowline
+
+    return ParabolicBedFlowline(
+        bed_shape=np.full(n, 3.0e-3), **_flowline_base_kwargs(n)
+    )
+
+
+def _make_rectangular_flowline(n=5):
+    from oggm.core.flowline import RectangularBedFlowline
+
+    return RectangularBedFlowline(
+        widths=np.full(n, 2.0), **_flowline_base_kwargs(n)
+    )
+
+
+def _make_trapezoidal_flowline(n=5):
+    from oggm.core.flowline import TrapezoidalBedFlowline
+
+    return TrapezoidalBedFlowline(
+        widths=np.full(n, 5.0), lambdas=np.full(n, 1.0),
+        **_flowline_base_kwargs(n)
+    )
+
+
 class TestZarrUtilities:
     """Tests for any Zarr operations called via workflow or _workflow."""
 
@@ -684,3 +725,53 @@ def _reconstruct_model_flowlines(data_tree):
     keys = sorted(data_tree.children, key=int)
     return [oggmzarr.get_flowline_from_datatree(data_tree[k]) for k in keys]
 
+
+class TestModelFlowlineZarr:
+    """model_flowlines must round-trip to zarr for every Flowline subclass,
+    not just MixedBedFlowline.
+
+    Uses a function-level round-trip (convert -> on-disk zarr -> reconstruct)
+    rather than the hef_gdir fixture: the public write_store/read_store path
+    for a non-Mixed flowline is already exercised end-to-end by
+    test_prepro.py::TestPyGEM_compat::test_flowlines_from_gmip_data.
+    """
+
+    @pytest.mark.parametrize(
+        "make_fl, cls_name",
+        [
+            (_make_parabolic_flowline, "ParabolicBedFlowline"),
+            (_make_rectangular_flowline, "RectangularBedFlowline"),
+            (_make_trapezoidal_flowline, "TrapezoidalBedFlowline"),
+            (_make_mixed_bed_flowline, "MixedBedFlowline"),
+        ],
+    )
+    def test_model_flowline_roundtrip_on_disk(
+        self, tmp_path, make_fl, cls_name
+    ):
+        cfg.initialize()
+        fl = make_fl()
+
+        data_tree = oggmzarr.convert_pickles_to_datatree(
+            {"model_flowlines": [fl]}
+        )
+        # The concrete class is recorded as a node attr (not MixedBedFlowline).
+        assert data_tree["model_flowlines"]["0"].attrs["_flowline_class"] == (
+            cls_name
+        )
+
+        fp = os.path.join(str(tmp_path), "data_store.zarr")
+        _write_datatree_to_zarr(data_tree, fp)
+
+        back = xr.open_datatree(
+            fp, group="model_flowlines", engine="zarr", consolidated=True
+        )
+        fls = _reconstruct_model_flowlines(back)
+        assert len(fls) == 1
+        rfl = fls[0]
+        assert type(rfl).__name__ == cls_name
+        assert_allclose(rfl.surface_h, fl.surface_h)
+        assert_allclose(rfl.bed_h, fl.bed_h)
+        assert_allclose(rfl.widths_m, fl.widths_m)
+        assert_allclose(rfl.section, fl.section)
+        assert_allclose(rfl.area_m2, fl.area_m2)
+        assert_allclose(rfl.volume_m3, fl.volume_m3)
