@@ -1578,7 +1578,7 @@ def catchment_area(gdir):
     if len(cls) == 1:
         cl_catchments = [np.array(np.nonzero(glacier_mask == 1)).T]
         geom['catchment_indices'] = cl_catchments
-        gdir.write_store(geom, 'geometries', use_pickle=True)
+        gdir.write_store(geom, 'geometries')
         return
 
     # Cost array
@@ -1661,7 +1661,7 @@ def catchment_area(gdir):
 
     # Write the data
     geom['catchment_indices'] = cl_catchments
-    gdir.write_store(geom, 'geometries', use_pickle=True)
+    gdir.write_store(geom, 'geometries')
 
 
 @entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])

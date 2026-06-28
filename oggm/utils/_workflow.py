@@ -3473,13 +3473,7 @@ class GlacierDirectory(object):
                 data_tree["full_line"] = None
             return data_tree
         elif "geometries" in name:
-            data_tree = geozarr.get_dict_from_datatree(data_tree)
-            for key in ["polygon_hr", "polygon_pix"]:
-                if key in data_tree.keys():
-                    data_tree[key] = geozarr._validate_polygon(
-                data_tree[key]
-            )
-            return data_tree
+            return geozarr.get_geometries_from_datatree(data_tree)
         elif "model_flowline" in name:
             child_keys = list(data_tree.children.keys())
             if child_keys and all(k.isdigit() for k in child_keys):
@@ -3720,8 +3714,8 @@ class GlacierDirectory(object):
                         and not isinstance(data[0], dict)
                     ):
                         from oggm import Centerline
-                        from oggm.core.flowline import MixedBedFlowline
-                        _supported = (Centerline, MixedBedFlowline)
+                        from oggm.core.flowline import Flowline
+                        _supported = (Centerline, Flowline)
                         _supported_groups = (
                             "inversion_flowlines",
                             "model_flowlines",

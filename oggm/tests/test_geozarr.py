@@ -492,3 +492,133 @@ class TestZarrUtilities:
 
         result = oggmzarr.get_pickle_data([Path("scalar.pkl")], _MockGDir())
         assert "scalar" not in result
+
+
+    """Round-trip ``geometries`` (polygons with holes, MultiPolygons,
+    catchment_indices) through the zarr conversion helpers."""
+
+    @pytest.fixture(autouse=True)
+    def _holed_polygon(self):
+        """A Polygon with a single interior hole (nunatak)."""
+        exterior = [(0, 0), (0, 10), (10, 10), (10, 0), (0, 0)]
+        hole = [(1, 1), (1, 3), (3, 3), (3, 1), (1, 1)]
+        return shpg.Polygon(exterior, [hole])
+
+    @pytest.fixture(autouse=True)
+    def _multipolygon_two_holes(self):
+        """A MultiPolygon whose first part has more than one hole."""
+        exterior = [(20, 20), (20, 30), (30, 30), (30, 20), (20, 20)]
+        hole_a = [(21, 21), (21, 23), (23, 23), (23, 21), (21, 21)]
+        hole_b = [(25, 25), (25, 27), (27, 27), (27, 25), (25, 25)]
+        part_a = shpg.Polygon(exterior, [hole_a, hole_b])
+        part_b = shpg.Polygon(
+            [(40, 40), (40, 45), (45, 45), (45, 40), (40, 40)]
+        )
+        return shpg.MultiPolygon([part_a, part_b])
+
+    def test_geometries_roundtrip_in_memory(
+        self, _holed_polygon, _multipolygon_two_holes
+    ):
+        poly_hr = _holed_polygon
+        poly_pix = _multipolygon_two_holes
+        cis = [
+            np.array([[1, 2], [3, 4], [5, 6]]),
+            np.zeros((0, 2), dtype=np.int64),  # empty catchment
+            np.array([[7, 8]]),
+        ]
+        geom = {
+            "polygon_hr": poly_hr,
+            "polygon_pix": poly_pix,
+            "polygon_area": 123.45,
+            "catchment_indices": cis,
+        }
+
+        data_tree = oggmzarr.convert_pickles_to_datatree({"geometries": geom})
+        assert "geometries" in data_tree.children
+        node = data_tree["geometries"]
+        # polygons + catchment_indices are child groups, area is a root var
+        assert set(node.children) == {
+            "polygon_hr",
+            "polygon_pix",
+            "catchment_indices",
+        }
+        assert "polygon_area" in node.data_vars
+
+        result = oggmzarr.get_geometries_from_datatree(node)
+
+        # exterior + interior coordinates preserved
+        assert result["polygon_hr"].equals(poly_hr)
+        assert len(list(result["polygon_hr"].interiors)) == 1
+        assert result["polygon_pix"].equals(poly_pix)
+        assert result["polygon_pix"].geom_type == "MultiPolygon"
+
+        # the holed MultiPolygon part keeps both holes
+        assert len(list(result["polygon_pix"].geoms[0].interiors)) == 2
+        assert isinstance(result["polygon_area"], float)
+        assert result["polygon_area"] == 123.45
+        for got, exp in zip(result["catchment_indices"], cis):
+            assert_allclose(got, exp)
+            assert got.shape == exp.reshape(-1, 2).shape
+
+    def test_geometries_write_read_store_on_disk(
+        self, tmp_path, hef_gdir, _holed_polygon, _multipolygon_two_holes
+    ):
+        """write_store must store polygon interiors+exteriors to a real
+        zarr file on disk, and read_store must reconstruct them."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        # Real geometries are shapely polygons read from the store.
+        geom = dict(gdir.read_store("geometries"))
+        assert isinstance(geom["polygon_hr"], (shpg.Polygon, shpg.MultiPolygon))
+
+        # Guarantee hole / multipolygon coverage regardless of the glacier.
+        geom["polygon_hr"] = _holed_polygon
+        geom["polygon_pix"] = _multipolygon_two_holes
+        geom["polygon_area"] = float(geom["polygon_hr"].area)
+        geom["catchment_indices"] = [
+            np.array([[1, 2], [3, 4]]),
+            np.array([[5, 6]]),
+        ]
+
+        gdir.write_store(geom, "geometries", filesuffix="zarrtest")
+
+        # Check it's really zarr, group and flattened ring arrays exist
+        zarr_fp = gdir.get_filepath("data_store").replace(".pkl", ".zarr")
+        group_dir = os.path.join(zarr_fp, "geometries_zarrtest")
+        assert os.path.isdir(group_dir)
+        assert os.path.isdir(os.path.join(group_dir, "polygon_hr", "vertices"))
+
+        back = gdir.read_store("geometries", filesuffix="zarrtest")
+        assert back["polygon_hr"].equals(geom["polygon_hr"])
+        assert len(list(back["polygon_hr"].interiors)) == 1
+        assert back["polygon_pix"].equals(geom["polygon_pix"])
+        assert len(list(back["polygon_pix"].geoms[0].interiors)) == 2
+        assert_allclose(back["polygon_area"], geom["polygon_area"])
+        for got, exp in zip(
+            back["catchment_indices"], geom["catchment_indices"]
+        ):
+            assert_allclose(got, exp)
+
+
+def _write_datatree_to_zarr(data_tree, fp):
+    """Mimic write_zarr's per-node write (no gdir needed)."""
+    import zarr
+
+    for node in data_tree.subtree:
+        ds = node.ds
+        if ds is None or (len(ds.data_vars) == 0 and len(ds.coords) == 0):
+            continue
+        ds.to_zarr(
+            fp,
+            group=(node.path.lstrip("/") or None),
+            mode="a",
+            zarr_format=2,
+            consolidated=False,
+        )
+    zarr.consolidate_metadata(fp)
+
+
+    return [oggmzarr.get_flowline_from_datatree(data_tree[k]) for k in keys]
+

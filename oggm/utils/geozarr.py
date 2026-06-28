@@ -120,10 +120,61 @@ def _validate_linestring(
 def _validate_polygon(
     polygon: xr.DataArray | shapely.Polygon,
 ) -> shapely.Polygon | None:
-    """Coerce an object into a LineString."""
+    """Coerce an object into a Polygon.
+
+    Parameters
+    ----------
+    polygon : xr.DataArray or shapely.Polygon
+        The input object to validate.
+
+    Returns
+    -------
+    shapely.Polygon or None
+        A Polygon, or None if the input is None.
+    """
     if not isinstance(polygon, shapely.Polygon) and (polygon is not None):
         polygon = shapely.Polygon(polygon)
     return polygon
+
+
+def _extract_polygon_coords(geometry: shapely.Polygon) -> list[tuple]:
+    """Extract coordinates of a shapely Polygon or MultiPolygon.
+
+    Polygons may contain interior holes, MultiPolygons may contain
+    several parts, each with its own holes. Every ring is returned with
+    the index of the part it belongs to.
+
+    TODO: This is streamable, but it may be more efficient to use a
+    shapefile instead.
+
+    Parameters
+    ----------
+    geometry : shapely.Polygon or shapely.MultiPolygon
+        The input geometry from which to extract coordinates.
+
+    Returns
+    -------
+    list[tuple]
+        One ``(coords, poly_idx, is_exterior)`` tuple per ring, where
+        ``coords`` is an ``(n, 2)`` numpy array, ``poly_idx`` is the
+        part index (0 for a simple Polygon) and ``is_exterior`` is True
+        for a part's exterior ring and False for an interior hole. Rings
+        are emitted exterior-first within each part.
+    """
+    rings = []
+    if geometry.geom_type == "Polygon":
+        rings.append((np.asarray(geometry.exterior.coords), 0, True))
+        for interior in geometry.interiors:
+            rings.append((np.asarray(interior.coords), 0, False))
+    elif geometry.geom_type == "MultiPolygon":
+        for poly_idx, part in enumerate(geometry.geoms):
+            rings.append((np.asarray(part.exterior.coords), poly_idx, True))
+            for interior in part.interiors:
+                rings.append((np.asarray(interior.coords), poly_idx, False))
+    else:
+        raise ValueError("Unhandled geometry type: " + repr(geometry.geom_type))
+
+    return rings
 
 
 def _validate_point(
@@ -230,6 +281,129 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
     return centerline
 
 
+def get_polygon_from_datatree(
+    data_tree: xr.DataTree,
+) -> shapely.Polygon | shapely.MultiPolygon:
+    """Reconstruct a (Multi)Polygon from a DataTree node.
+
+    Inverse of :func:`convert_polygon_to_dataarray`: splits the flat
+    ``coords`` array into rings using ``ring_lengths`` and groups them
+    into parts via ``ring_poly_idx`` / ``ring_is_exterior``.
+
+    Parameters
+    ----------
+    data_tree : xr.DataTree
+        The DataTree node containing the polygon data.
+
+    Returns
+    -------
+    shapely.Polygon or shapely.MultiPolygon
+        The reconstructed (Multi)Polygon object.
+    """
+    coords = np.asarray(get_datatree_value(data_tree, "vertices"))
+    ring_lengths = np.asarray(get_datatree_value(data_tree, "ring_lengths"))
+    ring_poly_idx = np.asarray(get_datatree_value(data_tree, "ring_poly_idx"))
+    ring_is_exterior = np.asarray(
+        get_datatree_value(data_tree, "ring_is_exterior")
+    )
+
+    # Split flat coords array back into individual rings
+    splits = np.cumsum(ring_lengths)[:-1]
+    rings = np.split(coords, splits) if len(ring_lengths) else []
+
+    # Preserve order
+    parts = {}
+    for ring, poly_idx, is_ext in zip(rings, ring_poly_idx, ring_is_exterior):
+        part = parts.setdefault(int(poly_idx), {"exterior": None, "holes": []})
+        if bool(is_ext):
+            part["exterior"] = ring
+        else:
+            part["holes"].append(ring)
+
+    polygons = [
+        shapely.Polygon(parts[idx]["exterior"], parts[idx]["holes"])
+        for idx in sorted(parts)
+    ]
+    if len(polygons) == 1:
+        return polygons[0]
+
+    return shapely.MultiPolygon(polygons)
+
+
+def get_index_list_from_datatree(data_tree: xr.DataTree) -> list:
+    """Reconstruct polygon indices from a DataTree node.
+
+    Used for converting polygons. Inverse of
+    :func:`convert_index_list_to_dataarrays`.
+
+    Parameters
+    ----------
+    data_tree : xr.DataTree
+        The DataTree node containing the index list data.
+
+    Returns
+    -------
+    list of np.ndarray
+        Polygon indices as ``(n, 2)`` int arrays.
+    """
+
+    coords = np.asarray(
+        get_datatree_value(data_tree, "vertices"), dtype=np.int64
+    )
+    lengths = np.asarray(
+        get_datatree_value(data_tree, "lengths"), dtype=np.int64
+    )
+    if not len(lengths):
+        return []
+    splits = np.cumsum(lengths)[:-1]
+
+    return [a.reshape(-1, 2) for a in np.split(coords, splits)]
+
+
+def get_geometries_from_datatree(data_tree: xr.DataTree) -> dict:
+    """Reconstruct geometries from a DataTree.
+
+    Returns a flat dict matching the original ``geometries`` pickle:
+    polygon children become shapely (Multi)Polygons, the
+    ``catchment_indices`` child becomes a list of index arrays, scalar
+    root variables (e.g. ``polygon_area``) become plain Python scalars,
+    and any other child is recursed into.
+
+    Parameters
+    ----------
+    data_tree : xr.DataTree
+        The DataTree node containing the geometries.
+
+    Returns
+    -------
+    dict
+        A dictionary of geometries, with keys matching the original
+        ``geometries`` pickle.
+    """
+    geometries = {}
+
+    # Root-level variables (scalars such as polygon_area).
+    for var in data_tree.data_vars:
+        val = data_tree[var].values.copy()
+        geometries[var] = val.item() if val.ndim == 0 else val
+    for coord in data_tree.coords:
+        geometries[coord] = data_tree.coords[coord].values.copy()
+
+    for name, child in data_tree.children.items():
+        if not isinstance(child, xr.DataTree):
+            geometries[name] = child
+        elif child.is_empty:
+            geometries[name] = None
+        elif child.attrs.get("_geom_kind") == "polygon":
+            geometries[name] = get_polygon_from_datatree(child)
+        elif child.attrs.get("_geom_kind") == "index_list":
+            geometries[name] = get_index_list_from_datatree(child)
+        else:
+            geometries[name] = get_geometries_from_datatree(child)
+
+    return geometries
+
+
 def restore_projection(root: xr.DataTree) -> None:
     if "pyproj_srs" in root.attrs:
         if isinstance(root.attrs["pyproj_srs"], dict):
@@ -288,31 +462,86 @@ def convert_point_to_dataarray(
 
 def convert_polygon_to_dataarray(
     polygon: shapely.Polygon,
-) -> xr.DataArray | shapely.Polygon:
-    """Convert a shapely Polygon to a DataArray of coordinates.
+) -> dict | object:
+    """Convert a shapely Polygon/MultiPolygon to DataArrays.
 
-    WARNING: This function currently only supports simple Polygons
-    without holes. This means Polygons cannot be correctly reconstructed.
+    Interior holes and multiple parts are preserved by flattening every
+    ring into a single ``coords`` array with index arrays describing how
+    to split it back up (see :func:`_extract_polygon_coords`). The
+    result is a dict of ``xr.DataArray``, suitable for
+    storing as a single DataTree node.
+
+    Parameters
+    ----------
+    polygon : shapely.Polygon or shapely.MultiPolygon
+        The geometry to convert. Any other input is returned unchanged.
+
+    Returns
+    -------
+    dict or object
+        A dict with ``coords``, ``ring_lengths``, ``ring_poly_idx`` and
+        ``ring_is_exterior`` DataArrays, or the input unchanged if it is
+        not a (Multi)Polygon.
     """
-    if not isinstance(polygon, shapely.Polygon):
+    if not isinstance(polygon, (shapely.Polygon, shapely.MultiPolygon)):
         return polygon
-    elif not polygon.geom_type == "MultiPolygon":
-        raise NotImplementedError("MultiPolygons are not supported.")
-    else:
-        exterior_coords = shapely.geometry.mapping(polygon)["coordinates"][0]
-        try:
-            interior_coords = []
-            for interior in polygon.interiors:
-                interior_coords += [interior.coords[:]]
-            raise NotImplementedError("Polygons with holes are not supported.")
-        except NotImplementedError as e:
-            print(
-                "Warning: Currently polygons with holes cannot be reconstructed."
-            )
-            return xr.DataArray.from_dict(
-                np.array(exterior_coords),
-                dims=["x", "y"],
-            )
+
+    rings = _extract_polygon_coords(polygon)
+    coords = (
+        np.concatenate([r[0] for r in rings], axis=0)
+        if rings
+        else np.zeros((0, 2), dtype=np.float64)
+    )
+    ring_lengths = np.array([len(r[0]) for r in rings], dtype=np.int64)
+    ring_poly_idx = np.array([r[1] for r in rings], dtype=np.int64)
+    ring_is_exterior = np.array([r[2] for r in rings], dtype=bool)
+
+    return {
+        "vertices": xr.DataArray(
+            np.asarray(coords, dtype=np.float64), dims=["vertex", "xy"]
+        ),
+        "ring_lengths": xr.DataArray(ring_lengths, dims=["ring"]),
+        "ring_poly_idx": xr.DataArray(ring_poly_idx, dims=["ring"]),
+        "ring_is_exterior": xr.DataArray(ring_is_exterior, dims=["ring"]),
+    }
+
+
+def convert_index_list_to_dataarrays(index_list: list) -> dict | object:
+    """Convert a list of polygon indices DataArrays.
+
+    Used for ``catchment_indices``, with index arrays for each
+    centerline.They are flattened into a single ``coords`` array plus a
+    ``lengths`` array so the list can be split back up when read.
+
+    Parameters
+    ----------
+    index_list : list
+        A list of ``(n_k, 2)`` integer arrays. Any other input is
+        returned unchanged.
+
+    Returns
+    -------
+    dict or object
+        A dict with ``coords`` and ``lengths`` DataArrays, or the
+        unchanged input if it is not a list of arrays.
+    """
+    if not isinstance(index_list, list) or not all(
+        isinstance(a, np.ndarray) for a in index_list
+    ):
+        return index_list
+
+    arrays = [np.asarray(a, dtype=np.int64).reshape(-1, 2) for a in index_list]
+    coords = (
+        np.concatenate(arrays, axis=0)
+        if arrays
+        else np.zeros((0, 2), dtype=np.int64)
+    )
+    lengths = np.array([len(a) for a in arrays], dtype=np.int64)
+
+    return {
+        "vertices": xr.DataArray(coords, dims=["vertex", "xy"]),
+        "lengths": xr.DataArray(lengths, dims=["entry"]),
+    }
 
 
 def get_dict_from_datatree(data_tree: xr.DataTree) -> dict:
@@ -552,6 +781,36 @@ def get_centerlines_from_pkl(pickle: list) -> list[dict]:
     return get_inversion_flowlines_from_pkl(pickle)
 
 
+def get_geometries_from_pkl(pickle: dict) -> dict:
+    """Convert a ``geometries`` pickle to zarr-compatible structure.
+
+    Parameters
+    ----------
+    pickle : dict
+        Data loaded directly from the ``geometries`` pickle.
+
+    Returns
+    -------
+    dict
+        Identical to the pickle, but with zarr-compatible values for
+        ``polygon_hr``, ``polygon_pix``, ``catchment_indices``, and
+        ``downstream_line``. Scalars like ``polygon_area``) are left
+        unchanged.
+    """
+    new_pickle = {}
+    for name, geom in pickle.items():
+        if "polygon_hr" in name or "polygon_pix" in name:
+            new_pickle[name] = convert_polygon_to_dataarray(geom)
+        elif "catchment_indices" in name:
+            new_pickle[name] = convert_index_list_to_dataarrays(geom)
+        elif "downstream_line" in name:
+            new_pickle[name] = convert_linestring_to_dataarray(geom)
+        else:
+            new_pickle[name] = geom
+
+    return new_pickle
+
+
 def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
     """Convert a dictionary of pickles into an xarray DataTree."""
     data_tree = xr.DataTree()
@@ -609,6 +868,30 @@ def convert_pickles_to_datatree(pickle_data: dict) -> xr.DataTree:
                         grid_params = get_grid_params_from_partial(map_trafo)
                         sub_tree[str(i)].attrs.update(grid_params)
                 data_tree[name] = sub_tree
+                continue
+
+            if "geometries" in name and isinstance(pickle, dict):
+                converted = get_geometries_from_pkl(pickle)
+                root_vars = {}
+                children = {}
+                for k, v in converted.items():
+                    if isinstance(v, dict) and "ring_lengths" in v:
+                        children[k] = ("polygon", v)
+                    elif isinstance(v, dict) and "lengths" in v:
+                        children[k] = ("index_list", v)
+                    elif isinstance(v, xr.DataArray):
+                        root_vars[k] = v
+                    else:
+                        # scalar (e.g. polygon_area) -> 0-d DataArray
+                        root_vars[k] = xr.DataArray(v)
+                node = xr.DataTree(
+                    dataset=xr.Dataset(root_vars) if root_vars else None
+                )
+                for k, (kind, arrays) in children.items():
+                    child = xr.DataTree(dataset=xr.Dataset(arrays))
+                    child.attrs["_geom_kind"] = kind
+                    node[k] = child
+                data_tree[name] = node
                 continue
 
             # Fallback for implicitly supported pickles
