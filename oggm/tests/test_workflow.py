@@ -709,7 +709,7 @@ class TestZarrWorkflow:
     def test_validate_store_logic(self, hef_gdir):
         """Test that _validate_store modifies the data_tree as expected."""
         gdir = hef_gdir
-        downstream_line = gdir.read_pickle("downstream_line")["downstream_line"]
+        downstream_line = gdir.read_store("downstream_line")["downstream_line"]
         assert isinstance(downstream_line, shapely.LineString)
 
         # Create a DataTree with a downstream_line variable
