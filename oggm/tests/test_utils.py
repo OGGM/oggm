@@ -927,10 +927,6 @@ class TestPreproCLI:
         self.testdir = tmpdir_factory.mktemp("tmp_prepro_levs")
         utils.mkdir(self.testdir, reset=True)
 
-    def tearDown(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
-
     def test_parse_args(self):
 
         from oggm.cli import prepro_levels
