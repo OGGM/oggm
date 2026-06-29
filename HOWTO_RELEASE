@@ -14,7 +14,8 @@ Environment name: pypi-release
 In Github, under Settings -> Environments, create an environment named
 "pypi-release", and click "configure environment". Add a required reviewer.
 These should be restricted to highly-trusted members of the OGGM team, as it
-grants the power to publish on PyPI.
+grants the power to publish on PyPI. Add deployment branch restrictions:
+"master" for branches and "v*" for tags.
 
 *IMPORTANT*
 The workflow and environment names on PyPI and GitHub should be identical,
@@ -59,7 +60,7 @@ Release steps
     We also update the stable branch with `git cherrypick` for documentation
     only fixes that apply the current released version.
 9. Add a section for the next release (v.X.(Y+1)) to doc/whats-new.rst.
-    Add the section to index that it is not yet released.
+    Add the section to index.rst that it is not yet released.
 10. Commit your changes and push to master again:
       git commit -a -m 'Revert to dev version'
       git push origin master

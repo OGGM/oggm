@@ -1774,6 +1774,7 @@ def mb_calibration_to_rmsd(gdir, *,
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_geodetic_mb(gdir, *,
                                     ref_period=None,
+                                    file_path=None,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
                                     use_regional_avg=False,
@@ -1786,7 +1787,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                     mb_model_class=MonthlyTIModel,
                                     filesuffix='',
                                     ):
-    """Calibrate for geodetic MB data from Hugonnet et al., 2021.
+    """Calibrate for geodetic MB data (from Hugonnet et al., 2021 or other).
 
     The data table can be obtained with utils.get_geodetic_mb_dataframe().
     It is equivalent to the original data from Hugonnet, but has some outlier
@@ -1810,6 +1811,9 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         one of '2000-01-01_2010-01-01', '2010-01-01_2020-01-01',
         '2000-01-01_2020-01-01'. If `ref_mb` is set, this should still match
         the same format but can be any date.
+    file_path : str, optional
+        path or URL to a custom geodetic mass-balance file, passed to
+        utils.get_geodetic_mb_dataframe.
     write_to_gdir : bool
         whether to write the results of the calibration to the glacier
         directory. If True (the default), this will be saved as `mb_calib.json`
@@ -1863,7 +1867,8 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     # Get the reference data
     ref_mb_err = np.nan
     if use_regional_avg:
-        ref_mb_df_o = get_geodetic_mb_dataframe(regional=True)
+        ref_mb_df_o = get_geodetic_mb_dataframe(file_path=file_path,
+                                                regional=True)
         ref_mb_df = ref_mb_df_o.loc[ref_mb_df_o.period == ref_period].set_index('reg')
         if len(ref_mb_df) == 0:
             raise InvalidParamsError(f'Ref period {ref_period} not found in file: '
@@ -1873,7 +1878,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         ref_mb_err = ref_mb_df.loc[int(gdir.rgi_region), 'err_dmdtda'] * 1000
     else:
         try:
-            ref_mb_df = get_geodetic_mb_dataframe().loc[gdir.rgi_id]
+            ref_mb_df = get_geodetic_mb_dataframe(file_path=file_path).loc[gdir.rgi_id]
             ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_period]
             # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
             ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000

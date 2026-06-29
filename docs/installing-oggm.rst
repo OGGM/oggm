@@ -241,7 +241,7 @@ Clone the latest repository version:
 
     git clone https://github.com/OGGM/oggm.git
     cd oggm
-    # Activate your python environment (conda or venv) here if you haven't already
+    # Activate your python environment (conda or venv) here if you havent already
     pip install -e .[full]  # if using pip
     uv sync --extra full  # if using uv
 

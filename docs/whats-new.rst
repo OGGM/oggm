@@ -3,17 +3,86 @@
 Version history
 ===============
 
-v1.6.3 (almost released)
-------------------------
+v1.x (unreleased)
+-----------------
 
-This is the final minor release in the 1.6.x series. It is a backwards-compatible
-update with several bug fixes and improvements listed below.
+Enhancements
+~~~~~~~~~~~~
 
-The main addition in this release is a new set of preprocessed glacier directories,
-including fully operational RGI7 directories and ERA5-calibrated directories with
-data extended to 2025. The various options are described in :ref:`preprodir`.
-Here we focus on updates to the "standard" directories, i.e. what changed between
-the 1.6.1 and 1.6.3 directories.
+- `run_prepro_levels` now allows to set a custom climate data processing
+  module and custom geodetic data file to create glacier directories (:pull:`1910`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Test durations are now visible in Actions logs (:pull:`1920`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
+  provide a list of additional spinup periods, which are tried in order if both
+  the initially defined spinup period (`spinup_period_initial`) and the minimum
+  spinup period (`min_spinup_period`) fail (:pull:`1914`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- `base_dir_to_tar` now groups glacier directories into bundles of 100 by
+  default (previously 1000); ``bundle_size`` accepts either 100 or 1000.
+  Smaller bundles make downloads more granular and faster while keeping the
+  number of files per directory manageable. Reading is fully backwards
+  compatible: existing base URLs keep serving the 1000-glacier bundles, while
+  newly created URLs use the 100-glacier bundles. Both RGI6 and RGI7 IDs are
+  supported (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Some tests have been refactored from unittest to pytest. (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+
+Bug fixes
+~~~~~~~~~
+
+- Fixed a variable name bug in `prepare_for_inversion` where passing
+  `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
+  instead cleared the rectangular flag (:pull:`1931`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- GH workflows will timeout after one hour to prevent hanging tests from
+  blocking runners or reaching usage limits (:pull:`1920`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
+  This is a breaking change because the OGGM output files have now an opposite
+  sign for that variable.
+  By `Brandon Tober <https://github.com/btobers>`_
+
+v1.6.3 (April 13, 2026)
+-----------------------
+
+This is the final release in the 1.6.x series. It is fully backwards-compatible
+and brings a range of bug fixes, improvements, as well as new and updated
+standard projections. Thanks to the 8 contributors who made this release possible!
+
+The main highlight is a new generation of preprocessed glacier directories,
+including fully operational RGI7 support and ERA5-calibrated directories with climate
+data extending to 2025. New directories including
+`avalanche maps <https://github.com/OGGM/Snowslide>`_ are also available.
+
+Model improvements are plenty: highlights include calving support in the default
+dynamical solver (``SemiImplicitModel``),
+`Glacier3dViz <https://glacier3dviz.oggm.org>`_
+and its ice thickness distribution algorithm, and RGI7 support. See below for a
+comprehensive list of changes.
+
+We also added two new `tutorials <https://tutorials.oggm.org>`_ showcasing the
+new directories, and a third one for glacier runoff sensitivity analysis.
+
+This release was designed to produce only small changes to the standard projections
+released a couple of years ago (v1.6.1), before more substancial changes are coming with 1.7
+and GlacierMIP4.
+See
+`this blogpost <https://oggm.org/2026/01/07/oggm_v16-gdirs-and-projection-options/>`_
+for a broader discussion on new glacier directories and the new projections.
+
+While 1.6.3 was just released, **v1.7 is around the corner.** Several major
+developments are `already in progress <https://github.com/OGGM/oggm/tree/dev>`_,
+including the move of the daily mass balance model to core OGGM and improved
+parameter handling. Stay tuned for more coming soon!
 
 .. _preprodirupdates:
 
@@ -26,13 +95,14 @@ improvement over the previous ones, but with some notable differences:
 - the map projection was changed from "local mercator" to UTM. This has a
   very minor influence on glacier grids and geometries (with slightly larger
   distortions near UTM zone boundaries)
-- the topography dataset is now COPDEM (almost) globally
+- the default topography dataset is now COPDEM (almost) globally
   (previously NASADEM in mid-latitudes)
 - ERA5 directories now include data up to 2025
 - RGI7 directories are now available with a full workflow
 - the ``_w_data`` folders now include additional datasets: ITS_LIVE v2,
   Cook et al. (2023, Alps only), and GlaThiDa. Bugs in some datasets
   (Hugonnet, Millan) have also been corrected
+- new directories including avalanche maps are available
 - other general enhancements and bug fixes that are listed below
 
 By design, the new directories lead to very similar results to the previous
@@ -43,9 +113,21 @@ calibration choices or model structures. See
 `this blogpost <https://oggm.org/2026/01/07/oggm_v16-gdirs-and-projection-options/>`_
 for a summary.
 
-Enhancements
+Contributors
 ~~~~~~~~~~~~
 
+Thanks to all contributors to this release:
+`Nicolas Gampierakis <https://github.com/gampnico>`_,
+`Dan Goldberg <https://github.com/dngoldberg>`_,
+`Chloe Hancock <https://github.com/chloe-hancock>`_,
+`Marin Kneib <https://github.com/MarinKneib>`_,
+`Fabien Maussion <https://github.com/fmaussion>`_,
+`Patrick Schmitt <https://github.com/pat-schmitt>`_,
+`Lilian Schuster <https://github.com/lilianschuster>`_, and
+`Beatriz Recinos <https://github.com/bearecinos>`_!
+
+Enhancements
+~~~~~~~~~~~~
 - Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
   calculate quantiles from multiple fl_diagnostic files. It enables users to
   compute metrics such as the median flowline across various GCM projections

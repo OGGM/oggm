@@ -4,7 +4,7 @@ Type `$ oggm_prepro -h` for help
 
 """
 
-# External modules
+# Standard libraries
 import os
 import sys
 import shutil
@@ -12,6 +12,10 @@ import argparse
 import time
 import logging
 import json
+import importlib
+from pathlib import Path
+
+# External modules
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -96,22 +100,26 @@ def _move_hypsometry_to_dem_folder(gdir, source=''):
 
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
-                      is_test=False, test_ids=None, test_rgidf=None,
-                      test_intersects_file=None, test_topofile=None,
+                      is_test=False, test_ids=None, rgi_file=None,
+                      intersects_file=None, test_topofile=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
                       mb_calibration_strategy='informed_threestep',
+                      geodetic_mb_file_path=None,
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
                       add_hugonnet_dhdt=False, add_bedmachine=False,
                       add_glathida=False, add_distributed_thickness=False,
                       add_export_thickness_geotiff=False, compute_hypsometry=False,
+                      custom_climate_task=None,
+                      custom_climate_task_kwargs=None,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
+                      dynamic_spinup_periods_to_try=None,
                       continue_on_error=True, store_fl_diagnostics=False):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -139,10 +147,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         to test on a couple of glaciers only!
     test_ids : list
         if is_test: list of ids to process
-    test_rgidf : shapefile
-        for testing purposes only
-    test_intersects_file : shapefile
-        for testing purposes only
+    rgi_file : str or geopandas.GeoDataFrame, optional
+        path to an RGI shapefile or a GeoDataFrame to use instead of
+        the default RGI region file. Useful to override the default RGI
+        files for custom runs as well as for testing.
+    intersects_file : str or geopandas.GeoDataFrame, optional
+        path to an intersects shapefile or a GeoDataFrame to use instead of
+        the default RGI intersects file. Can also be None to skip setting
+        the intersects database.
     test_topofile : str
         for testing purposes only
     test_crudir : str
@@ -160,6 +172,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'temp_melt'
         Add the `_regional` suffix to use regional values instead,
         for example `informed_threestep_regional`
+    geodetic_mb_file_path : str
+        optional path or URL to a custom geodetic MB file, passed to
+        utils.get_geodetic_mb_dataframe and
+        tasks.mb_calibration_from_geodetic_mb.
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -199,6 +215,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         Compute the hypsometry tables for all glaciers,
         added to the glacier directory and compiled in
         the summary folder.
+    custom_climate_task : str
+        optional import path to a custom climate task in the form
+        "module_path:function_name". If provided, it will be called instead of
+        the default process_climate_data.
+    custom_climate_task_kwargs : dict
+        optional kwargs passed to the custom climate task when it is executed.
     start_level : int
         the pre-processed level to start from (default is to start from
         scratch). If set, you'll need to indicate start_base_url as well.
@@ -221,6 +243,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
+    dynamic_spinup_periods_to_try : list or None
+        If the spinup_period defined by rgi_date - dynamic_spinup_start_yr was
+        not successful, you can provide here a list of spinup periods which
+        should be tried in order.
+        Default is None
     continue_on_error : bool
         if True the workflow continues if a task raises an error. For operational
         runs it should be set to True (the default).
@@ -304,25 +331,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
-    output_base_dir = os.path.join(output_folder,
-                                   'RGI{}'.format(rgi_version),
-                                   'b_{:03d}'.format(border))
+    output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
 
     # Add a package version file
     utils.mkdir(output_base_dir)
-    opath = os.path.join(output_base_dir, 'package_versions.txt')
+    opath = output_base_dir / 'package_versions.txt'
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
-    if test_rgidf is None:
+    if rgi_file is None:
 
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
         # We use intersects
         if rgi_version != '70C':
-            rgif = utils.get_rgi_intersects_region_file(rgi_reg,
-                                                        version=rgi_version)
+            if intersects_file is None:
+                rgif = utils.get_rgi_intersects_region_file(rgi_reg,
+                                                            version=rgi_version)
+            else:
+                rgif = intersects_file
             cfg.set_intersects_db(rgif)
 
         if rgi_version == '62':
@@ -340,14 +368,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             # In AA almost all large ice bodies are actually ice caps
             if rgi_reg == '19':
-                rgidf.loc[rgidf.Area > 100, 'Form'] = '1'
+                rgidf.loc[rgidf.Area > 100, 'Form'] = 1
 
             # For greenland we omit connectivity level 2
             if rgi_reg == '05':
                 rgidf = rgidf.loc[rgidf['Connect'] != 2]
     else:
-        rgidf = test_rgidf
-        cfg.set_intersects_db(test_intersects_file)
+        if isinstance(rgi_file, str):
+            rgidf = gpd.read_file(rgi_file)
+        else:
+            rgidf = rgi_file
+        cfg.set_intersects_db(intersects_file)
 
     if is_test:
         if test_ids is not None:
@@ -395,14 +426,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
 
         # Glacier stats
-        sum_dir = os.path.join(output_base_dir, 'L0', 'summary')
+        sum_dir = Path(output_base_dir) / 'L0' / 'summary'
         utils.mkdir(sum_dir)
-        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L0 OK - compress all in output directory
         log.workflow('L0 done. Writing to tar...')
-        level_base_dir = os.path.join(output_base_dir, 'L0')
+        level_base_dir = Path(output_base_dir) / 'L0'
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                      base_dir=level_base_dir)
         utils.base_dir_to_tar(level_base_dir)
@@ -446,9 +477,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          gdirs, source='ALL')
 
             # Glacier stats
-            sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
+            sum_dir = Path(output_base_dir) / 'L1' / 'summary'
             utils.mkdir(sum_dir)
-            opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
             utils.compile_glacier_statistics(gdirs, path=opath)
 
             # Add hypsometry files
@@ -465,7 +496,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs,
                                                  overwrite=False)
                     workflow.execute_entity_task(tasks.compute_hypsometry_attributes, gdirs)
-                    opath = os.path.join(sum_dir, f'hypsometry_{rgi_reg}_{dem_source}.csv')
+                    opath = sum_dir / f'hypsometry_{rgi_reg}_{dem_source}.csv'
                     utils.compile_glacier_hypsometry(gdirs, path=opath,
                                                      add_column=('dem_source', dem_source))
                     workflow.execute_entity_task(_move_hypsometry_to_dem_folder,
@@ -473,7 +504,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
             # L1 OK - compress all in output directory
             log.workflow('L1 done. Writing to tar...')
-            level_base_dir = os.path.join(output_base_dir, 'L1')
+            level_base_dir = Path(output_base_dir) / 'L1'
             workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                          base_dir=level_base_dir)
             utils.base_dir_to_tar(level_base_dir)
@@ -489,7 +520,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      source=source)
 
         # Summaries
-        sum_dir = os.path.join(output_base_dir, 'L1', 'summary')
+        sum_dir = Path(output_base_dir) / 'L1' / 'summary'
         utils.mkdir(sum_dir)
 
         # Add hypsometry files
@@ -499,16 +530,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          no_nunataks=True)
             workflow.execute_entity_task(tasks.rasterio_glacier_exterior_mask, gdirs)
             workflow.execute_entity_task(tasks.compute_hypsometry_attributes, gdirs)
-            opath = os.path.join(sum_dir, f'hypsometry_{rgi_reg}.csv')
+            opath = sum_dir / f'hypsometry_{rgi_reg}.csv'
             utils.compile_glacier_hypsometry(gdirs, path=opath)
 
         # Glacier stats
-        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L1 OK - compress all in output directory
         log.workflow('L1 done. Writing to tar...')
-        level_base_dir = os.path.join(output_base_dir, 'L1')
+        level_base_dir = Path(output_base_dir) / 'L1'
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                      base_dir=level_base_dir)
         utils.base_dir_to_tar(level_base_dir)
@@ -623,63 +654,63 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                          'downstream lines.')
 
         # Glacier stats
-        sum_dir = os.path.join(output_base_dir, 'L2', 'summary')
+        sum_dir = Path(output_base_dir) / 'L2' / 'summary'
         utils.mkdir(sum_dir)
-        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         if add_itslive_velocity:
             from oggm.shop.its_live import compile_itslive_statistics
-            opath = os.path.join(sum_dir, 'itslive_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'itslive_statistics_{rgi_reg}.csv'
             compile_itslive_statistics(gdirs, path=opath)
         if add_millan_thickness or add_millan_velocity:
             from oggm.shop.millan22 import compile_millan_statistics
-            opath = os.path.join(sum_dir, 'millan_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'millan_statistics_{rgi_reg}.csv'
             compile_millan_statistics(gdirs, path=opath)
         if add_consensus_thickness:
             from oggm.shop.bedtopo import compile_consensus_statistics
-            opath = os.path.join(sum_dir, 'consensus_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'consensus_statistics_{rgi_reg}.csv'
             compile_consensus_statistics(gdirs, path=opath)
         if add_hugonnet_dhdt:
             from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
-            opath = os.path.join(sum_dir, 'hugonnet_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'hugonnet_statistics_{rgi_reg}.csv'
             compile_hugonnet_statistics(gdirs, path=opath)
         if add_bedmachine:
             from oggm.shop.bedmachine import compile_bedmachine_statistics
-            opath = os.path.join(sum_dir, 'bedmachine_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'bedmachine_statistics_{rgi_reg}.csv'
             compile_bedmachine_statistics(gdirs, path=opath)
         if add_glathida:
             from oggm.shop.glathida import compile_glathida_statistics
-            opath = os.path.join(sum_dir, 'glathida_statistics_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'glathida_statistics_{rgi_reg}.csv'
             compile_glathida_statistics(gdirs, path=opath)
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
-            opath = os.path.join(sum_dir, f'centerlines_{rgi_reg}.shp')
+            opath = sum_dir / f'centerlines_{rgi_reg}.shp'
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'centerlines_smoothed_{rgi_reg}.shp')
+            opath = sum_dir / f'centerlines_smoothed_{rgi_reg}.shp'
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              ensure_exterior_match=True,
                                              simplify_line_before=0.75,
                                              corner_cutting=3,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'flowlines_{rgi_reg}.shp')
+            opath = sum_dir / f'flowlines_{rgi_reg}.shp'
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              flowlines_output=True,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'geom_widths_{rgi_reg}.shp')
+            opath = sum_dir / f'geom_widths_{rgi_reg}.shp'
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              geometrical_widths_output=True,
                                              path=opath)
-            opath = os.path.join(sum_dir, f'widths_{rgi_reg}.shp')
+            opath = sum_dir / f'widths_{rgi_reg}.shp'
             utils.write_centerlines_to_shape(gdirs_cent, to_tar=True,
                                              corrected_widths_output=True,
                                              path=opath)
 
         # L2 OK - compress all in output directory
         log.workflow('L2 done. Writing to tar...')
-        level_base_dir = os.path.join(output_base_dir, 'L2')
+        level_base_dir = Path(output_base_dir) / 'L2'
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                      base_dir=level_base_dir)
         utils.base_dir_to_tar(level_base_dir)
@@ -689,14 +720,30 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L3 - Tasks
     if start_level <= 2:
-        sum_dir = os.path.join(output_base_dir, 'L3', 'summary')
+        sum_dir = Path(output_base_dir) / 'L3' / 'summary'
         utils.mkdir(sum_dir)
 
         # Climate
-        workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+        climate_kwargs = custom_climate_task_kwargs or {}
+        if custom_climate_task:
+            try:
+                mod_path, func_name = custom_climate_task.rsplit(':', 1)
+            except ValueError:
+                raise InvalidParamsError('custom_climate_task must be of the form "module:function"')
+            try:
+                mod = importlib.import_module(mod_path)
+            except ModuleNotFoundError as err:
+                raise InvalidParamsError(f'Cannot import module {mod_path}') from err
+            try:
+                custom_task_func = getattr(mod, func_name)
+            except AttributeError as err:
+                raise InvalidParamsError(f'Module {mod_path} has no attribute {func_name}') from err
+            workflow.execute_entity_task(custom_task_func, gdirs, **climate_kwargs)
+        else:
+            workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
         # Small optim to avoid concurrency
-        utils.get_geodetic_mb_dataframe()
+        utils.get_geodetic_mb_dataframe(file_path=geodetic_mb_file_path)
         utils.get_temp_bias_dataframe(dataset='w5e5')
         utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
         utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
@@ -712,19 +759,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          informed_threestep=True,
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias',
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'temp_melt':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f',
-                                         use_regional_avg=use_regional_avg)
+                                         use_regional_avg=use_regional_avg,
+                                         file_path=geodetic_mb_file_path)
         else:
             raise InvalidParamsError('mb_calibration_strategy not understood: '
                                      f'{mb_calibration_strategy}')
@@ -772,24 +822,24 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 log.workflow('L3: for map border values < 20, wont initialize glaciers '
                              'for the run.')
         # Glacier stats
-        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # Export thickness to GeoTIFF if requested
         if add_export_thickness_geotiff and add_distributed_thickness:
-            thickness_dir = os.path.join(sum_dir, 'distributed_thickness')
+            thickness_dir = sum_dir / 'distributed_thickness'
             utils.mkdir(thickness_dir)
             workflow.execute_entity_task(tasks.gridded_data_var_to_geotiff, gdirs,
                                          varname='distributed_thickness',
                                          output_folder=thickness_dir)
-        opath = os.path.join(sum_dir, 'climate_statistics_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'climate_statistics_{rgi_reg}.csv'
         utils.compile_climate_statistics(gdirs, path=opath)
-        opath = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'fixed_geometry_mass_balance_{rgi_reg}.csv'
         utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
 
         # L3 OK - compress all in output directory
         log.workflow('L3 done. Writing to tar...')
-        level_base_dir = os.path.join(output_base_dir, 'L3')
+        level_base_dir = Path(output_base_dir) / 'L3'
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                      base_dir=level_base_dir)
         utils.base_dir_to_tar(level_base_dir)
@@ -806,14 +856,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L4 - Tasks (add historical runs (old default) and dynamic spinup runs)
     if start_level <= 3:
-        sum_dir = os.path.join(output_base_dir, 'L4', 'summary')
+        sum_dir = Path(output_base_dir) / 'L4' / 'summary'
         utils.mkdir(sum_dir)
 
         # Copy L3 files for consistency
         for bn in ['glacier_statistics', 'climate_statistics',
                    'fixed_geometry_mass_balance']:
             if start_level <= 2:
-                ipath = os.path.join(sum_dir_L3, bn + '_{}.csv'.format(rgi_reg))
+                ipath = sum_dir_L3 / f'{bn}_{rgi_reg}.csv'
             else:
                 ipath = file_downloader(os.path.join(
                     get_prepro_base_url(base_url=start_base_url,
@@ -821,7 +871,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                         prepro_level=start_level), 'summary',
                     bn + '_{}.csv'.format(rgi_reg)))
 
-            opath = os.path.join(sum_dir, bn + '_{}.csv'.format(rgi_reg))
+            opath = sum_dir / f'{bn}_{rgi_reg}.csv'
             shutil.copyfile(ipath, opath)
 
         # Get end date. The first gdir might have blown up, try some others
@@ -843,7 +893,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      min_ys=y0, ye=ye,
                                      output_filesuffix='_historical')
         # Now compile the output
-        opath = os.path.join(sum_dir, f'historical_run_output_{rgi_reg}.nc')
+        opath = Path(sum_dir) / f'historical_run_output_{rgi_reg}.nc'
         utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
 
         # conduct dynamic spinup if wanted
@@ -859,25 +909,31 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
                 melt_f_max=melt_f_max,
-                kwargs_run_function={'minimise_for': minimise_for},
+                kwargs_run_function={'minimise_for': minimise_for,
+                                     'spinup_periods_to_try':
+                                         dynamic_spinup_periods_to_try
+                                     },
                 ignore_errors=True,
-                kwargs_fallback_function={'minimise_for': minimise_for},
+                kwargs_fallback_function={'minimise_for': minimise_for,
+                                          'spinup_periods_to_try':
+                                              dynamic_spinup_periods_to_try
+                                          },
                 output_filesuffix='_spinup_historical',)
             # Now compile the output
-            opath = os.path.join(sum_dir, f'spinup_historical_run_output_{rgi_reg}.nc')
+            opath = sum_dir / f'spinup_historical_run_output_{rgi_reg}.nc'
             utils.compile_run_output(gdirs, path=opath,
                                      input_filesuffix='_spinup_historical')
 
         # Glacier statistics we recompute here for error analysis
-        opath = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
+        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # Add the extended files
-        pf = os.path.join(sum_dir, 'historical_run_output_{}.nc'.format(rgi_reg))
+        pf = sum_dir / f'historical_run_output_{rgi_reg}.nc'
         # We have copied the files above
-        mf = os.path.join(sum_dir, 'fixed_geometry_mass_balance_{}.csv'.format(rgi_reg))
-        sf = os.path.join(sum_dir, 'glacier_statistics_{}.csv'.format(rgi_reg))
-        opath = os.path.join(sum_dir, 'historical_run_output_extended_{}.nc'.format(rgi_reg))
+        mf = sum_dir / f'fixed_geometry_mass_balance_{rgi_reg}.csv'
+        sf = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
+        opath = sum_dir / f'historical_run_output_extended_{rgi_reg}.nc'
         utils.extend_past_climate_run(past_run_file=pf,
                                       fixed_geometry_mb_file=mf,
                                       glacier_statistics_file=sf,
@@ -885,7 +941,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L4 OK - compress all in output directory
         log.workflow('L4 done. Writing to tar...')
-        level_base_dir = os.path.join(output_base_dir, 'L4')
+        level_base_dir = Path(output_base_dir) / 'L4'
         workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                      base_dir=level_base_dir)
         utils.base_dir_to_tar(level_base_dir)
@@ -897,7 +953,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             return
 
     # L5 - No tasks: make the dirs small
-    sum_dir = os.path.join(output_base_dir, 'L5', 'summary')
+    sum_dir = Path(output_base_dir) / 'L5' / 'summary'
     utils.mkdir(sum_dir)
 
     # Copy L4 files for consistency
@@ -910,27 +966,30 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         files_suffixes.append('nc')
     for bn, suffix in zip(files_to_copy, files_suffixes):
         if start_level <= 3:
-            ipath = os.path.join(sum_dir_L4, bn + f'_{rgi_reg}.{suffix}')
+            ipath = sum_dir_L4 / f'{bn}_{rgi_reg}.{suffix}'
         else:
             ipath = file_downloader(os.path.join(
                 get_prepro_base_url(base_url=start_base_url,
                                     rgi_version=rgi_version, border=border,
                                     prepro_level=start_level), 'summary',
-                bn + f'_{rgi_reg}.{suffix}'))
-        opath = os.path.join(sum_dir, bn + f'_{rgi_reg}.{suffix}')
+                f'{bn}_{rgi_reg}.{suffix}'))
+        opath = sum_dir / f'{bn}_{rgi_reg}.{suffix}'
         shutil.copyfile(ipath, opath)
 
     # Copy mini data to new dir
-    mini_base_dir = os.path.join(working_dir, 'mini_perglacier',
-                                 'RGI{}'.format(rgi_version),
-                                 'b_{:03d}'.format(border))
+    mini_base_dir = (
+        Path(working_dir)
+        / 'mini_perglacier'
+        / f'RGI{rgi_version}'
+        / f'b_{border:03d}'
+    )
     mini_gdirs = workflow.execute_entity_task(tasks.copy_to_basedir, gdirs,
                                               base_dir=mini_base_dir,
                                               setup='run/spinup')
 
     # L5 OK - compress all in output directory
     log.workflow('L5 done. Writing to tar...')
-    level_base_dir = os.path.join(output_base_dir, 'L5')
+    level_base_dir = Path(output_base_dir) / 'L5'
     workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
                                  base_dir=level_base_dir)
     utils.base_dir_to_tar(level_base_dir)
@@ -1048,6 +1107,11 @@ def parse_args(args):
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
                              'The data points are stored as csv.')
+    parser.add_argument('--custom-climate-task', type=str, default=None,
+                        help='Custom climate task import path in the form module:function. '
+                            'If provided, it replaces the default process_climate_data.')
+    parser.add_argument('--custom-climate-task-kwargs', type=json.loads, default=None,
+                        help='JSON dict of kwargs passed to the custom climate task.')
     parser.add_argument('--add-distributed-thickness', nargs='?', const=True, default=False,
                         help='adds a thickness field to gridded_data using '
                              'distribute_thickness_per_altitude.')
@@ -1065,13 +1129,19 @@ def parse_args(args):
     parser.add_argument('--test-ids', nargs='+',
                         help='if --test, specify the RGI ids to run separated '
                              'by a space (default: 4 randomly selected).')
+    parser.add_argument('--rgi-file', type=str, default=None,
+                        help='path to an RGI shapefile to use instead of '
+                             'the default RGI region file.')
+    parser.add_argument('--intersects-file', type=str, default=None,
+                        help='path to an intersects shapefile to use instead '
+                             'of the default RGI intersects file.')
     parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic-spinup', type=str, default='',
                         help="include a dynamic spinup for matching glacier area "
                              "('area/dmdtda') OR volume ('volume/dmdtda') at "
                              "the RGI-date, AND mass-change from Hugonnet "
-                             "in the period 2000-2020 (dynamic mu* "
+                             "in the period 2000-2020 (dynamic melt_f "
                              "calibration).")
     parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=0.2,
                         help="scaling factor to account for correlated "
@@ -1082,6 +1152,17 @@ def parse_args(args):
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
+    parser.add_argument('--dynamic-spinup-periods-to-try', nargs='*',
+                        default=[30, 40, 50, 60, 70, 80, 90, 100],
+                        help="if --dynamic-spinup is set, define additional "
+                             "spinup periods to try, if the spinup starting "
+                             "from --dynamic-spinup-year is not successful. If"
+                             "you do not want to use set"
+                             "'--dynamic-spinup-periods-to-try none' in the"
+                             "terminal.")
+    parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
+                        help='optional path or URL to a custom geodetic MB '
+                             'file passed to MB calibration.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1123,11 +1204,16 @@ def parse_args(args):
 
     dynamic_spinup = False if args.dynamic_spinup == '' else args.dynamic_spinup
 
+    if args.dynamic_spinup_periods_to_try == ['none']:
+        args.dynamic_spinup_periods_to_try = None
+
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
                 border=border, output_folder=output_folder,
                 working_dir=working_dir, params_file=args.params_file,
                 is_test=args.test, test_ids=args.test_ids,
+                rgi_file=args.rgi_file,
+                intersects_file=args.intersects_file,
                 dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 max_level=args.max_level, disable_mp=args.disable_mp,
@@ -1147,10 +1233,14 @@ def parse_args(args):
                 add_distributed_thickness=args.add_distributed_thickness,
                 add_export_thickness_geotiff=args.add_export_thickness_geotiff,
                 compute_hypsometry=args.compute_hypsometry,
+                custom_climate_task=args.custom_climate_task,
+                custom_climate_task_kwargs=args.custom_climate_task_kwargs,
                 dynamic_spinup=dynamic_spinup,
                 err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
+                dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
                 mb_calibration_strategy=args.mb_calibration_strategy,
+                geodetic_mb_file_path=args.geodetic_mb_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 override_params=args.override_params,
                 )

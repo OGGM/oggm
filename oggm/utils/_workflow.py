@@ -25,6 +25,7 @@ import platform
 import struct
 import importlib
 import re as regexp
+from pathlib import Path
 
 # External libs
 import pandas as pd
@@ -796,22 +797,27 @@ def get_centerline_lonlat(gdir,
     return olist
 
 
-def _write_shape_to_disk(gdf, fpath, to_tar=False):
-    """Write a shapefile to disk with optional compression
+def _write_shape_to_disk(
+    gdf: gpd.GeoDataFrame, fpath: str | Path, to_tar: bool = False
+) -> None:
+    """Write a shapefile to disk with optional compression.
 
     Parameters
     ----------
     gdf : gpd.GeoDataFrame
-        the data to write
-    fpath : str
-        where to writ the file - should be ending in shp
-    to_tar : bool
-        put the files in a .tar file. If cfg.PARAMS['use_compression'],
-        also compress to .gz
+        The data to write
+    fpath : str or Path
+        Where to write the file - should end with .shp
+    to_tar : bool, default False
+        Put the files in a `.tar` file.
+        If `cfg.PARAMS['use_compression']`, also compress to .gz
     """
 
-    if '.shp' not in fpath:
-        raise ValueError('File ending should be .shp')
+    if isinstance(fpath, Path):
+        fpath = str(fpath)
+
+    if not fpath.endswith(".shp"):
+        raise ValueError("File ending should be .shp")
 
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
@@ -899,9 +905,11 @@ def write_centerlines_to_shape(gdirs, *, path=True, to_tar=False,
     """
     from oggm.workflow import execute_entity_task
 
-    if path is True:
-        path = os.path.join(cfg.PATHS['working_dir'],
-                            'glacier_centerlines' + filesuffix + '.shp')
+    if isinstance(path, bool) and path:
+        path = os.path.join(
+            cfg.PATHS["working_dir"],
+            "glacier_centerlines" + filesuffix + ".shp",
+        )
 
     _to_crs = salem.check_crs(to_crs)
     if not _to_crs:
@@ -945,7 +953,7 @@ class compile_to_netcdf(object):
     """
 
     def __init__(self, log):
-        """Decorator syntax: ``@compile_to_netcdf(log, n_tmp_files=1000)``
+        """Decorator syntax: ``@compile_to_netcdf(log, n_tmp_files=100)``
 
         Parameters
         ----------
@@ -963,7 +971,7 @@ class compile_to_netcdf(object):
         def _compile_to_netcdf(gdirs, input_filesuffix='',
                                output_filesuffix='',
                                path=True,
-                               tmp_file_size=1000,
+                               tmp_file_size=100,
                                **kwargs):
 
             if not output_filesuffix:
@@ -1827,7 +1835,7 @@ def _write_fl_diagnostics(gdir, input_filesuffix='', folder_map=None):
 @global_task(log)
 def compile_fl_diagnostics(gdirs, *,
                            path=True,
-                           group_size=1000,
+                           group_size=100,
                            input_filesuffix='',
                            compress=True,
                            delete_folders=False):
@@ -2611,25 +2619,48 @@ def _robust_extract(to_dir, *args, **kwargs):
     _back_up_retry(func, FileExistsError)
 
 
-def robust_tar_extract(from_tar, to_dir, delete_tar=False):
-    """Extract a tar file - also checks for a "tar in tar" situation"""
+def robust_tar_extract(
+    from_tar: str, to_dir: str, delete_tar: bool = False
+) -> None:
+    """Extract a tar file - also checks for a "tar in tar" situation.
+
+    Parameters
+    ----------
+    from_tar : str
+        Path to the tar file to extract.
+    to_dir : str
+        Path to the directory where to extract the tar file.
+    delete_tar : bool, default False
+        Whether to delete the tar file after extraction.
+    """
 
     if os.path.isfile(from_tar):
-        _robust_extract(to_dir, from_tar, 'r')
+        _robust_extract(to_dir, from_tar, "r")
     else:
         # maybe a tar in tar
-        base_tar = os.path.dirname(from_tar) + '.tar'
-        if not os.path.isfile(base_tar):
-            raise FileNotFoundError('Could not find a tarfile with path: '
-                                    '{}'.format(from_tar))
-        if delete_tar:
-            raise InvalidParamsError('Cannot delete tar in tar.')
-        # Open the tar
         bname = os.path.basename(from_tar)
+        # 1000-glacier bundles: subregion dir is tarred
+        base_tar = os.path.dirname(from_tar) + ".tar"
         dirbname = os.path.basename(os.path.dirname(from_tar))
+        if not os.path.isfile(base_tar):
+            # 100-glacier bundle: RGI60-11.006.tar in the region dir
+            # TODO: Really ought to consider switching to pathlib!
+            rgi_id = bname[:-7]  # strip .tar.gz
+            # The bundle name slices work for both RGI6 (14 char IDs) and
+            # RGI7 (23 char IDs).
+            if len(rgi_id) in (14, 23):
+                dirbname = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"  # e.g. RGI60-11.006
+                region_dir = os.path.dirname(os.path.dirname(from_tar))
+                base_tar = os.path.join(region_dir, dirbname + ".tar")
+        if not os.path.isfile(base_tar):
+            raise FileNotFoundError(
+                f"Could not find a tarfile with path: {from_tar}"
+            )
+        if delete_tar:
+            raise InvalidParamsError("Cannot delete tar in tar.")
 
         def func():
-            with tarfile.open(base_tar, 'r') as tf:
+            with tarfile.open(base_tar, "r") as tf:
                 i_from_tar = tf.getmember(os.path.join(dirbname, bname))
                 with tf.extractfile(i_from_tar) as fileobj:
                     _robust_extract(to_dir, fileobj=fileobj)
@@ -3031,7 +3062,7 @@ class GlacierDirectory(object):
         project = partial(transform_proj, proj_in, proj_out)
         geometry = shp_trafo(project, entity['geometry'])
         if len(self.rgi_id) == 23 and (not geometry.is_valid or
-                                       type(geometry) != shpg.Polygon):
+                                       not isinstance(geometry, shpg.Polygon)):
             # In RGI7 we know that the geometries are valid in the source file,
             # so we have to validate them after projection them as well
             # Try buffer first
@@ -3041,7 +3072,12 @@ class GlacierDirectory(object):
                 if len(correct) != 1:
                     raise RuntimeError('Cant correct this geometry')
                 geometry = correct[0]
-            if type(geometry) != shpg.Polygon:
+            if isinstance(geometry, shpg.MultiPolygon):
+                geoms = list(geometry.geoms)
+                if not geoms or not all(isinstance(g, shpg.Polygon) for g in geoms):
+                    raise ValueError(f'{self.rgi_id}: geometry not valid')
+                geometry = max(geoms, key=lambda g: g.area)
+            if not isinstance(geometry, shpg.Polygon):
                 raise ValueError(f'{self.rgi_id}: geometry not valid')
         elif not cfg.PARAMS['keep_multipolygon_outlines']:
             geometry = multipolygon_to_polygon(geometry, gdir=self)
@@ -4196,37 +4232,104 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
     return opath
 
 
-def base_dir_to_tar(base_dir=None, delete=True):
-    """Merge the directories into 1000 bundles as tar files.
+def base_dir_to_tar(
+    base_dir: Path | str | None = None,
+    delete: bool = True,
+    bundle_size: int = 100,
+) -> None:
+    """Merge the directories into tar bundle files.
 
     The tar file is located at the same location of the original directory.
 
     Parameters
     ----------
-    base_dir : str
-        path to the basedir to parse (defaults to the working directory)
-    to_base_dir : str
-        path to the basedir where to write the directory (defaults to the
-        same location of the original directory)
+    base_dir : Path | str | None
+        Path to the basedir to parse (defaults to the working directory)
     delete : bool
-        delete the original directory tars afterwards (default)
+        Delete the original directory tars afterwards (default)
+    bundle_size : int, default 100
+        Size of the glacier bundles to create. Must be either 100 (the new
+        default, which makes for faster downloads) or 1000 (the legacy
+        layout). With 100, the individual glacier .tar.gz files (from
+        gdir_to_tar) are grouped into bundles named from each glacier's RGI
+        ID, e.g. RGI60-07.000 contains glaciers 00000-00099. Both RGI6 and
+        RGI7 IDs are supported.
     """
 
     if base_dir is None:
-        if not cfg.PATHS.get('working_dir', None):
+        if not cfg.PATHS.get("working_dir", None):
             raise ValueError("Need a valid PATHS['working_dir']!")
-        base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
+        base_dir = os.path.join(cfg.PATHS["working_dir"], "per_glacier")
+
+    # The read side (robust_tar_extract, gdir_from_tar, _get_prepro_gdir)
+    # only knows how to locate 100- and 1000-glacier bundles, so reject
+    # anything else rather than silently producing unreadable bundles.
+    if bundle_size not in (100, 1000):
+        raise InvalidParamsError(
+            "bundle_size must be 100 or 1000, got {}".format(bundle_size)
+        )
+
+    if bundle_size == 100:
+        # Group the glacier .tar.gz files into 100-glacier bundles named from
+        # the RGI ID, e.g. RGI60-07.000 holds glaciers 00000-00099. The slices
+        # below work for both RGI6 (14 char IDs) and RGI7 (23 char IDs).
+        # region_dir is derived from the walk so it's correct regardless of
+        # whether base_dir points to working_dir or per_glacier directly.
+        bundles = {}
+        src_dirs = set()
+        for dirpath, _, filenames in os.walk(base_dir):
+            for fname in sorted(filenames):
+                if not fname.endswith(".tar.gz"):
+                    continue
+                rgi_id = fname[:-7]
+                # check for a valid RGI ID, e.g. `centerlines_11` is also
+                # 14 chars long but is not an RGI ID
+                if not (len(rgi_id) in (14, 23) and "RGI" in rgi_id):
+                    continue
+                bundle_name = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"
+                region_dir = os.path.dirname(dirpath)
+                if bundle_name not in bundles:
+                    bundles[bundle_name] = (region_dir, [])
+                bundles[bundle_name][1].append(os.path.join(dirpath, fname))
+                src_dirs.add(dirpath)
+
+        to_delete = []
+        for bundle_name, (region_dir, tar_paths) in sorted(bundles.items()):
+            opath = os.path.join(region_dir, bundle_name + ".tar")
+            with tarfile.open(opath, "w") as tar:
+                for tp in sorted(tar_paths):
+                    # Store as bundle_name/file.tar.gz so robust_tar_extract
+                    # can locate the member via os.path.join(dirbname, bname)
+                    # Also ensures correct transfer between the download-cache
+                    tar.add(
+                        tp,
+                        arcname=os.path.join(bundle_name, os.path.basename(tp)),
+                    )
+            if delete:
+                to_delete.extend(tar_paths)
+
+        for tp in to_delete:
+            os.remove(tp)
+        if delete:
+            # Remove the now-empty subregion directories left behind, to match
+            # the 1000-bundle behavior which removes the source dirs.
+            for d in src_dirs:
+                if os.path.isdir(d) and not os.listdir(d):
+                    os.rmdir(d)
+        return
 
     to_delete = []
     for dirname, subdirlist, filelist in os.walk(base_dir):
         # RGI60-01.00
         bname = os.path.basename(dirname)
         # second argument for RGI7 naming convention
-        if not ((len(bname) == 11 and bname[-3] == '.') or
-                (len(bname) == 20 and bname[-3] == '-')):
+        if not (
+            (len(bname) == 11 and bname[-3] == ".")
+            or (len(bname) == 20 and bname[-3] == "-")
+        ):
             continue
-        opath = dirname + '.tar'
-        with tarfile.open(opath, 'w') as tar:
+        opath = dirname + ".tar"
+        with tarfile.open(opath, "w") as tar:
             tar.add(dirname, arcname=os.path.basename(dirname))
         if delete:
             to_delete.append(dirname)

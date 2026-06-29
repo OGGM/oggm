@@ -92,12 +92,40 @@ The OGGM logos are free to use!
 `night dark large (2008x858) with alpha channel <_static/logos/oggm_night_l_alpha.png>`_,
 `night dark small (502x215) with alpha channel <_static/logos/oggm_night_s_alpha.png>`_
 
-.. image:: _static/logos/oggm_pride_s_alpha.png
+**Celebration logos**:
 
-**OGGM pride**:
-`pride large (2004x856) with alpha channel <_static/logos/oggm_pride_l_alpha.png>`_,
-`pride small (502x215) with alpha channel <_static/logos/oggm_pride_s_alpha.png>`_
+These logos are rotating logos following various events of the year!
+
+.. list-table::
+   :widths: 50 50
+
+   * - .. image:: _static/logos/celebrations/oggm_logo_pride.png
+          :width: 100%
+     - .. image:: _static/logos/celebrations/oggm_logo_chinesenewyear.png
+          :width: 100%
+   * - `Pride month <_static/logos/celebrations/oggm_logo_pride.png>`_
+     - `Chinese new year <_static/logos/celebrations/oggm_logo_chinesenewyear.png>`_
+   * - .. image:: _static/logos/celebrations/oggm_logo_christmas.png
+          :width: 100%
+     - .. image:: _static/logos/celebrations/oggm_logo_disabilityday.png
+          :width: 100%
+   * - `Christmas <_static/logos/celebrations/oggm_logo_christmas.png>`_
+     - `Disability Day <_static/logos/celebrations/oggm_logo_disabilityday.png>`_
+   * - .. image:: _static/logos/celebrations/oggm_logo_diwali.png
+          :width: 100%
+     - .. image:: _static/logos/celebrations/oggm_logo_womeninscience.png
+          :width: 100%
+   * - `Diwali <_static/logos/celebrations/oggm_logo_diwali.png>`_
+     - `Women in Science <_static/logos/celebrations/oggm_logo_womeninscience.png>`_
+   * - .. image:: _static/logos/celebrations/oggm_logo_worldglacierday.png
+          :width: 100%
+     - .. image:: _static/logos/celebrations/oggm_logo_aid.png
+          :width: 100%
+   * - `World Glacier Day <_static/logos/celebrations/oggm_logo_worldglacierday.png>`_
+     - `Ramadan <_static/logos/celebrations/oggm_logo_aid.png>`_
 
 |
 
-**Acknowledgments:** thanks to Ben Marzeion for the original logo design, and Larissa van der Laan for the rainbow and dark logos!
+**Acknowledgments:** thanks to Ben Marzeion for the original logo design,
+Larissa van der Laan for the rainbow and dark logos, and Anne Maussion for the
+"celebrations" series.

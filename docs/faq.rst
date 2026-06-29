@@ -5,7 +5,8 @@ FAQ and Troubleshooting
 ***********************
 
 We list here some of the questions we get most often, either on our
-`Slack workspace <https://community.oggm.org/guides/slack-intro.html>`_ or on `github <https://github.com/OGGM/oggm>`_.
+`Slack workspace <https://community.oggm.org/guides/slack-intro.html>`_
+or on `github <https://github.com/OGGM/oggm>`_.
 
 What is the difference between OGGM and other glacier models?
 -------------------------------------------------------------
@@ -81,13 +82,14 @@ I have a question about OGGM, can we talk about it per email/phone?
 Thanks for your interest in OGGM! The best place to ask questions is in
 our interactive forum, the `Slack #support channel <https://community.oggm.org/guides/slack-intro.html>`_ so that
 everybody can learn from all questions and their answers. More
-information on how to join the Slack can be found `here <https://community.oggm.org/guides/slack-intro.html#how-to-join>`_.
+information on how to join the Slack can be found
+`on the community website <https://community.oggm.org/guides/slack-intro.html#how-to-join>`_.
 We also have a `community guideline <https://community.oggm.org/guides/error-guide.html>`_ how to best raise your
 question or find the error in your code. Keep in touch with us if you'd like to join, we are a very open community!
 
 If you are working on OGGM code development
 or encounter a bug in the codebase, raising an issue on GitHub in one of the OGGM repositories may be more appropriate.
-For example, `here <https://github.com/OGGM/oggm/issues>`_ for the main OGGM code.
+For example, on `github.com/OGGM/oggm/issues <https://github.com/OGGM/oggm/issues>`_ for the main OGGM code.
 
 
 
