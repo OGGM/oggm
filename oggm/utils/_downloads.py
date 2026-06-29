@@ -111,6 +111,12 @@ tuple2int = partial(np.array, dtype=np.int64)
 
 lock = None
 
+# Cache of the resolved bundle layout per prepro url: maps a resolved prepro
+# url to "new" (100-glacier bundles) or "old" (1000-glacier bundles), so we
+# don't re-probe (and 404) the new-format url for every glacier of a legacy
+# dataset. Populated only on a confirmed download (see _get_prepro_gdir_unlocked).
+_prepro_bundle_format = {}
+
 
 def mkdir(path, reset=False):
     """Checks if directory exists and if not, create one.
@@ -1150,20 +1156,60 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     return url
 
 
-def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
-                              base_url=None):
+def _get_prepro_gdir_unlocked(
+    rgi_version: str,
+    rgi_id: str,
+    border: int,
+    prepro_level,
+    base_url: str = None,
+) -> str:
 
-    url = get_prepro_base_url(rgi_version=rgi_version, border=border,
-                              prepro_level=prepro_level, base_url=base_url)
-    if len(rgi_id) == 23:
-        # RGI7
-        url += '{}/{}.tar'.format(rgi_id[:17], rgi_id[:20])
-    else:
-        url += '{}/{}.tar'.format(rgi_id[:8], rgi_id[:11])
-    tar_base = file_downloader(url)
+    url = get_prepro_base_url(
+        rgi_version=rgi_version,
+        border=border,
+        prepro_level=prepro_level,
+        base_url=base_url,
+    )
+    # The region dir, the new 100-glacier bundle name and the old
+    # 1000-glacier bundle name can all be derived from the RGI ID with the
+    # same slices for both RGI6 (14 char IDs) and RGI7 (23 char IDs), since
+    # the glacier number is always the last 5 characters of the ID.
+    # TODO: add support for bundle sizes of 10 and 1
+    region = rgi_id[:-6]                      # RGI60-07 / RGI2000-v7.0-G-01
+    new_bundle = f"{region}.{rgi_id[-5:-2]}"  # 100-bundle, e.g. RGI60-07.000
+    old_bundle = rgi_id[:-3]                  # 1000-bundle, e.g. RGI60-07.00
+
+    # The bundle layout (100- vs 1000-glacier) is uniform across a published
+    # prepro dataset, so once we have confirmed it for this url we go straight
+    # to the right file instead of re-probing (and 404-ing) the new-format url
+    # for every glacier. We only cache on a confirmed download: a bare 404 on
+    # the new-format url is ambiguous (legacy dataset vs. a glacier that is
+    # simply missing), so caching it could wrongly downgrade sibling glaciers.
+    fmt = _prepro_bundle_format.get(url)
+    new_url = f"{url}{region}/{new_bundle}.tar"
+
+    # Try the new 100-glacier bundle first, unless we already know this dataset
+    # is legacy.
+    if fmt in (None, "new"):
+        try:
+            tar_base = file_downloader(new_url)
+        except InvalidParamsError:
+            # new format URL not in allowlist -> fall back to the old layout
+            tar_base = None
+        if tar_base is not None:
+            _prepro_bundle_format[url] = "new"
+            return tar_base
+        if fmt == "new":
+            # confirmed new-format dataset, so this glacier is simply missing
+            raise RuntimeError(f"Could not find file at {new_url}")
+
+    # Fall back to the old 1000-glacier bundle for legacy base_urls.
+    old_url = f"{url}{region}/{old_bundle}.tar"
+    tar_base = file_downloader(old_url)
     if tar_base is None:
-        raise RuntimeError('Could not find file at ' + url)
+        raise RuntimeError(f"Could not find file at {old_url}")
 
+    _prepro_bundle_format[url] = "old"
     return tar_base
 
 
