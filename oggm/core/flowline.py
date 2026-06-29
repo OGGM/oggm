@@ -2164,7 +2164,7 @@ class SemiImplicitModel(FlowlineModel):
                  inplace=False, fixed_dt=None, cfl_number=0.5, min_dt=None,
                  flux_gate=None, flux_gate_thickness=None, flux_gate_build_up=100,
                  do_calving=None, calving_k=None, calving_law=k_calving_law,
-                 calving_use_limiter=None, water_level=0.0, use_thomas=True,
+                 calving_use_limiter=None, water_level=0.0,
                  **kwargs):
         """Instantiate the model.
 
@@ -2282,7 +2282,6 @@ class SemiImplicitModel(FlowlineModel):
                                      "cfl numbers in the order of 0.1 - 0.5 "
                                      f"(you set {cfl_number}).")
         self.cfl_number = cfl_number
-        self.use_thomas = use_thomas
 
         # Calving params
         if do_calving is None:
@@ -2521,33 +2520,24 @@ class SemiImplicitModel(FlowlineModel):
             if q_in != 0.0:
                 rhs[0] += dt * q_in / (width[0] * dx)
 
-        if self.use_thomas:
-            # this strips scipy.linalg.solve_banded to our use case and removes
-            # some checks. It also automatically selects the correct fortran
-            # function for the shape of our matrix. Internally dgtsv relies on
-            # the thomas algorithm (Gaussian elimination with partial pivoting)
-            dgtsv(dm[1:], np.ones(len(d0)) + d0, dp[:-1], rhs,
-                  overwrite_dl=True,
-                  overwrite_d=True,
-                  overwrite_du=True,
-                  overwrite_b=True)
-            fl.thick = utils.clip_min(rhs, 0)
-        else:
-            # construct banded form of the matrix, which is used during solving
-            # (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.solve_banded.html)
-            # original matrix:
-            # d_matrix = (np.diag(dp[:-1], 1) +
-            #             np.diag(np.ones(len(d0)) + d0) +
-            #             np.diag(dm[1:], -1))
-            self.d_matrix_banded[0, 1:] = dp[:-1]
-            self.d_matrix_banded[1, :] = np.ones(len(d0)) + d0
-            self.d_matrix_banded[2, :-1] = dm[1:]
+        # this strips scipy.linalg.solve_banded to our use case and removes
+        # some checks. It also automatically selects the correct fortran
+        # function for the shape of our matrix. Internally dgtsv relies on
+        # the thomas algorithm (Gaussian elimination with partial pivoting)
+        dgtsv(dm[1:], np.ones(len(d0)) + d0, dp[:-1], rhs,
+              overwrite_dl=True,
+              overwrite_d=True,
+              overwrite_du=True,
+              overwrite_b=True)
+        fl.thick = utils.clip_min(rhs, 0)
 
-            # solve matrix and update flowline thickness
-            thick_new = utils.clip_min(
-                solve_banded((1, 1), self.d_matrix_banded, rhs),
-                0)
-            fl.thick = thick_new
+        # the old implementation using solve_banded looks like this:
+        # self.d_matrix_banded[0, 1:] = dp[:-1]
+        # self.d_matrix_banded[1, :] = np.ones(len(d0)) + d0
+        # self.d_matrix_banded[2, :-1] = dm[1:]
+        # fl.thick = utils.clip_min(
+        #     solve_banded((1, 1), self.d_matrix_banded, rhs),
+        #     0)
 
         # Retreat-based calving parametrization (adapted from FluxBasedModel)
         # We need here less "if" statements as we dont deal with tributaries
