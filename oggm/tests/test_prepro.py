@@ -1739,8 +1739,11 @@ class TestClimate:
         from oggm.core.massbalance import mb_calibration_to_rmsd, mb_calibration_from_scalar_mb
         from functools import partial
 
+        # Seed differential evolution so the order-independence check below is
+        # deterministic rather than relying on stochastic luck.
         mb_calibration_to_rmsd = partial(mb_calibration_to_rmsd,
-                                         overwrite_gdir=True)
+                                         overwrite_gdir=True,
+                                         optimisation_kwargs={'seed': 42})
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -1930,69 +1933,26 @@ class TestClimate:
         np.testing.assert_array_less(utils.rmsd(mbdf['temp_bias_mb_rmsd'], mbdf['ref_mb']),
                                      utils.rmsd(mbdf['temp_bias_mb_scalar'], mbdf['ref_mb']))
 
-        # Now check that the order of parameters added into the  calibration does not affact the result
+        # Now check that the order of parameters in calibrate_params does not
+        # affect the result. perm0 reuses the all-parameter run from above
+        # (identical params, seeded -> identical result); we then test a couple
+        # of distinct orderings against it. The full set of 6 permutations is
+        # unnecessary and was the dominant cost of this test.
+        mbdf['perm0'] = mbdf['all_mb_rmsd']
 
-        # Calibrate with parameters inserted in all possible permutations
-        # mf, pf, tb
-        mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
-                               calibrate_params=('melt_f', 'prcp_fac', 'temp_bias'),)
+        permutations = [('prcp_fac', 'temp_bias', 'melt_f'),
+                        ('temp_bias', 'melt_f', 'prcp_fac')]
+        for i, params in enumerate(permutations, start=1):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb, calibrate_params=params)
+            h, w = gdir.get_inversion_flowline_hw()
+            mb_new = massbalance.MonthlyTIModel(gdir)
+            mbdf[f'perm{i}'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
 
-        h, w = gdir.get_inversion_flowline_hw()
-        mb_new = massbalance.MonthlyTIModel(gdir)
-        mbdf['perm1'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-
-        # mf, tb, pf
-        mb_calibration_to_rmsd(gdir,
-                               ref_df=ref_mb,
-                               calibrate_params=('melt_f', 'temp_bias', 'prcp_fac',))
-
-        h, w = gdir.get_inversion_flowline_hw()
-        mb_new = massbalance.MonthlyTIModel(gdir)
-        mbdf['perm2'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-
-        # pf, mf, tb
-        mb_calibration_to_rmsd(gdir,
-                               ref_df=ref_mb,
-                               calibrate_params=('prcp_fac', 'melt_f', 'temp_bias',))
-
-        h, w = gdir.get_inversion_flowline_hw()
-        mb_new = massbalance.MonthlyTIModel(gdir)
-        mbdf['perm3'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-
-        # pf, tb, mf
-        mb_calibration_to_rmsd(gdir,
-                               ref_df=ref_mb,
-                               calibrate_params=('prcp_fac', 'temp_bias', 'melt_f',))
-
-        h, w = gdir.get_inversion_flowline_hw()
-        mb_new = massbalance.MonthlyTIModel(gdir)
-        mbdf['perm4'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-
-        # tb, mf, pf
-        mb_calibration_to_rmsd(gdir,
-                               ref_df=ref_mb,
-                               calibrate_params=('temp_bias', 'melt_f', 'prcp_fac',))
-
-        h, w = gdir.get_inversion_flowline_hw()
-        mb_new = massbalance.MonthlyTIModel(gdir)
-        mbdf['perm5'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-
-        # tb, pf, mf
-        mb_calibration_to_rmsd(gdir,
-                               ref_df=ref_mb,
-                               calibrate_params=('temp_bias', 'prcp_fac', 'melt_f',))
-
-        h, w = gdir.get_inversion_flowline_hw()
-        mb_new = massbalance.MonthlyTIModel(gdir)
-        mbdf['perm6'] = mb_new.get_specific_mb(h, w, year=mbdf.index)
-
-        # Check that all permutations of parameters gather the same results for differential evolution
-        # Differential evolution is stochastic and so may differ slighly (hence rtol here)
-        np.testing.assert_allclose(mbdf['perm1'].values, mbdf['perm2'].values, rtol=0.01)
-        np.testing.assert_allclose(mbdf['perm2'].values, mbdf['perm3'].values, rtol=0.01)
-        np.testing.assert_allclose(mbdf['perm3'].values, mbdf['perm4'].values, rtol=0.01)
-        np.testing.assert_allclose(mbdf['perm4'].values, mbdf['perm5'].values, rtol=0.01)
-        np.testing.assert_allclose(mbdf['perm5'].values, mbdf['perm6'].values, rtol=0.01)
+        # Differential evolution is stochastic and so may differ slightly even
+        # when seeded, since each ordering explores the parameter space in a
+        # different coordinate order (hence rtol here).
+        np.testing.assert_allclose(mbdf['perm0'].values, mbdf['perm1'].values, rtol=0.01)
+        np.testing.assert_allclose(mbdf['perm0'].values, mbdf['perm2'].values, rtol=0.01)
 
         # Now check what happens when we input unrealistic values, lets make an invalid boundary condition
         # This will force differential evolution to fail

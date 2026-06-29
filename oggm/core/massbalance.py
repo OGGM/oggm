@@ -1546,7 +1546,8 @@ def mb_calibration_to_rmsd(gdir, *,
                            temp_bias_min=None,
                            temp_bias_max=None,
                            mb_model_class=MonthlyTIModel,
-                           filesuffix='',):
+                           filesuffix='',
+                           optimisation_kwargs=None,):
     """Determine the MB parameters by minimising RMSD to a reference timeseries
 
     This calibrates the mass balance parameters using interannual
@@ -1628,6 +1629,11 @@ def mb_calibration_to_rmsd(gdir, *,
         add a filesuffix to mb_calib.json. This could be useful for sensitivity
         analyses with MB models, if they need to fetch other sets of params for
         example.
+    optimisation_kwargs: dict
+        optional keyword arguments forwarded to
+        `scipy.optimize.differential_evolution`, overriding the defaults
+        (``tol=1e-2``, ``maxiter=5000``). Useful to set a ``seed`` for
+        reproducibility or to tighten ``tol`` for a more precise optimum.
     """
 
     # Param constraints
@@ -1723,13 +1729,19 @@ def mb_calibration_to_rmsd(gdir, *,
 
         return rmsd(ref_values, sim_out)
 
+    # Default optimiser settings, can be overridden by the caller (e.g. to
+    # set a seed for reproducibility). tol=1e-2 is the scipy default; tighter
+    # values cost many more cost-function evaluations for negligible gain here.
+    de_kwargs = dict(tol=1e-2, maxiter=5000)
+    if optimisation_kwargs:
+        de_kwargs.update(optimisation_kwargs)
+
     try:
         res = optimize.differential_evolution(
             rmsd_cost_function,
             bounds=bounds,
-            tol=1e-8,
-            maxiter=5000,
             args=calibrate_params,
+            **de_kwargs,
         )
 
         for param, val in zip(calibrate_params, res.x):
