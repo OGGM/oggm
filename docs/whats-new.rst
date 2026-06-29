@@ -19,15 +19,29 @@ Enhancements
   the initially defined spinup period (`spinup_period_initial`) and the minimum
   spinup period (`min_spinup_period`) fail (:pull:`1914`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- `base_dir_to_tar` now groups glacier directories into bundles of 100 by
+  default (previously 1000); ``bundle_size`` accepts either 100 or 1000.
+  Smaller bundles make downloads more granular and faster while keeping the
+  number of files per directory manageable. Reading is fully backwards
+  compatible: existing base URLs keep serving the 1000-glacier bundles, while
+  newly created URLs use the 100-glacier bundles. Both RGI6 and RGI7 IDs are
+  supported (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Some tests have been refactored from unittest to pytest. (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a variable name bug in `prepare_for_inversion` where passing
+  `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
+  instead cleared the rectangular flag (:pull:`1931`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - GH workflows will timeout after one hour to prevent hanging tests from
   blocking runners or reaching usage limits (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
-  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
