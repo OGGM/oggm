@@ -27,12 +27,12 @@ Enhancements
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Some tests have been refactored from unittest to pytest. (:pull:`1925`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-
-Bug fixes
-~~~~~~~~~
 - Test optimisations for climate, mass balance calibration, and dynamic
   spinup (:pull:`1933`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+
+Bug fixes
+~~~~~~~~~
 
 - Fixed a variable name bug in `prepare_for_inversion` where passing
   `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
