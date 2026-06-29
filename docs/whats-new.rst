@@ -20,7 +20,7 @@ Enhancements
 
 Bug fixes
 ~~~~~~~~~
-- Test optimisations for climate and mass balance calibration e.g. (:pull:1933)
+- Test optimisations for climate and mass balance calibration e.g. (:pull:`1933`)
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Breaking changes
