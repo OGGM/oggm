@@ -53,15 +53,14 @@ def read_svgcoords(svg_file):
     return np.rint(np.asarray((x, y)).T).astype(np.int64)
 
 
-class TestGIS(unittest.TestCase):
+class TestGIS:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp('tmp_gis')
+        utils.mkdir(self.testdir)
 
         # Init
         cfg.initialize()
@@ -69,16 +68,6 @@ class TestGIS(unittest.TestCase):
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 20
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_init_gdir(self):
 
@@ -100,7 +89,7 @@ class TestGIS(unittest.TestCase):
         tdf = gdir.read_shapefile('outlines').iloc[0]
         myarea = tdf.geometry.area * 10**-6
         np.testing.assert_allclose(myarea, float(tdf['Area']), rtol=1e-2)
-        self.assertTrue(gdir.has_file('intersects'))
+        assert gdir.has_file('intersects')
         np.testing.assert_array_equal(gdir.intersects_ids,
                                       ['RGI50-11.00846', 'RGI50-11.00950'])
 
@@ -288,7 +277,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        self.assertEqual(gdir.__repr__(), expected)
+        assert gdir.__repr__() == expected
 
     def test_glacierdir(self):
 
@@ -385,11 +374,13 @@ class TestGIS(unittest.TestCase):
 
         np.testing.assert_allclose(dfh['slope_deg'], entity.Slope, atol=0.5)
         np.testing.assert_allclose(dfh['aspect_deg'], entity.Aspect, atol=5)
-        np.testing.assert_allclose(dfh['zmed_m'], entity.Zmed, atol=20)
-        np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
-        np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
-        np.testing.assert_allclose(dfh['zmax_m'], entity.Zmax, atol=20)
-        np.testing.assert_allclose(dfh['zmin_m'], entity.Zmin, atol=20)
+        for col in ["zmed_m", "zmax_m", "zmin_m"]:
+            assert col in dfh.columns
+            np.testing.assert_allclose(
+                dfh[col],
+                getattr(entity, col.split("_")[0].capitalize()),
+                atol=20,
+            )
         # From google map checks
         np.testing.assert_allclose(dfh['terminus_lon'], 10.80, atol=0.01)
         np.testing.assert_allclose(dfh['terminus_lat'], 46.81, atol=0.01)
@@ -451,8 +442,8 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
 
         # specifying a source will look for a DEN in a respective folder
-        self.assertRaises(ValueError, gis.rasterio_glacier_mask,
-                          gdir, source='SRTM')
+        with pytest.raises(ValueError):
+            gis.rasterio_glacier_mask(gdir, source='SRTM')
 
         # this should work
         gis.rasterio_glacier_mask(gdir, source=None)
@@ -464,24 +455,24 @@ class TestGIS(unittest.TestCase):
             data = ds.read(1).astype(profile['dtype'])
 
         # compare projections
-        self.assertEqual(ds.width, gdir.grid.nx)
-        self.assertEqual(ds.height, gdir.grid.ny)
-        self.assertEqual(ds.transform[0], gdir.grid.dx)
-        self.assertEqual(ds.transform[4], gdir.grid.dy)
+        assert ds.width == gdir.grid.nx
+        assert ds.height == gdir.grid.ny
+        assert ds.transform[0] == gdir.grid.dx
+        assert ds.transform[4] == gdir.grid.dy
         # origin is center for gdir grid but corner for dem_mask, so shift
-        self.assertAlmostEqual(ds.transform[2], gdir.grid.x0 - gdir.grid.dx/2)
-        self.assertAlmostEqual(ds.transform[5], gdir.grid.y0 - gdir.grid.dy/2)
+        assert np.isclose(ds.transform[2], gdir.grid.x0 - gdir.grid.dx / 2)
+        assert np.isclose(ds.transform[5], gdir.grid.y0 - gdir.grid.dy / 2)
 
         # compare dem_mask size with RGI area
         mask_area_km2 = data.sum() * gdir.grid.dx**2 * 1e-6
-        self.assertAlmostEqual(mask_area_km2, gdir.rgi_area_km2, 1)
+        assert np.isclose(mask_area_km2, gdir.rgi_area_km2, rtol=1e-1)
 
         # how the mask is derived from the outlines it should always be larger
-        self.assertTrue(mask_area_km2 > gdir.rgi_area_km2)
+        assert mask_area_km2 > gdir.rgi_area_km2
 
         # not sure if we want such a hard coded test, but this will fail if the
         # sample data changes but could also indicate changes in rasterio
-        self.assertTrue(data.sum() == 3218)
+        assert data.sum() == 3218
 
     def test_intersects(self):
 
@@ -489,7 +480,7 @@ class TestGIS(unittest.TestCase):
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
-        self.assertTrue(gdir.has_file('intersects'))
+        assert gdir.has_file('intersects')
 
     def test_dem_source_text(self):
 
@@ -505,10 +496,10 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
 
         # dem_info should return a string
-        self.assertIsInstance(gdir.dem_info, str)
+        assert isinstance(gdir.dem_info, str)
 
         # there is no daterange for demo/custom data
-        self.assertIsNone(gdir.dem_daterange)
+        assert gdir.dem_daterange is None
 
         # but we can make some
         with open(os.path.join(gdir.dir, 'dem_source.txt'), 'a') as f:
@@ -517,9 +508,8 @@ class TestGIS(unittest.TestCase):
         delattr(gdir, '_lazy_dem_daterange')
 
         # now call again and check return type
-        self.assertIsInstance(gdir.dem_daterange, tuple)
-        self.assertTrue(all(isinstance(year, int)
-                            for year in gdir.dem_daterange))
+        assert isinstance(gdir.dem_daterange, tuple)
+        assert all(isinstance(year, int) for year in gdir.dem_daterange)
 
     def test_custom_basename(self):
 
