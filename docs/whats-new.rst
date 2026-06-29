@@ -12,6 +12,8 @@ Enhancements
 - `run_prepro_levels` now allows to set a custom climate data processing
   module and custom geodetic data file to create glacier directories (:pull:`1910`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Test durations are now visible in Actions logs (:pull:`1920`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
   provide a list of additional spinup periods, which are tried in order if both
   the initially defined spinup period (`spinup_period_initial`) and the minimum
@@ -37,6 +39,9 @@ Bug fixes
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Fixed test runtime due to unnecessary downloads (:pull:`1934`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- GH workflows will timeout after one hour to prevent hanging tests from
+  blocking runners or reaching usage limits (:pull:`1920`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
