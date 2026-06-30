@@ -551,31 +551,20 @@ class TestGIS:
         assert np.allclose(demtiff_ds.y, gtiff_ds.y)
 
 
-class TestCenterlines(unittest.TestCase):
+class TestCenterlines:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp("tmp_centerlines")
+        utils.mkdir(self.testdir)
 
         # Init
         cfg.initialize()
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_filter_heads(self):
 
@@ -595,8 +584,8 @@ class TestCenterlines(unittest.TestCase):
                                                heads_height[::-1],
                                                radius, polygon)
 
-        self.assertEqual(_heads, _headsi[::-1])
-        self.assertEqual(_heads, [heads[h] for h in [2, 5, 6, 7]])
+        assert _heads == _headsi[::-1]
+        assert _heads == [heads[h] for h in [2, 5, 6, 7]]
 
     def test_mask_to_polygon(self):
         from oggm.core.centerlines import _mask_to_polygon
@@ -647,15 +636,12 @@ class TestCenterlines(unittest.TestCase):
         for cl in cls:
             for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
                                  cl.inflows):
-                self.assertEqual(cl.line.coords[j], ip.coords[0])
-                self.assertEqual(ob.flows_to_point.coords[0],
-                                 ip.coords[0])
-                self.assertEqual(cl.line.coords[ob.flows_to_indice],
-                                 ip.coords[0])
+                assert cl.line.coords[j] == ip.coords[0]
+                assert ob.flows_to_point.coords[0] == ip.coords[0]
+                assert cl.line.coords[ob.flows_to_indice] == ip.coords[0]
 
-        self.assertEqual(len(cls), 3)
-
-        self.assertEqual(set(cls), set(centerlines.line_inflows(cls[-1])))
+        assert len(cls) == 3
+        assert set(cls) == set(centerlines.line_inflows(cls[-1]))
 
         df = utils.glacier_statistics(gdir)
         # From google map checks
@@ -676,9 +662,10 @@ class TestCenterlines(unittest.TestCase):
 
         d = gdir.read_pickle('downstream_line')
         cl = gdir.read_pickle('inversion_flowlines')[-1]
-        self.assertEqual(
-            len(d['full_line'].coords) - len(d['downstream_line'].coords),
-            cl.nx)
+        assert (
+            len(d["full_line"].coords) - len(d["downstream_line"].coords)
+            == cl.nx
+        )
         np.testing.assert_allclose(d['downstream_line'].length, 12, atol=0.5)
 
     def test_downstream_bedshape(self):
@@ -781,7 +768,7 @@ class TestCenterlines(unittest.TestCase):
         assert gdir.rgi_date == 2009
 
         sub = centerlines.line_inflows(cls[-1])
-        self.assertEqual(set(cls), set(sub))
+        assert set(cls) == set(sub)
         assert sub[-1] is cls[-1]
 
         sub = centerlines.line_inflows(cls[-2])
