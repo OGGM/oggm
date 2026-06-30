@@ -60,7 +60,7 @@ class TestGIS:
 
         # test directory
         self.testdir = tmpdir_factory.mktemp('tmp_gis')
-        utils.mkdir(self.testdir)
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
@@ -558,7 +558,7 @@ class TestCenterlines:
 
         # test directory
         self.testdir = tmpdir_factory.mktemp("tmp_centerlines")
-        utils.mkdir(self.testdir)
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
@@ -834,7 +834,7 @@ class TestElevationBandFlowlines:
 
         # test directory
         self.testdir = tmpdir_factory.mktemp("tmp_flowlines")
-        utils.mkdir(self.testdir)
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
@@ -1004,6 +1004,7 @@ class TestGeometry:
 
         # test directory
         self.testdir = tmpdir_factory.mktemp("tmp_geometry")
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
@@ -2104,6 +2105,7 @@ class TestInversion:
 
         # test directory
         self.testdir = tmpdir_factory.mktemp("tmp_inversion")
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
