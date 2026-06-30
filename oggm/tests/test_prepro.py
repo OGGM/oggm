@@ -539,8 +539,8 @@ class TestGIS:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             gridded_topo = ds[target_var]
             gtiff_ds = rioxr.open_rasterio(gtiff_path)
-            np.allclose(ds.salem.grid.x_coord, gtiff_ds.x)
-            np.allclose(ds.salem.grid.y_coord, gtiff_ds.y)
+            assert np.allclose(ds.salem.grid.x_coord, gtiff_ds.x)
+            assert np.allclose(ds.salem.grid.y_coord, gtiff_ds.y)
             assert np.allclose(gridded_topo.data, gtiff_ds.data)
 
         # compare coordinates of topo.tif with dem.tif
