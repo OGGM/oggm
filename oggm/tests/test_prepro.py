@@ -2097,15 +2097,13 @@ class TestClimate(unittest.TestCase):
         assert len(ref_gd) == 1
 
 
-class TestInversion(unittest.TestCase):
+class TestInversion:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp("tmp_inversion")
 
         # Init
         cfg.initialize()
@@ -2116,16 +2114,6 @@ class TestInversion(unittest.TestCase):
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['border'] = 10
         cfg.PARAMS['prcp_fac'] = 2.5
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_invert_hef(self):
 
@@ -2165,8 +2153,8 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        self.assertTrue(nabove == 0)
-        self.assertTrue(np.rad2deg(maxs) < 40.)
+        assert nabove == 0
+        assert np.rad2deg(maxs) < 40.0
 
         ref_v = 0.573 * 1e9
 
@@ -2182,10 +2170,10 @@ class TestInversion(unittest.TestCase):
         out = optimization.minimize(to_optimize, [1, 1],
                                     bounds=((0.01, 10), (0.01, 10)),
                                     tol=1e-4)['x']
-        self.assertTrue(out[0] > 0.1)
-        self.assertTrue(out[1] > 0.1)
-        self.assertTrue(out[0] < 1.1)
-        self.assertTrue(out[1] < 1.1)
+        assert out[0] > 0.1
+        assert out[1] > 0.1
+        assert out[0] < 1.1
+        assert out[1] < 1.1
         glen_a = glen_a * out[0]
         fs = fs * out[1]
         v = inversion.mass_conservation_inversion(gdir, fs=fs,
@@ -2429,8 +2417,8 @@ class TestInversion(unittest.TestCase):
             if _max > maxs:
                 maxs = _max
 
-        self.assertTrue(nabove == 0)
-        self.assertTrue(np.rad2deg(maxs) < 40.)
+        assert nabove == 0
+        assert np.rad2deg(maxs) < 40.0
 
         ref_v = 0.573 * 1e9
 
@@ -2446,10 +2434,10 @@ class TestInversion(unittest.TestCase):
         out = optimization.minimize(to_optimize, [1, 1],
                                     bounds=((0.01, 10), (0.01, 10)),
                                     tol=1e-4)['x']
-        self.assertTrue(out[0] > 0.1)
-        self.assertTrue(out[1] > 0.1)
-        self.assertTrue(out[0] < 1.1)
-        self.assertTrue(out[1] < 1.1)
+        assert out[0] > 0.1
+        assert out[1] > 0.1
+        assert out[0] < 1.1
+        assert out[1] < 1.1
         glen_a = glen_a * out[0]
         fs = fs * out[1]
         v = inversion.mass_conservation_inversion(gdir, fs=fs,
@@ -2607,8 +2595,8 @@ class TestInversion(unittest.TestCase):
                                     bounds=((0.00001, 100000),),
                                     tol=1e-4)['x']
 
-        self.assertTrue(out[0] > 0.1)
-        self.assertTrue(out[0] < 10)
+        assert out[0] > 0.1
+        assert out[0] < 10
 
         glen_a = cfg.PARAMS['inversion_glen_a'] * out[0]
         fs = 0.
@@ -2683,16 +2671,16 @@ class TestInversion(unittest.TestCase):
 
         rdir = os.path.join(self.testdir, 'RGI50-11', 'RGI50-11.fa',
                             'RGI50-11.faked')
-        self.assertTrue(os.path.exists(rdir))
+        assert os.path.exists(rdir)
 
         rdir = os.path.join(rdir, 'log.txt')
-        self.assertTrue(os.path.exists(rdir))
+        assert os.path.exists(rdir)
 
         cfg.PARAMS['continue_on_error'] = False
 
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics([gdir], path=False)
-        self.assertEqual(dfc.terminus_type.values[0], 'Land-terminating')
+        assert dfc.terminus_type.values[0] == 'Land-terminating'
 
 
 class TestCoxeCalving(unittest.TestCase):
