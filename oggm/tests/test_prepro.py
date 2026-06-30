@@ -821,9 +821,9 @@ class TestCenterlines:
         denom = float((na+nc)*(nd+nc)+(na+nb)*(nd+nb))
         hss = float(2.) * ((na*nd)-(nb*nc)) / denom
         if cfg.PARAMS['grid_dx_method'] == 'linear':
-            self.assertTrue(hss > 0.53)
+            assert (hss > 0.53)
         if cfg.PARAMS['grid_dx_method'] == 'fixed':  # quick fix
-            self.assertTrue(hss > 0.41)
+            assert (hss > 0.41)
 
 
 class TestElevationBandFlowlines(unittest.TestCase):
