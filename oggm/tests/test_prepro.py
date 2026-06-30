@@ -2919,15 +2919,14 @@ class TestGrindelInvert:
         assert np.sum(fls[-1].is_rectangular) >= 10
 
 
-class TestGCMClimate(unittest.TestCase):
+class TestGCMClimate:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp("tmp_prepro")
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
@@ -2939,15 +2938,6 @@ class TestGCMClimate(unittest.TestCase):
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
 
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_process_monthly_isimip_data(self):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -3126,8 +3116,8 @@ class TestGCMClimate(unittest.TestCase):
         tasks.process_cru_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         f = get_demo_file('cesm.TREFHT.160001-200512.selection.nc')
         cfg.PATHS['cesm_temp_file'] = f
@@ -3186,8 +3176,8 @@ class TestGCMClimate(unittest.TestCase):
         tasks.process_cru_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         fpath_temp = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
         fpath_precip = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
@@ -3275,8 +3265,8 @@ class TestGCMClimate(unittest.TestCase):
         tasks.process_cru_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         ft = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
         fp = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
@@ -3331,8 +3321,8 @@ class TestGCMClimate(unittest.TestCase):
         tasks.process_cru_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         fpath_temp = get_demo_file('air_MCruns_ensemble_mean_LMRv2.1.nc')
         fpath_precip = get_demo_file('prate_MCruns_ensemble_mean_LMRv2.1.nc')
@@ -3437,8 +3427,8 @@ class TestGCMClimate(unittest.TestCase):
         tasks.process_cru_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         fpath_temp = get_demo_file('ModE-RA_ensmean_temp2_anom_wrt_'
                                    '1901-2000_1421-2008_mon.nc')
@@ -3502,8 +3492,8 @@ class TestGCMClimate(unittest.TestCase):
         tasks.process_cru_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         fpath_temp = get_demo_file('tas_mon_CCSM4_rcp26_r1i1p1_g025.nc')
         fpath_precip = get_demo_file('pr_mon_CCSM4_rcp26_r1i1p1_g025.nc')
@@ -3636,15 +3626,14 @@ class TestGCMClimate(unittest.TestCase):
                                        clim_cesm2.ref_pix_lon)
 
 
-class TestIdealizedGdir(unittest.TestCase):
+class TestIdealizedGdir:
 
-    def setUp(self):
-
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp('tmp')
+        utils.mkdir(self.testdir, reset=True)
+
 
         # Init
         cfg.initialize()
@@ -3654,16 +3643,6 @@ class TestIdealizedGdir(unittest.TestCase):
         cfg.PARAMS['use_intersects'] = False
         cfg.PARAMS['use_tar_shapefiles'] = False
         cfg.PARAMS['use_multiple_flowlines'] = False
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_invert(self):
 
@@ -3704,34 +3683,25 @@ class TestIdealizedGdir(unittest.TestCase):
         np.testing.assert_allclose(gdir1.rgi_area_km2, gdir.rgi_area_km2)
 
 
-class TestCatching(unittest.TestCase):
+class TestCatching:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_errors')
+        self.testdir = tmpdir_factory.mktemp('tmp_errors')
+        self.log_dir = self.testdir.join('log')
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.log_dir, reset=True)
+
 
         # Init
         cfg.initialize()
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
-        self.log_dir = os.path.join(self.testdir, 'log')
-        self.clean_dir()
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        utils.mkdir(self.testdir, reset=True)
-        utils.mkdir(self.log_dir, reset=True)
 
     def test_pipe_log(self):
-
-        self.clean_dir()
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
@@ -3766,14 +3736,13 @@ class TestCatching(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
 
-        self.assertEqual(gdir.get_task_status(gis.glacier_masks.__name__),
-                         'SUCCESS')
+        assert gdir.get_task_status(gis.glacier_masks.__name__) == 'SUCCESS'
         assert gdir.get_task_time(gis.glacier_masks.__name__) > 0
-        self.assertIsNone(gdir.get_task_status(
-            centerlines.compute_centerlines.__name__))
-        self.assertIsNone(gdir.get_task_time(
-            centerlines.compute_centerlines.__name__))
-        self.assertIsNone(gdir.get_error_log())
+        assert gdir.get_task_status(
+            centerlines.compute_centerlines.__name__) is None
+        assert gdir.get_task_time(
+            centerlines.compute_centerlines.__name__) is None
+        assert gdir.get_error_log() is None
 
         centerlines.compute_downstream_bedshape(gdir)
 
@@ -3835,30 +3804,19 @@ class TestCatching(unittest.TestCase):
         assert 'error_task' in df.columns
 
 
-class TestPyGEM_compat(unittest.TestCase):
+class TestPyGEM_compat:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp('tmp')
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['use_intersects'] = False
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_read_gmip_data(self):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
