@@ -2685,12 +2685,14 @@ class TestInversion:
         assert dfc.terminus_type.values[0] == 'Land-terminating'
 
 
-class TestCoxeCalving(unittest.TestCase):
+class TestCoxeCalving:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_calving')
+        self.testdir = tmpdir_factory.mktemp("tmp_calving")
+        utils.mkdir(self.testdir, reset=True)
 
         # Init
         cfg.initialize()
@@ -2699,13 +2701,6 @@ class TestCoxeCalving(unittest.TestCase):
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PARAMS['border'] = 40
         cfg.PARAMS['prcp_fac'] = 2.5
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
 
     @pytest.mark.slow
     def test_inversion_with_calving(self):
@@ -2802,12 +2797,14 @@ class TestCoxeCalving(unittest.TestCase):
 
 
 @pytest.mark.slow
-class TestGrindelInvert(unittest.TestCase):
+class TestGrindelInvert:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_grindel')
+        self.testdir = tmpdir_factory.mktemp("tmp_grindel")
+        utils.mkdir(self.testdir, reset=True)
         self.clean_dir()
 
         # Init
@@ -2816,16 +2813,9 @@ class TestGrindelInvert(unittest.TestCase):
         cfg.PARAMS['use_multiple_flowlines'] = False
         cfg.PARAMS['use_tar_shapefiles'] = False
         cfg.PARAMS['prcp_fac'] = 2.5
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
+        # self.clean_dir()
 
     def clean_dir(self):
-        self.rm_dir()
         tfile = get_demo_file('glacier_grid.json')
         gpath = os.path.dirname(tfile)
         self.rgin = os.path.basename(gpath)
@@ -2920,13 +2910,13 @@ class TestGrindelInvert(unittest.TestCase):
         # see that we have as many catchments as flowlines
         fls = gdir.read_pickle('inversion_flowlines')
         gdfc = gdir.read_shapefile('flowline_catchments')
-        self.assertEqual(len(fls), len(gdfc))
+        assert len(fls) == len(gdfc)
         # and at least as many intersects
         gdfc = gdir.read_shapefile('catchments_intersects')
-        self.assertGreaterEqual(len(gdfc), len(fls)-1)
+        assert len(gdfc) >= len(fls)-1
 
         # check touch borders qualitatively
-        self.assertGreaterEqual(np.sum(fls[-1].is_rectangular), 10)
+        assert np.sum(fls[-1].is_rectangular) >= 10
 
 
 class TestGCMClimate(unittest.TestCase):
