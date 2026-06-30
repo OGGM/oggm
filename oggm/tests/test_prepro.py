@@ -826,15 +826,15 @@ class TestCenterlines:
             assert (hss > 0.41)
 
 
-class TestElevationBandFlowlines(unittest.TestCase):
+class TestElevationBandFlowlines:
 
-    def setUp(self):
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp("tmp_flowlines")
+        utils.mkdir(self.testdir)
 
         # Init
         cfg.initialize()
@@ -844,16 +844,6 @@ class TestElevationBandFlowlines(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
         cfg.PARAMS['baseline_climate'] = ''
         cfg.PARAMS['prcp_fac'] = 2.5
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_irregular_grid(self):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1007,31 +997,19 @@ class TestElevationBandFlowlines(unittest.TestCase):
             assert ds.length_m[-1] < ds.length_m[0]
 
 
-class TestGeometry(unittest.TestCase):
+class TestGeometry:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = tmpdir_factory.mktemp("tmp_geometry")
 
         # Init
         cfg.initialize()
         cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PARAMS['border'] = 10
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_catchment_area(self):
 
@@ -1055,7 +1033,7 @@ class TestGeometry(unittest.TestCase):
         for i, ci in enumerate(cis):
             mymask_a[tuple(ci.T)] += 1
             mymask_b[tuple(ci.T)] = i+1
-        self.assertTrue(np.max(mymask_a) == 1)
+        assert np.max(mymask_a) == 1
         np.testing.assert_allclose(mask, mymask_a)
 
     def test_flowlines(self):
@@ -1073,12 +1051,11 @@ class TestGeometry(unittest.TestCase):
         for cl in cls:
             for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
                                  cl.inflows):
-                self.assertEqual(cl.line.coords[j], ip.coords[0])
-                self.assertEqual(ob.flows_to_point.coords[0], ip.coords[0])
-                self.assertEqual(cl.line.coords[ob.flows_to_indice],
-                                 ip.coords[0])
+                assert cl.line.coords[j] == ip.coords[0]
+                assert ob.flows_to_point.coords[0] == ip.coords[0]
+                assert cl.line.coords[ob.flows_to_indice] == ip.coords[0]
 
-        self.assertEqual(len(cls), 3)
+        assert len(cls) == 3
 
         x, y = map(np.array, cls[0].line.xy)
         dis = np.sqrt((x[1:] - x[:-1])**2 + (y[1:] - y[:-1])**2)
@@ -1191,7 +1168,7 @@ class TestGeometry(unittest.TestCase):
         for fl in fls:
             dx = fl.dx * gdir.grid.dx
             slope = np.arctan(-np.gradient(fl.surface_h, dx))
-            self.assertTrue(np.all(slope >= min_slope))
+            assert np.all(slope >= min_slope)
 
 
 class TestClimate(unittest.TestCase):
