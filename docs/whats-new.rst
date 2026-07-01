@@ -16,7 +16,7 @@ Enhancements
   `temp_bias_file_path` to supply a custom temperature-bias file (path or URL)
   for the `informed_threestep` calibration, so it can be used together with an
   arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
-  (:pull:`1936`).
+  (:pull:`1941`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
