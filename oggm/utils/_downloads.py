@@ -1266,7 +1266,8 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
     return df
 
 
-def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
+def get_temp_bias_dataframe(dataset=None, regional=False, rgi_version='62',
+                            file_path=None):
     """Fetches the temperature bias dataframe.
 
     The dataframe was created by the OGGM>=v16 pre-calibration
@@ -1282,34 +1283,48 @@ def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
     ----------
     dataset : str
         climate dataset used to choose temperature bias dataframe
-        (currently only w5e5 and era5 are available)
+        (currently only w5e5 and era5 are available). Ignored if `file_path`
+        is provided.
+    regional : bool
+        fetch the regional file instead of the per-glacier one. Ignored if
+        `file_path` is provided.
+    rgi_version : str
+        the RGI version to fetch the file for. Ignored if `file_path` is
+        provided.
+    file_path : str
+        in case you have your own file to parse (check the format first!).
+        Can be a url as well. If provided, `dataset`, `regional` and
+        `rgi_version` are ignored for fetching the file.
 
     Returns
     -------
     a DataFrame with the data.
     """
 
-    if dataset not in ['w5e5', 'era5']:
-        raise NotImplementedError(f'No such dataset available yet: {dataset}')
-    if rgi_version == '60':
-        rgi_version = '62'
-    if rgi_version not in ['62', '70G', '70C']:
-        raise NotImplementedError(f'RGI version not available yet: {rgi_version}')
+    if file_path is None:
+        if dataset not in ['w5e5', 'era5']:
+            raise NotImplementedError(f'No such dataset available yet: {dataset}')
+        if rgi_version == '60':
+            rgi_version = '62'
+        if rgi_version not in ['62', '70G', '70C']:
+            raise NotImplementedError(f'RGI version not available yet: {rgi_version}')
 
-    # fetch the file online
-    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
-    calibtype = 'regional' if regional else 'perglacier'
-    if rgi_version in ['70G', '70C']:
-        file_version = '1'
-    if rgi_version == '62':
-        file_version = '3' if regional else '2'
-        rgi_version = '6'
-    if dataset == 'w5e5':
-        base_url += f'w5e5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
-    if dataset == 'era5':
-        base_url += f'era5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
+        # fetch the file online
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
+        calibtype = 'regional' if regional else 'perglacier'
+        if rgi_version in ['70G', '70C']:
+            file_version = '1'
+        if rgi_version == '62':
+            file_version = '3' if regional else '2'
+            rgi_version = '6'
+        if dataset == 'w5e5':
+            base_url += f'w5e5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
+        if dataset == 'era5':
+            base_url += f'era5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
 
-    file_path = file_downloader(base_url)
+        file_path = file_downloader(base_url)
+    elif file_path.startswith('http'):
+        file_path = file_downloader(file_path)
 
     # Did we open it yet?
     if file_path in cfg.DATA:
