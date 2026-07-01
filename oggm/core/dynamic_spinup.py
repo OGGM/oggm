@@ -1343,11 +1343,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     with utils.DisableLogger():
         ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
                                       path=False)
-    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values[0] -
-                   ds.volume.loc[yr0_ref_mb].values[0]) /
+    dmdtda_mdl = ((ds.mass_kg.loc[yr1_ref_mb].values[0] -
+                   ds.mass_kg.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
-                  (yr1_ref_mb - yr0_ref_mb) *
-                  gdir.settings['ice_density'])
+                  (yr1_ref_mb - yr0_ref_mb))
 
     return model, dmdtda_mdl
 
@@ -1712,11 +1711,10 @@ def dynamic_melt_f_run(
     with utils.DisableLogger():
         ds = utils.compile_run_output(gdir, input_filesuffix=output_filesuffix,
                                       path=False)
-    dmdtda_mdl = ((ds.volume.loc[yr1_ref_mb].values[0] -
-                   ds.volume.loc[yr0_ref_mb].values[0]) /
+    dmdtda_mdl = ((ds.mass_kg.loc[yr1_ref_mb].values[0] -
+                   ds.mass_kg.loc[yr0_ref_mb].values[0]) /
                   gdir.rgi_area_m2 /
-                  (yr1_ref_mb - yr0_ref_mb) *
-                  gdir.settings['ice_density'])
+                  (yr1_ref_mb - yr0_ref_mb))
 
     return model, dmdtda_mdl
 

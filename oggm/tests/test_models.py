@@ -61,7 +61,7 @@ do_plot = False
 
 DOM_BORDER = 80
 
-ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length',
+ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length', 'mass',
              'calving', 'calving_rate', 'off_area', 'on_area', 'melt_off_glacier',
              'melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
              'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
