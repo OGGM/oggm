@@ -5423,7 +5423,7 @@ class TestDynamicSpinup:
         spinup_start_yr = yr_rgi - 20
         model_dynamic_spinup_ys = run_dynamic_spinup(
             hef_gdir,
-            spinup_period=40,
+            spinup_period_initial=40,
             spinup_start_yr=spinup_start_yr,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
@@ -5472,7 +5472,7 @@ class TestDynamicSpinup:
                     minimise_for=minimise_for,
                     ye=2002,
                     ignore_errors=ignore_errors,
-                    spinup_period=10,
+                    spinup_period_initial=10,
                     maxiter=2,
                     output_filesuffix='_dynamic_spinup',
                     **kwarg_dyn_spn)
@@ -5513,7 +5513,7 @@ class TestDynamicSpinup:
         precision_absolute = 1
         model_dynamic_spinup_ye, t_spinup = run_dynamic_spinup(
             hef_gdir,
-            spinup_period=40,
+            spinup_period_initial=40,
             spinup_start_yr=spinup_start_yr,
             ye=ye,
             return_t_spinup_best=True,
@@ -5544,7 +5544,7 @@ class TestDynamicSpinup:
         # to start at spinup_start_yr_max
         run_dynamic_spinup(
             hef_gdir,
-            spinup_period=5,
+            spinup_period_initial=5,
             spinup_start_yr=None,
             spinup_start_yr_max=1990,
             minimise_for=minimise_for,
