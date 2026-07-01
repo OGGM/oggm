@@ -15,7 +15,7 @@ Enhancements
   to interannual variability in snowfall. It is named ``area_min_h_m2`` in the
   per-glacier ``model_diagnostics`` files and ``area_min_h`` in the compiled
   output. This is the recommended area variable for most applications
-  (:pull:`XXXX`).
+  (:pull:`1940`).
   By `Fabien Maussion <https://github.com/fmaussion>`_ and
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - `run_prepro_levels` now allows to set a custom climate data processing
@@ -67,10 +67,12 @@ Breaking changes
   ``area_min_h``, previously ``area_m2_min_h``). The
   ``dynamic_spinup_min_ice_thick`` keyword of
   ``FlowlineModel.run_until_and_store`` is renamed to ``min_ice_thick_for_area``
-  accordingly. Furthermore, the default of
+  accordingly. (:pull:`1940`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Furthermore, the default of
   ``cfg.PARAMS['min_ice_thick_for_length']`` was changed from 0 to 2 m, so that
   ``length_m`` now also filters out length spikes due to climate variability
-  (set it back to 0 to recover the previous raw length) (:pull:`XXXX`).
+  (set it back to 0 to recover the previous raw length) (:pull:`1940`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
   This is a breaking change because the OGGM output files have now an opposite
