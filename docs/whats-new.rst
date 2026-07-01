@@ -21,6 +21,12 @@ Enhancements
 - `run_prepro_levels` now allows to set a custom climate data processing
   module and custom geodetic data file to create glacier directories (:pull:`1910`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- `run_prepro_levels` and `mb_calibration_from_geodetic_mb` now accept a
+  `temp_bias_file_path` to supply a custom temperature-bias file (path or URL)
+  for the `informed_threestep` calibration, so it can be used together with an
+  arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
+  (:pull:`1941`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
