@@ -106,6 +106,9 @@ class TestIdealisedCases(unittest.TestCase):
             diag_path = os.path.join(tmpdir, 'diag.nc')
             geom_path = os.path.join(tmpdir, 'geom.nc')
 
+            # Off by default - enable it (as a projection workflow would)
+            cfg.PARAMS['store_output_on_error'] = True
+
             def make_model():
                 fls = dummy_constant_bed()
                 # Low ELA so the glacier grows out of the domain mid-run
@@ -113,8 +116,8 @@ class TestIdealisedCases(unittest.TestCase):
                 return FluxBasedModel(fls, mb_model=mb,
                                       check_for_boundaries=True)
 
-            # Default (store_output_on_error=True): the error is re-raised
-            # but the truncated files are written.
+            # Enabled: the error is re-raised but the truncated files are
+            # written.
             model = make_model()
             with pytest.raises(RuntimeError, match='domain boundaries'):
                 model.run_until_and_store(300,
