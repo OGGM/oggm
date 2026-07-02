@@ -451,6 +451,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 min_ice_thick_for_area=min_ice_thickness,
                 fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 store_monthly_step=store_monthly_step,
+                # The dynamic spinup search relies on errors being raised to
+                # adjust its parameters - do not write partial output here.
+                store_output_on_error=False,
             )
 
             # now we delete the min_h variable again if it was not

@@ -9,6 +9,18 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New ``cfg.PARAMS['store_output_on_error']`` (default ``False``): when a run
+  fails mid-simulation (e.g. a glacier growing out of its domain), the output
+  files (diagnostics, geometry and flowline diagnostics) are written truncated
+  to the last successfully completed year before the error is re-raised,
+  instead of losing all output. This is meant for projections; preprocessing
+  and spinup runs should keep failing loudly (hence the ``False`` default).
+  Truncated files carry a ``partial_output`` global attribute, and
+  ``run_with_hydro`` also adds the hydro diagnostics to them. ``compile_run_output``
+  merges files of different lengths onto a common time axis and now always
+  reports two per-glacier variables, ``is_partial_output`` and
+  ``error_during_run`` (:pull:`1929`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``area_min_h`` is now a default diagnostic output variable: it is the
   glacier area computed from grid points thicker than
   ``cfg.PARAMS['min_ice_thick_for_area']`` (2 m), which avoids area spikes due
