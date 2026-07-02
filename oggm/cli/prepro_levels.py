@@ -806,7 +806,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                              error_on_mismatch=False,
                                              filter_inversion_output=filter)
             else:
-                workflow.calibrate_inversion_from_consensus(gdirs,
+                workflow.calibrate_inversion_from_ref_table(gdirs,
                                                             apply_fs_on_mismatch=True,
                                                             error_on_mismatch=False,
                                                             filter_inversion_output=filter)
