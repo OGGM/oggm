@@ -520,7 +520,7 @@ class TestWorkflowTools(unittest.TestCase):
         assert len(df.loc[df['dmdtda'].isnull()]) == 0
 
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.parquet'
         file_path = utils.file_downloader(base_url + file_name)
 
         assert file_path in cfg.DATA
@@ -2466,6 +2466,7 @@ class TestFakeDownloads(unittest.TestCase):
 
 
 class TestDataFiles(unittest.TestCase):
+    # TODO: Refactor to pytest
 
     def setUp(self):
         self.dldir = os.path.join(get_test_dir(), 'tmp_download')
@@ -2542,6 +2543,33 @@ class TestDataFiles(unittest.TestCase):
         # Raise error if nothing to extract
         with pytest.raises(InvalidParamsError):
             utils.file_extractor(tmp_file)
+
+    def test_get_dataframe_from_file(self):
+        wd = cfg.PATHS["working_dir"]
+        df_orig = pd.DataFrame({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]})
+
+        csv_path = os.path.join(wd, "test.csv")
+        df_orig.to_csv(csv_path, index=False)
+        df = _downloads.get_dataframe_from_file(csv_path)
+        pd.testing.assert_frame_equal(df, df_orig)
+
+        parquet_path = os.path.join(wd, "test.parquet")
+        df_orig.to_parquet(parquet_path, engine="pyarrow", index=False)
+        df = _downloads.get_dataframe_from_file(parquet_path)
+        pd.testing.assert_frame_equal(df, df_orig)
+
+        with pytest.raises(NotImplementedError):
+            _downloads.get_dataframe_from_file(os.path.join(wd, "test.nc"))
+
+        # TODO: Remove once HDF files are no longer available on oggm-sample-data
+        # Kept last as importorskip aborts the rest of the test when pytables
+        # (an optional dependency) is not installed.
+        pytest.importorskip("tables")
+        hdf_path = os.path.join(wd, "test.hdf")
+        df_orig.to_hdf(hdf_path, key="df")
+        with pytest.warns(DeprecationWarning, match="hdf"):
+            df = _downloads.get_dataframe_from_file(hdf_path)
+        pd.testing.assert_frame_equal(df, df_orig)
 
     def test_srtmzone(self):
 
@@ -3173,6 +3201,6 @@ class TestELAComputation(unittest.TestCase):
 
         fpath = os.path.join(cfg.PATHS['working_dir'], 'ELA.csv')
         ela1 = pd.read_csv(fpath, index_col=0)
-        ela2 = pd.read_hdf(fpath.replace('.csv', '.hdf'))
+        ela2 = pd.read_parquet(fpath.replace('.csv', '.parquet'))
 
         assert_allclose(ela1, ela2, rtol=1e-3)
