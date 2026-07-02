@@ -582,13 +582,13 @@ class TestWorkflowUtils:
                                         input_filesuffix=filesuffix)
 
         def check_result(ds):
-            assert 'area_m2_min_h' in ds.data_vars
+            assert 'area_min_h' in ds.data_vars
             assert 'melt_on_glacier' in ds.data_vars
             assert 'melt_on_glacier_monthly' in ds.data_vars
             assert ds_1['melt_on_glacier'].unit == 'kg yr-1'
             assert ds_1['melt_on_glacier_monthly'].unit == 'kg yr-1'
             assert np.all(np.isnan(
-                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_m2_min_h'].values))
+                ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_min_h'].values))
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier'].values))
             assert np.all(np.isnan(
@@ -603,86 +603,136 @@ class TestWorkflowUtils:
         check_result(ds_2)
 
 
-class TestStartFromTar(unittest.TestCase):
+class TestStartFromTar:
 
-    def setUp(self):
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_tar_tools')
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
+        working_dir = tmpdir_factory.mktemp("tmp_tar_tools")
         # Init
         cfg.initialize()
-        cfg.set_intersects_db(utils.get_demo_file('rgi_intersect_oetztal.shp'))
+        cfg.PATHS["working_dir"] = working_dir
+        cfg.set_intersects_db(utils.get_demo_file("rgi_intersect_oetztal.shp"))
 
         # Read in the RGI file
-        rgi_file = utils.get_demo_file('rgi_oetztal.shp')
+        rgi_file = utils.get_demo_file("rgi_oetztal.shp")
         rgidf = gpd.read_file(rgi_file)
-        rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
+        rgidf = rgidf.loc[["_d0" not in d for d in rgidf.RGIId]].copy()
         self.rgidf = rgidf.sample(4)
-        cfg.PATHS['dem_file'] = utils.get_demo_file('srtm_oetztal.tif')
-        cfg.PATHS['working_dir'] = self.testdir
-        self.clean_dir()
+        cfg.PATHS["dem_file"] = utils.get_demo_file("srtm_oetztal.tif")
+        utils.mkdir(working_dir, reset=True)
 
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        utils.mkdir(self.testdir, reset=True)
+    def test_setup(self):
+        assert hasattr(self, "rgidf")
+        assert len(self.rgidf) == 4
+        assert os.path.exists(cfg.PATHS["dem_file"])
+        assert os.path.exists(cfg.PATHS["working_dir"])
 
     @pytest.mark.slow
     def test_to_and_from_tar(self):
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
-        workflow.execute_entity_task([tasks.define_glacier_region, utils.gdir_to_tar],
-                                     gdirs)
+        workflow.execute_entity_task(
+            [tasks.define_glacier_region, utils.gdir_to_tar], gdirs
+        )
 
         # Test - reopen form tar
-        gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True,
-                                                  delete_tar=True)
+        gdirs = workflow.init_glacier_directories(
+            self.rgidf, from_tar=True, delete_tar=True
+        )
         for gdir in gdirs:
-            assert gdir.has_file('dem')
-            assert not os.path.exists(gdir.dir + '.tar.gz')
-        workflow.execute_entity_task([tasks.glacier_masks, utils.gdir_to_tar], gdirs)
+            assert gdir.has_file("dem")
+            assert not os.path.exists(gdir.dir + ".tar.gz")
+        workflow.execute_entity_task(
+            [tasks.glacier_masks, utils.gdir_to_tar], gdirs
+        )
 
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True)
         for gdir in gdirs:
-            assert gdir.has_file('gridded_data')
-            assert os.path.exists(gdir.dir + '.tar.gz')
+            assert gdir.has_file("gridded_data")
+            assert os.path.exists(gdir.dir + ".tar.gz")
 
     @pytest.mark.slow
-    def test_to_and_from_basedir_tar(self):
+    @pytest.mark.parametrize("arg_bundle_size", [1000, 100])
+    def test_to_and_from_basedir_tar(self, arg_bundle_size):
+
+        test_dir = cfg.PATHS["working_dir"]
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
-        workflow.execute_entity_task([tasks.define_glacier_region, utils.gdir_to_tar],
-                                     gdirs)
+        workflow.execute_entity_task(
+            [tasks.define_glacier_region, utils.gdir_to_tar], gdirs
+        )
         # End - compress all
-        utils.base_dir_to_tar()
+        utils.base_dir_to_tar(bundle_size=arg_bundle_size)
 
-        # Test - reopen form tar
+        # Test - reopen from tar
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=True)
 
         for gdir in gdirs:
-            assert gdir.has_file('dem')
-            assert not os.path.exists(gdir.dir + '.tar.gz')
-        workflow.execute_entity_task([tasks.glacier_masks, utils.gdir_to_tar], gdirs)
-        utils.base_dir_to_tar()
+            assert gdir.has_file("dem")
+            assert not os.path.exists(gdir.dir + ".tar.gz")
+        workflow.execute_entity_task(
+            [tasks.glacier_masks, utils.gdir_to_tar], gdirs
+        )
+        utils.base_dir_to_tar(bundle_size=arg_bundle_size)
 
-        tar_dir = os.path.join(self.testdir, 'new_dir')
-        shutil.copytree(os.path.join(cfg.PATHS['working_dir'],
-                                     'per_glacier'), tar_dir)
+        tar_dir = os.path.join(test_dir, "new_dir")
+        shutil.copytree(
+            os.path.join(cfg.PATHS["working_dir"], "per_glacier"), tar_dir
+        )
 
         gdirs = workflow.init_glacier_directories(self.rgidf, from_tar=tar_dir)
         for gdir in gdirs:
-            assert gdir.has_file('gridded_data')
+            assert gdir.has_file("gridded_data")
+
+    @pytest.mark.parametrize("bundle_size", [100, 1000])
+    @pytest.mark.parametrize("rgi_ids", [
+        ["RGI60-11.00001", "RGI60-11.00099", "RGI60-11.00100"],
+        ["RGI2000-v7.0-G-01-00001", "RGI2000-v7.0-G-01-00099",
+         "RGI2000-v7.0-G-01-00100"],
+    ], ids=["RGI6", "RGI7"])
+    def test_bundle_tar_roundtrip(self, bundle_size, rgi_ids):
+        # Path-level round-trip of base_dir_to_tar + robust_tar_extract for
+        # both RGI6 and RGI7 IDs and both bundle sizes. Uses synthetic glacier
+        # tars so it needs no glacier data and runs fast.
+        base_dir = os.path.join(cfg.PATHS["working_dir"], "per_glacier")
+
+        def make_fake_gdir_tar(rgi_id):
+            # mirror gdir_to_tar: <region>/<subregion>/<rgi_id>.tar.gz holding
+            # <rgi_id>/dummy.txt
+            gdir_dir = os.path.join(base_dir, rgi_id[:-6], rgi_id[:-3], rgi_id)
+            utils.mkdir(gdir_dir)
+            with open(os.path.join(gdir_dir, "dummy.txt"), "w") as f:
+                f.write(rgi_id)
+            with tarfile.open(gdir_dir + ".tar.gz", "w:gz") as tar:
+                tar.add(gdir_dir, arcname=rgi_id)
+            shutil.rmtree(gdir_dir)
+
+        for rid in rgi_ids:
+            make_fake_gdir_tar(rid)
+
+        utils.base_dir_to_tar(base_dir, bundle_size=bundle_size)
+
+        for rid in rgi_ids:
+            # the path GlacierDirectory(from_tar=True) constructs
+            from_tar = os.path.join(base_dir, rid[:-6], rid[:-3],
+                                    rid + ".tar.gz")
+            to_dir = os.path.join(cfg.PATHS["working_dir"], "extracted", rid)
+            utils.mkdir(os.path.dirname(to_dir))
+            utils.robust_tar_extract(from_tar, to_dir)
+            assert os.path.exists(os.path.join(to_dir, "dummy.txt"))
+
+    def test_base_dir_to_tar_bad_bundle_size(self):
+        with pytest.raises(utils.InvalidParamsError):
+            utils.base_dir_to_tar(cfg.PATHS["working_dir"], bundle_size=10)
 
     @pytest.mark.slow
     def test_to_and_from_tar_new_dir(self):
 
-        base_dir = os.path.join(self.testdir, 'new_base_dir')
+        test_dir = cfg.PATHS["working_dir"]
+        base_dir = os.path.join(test_dir, "new_base_dir")
 
         # Go - initialize working directories
         gdirs = workflow.init_glacier_directories(self.rgidf)
@@ -706,7 +756,8 @@ class TestStartFromTar(unittest.TestCase):
 
     def test_to_and_from_tar_string(self):
 
-        base_dir = os.path.join(self.testdir, 'new_base_dir')
+        test_dir = cfg.PATHS["working_dir"]
+        base_dir = os.path.join(test_dir, "new_base_dir")
         utils.mkdir(base_dir, reset=True)
 
         # Go - initialize working directories
@@ -716,8 +767,8 @@ class TestStartFromTar(unittest.TestCase):
             (utils.gdir_to_tar, {"base_dir": base_dir, "delete": False})],
             gdirs)
 
-        # Test - reopen form tar after copy
-        new_base_dir = os.path.join(self.testdir, 'newer_base_dir')
+        # Test - reopen from tar after copy
+        new_base_dir = os.path.join(test_dir, "newer_base_dir")
         utils.mkdir(new_base_dir, reset=True)
         for p, gdir in zip(paths, gdirs):
             assert base_dir in p
@@ -728,29 +779,25 @@ class TestStartFromTar(unittest.TestCase):
             assert new_base_dir in new_gdir.base_dir
 
 
-class TestStartFromV14(unittest.TestCase):
+class TestStartFromV14:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
+
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_tools')
-        self.dldir = os.path.join(get_test_dir(), 'dl_cache')
+        working_dir = tmpdir_factory.mktemp("tmp_prepro_tools")
+        self.test_dir = working_dir
+        self.dl_dir = working_dir / "dl_cache"
 
         # Init
         cfg.initialize()
-        cfg.PATHS['dl_cache_dir'] = self.dldir
-        cfg.PATHS['working_dir'] = self.testdir
+        cfg.PATHS["dl_cache_dir"] = self.dl_dir
+        cfg.PATHS["working_dir"] = self.test_dir
         self.clean_dir()
 
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-        shutil.rmtree(self.dldir)
-
     def clean_dir(self):
-        utils.mkdir(self.testdir, reset=True)
-        utils.mkdir(self.dldir, reset=True)
+        utils.mkdir(self.test_dir, reset=True)
+        utils.mkdir(self.dl_dir, reset=True)
 
     def test_start_from_level_1(self):
 
@@ -836,25 +883,49 @@ def _read_shp():
     return inter, rgidf
 
 
+def test_get_prepro_gdir_bundle_cache(monkeypatch):
+    # On a legacy (1000-bundle) base_url, the first glacier probes the new
+    # 100-bundle url (404) then the old one; every subsequent glacier for the
+    # same url must skip the new-format probe.
+    from oggm.utils import _downloads
+
+    calls = []
+
+    def fake_file_downloader(www_path, **kwargs):
+        calls.append(www_path)
+        # legacy server: only the old 1000-glacier bundle exists
+        if www_path.endswith(".00.tar"):
+            return "/fake/RGI60-11.00.tar"
+        return None  # new-format url -> 404
+
+    monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
+    monkeypatch.setattr(_downloads, "_prepro_bundle_format", {})
+
+    base_url = "https://example.com/gdirs/"
+    kw = dict(rgi_version="62", border=80, prepro_level=2, base_url=base_url)
+    prefix = f"{base_url}RGI62/b_080/L2/RGI60-11/"
+
+    p1 = _downloads._get_prepro_gdir_unlocked(rgi_id="RGI60-11.00001", **kw)
+    p2 = _downloads._get_prepro_gdir_unlocked(rgi_id="RGI60-11.00002", **kw)
+
+    assert p1 == "/fake/RGI60-11.00.tar"
+    assert p2 == "/fake/RGI60-11.00.tar"
+    assert calls == [
+        f"{prefix}RGI60-11.000.tar",  # 1st glacier: new probe (404)
+        f"{prefix}RGI60-11.00.tar",   # 1st glacier: old fallback (hit)
+        f"{prefix}RGI60-11.00.tar",   # 2nd glacier: straight to old, no probe
+    ]
+    assert _downloads._prepro_bundle_format[f"{base_url}RGI62/b_080/L2/"] == "old"
+
+
 class TestPreproCLI:
 
-    on_mac = platform.system() == 'Darwin'    
+    on_mac = platform.system() == "Darwin"
 
-    def setUp(self):
-        from _pytest.monkeypatch import MonkeyPatch
-        self.monkeypatch = MonkeyPatch()
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_levs')
-        self.reset_dir()
-        self.on_mac = platform.system() == 'Darwin'
-
-    def tearDown(self):
-        if os.path.exists(self.testdir):
-            shutil.rmtree(self.testdir)
-
-    @pytest.fixture(scope="function", autouse=True)
-    def reset_dir(self, tmpdir):
-        utils.mkdir(tmpdir, reset=True)
-        # self.tearDown()
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
+        self.testdir = tmpdir_factory.mktemp("tmp_prepro_levs")
+        utils.mkdir(self.testdir, reset=True)
 
     def test_parse_args(self):
 
@@ -1751,8 +1822,14 @@ class TestPreproCLI:
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:8] + '.00.tar')
+        tarf = os.path.join(
+            odir,
+            "RGI61",
+            "b_020",
+            "L1",
+            rid[:8],
+            rid[:8] + f".{rid[-5:-2]}.tar",  # bundle_size=100
+        )
         assert os.path.isfile(tarf)
 
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',

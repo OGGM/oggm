@@ -43,6 +43,7 @@ jobs:
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
+        timeout-minutes: 60
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
         env:
           STATIC_MAP_API_KEY: ${{ secrets.STATIC_MAP_API_KEY }}

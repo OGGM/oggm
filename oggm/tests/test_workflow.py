@@ -103,6 +103,9 @@ def up_to_climate(reset=False, use_mp=None, params_file=None):
     cfg.PARAMS['baseline_climate'] = 'CRU'
     cfg.PARAMS['evolution_model'] = 'FluxBased'
     cfg.PARAMS['downstream_line_shape'] = 'parabola'
+    # These tests compare the model length to the raw flowline geometry, so we
+    # switch off the length filtering (min_ice_thick_for_length default is 2)
+    cfg.PARAMS['min_ice_thick_for_length'] = 0
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)

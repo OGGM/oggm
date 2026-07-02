@@ -36,7 +36,7 @@ export COVERAGE_RCFILE="$PWD/.coveragerc"
 coverage erase
 
 coverage run --source=./oggm --parallel-mode --module \
-    pytest --verbose --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
+    pytest --verbose --durations=0 --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
 
 coverage combine
 coverage xml
