@@ -164,20 +164,6 @@ def patch_data_urls():
 @pytest.fixture(autouse=True)
 def patch_download_url_allowlist():
 
-    # We added a few extra glaciers recently -
-    # this really needs to be handled better
-    base_extra_l3 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                     'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/RGI62/'
-                     'b_160/L3/')
-
-    base_extra_v14 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                      'oggm_v1.4/L1-L2_files/elev_bands/RGI62/b_040/{}/'
-                      'RGI60-15/RGI60-15.13.tar')
-
-    base_extra_v14l3 = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                        'oggm_v1.4/L3-L5_files/CRU/elev_bands/qc3/pcp2.5/'
-                        'no_match/RGI62/b_040/{}/RGI60-15/RGI60-15.13.tar')
-
     old_do_log = cfg.PARAMS.do_log
     cfg.PARAMS.do_log = False
     cfg.PARAMS['download_url_allowlist'] = [
@@ -189,11 +175,8 @@ def patch_download_url_allowlist():
         'cluster.klima.uni-bremen.de/~oggm/test_files/',
         'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
         'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
+        'klima.uni-bremen.de/~oggm/g2ti',
         'RGI2000-v7.0-regions.zip',
-        base_extra_v14.format('L1'),
-        base_extra_v14.format('L2'),
-        base_extra_v14l3.format('L3'),
-        base_extra_l3,
     ]
     cfg.PARAMS.do_log = old_do_log
 
@@ -338,3 +321,15 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
     """
     return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')
+
+
+@pytest.fixture(scope="session")
+def rgi62_itmix_df():
+    """Provides a reference to the rgi62_itmix_df for the entire test session.
+
+    Named after the current git revision.
+    As a session-scoped fixture, this will only be created once and
+    then injected to each test that depends on it.
+    """
+    dl_path = "https://cluster.klima.uni-bremen.de/~oggm/g2ti/rgi62_itmix_df_v20260617.parquet"
+    return utils.file_downloader(dl_path)

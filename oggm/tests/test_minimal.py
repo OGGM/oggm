@@ -171,6 +171,8 @@ class TestSia2d(unittest.TestCase):
 
     def setUp(self):
         cfg.initialize_minimal()
+        # this idealised case compares length to the raw geometry
+        cfg.PARAMS['min_ice_thick_for_length'] = 0
 
     def tearDown(self):
         pass

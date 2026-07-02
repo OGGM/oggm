@@ -32,8 +32,9 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                        climate_input_filesuffix='',
                        evolution_model=None,
                        mb_model_historical=None, mb_model_spinup=None,
-                       spinup_period=20, spinup_start_yr=None,
+                       spinup_period_initial=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
+                       spinup_periods_to_try=None,
                        target_yr=None, target_value=None,
                        minimise_for='area', precision_percent=1,
                        precision_absolute=1, min_ice_thickness=None,
@@ -81,7 +82,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         historical run. Default is to use a ConstantMassBalance model together
         with the provided parameter climate_input_filesuffix and during the
         period of spinup_start_yr until rgi_year (e.g. 1979 - 2000).
-    spinup_period : int
+    spinup_period_initial : int
         The period how long the spinup should run. Start date of historical run
         is defined "target_yr - spinup_period". Minimum allowed value is 10. If
         the provided climate data starts at year later than
@@ -103,6 +104,10 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         Possibility to provide a maximum year where the dynamic spinup must
         start from at least. If set, this overrides the min_spinup_period if
         target_yr - spinup_start_yr_max > min_spinup_period.
+        Default is None
+    spinup_periods_to_try : list or None
+        If spinup_period_initial and min_spinup_period were not successful, you
+        can provide here a list of spinup periods which should be tried in order.
         Default is None
     target_yr : int or None
         The year at which we want to match area or volume.
@@ -138,7 +143,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -231,7 +236,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
-        min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+        min_ice_thickness = cfg.PARAMS['min_ice_thick_for_area']
 
     # check provided maximum start year here, and change min_spinup_period
     if spinup_start_yr_max is not None:
@@ -443,7 +448,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 geom_path=geom_path,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
-                dynamic_spinup_min_ice_thick=min_ice_thickness,
+                min_ice_thick_for_area=min_ice_thickness,
                 fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 store_monthly_step=store_monthly_step,
                 # The dynamic spinup search relies on errors being raised to
@@ -458,7 +463,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
             if type(ds) == tuple:
                 ds = ds[0]
-            model_area_km2 = ds.area_m2_min_h.loc[target_yr].values * 1e-6
+            model_area_km2 = ds.area_min_h_m2.loc[target_yr].values * 1e-6
             model_volume_km3 = ds.volume_m3.loc[target_yr].values * 1e-9
         else:
             # only run to rgi date and extract values
@@ -809,15 +814,21 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         spinup_period_initial = min(target_yr - spinup_start_yr,
                                     target_yr - yr_min)
     else:
-        spinup_period_initial = min(spinup_period, target_yr - yr_min)
+        spinup_period_initial = min(spinup_period_initial, target_yr - yr_min)
+
+    # define the spinup periods we try to run in order
     if spinup_period_initial <= min_spinup_period:
-        spinup_periods_to_try = [min_spinup_period]
+        spinup_periods_to_run = [min_spinup_period]
     else:
-        # try out a maximum of three different spinup_periods
-        spinup_periods_to_try = [spinup_period_initial,
-                                 int((spinup_period_initial +
-                                      min_spinup_period) / 2),
+        # add initial and minimum spinup period
+        spinup_periods_to_run = [spinup_period_initial,
+                                 (spinup_period_initial + min_spinup_period) / 2,
                                  min_spinup_period]
+    if spinup_periods_to_try is not None:
+        for spn_prd in spinup_periods_to_try:
+            if min_spinup_period < spn_prd < target_yr - yr_min:
+                spinup_periods_to_run.append(spn_prd)
+
     # after defining the initial spinup period we can define the year for the
     # fixed_geometry_spinup
     if add_fixed_geometry_spinup:
@@ -831,7 +842,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     if mb_model_spinup is not None:
         provided_mb_model_spinup = True
 
-    for spinup_period in spinup_periods_to_try:
+    for spinup_period in spinup_periods_to_run:
         yr_spinup = target_yr - spinup_period
 
         if not provided_mb_model_spinup:
@@ -855,7 +866,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         except RuntimeError as e:
             # if the last spinup period was min_spinup_period the dynamic
             # spinup failed
-            if spinup_period == min_spinup_period:
+            if spinup_period == spinup_periods_to_run[-1]:
                 log.warning('No dynamic spinup could be conducted and the '
                             'original model with no spinup is saved using the '
                             f'provided output_filesuffix "{output_filesuffix}". '
@@ -952,13 +963,14 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         output_filesuffix='', evolution_model=None,
         mb_model_historical=None, mb_model_spinup=None,
-        minimise_for='area', climate_input_filesuffix='', spinup_period=20,
+        minimise_for='area', climate_input_filesuffix='', spinup_period_initial=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
         precision_absolute=1, min_ice_thickness=None,
         first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
         spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
+        spinup_periods_to_try=None,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1011,7 +1023,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     climate_input_filesuffix : str
         filesuffix for the input climate file
         Default is ''
-    spinup_period : int
+    spinup_period_initial : int
         The period how long the spinup should run. Start date of historical run
         is defined "target_yr - spinup_period". Minimum allowed value is
         defined with 'min_spinup_period'. If the provided climate data starts
@@ -1050,7 +1062,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1098,6 +1110,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
+    spinup_periods_to_try : list or None
+        If spinup_period_initial and min_spinup_period were not successful, you
+        can provide here a list of spinup periods which should be tried in order.
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1135,7 +1151,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                  'adapted and it is the only period which is tried by the '
                  'dynamic spinup function!')
         min_spinup_period = target_yr - ys
-        spinup_period = target_yr - ys
+        spinup_period_initial = target_yr - ys
 
     if spinup_start_yr_max is None:
         spinup_start_yr_max = yr0_ref_mb
@@ -1147,7 +1163,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         spinup_start_yr_max = yr0_ref_mb
 
     # check that inversion is only possible without providing own fls
-    if do_inversion:
+    # fls_init is constant across iterations, so check once and cache result
+    if do_inversion and not local_variables.get(
+        '_fls_init_matches_gdir', False
+    ):
         if not np.all([np.all(getattr(fl_prov, 'surface_h') ==
                               getattr(fl_orig, 'surface_h')) and
                        np.all(getattr(fl_prov, 'bed_h') ==
@@ -1160,13 +1179,18 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                        'provide your own flowlines! (fls_init '
                                        'should be None or '
                                        'the original model_flowlines)')
+    local_variables['_fls_init_matches_gdir'] = True
 
     # Here we start with the actual model run
-    if melt_f == gdir.read_json('mb_calib')['melt_f']:
+    current_melt_f_in_gdir = local_variables.get(
+        "_last_melt_f_in_gdir", gdir.read_json("mb_calib")["melt_f"]
+    )
+    if melt_f == current_melt_f_in_gdir:
         # we do not need to define a new melt_f or do an inversion
         do_inversion = False
     else:
         define_new_melt_f_in_gdir(gdir, melt_f)
+        local_variables['_last_melt_f_in_gdir'] = melt_f
 
     if do_inversion:
         with utils.DisableLogger():
@@ -1186,6 +1210,15 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     init_present_time_glacier(gdir, filesuffix=model_flowline_filesuffix,
                               add_to_log_file=False)
 
+    # check if there was already a successful run
+    if 'dynamic_spinup_period' in gdir.get_diagnostics():
+        last_spinup_period = gdir.get_diagnostics()['dynamic_spinup_period']
+        spinup_periods_to_try_forward = [last_spinup_period]
+        if spinup_periods_to_try is not None:
+            spinup_periods_to_try_forward.extend(spinup_periods_to_try)
+    else:
+        spinup_periods_to_try_forward = spinup_periods_to_try
+
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad'/intermediate files
     # are deleted in run_dynamic_spinup function
@@ -1199,10 +1232,11 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             evolution_model=evolution_model,
             mb_model_historical=mb_model_historical,
             mb_model_spinup=mb_model_spinup,
-            spinup_period=spinup_period,
+            spinup_period_initial=spinup_period_initial,
             spinup_start_yr=ys,
             spinup_start_yr_max=spinup_start_yr_max,
             min_spinup_period=min_spinup_period, target_yr=target_yr,
+            spinup_periods_to_try=spinup_periods_to_try_forward,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
             min_ice_thickness=min_ice_thickness,
@@ -1243,13 +1277,14 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir, melt_f, fls_init, ys, ye, local_variables, output_filesuffix='',
         evolution_model=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
-        climate_input_filesuffix='', spinup_period=20, min_spinup_period=10,
-        target_yr=None, precision_percent=1,
+        climate_input_filesuffix='', spinup_period_initial=20,
+        min_spinup_period=10, target_yr=None, precision_percent=1,
         precision_absolute=1, min_ice_thickness=None,
         first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
-        add_fixed_geometry_spinup=True, **kwargs):
+        add_fixed_geometry_spinup=True, spinup_periods_to_try=None,
+        **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run_with_dynamic_spinup', which are provided
@@ -1296,7 +1331,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     climate_input_filesuffix : str
         filesuffix for the input climate file
         Default is ''
-    spinup_period : int
+    spinup_period_initial : int
         The period how long the spinup should run. Start date of historical run
         is defined "target_yr - spinup_period". Minimum allowed value is
         defined with 'min_spinup_period'. If the provided climate data starts
@@ -1335,7 +1370,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1370,6 +1405,10 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
+    spinup_periods_to_try : list or None
+        If spinup_period_initial and min_spinup_period were not successful, you
+        can provide here a list of spinup periods which should be tried in order.
+        Default is None
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1412,7 +1451,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                  'adapted and it is the only period which is tried by the '
                  'dynamic spinup function!')
         min_spinup_period = target_yr - ys
-        spinup_period = target_yr - ys
+        spinup_period_initial = target_yr - ys
 
     yr_clim_min = gdir.get_climate_info()['baseline_yr_0']
     try:
@@ -1425,10 +1464,11 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             evolution_model=evolution_model,
             mb_model_historical=mb_model_historical,
             mb_model_spinup=mb_model_spinup,
-            spinup_period=spinup_period,
+            spinup_period_initial=spinup_period_initial,
             spinup_start_yr=ys,
             min_spinup_period=min_spinup_period,
             spinup_start_yr_max=spinup_start_yr_max,
+            spinup_periods_to_try=spinup_periods_to_try,
             target_yr=target_yr,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
@@ -1980,7 +2020,7 @@ def run_dynamic_melt_f_calibration(
         model_dynamic_spinup, dmdtda_mdl = model_run(melt_f)
 
         # save final model for later
-        model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
+        model_dynamic_spinup_end[0] = model_dynamic_spinup
 
         # calculate the mismatch of dmdtda
         cost = float(dmdtda_mdl - ref_dmdtda)
@@ -1988,7 +2028,7 @@ def run_dynamic_melt_f_calibration(
         return cost
 
     def init_cost_fun():
-        model_dynamic_spinup_end = []
+        model_dynamic_spinup_end = [None]
 
         def c_fun(melt_f):
             return cost_fct(melt_f, model_dynamic_spinup_end)
@@ -2011,12 +2051,11 @@ def run_dynamic_melt_f_calibration(
         was_errors = [was_min_error, was_max_error]
 
         def get_mismatch(melt_f):
-            melt_f = copy.deepcopy(melt_f)
             # first check if the melt_f is inside limits
             if melt_f < melt_f_limits[0]:
                 # was the smaller limit already executed, if not first do this
                 if melt_f_limits[0] not in melt_f_guess:
-                    melt_f = copy.deepcopy(melt_f_limits[0])
+                    melt_f = melt_f_limits[0]
                 else:
                     # smaller limit was already used, check if it was
                     # already newly defined with error
@@ -2033,7 +2072,7 @@ def run_dynamic_melt_f_calibration(
             elif melt_f > melt_f_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if melt_f_limits[1] not in melt_f_guess:
-                    melt_f = copy.deepcopy(melt_f_limits[1])
+                    melt_f = melt_f_limits[1]
                 else:
                     # larger limit was already used, check if it was
                     # already newly defined with ice free glacier
@@ -2068,7 +2107,7 @@ def run_dynamic_melt_f_calibration(
             current_max_error = False
             doing_first_guess = (len(mismatch) == 0)
             iteration = 0
-            current_melt_f = copy.deepcopy(melt_f)
+            current_melt_f = melt_f
 
             # in this loop if an error at the limits is raised we go step by
             # step away from the limits until we are at the initial guess or we

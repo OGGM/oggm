@@ -25,6 +25,8 @@ import ftplib
 import ssl
 import tarfile
 import json
+import warnings
+from pathlib import Path
 
 # External libs
 import pandas as pd
@@ -68,7 +70,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = '8af40f89620c6bd72f3485a777a018dcacb99d94'
+SAMPLE_DATA_COMMIT = 'df58aaf6b55390ab831e4bd28815a9c3070f5235'
 
 # Recommended url for runs
 DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
@@ -108,6 +110,12 @@ DEM3REG = {
 tuple2int = partial(np.array, dtype=np.int64)
 
 lock = None
+
+# Cache of the resolved bundle layout per prepro url: maps a resolved prepro
+# url to "new" (100-glacier bundles) or "old" (1000-glacier bundles), so we
+# don't re-probe (and 404) the new-format url for every glacier of a legacy
+# dataset. Populated only on a confirmed download (see _get_prepro_gdir_unlocked).
+_prepro_bundle_format = {}
 
 
 def mkdir(path, reset=False):
@@ -1148,21 +1156,108 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     return url
 
 
-def _get_prepro_gdir_unlocked(rgi_version, rgi_id, border, prepro_level,
-                              base_url=None):
+def _get_prepro_gdir_unlocked(
+    rgi_version: str,
+    rgi_id: str,
+    border: int,
+    prepro_level,
+    base_url: str = None,
+) -> str:
 
-    url = get_prepro_base_url(rgi_version=rgi_version, border=border,
-                              prepro_level=prepro_level, base_url=base_url)
-    if len(rgi_id) == 23:
-        # RGI7
-        url += '{}/{}.tar'.format(rgi_id[:17], rgi_id[:20])
-    else:
-        url += '{}/{}.tar'.format(rgi_id[:8], rgi_id[:11])
-    tar_base = file_downloader(url)
+    url = get_prepro_base_url(
+        rgi_version=rgi_version,
+        border=border,
+        prepro_level=prepro_level,
+        base_url=base_url,
+    )
+    # The region dir, the new 100-glacier bundle name and the old
+    # 1000-glacier bundle name can all be derived from the RGI ID with the
+    # same slices for both RGI6 (14 char IDs) and RGI7 (23 char IDs), since
+    # the glacier number is always the last 5 characters of the ID.
+    # TODO: add support for bundle sizes of 10 and 1
+    region = rgi_id[:-6]                      # RGI60-07 / RGI2000-v7.0-G-01
+    new_bundle = f"{region}.{rgi_id[-5:-2]}"  # 100-bundle, e.g. RGI60-07.000
+    old_bundle = rgi_id[:-3]                  # 1000-bundle, e.g. RGI60-07.00
+
+    # The bundle layout (100- vs 1000-glacier) is uniform across a published
+    # prepro dataset, so once we have confirmed it for this url we go straight
+    # to the right file instead of re-probing (and 404-ing) the new-format url
+    # for every glacier. We only cache on a confirmed download: a bare 404 on
+    # the new-format url is ambiguous (legacy dataset vs. a glacier that is
+    # simply missing), so caching it could wrongly downgrade sibling glaciers.
+    fmt = _prepro_bundle_format.get(url)
+    new_url = f"{url}{region}/{new_bundle}.tar"
+
+    # Try the new 100-glacier bundle first, unless we already know this dataset
+    # is legacy.
+    if fmt in (None, "new"):
+        try:
+            tar_base = file_downloader(new_url)
+        except InvalidParamsError:
+            # new format URL not in allowlist -> fall back to the old layout
+            tar_base = None
+        if tar_base is not None:
+            _prepro_bundle_format[url] = "new"
+            return tar_base
+        if fmt == "new":
+            # confirmed new-format dataset, so this glacier is simply missing
+            raise RuntimeError(f"Could not find file at {new_url}")
+
+    # Fall back to the old 1000-glacier bundle for legacy base_urls.
+    old_url = f"{url}{region}/{old_bundle}.tar"
+    tar_base = file_downloader(old_url)
     if tar_base is None:
-        raise RuntimeError('Could not find file at ' + url)
+        raise RuntimeError(f"Could not find file at {old_url}")
 
+    _prepro_bundle_format[url] = "old"
     return tar_base
+
+
+def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
+    """Fetches a dataframe from a file.
+
+    Parameters
+    ----------
+    file_path : str or Path
+        Path to the file to read. Supports csv and parquet files, with
+        deprecation warning for hdf files.
+    **kwargs
+        Additional keyword arguments to pass to the pandas read function.
+
+    Returns
+    -------
+    pd.DataFrame
+        The dataframe read from the file.
+
+    Raises
+    ------
+    NotImplementedError
+        If the file extension is not supported.
+
+    Warns
+    -----
+    DeprecationWarning
+        If reading from hdf files, a warning is raised that support will
+        be removed in a future release.
+    """
+    extension = Path(file_path).suffix.lower()
+
+    if extension == ".csv":
+        df = pd.read_csv(file_path, **kwargs)
+    elif extension in [".hdf", ".h5"]:
+        warnings.warn(
+            "Reading directly from hdf files will be removed in a future "
+            "release and replaced with geoparquet.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        df = pd.read_hdf(file_path, **kwargs)
+    elif extension == ".parquet":
+        df = pd.read_parquet(file_path, engine="pyarrow", **kwargs)
+    else:
+        raise NotImplementedError(f"File type not supported: {extension}")
+
+    return df
 
 
 def get_geodetic_mb_dataframe(file_path=None, regional=False):
@@ -1193,7 +1288,7 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
             file_name = 'hugonnet_2021_regional_avg.csv'
             file_path = file_downloader(base_url + file_name)
         else:
-            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.parquet'
             file_path = file_downloader(base_url + file_name)
 
     if file_path.startswith('http'):
@@ -1204,12 +1299,7 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
         return cfg.DATA[file_path]
 
     # If not let's go
-    extension = os.path.splitext(file_path)[1]
-    if extension == '.csv':
-        df = pd.read_csv(file_path)
-    elif extension == '.hdf':
-        df = pd.read_hdf(file_path)
-
+    df = get_dataframe_from_file(file_path)
     # Check for missing data (old files)
     if len(df.loc[df['dmdtda'].isnull()]) > 0:
         raise InvalidParamsError('The reference file you are using has missing '
@@ -1270,11 +1360,7 @@ def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
         return cfg.DATA[file_path]
 
     # If not let's go
-    extension = os.path.splitext(file_path)[1]
-    if extension == '.csv':
-        df = pd.read_csv(file_path, index_col=0)
-    elif extension == '.hdf':
-        df = pd.read_hdf(file_path)
+    df = get_dataframe_from_file(file_path, index_col=0)
 
     cfg.DATA[file_path] = df
     return df
