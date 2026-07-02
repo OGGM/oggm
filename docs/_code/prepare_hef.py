@@ -46,7 +46,7 @@ refv = 577852773  # From ITMIX
 df = workflow.calibrate_inversion_from_consensus(gdir, volume_m3_reference=refv)
 np.testing.assert_allclose(refv, df.vol_oggm_m3, rtol=0.01)
 
-cl = gdir.read_pickle('inversion_input')[-1]
+cl = gdir.read_store('inversion_input')[-1]
 mbmod = massbalance.ConstantMassBalance(gdir, y0=1985)
 mbx = mbmod.get_annual_mb(cl['hgt']) * cfg.SEC_IN_YEAR * cfg.PARAMS['ice_density']
 fdf = pd.DataFrame(index=np.arange(len(mbx))*cl['dx'])

@@ -146,7 +146,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         weighting_per_pixel = topo_data * 0.  # container
 
     # For the flowline we need the model flowlines only
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     assert len(fls) == 1, 'Only works with one flowline.'
     fl = fls[0]
 
