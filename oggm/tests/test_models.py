@@ -5441,7 +5441,8 @@ class TestMassRedis:
         tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                             ref_period='1953-01-01_2003-01-01')
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
-        workflow.calibrate_inversion_from_consensus([gdir])
+        ref_table = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        workflow.calibrate_inversion_from_ref_table([gdir], ref_table=ref_table)
         tasks.init_present_time_glacier(gdir)
 
         seed = 0

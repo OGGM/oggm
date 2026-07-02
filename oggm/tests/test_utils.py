@@ -1139,6 +1139,7 @@ class TestPreproCLI:
                           intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          inversion_volume_dataset='consensus',
                           continue_on_error=False,
                           override_params={}
                           )
@@ -1297,6 +1298,7 @@ class TestPreproCLI:
                           test_topofile=topof,
                           elev_bands=True,
                           max_level=3,
+                          inversion_volume_dataset='consensus',
                           add_distributed_thickness=True,
                           add_export_thickness_geotiff=True,
                           continue_on_error=False,
@@ -1360,6 +1362,7 @@ class TestPreproCLI:
                           test_topofile=topof,
                           disable_mp=False,
                           centerlines=True,
+                          inversion_volume_dataset='consensus',
                           continue_on_error=False,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
@@ -1521,6 +1524,7 @@ class TestPreproCLI:
                               test_ids=['RGI60-11.00929'],
                               dynamic_spinup='area/dmdtda', rgi_file=rgidf,
                               intersects_file=inter,
+                              inversion_volume_dataset='consensus',
                               store_fl_diagnostics=True,
                               continue_on_error=False,
                               mb_calibration_strategy='melt_temp',
@@ -1680,6 +1684,7 @@ class TestPreproCLI:
                           override_params=params,
                           disable_mp=False,
                           mb_calibration_strategy='melt_temp',
+                          inversion_volume_dataset='consensus',
                           test_topofile=topof, elev_bands=True)
 
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
@@ -1774,6 +1779,7 @@ class TestPreproCLI:
                           start_level=1, start_base_url=base_url,
                           mb_calibration_strategy='melt_temp',
                           disable_mp=False,
+                          inversion_volume_dataset='consensus',
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_period,
                                            'baseline_climate': 'CRU',
@@ -1820,6 +1826,7 @@ class TestPreproCLI:
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf, intersects_file=inter,
                           logging_level='INFO',
+                          inversion_volume_dataset='consensus',
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId

@@ -30,12 +30,14 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 # Default reference volume tables ("IceBoost v2") used by
-# calibrate_inversion_from_ref_table, one file per RGI version
+# calibrate_inversion_from_ref_table, one parquet file per RGI version /
+# subtype (RGI6, RGI7 glaciers '7G', RGI7 complexes '7C')
 ICEBOOST_V2_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
                         'ice_thickness/iceboost_v2/')
 ICEBOOST_V2_FILES = {
-    '6': 'iceboostv2_compiled_rgi62_v20260701.hdf',
-    '7': 'iceboostv2_compiled_rgi70G_v20260701.hdf',
+    '6': 'iceboostv2_compiled_rgi62_v20260701.parquet',
+    '7G': 'iceboostv2_compiled_rgi70G_v20260701.parquet',
+    '7C': 'iceboostv2_compiled_rgi70C_v20260701.parquet',
 }
 
 # Multiprocessing Pool
@@ -605,6 +607,13 @@ def inversion_tasks(gdirs, glen_a=None, fs=None, filter_inversion_output=True,
                                 add_to_log_file=add_to_log_file)
 
 
+def _read_ref_table_file(fpath):
+    """Read a reference volume table from a parquet or hdf file."""
+    if str(fpath).endswith('.parquet'):
+        return pd.read_parquet(fpath)
+    return pd.read_hdf(fpath)
+
+
 def _resolve_ref_volume_table(gdirs, ref_table):
     """Load and normalise a reference volume table.
 
@@ -622,25 +631,27 @@ def _resolve_ref_volume_table(gdirs, ref_table):
         of the column holding the reference volume, in m3.
     """
     if ref_table is None:
-        # Pick the default IceBoost v2 table matching the RGI version
-        rgi_version = gdirs[0].rgi_version[0]
+        # Pick the default IceBoost v2 table matching the RGI version.
+        # gdir.rgi_version is '6x' for RGI6 and '70G'/'70C' for RGI7.
+        rgi_version = gdirs[0].rgi_version
+        key = '6' if rgi_version[0] == '6' else rgi_version[0] + rgi_version[-1]
         try:
-            fname = ICEBOOST_V2_FILES[rgi_version]
+            fname = ICEBOOST_V2_FILES[key]
         except KeyError:
             raise InvalidParamsError(
                 'No default reference volume table available for RGI version '
                 '"{}". Provide one with the `ref_table` argument.'
-                ''.format(gdirs[0].rgi_version))
+                ''.format(rgi_version))
         fpath = utils.file_downloader(ICEBOOST_V2_BASE_URL + fname)
-        df = pd.read_hdf(fpath)
+        df = _read_ref_table_file(fpath)
     elif isinstance(ref_table, pd.DataFrame):
         df = ref_table.copy()
     else:
-        # A local path or a URL to an hdf file
+        # A local path or a URL to a parquet or hdf file
         fpath = ref_table
         if '://' in str(ref_table):
             fpath = utils.file_downloader(ref_table)
-        df = pd.read_hdf(fpath)
+        df = _read_ref_table_file(fpath)
 
     # Normalise the reference volume to a column in m3
     if 'vol_itmix_m3' in df.columns:
@@ -681,9 +692,9 @@ def calibrate_inversion_from_ref_table(gdirs, ref_table=None,
         by RGI id and contain either a ``vol_km3`` column (volume in km3, as
         in the IceBoost products) or a ``vol_itmix_m3`` column (volume in m3,
         as in the Farinotti et al. (2019) consensus estimate). This can be
-        given as a pandas DataFrame, or as a path/URL to an hdf file. If None
-        (default), the IceBoost v2 table matching the RGI version of the
-        glaciers is downloaded and used.
+        given as a pandas DataFrame, or as a path/URL to a parquet or hdf
+        file. If None (default), the IceBoost v2 table matching the RGI
+        version of the glaciers is downloaded and used.
     ignore_missing : bool
         set this to true to silence the error if some glaciers could not be
         found in the reference table.
