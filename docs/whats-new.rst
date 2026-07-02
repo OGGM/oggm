@@ -36,7 +36,8 @@ Enhancements
   newly created URLs use the 100-glacier bundles. Both RGI6 and RGI7 IDs are
   supported (:pull:`1925`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- Some tests have been refactored from unittest to pytest. (:pull:`1925`).
+- Some tests have been refactored from unittest to pytest. (:pull:`1925`,
+  :pull:`1936`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Replaced `scipy.linalg.solve_banded` with `scipy.linalg.lapack.dgtsv` for
   solving linear systems with a tridiagonal matrix in `SemiImplicitModel`. This
