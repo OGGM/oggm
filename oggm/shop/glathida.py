@@ -19,7 +19,7 @@ from oggm import utils, cfg
 log = logging.getLogger(__name__)
 
 GTD_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/glathida/glathida-main/'
-                'data/glathida_2023-11-16_rgi_{}_per_id.h5')
+                'data/glathida_2023-11-16_rgi_{}_per_id.parquet')
 
 
 @utils.entity_task(log, writes=['glathida_data'])
