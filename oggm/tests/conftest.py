@@ -204,6 +204,7 @@ def patch_download_url_allowlist():
         'cluster.klima.uni-bremen.de/~oggm/test_files/',
         'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
         'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
+        'klima.uni-bremen.de/~oggm/g2ti',
         'RGI2000-v7.0-regions.zip',
     ]
     cfg.PARAMS.do_log = old_do_log
@@ -349,3 +350,15 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
     """
     return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')
+
+
+@pytest.fixture(scope="session")
+def rgi62_itmix_df():
+    """Provides a reference to the rgi62_itmix_df for the entire test session.
+
+    Named after the current git revision.
+    As a session-scoped fixture, this will only be created once and
+    then injected to each test that depends on it.
+    """
+    dl_path = "https://cluster.klima.uni-bremen.de/~oggm/g2ti/rgi62_itmix_df_v20260617.parquet"
+    return utils.file_downloader(dl_path)
