@@ -81,6 +81,11 @@ Breaking changes
   This is a breaking change because the OGGM output files have now an opposite
   sign for that variable.
   By `Brandon Tober <https://github.com/btobers>`_
+- Support for reading and writing HDF files with pytables is deprecated. Files
+  should instead use parquet with ZSTD compression. This adds ``pyarrow`` as a
+  core dependency and removes ``tables`` (pytables), which we are very glad to
+  see go as it was a recurrent source of installation pain (:pull:`1924`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 v1.6.3 (April 13, 2026)
 -----------------------

@@ -20,7 +20,7 @@ from oggm import utils, workflow, tasks, cfg
 from oggm.core import climate, inversion, centerlines
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils import get_demo_file
+from oggm.utils import get_demo_file, file_downloader
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
 from oggm.tests.funcs import get_test_dir
@@ -154,8 +154,9 @@ class TestInitPresentDayFlowline:
         with pytest.raises(InvalidParamsError):
             init_present_time_glacier(gdir)
 
-    def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
-                                                 monkeypatch):
+    def test_init_present_time_glacier_obs_thick(
+        self, hef_elev_gdir, rgi62_itmix_df, monkeypatch
+    ):
 
         gdir = hef_elev_gdir
 
@@ -178,7 +179,7 @@ class TestInitPresentDayFlowline:
                                         filesuffix='_consensus')[0]
 
         # check that resulting flowline has the same volume as observation
-        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        cdf = pd.read_parquet(rgi62_itmix_df, engine='pyarrow')
         ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
         np.testing.assert_allclose(fl_consensus.volume_m3, ref_vol)
 
