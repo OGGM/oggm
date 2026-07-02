@@ -807,8 +807,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     "consensus estimate is only available for RGI62).")
 
             if inversion_volume_dataset == 'consensus':
-                # Farinotti et al. (2019) consensus (ITMIX) estimate
-                ref_table = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+                # Farinotti et al. (2019) consensus (ITMIX) estimate, parquet
+                dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
+                           "rgi62_itmix_df_v20260617.parquet")
+                ref_table = pd.read_parquet(utils.file_downloader(dl_path))
             else:
                 # IceBoost v2, auto-selected by RGI version (62 / 70G / 70C)
                 ref_table = None

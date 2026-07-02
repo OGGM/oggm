@@ -17,7 +17,7 @@ Enhancements
   ``calibrate_inversion_from_consensus`` is deprecated but still available: it
   keeps calibrating against the Farinotti et al. (2019) consensus estimate.
   Note that the default reference for RGI6 ``run_prepro_levels`` inversions
-  changes accordingly from the consensus estimate to IceBoost v2 (:pull:`XXXX`).
+  changes accordingly from the consensus estimate to IceBoost v2 (:pull:`1942`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``area_min_h`` is now a default diagnostic output variable: it is the
   glacier area computed from grid points thicker than

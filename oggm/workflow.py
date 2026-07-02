@@ -882,8 +882,11 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                   'estimate, pass that table explicitly via `ref_table`.',
                   FutureWarning)
 
-    # Preserve the exact historical behaviour: the consensus (ITMIX) table
-    ref_table = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+    # Preserve the historical behaviour: calibrate against the Farinotti
+    # et al. (2019) consensus (ITMIX) table, now served as parquet.
+    dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
+               "rgi62_itmix_df_v20260617.parquet")
+    ref_table = pd.read_parquet(utils.file_downloader(dl_path))
     return calibrate_inversion_from_ref_table(
         gdirs,
         ref_table=ref_table,

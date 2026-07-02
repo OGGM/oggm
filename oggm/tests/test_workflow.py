@@ -206,7 +206,9 @@ class TestFullRun(unittest.TestCase):
         # check if mini params file is used as expected
         assert cfg.PARAMS['lru_maxsize'] == 123
 
-        ref_table = pd.read_hdf(get_demo_file('rgi62_itmix_df.h5'))
+        dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
+                   "rgi62_itmix_df_v20260617.parquet")
+        ref_table = pd.read_parquet(utils.file_downloader(dl_path))
         df = workflow.calibrate_inversion_from_ref_table(gdirs,
                                                          ref_table=ref_table,
                                                          ignore_missing=True)
