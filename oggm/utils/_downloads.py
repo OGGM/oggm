@@ -1233,6 +1233,9 @@ def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
     ------
     NotImplementedError
         If the file extension is not supported.
+
+    Warns
+    -----
     DeprecationWarning
         If reading from hdf files, a warning is raised that support will
         be removed in a future release.
@@ -1243,7 +1246,7 @@ def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
         df = pd.read_csv(file_path, **kwargs)
     elif extension in [".hdf", ".h5"]:
         warnings.warn(
-            "Reading directly from hdf files will be removed in a future"
+            "Reading directly from hdf files will be removed in a future "
             "release and replaced with geoparquet.",
             DeprecationWarning,
             stacklevel=2,
@@ -1285,7 +1288,7 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
             file_name = 'hugonnet_2021_regional_avg.csv'
             file_path = file_downloader(base_url + file_name)
         else:
-            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.parquet'
             file_path = file_downloader(base_url + file_name)
 
     if file_path.startswith('http'):
@@ -1357,7 +1360,7 @@ def get_temp_bias_dataframe(dataset, regional=False, rgi_version='62'):
         return cfg.DATA[file_path]
 
     # If not let's go
-    df = get_dataframe_from_file(file_path)
+    df = get_dataframe_from_file(file_path, index_col=0)
 
     cfg.DATA[file_path] = df
     return df

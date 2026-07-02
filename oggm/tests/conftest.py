@@ -323,7 +323,7 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
                                  setup='all')
 
 
-@pytest.fixture(scope="class", autouse=True)
+@pytest.fixture(scope="session")
 def rgi62_itmix_df():
     """Provides a reference to the rgi62_itmix_df for the entire test session.
 

@@ -520,7 +520,7 @@ class TestWorkflowTools(unittest.TestCase):
         assert len(df.loc[df['dmdtda'].isnull()]) == 0
 
         base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.hdf'
+        file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.parquet'
         file_path = utils.file_downloader(base_url + file_name)
 
         assert file_path in cfg.DATA
@@ -2546,13 +2546,6 @@ class TestDataFiles(unittest.TestCase):
         df = _downloads.get_dataframe_from_file(csv_path)
         pd.testing.assert_frame_equal(df, df_orig)
 
-        # TODO: Remove once HDF files are no longer available on oggm-sample-data
-        hdf_path = os.path.join(wd, "test.hdf")
-        df_orig.to_hdf(hdf_path, key="df")
-        with pytest.warns(DeprecationWarning, match="hdf"):
-            df = _downloads.get_dataframe_from_file(hdf_path)
-        pd.testing.assert_frame_equal(df, df_orig)
-
         parquet_path = os.path.join(wd, "test.parquet")
         df_orig.to_parquet(parquet_path, engine="pyarrow", index=False)
         df = _downloads.get_dataframe_from_file(parquet_path)
@@ -2560,6 +2553,16 @@ class TestDataFiles(unittest.TestCase):
 
         with pytest.raises(NotImplementedError):
             _downloads.get_dataframe_from_file(os.path.join(wd, "test.nc"))
+
+        # TODO: Remove once HDF files are no longer available on oggm-sample-data
+        # Kept last as importorskip aborts the rest of the test when pytables
+        # (an optional dependency) is not installed.
+        pytest.importorskip("tables")
+        hdf_path = os.path.join(wd, "test.hdf")
+        df_orig.to_hdf(hdf_path, key="df")
+        with pytest.warns(DeprecationWarning, match="hdf"):
+            df = _downloads.get_dataframe_from_file(hdf_path)
+        pd.testing.assert_frame_equal(df, df_orig)
 
     def test_srtmzone(self):
 

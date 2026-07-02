@@ -2196,7 +2196,7 @@ class TestInversion(unittest.TestCase):
 
         dfo = workflow.invert_from_params(gdir, params_df=dfi)
         np.testing.assert_allclose(df.vol_itmix_m3, dfo.vol_oggm_m3, rtol=0.01)
-        
+
         dl_path = "https://cluster.klima.uni-bremen.de/~oggm/g2ti/rgi62_itmix_df_v20260617.parquet"
         df = pd.read_parquet(utils.file_downloader(dl_path))
 
