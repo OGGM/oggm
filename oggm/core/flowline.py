@@ -17,6 +17,7 @@ import numpy as np
 import shapely.geometry as shpg
 import xarray as xr
 from scipy.linalg import solve_banded
+from scipy.linalg.lapack import dgtsv
 
 # Optional libs
 try:
@@ -926,7 +927,7 @@ class FlowlineModel(object):
                             store_monthly_step=None,
                             stop_criterion=None,
                             fixed_geometry_spinup_yr=None,
-                            dynamic_spinup_min_ice_thick=None,
+                            min_ice_thick_for_area=None,
                             ):
         """Runs the model and returns intermediate steps in xarray datasets.
 
@@ -978,13 +979,13 @@ class FlowlineModel(object):
             starting from the chosen year. The only output affected are the
             glacier wide diagnostic files - all other outputs are set
             to constants during "spinup"
-        dynamic_spinup_min_ice_thick : float or None
+        min_ice_thick_for_area : float or None
             if set to a float, additional variables are saved which are useful
             in combination with the dynamic spinup. In particular only grid
             points with a minimum ice thickness are considered for the total
             area or the total volume. This is useful to smooth out yearly
             fluctuations when matching to observations. The names of this new
-            variables include the suffix _min_h (e.g. 'area_m2_min_h')
+            variables include the suffix _min_h (e.g. 'area_min_h_m2')
 
         Returns
         -------
@@ -1106,16 +1107,16 @@ class FlowlineModel(object):
             diag_ds['area_m2'].attrs['description'] = 'Total glacier area'
             diag_ds['area_m2'].attrs['unit'] = 'm 2'
 
-        if dynamic_spinup_min_ice_thick is None:
-            dynamic_spinup_min_ice_thick = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+        if min_ice_thick_for_area is None:
+            min_ice_thick_for_area = cfg.PARAMS['min_ice_thick_for_area']
 
         if 'area_min_h' in ovars:
-            # filled with a value if dynamic_spinup_min_ice_thick is not None
-            diag_ds['area_m2_min_h'] = ('time', np.zeros(nm) * np.nan)
-            diag_ds['area_m2_min_h'].attrs['description'] = \
-                f'Total glacier area of gridpoints with a minimum ice' \
-                f'thickness of {dynamic_spinup_min_ice_thick} m'
-            diag_ds['area_m2_min_h'].attrs['unit'] = 'm 2'
+            # filled with a value if min_ice_thick_for_area is not None
+            diag_ds['area_min_h_m2'] = ('time', np.zeros(nm) * np.nan)
+            diag_ds['area_min_h_m2'].attrs['description'] = \
+                f'Total glacier area of gridpoints with a minimum ice ' \
+                f'thickness of {min_ice_thick_for_area} m'
+            diag_ds['area_min_h_m2'].attrs['unit'] = 'm 2'
 
         if 'length' in ovars:
             diag_ds['length_m'] = ('time', np.zeros(nm) * np.nan)
@@ -1346,8 +1347,9 @@ class FlowlineModel(object):
                                 val * fac_sec)
                             surface_h_previous[fl_id] = fl.surface_h
                         if 'flux_divergence' in ovars_fl and (yr > self.y0) and (i != 0):
-                            # calculated after the formula dhdt = mb + flux_div
-                            val = ds['dhdt'].data[i, :] - ds['climatic_mb'].data[i, :]
+                            # calculated after the formula mb = dhdt + flux_div
+                            # Cogley et al. (2010): Glossary of Glacier Mass Balance
+                            val = ds['climatic_mb'].data[i, :] - ds['dhdt'].data[i, :]
                             # special treatment for retreating: If the glacier
                             # terminus is getting ice free it means the
                             # climatic mass balance is more negative than the
@@ -1381,8 +1383,8 @@ class FlowlineModel(object):
             if 'volume_bwl' in ovars:
                 diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
             if 'area_min_h' in ovars:
-                diag_ds['area_m2_min_h'].data[i] = np.sum([np.sum(
-                    fl.bin_area_m2[fl.thick > dynamic_spinup_min_ice_thick])
+                diag_ds['area_min_h_m2'].data[i] = np.sum([np.sum(
+                    fl.bin_area_m2[fl.thick > min_ice_thick_for_area])
                     for fl in self.fls])
             # Terminus thick is a bit more logic
             ti = None
@@ -2498,16 +2500,6 @@ class SemiImplicitModel(FlowlineModel):
         dm = - dt / dx ** 2 * d_stag[:-1] / width
         dp = - dt / dx ** 2 * d_stag[1:] / width
 
-        # construct banded form of the matrix, which is used during solving
-        # (see https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.solve_banded.html)
-        # original matrix:
-        # d_matrix = (np.diag(dp[:-1], 1) +
-        #             np.diag(np.ones(len(d0)) + d0) +
-        #             np.diag(dm[1:], -1))
-        self.d_matrix_banded[0, 1:] = dp[:-1]
-        self.d_matrix_banded[1, :] = np.ones(len(d0)) + d0
-        self.d_matrix_banded[2, :-1] = dm[1:]
-
         # correction term for glacier bed (original equation is an equation for
         # the surface height s, which is transformed in an equation for h, as
         # s = h + b the term below comes from the '- b'
@@ -2529,11 +2521,24 @@ class SemiImplicitModel(FlowlineModel):
             if q_in != 0.0:
                 rhs[0] += dt * q_in / (width[0] * dx)
 
-        # solve matrix and update flowline thickness
-        thick_new = utils.clip_min(
-            solve_banded((1, 1), self.d_matrix_banded, rhs),
-            0)
-        fl.thick = thick_new
+        # this strips scipy.linalg.solve_banded to our use case and removes
+        # some checks. It also automatically selects the correct fortran
+        # function for the shape of our matrix. Internally dgtsv relies on
+        # the thomas algorithm (Gaussian elimination with partial pivoting)
+        dgtsv(dm[1:], np.ones(len(d0)) + d0, dp[:-1], rhs,
+              overwrite_dl=True,
+              overwrite_d=True,
+              overwrite_du=True,
+              overwrite_b=True)
+        fl.thick = utils.clip_min(rhs, 0)
+
+        # the old implementation using solve_banded looks like this:
+        # self.d_matrix_banded[0, 1:] = dp[:-1]
+        # self.d_matrix_banded[1, :] = np.ones(len(d0)) + d0
+        # self.d_matrix_banded[2, :-1] = dm[1:]
+        # fl.thick = utils.clip_min(
+        #     solve_banded((1, 1), self.d_matrix_banded, rhs),
+        #     0)
 
         # Retreat-based calving parametrization (adapted from FluxBasedModel)
         # We need here less "if" statements as we dont deal with tributaries

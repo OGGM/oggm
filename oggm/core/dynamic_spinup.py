@@ -143,7 +143,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -236,7 +236,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
     yr_min = gdir.get_climate_info()['baseline_yr_0']
 
     if min_ice_thickness is None:
-        min_ice_thickness = cfg.PARAMS['dynamic_spinup_min_ice_thick']
+        min_ice_thickness = cfg.PARAMS['min_ice_thick_for_area']
 
     # check provided maximum start year here, and change min_spinup_period
     if spinup_start_yr_max is not None:
@@ -448,7 +448,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
                 geom_path=geom_path,
                 diag_path=diag_path,
                 fl_diag_path=fl_diag_path,
-                dynamic_spinup_min_ice_thick=min_ice_thickness,
+                min_ice_thick_for_area=min_ice_thickness,
                 fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 store_monthly_step=store_monthly_step,
             )
@@ -460,7 +460,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None, init_model_yr=None,
 
             if type(ds) == tuple:
                 ds = ds[0]
-            model_area_km2 = ds.area_m2_min_h.loc[target_yr].values * 1e-6
+            model_area_km2 = ds.area_min_h_m2.loc[target_yr].values * 1e-6
             model_volume_km3 = ds.volume_m3.loc[target_yr].values * 1e-9
         else:
             # only run to rgi date and extract values
@@ -1059,7 +1059,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -1160,7 +1160,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         spinup_start_yr_max = yr0_ref_mb
 
     # check that inversion is only possible without providing own fls
-    if do_inversion:
+    # fls_init is constant across iterations, so check once and cache result
+    if do_inversion and not local_variables.get(
+        '_fls_init_matches_gdir', False
+    ):
         if not np.all([np.all(getattr(fl_prov, 'surface_h') ==
                               getattr(fl_orig, 'surface_h')) and
                        np.all(getattr(fl_prov, 'bed_h') ==
@@ -1173,13 +1176,18 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                        'provide your own flowlines! (fls_init '
                                        'should be None or '
                                        'the original model_flowlines)')
+    local_variables['_fls_init_matches_gdir'] = True
 
     # Here we start with the actual model run
-    if melt_f == gdir.read_json('mb_calib')['melt_f']:
+    current_melt_f_in_gdir = local_variables.get(
+        "_last_melt_f_in_gdir", gdir.read_json("mb_calib")["melt_f"]
+    )
+    if melt_f == current_melt_f_in_gdir:
         # we do not need to define a new melt_f or do an inversion
         do_inversion = False
     else:
         define_new_melt_f_in_gdir(gdir, melt_f)
+        local_variables['_last_melt_f_in_gdir'] = melt_f
 
     if do_inversion:
         with utils.DisableLogger():
@@ -1359,7 +1367,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         the forward model run. Therefore you could see quite fast changes
         (spikes) in the time-evolution (especially visible in length and area).
         If you set this value to 0 the filtering can be switched off.
-        Default is cfg.PARAMS['dynamic_spinup_min_ice_thick'].
+        Default is cfg.PARAMS['min_ice_thick_for_area'].
     first_guess_t_spinup : float
         The initial guess for the temperature bias for the spinup
         MassBalanceModel in °C.
@@ -2009,7 +2017,7 @@ def run_dynamic_melt_f_calibration(
         model_dynamic_spinup, dmdtda_mdl = model_run(melt_f)
 
         # save final model for later
-        model_dynamic_spinup_end.append(copy.deepcopy(model_dynamic_spinup))
+        model_dynamic_spinup_end[0] = model_dynamic_spinup
 
         # calculate the mismatch of dmdtda
         cost = float(dmdtda_mdl - ref_dmdtda)
@@ -2017,7 +2025,7 @@ def run_dynamic_melt_f_calibration(
         return cost
 
     def init_cost_fun():
-        model_dynamic_spinup_end = []
+        model_dynamic_spinup_end = [None]
 
         def c_fun(melt_f):
             return cost_fct(melt_f, model_dynamic_spinup_end)
@@ -2040,12 +2048,11 @@ def run_dynamic_melt_f_calibration(
         was_errors = [was_min_error, was_max_error]
 
         def get_mismatch(melt_f):
-            melt_f = copy.deepcopy(melt_f)
             # first check if the melt_f is inside limits
             if melt_f < melt_f_limits[0]:
                 # was the smaller limit already executed, if not first do this
                 if melt_f_limits[0] not in melt_f_guess:
-                    melt_f = copy.deepcopy(melt_f_limits[0])
+                    melt_f = melt_f_limits[0]
                 else:
                     # smaller limit was already used, check if it was
                     # already newly defined with error
@@ -2062,7 +2069,7 @@ def run_dynamic_melt_f_calibration(
             elif melt_f > melt_f_limits[1]:
                 # was the larger limit already executed, if not first do this
                 if melt_f_limits[1] not in melt_f_guess:
-                    melt_f = copy.deepcopy(melt_f_limits[1])
+                    melt_f = melt_f_limits[1]
                 else:
                     # larger limit was already used, check if it was
                     # already newly defined with ice free glacier
@@ -2097,7 +2104,7 @@ def run_dynamic_melt_f_calibration(
             current_max_error = False
             doing_first_guess = (len(mismatch) == 0)
             iteration = 0
-            current_melt_f = copy.deepcopy(melt_f)
+            current_melt_f = melt_f
 
             # in this loop if an error at the limits is raised we go step by
             # step away from the limits until we are at the initial guess or we

@@ -1822,7 +1822,7 @@ class TestIO():
                     np.isclose(model.fls[0].thick, 0.),
                     dhdt_ref[-1] < 0.)
                 flux_divergence_ref.append(
-                    (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                    (climatic_mb_ref[-1] - dhdt_ref[-1]) *
                     np.where(has_become_ice_free, 0.1, 1.))
             if int(yr) == 500:
                 secfortest = model.fls[0].section
@@ -1852,6 +1852,20 @@ class TestIO():
                                    ds_fl.climatic_mb[1:])
         np.testing.assert_allclose(flux_divergence_ref,
                                    ds_fl.flux_divergence[1:])
+
+        # Physical check of the flux divergence sign, independent of the
+        # formula used above (Cogley et al., 2011: climatic_mb = dhdt +
+        # flux_divergence). At the end of the run the glacier is in steady
+        # state (dhdt ~ 0), so the flux divergence balances the climatic mass
+        # balance: it must export ice (positive) in the accumulation area and
+        # import ice (negative) in the ablation area. An inverted sign would
+        # flip both checks.
+        fdiv_end = ds_fl.flux_divergence.isel(time=-1).values
+        cmb_end = ds_fl.climatic_mb.isel(time=-1).values
+        dhdt_end = ds_fl.dhdt.isel(time=-1).values
+        np.testing.assert_allclose(cmb_end, dhdt_end + fdiv_end, atol=1e-9)
+        assert np.all(fdiv_end[cmb_end > 0] > 0)
+        assert np.all(fdiv_end[cmb_end < 0] < 0)
 
         vel = ds_fl.ice_velocity_myr.isel(time=-1)
         assert 20 < vel.max() < 40
@@ -2494,6 +2508,70 @@ class TestIdealisedInversion():
         assert_allclose(v, model.volume_m3, rtol=0.05)
         if do_plot:  # pragma: no cover
             self.simple_plot(model, inversion_gdir)
+
+    def test_prepare_for_inversion_shape_flags(self, inversion_gdir):
+        # The shape selection flags of prepare_for_inversion used to overwrite
+        # the rectangular flag in the trapezoid branch instead of the trapezoid
+        # one. The default code path (both flags True) hid the bug, hence this
+        # explicit check of all combinations - see GH #1931.
+        fls = dummy_constant_bed(map_dx=inversion_gdir.grid.dx)
+        mb = LinearMassBalance(2600.)
+
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until_equilibrium()
+
+        fls = []
+        for fl in model.fls:
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
+            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+            sh = fl.surface_h[pg]
+            flo = centerlines.Centerline(line, dx=fl.dx, surface_h=sh)
+            flo.widths = fl.widths[pg]
+            # a mix of rectangular, trapezoid and (the rest) parabolic sections
+            is_rect = np.zeros(flo.nx, dtype=bool)
+            is_trap = np.zeros(flo.nx, dtype=bool)
+            is_rect[::3] = True
+            is_trap[1::3] = True
+            flo.is_rectangular = is_rect
+            flo.is_trapezoid = is_trap
+            fls.append(flo)
+        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
+
+        ref_rect = fls[0].is_rectangular.copy()
+        ref_trap = fls[0].is_trapezoid.copy()
+        assert ref_rect.any() and ref_trap.any()
+
+        # Default: both shapes are kept as is
+        inversion.prepare_for_inversion(inversion_gdir)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        np.testing.assert_array_equal(cl['is_rectangular'], ref_rect)
+        np.testing.assert_array_equal(cl['is_trapezoid'], ref_trap)
+
+        # No trapezoid: trapezoid flag is cleared, rectangular untouched
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_with_trapezoid=False)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        np.testing.assert_array_equal(cl['is_rectangular'], ref_rect)
+        assert not cl['is_trapezoid'].any()
+
+        # No rectangular: rectangular flag is cleared, trapezoid untouched
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_with_rectangular=False)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        assert not cl['is_rectangular'].any()
+        np.testing.assert_array_equal(cl['is_trapezoid'], ref_trap)
+
+        # Force all trapezoid / all rectangular
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_all_trapezoid=True)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        assert cl['is_trapezoid'].all()
+
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_all_rectangular=True)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        assert cl['is_rectangular'].all()
 
     def test_inversion_tributary(self, inversion_gdir):
 
@@ -3774,7 +3852,7 @@ class TestDynamicSpinup:
         }
         gdirs = workflow.init_glacier_directories(
             rgi_ids.keys(), from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         for gdir in gdirs:
@@ -3832,7 +3910,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -4020,7 +4098,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -4290,7 +4368,7 @@ class TestDynamicSpinup:
             gdir = workflow.init_glacier_directories(
                 ['RGI60-11.00033'],
                 from_prepro_level=3, prepro_border=160,
-                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                                 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
             df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
@@ -4408,7 +4486,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -5041,7 +5119,7 @@ class TestHydro:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
@@ -5108,7 +5186,7 @@ class TestHydro:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
@@ -5962,7 +6040,7 @@ class TestDistribute2D:
 
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         # we run the first glacier with a larger temperature bias to force a

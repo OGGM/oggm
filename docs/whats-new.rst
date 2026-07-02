@@ -9,21 +9,78 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- ``area_min_h`` is now a default diagnostic output variable: it is the
+  glacier area computed from grid points thicker than
+  ``cfg.PARAMS['min_ice_thick_for_area']`` (2 m), which avoids area spikes due
+  to interannual variability in snowfall. It is named ``area_min_h_m2`` in the
+  per-glacier ``model_diagnostics`` files and ``area_min_h`` in the compiled
+  output. This is the recommended area variable for most applications
+  (:pull:`1940`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - `run_prepro_levels` now allows to set a custom climate data processing
   module and custom geodetic data file to create glacier directories (:pull:`1910`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Test durations are now visible in Actions logs (:pull:`1920`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
   provide a list of additional spinup periods, which are tried in order if both
   the initially defined spinup period (`spinup_period_initial`) and the minimum
   spinup period (`min_spinup_period`) fail (:pull:`1914`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- `base_dir_to_tar` now groups glacier directories into bundles of 100 by
+  default (previously 1000); ``bundle_size`` accepts either 100 or 1000.
+  Smaller bundles make downloads more granular and faster while keeping the
+  number of files per directory manageable. Reading is fully backwards
+  compatible: existing base URLs keep serving the 1000-glacier bundles, while
+  newly created URLs use the 100-glacier bundles. Both RGI6 and RGI7 IDs are
+  supported (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Some tests have been refactored from unittest to pytest. (:pull:`1925`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Replaced `scipy.linalg.solve_banded` with `scipy.linalg.lapack.dgtsv` for
+  solving linear systems with a tridiagonal matrix in `SemiImplicitModel`. This
+  change speeds up regional simulations by at least 10%  (:pull:`1885`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Test optimisations for climate, mass balance calibration, and dynamic
+  spinup (:pull:`1933`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- Fixed a variable name bug in `prepare_for_inversion` where passing
+  `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
+  instead cleared the rectangular flag (:pull:`1931`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed test runtime due to unnecessary downloads (:pull:`1934`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- GH workflows will timeout after one hour to prevent hanging tests from
+  blocking runners or reaching usage limits (:pull:`1920`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- Renamed ``cfg.PARAMS['dynamic_spinup_min_ice_thick']`` to
+  ``cfg.PARAMS['min_ice_thick_for_area']`` and the associated diagnostic output
+  variable ``area_m2_min_h`` to ``area_min_h_m2`` in the per-glacier
+  ``model_diagnostics`` files (units now consistently at the end of the name,
+  as for the other variables; in the compiled output the variable is named
+  ``area_min_h``, previously ``area_m2_min_h``). The
+  ``dynamic_spinup_min_ice_thick`` keyword of
+  ``FlowlineModel.run_until_and_store`` is renamed to ``min_ice_thick_for_area``
+  accordingly. (:pull:`1940`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Furthermore, the default of
+  ``cfg.PARAMS['min_ice_thick_for_length']`` was changed from 0 to 2 m, so that
+  ``length_m`` now also filters out length spikes due to climate variability
+  (set it back to 0 to recover the previous raw length) (:pull:`1940`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- Resolved inverted sign of flowline diagnostics flux divergence (:pull:`1815`).
+  This is a breaking change because the OGGM output files have now an opposite
+  sign for that variable.
+  By `Brandon Tober <https://github.com/btobers>`_
 - Support for reading and writing HDF files with pytables is deprecated. Files
   should instead use parquet with ZSTD compression. Adds pyarrow as a
   dependency (:pull:`1924`).
@@ -106,7 +163,6 @@ Thanks to all contributors to this release:
 
 Enhancements
 ~~~~~~~~~~~~
-
 - Added ``tasks.compute_fl_diagnostics_quantiles``, this task is designed to
   calculate quantiles from multiple fl_diagnostic files. It enables users to
   compute metrics such as the median flowline across various GCM projections

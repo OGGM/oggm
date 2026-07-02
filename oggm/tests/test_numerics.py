@@ -50,6 +50,8 @@ class TestIdealisedCases(unittest.TestCase):
     def setUp(self):
         N = 3
         cfg.initialize()
+        # these idealised cases compare length to the raw geometry
+        cfg.PARAMS['min_ice_thick_for_length'] = 0
         self.glen_a = 2.4e-24  # Modern style Glen parameter A
         self.aglen_old = (N + 2) * 1.9e-24 / 2.  # outdated value
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
@@ -1790,6 +1792,8 @@ class TestSia2d(unittest.TestCase):
 
     def setUp(self):
         cfg.initialize()
+        # this idealised case compares length to the raw geometry
+        cfg.PARAMS['min_ice_thick_for_length'] = 0
 
     def tearDown(self):
         pass
