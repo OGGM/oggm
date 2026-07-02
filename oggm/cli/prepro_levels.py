@@ -105,6 +105,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
+                      inversion_volume_dataset='iceboost',
                       mb_calibration_strategy='informed_threestep',
                       geodetic_mb_file_path=None,
                       select_source_from_dir=None, keep_dem_folders=False,
@@ -231,6 +232,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     skip_inversion : bool
          do not run the inversion (level 3 files). This is a temporary
          workaround for workflows that wont run that far into level 3.
+    inversion_volume_dataset : str
+        which reference volume dataset to calibrate the ice thickness
+        inversion (Glen A) against. One of:
+        - 'iceboost' (default): the IceBoost v2 product, auto-selected by RGI
+          version. Supported for RGI62, RGI70G and RGI70C.
+        - 'consensus': the Farinotti et al. (2019) consensus (ITMIX) estimate.
+          Only supported for RGI62.
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
     override_params : dict
@@ -782,34 +790,37 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if not skip_inversion:
             workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
-            # Inversion: we match the consensus
             filter = border >= 20
 
-            if rgi_version == '70G':
-                purl = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
-                        'oggm_v1.6/inv_rgi7/rgi6_regional_inv_params_2025.1.csv')
-                params_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
-                workflow.invert_from_params(gdirs,
-                                            params_df=params_df,
-                                            filter_inversion_output=filter)
-            elif rgi_version == '70C':
-                purl = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
-                        'oggm_v1.6/inv_rgi7/rgi7c_glacier_inv_ref_2025.1.csv')
-                ref_vol_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
-                # Small optim
-                ref_vol_df = ref_vol_df.loc[ref_vol_df.rgi_region == int(rgi_reg)]
-                ref_vol_df = ref_vol_df['inv_volume_km3'] * 1e9
-                workflow.execute_entity_task(workflow.calibrate_inversion_from_volume,
-                                             gdirs,
-                                             vol_ref_m3=ref_vol_df,
-                                             apply_fs_on_mismatch=True,
-                                             error_on_mismatch=False,
-                                             filter_inversion_output=filter)
+            # Inversion: calibrate Glen A to a reference volume dataset.
+            # Be explicit about which dataset is used for which RGI version.
+            if inversion_volume_dataset not in ('iceboost', 'consensus'):
+                raise InvalidParamsError(
+                    "inversion_volume_dataset must be 'iceboost' or "
+                    f"'consensus', not '{inversion_volume_dataset}'.")
+
+            if rgi_version in ('70G', '70C') and \
+                    inversion_volume_dataset != 'iceboost':
+                raise InvalidParamsError(
+                    f"For {rgi_version} only inversion_volume_dataset='iceboost' "
+                    f"is supported, not '{inversion_volume_dataset}' (the "
+                    "consensus estimate is only available for RGI62).")
+
+            if inversion_volume_dataset == 'consensus':
+                # Farinotti et al. (2019) consensus (ITMIX) estimate, parquet
+                dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
+                           "rgi62_itmix_df_v20260617.parquet")
+                ref_table = pd.read_parquet(utils.file_downloader(dl_path))
             else:
-                workflow.calibrate_inversion_from_consensus(gdirs,
-                                                            apply_fs_on_mismatch=True,
-                                                            error_on_mismatch=False,
-                                                            filter_inversion_output=filter)
+                # IceBoost v2, auto-selected by RGI version (62 / 70G / 70C)
+                ref_table = None
+
+            workflow.calibrate_inversion_from_ref_table(
+                gdirs,
+                ref_table=ref_table,
+                apply_fs_on_mismatch=True,
+                error_on_mismatch=False,
+                filter_inversion_output=filter)
 
             # Distribute thickness per altitude for gridded data
             if add_distributed_thickness:
@@ -1047,6 +1058,13 @@ def parse_args(args):
                         help='do not run the inversion (level 3 files). '
                              'this is a temporary workaround for workflows '
                              'that wont run that far into level 3.')
+    parser.add_argument('--inversion-volume-dataset', type=str,
+                        default='iceboost',
+                        choices=['iceboost', 'consensus'],
+                        help="reference volume dataset to calibrate the ice "
+                             "thickness inversion against. 'iceboost' (default, "
+                             "IceBoost v2, RGI62/RGI70G/RGI70C) or 'consensus' "
+                             "(Farinotti et al. 2019, RGI62 only).")
     parser.add_argument('--mb-calibration-strategy', type=str,
                         default='informed_threestep',
                         help='how to calibrate the massbalance. Currently one of '
@@ -1220,6 +1238,7 @@ def parse_args(args):
                 logging_level=args.logging_level,
                 elev_bands=args.elev_bands,
                 skip_inversion=args.skip_inversion,
+                inversion_volume_dataset=args.inversion_volume_dataset,
                 centerlines=args.centerlines,
                 select_source_from_dir=args.select_source_from_dir,
                 keep_dem_folders=args.keep_dem_folders,

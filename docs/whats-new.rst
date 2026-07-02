@@ -9,6 +9,16 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New global task ``calibrate_inversion_from_ref_table`` generalises
+  ``calibrate_inversion_from_consensus`` to calibrate the ice thickness
+  inversion against an arbitrary reference volume table (given as a DataFrame,
+  a path or a URL). By default it now uses the IceBoost v2 products, with the
+  RGI6 or RGI7 table selected automatically from the glacier directories.
+  ``calibrate_inversion_from_consensus`` is deprecated but still available: it
+  keeps calibrating against the Farinotti et al. (2019) consensus estimate.
+  Note that the default reference for RGI6 ``run_prepro_levels`` inversions
+  changes accordingly from the consensus estimate to IceBoost v2 (:pull:`1942`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``area_min_h`` is now a default diagnostic output variable: it is the
   glacier area computed from grid points thicker than
   ``cfg.PARAMS['min_ice_thick_for_area']`` (2 m), which avoids area spikes due
