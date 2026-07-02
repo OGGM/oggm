@@ -42,6 +42,9 @@ Enhancements
   solving linear systems with a tridiagonal matrix in `SemiImplicitModel`. This
   change speeds up regional simulations by at least 10%  (:pull:`1885`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Test optimisations for climate, mass balance calibration, and dynamic
+  spinup (:pull:`1933`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
