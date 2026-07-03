@@ -607,8 +607,8 @@ class TestMassBalanceModels:
             - settings_filesuffix: _daily
             - ice_density: 900.0
             - use_leap_years: True
-            - filename: climate_historical_daily
-            - input_filesuffix: 
+            - filename: climate_historical
+            - input_filesuffix: _daily
             - temp_all_solid: 0.0
             - temp_all_liq: 2.0
             - temp_melt: 0.0
@@ -635,16 +635,15 @@ class TestMassBalanceModels:
             - hemisphere: nh
             - ice_density: 900.0
             - use_leap_years: True
-            - mb_model_class: DailyTIModel
-            - filename: climate_historical_daily
+            - mb_model_class: MonthlyTIModel
+            - filename: climate_historical
             - input_filesuffix: 
             - bias: 0.0
-            - ys: 2000
-            - ye: 2019
+            - ye: 2002
             - aging_frequency: monthly
             - climate_resolution: monthly
             - spinup_years: 6
-            - save_spinup_mbs: False
+            - save_spinup_mbs: True
             - tau_e: 1.0
             - melt_f_ratio: 0.5
             - melt_f_change: neg_exp
@@ -653,8 +652,6 @@ class TestMassBalanceModels:
             - store_buckets: False
             - use_previous_mbs: False
             - store_snowline: False
-            - nr_timesteps: 240
-            - mb_buckets_year: 2000.0
         """)
         mb_mod = massbalance.SfcTypeTIModel(hef_gdir,
                                             settings_filesuffix='_daily',
@@ -670,16 +667,14 @@ class TestMassBalanceModels:
 
         if is_daily_model(cl):
             tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
-            filename = "climate_historical_daily"
             check_calib_params = False
             ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
             settings_filesuffix = '_daily'
         else:
-            filename = "climate_historical"
             check_calib_params = True
             settings_filesuffix = ''
         mb_mod = cl(gdir, settings_filesuffix=settings_filesuffix, bias=0,
-                    filename=filename, check_calib_params=check_calib_params)
+                    check_calib_params=check_calib_params)
         # save old precipitation/temperature time series
         prcp_old = mb_mod.prcp.copy()
         temp_old = mb_mod.temp.copy()
@@ -841,7 +836,9 @@ class TestMassBalanceModels:
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
-                                       massbalance.DailyTIModel])
+                                       massbalance.DailyTIModel,
+                                       massbalance.SfcTypeTIModel,
+                                       ])
     def test_get_specific_mb(self, hef_gdir, model):
 
         check_calib_params = True
@@ -858,21 +855,40 @@ class TestMassBalanceModels:
         ye = 2002
         years = np.arange(ys, ye + 1)
         fls = gdir.read_pickle("inversion_flowlines")
-        heights_fls = np.concatenate([i.surface_h for i in fls], axis=0)
-        widths_fls = np.concatenate([i.widths for i in fls], axis=0)
+        if issubclass(model, massbalance.SfcTypeTIModel):
+            # SfcTypeTIModel has a fixed grid of points defined at
+            # initialisation. mb_mod_native below is built without an
+            # explicit `fl`, so it defaults to only the main flowline
+            # (fls[-1]) - use its heights/widths here instead of the
+            # concatenation over all flowlines, which would not match the
+            # number of grid points it was initialised with.
+            heights_native = fls[-1].surface_h
+            widths_native = fls[-1].widths
+        else:
+            heights_native = np.concatenate([i.surface_h for i in fls], axis=0)
+            widths_native = np.concatenate([i.widths for i in fls], axis=0)
+
+        stateful_kwargs = {}
+        if issubclass(model, massbalance.SfcTypeTIModel):
+            # SfcTypeTIModel keeps a running bucket state and by default
+            # refuses to go back to an already-passed year. Below we query
+            # the same years repeatedly (once as an array, then again as
+            # single values / at a different time_resolution), so we need
+            # to allow retrieving already-computed years.
+            stateful_kwargs['use_previous_mbs'] = True
 
         mb_mod_native = model(gdir, settings_filesuffix=settings_filesuffix,
                               check_calib_params=check_calib_params,
-                              ys=ys, ye=ye)
+                              ys=ys, ye=ye, **stateful_kwargs)
         mb_mod_multi_fls = massbalance.MultipleFlowlineMassBalance(
             gdir, settings_filesuffix=settings_filesuffix, fls=fls,
             mb_model_class=model, check_calib_params=check_calib_params,
-            ys=ys, ye=ye,
+            ys=ys, ye=ye, **stateful_kwargs,
         )
 
         for mb_mod, fls, heights, widths in zip(
                 [mb_mod_native, mb_mod_multi_fls], [None, fls],
-                [heights_fls, None], [widths_fls, None]):
+                [heights_native, None], [widths_native, None]):
             # test call with array
             smb = mb_mod.get_specific_mb(year=years, fls=fls, heights=heights,
                                          widths=widths,)
@@ -1389,7 +1405,7 @@ class TestMassBalanceModels:
             if ti_model == 'daily_timodel':
                 mb_model_class = massbalance.DailyTIModel
                 settings_filesuffix = '_daily'
-                input_filesuffix = ''
+                input_filesuffix = '_daily'
             elif ti_model == 'monthly_timodel':
                 mb_model_class = massbalance.MonthlyTIModel
                 settings_filesuffix = ''
@@ -1685,12 +1701,14 @@ class TestMassBalanceModels:
         with pytest.raises(ValueError,
                            match='Climate data for spinup not available. *'):
             massbalance.SfcTypeTIModel(gdir, settings_filesuffix='_daily',
+                                       mb_model_class=massbalance.DailyTIModel,
                                        ys=1800, check_calib_params=False,)
 
         with pytest.raises(InvalidWorkflowError,
                            match='The current buckets are valid for *'):
             mb_mod = massbalance.SfcTypeTIModel(
-                gdir, settings_filesuffix='_daily', ys=2000,
+                gdir, settings_filesuffix='_daily',
+                mb_model_class=massbalance.DailyTIModel, ys=2000,
                 use_previous_mbs=False, check_calib_params=False, )
             mb_mod.get_annual_mb(heights=h, year=2000)
             # calling the same year a second time with use_previous_mbs=False
@@ -1699,7 +1717,8 @@ class TestMassBalanceModels:
 
         # Look at different options of defining the melt_f per bucket
         mb_mod = massbalance.SfcTypeTIModel(
-            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            gdir, settings_filesuffix='_daily',
+            mb_model_class=massbalance.DailyTIModel, check_calib_params=False,
             climate_resolution='monthly', aging_frequency='monthly',
             melt_f_change="neg_exp", melt_f_ratio=0.5)
         melt_f_exp = np.asarray(list(mb_mod.melt_f_buckets.values()))
@@ -1707,7 +1726,8 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(melt_f_exp[0] / melt_f_exp[-1], 0.5, atol=1e-3)
 
         mb_mod = massbalance.SfcTypeTIModel(
-            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            gdir, settings_filesuffix='_daily',
+            mb_model_class=massbalance.DailyTIModel, check_calib_params=False,
             climate_resolution='monthly', aging_frequency='monthly',
             melt_f_change="neg_exp", melt_f_ratio=0.5, tau_e=0.5)
         melt_f_exp_05 = np.asarray(list(mb_mod.melt_f_buckets.values()))
@@ -1716,7 +1736,8 @@ class TestMassBalanceModels:
                                    atol=1e-3)
 
         mb_mod = massbalance.SfcTypeTIModel(
-            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            gdir, settings_filesuffix='_daily', ys=2000,
+            mb_model_class=massbalance.DailyTIModel, check_calib_params=False,
             climate_resolution='monthly', aging_frequency='monthly',
             melt_f_change="linear", melt_f_ratio=0.5)
         melt_f_linear = np.asarray(list(mb_mod.melt_f_buckets.values()))
@@ -1755,7 +1776,8 @@ class TestMassBalanceModels:
 
         # test starting from user provided spinup buckets
         mb_mod = massbalance.SfcTypeTIModel(
-            gdir, settings_filesuffix='_daily', check_calib_params=False,
+            gdir, settings_filesuffix='_daily',
+            mb_model_class=massbalance.DailyTIModel, check_calib_params=False,
             climate_resolution='monthly', aging_frequency='monthly',
             ys=2000, spinup_buckets=mb_buckets_2006)
         np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
@@ -1766,6 +1788,47 @@ class TestMassBalanceModels:
         # but after setting a mb parameter it should be reset
         mb_mod.prcp_fac = 1
         np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
+
+    def test_sfc_type_apparent_mb_from_any_mb_multiple_fl(self, hef_gdir):
+        """apparent_mb_from_any_mb with SfcTypeTIModel and centerlines, i.e.
+        several flowlines of different length (SfcTypeTIModel needs to know
+        the length of its corresponding flowline at initialisation).
+        """
+        gdir = hef_gdir
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        # be sure we have multiple flowlines
+        assert len(fls) > 1
+
+        massbalance.apparent_mb_from_any_mb(
+            gdir, mb_model_class=massbalance.SfcTypeTIModel,
+            mb_years=(2000, 2003),
+            output_filesuffix='_sfc_type_multiple_fls'
+        )
+
+        fls = gdir.read_pickle('inversion_flowlines',
+                               filesuffix='_sfc_type_multiple_fls')
+        # mass flux is close to zero at the terminus of the main flowline
+        np.testing.assert_allclose(fls[-1].flux_out, 0, atol=1e-7)
+        # every flowline got a sensible apparent mb assigned
+        for fl in fls:
+            assert np.isfinite(fl.flux_out)
+            assert np.any(fl.apparent_mb != 0)
+
+        # test that inversion and flowline initialisation is working
+        workflow.inversion_tasks(gdir,
+                                 input_filesuffix='_sfc_type_multiple_fls',
+                                 output_filesuffix='_sfc_type_multiple_fls',
+                                 )
+        init_present_time_glacier(gdir,
+                                  input_filesuffix='_sfc_type_multiple_fls',
+                                  output_filesuffix='_sfc_type_multiple_fls',
+                                  )
+        fls = gdir.read_pickle('model_flowlines',
+                               filesuffix='_sfc_type_multiple_fls')
+
+        for fl in fls:
+            assert fl.volume_m3 > 0
 
     @pytest.mark.slow
     def test_sfc_type_save_load(self, hef_gdir):
@@ -2013,6 +2076,42 @@ class TestMassBalanceModels:
                 part2_mb.flowline_mb_models[i].mb_buckets_np,
                 atol=1e-2)
 
+    def test_sfc_type_mb_calibration_for_multiple_flowlines(self, hef_gdir):
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        fls = gdir.read_pickle('inversion_flowlines')
+        # make sure we are actually testing multiple flowlines
+        assert len(fls) > 1
+
+        df, mb_mod = massbalance.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='_sfc_type_multi_fl',
+            calibrate_param1='melt_f',
+            ref_mb=0, ref_mb_years=(1970, 2001),
+            write_to_gdir=False,
+            return_mb_model=True,
+            mb_model_class=massbalance.SfcTypeTIModel,
+            ys=1970, use_previous_mbs=True,
+        )
+
+        assert isinstance(mb_mod, massbalance.MultipleFlowlineMassBalance)
+        assert len(mb_mod.flowline_mb_models) == len(fls)
+        for fl, mbmod in zip(fls, mb_mod.flowline_mb_models):
+            # melt_f was correctly broadcast to every flowline mb model
+            assert mbmod.melt_f == df['melt_f']
+            # each flowline mb model is bound to its own flowline's grid
+            assert len(mbmod.buckets_grid_point_label) == fl.nx
+
+        assert mb_mod.melt_f == df['melt_f']
+        assert mb_mod.filename == mb_mod.flowline_mb_models[0].filename
+        assert (mb_mod.input_filesuffix ==
+               mb_mod.flowline_mb_models[0].input_filesuffix)
+
+        # the calibrated model reproduces the reference specific mb (0)
+        smb = mb_mod.get_specific_mb(fls=fls, year=np.arange(1970, 2001))
+        np.testing.assert_allclose(smb.mean(), 0, atol=1e-6)
+
     @pytest.mark.slow
     def test_sfc_type_mb_model_calib_dynamics(self, hef_gdir):
 
@@ -2110,7 +2209,7 @@ class TestMassBalanceModels:
             ys=1980, ye=2020,
             store_model_geometry=True, store_fl_diagnostics=True,
             store_monthly_step=True, mb_elev_feedback='monthly',
-            include_mb_model_heights=False,
+            include_mb_model_heights=False, include_firn_outputs=False,
             output_filesuffix='_daily_sfc')
         ds_daily_sfc = utils.compile_run_output(gdir,
                                                 input_filesuffix='_daily_sfc')
@@ -2278,8 +2377,10 @@ class TestMassBalanceModels:
         # projection MB model is in scenario-branch state: history reset
         proj_mb_mod = dyn_model_proj.mb_model.flowline_mb_models[0]
         assert proj_mb_mod.ys == int(hist_mb_mod.mb_buckets_year)
-        # historical mb should cover the entire period provided (ys to ye)
-        assert hist_mb_mod._climatic_mb.shape[0] == (2020 - mbdf.index[0]) * 12
+        # historical mb should cover the entire period provided
+        # (ys + spinup_years to ye)
+        assert hist_mb_mod._climatic_mb.shape[0] == (2020 - mbdf.index[0] +
+                                                     proj_mb_mod.spinup_years) * 12
         # the projection only should start at ys = 2010
         assert proj_mb_mod._climatic_mb.shape[0] == (2020 - 2010) * 12
 
@@ -2377,39 +2478,6 @@ class TestMassBalanceModels:
             plot_runoff('_daily_sfc_hydro', 'SfcTypeTIModel with DailyTIModel')
 
         # test sfc_type model with dynamic melt_f calibration
-        kwargs_sfc_type = {
-            'mb_model_class': massbalance.MonthlyTIModel,
-            'climate_resolution': "monthly",
-            'aging_frequency': "monthly",
-            'ys': 1979,
-            'spinup_years': 6,
-            'use_previous_mbs': True,
-        }
-
-        # With the bucketsystem we need to know the number of grid points
-        MySfcTypeTIModel_inv = partial(
-            massbalance.SfcTypeTIModel,
-            use_main_fl_from='inversion_flowlines',
-            **kwargs_sfc_type,
-        )
-
-        MySfcTypeTIModel_dyn = partial(
-            massbalance.SfcTypeTIModel,
-            use_main_fl_from='model_flowlines',
-            **kwargs_sfc_type,
-        )
-        mb_model_historical = massbalance.MultipleFlowlineMassBalance(
-            gdir, settings_filesuffix='',
-            mb_model_class=MySfcTypeTIModel_dyn,
-            filename='climate_historical')
-        mb_model_spinup = massbalance.MultipleFlowlineMassBalance(
-            gdir, settings_filesuffix='',
-            mb_model_class=partial(
-                massbalance.ConstantMassBalance,
-                mb_model_class=MySfcTypeTIModel_dyn,
-                y0=2001, halfsize=10,
-            ),
-            filename='climate_historical')
         dyn_models = workflow.execute_entity_task(
             tasks.run_dynamic_melt_f_calibration,
             gdir,
@@ -2417,16 +2485,9 @@ class TestMassBalanceModels:
             ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
             ignore_errors=True,
             ref_mb_err_scaling_factor=0.2,
-            maxiter=10,
-            kwargs_run_function={
-                'maxiter': 10,
-                'overwrite_observations': False,
-                'mb_model_historical': mb_model_historical,
-                'mb_model_spinup': mb_model_spinup,
-                'include_mb_model_heights': True,
-                'include_firn_outputs': True,
-                'mb_model_class_apparent_mb': MySfcTypeTIModel_inv,
-            },
+            maxiter=5,
+            mb_model_class=massbalance.SfcTypeTIModel,
+            kwargs_run_function={'maxiter': 5},
             output_filesuffix='_spinup_historical',
         )
         # if the above runs without an error it is fine, but still check a few
@@ -2434,8 +2495,8 @@ class TestMassBalanceModels:
         assert isinstance(dyn_models[0].volume_m3, float)
         assert gdir.get_diagnostics()['used_spinup_option'] in [
             'dynamic melt_f calibration (full success)',
-            'dynamic melt_f calibration (part success)',
-            'dynamic spinup only',
+            #'dynamic melt_f calibration (part success)',
+            #'dynamic spinup only',
         ]
 
     def test_constant_mb_model(self, hef_gdir):
@@ -4649,6 +4710,12 @@ class TestHEFNonPolluted:
                 for y in [1992, 2000, 2003]:
                     assert new.sel(time=y).data == ref.sel(time=y).data
                 assert new.sel(time=1950).data == new.sel(time=1980).data
+
+            for vn in ['volume_ice', 'volume_firn']:
+                # should be nan for fixed geometry spinup period
+                assert np.all(np.isnan(ods[vn].sel(time=[1850, 1900, 1990])))
+                # should have some values after fixed geometry spinup period
+                assert ~np.all(np.isnan(ods[vn].sel(time=[1991, 2000, 2003])))
 
             # We pick symmetry around rgi date so show that somehow it works
             for vn in ['volume']:

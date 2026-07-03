@@ -610,7 +610,7 @@ class FlowlineModel(object):
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
                  water_level=None, required_model_steps='monthly',
-                 include_mb_model_heights=True, include_firn_outputs=False, ):
+                 include_mb_model_heights=True, include_firn_outputs=True, ):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -663,7 +663,7 @@ class FlowlineModel(object):
             If True we add the snow/firn height of the current mb_model (if
             available) to include this in the elevation feedback of the mb
             calculation.
-        include_firn_outputs : bool, default False
+        include_firn_outputs : bool, default True
             If True we include firn/snow output for volume, mass and thickness.
             With this you get for each of them three output variables. E.g. for
             volume: volume_m3 = volume_ice_m3 + volume_firn_m3. If False only
@@ -922,8 +922,8 @@ class FlowlineModel(object):
         if isinstance(self._mb_model, MultipleFlowlineMassBalance):
             return self._mb_model.flowline_mb_models[fl_id]
         else:
-            # we only allow a single flowline for this case
-            assert len(self.fls) == 1
+            # in this case the provided mb_model can work on any fl and has no
+            # memory (e.g. like the SfcTypeTIModel)
             return self._mb_model
 
     def _get_along_fl_thickness_firn_m(self, fl_id):

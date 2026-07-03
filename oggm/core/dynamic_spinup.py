@@ -4,6 +4,7 @@ import logging
 import copy
 import os
 import warnings
+from functools import partial
 
 # External libs
 import numpy as np
@@ -34,7 +35,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                        init_model_filesuffix=None, init_model_yr=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
-                       evolution_model=None,
+                       evolution_model=None, mb_model_class=None,
                        mb_model_historical=None, mb_model_spinup=None,
                        spinup_period_initial=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
@@ -101,6 +102,8 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -240,6 +243,9 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
 
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
+
     # handling of the observations here, there are two options matching area or
     # volume
     if minimise_for == 'area':
@@ -370,7 +376,8 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     if mb_model_historical is None:
         mb_model_historical = MultipleFlowlineMassBalance(
             gdir, settings_filesuffix=settings_filesuffix,
-            mb_model_class=MonthlyTIModel,
+            mb_model_class=mb_model_class,
+            flowlines_filesuffix=model_flowlines_filesuffix,
             filename='climate_historical',
             input_filesuffix=climate_input_filesuffix)
 
@@ -437,6 +444,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         if settings_filesuffix == '':
             gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
         yr_use = np.clip(target_yr, yr_min, None)
+        mb_model_historical.reset_state()
         model_dynamic_spinup_end = evolution_model(flowlines=fls_spinup,
                                                    mb_model=mb_model_historical,
                                                    y0=yr_use,
@@ -504,6 +512,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
 
         # with t_spinup the glacier state after spinup is changed between iterations
         mb_model_spinup.temp_bias = t_spinup
+        mb_model_spinup.reset_state()
         # run the spinup
         model_spinup = evolution_model(flowlines=copy.deepcopy(fls_spinup),
                                        mb_model=mb_model_spinup,
@@ -519,6 +528,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
             ice_free = True
 
         # Now conduct the actual model run to the rgi date
+        mb_model_historical.reset_state()
         model_historical = evolution_model(flowlines=model_spinup.fls,
                                            mb_model=mb_model_historical,
                                            y0=yr_spinup,
@@ -939,7 +949,9 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
             # ConstantMassBalance
             mb_model_spinup = MultipleFlowlineMassBalance(
                 gdir, settings_filesuffix=settings_filesuffix,
-                mb_model_class=ConstantMassBalance,
+                mb_model_class=partial(ConstantMassBalance,
+                                       mb_model_class=mb_model_class),
+                flowlines_filesuffix=model_flowlines_filesuffix,
                 filename='climate_historical',
                 input_filesuffix=climate_input_filesuffix, y0=y0_spinup,
                 halfsize=halfsize_spinup)
@@ -1047,7 +1059,7 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f):
 def dynamic_melt_f_run_with_dynamic_spinup(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None, evolution_model=None,
-        mb_model_historical=None, mb_model_spinup=None,
+        mb_model_class=None, mb_model_historical=None, mb_model_spinup=None,
         model_flowlines_filesuffix='',
         minimise_for='area', climate_input_filesuffix='', spinup_period_initial=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
@@ -1056,8 +1068,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
         spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
-        spinup_periods_to_try=None, mb_model_class_apparent_mb=None,
-        **kwargs):
+        spinup_periods_to_try=None, **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_melt_f_calibration' function (the corresponding
@@ -1096,6 +1107,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -1203,9 +1216,6 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         If spinup_period_initial and min_spinup_period were not successful, you
         can provide here a list of spinup periods which should be tried in order.
         Default is None
-    mb_model_class_apparent_mb : py:class:`core.MassBalanceModel`
-        The mass balance model class which should be used to define the apparent
-        mb for the inversion.
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1220,6 +1230,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
 
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
+
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
 
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
@@ -1297,7 +1310,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             apparent_mb_from_any_mb(gdir,
                                     settings_filesuffix=settings_filesuffix,
                                     add_to_log_file=False,  # dont write to log
-                                    mb_model_class=mb_model_class_apparent_mb,
+                                    mb_model_class=mb_model_class,
                                     )
             # do inversion with A calibration to current volume
             calibrate_inversion_from_volume(
@@ -1334,6 +1347,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
+            mb_model_class=mb_model_class,
             mb_model_historical=mb_model_historical,
             mb_model_spinup=mb_model_spinup,
             spinup_period_initial=spinup_period_initial,
@@ -1379,7 +1393,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
 def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir, melt_f, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None,
-        evolution_model=None, minimise_for='area',
+        evolution_model=None, mb_model_class=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period_initial=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
@@ -1388,7 +1402,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
         add_fixed_geometry_spinup=True, spinup_periods_to_try=None,
-        mb_model_class_apparent_mb=None, **kwargs):
+        **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run_with_dynamic_spinup', which are provided
@@ -1419,6 +1433,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -1513,9 +1529,6 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         If spinup_period_initial and min_spinup_period were not successful, you
         can provide here a list of spinup periods which should be tried in order.
         Default is None
-    mb_model_class_apparent_mb : py:class:`core.MassBalanceModel`
-        The mass balance model class which should be used to define the apparent
-        mb for the inversion.
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1532,6 +1545,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
 
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
+
     # revert gdir to original state if necessary
     if melt_f != gdir.settings['melt_f']:
         define_new_melt_f_in_gdir(gdir, melt_f)
@@ -1539,7 +1555,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             with utils.DisableLogger():
                 apparent_mb_from_any_mb(gdir,
                                         settings_filesuffix=settings_filesuffix,
-                                        mb_model_class=mb_model_class_apparent_mb,
+                                        mb_model_class=mb_model_class,
                                         add_to_log_file=False)
                 calibrate_inversion_from_volume(
                     [gdir], settings_filesuffix=settings_filesuffix,
@@ -1573,6 +1589,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             init_model_fls=fls_init,
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
+            mb_model_class=mb_model_class,
             mb_model_historical=mb_model_historical,
             mb_model_spinup=mb_model_spinup,
             spinup_period_initial=spinup_period_initial,
@@ -1629,6 +1646,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
 
         # try to make a fixed geometry spinup
+        mb_model_historical.reset_state()
         model_end = run_from_climate_data(
             gdir,
             # force to raise an error in @entity_task
@@ -1642,6 +1660,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             store_model_geometry=store_model_geometry,
             store_fl_diagnostics=store_fl_diagnostics,
             init_model_fls=fls_init, evolution_model=evolution_model,
+            mb_model_class=mb_model_class,
             fixed_geometry_spinup_yr=ys)
 
         gdir.settings['used_spinup_option'] = 'fixed geometry spinup'
@@ -1654,8 +1673,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
 def dynamic_melt_f_run(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         settings_filesuffix='',  output_filesuffix=None, evolution_model=None,
-        local_variables=None, set_local_variables=False, target_yr=None,
-        model_flowlines_filesuffix='',
+        mb_model_class=None, local_variables=None, set_local_variables=False,
+        target_yr=None, model_flowlines_filesuffix='',
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1690,6 +1709,8 @@ def dynamic_melt_f_run(
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     local_variables : None
         Not needed in this function, just here to match with the function
         call in run_dynamic_melt_f_calibration.
@@ -1714,6 +1735,9 @@ def dynamic_melt_f_run(
     evolution_model = decide_evolution_model(gdir=gdir,
                                              evolution_model=evolution_model)
 
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
+
     if set_local_variables:
         # No local variables needed in this function
         return None
@@ -1732,6 +1756,7 @@ def dynamic_melt_f_run(
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
                                       evolution_model=evolution_model,
+                                      mb_model_class=mb_model_class,
                                       **kwargs)
     except RuntimeError as e:
         raise RuntimeError(f'run_from_climate_data raised error! '
@@ -1752,7 +1777,7 @@ def dynamic_melt_f_run(
 def dynamic_melt_f_run_fallback(
         gdir, melt_f, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None,
-        evolution_model=None, target_yr=None, **kwargs):
+        evolution_model=None, mb_model_class=None, target_yr=None, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run', which are provided to
@@ -1781,6 +1806,8 @@ def dynamic_melt_f_run_fallback(
     evolution_model : :class:oggm.core.FlowlineModel
         which evolution model to use. Default: gdir.settings['evolution_model']
         Not all models work in all circumstances!
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     target_yr : int or None
         The target year for a potential dynamic spinup (not needed here).
         Default is None
@@ -1811,6 +1838,7 @@ def dynamic_melt_f_run_fallback(
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       init_model_fls=fls_init,
+                                      mb_model_class=mb_model_class,
                                       evolution_model=evolution_model,
                                       **kwargs)
         gdir.settings['used_spinup_option'] = 'no spinup'
@@ -1831,7 +1859,7 @@ def run_dynamic_melt_f_calibration(
         ref_mb_period=None, melt_f_min=None,
         melt_f_max=None, melt_f_max_step_length_minimum=0.1, maxiter=20,
         ignore_errors=False, output_filesuffix=None,
-        model_flowlines_filesuffix=None,
+        model_flowlines_filesuffix=None, mb_model_class=None,
         ys=None, ye=None, target_yr=None,
         run_function=dynamic_melt_f_run_with_dynamic_spinup,
         kwargs_run_function=None,
@@ -1929,6 +1957,8 @@ def run_dynamic_melt_f_calibration(
         for the model flowline to use if no other flowlines for initialisation
         are provided. If None the settings_filesuffix will be used.
         Default is None
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     ys : int or None
         The start year of the conducted run. If None the first year of the
         provided climate file.
@@ -1989,6 +2019,9 @@ def run_dynamic_melt_f_calibration(
 
     if model_flowlines_filesuffix is None:
         model_flowlines_filesuffix = settings_filesuffix
+
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
 
     # melt_f constraints
     if melt_f_min is None:
@@ -2162,6 +2195,7 @@ def run_dynamic_melt_f_calibration(
             model = fallback_function(gdir=gdir,
                                       settings_filesuffix=settings_filesuffix,
                                       melt_f=melt_f, fls_init=fls_init,
+                                      mb_model_class=mb_model_class,
                                       ys=ys, ye=ye,
                                       output_filesuffix=output_filesuffix,
                                       **kwargs_fallback_function)
@@ -2188,6 +2222,7 @@ def run_dynamic_melt_f_calibration(
                                              yr0_ref_mb=yr0_ref_mb,
                                              yr1_ref_mb=yr1_ref_mb,
                                              fls_init=fls_init, ys=ys, ye=ye,
+                                             mb_model_class=mb_model_class,
                                              output_filesuffix=output_filesuffix,
                                              local_variables=local_variables_run_function,
                                              **kwargs_run_function)
@@ -2222,6 +2257,7 @@ def run_dynamic_melt_f_calibration(
     run_function(gdir=gdir, settings_filesuffix=settings_filesuffix,
                  melt_f=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
+                 mb_model_class=mb_model_class,
                  local_variables=local_variables_run_function,
                  model_flowlines_filesuffix=model_flowlines_filesuffix,
                  set_local_variables=True, **kwargs_run_function)
@@ -2239,6 +2275,7 @@ def run_dynamic_melt_f_calibration(
                                          yr0_ref_mb=yr0_ref_mb,
                                          yr1_ref_mb=yr1_ref_mb,
                                          fls_init=fls_init, ys=ys, ye=ye,
+                                         mb_model_class=mb_model_class,
                                          output_filesuffix=output_filesuffix,
                                          local_variables=local_variables_run_function,
                                          **kwargs_run_function)
