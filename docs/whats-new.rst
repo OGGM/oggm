@@ -18,6 +18,17 @@ Enhancements
   keeps calibrating against the Farinotti et al. (2019) consensus estimate.
   Note that the default reference for RGI6 ``run_prepro_levels`` inversions
   changes accordingly from the consensus estimate to IceBoost v2 (:pull:`1942`).
+- New ``cfg.PARAMS['store_output_on_error']`` (default ``False``): when a run
+  fails mid-simulation (e.g. a glacier growing out of its domain), the output
+  files (diagnostics, geometry and flowline diagnostics) are written truncated
+  to the last successfully completed year before the error is re-raised,
+  instead of losing all output. This is meant for projections; preprocessing
+  and spinup runs should keep failing loudly (hence the ``False`` default).
+  Truncated files carry a ``partial_output`` global attribute, and
+  ``run_with_hydro`` also adds the hydro diagnostics to them. ``compile_run_output``
+  merges files of different lengths onto a common time axis and now always
+  reports two per-glacier variables, ``is_partial_output`` and
+  ``error_during_run`` (:pull:`1929`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``area_min_h`` is now a default diagnostic output variable: it is the
   glacier area computed from grid points thicker than
@@ -72,6 +83,8 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The default reference for RGI6 all initial glacier volumes is now
+  IceBoost v2 - this replaces the previous consensus estimate (:pull:`1942`).
 - Renamed ``cfg.PARAMS['dynamic_spinup_min_ice_thick']`` to
   ``cfg.PARAMS['min_ice_thick_for_area']`` and the associated diagnostic output
   variable ``area_m2_min_h`` to ``area_min_h_m2`` in the per-glacier
