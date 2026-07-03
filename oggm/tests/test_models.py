@@ -1789,6 +1789,12 @@ class TestMassBalanceModels:
         mb_mod.prcp_fac = 1
         np.testing.assert_allclose(mb_mod.mb_buckets, mb_buckets_2006)
 
+        # test fixed_geometry_mass_balance
+        s = massbalance.fixed_geometry_mass_balance(
+            gdir, mb_model_class=massbalance.SfcTypeTIModel)
+        assert s.index[0] == 1808
+        assert s.index[-1] == 2002
+
     def test_sfc_type_apparent_mb_from_any_mb_multiple_fl(self, hef_gdir):
         """apparent_mb_from_any_mb with SfcTypeTIModel and centerlines, i.e.
         several flowlines of different length (SfcTypeTIModel needs to know

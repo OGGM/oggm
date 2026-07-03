@@ -5577,6 +5577,11 @@ def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
     if years is None:
         if ys is None:
             ys = mbmod.flowline_mb_models[0].ys
+            if ys is None:
+                if isinstance(mbmod.flowline_mb_models[0], SfcTypeTIModel):
+                    # for SfcTypeTIModel we need go one layer deeper
+                    sfc_mbod = mbmod.flowline_mb_models[0]
+                    ys = sfc_mbod.mbmod.ys + sfc_mbod.spinup_years
         if ye is None:
             ye = mbmod.flowline_mb_models[0].ye
         years = np.arange(ys, ye + 1)
