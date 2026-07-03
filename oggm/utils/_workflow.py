@@ -1104,6 +1104,25 @@ def merge_consecutive_run_outputs(gdir,
     return out_ds
 
 
+def _time_index(time, t):
+    """Index in `time` (sorted ascending) of the entry matching `t`.
+
+    Robust to tiny floating point representation differences between files
+    (used by compile_run_output instead of an exact `==` lookup, which can
+    raise an opaque IndexError). Asserts a near-exact match so genuine
+    misalignment still errors clearly.
+    """
+    time = np.asarray(time)
+    idx = int(np.searchsorted(time, t))
+    cands = [c for c in (idx - 1, idx, idx + 1) if 0 <= c < len(time)]
+    best = min(cands, key=lambda c: abs(time[c] - t))
+    if not np.isclose(time[best], t, atol=1e-4):
+        raise InvalidWorkflowError(
+            'Could not align time {} when compiling output (closest '
+            'available time is {}).'.format(t, time[best]))
+    return best
+
+
 @global_task(log)
 @compile_to_netcdf(log)
 def compile_run_output(gdirs, path=True, input_filesuffix='',
@@ -1170,17 +1189,17 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                 else:
                     # Here we may need to append or add stuff
                     ot = time_info['time']
-                    if time[0] > ot[-1] or ot[-1] < time[0]:
+                    if time[0] > ot[-1] or time[-1] < ot[0]:
                         raise InvalidWorkflowError('Trying to compile output '
                                                    'without overlap.')
                     if time[-1] > ot[-1]:
-                        p = np.nonzero(time == ot[-1])[0][0] + 1
+                        p = _time_index(time, ot[-1]) + 1
                         time_info['time'] = np.append(ot, time[p:])
                         for cn in time_keys:
                             time_info[cn] = np.append(time_info[cn],
                                                       ds.variables[cn][p:])
                     if time[0] < ot[0]:
-                        p = np.nonzero(time == ot[0])[0][0]
+                        p = _time_index(time, ot[0])
                         time_info['time'] = np.append(time[:p], ot)
                         for cn in time_keys:
                             time_info[cn] = np.append(ds.variables[cn][:p],
@@ -1297,6 +1316,11 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                 var['attrs'] = data_vars[vn]['attrs']
                 out_3d[vn] = var
 
+    # Per-glacier run status (from global attributes). NaN means the file was
+    # missing, 0 a complete run, 1 a run truncated by a mid-run error.
+    is_partial = np.full(len(rgi_ids), np.nan)
+    run_errors = np.array([''] * len(rgi_ids), dtype=object)
+
     # Read out
     for i, gdir in enumerate(gdirs):
         try:
@@ -1304,8 +1328,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                                       filesuffix=input_filesuffix)
             with ncDataset(ppath) as ds_diag:
                 it = ds_diag.variables['time'][:]
-                a = np.nonzero(time == it[0])[0][0]
-                b = np.nonzero(time == it[-1])[0][0] + 1
+                # A truncated file (store_output_on_error) is shorter - place
+                # its data where it belongs and leave the rest as NaN.
+                a = _time_index(time, it[0])
+                b = _time_index(time, it[-1]) + 1
                 for vn, var in out_2d.items():
                     # try statement if some data variables not in all files
                     try:
@@ -1320,6 +1346,16 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                         pass
                 for vn, var in out_1d.items():
                     var['data'][i] = ds_diag.getncattr(vn)
+                # Did this run fail mid-simulation (store_output_on_error)?
+                try:
+                    ds_diag.getncattr('partial_output')
+                    is_partial[i] = 1.
+                    try:
+                        run_errors[i] = ds_diag.getncattr('error_during_run')
+                    except AttributeError:
+                        pass
+                except AttributeError:
+                    is_partial[i] = 0.
         except FileNotFoundError:
             pass
 
@@ -1338,13 +1374,26 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         ds[vn] = (('rgi_id', ), var['data'])
         ds[vn].attrs = var['attrs']
 
+    # Run status (one value per glacier). Always present so that downstream
+    # code can rely on it, even when no run was truncated.
+    ds['is_partial_output'] = (('rgi_id', ), is_partial)
+    ds['is_partial_output'].attrs['description'] = (
+        'Whether the run was truncated by a mid-run error (1), completed '
+        '(0) or the output file was missing (NaN)')
+    ds['error_during_run'] = (('rgi_id', ), run_errors)
+    ds['error_during_run'].attrs['description'] = (
+        'Error message if the run failed mid-simulation, empty otherwise')
+
     # To file?
     if path:
         enc_var = {'dtype': 'float32'}
         if use_compression:
             enc_var['complevel'] = 5
             enc_var['zlib'] = True
-        encoding = {v: enc_var for v in ds.data_vars}
+        # Only the (numeric) float variables get the float32 encoding - not
+        # e.g. the string `error_during_run`.
+        encoding = {v: enc_var for v in ds.data_vars
+                    if np.issubdtype(ds[v].dtype, np.floating)}
         ds.to_netcdf(path, encoding=encoding)
 
     return ds
@@ -2523,7 +2572,10 @@ def extend_past_climate_run(past_run_file=None,
             if use_compression:
                 enc_var['complevel'] = 5
                 enc_var['zlib'] = True
-            encoding = {v: enc_var for v in ods.data_vars}
+            # Only the (numeric) float variables get the float32 encoding - not
+            # e.g. the string `error_during_run` carried over from compilation.
+            encoding = {v: enc_var for v in ods.data_vars
+                        if np.issubdtype(ods[v].dtype, np.floating)}
             ods.to_netcdf(path, encoding=encoding)
 
     return ods
