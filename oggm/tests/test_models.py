@@ -2517,6 +2517,53 @@ class TestMassBalanceModels:
         assert np.any(firn_thick > 0)  # at least some should be > 0
         assert np.all(firn_thick >= 0)
 
+    @pytest.mark.slow
+    def test_sfc_type_mass_conservation(self, hef_gdir):
+        from oggm.core.flowline import MassConservationChecker
+
+        gdir = hef_gdir
+        tasks.process_gswp3_w5e5_data(gdir, output_filesuffix='_monthly')
+        init_present_time_glacier(gdir)
+
+        # SfcTypeTIModel only supports a single flowline; start from zero ice
+        # so that total_mass (accumulated MB) equals final volume_m3
+        fl = copy.deepcopy(gdir.read_pickle('model_flowlines')[-1])
+        fl.thick = fl.thick * 0.
+        fls = [fl]
+
+        def make_mb_mod():
+            return massbalance.SfcTypeTIModel(
+                gdir,
+                settings_filesuffix='',
+                fl=fls[0],
+                mb_model_class=massbalance.MonthlyTIModel,
+                input_filesuffix='_monthly',
+                ys=1950,
+                use_previous_mbs=True,
+                climate_resolution='monthly',
+                aging_frequency='monthly',
+                check_calib_params=False,
+            )
+
+        model = MassConservationChecker(
+            fls, mb_model=make_mb_mod(), y0=1950,
+            mb_elev_feedback='annual',
+            include_mb_model_heights=False,
+        )
+        # dynamic run for 70 years
+        model.run_until(2020)
+        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+
+        # same check with bucket heights included in elevation feedback
+        model_elev = MassConservationChecker(
+            fls, mb_model=make_mb_mod(), y0=1950,
+            mb_elev_feedback='annual',
+            include_mb_model_heights=True,
+        )
+        # dynamic run for 70 years
+        model_elev.run_until(2020)
+        assert_allclose(model_elev.total_mass, model_elev.volume_m3, rtol=1e-3)
+
     def test_constant_mb_model(self, hef_gdir):
 
         rho = cfg.PARAMS['ice_density']
