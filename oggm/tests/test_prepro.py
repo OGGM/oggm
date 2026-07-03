@@ -1131,6 +1131,41 @@ class TestGeometry(unittest.TestCase):
         centerlines.catchment_intersections(gdir)
         centerlines.catchment_width_geom(gdir)
 
+    def test_geom_width_store_roundtrip(self):
+        """Test ragged arrays for catrchment widths."""
+        hef_file = get_demo_file("Hintereisferner_RGI5.shp")
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+
+        fls = gdir.read_store("inversion_flowlines")
+        # HEF has neither two-member or empty widths
+        mls2 = shpg.MultiLineString(
+            [[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 4.0)]]
+        )
+        empty = shpg.MultiLineString()
+        fls[0].geometrical_widths[0] = mls2
+        fls[0].geometrical_widths[1] = empty
+        gdir.write_store(fls, "inversion_flowlines")
+
+        back = gdir.read_store("inversion_flowlines")
+        w0, w1 = back[0].geometrical_widths[:2]
+        assert len(w0.geoms) == 2
+        assert w0.equals(mls2)
+        assert w1.is_empty
+        # Every other width round-trips identically too.
+        for a, b in zip(fls, back):
+            for wa, wb in zip(a.geometrical_widths, b.geometrical_widths):
+                assert len(wa.geoms) == len(wb.geoms)
+                assert wa.equals(wb)
+
     def test_width(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')

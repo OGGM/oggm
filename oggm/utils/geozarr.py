@@ -330,21 +330,39 @@ def get_centerline_from_datatree(data_tree: xr.DataTree):
         val = get_datatree_value(data_tree, attribute)
         setattr(centerline, attribute, val)
 
-    # For widths from (N,2,2) array to MultiLineString
-    # Matches original structure by converting NaN row to emtpy MLS
+    # Need to rebuild list of MultiLineStrings from flat coord array
     gw_data = get_datatree_value(data_tree, "geometrical_widths")
     if gw_data is not None:
-        gw_array = np.array(gw_data)
-        widths = []
-        for i in range(len(gw_array)):
-            if np.any(np.isnan(gw_array[i])):
-                widths.append(shapely.geometry.MultiLineString())
-            else:
-                widths.append(
-                    shapely.geometry.MultiLineString(
-                        [shapely.geometry.LineString(gw_array[i])]
+        coords = np.array(gw_data)
+        line_lengths = get_datatree_value(data_tree, "gw_line_lengths")
+        counts = get_datatree_value(data_tree, "gw_width_line_counts")
+        if line_lengths is None:
+            # TODO: legacy (N,2,2) stores from before the ragged fix,
+            # drop this logic once pre-fix zarr caches are rebuilt
+            widths = []
+            for i in range(len(coords)):
+                if np.any(np.isnan(coords[i])):
+                    widths.append(shapely.geometry.MultiLineString())
+                else:
+                    widths.append(
+                        shapely.geometry.MultiLineString(
+                            [shapely.geometry.LineString(coords[i])]
+                        )
                     )
-                )
+        else:
+            line_lengths = np.asarray(line_lengths, dtype=np.int64)
+            counts = np.asarray(counts, dtype=np.int64)
+            splits = np.cumsum(line_lengths)[:-1]
+            lines = np.split(coords, splits) if len(line_lengths) else []
+            widths = []
+            li = 0
+            for cnt in counts:
+                members = [
+                    shapely.geometry.LineString(lines[li + j])
+                    for j in range(cnt)
+                ]
+                li += cnt
+                widths.append(shapely.geometry.MultiLineString(members))
         centerline.geometrical_widths = widths
 
     return centerline
@@ -896,28 +914,41 @@ def get_inversion_flowlines_from_pkl(pickle: list) -> list[dict]:
             )
             gw = getattr(fl, "geometrical_widths", None)
             if gw is not None:
-                nan_row = np.full((2, 2), np.nan, dtype=np.float64)
-                gw_rows = []
+                # Widths are ragged MultiLineStrings, so store flat coord array
+                # plus counts to preserve ragged shape
+                all_coords = []  # flat coords across all member lines
+                line_lengths = []  # vertices per member LineString
+                width_line_counts = []  # member lines per width
                 for w in gw:
-                    if w is None or w.is_empty:
-                        gw_rows.append(nan_row)
+                    if w is None:
+                        members = []
                     elif hasattr(w, "geoms"):
-                        # MultiLineString: take the first (only) member
-                        sub = list(w.geoms)
-                        if sub:
-                            gw_rows.append(
-                                np.array(list(sub[0].coords), dtype=np.float64)
-                            )
-                        else:
-                            gw_rows.append(nan_row)
+                        members = list(w.geoms)
                     else:
-                        # Plain LineString
-                        gw_rows.append(
-                            np.array(list(w.coords), dtype=np.float64)
-                        )
+                        members = [w]
+                    cnt = 0
+                    for m in members:
+                        if m is None or m.is_empty:
+                            continue
+                        c = np.asarray(m.coords, dtype=np.float64)
+                        all_coords.append(c)
+                        line_lengths.append(len(c))
+                        cnt += 1
+                    width_line_counts.append(cnt)
+                coords = (
+                    np.concatenate(all_coords, axis=0)
+                    if all_coords
+                    else np.zeros((0, 2), dtype=np.float64)
+                )
                 data["geometrical_widths"] = xr.DataArray(
-                    np.array(gw_rows, dtype=np.float64),
-                    dims=["width_idx", "vertex", "coord"],
+                    coords, dims=["gw_vertex", "gw_coord"]
+                )
+                data["gw_line_lengths"] = xr.DataArray(
+                    np.asarray(line_lengths, dtype=np.int64), dims=["gw_line"]
+                )
+                data["gw_width_line_counts"] = xr.DataArray(
+                    np.asarray(width_line_counts, dtype=np.int64),
+                    dims=["gw_width"],
                 )
             # so xarray can infer dtypes for each variable
             data = {k: v for k, v in data.items() if v is not None}
