@@ -1691,7 +1691,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
 
         # try to make a fixed geometry spinup
-        mb_model_historical.reset_state()
+        if mb_model_historical is not None:
+            mb_model_historical.reset_state()
         model_end = run_from_climate_data(
             gdir,
             # force to raise an error in @entity_task
