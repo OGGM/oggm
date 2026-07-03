@@ -46,6 +46,15 @@ from oggm.cfg import G, GAUSSIAN_KERNEL
 # Module logger
 log = logging.getLogger(__name__)
 
+# Internal flag: when True, `flowline_model_run` returns a partially completed
+# model (with `.run_error` set) instead of re-raising on a mid-run error.
+# Only `run_with_hydro` sets this (around its `run_task` call) so it can add
+# the hydro diagnostics to the truncated output before re-raising itself. It
+# is a module global rather than a kwarg because `run_task` can be any of the
+# `run_*` tasks (incl. dynamic spinup), which do not all forward kwargs to
+# `flowline_model_run`. OGGM runs one glacier per process, so this is safe.
+_RETURN_MODEL_ON_ERROR = False
+
 
 class Flowline(Centerline):
     """A Centerline with additional properties: input to the FlowlineModel
@@ -930,6 +939,7 @@ class FlowlineModel(object):
                             store_monthly_step=None,
                             stop_criterion=None,
                             fixed_geometry_spinup_yr=None,
+                            store_output_on_error=None,
                             min_ice_thick_for_area=None,
                             ):
         """Runs the model and returns intermediate steps in xarray datasets.
@@ -987,8 +997,13 @@ class FlowlineModel(object):
             in combination with the dynamic spinup. In particular only grid
             points with a minimum ice thickness are considered for the total
             area or the total volume. This is useful to smooth out yearly
-            fluctuations when matching to observations. The names of this new
-            variables include the suffix _min_h (e.g. 'area_min_h_m2')
+            fluctuations when matching to observations.
+        store_output_on_error : bool or None
+            if the run fails mid-simulation (e.g. a domain boundary or
+            numerical error), still write the output files truncated to the
+            last successfully completed time step, then re-raise the error.
+            Such files carry a `partial_output = True` global attribute. The
+            default (None) follows cfg.PARAMS['store_output_on_error'].
 
         Returns
         -------
@@ -1010,6 +1025,9 @@ class FlowlineModel(object):
             raise InvalidParamsError('run_until_and_store needs a '
                                      'mass balance model with an unambiguous '
                                      'hemisphere.')
+
+        if store_output_on_error is None:
+            store_output_on_error = cfg.PARAMS['store_output_on_error']
 
         # Do we have a spinup?
         do_fixed_spinup = fixed_geometry_spinup_yr is not None
@@ -1295,12 +1313,26 @@ class FlowlineModel(object):
 
         # Run
         prev_state = None  # for the stopping criterion
+        run_error = None  # set if the run fails and we still want output
         for i, (yr, mo) in enumerate(zip(monthly_time, months)):
 
             if yr > self.yr:
                 # Here we model run - otherwise (for spinup) we
                 # constantly store the same data
-                self.run_until(yr)
+                try:
+                    self.run_until(yr)
+                except Exception as e:
+                    if not store_output_on_error:
+                        raise
+                    # Keep the data stored so far (rows 0..i-1) and write it
+                    # out below, truncated to the last completed step. The
+                    # error is re-raised once the files are written.
+                    run_error = e
+                    log.workflow('run_until_and_store: the run failed at year '
+                                 '%s (%s). Writing output truncated to the '
+                                 'last completed step before re-raising.',
+                                 yr, repr(e))
+                    break
 
             # Glacier geometry
             if do_geom or do_fl_diag:
@@ -1404,6 +1436,22 @@ class FlowlineModel(object):
                 if stop:
                     break
 
+        # On early termination (stop criterion or a caught run error) the
+        # output arrays still have a trailing block of nans which we drop
+        # before writing. We truncate by the number of steps actually stored
+        # rather than dropping nans on a specific variable, so this does not
+        # depend on which diagnostic variables are enabled. On error the
+        # failing step `i` was not stored (n = i); for a stop criterion or a
+        # normal completion step `i` was stored (n = i + 1). `i` is captured
+        # here because the write loops below reuse it.
+        do_truncate = stop_criterion is not None or run_error is not None
+        n_stored = i if run_error is not None else i + 1
+
+        if run_error is not None and n_stored == 0:
+            # Nothing useful was stored (the run failed on the very first
+            # step) - re-raise without writing empty files.
+            raise run_error
+
         # to datasets
         geom_ds = None
         if do_geom:
@@ -1435,9 +1483,9 @@ class FlowlineModel(object):
                 ds['ts_calving_bucket_m3'] = xr.DataArray(b, dims=('time', ),
                                                           coords=varcoords)
 
-                if stop_criterion is not None:
-                    # Remove probable nans
-                    ds = ds.dropna('time', subset=['ts_section'])
+                if do_truncate:
+                    # Keep only the steps actually stored
+                    ds = ds.isel(time=slice(0, n_stored))
 
                 geom_ds.append(ds)
 
@@ -1449,9 +1497,18 @@ class FlowlineModel(object):
                                           'not implemented yet.')
             diag_ds['volume_m3'].data[:] += spinup_vol
 
-        if stop_criterion is not None:
-            # Remove probable nans
-            diag_ds = diag_ds.dropna('time', subset=['volume_m3'])
+        if do_truncate:
+            # Keep only the steps actually stored
+            diag_ds = diag_ds.isel(time=slice(0, n_stored))
+
+        if run_error is not None:
+            # Flag the truncated files so downstream tools (and users) can
+            # tell that they are incomplete. netcdf attrs don't store bools,
+            # hence the strings (as done for the mb_model attrs above).
+            err_msg = repr(run_error)
+            for ds in [diag_ds] + (geom_ds or []) + (fl_diag_dss or []):
+                ds.attrs['partial_output'] = 'True'
+                ds.attrs['error_during_run'] = err_msg
 
         # write output?
         if do_fl_diag:
@@ -1462,9 +1519,9 @@ class FlowlineModel(object):
                 # These variables are always there (see above)
                 ds['volume_m3'] = ds['volume_m3'] * dx
                 ds['area_m2'] = ds['area_m2'].where(ds['volume_m3'] > 0, 0) * dx
-                if stop_criterion is not None:
-                    # Remove probable nans
-                    fl_diag_dss[i] = ds.dropna('time', subset=['volume_m3'])
+                if do_truncate:
+                    # Keep only the steps actually stored
+                    fl_diag_dss[i] = ds.isel(time=slice(0, n_stored))
 
             # Write out?
             if fl_diag_path not in [True, None]:
@@ -1502,6 +1559,14 @@ class FlowlineModel(object):
 
         if diag_path not in [True, None]:
             diag_ds.to_netcdf(diag_path)
+
+        if run_error is not None:
+            # The (truncated) output is now written - the run is still a
+            # failure, so we re-raise the original error. We attach the model
+            # to the exception so that callers which want to keep working with
+            # the partial result (e.g. run_with_hydro) can recover it.
+            run_error.partial_run_model = self
+            raise run_error
 
         # Decide on what to give back
         out = [diag_ds]
@@ -3539,13 +3604,24 @@ def flowline_model_run(gdir, output_filesuffix=None, mb_model=None,
     with warnings.catch_warnings():
         # For operational runs we ignore the warnings
         warnings.filterwarnings('ignore', category=RuntimeWarning)
-        model.run_until_and_store(ye,
-                                  geom_path=geom_path,
-                                  diag_path=diag_path,
-                                  fl_diag_path=fl_diag_path,
-                                  store_monthly_step=store_monthly_step,
-                                  fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
-                                  stop_criterion=stop_criterion)
+        try:
+            model.run_until_and_store(ye,
+                                      geom_path=geom_path,
+                                      diag_path=diag_path,
+                                      fl_diag_path=fl_diag_path,
+                                      store_monthly_step=store_monthly_step,
+                                      fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
+                                      stop_criterion=stop_criterion)
+        except Exception as e:
+            # If the run failed mid-simulation but partial output was written
+            # (store_output_on_error), some callers want to keep working with
+            # the truncated result rather than letting the error propagate
+            # (e.g. run_with_hydro, which sets _RETURN_MODEL_ON_ERROR).
+            if _RETURN_MODEL_ON_ERROR and \
+                    getattr(e, 'partial_run_model', None) is not None:
+                model.run_error = e
+                return model
+            raise
 
     return model
 
@@ -4005,11 +4081,34 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     if fixed_geometry_spinup_yr is not None:
         kwargs['fixed_geometry_spinup_yr'] = fixed_geometry_spinup_yr
 
-    out = run_task(gdir, **kwargs)
+    # If the dynamic run fails mid-simulation but partial output was written
+    # (store_output_on_error), we still want to add the hydro diagnostics to
+    # the truncated files before letting the error propagate - just like a
+    # simple run does. We set a module flag so that flowline_model_run returns
+    # the (partial) model (with .run_error set) instead of raising, then we
+    # compute hydro here and re-raise at the end. Using a flag rather than a
+    # kwarg keeps run_task signatures (incl. the dynamic spinup tasks, which
+    # don't go through flowline_model_run) untouched.
+    global _RETURN_MODEL_ON_ERROR
+    _prev_return_model_on_error = _RETURN_MODEL_ON_ERROR
+    _RETURN_MODEL_ON_ERROR = True
+    try:
+        out = run_task(gdir, **kwargs)
+    finally:
+        _RETURN_MODEL_ON_ERROR = _prev_return_model_on_error
 
     if out is None:
         raise InvalidWorkflowError('The run task ({}) did not run '
                                    'successfully.'.format(run_task.__name__))
+
+    # Was the dynamic run truncated by an error? If so, we still compute the
+    # hydro output over the available years, then re-raise the error at the
+    # end (the files carry a `partial_output` flag in the meantime).
+    run_error = getattr(out, 'run_error', None)
+    if run_error is not None:
+        log.workflow('run_with_hydro: the dynamic run was truncated by an '
+                     'error (%s). Adding hydro diagnostics over the available '
+                     'years before re-raising.', repr(run_error))
 
     do_spinup = fixed_geometry_spinup_yr is not None
     if do_spinup:
@@ -4374,6 +4473,11 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
     # Append the output to the existing diagnostics
     fpath = gdir.get_filepath('model_diagnostics', filesuffix=suffix)
     ods.to_netcdf(fpath, mode='a')
+
+    if run_error is not None:
+        # The (truncated) output now also has the hydro diagnostics - the run
+        # is still a failure, so we re-raise, just like a simple run does.
+        raise run_error
 
 
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):

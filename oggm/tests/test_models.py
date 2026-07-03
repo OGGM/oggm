@@ -2954,6 +2954,99 @@ class TestHEF:
         assert_allclose(ds.area_m2.T, ds2.area)
         assert_allclose(ds.calving_m3.T, ds2.calving)
 
+    def test_compile_run_output_different_lengths(self, hef_gdir,
+                                                  hef_copy_gdir,
+                                                  inversion_params):
+        # compile_run_output must merge runs of different length (which
+        # happens with store_output_on_error) onto a common (union) time axis.
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+
+        # Two runs that end at different years
+        run_from_climate_data(hef_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_dl')
+        run_from_climate_data(hef_copy_gdir, ys=1985, ye=1995,
+                              output_filesuffix='_dl')
+
+        long_id = hef_gdir.rgi_id
+        short_id = hef_copy_gdir.rgi_id
+
+        # Both orders, so the short file is also exercised as the template
+        for order in ([hef_gdir, hef_copy_gdir], [hef_copy_gdir, hef_gdir]):
+            ds = utils.compile_run_output(order, input_filesuffix='_dl',
+                                          path=False)
+            # Union time spans the longer run
+            assert ds['time'].values[0] == 1985
+            assert ds['time'].values[-1] == 2000
+            vlong = ds.volume.sel(rgi_id=long_id)
+            vshort = ds.volume.sel(rgi_id=short_id)
+            # Long run is finite everywhere
+            assert vlong.notnull().all()
+            # Short run is finite up to 1995 then NaN
+            assert vshort.sel(time=slice(1985, 1995)).notnull().all()
+            assert vshort.sel(time=slice(1996, 2000)).isnull().all()
+            # Status vars are always present; neither run errored
+            assert float(ds['is_partial_output'].sel(rgi_id=long_id)) == 0
+            assert float(ds['is_partial_output'].sel(rgi_id=short_id)) == 0
+            assert str(ds['error_during_run'].sel(rgi_id=short_id).values) == ''
+
+    def test_compile_run_output_with_partial(self, hef_gdir, hef_copy_gdir,
+                                             inversion_params, monkeypatch):
+        # A run truncated by a mid-run error (store_output_on_error) must
+        # compile, with its tail NaN and the error recorded in the output.
+        import tempfile
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['store_output_on_error'] = True
+        cfg.PARAMS['evolution_model'] = 'FluxBased'
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+
+        # Full run first (before monkeypatching)
+        run_from_climate_data(hef_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_pp')
+
+        # Now make the dynamic run fail mid-simulation at 1992
+        from oggm.core.flowline import FluxBasedModel
+        orig_run_until = FluxBasedModel.run_until
+
+        def failing_run_until(self, y1):
+            if y1 > 1992:
+                raise RuntimeError('Glacier exceeds domain boundaries, '
+                                   'at year: {}'.format(y1))
+            return orig_run_until(self, y1)
+
+        monkeypatch.setattr(FluxBasedModel, 'run_until', failing_run_until)
+        # continue_on_error so the partial file is written and the error
+        # swallowed (the file still carries the error in its attributes)
+        run_from_climate_data(hef_copy_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_pp', continue_on_error=True)
+
+        full_id = hef_gdir.rgi_id
+        part_id = hef_copy_gdir.rgi_id
+
+        # Write to disk too, to exercise the (string) error var encoding
+        tmpdir = tempfile.mkdtemp()
+        try:
+            out = os.path.join(tmpdir, 'compiled_pp.nc')
+            utils.compile_run_output([hef_gdir, hef_copy_gdir],
+                                     input_filesuffix='_pp', path=out)
+            with xr.open_dataset(out) as ds:
+                assert ds['time'].values[-1] == 2000
+                vpart = ds.volume.sel(rgi_id=part_id)
+                assert vpart.sel(time=slice(1985, 1992)).notnull().all()
+                assert bool(vpart.sel(time=2000).isnull())
+                assert ds.volume.sel(rgi_id=full_id).notnull().all()
+                # Status recorded
+                assert float(ds['is_partial_output'].sel(rgi_id=part_id)) == 1
+                assert float(ds['is_partial_output'].sel(rgi_id=full_id)) == 0
+                assert 'domain boundaries' in str(
+                    ds['error_during_run'].sel(rgi_id=part_id).values)
+                assert str(
+                    ds['error_during_run'].sel(rgi_id=full_id).values) == ''
+        finally:
+            shutil.rmtree(tmpdir)
+
     @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
 
@@ -5403,6 +5496,70 @@ class TestHydro:
 
         # Runoff peak should follow a temperature curve
         assert_allclose(odf_ma['runoff'].idxmax(), 8)
+
+    @pytest.mark.slow
+    def test_hydro_with_stop_criterion(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        cfg.PARAMS['store_model_geometry'] = True
+
+        init_present_time_glacier(gdir)
+
+        # Constant climate reaches equilibrium well before nyears, so the
+        # stop criterion truncates the run.
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             store_monthly_hydro=False,
+                             y0=1985, nyears=300,
+                             stop_criterion=equilibrium_stop_criterion,
+                             output_filesuffix='_stop')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_stop')) as ds:
+            # The run stopped early (a full run would have 301 steps)
+            assert ds['time'].size < 300
+            # Both dynamic and hydro variables are present and aligned
+            assert 'volume_m3' in ds
+            assert 'melt_on_glacier' in ds
+            assert ds['melt_on_glacier'].size == ds['volume_m3'].size
+            # Hydro was actually computed over the truncated period (the very
+            # last year is always NaN by design - "last year is never good")
+            assert ds['melt_on_glacier'].isel(time=slice(0, -1)).isnull().sum() == 0
+
+    @pytest.mark.slow
+    def test_hydro_partial_output_on_error(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_output_on_error'] = True
+
+        init_present_time_glacier(gdir)
+
+        # Ask for a run that goes beyond the available climate data: the
+        # dynamic run fails mid-simulation once the climate runs out. With
+        # store_output_on_error this writes the truncated output, then
+        # run_with_hydro adds the hydro diagnostics and re-raises (like a
+        # simple run does).
+        with pytest.raises(ValueError, match='time bounds'):
+            tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 store_monthly_hydro=False,
+                                 ys=2000, ye=2050,
+                                 continue_on_error=False,
+                                 output_filesuffix='_partial')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_partial')) as ds:
+            # Truncated to the last year with climate data (well before 2050)
+            assert int(ds['time'][-1]) < 2050
+            # Both dynamic and hydro variables are present and aligned
+            assert 'volume_m3' in ds
+            assert 'melt_on_glacier' in ds
+            assert ds['melt_on_glacier'].size == ds['volume_m3'].size
+            # Flagged as partial output
+            assert ds.attrs['partial_output'] == 'True'
 
 
 class TestMassRedis:
