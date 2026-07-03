@@ -105,8 +105,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       disable_mp=False, params_file=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
+                      inversion_volume_dataset='iceboost',
                       mb_calibration_strategy='informed_threestep',
                       geodetic_mb_file_path=None,
+                      temp_bias_file_path=None,
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
@@ -176,6 +178,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         optional path or URL to a custom geodetic MB file, passed to
         utils.get_geodetic_mb_dataframe and
         tasks.mb_calibration_from_geodetic_mb.
+    temp_bias_file_path : str
+        optional path or URL to a custom temperature-bias file, passed to
+        tasks.mb_calibration_from_geodetic_mb (only used with the
+        'informed_threestep' calibration strategy). Use this together with a
+        `custom_climate_task` to calibrate on an arbitrary climate dataset.
+        The file must follow the same format as the default temp-bias files.
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -231,6 +239,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     skip_inversion : bool
          do not run the inversion (level 3 files). This is a temporary
          workaround for workflows that wont run that far into level 3.
+    inversion_volume_dataset : str
+        which reference volume dataset to calibrate the ice thickness
+        inversion (Glen A) against. One of:
+        - 'iceboost' (default): the IceBoost v2 product, auto-selected by RGI
+          version. Supported for RGI62, RGI70G and RGI70C.
+        - 'consensus': the Farinotti et al. (2019) consensus (ITMIX) estimate.
+          Only supported for RGI62.
     logging_level : str
         the logging level to use (DEBUG, INFO, WARNING, WORKFLOW)
     override_params : dict
@@ -747,14 +762,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        # Small optim to avoid concurrency
-        utils.get_geodetic_mb_dataframe(file_path=geodetic_mb_file_path)
-        utils.get_temp_bias_dataframe(dataset='w5e5')
-        utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
-        utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
-        utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70C', regional=True)
-        utils.get_temp_bias_dataframe(dataset='era5')
-
         use_regional_avg = False
         if '_regional' in mb_calibration_strategy:
             use_regional_avg = True
@@ -765,7 +772,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          gdirs,
                                          informed_threestep=True,
                                          use_regional_avg=use_regional_avg,
-                                         file_path=geodetic_mb_file_path)
+                                         file_path=geodetic_mb_file_path,
+                                         temp_bias_file_path=temp_bias_file_path)
         elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
@@ -787,34 +795,29 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if not skip_inversion:
             workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
 
-            # Inversion: we match the consensus
             filter = border >= 20
 
-            if rgi_version == '70G':
-                purl = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
-                        'oggm_v1.6/inv_rgi7/rgi6_regional_inv_params_2025.1.csv')
-                params_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
-                workflow.invert_from_params(gdirs,
-                                            params_df=params_df,
-                                            filter_inversion_output=filter)
-            elif rgi_version == '70C':
-                purl = ('https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/'
-                        'oggm_v1.6/inv_rgi7/rgi7c_glacier_inv_ref_2025.1.csv')
-                ref_vol_df = pd.read_csv(utils.file_downloader(purl), index_col=0)
-                # Small optim
-                ref_vol_df = ref_vol_df.loc[ref_vol_df.rgi_region == int(rgi_reg)]
-                ref_vol_df = ref_vol_df['inv_volume_km3'] * 1e9
-                workflow.execute_entity_task(workflow.calibrate_inversion_from_volume,
-                                             gdirs,
-                                             vol_ref_m3=ref_vol_df,
-                                             apply_fs_on_mismatch=True,
-                                             error_on_mismatch=False,
-                                             filter_inversion_output=filter)
-            else:
-                workflow.calibrate_inversion_from_consensus(gdirs,
-                                                            apply_fs_on_mismatch=True,
-                                                            error_on_mismatch=False,
-                                                            filter_inversion_output=filter)
+            # Inversion: calibrate Glen A to a reference volume dataset.
+            # Be explicit about which dataset is used for which RGI version.
+            if inversion_volume_dataset not in ('iceboost', 'consensus'):
+                raise InvalidParamsError(
+                    "inversion_volume_dataset must be 'iceboost' or "
+                    f"'consensus', not '{inversion_volume_dataset}'.")
+
+            if rgi_version in ('70G', '70C') and \
+                    inversion_volume_dataset != 'iceboost':
+                raise InvalidParamsError(
+                    f"For {rgi_version} only inversion_volume_dataset='iceboost' "
+                    f"is supported, not '{inversion_volume_dataset}' (the "
+                    "consensus estimate is only available for RGI62).")
+
+            # 'iceboost'/'consensus' map directly to ref_table presets
+            workflow.calibrate_inversion_from_ref_table(
+                gdirs,
+                ref_table=inversion_volume_dataset,
+                apply_fs_on_mismatch=True,
+                error_on_mismatch=False,
+                filter_inversion_output=filter)
 
             # Distribute thickness per altitude for gridded data
             if add_distributed_thickness:
@@ -1052,6 +1055,13 @@ def parse_args(args):
                         help='do not run the inversion (level 3 files). '
                              'this is a temporary workaround for workflows '
                              'that wont run that far into level 3.')
+    parser.add_argument('--inversion-volume-dataset', type=str,
+                        default='iceboost',
+                        choices=['iceboost', 'consensus'],
+                        help="reference volume dataset to calibrate the ice "
+                             "thickness inversion against. 'iceboost' (default, "
+                             "IceBoost v2, RGI62/RGI70G/RGI70C) or 'consensus' "
+                             "(Farinotti et al. 2019, RGI62 only).")
     parser.add_argument('--mb-calibration-strategy', type=str,
                         default='informed_threestep',
                         help='how to calibrate the massbalance. Currently one of '
@@ -1168,6 +1178,10 @@ def parse_args(args):
     parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')
+    parser.add_argument('--temp-bias-file-path', type=str, default=None,
+                        help='optional path or URL to a custom temperature-bias '
+                             'file passed to MB calibration (informed_threestep '
+                             'only). Use together with --custom-climate-task.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1225,6 +1239,7 @@ def parse_args(args):
                 logging_level=args.logging_level,
                 elev_bands=args.elev_bands,
                 skip_inversion=args.skip_inversion,
+                inversion_volume_dataset=args.inversion_volume_dataset,
                 centerlines=args.centerlines,
                 select_source_from_dir=args.select_source_from_dir,
                 keep_dem_folders=args.keep_dem_folders,
@@ -1246,6 +1261,7 @@ def parse_args(args):
                 dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
+                temp_bias_file_path=args.temp_bias_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 override_params=args.override_params,
                 )

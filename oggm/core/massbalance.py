@@ -1787,6 +1787,7 @@ def mb_calibration_to_rmsd(gdir, *,
 def mb_calibration_from_geodetic_mb(gdir, *,
                                     ref_period=None,
                                     file_path=None,
+                                    temp_bias_file_path=None,
                                     write_to_gdir=True,
                                     overwrite_gdir=False,
                                     use_regional_avg=False,
@@ -1826,6 +1827,13 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     file_path : str, optional
         path or URL to a custom geodetic mass-balance file, passed to
         utils.get_geodetic_mb_dataframe.
+    temp_bias_file_path : str, optional
+        path or URL to a custom temperature-bias file, passed to
+        utils.get_temp_bias_dataframe. Only used with `informed_threestep`.
+        When set, it overrides the default w5e5/era5 file selection based on
+        the glacier's climate source, so it can be used together with an
+        arbitrary (custom) climate dataset. The file must follow the same
+        format as the default temp-bias files (check the format first!).
     write_to_gdir : bool
         whether to write the results of the calibration to the glacier
         directory. If True (the default), this will be saved as `mb_calib.json`
@@ -1904,7 +1912,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
     if informed_threestep:
         climinfo = gdir.get_climate_info()
         climsource = climinfo['baseline_climate_source']
-        if 'w5e5' in climsource.lower():
+        if temp_bias_file_path is not None:
+            bias_df = get_temp_bias_dataframe(file_path=temp_bias_file_path,
+                                              regional=use_regional_avg)
+        elif 'w5e5' in climsource.lower():
             bias_df = get_temp_bias_dataframe('w5e5',
                                               rgi_version=gdir.rgi_version,
                                               regional=use_regional_avg)

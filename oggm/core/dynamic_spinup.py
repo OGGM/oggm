@@ -980,7 +980,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     'dynamic_melt_f_run_with_dynamic_spinup_fallback'). This
     function defines a new melt_f in the glacier directory and conducts an
     inversion calibrating A to match '_vol_m3_ref' with this new melt_f
-    ('calibrate_inversion_from_consensus'). Afterwards a dynamic spinup is
+    ('calibrate_inversion_from_ref_table'). Afterwards a dynamic spinup is
     conducted to match 'minimise_for' (for more info look at docstring of
     'run_dynamic_spinup'). And in the end the geodetic mass balance of the
     current run is calculated (between the period [yr0_ref_mb, yr1_ref_mb]) and
@@ -1129,14 +1129,14 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
 
-    from oggm.workflow import calibrate_inversion_from_consensus
+    from oggm.workflow import calibrate_inversion_from_ref_table
 
     if set_local_variables:
         # clear the provided dictionary and set the first elements
         local_variables.clear()
         local_variables['t_spinup'] = [first_guess_t_spinup]
         # ATTENTION: it is assumed that the flowlines in gdir have the volume
-        # we want to match during calibrate_inversion_from_consensus when we
+        # we want to match during calibrate_inversion_from_ref_table when we
         # set_local_variables
         fls_ref = gdir.read_store('model_flowlines')
         local_variables['vol_m3_ref'] = np.sum([f.volume_m3 for f in fls_ref])
@@ -1199,7 +1199,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                     add_to_log_file=False,  # dont write to log
                                     )
             # do inversion with A calibration to current volume
-            calibrate_inversion_from_consensus(
+            calibrate_inversion_from_ref_table(
                 [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
                 filter_inversion_output=True,
                 volume_m3_reference=local_variables['vol_m3_ref'],
@@ -1309,7 +1309,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         end year of the run
     local_variables : dict
         Dict in which under the key 'vol_m3_ref' the volume which is used in
-        'calibrate_inversion_from_consensus'
+        'calibrate_inversion_from_ref_table'
     output_filesuffix : str
         For the output file.
         Default is ''
@@ -1418,13 +1418,13 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     :py:class:`oggm.core.flowline.evolution_model`
         The final model after the run.
     """
-    from oggm.workflow import calibrate_inversion_from_consensus
+    from oggm.workflow import calibrate_inversion_from_ref_table
 
     evolution_model = decide_evolution_model(evolution_model)
 
     if local_variables is None:
         raise RuntimeError('Need the volume to do'
-                           'calibrate_inversion_from_consensus provided in '
+                           'calibrate_inversion_from_ref_table provided in '
                            'local_variables!')
 
     # revert gdir to original state if necessary
@@ -1434,7 +1434,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             with utils.DisableLogger():
                 apparent_mb_from_any_mb(gdir,
                                         add_to_log_file=False)
-                calibrate_inversion_from_consensus(
+                calibrate_inversion_from_ref_table(
                     [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
                     filter_inversion_output=True,
                     volume_m3_reference=local_variables['vol_m3_ref'],

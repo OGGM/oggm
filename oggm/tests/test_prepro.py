@@ -2196,23 +2196,28 @@ class TestInversion(unittest.TestCase):
         massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
-        df = workflow.calibrate_inversion_from_consensus(gdir)
+        ref_table = 'consensus'
+        df = workflow.calibrate_inversion_from_ref_table(gdir,
+                                                         ref_table=ref_table)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
         # Make it fail
         with pytest.raises(ValueError):
             a = (0.1, 3)
-            workflow.calibrate_inversion_from_consensus(gdir,
+            workflow.calibrate_inversion_from_ref_table(gdir,
+                                                        ref_table=ref_table,
                                                         a_bounds=a)
 
         a = (0.1, 5)
-        df = workflow.calibrate_inversion_from_consensus(gdir,
+        df = workflow.calibrate_inversion_from_ref_table(gdir,
+                                                         ref_table=ref_table,
                                                          a_bounds=a,
                                                          error_on_mismatch=False)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.08)
 
         # With fs it can work
         a = (0.1, 3)
-        df = workflow.calibrate_inversion_from_consensus(gdir,
+        df = workflow.calibrate_inversion_from_ref_table(gdir,
+                                                         ref_table=ref_table,
                                                          a_bounds=a,
                                                          apply_fs_on_mismatch=True)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)

@@ -9,6 +9,15 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New global task ``calibrate_inversion_from_ref_table`` generalises
+  ``calibrate_inversion_from_consensus`` to calibrate the ice thickness
+  inversion against an arbitrary reference volume table (given as a DataFrame,
+  a path or a URL). By default it now uses the IceBoost v2 products, with the
+  RGI6 or RGI7 table selected automatically from the glacier directories.
+  ``calibrate_inversion_from_consensus`` is deprecated but still available: it
+  keeps calibrating against the Farinotti et al. (2019) consensus estimate.
+  Note that the default reference for RGI6 ``run_prepro_levels`` inversions
+  changes accordingly from the consensus estimate to IceBoost v2 (:pull:`1942`).
 - New ``cfg.PARAMS['store_output_on_error']`` (default ``False``): when a run
   fails mid-simulation (e.g. a glacier growing out of its domain), the output
   files (diagnostics, geometry and flowline diagnostics) are written truncated
@@ -32,6 +41,12 @@ Enhancements
   `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - `run_prepro_levels` now allows to set a custom climate data processing
   module and custom geodetic data file to create glacier directories (:pull:`1910`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- `run_prepro_levels` and `mb_calibration_from_geodetic_mb` now accept a
+  `temp_bias_file_path` to supply a custom temperature-bias file (path or URL)
+  for the `informed_threestep` calibration, so it can be used together with an
+  arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
+  (:pull:`1941`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
@@ -74,6 +89,8 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The default reference for RGI6 all initial glacier volumes is now
+  IceBoost v2 - this replaces the previous consensus estimate (:pull:`1942`).
 - Renamed ``cfg.PARAMS['dynamic_spinup_min_ice_thick']`` to
   ``cfg.PARAMS['min_ice_thick_for_area']`` and the associated diagnostic output
   variable ``area_m2_min_h`` to ``area_min_h_m2`` in the per-glacier
