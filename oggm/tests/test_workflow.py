@@ -5,6 +5,7 @@ import pickle
 import pytest
 import json
 import numpy as np
+import pandas as pd
 import xarray as xr
 from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
@@ -205,7 +206,9 @@ class TestFullRun(unittest.TestCase):
         # check if mini params file is used as expected
         assert cfg.PARAMS['lru_maxsize'] == 123
 
-        df = workflow.calibrate_inversion_from_consensus(gdirs,
+        ref_table = 'consensus'
+        df = workflow.calibrate_inversion_from_ref_table(gdirs,
+                                                         ref_table=ref_table,
                                                          ignore_missing=True)
         df = df.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
@@ -216,13 +219,18 @@ class TestFullRun(unittest.TestCase):
         # test user provided volume is working
         delta_volume_m3 = 100000000
         user_provided_volume_m3 = df.vol_itmix_m3.sum() - delta_volume_m3
-        df = workflow.calibrate_inversion_from_consensus(
-            gdirs, ignore_missing=True,
+        df = workflow.calibrate_inversion_from_ref_table(
+            gdirs, ref_table=ref_table, ignore_missing=True,
             volume_m3_reference=user_provided_volume_m3)
 
         np.testing.assert_allclose(user_provided_volume_m3,
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.01)
+
+        # the deprecated alias still works and warns
+        with pytest.warns(FutureWarning, match='deprecated'):
+            workflow.calibrate_inversion_from_consensus(gdirs,
+                                                        ignore_missing=True)
 
     @pytest.mark.slow
     def test_shapefile_output(self):
