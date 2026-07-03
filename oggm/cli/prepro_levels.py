@@ -108,6 +108,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       inversion_volume_dataset='iceboost',
                       mb_calibration_strategy='informed_threestep',
                       geodetic_mb_file_path=None,
+                      temp_bias_file_path=None,
                       select_source_from_dir=None, keep_dem_folders=False,
                       add_consensus_thickness=False, add_itslive_velocity=False,
                       add_millan_thickness=False, add_millan_velocity=False,
@@ -177,6 +178,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         optional path or URL to a custom geodetic MB file, passed to
         utils.get_geodetic_mb_dataframe and
         tasks.mb_calibration_from_geodetic_mb.
+    temp_bias_file_path : str
+        optional path or URL to a custom temperature-bias file, passed to
+        tasks.mb_calibration_from_geodetic_mb (only used with the
+        'informed_threestep' calibration strategy). Use this together with a
+        `custom_climate_task` to calibrate on an arbitrary climate dataset.
+        The file must follow the same format as the default temp-bias files.
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -750,14 +757,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        # Small optim to avoid concurrency
-        utils.get_geodetic_mb_dataframe(file_path=geodetic_mb_file_path)
-        utils.get_temp_bias_dataframe(dataset='w5e5')
-        utils.get_temp_bias_dataframe(dataset='w5e5', regional=True)
-        utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70G', regional=True)
-        utils.get_temp_bias_dataframe(dataset='w5e5', rgi_version='70C', regional=True)
-        utils.get_temp_bias_dataframe(dataset='era5')
-
         use_regional_avg = False
         if '_regional' in mb_calibration_strategy:
             use_regional_avg = True
@@ -768,7 +767,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          gdirs,
                                          informed_threestep=True,
                                          use_regional_avg=use_regional_avg,
-                                         file_path=geodetic_mb_file_path)
+                                         file_path=geodetic_mb_file_path,
+                                         temp_bias_file_path=temp_bias_file_path)
         elif mb_calibration_strategy == 'melt_temp':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
@@ -1173,6 +1173,10 @@ def parse_args(args):
     parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')
+    parser.add_argument('--temp-bias-file-path', type=str, default=None,
+                        help='optional path or URL to a custom temperature-bias '
+                             'file passed to MB calibration (informed_threestep '
+                             'only). Use together with --custom-climate-task.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1252,6 +1256,7 @@ def parse_args(args):
                 dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
+                temp_bias_file_path=args.temp_bias_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 override_params=args.override_params,
                 )
