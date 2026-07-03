@@ -3427,7 +3427,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                  fls=None, mb_model_class=MonthlyTIModel,
                  use_inversion_flowlines=False,
                  flowlines_filesuffix='',
-                 input_filesuffix='',
+                 input_filesuffix=None,
                  **kwargs):
         """Initialize.
 
@@ -3478,6 +3478,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for fl in self.fls:
             # Merged glaciers will need different climate files, use filesuffix
             if (fl.rgi_id is not None) and (fl.rgi_id != gdir.rgi_id):
+                input_filesuffix = '' if input_filesuffix is None else None
                 rgi_filesuffix = '_' + fl.rgi_id + input_filesuffix
             else:
                 rgi_filesuffix = input_filesuffix
@@ -3486,11 +3487,13 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             if 'fl' in inspect.signature(mb_model_class).parameters:
                 kwargs['fl'] = fl
 
+            if rgi_filesuffix is not None:
+                kwargs['input_filesuffix'] = rgi_filesuffix
+
             self.flowline_mb_models.append(
                 mb_model_class(
                     gdir=gdir,
                     settings_filesuffix=settings_filesuffix,
-                    input_filesuffix=rgi_filesuffix,
                     **kwargs,
                 )
             )

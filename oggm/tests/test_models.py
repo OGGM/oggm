@@ -7386,7 +7386,7 @@ class TestMassRedis:
             workflow.execute_entity_task(
                 gdirs=gdir, task=process_gswp3_w5e5_data, daily=True
             )
-            climate_file = "climate_historical_daily"
+            climate_file = "climate_historical"
             settings_filesuffix = '_daily'
             ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
         else:
@@ -7403,12 +7403,16 @@ class TestMassRedis:
                                             overwrite_gdir=True,
                                             mb_model_class=model,
                                             )
-        tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
+        tasks.apparent_mb_from_any_mb(
+            gdir, settings_filesuffix=settings_filesuffix,
+            mb_model_class=model, mb_years=[1953, 2003])
         # previously calibrate_inversion_from_consensus was used, but with the
         # RGI5 id not estimate is available and here we just use the first guess
         # as it is done in calibrate_inversion_from_consensus
-        workflow.inversion_tasks(gdir, glen_a=0.1 * cfg.PARAMS['inversion_glen_a'])
-        tasks.init_present_time_glacier(gdir)
+        workflow.inversion_tasks(gdir, settings_filesuffix=settings_filesuffix,
+                                 glen_a=0.1 * cfg.PARAMS['inversion_glen_a'])
+        tasks.init_present_time_glacier(gdir,
+                                        settings_filesuffix=settings_filesuffix)
 
         seed = 0
 
@@ -7424,6 +7428,7 @@ class TestMassRedis:
                 seed=seed,
                 mb_model_class=model,
                 climate_filename=climate_file,
+                flowlines_filesuffix=settings_filesuffix,
                 output_filesuffix='_fl'
             )
             with xr.open_dataset(gdir.get_filepath('model_diagnostics',
@@ -7444,6 +7449,7 @@ class TestMassRedis:
                     seed=seed,
                     mb_model_class=model,
                     climate_filename=climate_file,
+                    flowlines_filesuffix=settings_filesuffix,
                     evolution_model=MethodCurveModel,
                     output_filesuffix='_mr'
                 )
