@@ -2487,6 +2487,7 @@ class TestMassBalanceModels:
             ref_mb_err_scaling_factor=0.2,
             maxiter=5,
             mb_model_class=massbalance.SfcTypeTIModel,
+            save_mb_diagnostics_filesuffix='_spinup_historical',
             kwargs_run_function={'maxiter': 5},
             output_filesuffix='_spinup_historical',
         )
@@ -2495,9 +2496,20 @@ class TestMassBalanceModels:
         assert isinstance(dyn_models[0].volume_m3, float)
         assert gdir.get_diagnostics()['used_spinup_option'] in [
             'dynamic melt_f calibration (full success)',
-            #'dynamic melt_f calibration (part success)',
-            #'dynamic spinup only',
+            # 'dynamic melt_f calibration (part success)',
+            # 'dynamic spinup only',
         ]
+
+        # check that mb diagnostics were saved
+        assert gdir.has_file('mb_diagnostics', filesuffix='_spinup_historical')
+        mb_model = (massbalance.MultipleFlowlineMassBalance.load_from_file(
+            gdir,
+            filesuffix='_spinup_historical', ))
+        # check that the finally snow bucktes contain some values
+        firn_thick = mb_model.flowline_mb_models[-1].columns_thickness_m
+        assert np.all(np.isfinite(firn_thick))
+        assert np.any(firn_thick > 0)  # at least some should be > 0
+        assert np.all(firn_thick >= 0)
 
     def test_constant_mb_model(self, hef_gdir):
 

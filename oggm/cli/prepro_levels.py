@@ -295,6 +295,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if mb_model_class == 'MonthlyTIModel':
         override_params['melt_f'] = 5.
         mb_model_class = MonthlyTIModel
+        store_mb_diagnostics = False
     elif mb_model_class == 'SfcTypeTIModel':
         # TODO: According to Schuster et al. (2023) Figure 1, the default melt_f
         # should be larger when including snow tacking (around 6. to 7.). If we
@@ -303,6 +304,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # MonthlyTIModel.
         override_params['melt_f'] = 5.
         mb_model_class = SfcTypeTIModel
+        store_mb_diagnostics = True
     else:
         raise NotImplementedError(f"Unknown mb_model: {mb_model_class}")
 
@@ -870,10 +872,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # conduct historical run before dynamic melt_f calibration
         # (for comparison to old default behavior)
-        workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
-                                     min_ys=y0, ye=ye,
-                                     mb_model_class=mb_model_class,
-                                     output_filesuffix='_historical')
+        workflow.execute_entity_task(
+            tasks.run_from_climate_data, gdirs,
+            min_ys=y0, ye=ye, mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix='_historical' if store_mb_diagnostics else None,
+            output_filesuffix='_historical'
+        )
         # Now compile the output
         opath = os.path.join(sum_dir, f'historical_run_output_{rgi_reg}.nc')
         utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
@@ -901,6 +905,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                           'spinup_periods_to_try':
                                               dynamic_spinup_periods_to_try
                                           },
+                save_mb_diagnostics_filesuffix=('_spinup_historical'
+                                                if store_mb_diagnostics else None),
                 output_filesuffix='_spinup_historical',)
             # Now compile the output
             opath = os.path.join(sum_dir, f'spinup_historical_run_output_{rgi_reg}.nc')

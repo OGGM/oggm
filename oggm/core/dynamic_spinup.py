@@ -36,6 +36,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                        init_model_fls=None,
                        climate_input_filesuffix='',
                        evolution_model=None, mb_model_class=None,
+                       save_mb_diagnostics_filesuffix=None,
                        mb_model_historical=None, mb_model_spinup=None,
                        spinup_period_initial=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
@@ -104,6 +105,12 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         Not all models work in all circumstances!
     mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         The MassBalanceModel class to use.
+    save_mb_diagnostics_filesuffix : str, optional
+        if provided, the mass balance model state is saved to
+        ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
+        completes, via :meth:`MultipleFlowlineMassBalance.save_to_file`.
+        Useful for saving a historical run before branching into multiple
+        projection scenarios.
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -399,6 +406,13 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     else:
         fl_diag_path = False
 
+    if save_mb_diagnostics_filesuffix is not None:
+        mb_diag_path = gdir.get_filepath('mb_diagnostics',
+                                         filesuffix=save_mb_diagnostics_filesuffix,
+                                         delete=True)
+    else:
+        mb_diag_path = False
+
     diag_path = gdir.get_filepath('model_diagnostics',
                                   filesuffix=output_filesuffix,
                                   delete=True)
@@ -466,6 +480,10 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                 fl_diag_path=fl_diag_path,
                 store_monthly_step=store_monthly_step,
             )
+
+            if save_mb_diagnostics_filesuffix is not None:
+                model_dynamic_spinup_end.mb_model.save_to_file(
+                    filesuffix=save_mb_diagnostics_filesuffix)
 
         return model_dynamic_spinup_end
 
@@ -553,6 +571,10 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                 fixed_geometry_spinup_yr=fixed_geometry_spinup_yr,
                 store_monthly_step=store_monthly_step,
             )
+
+            if save_mb_diagnostics_filesuffix is not None:
+                model_historical.mb_model.save_to_file(
+                    filesuffix=save_mb_diagnostics_filesuffix)
 
             # now we delete the min_h variable again if it was not
             # included before (inplace)
@@ -988,6 +1010,9 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                     if diag_path and os.path.exists(diag_path):
                         os.remove(diag_path)
 
+                    if mb_diag_path and os.path.exists(mb_diag_path):
+                        os.remove(mb_diag_path)
+
                     raise RuntimeError(e)
 
     # hurray, dynamic spinup successfully
@@ -1022,6 +1047,10 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                 fl_diag_path=fl_diag_path,
                 store_monthly_step=store_monthly_step,
             )
+
+            if save_mb_diagnostics_filesuffix is not None:
+                model_dynamic_spinup_end[-1].mb_model.save_to_file(
+                    filesuffix=save_mb_diagnostics_filesuffix)
 
     if return_t_spinup_best:
         return model_dynamic_spinup_end[-1], final_t_spinup_guess[-1]
@@ -1059,7 +1088,8 @@ def define_new_melt_f_in_gdir(gdir, new_melt_f):
 def dynamic_melt_f_run_with_dynamic_spinup(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None, evolution_model=None,
-        mb_model_class=None, mb_model_historical=None, mb_model_spinup=None,
+        mb_model_class=None, save_mb_diagnostics_filesuffix=None,
+        mb_model_historical=None, mb_model_spinup=None,
         model_flowlines_filesuffix='',
         minimise_for='area', climate_input_filesuffix='', spinup_period_initial=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
@@ -1109,6 +1139,12 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         Not all models work in all circumstances!
     mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         The MassBalanceModel class to use.
+    save_mb_diagnostics_filesuffix : str, optional
+        if provided, the mass balance model state is saved to
+        ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
+        completes, via :meth:`MultipleFlowlineMassBalance.save_to_file`.
+        Useful for saving a historical run before branching into multiple
+        projection scenarios.
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -1348,6 +1384,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
             mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
             mb_model_historical=mb_model_historical,
             mb_model_spinup=mb_model_spinup,
             spinup_period_initial=spinup_period_initial,
@@ -1393,7 +1430,8 @@ def dynamic_melt_f_run_with_dynamic_spinup(
 def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         gdir, melt_f, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None,
-        evolution_model=None, mb_model_class=None, minimise_for='area',
+        evolution_model=None, mb_model_class=None,
+        save_mb_diagnostics_filesuffix=None, minimise_for='area',
         mb_model_historical=None, mb_model_spinup=None,
         climate_input_filesuffix='', spinup_period_initial=20,
         min_spinup_period=10, target_yr=None, precision_percent=1,
@@ -1435,6 +1473,12 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         Not all models work in all circumstances!
     mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         The MassBalanceModel class to use.
+    save_mb_diagnostics_filesuffix : str, optional
+        if provided, the mass balance model state is saved to
+        ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
+        completes, via :meth:`MultipleFlowlineMassBalance.save_to_file`.
+        Useful for saving a historical run before branching into multiple
+        projection scenarios.
     mb_model_historical : :py:class:`core.MassBalanceModel`
         User-povided MassBalanceModel instance for the historical run. Default
         is to use a MonthlyTIModel model  together with the provided
@@ -1590,6 +1634,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             climate_input_filesuffix=climate_input_filesuffix,
             evolution_model=evolution_model,
             mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
             mb_model_historical=mb_model_historical,
             mb_model_spinup=mb_model_spinup,
             spinup_period_initial=spinup_period_initial,
@@ -1661,6 +1706,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             store_fl_diagnostics=store_fl_diagnostics,
             init_model_fls=fls_init, evolution_model=evolution_model,
             mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
             fixed_geometry_spinup_yr=ys)
 
         gdir.settings['used_spinup_option'] = 'fixed geometry spinup'
@@ -1673,9 +1719,9 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
 def dynamic_melt_f_run(
         gdir, melt_f, yr0_ref_mb, yr1_ref_mb, fls_init, ys, ye,
         settings_filesuffix='',  output_filesuffix=None, evolution_model=None,
-        mb_model_class=None, local_variables=None, set_local_variables=False,
-        target_yr=None, model_flowlines_filesuffix='',
-        **kwargs):
+        mb_model_class=None, save_mb_diagnostics_filesuffix=None,
+        local_variables=None, set_local_variables=False, target_yr=None,
+        model_flowlines_filesuffix='', **kwargs):
     """
     This function is one option for a 'run_function' for the
     'run_dynamic_melt_f_calibration' function (the corresponding
@@ -1711,6 +1757,12 @@ def dynamic_melt_f_run(
         Not all models work in all circumstances!
     mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         The MassBalanceModel class to use.
+    save_mb_diagnostics_filesuffix : str, optional
+        if provided, the mass balance model state is saved to
+        ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
+        completes, via :meth:`MultipleFlowlineMassBalance.save_to_file`.
+        Useful for saving a historical run before branching into multiple
+        projection scenarios.
     local_variables : None
         Not needed in this function, just here to match with the function
         call in run_dynamic_melt_f_calibration.
@@ -1747,17 +1799,19 @@ def dynamic_melt_f_run(
 
     # conduct model run
     try:
-        model = run_from_climate_data(gdir,
-                                      # force to raise an error in @entity_task
-                                      continue_on_error=False,
-                                      add_to_log_file=False,
-                                      settings_filesuffix=settings_filesuffix,
-                                      ys=ys, ye=ye,
-                                      output_filesuffix=output_filesuffix,
-                                      init_model_fls=fls_init,
-                                      evolution_model=evolution_model,
-                                      mb_model_class=mb_model_class,
-                                      **kwargs)
+        model = run_from_climate_data(
+            gdir,
+            # force to raise an error in @entity_task
+            continue_on_error=False,
+            add_to_log_file=False,
+            settings_filesuffix=settings_filesuffix,
+            ys=ys, ye=ye,
+            output_filesuffix=output_filesuffix,
+            init_model_fls=fls_init,
+            evolution_model=evolution_model,
+            mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+            **kwargs)
     except RuntimeError as e:
         raise RuntimeError(f'run_from_climate_data raised error! '
                            f'(Message: {e})')
@@ -1777,7 +1831,8 @@ def dynamic_melt_f_run(
 def dynamic_melt_f_run_fallback(
         gdir, melt_f, fls_init, ys, ye,
         settings_filesuffix='', output_filesuffix=None,
-        evolution_model=None, mb_model_class=None, target_yr=None, **kwargs):
+        evolution_model=None, mb_model_class=None,
+        save_mb_diagnostics_filesuffix=None, target_yr=None, **kwargs):
     """
     This is the fallback function corresponding to the function
     'dynamic_melt_f_run', which are provided to
@@ -1808,6 +1863,12 @@ def dynamic_melt_f_run_fallback(
         Not all models work in all circumstances!
     mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         The MassBalanceModel class to use.
+    save_mb_diagnostics_filesuffix : str, optional
+        if provided, the mass balance model state is saved to
+        ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
+        completes, via :meth:`MultipleFlowlineMassBalance.save_to_file`.
+        Useful for saving a historical run before branching into multiple
+        projection scenarios.
     target_yr : int or None
         The target year for a potential dynamic spinup (not needed here).
         Default is None
@@ -1830,17 +1891,19 @@ def dynamic_melt_f_run_fallback(
 
     # conduct model run
     try:
-        model = run_from_climate_data(gdir,
-                                      # force to raise an error in @entity_task
-                                      continue_on_error=False,
-                                      add_to_log_file=False,
-                                      settings_filesuffix=settings_filesuffix,
-                                      ys=ys, ye=ye,
-                                      output_filesuffix=output_filesuffix,
-                                      init_model_fls=fls_init,
-                                      mb_model_class=mb_model_class,
-                                      evolution_model=evolution_model,
-                                      **kwargs)
+        model = run_from_climate_data(
+            gdir,
+            # force to raise an error in @entity_task
+            continue_on_error=False,
+            add_to_log_file=False,
+            settings_filesuffix=settings_filesuffix,
+            ys=ys, ye=ye,
+            output_filesuffix=output_filesuffix,
+            init_model_fls=fls_init,
+            mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+            evolution_model=evolution_model,
+              **kwargs)
         gdir.settings['used_spinup_option'] = 'no spinup'
         # this is only for backwards compatibility
         gdir.add_to_diagnostics('used_spinup_option', 'no spinup')
@@ -1860,6 +1923,7 @@ def run_dynamic_melt_f_calibration(
         melt_f_max=None, melt_f_max_step_length_minimum=0.1, maxiter=20,
         ignore_errors=False, output_filesuffix=None,
         model_flowlines_filesuffix=None, mb_model_class=None,
+        save_mb_diagnostics_filesuffix=None,
         ys=None, ye=None, target_yr=None,
         run_function=dynamic_melt_f_run_with_dynamic_spinup,
         kwargs_run_function=None,
@@ -1959,6 +2023,12 @@ def run_dynamic_melt_f_calibration(
         Default is None
     mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
         The MassBalanceModel class to use.
+    save_mb_diagnostics_filesuffix : str, optional
+        if provided, the mass balance model state is saved to
+        ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
+        completes, via :meth:`MultipleFlowlineMassBalance.save_to_file`.
+        Useful for saving a historical run before branching into multiple
+        projection scenarios.
     ys : int or None
         The start year of the conducted run. If None the first year of the
         provided climate file.
@@ -2192,13 +2262,15 @@ def run_dynamic_melt_f_calibration(
             # this is only for backwards compatibility
             gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
 
-            model = fallback_function(gdir=gdir,
-                                      settings_filesuffix=settings_filesuffix,
-                                      melt_f=melt_f, fls_init=fls_init,
-                                      mb_model_class=mb_model_class,
-                                      ys=ys, ye=ye,
-                                      output_filesuffix=output_filesuffix,
-                                      **kwargs_fallback_function)
+            model = fallback_function(
+                gdir=gdir,
+                settings_filesuffix=settings_filesuffix,
+                melt_f=melt_f, fls_init=fls_init,
+                mb_model_class=mb_model_class,
+                save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+                ys=ys, ye=ye,
+                output_filesuffix=output_filesuffix,
+                **kwargs_fallback_function)
         else:
             # we were not able to reach the desired precision during the
             # minimisation, but at least we conducted a few error free runs
@@ -2216,16 +2288,18 @@ def run_dynamic_melt_f_calibration(
                 gdir.add_to_diagnostics('used_spinup_option',
                                         'dynamic melt_f calibration (part '
                                         'success)')
-            model, dmdtda_mdl = run_function(gdir=gdir,
-                                             settings_filesuffix=settings_filesuffix,
-                                             melt_f=melt_f,
-                                             yr0_ref_mb=yr0_ref_mb,
-                                             yr1_ref_mb=yr1_ref_mb,
-                                             fls_init=fls_init, ys=ys, ye=ye,
-                                             mb_model_class=mb_model_class,
-                                             output_filesuffix=output_filesuffix,
-                                             local_variables=local_variables_run_function,
-                                             **kwargs_run_function)
+            model, dmdtda_mdl = run_function(
+                gdir=gdir,
+                settings_filesuffix=settings_filesuffix,
+                melt_f=melt_f,
+                yr0_ref_mb=yr0_ref_mb,
+                yr1_ref_mb=yr1_ref_mb,
+                fls_init=fls_init, ys=ys, ye=ye,
+                mb_model_class=mb_model_class,
+                save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+                output_filesuffix=output_filesuffix,
+                local_variables=local_variables_run_function,
+                **kwargs_run_function)
 
             # some dianostics for later
             diag_dyn_melt = {
@@ -2258,6 +2332,7 @@ def run_dynamic_melt_f_calibration(
                  melt_f=None, yr0_ref_mb=None, yr1_ref_mb=None,
                  fls_init=None, ys=None, ye=None,
                  mb_model_class=mb_model_class,
+                 save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
                  local_variables=local_variables_run_function,
                  model_flowlines_filesuffix=model_flowlines_filesuffix,
                  set_local_variables=True, **kwargs_run_function)
@@ -2269,16 +2344,18 @@ def run_dynamic_melt_f_calibration(
         dynamic_melt_f_calibration_runs.append(
             dynamic_melt_f_calibration_runs[-1] + 1)
 
-        model, dmdtda_mdl = run_function(gdir=gdir,
-                                         settings_filesuffix=settings_filesuffix,
-                                         melt_f=melt_f,
-                                         yr0_ref_mb=yr0_ref_mb,
-                                         yr1_ref_mb=yr1_ref_mb,
-                                         fls_init=fls_init, ys=ys, ye=ye,
-                                         mb_model_class=mb_model_class,
-                                         output_filesuffix=output_filesuffix,
-                                         local_variables=local_variables_run_function,
-                                         **kwargs_run_function)
+        model, dmdtda_mdl = run_function(
+            gdir=gdir,
+            settings_filesuffix=settings_filesuffix,
+            melt_f=melt_f,
+            yr0_ref_mb=yr0_ref_mb,
+            yr1_ref_mb=yr1_ref_mb,
+            fls_init=fls_init, ys=ys, ye=ye,
+            mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+            output_filesuffix=output_filesuffix,
+            local_variables=local_variables_run_function,
+            **kwargs_run_function)
         return model, dmdtda_mdl
 
     def cost_fct(melt_f, model_dynamic_spinup_end):
