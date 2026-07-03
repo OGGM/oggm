@@ -40,6 +40,10 @@ ICEBOOST_V2_FILES = {
     '7C': 'iceboostv2_compiled_rgi70C_v20260701.parquet',
 }
 
+# Farinotti et al. (2019) consensus (ITMIX) reference volume table (RGI6 only)
+CONSENSUS_REF_TABLE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/g2ti/'
+                           'rgi62_itmix_df_v20260617.parquet')
+
 # Multiprocessing Pool
 _mp_manager = None
 _mp_pool = None
@@ -631,7 +635,12 @@ def _resolve_ref_volume_table(gdirs, ref_table):
         of the column holding the reference volume, in m3.
     """
     if ref_table is None:
-        # Pick the default IceBoost v2 table matching the RGI version.
+        ref_table = 'iceboost'
+
+    if isinstance(ref_table, pd.DataFrame):
+        df = ref_table.copy()
+    elif ref_table == 'iceboost':
+        # Pick the IceBoost v2 table matching the RGI version.
         # gdir.rgi_version is '6x' for RGI6 and '70G'/'70C' for RGI7.
         rgi_version = gdirs[0].rgi_version
         key = '6' if rgi_version[0] == '6' else rgi_version[0] + rgi_version[-1]
@@ -639,13 +648,15 @@ def _resolve_ref_volume_table(gdirs, ref_table):
             fname = ICEBOOST_V2_FILES[key]
         except KeyError:
             raise InvalidParamsError(
-                'No default reference volume table available for RGI version '
+                'No IceBoost reference volume table available for RGI version '
                 '"{}". Provide one with the `ref_table` argument.'
                 ''.format(rgi_version))
         fpath = utils.file_downloader(ICEBOOST_V2_BASE_URL + fname)
         df = _read_ref_table_file(fpath)
-    elif isinstance(ref_table, pd.DataFrame):
-        df = ref_table.copy()
+    elif ref_table == 'consensus':
+        # Farinotti et al. (2019) consensus (ITMIX) estimate (RGI6 only)
+        fpath = utils.file_downloader(CONSENSUS_REF_TABLE_URL)
+        df = _read_ref_table_file(fpath)
     else:
         # A local path or a URL to a parquet or hdf file
         fpath = ref_table
@@ -687,14 +698,18 @@ def calibrate_inversion_from_ref_table(gdirs, ref_table=None,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
-    ref_table : None or pd.DataFrame or str
-        the reference volume table to calibrate against. It must be indexed
-        by RGI id and contain either a ``vol_km3`` column (volume in km3, as
-        in the IceBoost products) or a ``vol_itmix_m3`` column (volume in m3,
-        as in the Farinotti et al. (2019) consensus estimate). This can be
-        given as a pandas DataFrame, or as a path/URL to a parquet or hdf
-        file. If None (default), the IceBoost v2 table matching the RGI
-        version of the glaciers is downloaded and used.
+    ref_table : None or str or pd.DataFrame
+        the reference volume table to calibrate against. One of:
+        - ``'iceboost'`` (the default, also selected when None): the IceBoost
+          v2 product matching the RGI version of the glaciers is downloaded
+          and used.
+        - ``'consensus'``: the Farinotti et al. (2019) consensus (ITMIX)
+          estimate (RGI6 only).
+        - a pandas DataFrame, or a path/URL to a parquet or hdf file: a custom
+          table, indexed by RGI id. It must contain either a ``vol_km3``
+          column (volume in km3, as in the IceBoost products, the recommended
+          format) or a ``vol_itmix_m3`` column (volume in m3, as in the
+          consensus estimate).
     ignore_missing : bool
         set this to true to silence the error if some glaciers could not be
         found in the reference table.
@@ -883,13 +898,10 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
                   FutureWarning)
 
     # Preserve the historical behaviour: calibrate against the Farinotti
-    # et al. (2019) consensus (ITMIX) table, now served as parquet.
-    dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
-               "rgi62_itmix_df_v20260617.parquet")
-    ref_table = pd.read_parquet(utils.file_downloader(dl_path))
+    # et al. (2019) consensus (ITMIX) table.
     return calibrate_inversion_from_ref_table(
         gdirs,
-        ref_table=ref_table,
+        ref_table='consensus',
         ignore_missing=ignore_missing,
         fs=fs,
         a_bounds=a_bounds,

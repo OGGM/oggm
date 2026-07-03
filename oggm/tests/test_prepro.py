@@ -2160,9 +2160,7 @@ class TestInversion(unittest.TestCase):
         massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
-        dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
-                   "rgi62_itmix_df_v20260617.parquet")
-        ref_table = pd.read_parquet(utils.file_downloader(dl_path))
+        ref_table = 'consensus'
         df = workflow.calibrate_inversion_from_ref_table(gdir,
                                                          ref_table=ref_table)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)

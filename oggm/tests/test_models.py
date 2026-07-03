@@ -5566,7 +5566,7 @@ class TestHydro:
 
 class TestMassRedis:
 
-    def test_hef_retreat(self, class_case_dir, rgi62_itmix_df):
+    def test_hef_retreat(self, class_case_dir):
 
         import geopandas as gpd
 
@@ -5599,8 +5599,8 @@ class TestMassRedis:
         tasks.mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                             ref_period='1953-01-01_2003-01-01')
         tasks.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
-        ref_table = pd.read_parquet(rgi62_itmix_df, engine='pyarrow')
-        workflow.calibrate_inversion_from_ref_table([gdir], ref_table=ref_table)
+        workflow.calibrate_inversion_from_ref_table([gdir],
+                                                    ref_table='consensus')
         tasks.init_present_time_glacier(gdir)
 
         seed = 0

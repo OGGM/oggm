@@ -806,18 +806,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     f"is supported, not '{inversion_volume_dataset}' (the "
                     "consensus estimate is only available for RGI62).")
 
-            if inversion_volume_dataset == 'consensus':
-                # Farinotti et al. (2019) consensus (ITMIX) estimate, parquet
-                dl_path = ("https://cluster.klima.uni-bremen.de/~oggm/g2ti/"
-                           "rgi62_itmix_df_v20260617.parquet")
-                ref_table = pd.read_parquet(utils.file_downloader(dl_path))
-            else:
-                # IceBoost v2, auto-selected by RGI version (62 / 70G / 70C)
-                ref_table = None
-
+            # 'iceboost'/'consensus' map directly to ref_table presets
             workflow.calibrate_inversion_from_ref_table(
                 gdirs,
-                ref_table=ref_table,
+                ref_table=inversion_volume_dataset,
                 apply_fs_on_mismatch=True,
                 error_on_mismatch=False,
                 filter_inversion_output=filter)
