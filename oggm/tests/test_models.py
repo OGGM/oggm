@@ -2552,7 +2552,7 @@ class TestMassBalanceModels:
         )
         # dynamic run for 70 years
         model.run_until(2020)
-        assert_allclose(model.total_mass, model.volume_m3, rtol=1e-3)
+        assert_allclose(model.total_mass, model.volume_ice_m3, rtol=1e-3)
 
         # same check with bucket heights included in elevation feedback
         model_elev = MassConservationChecker(
@@ -2562,7 +2562,7 @@ class TestMassBalanceModels:
         )
         # dynamic run for 70 years
         model_elev.run_until(2020)
-        assert_allclose(model_elev.total_mass, model_elev.volume_m3, rtol=1e-3)
+        assert_allclose(model_elev.total_mass, model_elev.volume_ice_m3, rtol=1e-3)
 
     def test_constant_mb_model(self, hef_gdir):
 
