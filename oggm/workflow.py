@@ -1380,7 +1380,9 @@ def calibrate_inversion_from_volume(gdir,
 
 
 @global_task(log)
-def invert_from_params(gdirs,
+def invert_from_params(gdirs,  settings_filesuffix='',
+                       input_filesuffix=None,
+                       output_filesuffix=None,
                        params_df=None,
                        fs=None, glen_a=None,
                        filter_inversion_output=True,
@@ -1393,6 +1395,15 @@ def invert_from_params(gdirs,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
+    input_filesuffix: str
+        The filesuffix of the input inversion flowlines. If None the
+        settings_filesuffix will be used.
+    output_filesuffix: str
+        The filesuffix used for saving resulting inversion files to the gdir. If
+        None the settings_filesuffix will be used.
     params_df : str
         the dataframe to use (currently regional)
     glen_a : float
@@ -1408,6 +1419,12 @@ def invert_from_params(gdirs,
     -------
     a dataframe with the individual glacier volumes
     """
+
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
 
     gdirs = utils.tolist(gdirs)
 
@@ -1425,14 +1442,18 @@ def invert_from_params(gdirs,
         glen_a = params_df.loc[rgi_reg, 'inversion_glen_a']
         fs = params_df.loc[rgi_reg, 'inversion_fs']
 
-    log.workflow(f"Applying A factor = {glen_a/cfg.PARAMS['glen_a']} "
+    log.workflow(f"Applying A factor = {glen_a/gdirs[0].settings['glen_a']} "
                  f"and fs = {fs}")
 
     # Compute the final volume with the correct A
-    inversion_tasks(gdirs, glen_a=glen_a, fs=fs,
+    inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
+                    input_filesuffix=input_filesuffix,
+                    output_filesuffix=output_filesuffix,
+                    glen_a=glen_a, fs=fs,
                     filter_inversion_output=filter_inversion_output,
                     add_to_log_file=add_to_log_file)
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
+                                            input_filesuffix=output_filesuffix,
                                             add_to_log_file=add_to_log_file)
     return df
 
