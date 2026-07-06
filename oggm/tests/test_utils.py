@@ -1456,7 +1456,9 @@ class TestPreproCLI:
             assert kwargs['border'] == 120
 
     @pytest.mark.slow
-    def test_full_run_defaults(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_full_run_defaults(self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1473,6 +1475,7 @@ class TestPreproCLI:
                           intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          mb_model_class=mb_model_class,
                           inversion_volume_dataset='consensus',
                           continue_on_error=False,
                           override_params={}
@@ -1603,9 +1606,12 @@ class TestPreproCLI:
         with xr.open_dataset(fp) as ods:
             ref = ods.volume
             new = ods.volume_fixed_geom
+            # SfcTypeTIModel's snow tracking makes the fixed-geometry
+            # approximation less accurate than for MonthlyTIModel
+            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.15
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.05)
+                                       rtol=rtol)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
@@ -1832,7 +1838,10 @@ class TestPreproCLI:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_elev_bands_and_spinup_run_with_different_evolution_models(
+            self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1861,6 +1870,7 @@ class TestPreproCLI:
                               inversion_volume_dataset='consensus',
                               store_fl_diagnostics=True,
                               continue_on_error=False,
+                              mb_model_class=mb_model_class,
                               mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
                               override_params={'geodetic_mb_period': ref_period,
