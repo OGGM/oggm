@@ -5,6 +5,7 @@ import glob
 import os
 import tempfile
 import gzip
+import hashlib
 import json
 import time
 import random
@@ -2739,6 +2740,39 @@ def robust_tar_extract(
         os.remove(from_tar)
 
 
+def _extract_tars(
+    from_tar: str, to_dir: str, delete_tar: bool = False, finalize: bool = None
+):
+    """Extract one tar or layer several level tars into a directory.
+
+    Lists are extracted in order (ascending level: rollup first, then
+    deltas), later members overwriting earlier ones, after which the
+    merged directory is finalized (zarr re-consolidation and level
+    manifest compatibility check). Pass ``finalize=True`` to force
+    finalisation for a single tar layered onto an existing directory.
+
+    Parameters
+    ----------
+    from_tar : str or list of str
+        Path(s) to the tar file(s) to extract.
+    to_dir : str
+        Path to the directory where to extract the tar file(s).
+    delete_tar : bool, default False
+        Whether to delete the tar file(s) after extraction.
+    finalize : bool or None, default None
+        Whether to finalize the merged directory after extraction. If
+        None, finalisation is performed if multiple tars are extracted,
+        or if a single tar is extracted onto an existing directory. Pass
+        True to force finalisation for a single tar layered onto an
+        existing directory.
+    """
+    tars = from_tar if isinstance(from_tar, (list, tuple)) else [from_tar]
+    for ft in tars:
+        robust_tar_extract(ft, to_dir, delete_tar=delete_tar)
+    if finalize or (finalize is None and len(tars) > 1):
+        _finalize_merged_dir(to_dir)
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -2811,8 +2845,15 @@ class GlacierDirectory(object):
     rgi_area_km2
     """
 
-    def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False):
+    def __init__(
+        self,
+        rgi_entity,
+        base_dir=None,
+        reset=False,
+        from_tar=False,
+        delete_tar=False,
+        append=False,
+    ):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2825,11 +2866,17 @@ class GlacierDirectory(object):
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
         reset : bool, default=False
             empties the directory at construction (careful!)
-        from_tar : str or bool, default=False
+        from_tar : str, list of str or bool, default=False
             path to a tar file to extract the gdir data from. If set to `True`,
             will check for a tar file at the expected location in `base_dir`.
+            A list of paths (one rollup + level deltas, ascending level
+            order) is layered into the directory in order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
+        append : bool, default False
+            layer the tar file(s) on top of an existing directory
+            instead of replacing it (used to top up a directory with
+            additional prepro levels).
         """
 
         if base_dir is None:
@@ -2844,11 +2891,16 @@ class GlacierDirectory(object):
                 _dir = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity)
                 # Avoid bad surprises
-                if os.path.exists(_dir):
+                if os.path.exists(_dir) and not append:
                     shutil.rmtree(_dir)
                 if from_tar is True:
                     from_tar = _dir + '.tar.gz'
-                robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
+                _extract_tars(
+                    from_tar,
+                    _dir,
+                    delete_tar=delete_tar,
+                    finalize=True if append else None,
+                )
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
@@ -3047,13 +3099,18 @@ class GlacierDirectory(object):
                                 self.rgi_id[:-3], self.rgi_id)
 
         # Do we have to extract the files first?
-        if (reset or from_tar) and os.path.exists(self.dir):
+        if (reset or from_tar) and os.path.exists(self.dir) and not append:
             shutil.rmtree(self.dir)
 
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            _extract_tars(
+                from_tar,
+                self.dir,
+                delete_tar=delete_tar,
+                finalize=True if append else None,
+            )
             write_shp = False
         else:
             mkdir(self.dir)
@@ -4803,8 +4860,280 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
+def dataset_id_from_tag(dataset_tag: str, border: int, rgi_version: str) -> str:
+    """The dataset_id shared by all levels of one logical dataset.
+
+    Derived from an explicit tag, never from a source URL. One logical
+    dataset can be served from several URLs (e.g. the reference v1.6
+    L0-L2 and L3-L5 trees). This is used for identifying datasets
+    internally and is not meant to be human-readable.
+
+    Parameters
+    ----------
+    dataset_tag : str
+        A short string identifying the dataset. This is usually
+        generated from the base URL e.g. "oggm_v1.6_2025.6_elev_bands_w5e5".
+    border : int
+        Map border number.
+    rgi_version : str
+        The RGI version.
+
+    Returns
+    -------
+    str
+        A sha1 hex digest of the dataset tag, border, and RGI version.
+    """
+    key = f"{dataset_tag}|{border}|{rgi_version}"
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+def _check_level_compat(manifests: list):
+    """Validate that layered level manifests form one usable directory.
+
+    Raises InvalidWorkflowError if the manifests mix datasets, if a
+    level's requirements are not covered, or if the included levels are
+    not contiguous.
+    """
+
+    dataset_ids = {m["dataset_id"] for m in manifests}
+    if len(dataset_ids) > 1:
+        raise InvalidWorkflowError(
+            "Layered prepro levels come from different datasets: "
+            f"{sorted(dataset_ids)}"
+        )
+    included = set()
+    for m in manifests:
+        included.update(m.get("includes_levels") or [m["level"]])
+    for m in manifests:
+        missing = set(m.get("requires") or []) - included
+        if missing:
+            raise InvalidWorkflowError(
+                f"Level {m['level']} requires levels {sorted(missing)} "
+                "which are not present in the layered directory."
+            )
+    levels = sorted(included)
+    if levels != list(range(levels[0], levels[-1] + 1)):
+        raise InvalidWorkflowError(
+            f"Layered prepro levels are not contiguous: {levels}"
+        )
+
+
+def _finalize_merged_dir(dirpath: str):
+    """Make a directory whole again after layering level tars into it.
+
+    Re-consolidates the zarr store metadata as deltas never ship the
+    root consolidated metadata, which would be stale. Checks that the
+    applied level manifests are compatible.
+    """
+    store = os.path.join(dirpath, os.path.basename(cfg.BASENAMES["data_store"]))
+    if os.path.isdir(store):
+        # A store assembled purely from delta group subtrees has no root metadata
+        # since deltas never ship it
+        if not (
+            os.path.isfile(os.path.join(store, ".zgroup"))
+            or os.path.isfile(os.path.join(store, "zarr.json"))
+        ):
+            fmt = 3 if glob.glob(os.path.join(store, "*", "zarr.json")) else 2
+            zarr.open_group(store, mode="a", zarr_format=fmt)
+        zarr.consolidate_metadata(store)
+    manifests = []
+    for fp in sorted(glob.glob(os.path.join(dirpath, "L*.manifest.json"))):
+        with open(fp) as f:
+            manifests.append(json.load(f))
+    if manifests:
+        _check_level_compat(manifests)
+
+
+def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
+    """Content hashes of a glacier directory, for computing level deltas.
+
+    Maps each file path (relative to the directory, posix separators) to
+    a sha256 hex digest of its content. The ``data_store.zarr`` store is
+    hashed per top-level group (one key ``data_store.zarr/<group>`` per
+    group) so a group added or rewritten by a prepro level is detected
+    as a single unit. The store's root-level metadata files (e.g. the
+    consolidated ``.zmetadata``) are ignored: they are regenerated after
+    delta layering and would otherwise churn in every snapshot diff.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory (or its path) to snapshot.
+
+    Returns
+    -------
+    dict
+        Mapping of relative path (or ``data_store.zarr/<group>``) to
+        sha256 hex digest.
+    """
+    root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
+    store_name = os.path.basename(cfg.BASENAMES["data_store"])
+    state = {}
+    group_hashes = {}
+    for cur, dirs, files in os.walk(root):
+        # deterministic traversal so per-group digests are stable
+        dirs.sort()
+        for fname in sorted(files):
+            fpath = os.path.join(cur, fname)
+            rel = os.path.relpath(fpath, root).replace(os.sep, "/")
+            parts = rel.split("/")
+            if parts[0] == store_name:
+                if len(parts) == 2:
+                    # root store metadata (.zmetadata, .zgroup, zarr.json)
+                    continue
+                hasher = group_hashes.setdefault(parts[1], hashlib.sha256())
+                # include the in-store path so renames are detected
+                hasher.update(rel.encode("utf-8"))
+            else:
+                hasher = hashlib.sha256()
+            with open(fpath, "rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            if parts[0] != store_name:
+                state[rel] = hasher.hexdigest()
+    for group, hasher in group_hashes.items():
+        state[f"{store_name}/{group}"] = hasher.hexdigest()
+    return state
+
+
+def write_level_manifest(
+    gdir_or_dir: GlacierDirectory | str,
+    level: int,
+    prev_state: dict,
+    requires: list[int],
+    dataset_tag: str,
+    dataset_id: str = "",
+    includes_levels: list[int] | None = None,
+    kind: str = "delta",
+    border: int | None = None,
+    rgi_version: str | None = None,
+) -> tuple[str, list[str]]:
+    """Diffs a glacier directory against a snapshot and writes a manifest.
+
+    Compares the current state (see :func:`snapshot_gdir_state`) with
+    ``prev_state`` and records what this prepro level added or changed
+    in a ``L{level}.manifest.json`` file inside the glacier directory.
+    Per-level file names mean a layered directory self-documents every
+    level applied to it.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory or its path.
+    level : int
+        The prepro level this manifest describes.
+    prev_state : dict
+        Snapshot taken before the level's tasks ran. Use an empty dict
+        for a level starting from scratch.
+    requires : list[int]
+        Levels that must be present below this one. Empty for rollups
+        and standalone bundles.
+    dataset_tag : str
+        Tag identifying the dataset, e.g.
+        "oggm_v1.6_2025.6_elev_bands_w5e5".
+    dataset_id : str
+        Identifier shared by all levels of one logical dataset. Must not
+        be derived from a source URL: one dataset can be served from
+        several URLs.
+    includes_levels : list[int] | None, optional
+        Levels whose data this artifact contains. Defaults to
+        ``[level]`` (a plain delta); a rollup lists all included levels.
+    kind : str, default ``'delta'``
+        The kind of manifest. Must be either ``'delta'`` (incremental
+        changes only) or ``'standalone'`` (self-sufficient subset, e.g.
+        the L5 run bundle).
+    border : int | None, optional
+        Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
+    rgi_version : str | None, optional
+        RGI version of the dataset; defaults to
+        ``cfg.PARAMS['rgi_version']``.
+
+    Returns
+    -------
+    tuple[str, list[str]]
+        Path to the written manifest and the list of changed relative
+        paths, including the manifest itself, passed to
+        ``gdir_to_tar(include=...)``.
+    """
+    if not dataset_id:
+        dataset_id = dataset_id_from_tag(
+            dataset_tag,
+            border or cfg.PARAMS["border"],
+            rgi_version or cfg.PARAMS["rgi_version"],
+        )
+    if kind not in ("delta", "standalone"):
+        raise ValueError(
+            f"Invalid manifest kind: {kind!r}. Must be 'delta' or 'standalone'."
+        )
+    root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
+    rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
+    if border is None:
+        border = int(cfg.PARAMS["border"])
+    if rgi_version is None:
+        rgi_version = cfg.PARAMS["rgi_version"]
+
+    store_name = os.path.basename(cfg.BASENAMES["data_store"])
+    state = snapshot_gdir_state(root)
+    added, updated, zarr_groups = [], [], []
+    for rel, digest in sorted(state.items()):
+        if regexp.match(r"^L\d+\.manifest\.json$", rel):
+            continue
+        changed_kind = (
+            "added"
+            if rel not in prev_state
+            else "updated" if prev_state[rel] != digest else None
+        )
+        if changed_kind is None:
+            continue
+        if rel.startswith(store_name + "/"):
+            zarr_groups.append(rel[len(store_name) + 1 :])
+        elif changed_kind == "added":
+            added.append(rel)
+        else:
+            updated.append(rel)
+
+    manifest_name = f"L{level}.manifest.json"
+    manifest = {
+        "schema_version": 1,
+        "kind": kind,
+        "rgi_id": rgi_id,
+        "level": int(level),
+        "requires": sorted(int(l) for l in requires),
+        "includes_levels": sorted(
+            int(l)
+            for l in (
+                includes_levels if includes_levels is not None else [level]
+            )
+        ),
+        "dataset_tag": dataset_tag,
+        "dataset_id": dataset_id,
+        "border": int(border),
+        "rgi_version": str(rgi_version),
+        "oggm_version": __version__,
+        "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "files": {"added": added, "updated": updated},
+        "zarr_groups": zarr_groups,
+    }
+    manifest_path = os.path.join(root, manifest_name)
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    changed_paths = (
+        added
+        + updated
+        + [f"{store_name}/{g}" for g in zarr_groups]
+        + [manifest_name]
+    )
+    return manifest_path, changed_paths
+
+
 @entity_task(log)
-def gdir_to_tar(gdir, base_dir=None, delete=True):
+def gdir_to_tar(
+    gdir: GlacierDirectory,
+    base_dir: str = None,
+    delete: bool = True,
+    include: list = None,
+) -> str:
     """Writes the content of a glacier directory to a tar file.
 
     The tar file is located at the same location of the original directory.
@@ -4812,15 +5141,24 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
 
     Parameters
     ----------
-    base_dir : str
-        path to the basedir where to write the directory (defaults to the
-        same location of the original directory)
-    delete : bool
-        delete the original directory afterwards (default)
+    gdir : :py:class:`oggm.GlacierDirectory`
+        The glacier directory to write to a tar file.
+    base_dir : str, optional
+        Path to the basedir where to write the directory (defaults to
+        the same location of the original directory).
+    delete : bool, default True
+        Delete the original directory afterwards.
+    include : list of str, optional
+        Only add these paths (relative to the glacier directory) to the
+        tar file, e.g. the changed paths from ``write_level_manifest``
+        when building a per-level delta. Directories (such as
+        ``data_store.zarr/<group>``) are added recursively. The default
+        adds the whole directory.
 
     Returns
     -------
-    the path to the tar file
+    str
+        The path to the tar file.
     """
 
     source_dir = os.path.normpath(gdir.dir)
@@ -4830,7 +5168,15 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
         mkdir(os.path.dirname(opath))
 
     with tarfile.open(opath, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
+        if include is None:
+            tar.add(source_dir, arcname=os.path.basename(source_dir))
+        else:
+            arcbase = os.path.basename(source_dir)
+            for rel in sorted(set(include)):
+                tar.add(
+                    os.path.join(source_dir, rel),
+                    arcname=os.path.join(arcbase, rel),
+                )
 
     if delete:
         shutil.rmtree(source_dir)
