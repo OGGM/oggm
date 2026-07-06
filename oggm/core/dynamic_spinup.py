@@ -5,6 +5,7 @@ import copy
 import os
 import warnings
 from functools import partial
+import inspect
 
 # External libs
 import numpy as np
@@ -18,7 +19,7 @@ from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    MonthlyTIModel,
-                                   apparent_mb_from_any_mb)
+                                   apparent_mb_from_any_mb, SfcTypeTIModel)
 from oggm.core.flowline import (decide_evolution_model, FileModel,
                                 init_present_time_glacier,
                                 run_from_climate_data)
@@ -344,6 +345,14 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                            f'than the target year (target_yr = {target_yr}!')
 
     yr_min = gdir.get_climate_info()['baseline_yr_0']
+
+    # if mb_model_class is SfcTypeTIModel, we need to reserve spinup_years
+    if (isinstance(mb_model_class, partial) or
+            issubclass(mb_model_class, SfcTypeTIModel)):
+        yr_min += inspect.signature(
+            mb_model_class if isinstance(mb_model_class, partial)
+            else mb_model_class.__init__
+        ).parameters['spinup_years'].default
 
     if min_ice_thickness is None:
         min_ice_thickness = gdir.settings['dynamic_spinup_min_ice_thick']
@@ -2273,55 +2282,73 @@ def run_dynamic_melt_f_calibration(
                 output_filesuffix=output_filesuffix,
                 **kwargs_fallback_function)
         else:
-            # we were not able to reach the desired precision during the
-            # minimisation, but at least we conducted a few error free runs
-            # using the run_function, and therefore we save the best guess we
-            # found so far
-            if only_first_guess:
-                gdir.settings['used_spinup_option'] = first_guess_diagnostic_msg
-                # this is only for backwards compatibility
-                gdir.add_to_diagnostics('used_spinup_option',
-                                        first_guess_diagnostic_msg)
-            else:
-                gdir.settings['used_spinup_option'] = ('dynamic melt_f '
-                                                       'calibration (part success)')
-                # this is only for backwards compatibility
-                gdir.add_to_diagnostics('used_spinup_option',
-                                        'dynamic melt_f calibration (part '
-                                        'success)')
-            model, dmdtda_mdl = run_function(
-                gdir=gdir,
-                settings_filesuffix=settings_filesuffix,
-                melt_f=melt_f,
-                yr0_ref_mb=yr0_ref_mb,
-                yr1_ref_mb=yr1_ref_mb,
-                fls_init=fls_init, ys=ys, ye=ye,
-                mb_model_class=mb_model_class,
-                save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
-                output_filesuffix=output_filesuffix,
-                local_variables=local_variables_run_function,
-                **kwargs_run_function)
+            try:
+                # we were not able to reach the desired precision during the
+                # minimisation, but at least we conducted a few error free runs
+                # using the run_function, and therefore we save the best guess we
+                # found so far
+                if only_first_guess:
+                    gdir.settings['used_spinup_option'] = first_guess_diagnostic_msg
+                    # this is only for backwards compatibility
+                    gdir.add_to_diagnostics('used_spinup_option',
+                                            first_guess_diagnostic_msg)
+                else:
+                    gdir.settings['used_spinup_option'] = ('dynamic melt_f '
+                                                           'calibration (part success)')
+                    # this is only for backwards compatibility
+                    gdir.add_to_diagnostics('used_spinup_option',
+                                            'dynamic melt_f calibration (part '
+                                            'success)')
+                model, dmdtda_mdl = run_function(
+                    gdir=gdir,
+                    settings_filesuffix=settings_filesuffix,
+                    melt_f=melt_f,
+                    yr0_ref_mb=yr0_ref_mb,
+                    yr1_ref_mb=yr1_ref_mb,
+                    fls_init=fls_init, ys=ys, ye=ye,
+                    mb_model_class=mb_model_class,
+                    save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+                    output_filesuffix=output_filesuffix,
+                    local_variables=local_variables_run_function,
+                    **kwargs_run_function)
 
-            # some dianostics for later
-            diag_dyn_melt = {
-                'dmdtda_mismatch_dynamic_calibration_reference':
-                    float(ref_mb),
-                'dmdtda_dynamic_calibration_given_error': float(ref_mb_err),
-                'dmdtda_dynamic_calibration_error_scaling_factor':
-                    float(ref_mb_err_scaling_factor),
-                'dmdtda_mismatch_dynamic_calibration': float(best_mismatch),
-                'dmdtda_mismatch_with_initial_melt_f': float(initial_mismatch),
-                'melt_f_dynamic_calibration': float(melt_f),
-                'melt_f_before_dynamic_calibration': float(melt_f_initial),
-                'run_dynamic_melt_f_calibration_iterations':
-                    int(dynamic_melt_f_calibration_runs[-1]),
-            }
+                # some dianostics for later
+                diag_dyn_melt = {
+                    'dmdtda_mismatch_dynamic_calibration_reference':
+                        float(ref_mb),
+                    'dmdtda_dynamic_calibration_given_error': float(ref_mb_err),
+                    'dmdtda_dynamic_calibration_error_scaling_factor':
+                        float(ref_mb_err_scaling_factor),
+                    'dmdtda_mismatch_dynamic_calibration': float(best_mismatch),
+                    'dmdtda_mismatch_with_initial_melt_f': float(initial_mismatch),
+                    'melt_f_dynamic_calibration': float(melt_f),
+                    'melt_f_before_dynamic_calibration': float(melt_f_initial),
+                    'run_dynamic_melt_f_calibration_iterations':
+                        int(dynamic_melt_f_calibration_runs[-1]),
+                }
 
-            for k, v in diag_dyn_melt.items():
-                gdir.settings[k] = v
+                for k, v in diag_dyn_melt.items():
+                    gdir.settings[k] = v
+                    # this is only for backwards compatibility
+                    if settings_filesuffix == '':
+                        gdir.add_to_diagnostics(k, v)
+            except RuntimeError:
+                # something unexpected happened, we just do the fallback
+
+                # this diagnostics should be overwritten inside the fallback_function
+                gdir.settings['used_spinup_option'] = 'fallback_function'
                 # this is only for backwards compatibility
-                if settings_filesuffix == '':
-                    gdir.add_to_diagnostics(k, v)
+                gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
+
+                model = fallback_function(
+                    gdir=gdir,
+                    settings_filesuffix=settings_filesuffix,
+                    melt_f=melt_f, fls_init=fls_init,
+                    mb_model_class=mb_model_class,
+                    save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
+                    ys=ys, ye=ye,
+                    output_filesuffix=output_filesuffix,
+                    **kwargs_fallback_function)
 
         return model
 
