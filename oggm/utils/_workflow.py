@@ -3389,7 +3389,7 @@ class GlacierDirectory(object):
             return True
         # check if data exists as a group in zarr store
         zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
-        group = "_".join(filter(None, (filename, filesuffix)))
+        group = f"{filename}{filesuffix}"
         if os.path.exists(os.path.join(zarr_fp, group)):
             return True
         return False
@@ -3503,7 +3503,7 @@ class GlacierDirectory(object):
         if filename == "data_store":
             group = None
         else:
-            group = "_".join(filter(None,(filename, filesuffix)))
+            group = f"{filename}{filesuffix}"
         out = xr.open_datatree(
             fp.replace(".pkl", ".zarr"),
             group=group,
@@ -3733,7 +3733,7 @@ class GlacierDirectory(object):
 
         # avoid serving stale data from a zarr if a user fell back to
         # using a pickle.
-        group = "_".join(filter(None, (filename, filesuffix)))
+        group = f"{filename}{filesuffix}"
         zarr_fp = os.path.join(os.path.dirname(fp), "data_store.zarr")
         group_dir = os.path.join(zarr_fp, group)
         if os.path.exists(group_dir):
@@ -3854,7 +3854,7 @@ class GlacierDirectory(object):
 
         if not use_pickle:
             try:
-                group = "_".join(filter(None, (filename, filesuffix)))
+                group = f"{filename}{filesuffix}"
                 # Save original data in case of fallback to pickle
                 original_data = data
                 if not isinstance(data, xr.DataTree):

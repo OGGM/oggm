@@ -661,7 +661,7 @@ class TestZarrWorkflow:
         )
         # until this is included via oggm-sample-data
         gdir.write_zarr(data_tree=data_tree, filename="data_store", overwrite=False)
-        result = gdir.read_store(filename="inversion_input", filesuffix="test")
+        result = gdir.read_store(filename="inversion_input", filesuffix="_test")
 
         assert isinstance(result, list)
         assert isinstance(result[0], dict)
