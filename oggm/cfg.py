@@ -254,11 +254,6 @@ BASENAMES['inversion_flowlines'] = ('inversion_flowlines.pkl', _doc)
 _doc = 'The historical monthly climate timeseries stored in a netCDF file.'
 BASENAMES['climate_historical'] = ('climate_historical.nc', _doc)
 
-# so far, this is only ERA5 or E5E5 daily and does not work with the default
-# OGGM mass balance module, only with sandbox
-_doc = 'The historical daily climate timeseries stored in a netCDF file.'
-BASENAMES['climate_historical_daily'] = ('climate_historical_daily.nc', _doc)
-
 _doc = "A dict containing the glacier's mass balance calibration parameters."
 BASENAMES['mb_calib'] = ('mb_calib.json', _doc)
 

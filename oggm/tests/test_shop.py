@@ -445,24 +445,27 @@ class Test_w5e5:
         return True
 
     @pytest.mark.parametrize(
-        "daily,filepath",
-        [(False, "climate_historical"), (True, "climate_historical_daily")],
+        "daily,filesuffix",
+        [(False, ""), (True, "_daily")],
     )
-    def test_process_w5e5_data(self, w5e5_hef_gdir, daily, filepath):
+    def test_process_w5e5_data(self, w5e5_hef_gdir, daily, filesuffix):
 
         gdir = w5e5_hef_gdir
         from oggm.shop import w5e5
 
         w5e5.process_w5e5_data(gdir, daily=daily)
-        path_clim = gdir.get_filepath(filepath)
+        path_clim = gdir.get_filepath('climate_historical',
+                                      filesuffix=filesuffix)
         if not daily:
             assert "daily" not in path_clim
             assert not os.path.exists(
-                gdir.get_filepath("climate_historical_daily")
+                gdir.get_filepath('climate_historical',
+                                  filesuffix='_daily')
             )
         else:
             assert "daily" in path_clim
-            assert os.path.exists(gdir.get_filepath("climate_historical"))
+            assert os.path.exists(gdir.get_filepath('climate_historical',
+                                                    filesuffix='_daily'))
         assert os.path.exists(path_clim)
 
         with xr.open_dataset(path_clim) as ds_clim:
@@ -509,7 +512,7 @@ class Test_w5e5:
 
         # test daily implementation
         w5e5.process_gswp3_w5e5_data(gdir, daily=True)
-        path_clim = gdir.get_filepath("climate_historical_daily")
+        path_clim = gdir.get_filepath("climate_historical", filesuffix="_daily")
         assert os.path.exists(path_clim)
 
         with xr.open_dataset(path_clim) as ds_clim:

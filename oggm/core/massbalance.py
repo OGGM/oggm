@@ -1004,8 +1004,8 @@ class DailyTIModel(MonthlyTIModel):
     def __init__(
         self,
         gdir,
-        filename: str = 'climate_historical_daily',
-        input_filesuffix: str = '',
+        filename: str = 'climate_historical',
+        input_filesuffix: str = '_daily',
         settings_filesuffix: str = '',
         fl_id: int = None,
         melt_f: float = None,
@@ -1026,10 +1026,10 @@ class DailyTIModel(MonthlyTIModel):
         ----------
         gdir : GlacierDirectory
             The glacier directory.
-        filename : str, default 'climate_historical_daily'
+        filename : str, default 'climate_historical'
             Set to a different BASENAME if you want to use alternative
             climate data.
-        input_filesuffix : str, optional
+        input_filesuffix : str, default '_daily'
             Append a suffix to the climate input filename (useful for
             GCM runs).
         settings_filesuffix : str, optional
@@ -1339,15 +1339,15 @@ class SfcTypeTIModel(MassBalanceModel):
         gdir,
         settings_filesuffix: str = "",
         use_leap_years: bool = True,
-        mb_model_class=DailyTIModel,
+        mb_model_class=MonthlyTIModel,
         climate_resolution: str = "monthly",
         aging_frequency: str = "monthly",
         melt_f_ratio: float = 0.5,
         melt_f_change: str = "neg_exp",
         tau_e: float = 1.0,
-        ys: int = 2000,
+        ys: int = None,
         spinup_years: int = 6,
-        save_spinup_mbs: bool = False,
+        save_spinup_mbs: bool = True,
         spinup_buckets: np.ndarray = None,
         fl = None,
         use_main_fl_from: str = 'inversion_flowlines',
@@ -1397,10 +1397,18 @@ class SfcTypeTIModel(MassBalanceModel):
             melt_f=melt_f_ice+(melt_f_snow-melt_f_ice)*np.exp(-time_yr/tau_e_fold_yr)
             Must be larger than zero to prevent ``melt_f`` being set to NaN in
             the first bucket.
-        ys : int, default 2000
+        ys : int, default None
             The initial year from where we want to get mb values. This means the
             bucket system is spun up so that at ys for the first time ice
             can form. For spinup the years ys - spinup_years up to ys are used.
+            If None (the default), ys is not fixed at initialisation. Instead
+            it is set the first time get_annual_mb, get_monthly_mb or
+            get_daily_mb is called, using the first requested year (rounded
+            down to the next integer year via np.floor), and the buckets are
+            initialised at that point. Every call to reset_state resets ys
+            back to None again, so it is re-derived on the next call. If ys
+            is explicitly provided here, it is fixed and unaffected by
+            reset_state.
         spinup_years : int, default 6
             Number of spinup years. This defines the number of buckets we use
             (see aging_frequency for explanation). The minimum allowed value is
@@ -1481,8 +1489,15 @@ class SfcTypeTIModel(MassBalanceModel):
         self.input_filesuffix = self.mbmod.input_filesuffix
         self.hemisphere = self.mbmod.hemisphere
         self.bias = self.mbmod.bias
-        self.ys = self.mbmod.ys
         self.ye = self.mbmod.ye
+
+        # if ys is not provided we leave self.ys as None and set it lazily to
+        # the first year requested via get_annual_mb, get_monthly_mb or
+        # get_daily_mb (see _ensure_buckets_initialized). reset_state also
+        # resets self.ys back to None in that case, so it is again derived
+        # from the next requested year.
+        self._ys_is_dynamic = ys is None
+        self.ys = ys
 
         # check compatibility of aging_frequency and climate_resolution: aging
         # can not happen at higher temporal resolution than the climate steps
@@ -1517,22 +1532,12 @@ class SfcTypeTIModel(MassBalanceModel):
         self.spinup_buckets = spinup_buckets
         if isinstance(self.spinup_buckets, pd.core.frame.DataFrame):
             self.spinup_buckets = self.spinup_buckets.values
-        self.ys = ys
-        if self.spinup_buckets is None:
-            # check if climate data for spinup is available
-            spinup_start = self.ys - self.spinup_years
-            try:
-                self.mbmod.validate_year(spinup_start)
-                self.mbmod.validate_year(self.ys)
-            except ValueError as e:
-                raise ValueError(
-                    "Climate data for spinup not available. We need data for "
-                    f"the period {spinup_start} (ys - spinup_years) to "
-                    f"{self.ys}, but we get the following error: {e}")
+
+        if self.ys is not None:
+            self._validate_spinup_climate_data()
 
         # defining the number of grid points and the spinup heights, either with
         # fl or hbins
-        # TODO: need to test with constant_mb (maybe hbins[::-1])
         self.hbins = hbins
 
         # resolve the flowline into grid labels and spinup heights; the fl
@@ -1627,8 +1632,40 @@ class SfcTypeTIModel(MassBalanceModel):
             # covered or fully snow free
             self.snowline_inf_values = {}
 
-        # Initialise buckets and conduct a potential spinup
-        self._init_buckets()
+        # Initialise buckets and conduct a potential spinup. If ys was not
+        # provided this is deferred to the first call of get_annual_mb,
+        # get_monthly_mb or get_daily_mb (see _ensure_buckets_initialized).
+        if self.ys is not None:
+            self._init_buckets()
+
+    def reset_state(self):
+        if self._ys_is_dynamic:
+            # ys will be re-derived from the first year requested at the
+            # next call to get_annual_mb, get_monthly_mb or get_daily_mb
+            self.ys = None
+        else:
+            self._init_buckets()
+
+    def _validate_spinup_climate_data(self):
+        if self.spinup_buckets is None:
+            # check if climate data for spinup is available
+            spinup_start = self.ys - self.spinup_years
+            try:
+                self.mbmod.validate_year(spinup_start)
+                self.mbmod.validate_year(self.ys)
+            except ValueError as e:
+                raise ValueError(
+                    "Climate data for spinup not available. We need data for "
+                    f"the period {spinup_start} (ys - spinup_years) to "
+                    f"{self.ys}, but we get the following error: {e}")
+
+    def _ensure_buckets_initialized(self, year):
+        # if ys was not provided at initialisation, derive it from the
+        # first requested year and (re-)initialise the buckets
+        if self.ys is None:
+            self.ys = int(np.floor(year))
+            self._validate_spinup_climate_data()
+            self._init_buckets()
 
     def _init_buckets(self):
         # reset some containers for a fresh start
@@ -1766,8 +1803,8 @@ class SfcTypeTIModel(MassBalanceModel):
         """Set new melt_f and reset the buckets."""
         self.mbmod.melt_f = value
         self.set_melt_f_buckets()
-        # Recompute buckets
-        self._init_buckets()
+        # Reset state, we do not want to change parameters midway
+        self.reset_state()
 
     @property
     def prcp_fac(self):
@@ -1778,8 +1815,8 @@ class SfcTypeTIModel(MassBalanceModel):
     def prcp_fac(self, value):
         """Set new precipitation factor and reset buckets."""
         self.mbmod.prcp_fac = value
-        # Recompute buckets
-        self._init_buckets()
+        # Reset state, we do not want to change parameters midway
+        self.reset_state()
 
     @property
     def temp_bias(self):
@@ -1789,8 +1826,8 @@ class SfcTypeTIModel(MassBalanceModel):
     def temp_bias(self, value):
         """Set new temperature bias and reset buckets."""
         self.mbmod.temp_bias = value
-        # Recompute buckets
-        self._init_buckets()
+        # Reset state, we do not want to change parameters midway
+        self.reset_state()
 
     def set_melt_f_buckets(self):
         """Set the melt factor for each bucket."""
@@ -2258,6 +2295,10 @@ class SfcTypeTIModel(MassBalanceModel):
             solid precipitation.
         """
 
+        # if ys was not provided at initialisation, this sets it from year
+        # and (re-)initialises the buckets on the first call
+        self._ensure_buckets_initialized(year)
+
         # check if we should add the current bucket heights
         if include_mb_model_heights:
             heights = heights + self.columns_thickness_m
@@ -2350,6 +2391,10 @@ class SfcTypeTIModel(MassBalanceModel):
             temperature, the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
+
+        # if ys was not provided at initialisation, this sets it from year
+        # and (re-)initialises the buckets on the first call
+        self._ensure_buckets_initialized(year)
 
         # check if we should add the current bucket heights
         if include_mb_model_heights:
@@ -2453,6 +2498,10 @@ class SfcTypeTIModel(MassBalanceModel):
             temperature, the sums of melt temperature, total precipitation, and
             solid precipitation.
         """
+
+        # if ys was not provided at initialisation, this sets it from year
+        # and (re-)initialises the buckets on the first call
+        self._ensure_buckets_initialized(year)
 
         # check if we should add the current bucket heights
         if include_mb_model_heights:
@@ -3377,7 +3426,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
     def __init__(self, gdir, settings_filesuffix='',
                  fls=None, mb_model_class=MonthlyTIModel,
                  use_inversion_flowlines=False,
-                 input_filesuffix='',
+                 flowlines_filesuffix='',
+                 input_filesuffix=None,
                  **kwargs):
         """Initialize.
 
@@ -3395,6 +3445,11 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             ``ConstantMassBalance``.
         use_inversion_flowlines: bool, optional
             use 'inversion_flowlines' instead of 'model_flowlines'
+        flowlines_filesuffix : str
+            suffix to the flowlines filename to use (could be
+            'inversion_flowlines' or 'model_flowlines', depending on
+            'use_inversion_flowlines').
+            Default is ''
         kwargs : kwargs to pass to mb_model_class
         """
 
@@ -3403,11 +3458,13 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Read in the flowlines
         if use_inversion_flowlines:
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_pickle('inversion_flowlines',
+                                   filesuffix=flowlines_filesuffix)
 
         if fls is None:
             try:
-                fls = gdir.read_pickle('model_flowlines')
+                fls = gdir.read_pickle('model_flowlines',
+                                       filesuffix=flowlines_filesuffix)
             except FileNotFoundError:
                 raise InvalidWorkflowError('Need a valid `model_flowlines` '
                                            'file. If you explicitly want to '
@@ -3421,6 +3478,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for fl in self.fls:
             # Merged glaciers will need different climate files, use filesuffix
             if (fl.rgi_id is not None) and (fl.rgi_id != gdir.rgi_id):
+                input_filesuffix = '' if input_filesuffix is None else None
                 rgi_filesuffix = '_' + fl.rgi_id + input_filesuffix
             else:
                 rgi_filesuffix = input_filesuffix
@@ -3429,11 +3487,13 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             if 'fl' in inspect.signature(mb_model_class).parameters:
                 kwargs['fl'] = fl
 
+            if rgi_filesuffix is not None:
+                kwargs['input_filesuffix'] = rgi_filesuffix
+
             self.flowline_mb_models.append(
                 mb_model_class(
                     gdir=gdir,
                     settings_filesuffix=settings_filesuffix,
-                    input_filesuffix=rgi_filesuffix,
                     **kwargs,
                 )
             )
@@ -3476,6 +3536,33 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         for mbmod in self.flowline_mb_models:
             mbmod.bias = value
 
+    @property
+    def melt_f(self):
+        """Melt factor."""
+        return self.flowline_mb_models[0].melt_f
+
+    @melt_f.setter
+    def melt_f(self, value):
+        """Melt factor."""
+        for mbmod in self.flowline_mb_models:
+            mbmod.melt_f = value
+
+    @property
+    def filename(self):
+        return self.flowline_mb_models[0].filename
+
+    @property
+    def input_filesuffix(self):
+        return self.flowline_mb_models[0].input_filesuffix
+
+    @property
+    def ys_float(self):
+        return self.flowline_mb_models[0].ys_float
+
+    @property
+    def ye_float(self):
+        return self.flowline_mb_models[0].ye_float
+
     def is_year_valid(self, year):
         return self.flowline_mb_models[0].is_year_valid(year)
 
@@ -3484,6 +3571,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     def sec_in_year(self, year):
         return self.flowline_mb_models[0].sec_in_year(year)
+
+    def reset_state(self):
+        for fl_mb_mod in self.flowline_mb_models:
+            fl_mb_mod.reset_state()
 
     def get_daily_mb(self, heights, year=None, fl_id=None, **kwargs):
         if fl_id is None:
@@ -4941,15 +5032,32 @@ def mb_calibration_from_scalar_mb(gdir, *,
             temp_bias = 0
 
     # Create the MB model we will calibrate
-    mb_mod = mb_model_class(
-        gdir=gdir,
-        melt_f=melt_f,
-        temp_bias=temp_bias,
-        prcp_fac=prcp_fac,
-        check_calib_params=False,
-        settings_filesuffix=settings_filesuffix,
-        **kwargs
-    )
+    if fls is not None and len(fls) > 1:
+        # one mb model instance per flowline, needed for mb_model_class
+        # models that need to know the flowline length at initialisation
+        # (e.g. SfcTypeTIModel) whenever the glacier has more than one
+        # flowline
+        mb_mod = MultipleFlowlineMassBalance(
+            gdir=gdir,
+            fls=fls,
+            mb_model_class=mb_model_class,
+            melt_f=melt_f,
+            temp_bias=temp_bias,
+            prcp_fac=prcp_fac,
+            check_calib_params=False,
+            settings_filesuffix=settings_filesuffix,
+            **kwargs
+        )
+    else:
+        mb_mod = mb_model_class(
+            gdir=gdir,
+            melt_f=melt_f,
+            temp_bias=temp_bias,
+            prcp_fac=prcp_fac,
+            check_calib_params=False,
+            settings_filesuffix=settings_filesuffix,
+            **kwargs
+        )
 
     # Check that the years are available
     for y in years:
@@ -5321,7 +5429,10 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
 
     if mb_model is None:
-        mb_model = mb_model_class(gdir=gdir, settings_filesuffix=settings_filesuffix)
+        mb_model = MultipleFlowlineMassBalance(
+            gdir, settings_filesuffix=settings_filesuffix,
+            fls=fls, mb_model_class=mb_model_class,
+        )
 
     if mb_years is None:
         mb_years = gdir.settings['geodetic_mb_period']
@@ -5350,11 +5461,11 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         smb = 0
         for yr in mb_years:
             # some models have a climatic and ice mb (e.g. SfcTIModel), for
-            # inversion we want ice; if not available it is ignored; Similarly
-            # some models include a bucket height, and we can add this height on
-            # top to the ice surface height
+            # inversion we use climatic; if not available it is ignored;
+            # Similarly some models include a bucket height, and we can add this
+            # height on top to the ice surface height
             amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr,
-                                         climatic_mb_or_ice_mb='ice_mb',
+                                         climatic_mb_or_ice_mb='climatic_mb',
                                          include_mb_model_heights=include_mb_model_heights
                                          )
             amb *= mb_model.sec_in_year(year=yr) * rho
@@ -5406,7 +5517,7 @@ def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
                                 climate_input_filesuffix='',
                                 temperature_bias=None,
                                 precipitation_factor=None,
-                                mb_model_class=MonthlyTIModel):
+                                mb_model_class=None):
     """Computes the mass balance with climate input from e.g. CRU or a GCM.
 
     Parameters
@@ -5439,12 +5550,15 @@ def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
         Multiplicative factor applied to the precipitation time series.
         If None, uses the precipitation factor from the calibration in
         ``gdir.settings['prcp_fac']``.
-    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+    mb_model_class : MassBalanceModel, defaults to ``MonthlyTIModel``
         The MassBalanceModel class to use.
     """
 
     if monthly_step:
         raise NotImplementedError('monthly_step not implemented yet')
+
+    if mb_model_class is None:
+        mb_model_class = MonthlyTIModel
 
     mbmod = MultipleFlowlineMassBalance(
         gdir=gdir,
@@ -5463,6 +5577,11 @@ def fixed_geometry_mass_balance(gdir, settings_filesuffix='',
     if years is None:
         if ys is None:
             ys = mbmod.flowline_mb_models[0].ys
+            if ys is None:
+                if isinstance(mbmod.flowline_mb_models[0], SfcTypeTIModel):
+                    # for SfcTypeTIModel we need go one layer deeper
+                    sfc_mbod = mbmod.flowline_mb_models[0]
+                    ys = sfc_mbod.mbmod.ys + sfc_mbod.spinup_years
         if ye is None:
             ye = mbmod.flowline_mb_models[0].ye
         years = np.arange(ys, ye + 1)

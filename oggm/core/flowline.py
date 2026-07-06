@@ -610,7 +610,7 @@ class FlowlineModel(object):
                  is_tidewater=False, is_lake_terminating=False,
                  mb_elev_feedback='annual', check_for_boundaries=None,
                  water_level=None, required_model_steps='monthly',
-                 include_mb_model_heights=True, include_firn_outputs=False, ):
+                 include_mb_model_heights=True, include_firn_outputs=True, ):
         """Create a new flowline model from the flowlines and a MB model.
 
         Parameters
@@ -663,7 +663,7 @@ class FlowlineModel(object):
             If True we add the snow/firn height of the current mb_model (if
             available) to include this in the elevation feedback of the mb
             calculation.
-        include_firn_outputs : bool, default False
+        include_firn_outputs : bool, default True
             If True we include firn/snow output for volume, mass and thickness.
             With this you get for each of them three output variables. E.g. for
             volume: volume_m3 = volume_ice_m3 + volume_firn_m3. If False only
@@ -922,8 +922,8 @@ class FlowlineModel(object):
         if isinstance(self._mb_model, MultipleFlowlineMassBalance):
             return self._mb_model.flowline_mb_models[fl_id]
         else:
-            # we only allow a single flowline for this case
-            assert len(self.fls) == 1
+            # in this case the provided mb_model can work on any fl and has no
+            # memory (e.g. like the SfcTypeTIModel)
             return self._mb_model
 
     def _get_along_fl_thickness_firn_m(self, fl_id):
@@ -3985,7 +3985,8 @@ def run_random_climate(gdir, settings_filesuffix='',
                        store_fl_diagnostics=None,
                        mb_model_class=MonthlyTIModel,
                        climate_filename='climate_historical',
-                       climate_input_filesuffix='',
+                       climate_input_filesuffix=None,
+                       flowlines_filesuffix='',
                        output_filesuffix=None, init_model_fls=None,
                        init_model_filesuffix=None,
                        init_model_yr=None,
@@ -4048,6 +4049,8 @@ def run_random_climate(gdir, settings_filesuffix='',
         'gcm_data'
     climate_input_filesuffix: str
         filesuffix for the input climate file
+    flowlines_filesuffix : str
+        suffix to the model_flowlines to use. Default is ''
     output_filesuffix : str
         this add a suffix to the output file (useful to avoid overwriting
         previous experiments)
@@ -4079,6 +4082,7 @@ def run_random_climate(gdir, settings_filesuffix='',
                                            bias=bias, seed=seed,
                                            filename=climate_filename,
                                            input_filesuffix=climate_input_filesuffix,
+                                           flowlines_filesuffix=flowlines_filesuffix,
                                            unique_samples=unique_samples,
                                            settings_filesuffix=settings_filesuffix)
 
@@ -4102,6 +4106,7 @@ def run_random_climate(gdir, settings_filesuffix='',
                               init_model_yr=init_model_yr,
                               init_model_fls=init_model_fls,
                               zero_initial_glacier=zero_initial_glacier,
+                              model_flowlines_filesuffix=flowlines_filesuffix,
                               **kwargs)
 
 
@@ -4119,7 +4124,7 @@ def run_constant_climate(gdir, settings_filesuffix='',
                          output_filesuffix=None,
                          climate_filename='climate_historical',
                          mb_model_class=MonthlyTIModel,
-                         climate_input_filesuffix='',
+                         climate_input_filesuffix=None,
                          init_model_fls=None,
                          zero_initial_glacier=False,
                          **kwargs):
@@ -4239,7 +4244,7 @@ def run_from_climate_data(gdir, settings_filesuffix='',
                           climate_filename='climate_historical',
                           mb_model=None,
                           mb_model_class=MonthlyTIModel,
-                          climate_input_filesuffix='', output_filesuffix=None,
+                          climate_input_filesuffix=None, output_filesuffix=None,
                           init_model_filesuffix=None, init_model_yr=None,
                           init_model_fls=None, zero_initial_glacier=False,
                           bias=0, temperature_bias=None,

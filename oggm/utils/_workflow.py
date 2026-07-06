@@ -2000,7 +2000,9 @@ def compile_fixed_geometry_mass_balance(gdirs, settings_filesuffix='',
                                         climate_filename='climate_historical',
                                         climate_input_filesuffix='',
                                         temperature_bias=None,
-                                        precipitation_factor=None):
+                                        precipitation_factor=None,
+                                        mb_model_class=None,
+                                        ):
 
     """Compiles a table of specific mass balance timeseries for all glaciers.
 
@@ -2042,6 +2044,8 @@ def compile_fixed_geometry_mass_balance(gdirs, settings_filesuffix='',
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_fac']
+    mb_model_class : MassBalanceModel, defaults to ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     """
 
     from oggm.workflow import execute_entity_task
@@ -2053,7 +2057,9 @@ def compile_fixed_geometry_mass_balance(gdirs, settings_filesuffix='',
                                  ys=ys, ye=ye, years=years, climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
-                                 precipitation_factor=precipitation_factor)
+                                 precipitation_factor=precipitation_factor,
+                                 mb_model_class=mb_model_class,
+                                 )
 
     for idx, s in enumerate(out_df):
         if s is None:
@@ -2455,8 +2461,9 @@ def extend_past_climate_run(past_run_file=None,
             ods[vn] = ods[vn].astype(int)
 
         # New vars
-        for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_m2_min_h', 'length', 'calving', 'calving_rate']:
+        for vn in ['volume', 'volume_ice', 'volume_firn', 'volume_m3_min_h',
+                   'volume_bsl', 'volume_bwl', 'area', 'area_m2_min_h',
+                   'length', 'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
@@ -2526,6 +2533,18 @@ def extend_past_climate_run(past_run_file=None,
                 # +1 because calving rate at year 0 is unknown from the dyns model
                 orig_calv_rate_ts[:fid+1] = calv_rate
                 ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
+
+            if 'volume_ice' in ods.data_vars:
+                # we can not calculate a ice volume for the fixed geometry
+                orig_volume_ice_ts = ods.volume_ice_ext.data[:, i]
+                orig_volume_ice_ts[:fid] = np.nan
+                ods.volume_ice_ext.data[:, i] = orig_volume_ice_ts
+
+            if 'volume_firn' in ods.data_vars:
+                # we can not calculate a ice volume for the fixed geometry
+                orig_volume_firn_ts = ods.volume_firn_ext.data[:, i]
+                orig_volume_firn_ts[:fid] = np.nan
+                ods.volume_firn_ext.data[:, i] = orig_volume_firn_ts
 
             # Extend vol bsl by assuming that % stays constant
             if 'volume_bsl' in ods.data_vars:
