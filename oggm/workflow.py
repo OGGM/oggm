@@ -323,7 +323,9 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
                         return None
                     with mf:
                         return json.load(mf)
-    except KeyError:
+    # KeyError means a legacy, pre-manifest bundle
+    # ReadError means a possible truncated download
+    except (KeyError, tarfile.ReadError, OSError):
         return None
 
 

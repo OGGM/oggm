@@ -1,5 +1,6 @@
 """Tests for incremental (delta-per-level) glacier directory creation."""
 
+import io
 import json
 import os
 import tarfile
@@ -218,6 +219,59 @@ def test_gdir_to_tar_include(tmp_path):
     assert f"{rid}/diagnostics.json" in names
 
 
+def _build_bundle(path, rid, with_manifest=None):
+    """Write a bundle-in-tar (bundle/<rid>.tar.gz) as the downloads look."""
+    inner_buf = io.BytesIO()
+    with tarfile.open(fileobj=inner_buf, mode="w:gz") as inner:
+        payload = b'{"a": 1}\n'
+        ti = tarfile.TarInfo(f"{rid}/diagnostics.json")
+        ti.size = len(payload)
+        inner.addfile(ti, io.BytesIO(payload))
+        if with_manifest is not None:
+            mf = json.dumps(with_manifest).encode()
+            level = with_manifest["level"]
+            ti = tarfile.TarInfo(f"{rid}/L{level}.manifest.json")
+            ti.size = len(mf)
+            inner.addfile(ti, io.BytesIO(mf))
+        filler = os.urandom(40000)  # large enough to truncate into
+        ti = tarfile.TarInfo(f"{rid}/filler.bin")
+        ti.size = len(filler)
+        inner.addfile(ti, io.BytesIO(filler))
+    inner_bytes = inner_buf.getvalue()
+
+    bundle = f"{rid[:-6]}.{rid[-5:-2]}"
+    with tarfile.open(path, "w") as tf:
+        ti = tarfile.TarInfo(f"{bundle}/{rid}.tar.gz")
+        ti.size = len(inner_bytes)
+        tf.addfile(ti, io.BytesIO(inner_bytes))
+
+
+def test_peek_level_manifest_corruption(tmp_path):
+    rid = "RGI60-11.00897"
+    bundle = f"{rid[:-6]}.{rid[-5:-2]}"
+    tar_base = str(tmp_path / f"{bundle}.tar")
+
+    # Legacy bundle without a manifest should return None
+    _build_bundle(tar_base, rid)
+    assert workflow._peek_level_manifest(tar_base, rid, 1) is None
+
+    # Delta bundle carrying a manifest should be parsed
+    manifest = {"level": 1, "kind": "delta", "requires": [0]}
+    _build_bundle(tar_base, rid, with_manifest=manifest)
+    got = workflow._peek_level_manifest(tar_base, rid, 1)
+    assert got == manifest
+
+    # Truncated or corrupt bundle raises ReadError mid-stream.
+    # This should return None to avoid poisoning.
+    size = os.path.getsize(tar_base)
+    with open(tar_base, "r+b") as f:
+        f.truncate(size - 20000)
+    with pytest.raises(tarfile.ReadError):
+        with tarfile.open(tar_base, "r") as tf:
+            tf.getmembers()
+    assert workflow._peek_level_manifest(tar_base, rid, 1) is None
+
+
 class TestLayeredGdir:
 
     def test_glacierdirectory_from_tar_list(self, tmp_path, hef_gdir):
@@ -229,7 +283,7 @@ class TestLayeredGdir:
         shutil.copytree(hef_gdir.dir, workdir)
         assert os.path.isdir(os.path.join(workdir, "data_store.zarr"))
 
-        # Rollup artifact: everything up to L3 in one tar
+        # Materialisation artifact: everything up to L3 in one tar
         utils.write_level_manifest(
             workdir,
             level=3,
@@ -240,10 +294,12 @@ class TestLayeredGdir:
             border=80,
             rgi_version="62",
         )
-        rollup_tar = utils.gdir_to_tar.unwrapped(
+        materialisation_tar = utils.gdir_to_tar.unwrapped(
             _FakeGdir(workdir, workbase), delete=False
         )
-        rollup_tar = shutil.move(rollup_tar, str(tmp_path / "rollup.tar.gz"))
+        materialisation_tar = shutil.move(
+            materialisation_tar, str(tmp_path / "materialisation.tar.gz")
+        )
 
         # L4 delta: a changed file and a new zarr group, written the way a
         # delta ships it: group subtree only, no root consolidated metadata
@@ -275,10 +331,10 @@ class TestLayeredGdir:
 
         ref_state = utils.snapshot_gdir_state(workdir)
 
-        # Layer rollup + delta into a fresh base dir
+        # Layer materialisation + delta into a fresh base dir
         newbase = str(tmp_path / "layered")
         gdir = oggm.GlacierDirectory(
-            rid, base_dir=newbase, from_tar=[rollup_tar, delta_tar]
+            rid, base_dir=newbase, from_tar=[materialisation_tar, delta_tar]
         )
 
         assert utils.snapshot_gdir_state(gdir.dir) == ref_state
@@ -329,7 +385,7 @@ class TestDeltaServer:
 
     @pytest.fixture
     def delta_server(self, tmp_path, hef_gdir):
-        """A local server tree with L3 rollup, L4 delta, L5 standalone."""
+        """A local server tree with L3 materialisation, L4 delta, L5 standalone."""
         rid = hef_gdir.rgi_id
         srcbase = str(tmp_path / "src")
         workdir = os.path.join(srcbase, rid[:-6], rid[:-3], rid)
@@ -345,7 +401,7 @@ class TestDeltaServer:
                 tf.add(member_tar, arcname=f"{bundle}/{rid}.tar.gz")
             os.remove(member_tar)
 
-        # L3 rollup (includes 0..3)
+        # L3 materialisation (includes 0..3)
         utils.write_level_manifest(
             workdir,
             level=3,
@@ -434,7 +490,7 @@ class TestDeltaServer:
     def test_init_from_delta_server(self, served_calls):
         calls, rid = served_calls
 
-        # Level 4 = the L4 bundle plus the L3 rollup it requires
+        # Level 4 = the L4 bundle plus the L3 materialisation it requires
         gdirs = workflow.init_glacier_directories(
             [rid],
             from_prepro_level=4,
@@ -466,7 +522,7 @@ class TestDeltaServer:
     def test_append_topup(self, served_calls):
         calls, rid = served_calls
 
-        # Start from the L3 rollup: a single fetch
+        # Start from the L3 materialisation: a single fetch
         workflow.init_glacier_directories(
             [rid],
             from_prepro_level=3,
@@ -581,10 +637,10 @@ def test_level_consistency_mismatch(tmp_path):
         border=80,
         rgi_version="62",
     )
-    rollup_tar = utils.gdir_to_tar.unwrapped(
+    materialisation_tar = utils.gdir_to_tar.unwrapped(
         _FakeGdir(gdir_dir, base), delete=False
     )
-    rollup_tar = shutil.move(rollup_tar, str(tmp_path / "rollup.tar.gz"))
+    materialisation_tar = shutil.move(materialisation_tar, str(tmp_path / "materialisation.tar.gz"))
 
     # A level-4 delta from a *different* dataset
     prev = utils.snapshot_gdir_state(gdir_dir)
@@ -608,5 +664,5 @@ def test_level_consistency_mismatch(tmp_path):
         oggm.GlacierDirectory(
             rid,
             base_dir=str(tmp_path / "layered"),
-            from_tar=[rollup_tar, delta_tar],
+            from_tar=[materialisation_tar, delta_tar],
         )

@@ -194,9 +194,9 @@ def _write_artifact_manifest(
 ):
     """Write the level manifest and return the tar include list.
 
-    L3 is published as a standalone rollup of L0-L3, as it's the entry
-    point for the spinup tree. This means L3/L4/L5 stay within 2-3
-    requests.
+    L3 is published as a standalone materialisation of L0-L3, as it's
+    the entry point for the spinup tree. This means L3/L4/L5 stay within
+    2-3 requests.
 
     Also ensures that separately generated source trees agree on shared
     data files set by _TREE_INVARIANTS.
@@ -225,8 +225,8 @@ def _write_artifact_manifest(
     Returns
     -------
     None or list[str]
-        None (full tar) for rollups and the standalone L5 bundle, or a
-        list of changed paths for delta levels.
+        None (full tar) for materialisations and the standalone L5
+        bundle, or a list of changed paths for delta levels.
     """
 
     if not dataset_id:
@@ -260,7 +260,7 @@ def _write_artifact_manifest(
         )
         return None
     if level == 3:
-        # L3 is a rollup of L0-L3 (see docstring)
+        # L3 is a materialisation of L0-L3 (see docstring)
         if prev_state is not None:
             state = snapshot_gdir_state(gdir)
             diverged = [
@@ -272,7 +272,7 @@ def _write_artifact_manifest(
                 log.warning(
                     "(%s) the L%d source tree disagrees with the level "
                     "below on %s: the L0-L%d artifacts belong to a "
-                    "different dataset generation than the L3 rollup.",
+                    "different dataset generation than the L3 materialisation.",
                     gdir.rgi_id,
                     level,
                     diverged,

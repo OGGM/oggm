@@ -2745,10 +2745,10 @@ def _extract_tars(
 ):
     """Extract one tar or layer several level tars into a directory.
 
-    Lists are extracted in order (ascending level: rollup first, then
-    deltas), later members overwriting earlier ones, after which the
-    merged directory is finalized (zarr re-consolidation and level
-    manifest compatibility check). Pass ``finalize=True`` to force
+    Lists are extracted in order (ascending level: materialisation
+    first, then deltas), later members overwriting earlier ones, after
+    which the merged directory is finalised by reconsolidating zarr and
+    checking the level manifests. Pass ``finalize=True`` to force
     finalisation for a single tar layered onto an existing directory.
 
     Parameters
@@ -2760,7 +2760,7 @@ def _extract_tars(
     delete_tar : bool, default False
         Whether to delete the tar file(s) after extraction.
     finalize : bool or None, default None
-        Whether to finalize the merged directory after extraction. If
+        Whether to finalise the merged directory after extraction. If
         None, finalisation is performed if multiple tars are extracted,
         or if a single tar is extracted onto an existing directory. Pass
         True to force finalisation for a single tar layered onto an
@@ -2867,10 +2867,11 @@ class GlacierDirectory(object):
         reset : bool, default=False
             empties the directory at construction (careful!)
         from_tar : str, list of str or bool, default=False
-            path to a tar file to extract the gdir data from. If set to `True`,
-            will check for a tar file at the expected location in `base_dir`.
-            A list of paths (one rollup + level deltas, ascending level
-            order) is layered into the directory in order.
+            path to a tar file to extract the gdir data from. If set to
+            `True`, will check for a tar file at the expected location
+            in `base_dir`. A list of paths (one materialisation plus any
+            level deltas) are layered into the directory in ascending
+            order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
         append : bool, default False
@@ -5026,7 +5027,7 @@ def write_level_manifest(
         Snapshot taken before the level's tasks ran. Use an empty dict
         for a level starting from scratch.
     requires : list[int]
-        Levels that must be present below this one. Empty for rollups
+        Levels that must be present below this one. Empty for materialisations
         and standalone bundles.
     dataset_tag : str
         Tag identifying the dataset, e.g.
@@ -5037,7 +5038,8 @@ def write_level_manifest(
         several URLs.
     includes_levels : list[int] | None, optional
         Levels whose data this artifact contains. Defaults to
-        ``[level]`` (a plain delta); a rollup lists all included levels.
+        ``[level]`` (a plain delta). A materialisation lists all
+        included levels.
     kind : str, default ``'delta'``
         The kind of manifest. Must be either ``'delta'`` (incremental
         changes only) or ``'standalone'`` (self-sufficient subset, e.g.
