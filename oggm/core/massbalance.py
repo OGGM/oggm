@@ -51,7 +51,7 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         necessary for automated ELA search.
     hemisphere : str, {'nh', 'sh'}
         Used for certain methods - if the hydrological year is requested.
-    rho : float, default: ``cfg.PARAMS['ice_density']``
+    ice_density : float, default: ``cfg.PARAMS['ice_density']``
         Density of ice
     use_leap_years : bool, default: False
         If the calendar should use leap years
@@ -4028,23 +4028,23 @@ def mb_calibration_to_rmsd(gdir, *,
             'melt_f', 'temp_bias', 'prcp_fac'. Defaults to ('melt_f',)
     melt_f: float
         the default value to use as melt factor (or the starting value when
-        optimizing MB). Defaults to cfg.PARAMS['melt_f'].
+        optimizing MB). Defaults to gdir.settings['melt_f'].
     melt_f_min: float
         the minimum accepted value for the melt factor during optimisation.
-        Defaults to cfg.PARAMS['melt_f_min'].
+        Defaults to gdir.settings['melt_f_min'].
     melt_f_max: float
         the maximum accepted value for the melt factor during optimisation.
-        Defaults to cfg.PARAMS['melt_f_max'].
+        Defaults to gdir.settings['melt_f_max'].
     prcp_fac: float
         the default value to use as precipitation scaling factor
         (or the starting value when optimizing MB). Defaults to the method
         chosen in `params.cfg` (winter prcp or global factor).
     prcp_fac_min: float
         the minimum accepted value for the precipitation scaling factor during
-        optimisation. Defaults to cfg.PARAMS['prcp_fac_min'].
+        optimisation. Defaults to gdir.settings['prcp_fac_min'].
     prcp_fac_max: float
         the maximum accepted value for the precipitation scaling factor during
-        optimisation. Defaults to cfg.PARAMS['prcp_fac_max'].
+        optimisation. Defaults to gdir.settings['prcp_fac_max'].
     temp_bias: float
         the default value to use as temperature bias (or the starting value when
         optimizing MB). Defaults to 0.
