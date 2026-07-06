@@ -22,7 +22,7 @@ from oggm.core import climate, inversion, centerlines
 from oggm.shop.w5e5 import process_gswp3_w5e5_data
 from oggm.shop import gcm_climate, bedtopo
 from oggm.cfg import SEC_IN_YEAR, SEC_IN_MONTH
-from oggm.utils import (get_demo_file, ModelSettings,
+from oggm.utils import (get_demo_file, file_downloader, ModelSettings,
                         floatyear_to_date, date_to_floatyear)
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -164,8 +164,9 @@ class TestInitPresentDayFlowline:
         with pytest.raises(InvalidParamsError):
             init_present_time_glacier(gdir)
 
-    def test_init_present_time_glacier_obs_thick(self, hef_elev_gdir,
-                                                 monkeypatch):
+    def test_init_present_time_glacier_obs_thick(
+        self, hef_elev_gdir, rgi62_itmix_df, monkeypatch
+    ):
 
         gdir = hef_elev_gdir
 
@@ -188,7 +189,7 @@ class TestInitPresentDayFlowline:
                                         filesuffix='_consensus')[0]
 
         # check that resulting flowline has the same volume as observation
-        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        cdf = pd.read_parquet(rgi62_itmix_df, engine='pyarrow')
         ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
         np.testing.assert_allclose(fl_consensus.volume_m3, ref_vol)
 
@@ -3655,7 +3656,7 @@ class TestIO():
                     np.isclose(model.fls[0].thick, 0.),
                     dhdt_ref[-1] < 0.)
                 flux_divergence_ref.append(
-                    (dhdt_ref[-1] - climatic_mb_ref[-1]) *
+                    (climatic_mb_ref[-1] - dhdt_ref[-1]) *
                     np.where(has_become_ice_free, 0.1, 1.))
             if int(yr) == 500:
                 secfortest = model.fls[0].section
@@ -3685,6 +3686,20 @@ class TestIO():
                                    ds_fl.climatic_mb[1:])
         np.testing.assert_allclose(flux_divergence_ref,
                                    ds_fl.flux_divergence[1:])
+
+        # Physical check of the flux divergence sign, independent of the
+        # formula used above (Cogley et al., 2011: climatic_mb = dhdt +
+        # flux_divergence). At the end of the run the glacier is in steady
+        # state (dhdt ~ 0), so the flux divergence balances the climatic mass
+        # balance: it must export ice (positive) in the accumulation area and
+        # import ice (negative) in the ablation area. An inverted sign would
+        # flip both checks.
+        fdiv_end = ds_fl.flux_divergence.isel(time=-1).values
+        cmb_end = ds_fl.climatic_mb.isel(time=-1).values
+        dhdt_end = ds_fl.dhdt.isel(time=-1).values
+        np.testing.assert_allclose(cmb_end, dhdt_end + fdiv_end, atol=1e-9)
+        assert np.all(fdiv_end[cmb_end > 0] > 0)
+        assert np.all(fdiv_end[cmb_end < 0] < 0)
 
         vel = ds_fl.ice_velocity_myr.isel(time=-1)
         assert 20 < vel.max() < 40
@@ -4500,6 +4515,70 @@ class TestIdealisedInversion():
         if do_plot:  # pragma: no cover
             self.simple_plot(model, inversion_gdir)
 
+    def test_prepare_for_inversion_shape_flags(self, inversion_gdir):
+        # The shape selection flags of prepare_for_inversion used to overwrite
+        # the rectangular flag in the trapezoid branch instead of the trapezoid
+        # one. The default code path (both flags True) hid the bug, hence this
+        # explicit check of all combinations - see GH #1931.
+        fls = dummy_constant_bed(map_dx=inversion_gdir.grid.dx)
+        mb = LinearMassBalance(2600.)
+
+        model = FluxBasedModel(fls, mb_model=mb, y0=0.)
+        model.run_until_equilibrium()
+
+        fls = []
+        for fl in model.fls:
+            pg = np.where((fl.thick > 0) & (fl.widths_m > 1))
+            line = shpg.LineString([fl.line.coords[int(p)] for p in pg[0]])
+            sh = fl.surface_h[pg]
+            flo = centerlines.Centerline(line, dx=fl.dx, surface_h=sh)
+            flo.widths = fl.widths[pg]
+            # a mix of rectangular, trapezoid and (the rest) parabolic sections
+            is_rect = np.zeros(flo.nx, dtype=bool)
+            is_trap = np.zeros(flo.nx, dtype=bool)
+            is_rect[::3] = True
+            is_trap[1::3] = True
+            flo.is_rectangular = is_rect
+            flo.is_trapezoid = is_trap
+            fls.append(flo)
+        inversion_gdir.write_pickle(copy.deepcopy(fls), 'inversion_flowlines')
+        massbalance.apparent_mb_from_linear_mb(inversion_gdir)
+
+        ref_rect = fls[0].is_rectangular.copy()
+        ref_trap = fls[0].is_trapezoid.copy()
+        assert ref_rect.any() and ref_trap.any()
+
+        # Default: both shapes are kept as is
+        inversion.prepare_for_inversion(inversion_gdir)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        np.testing.assert_array_equal(cl['is_rectangular'], ref_rect)
+        np.testing.assert_array_equal(cl['is_trapezoid'], ref_trap)
+
+        # No trapezoid: trapezoid flag is cleared, rectangular untouched
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_with_trapezoid=False)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        np.testing.assert_array_equal(cl['is_rectangular'], ref_rect)
+        assert not cl['is_trapezoid'].any()
+
+        # No rectangular: rectangular flag is cleared, trapezoid untouched
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_with_rectangular=False)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        assert not cl['is_rectangular'].any()
+        np.testing.assert_array_equal(cl['is_trapezoid'], ref_trap)
+
+        # Force all trapezoid / all rectangular
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_all_trapezoid=True)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        assert cl['is_trapezoid'].all()
+
+        inversion.prepare_for_inversion(inversion_gdir,
+                                        invert_all_rectangular=True)
+        cl = inversion_gdir.read_pickle('inversion_input')[0]
+        assert cl['is_rectangular'].all()
+
     def test_inversion_tributary(self, inversion_gdir):
 
         fls = dummy_width_bed_tributary(map_dx=inversion_gdir.grid.dx)
@@ -4888,6 +4967,99 @@ class TestHEF:
         assert_allclose(ds.volume_m3.T, ds2.volume)
         assert_allclose(ds.area_m2.T, ds2.area)
         assert_allclose(ds.calving_m3.T, ds2.calving)
+
+    def test_compile_run_output_different_lengths(self, hef_gdir,
+                                                  hef_copy_gdir,
+                                                  inversion_params):
+        # compile_run_output must merge runs of different length (which
+        # happens with store_output_on_error) onto a common (union) time axis.
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+
+        # Two runs that end at different years
+        run_from_climate_data(hef_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_dl')
+        run_from_climate_data(hef_copy_gdir, ys=1985, ye=1995,
+                              output_filesuffix='_dl')
+
+        long_id = hef_gdir.rgi_id
+        short_id = hef_copy_gdir.rgi_id
+
+        # Both orders, so the short file is also exercised as the template
+        for order in ([hef_gdir, hef_copy_gdir], [hef_copy_gdir, hef_gdir]):
+            ds = utils.compile_run_output(order, input_filesuffix='_dl',
+                                          path=False)
+            # Union time spans the longer run
+            assert ds['time'].values[0] == 1985
+            assert ds['time'].values[-1] == 2000
+            vlong = ds.volume.sel(rgi_id=long_id)
+            vshort = ds.volume.sel(rgi_id=short_id)
+            # Long run is finite everywhere
+            assert vlong.notnull().all()
+            # Short run is finite up to 1995 then NaN
+            assert vshort.sel(time=slice(1985, 1995)).notnull().all()
+            assert vshort.sel(time=slice(1996, 2000)).isnull().all()
+            # Status vars are always present; neither run errored
+            assert float(ds['is_partial_output'].sel(rgi_id=long_id)) == 0
+            assert float(ds['is_partial_output'].sel(rgi_id=short_id)) == 0
+            assert str(ds['error_during_run'].sel(rgi_id=short_id).values) == ''
+
+    def test_compile_run_output_with_partial(self, hef_gdir, hef_copy_gdir,
+                                             inversion_params, monkeypatch):
+        # A run truncated by a mid-run error (store_output_on_error) must
+        # compile, with its tail NaN and the error recorded in the output.
+        import tempfile
+        cfg.PARAMS['trapezoid_lambdas'] = 1
+        cfg.PARAMS['store_output_on_error'] = True
+        cfg.PARAMS['evolution_model'] = 'FluxBased'
+        init_present_time_glacier(hef_gdir)
+        init_present_time_glacier(hef_copy_gdir)
+
+        # Full run first (before monkeypatching)
+        run_from_climate_data(hef_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_pp')
+
+        # Now make the dynamic run fail mid-simulation at 1992
+        from oggm.core.flowline import FluxBasedModel
+        orig_run_until = FluxBasedModel.run_until
+
+        def failing_run_until(self, y1):
+            if y1 > 1992:
+                raise RuntimeError('Glacier exceeds domain boundaries, '
+                                   'at year: {}'.format(y1))
+            return orig_run_until(self, y1)
+
+        monkeypatch.setattr(FluxBasedModel, 'run_until', failing_run_until)
+        # continue_on_error so the partial file is written and the error
+        # swallowed (the file still carries the error in its attributes)
+        run_from_climate_data(hef_copy_gdir, ys=1985, ye=2000,
+                              output_filesuffix='_pp', continue_on_error=True)
+
+        full_id = hef_gdir.rgi_id
+        part_id = hef_copy_gdir.rgi_id
+
+        # Write to disk too, to exercise the (string) error var encoding
+        tmpdir = tempfile.mkdtemp()
+        try:
+            out = os.path.join(tmpdir, 'compiled_pp.nc')
+            utils.compile_run_output([hef_gdir, hef_copy_gdir],
+                                     input_filesuffix='_pp', path=out)
+            with xr.open_dataset(out) as ds:
+                assert ds['time'].values[-1] == 2000
+                vpart = ds.volume.sel(rgi_id=part_id)
+                assert vpart.sel(time=slice(1985, 1992)).notnull().all()
+                assert bool(vpart.sel(time=2000).isnull())
+                assert ds.volume.sel(rgi_id=full_id).notnull().all()
+                # Status recorded
+                assert float(ds['is_partial_output'].sel(rgi_id=part_id)) == 1
+                assert float(ds['is_partial_output'].sel(rgi_id=full_id)) == 0
+                assert 'domain boundaries' in str(
+                    ds['error_during_run'].sel(rgi_id=part_id).values)
+                assert str(
+                    ds['error_during_run'].sel(rgi_id=full_id).values) == ''
+        finally:
+            shutil.rmtree(tmpdir)
 
     @pytest.mark.slow
     def test_equilibrium_glacier_wide(self, hef_gdir, inversion_params):
@@ -5799,7 +5971,7 @@ class TestDynamicSpinup:
         }
         gdirs = workflow.init_glacier_directories(
             rgi_ids.keys(), from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         for gdir in gdirs:
@@ -5857,7 +6029,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # redo the calibration and inversion to be sure we start from a clean
@@ -6066,7 +6238,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # save original melt_f to be able to reset back to default for testing
@@ -6334,7 +6506,7 @@ class TestDynamicSpinup:
             gdir = workflow.init_glacier_directories(
                 ['RGI60-11.00033'],
                 from_prepro_level=3, prepro_border=160,
-                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+                prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                                 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
             df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
@@ -6452,7 +6624,7 @@ class TestDynamicSpinup:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # redo the calibration and inversion to be sure we start from a clean
@@ -7115,7 +7287,7 @@ class TestHydro:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
@@ -7182,7 +7354,7 @@ class TestHydro:
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
         # Add debug vars
@@ -7401,6 +7573,70 @@ class TestHydro:
 
         # Runoff peak should follow a temperature curve
         assert_allclose(odf_ma['runoff'].idxmax(), 8)
+
+    @pytest.mark.slow
+    def test_hydro_with_stop_criterion(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        cfg.PARAMS['store_model_geometry'] = True
+
+        init_present_time_glacier(gdir)
+
+        # Constant climate reaches equilibrium well before nyears, so the
+        # stop criterion truncates the run.
+        tasks.run_with_hydro(gdir, run_task=tasks.run_constant_climate,
+                             store_monthly_hydro=False,
+                             y0=1985, nyears=300,
+                             stop_criterion=equilibrium_stop_criterion,
+                             output_filesuffix='_stop')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_stop')) as ds:
+            # The run stopped early (a full run would have 301 steps)
+            assert ds['time'].size < 300
+            # Both dynamic and hydro variables are present and aligned
+            assert 'volume_m3' in ds
+            assert 'melt_on_glacier' in ds
+            assert ds['melt_on_glacier'].size == ds['volume_m3'].size
+            # Hydro was actually computed over the truncated period (the very
+            # last year is always NaN by design - "last year is never good")
+            assert ds['melt_on_glacier'].isel(time=slice(0, -1)).isnull().sum() == 0
+
+    @pytest.mark.slow
+    def test_hydro_partial_output_on_error(self, hef_gdir, inversion_params):
+
+        gdir = hef_gdir
+
+        cfg.PARAMS['store_diagnostic_variables'] = ALL_DIAGS
+        cfg.PARAMS['store_model_geometry'] = True
+        cfg.PARAMS['store_output_on_error'] = True
+
+        init_present_time_glacier(gdir)
+
+        # Ask for a run that goes beyond the available climate data: the
+        # dynamic run fails mid-simulation once the climate runs out. With
+        # store_output_on_error this writes the truncated output, then
+        # run_with_hydro adds the hydro diagnostics and re-raises (like a
+        # simple run does).
+        with pytest.raises(ValueError, match='time bounds'):
+            tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data,
+                                 store_monthly_hydro=False,
+                                 ys=2000, ye=2050,
+                                 continue_on_error=False,
+                                 output_filesuffix='_partial')
+
+        with xr.open_dataset(gdir.get_filepath('model_diagnostics',
+                                               filesuffix='_partial')) as ds:
+            # Truncated to the last year with climate data (well before 2050)
+            assert int(ds['time'][-1]) < 2050
+            # Both dynamic and hydro variables are present and aligned
+            assert 'volume_m3' in ds
+            assert 'melt_on_glacier' in ds
+            assert ds['melt_on_glacier'].size == ds['volume_m3'].size
+            # Flagged as partial output
+            assert ds.attrs['partial_output'] == 'True'
 
 
 @pytest.mark.test_env("models_dynamics")
@@ -8080,7 +8316,7 @@ class TestDistribute2D:
 
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
                             'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')
 
         # we run the first glacier with a larger temperature bias to force a

@@ -6,6 +6,7 @@ import pickle
 import pytest
 import json
 import numpy as np
+import pandas as pd
 import xarray as xr
 from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
@@ -109,6 +110,9 @@ def up_to_climate(reset=False, use_mp=None, params_file=None):
     cfg.PARAMS['baseline_climate'] = 'CRU'
     cfg.PARAMS['evolution_model'] = 'FluxBased'
     cfg.PARAMS['downstream_line_shape'] = 'parabola'
+    # These tests compare the model length to the raw flowline geometry, so we
+    # switch off the length filtering (min_ice_thick_for_length default is 2)
+    cfg.PARAMS['min_ice_thick_for_length'] = 0
 
     # Go
     gdirs = workflow.init_glacier_directories(rgidf)
@@ -210,8 +214,10 @@ class TestFullRun(unittest.TestCase):
         # check if mini params file is used as expected
         assert cfg.PARAMS['lru_maxsize'] == 123
 
-        df_orig = workflow.calibrate_inversion_from_consensus(
-            gdirs, overwrite_observations=True, ignore_missing=True)
+        ref_table = 'consensus'
+        df_orig = workflow.calibrate_inversion_from_ref_table(
+            gdirs, overwrite_observations=True, ref_table=ref_table,
+            ignore_missing=True)
         df = df_orig.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
@@ -272,6 +278,11 @@ class TestFullRun(unittest.TestCase):
         assert (gdir_0_ref_vol['vol_itmix_m3'] ==
                 gdir_0_ref_vol_user_provided['vol_itmix_m3'])
 
+
+        # the deprecated alias still works and warns
+        with pytest.warns(FutureWarning, match='deprecated'):
+            workflow.calibrate_inversion_from_consensus(gdirs,
+                                                        ignore_missing=True)
 
     @pytest.mark.slow
     def test_shapefile_output(self):

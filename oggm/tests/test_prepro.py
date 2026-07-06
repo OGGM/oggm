@@ -1220,17 +1220,14 @@ class TestGeometry(unittest.TestCase):
             self.assertTrue(np.all(slope >= min_slope))
 
 
-class TestClimate(unittest.TestCase):
+class TestClimate:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
 
-        # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp_prepro_climate')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.testdir_cru = os.path.join(get_test_dir(), 'tmp_prepro_climate_cru')
-        if not os.path.exists(self.testdir_cru):
-            os.makedirs(self.testdir_cru)
+        # test directories
+        self.testdir = tmpdir_factory.mktemp("tmp_prepro_climate")
+        self.testdir_cru = tmpdir_factory.mktemp("tmp_prepro_climate_cru")
         self.clean_dir()
 
         # Init
@@ -1248,18 +1245,15 @@ class TestClimate(unittest.TestCase):
         cfg.PARAMS['prcp_fac_max'] = 5
         cfg.PARAMS['prcp_fac'] = 2.5
 
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-        shutil.rmtree(self.testdir_cru)
-
     def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
-        shutil.rmtree(self.testdir_cru)
-        os.makedirs(self.testdir_cru)
+        utils.mkdir(self.testdir, reset=True)
+        utils.mkdir(self.testdir_cru, reset=True)
+
+    def test_setup(self):
+        assert hasattr(self, "testdir")
+        assert hasattr(self, "testdir_cru")
+        assert os.path.exists(cfg.PATHS["dem_file"])
+        assert os.path.exists(cfg.PATHS["working_dir"])
 
     def test_distribute_climate(self):
 
@@ -1282,7 +1276,7 @@ class TestClimate(unittest.TestCase):
 
         f = os.path.join(gdir.dir, 'climate_historical.nc')
         with utils.ncDataset(f) as nc_r:
-            self.assertTrue(ref_h == nc_r.ref_hgt)
+            assert ref_h == nc_r.ref_hgt
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
@@ -1296,8 +1290,8 @@ class TestClimate(unittest.TestCase):
         climate.process_custom_climate_data(gdir)
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1802)
-        self.assertEqual(ci['baseline_yr_1'], 2002)
+        assert ci['baseline_yr_0'] == 1802
+        assert ci['baseline_yr_1'] == 2002
 
         with utils.ncDataset(get_demo_file('histalp_merged_hef.nc')) as nc_r:
             ref_h = nc_r.variables['hgt'][1, 1]
@@ -1307,7 +1301,7 @@ class TestClimate(unittest.TestCase):
 
         f = os.path.join(gdir.dir, 'climate_historical.nc')
         with utils.ncDataset(f) as nc_r:
-            self.assertTrue(ref_h == nc_r.ref_hgt)
+            assert ref_h == nc_r.ref_hgt
             np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
             np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
 
@@ -1332,8 +1326,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -1345,10 +1339,10 @@ class TestClimate(unittest.TestCase):
                 # (using default gradient because better)
                 temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
                 totest = temp_cor - nc_h.temp
-                self.assertTrue(totest.mean() < 0.5)
+                assert totest.mean() < 0.5
                 # precip
                 totest = nc_c.prcp - nc_h.prcp
-                self.assertTrue(totest.mean() < 100)
+                assert totest.mean() < 100
 
     def test_distribute_climate_dummy(self):
 
@@ -1371,8 +1365,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1901)
-        self.assertEqual(ci['baseline_yr_1'], 2014)
+        assert ci['baseline_yr_0'] == 1901
+        assert ci['baseline_yr_1'] == 2014
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -1417,8 +1411,8 @@ class TestClimate(unittest.TestCase):
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
         ci = gdir.get_climate_info()
-        self.assertEqual(ci['baseline_yr_0'], 1850)
-        self.assertEqual(ci['baseline_yr_1'], 2002)
+        assert ci['baseline_yr_0'] == 1850
+        assert ci['baseline_yr_1'] == 2002
 
         gdh = gdirs[0]
         gdc = gdirs[1]
@@ -2272,6 +2266,165 @@ class TestClimate(unittest.TestCase):
         np.testing.assert_allclose(0, (mbdf['pf_tb_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
         np.testing.assert_allclose(0, (mbdf['all_mb_rmsd'] - mbdf['ref_mb']).mean(), atol=100)
 
+    # Fixtures for the RMSD calibration tests
+    def _build_calib_gdir(self):
+        """Get a gdir with required pre-processing for calibration.
+
+        This is faster than using hef_gdir fixture directly, and doesn't
+        cause overwrite issues when testing order independence.
+        """
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.simple_glacier_masks(gdir)
+        centerlines.elevation_band_flowline(gdir)
+        centerlines.fixed_dx_elevation_band_flowline(gdir)
+        climate.process_custom_climate_data(gdir)
+        return gdir
+
+    def _get_specific_mb(self, gdir, years):
+        h, w = gdir.get_inversion_flowline_hw()
+        mb = massbalance.MonthlyTIModel(gdir)
+        return pd.Series(mb.get_specific_mb(h, w, year=years), index=years)
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _rmsd_calib(self):
+        from functools import partial
+        from oggm.core.massbalance import mb_calibration_to_rmsd
+        mb_calibration_to_rmsd = partial(mb_calibration_to_rmsd,
+                                         overwrite_gdir=True,
+                                         optimisation_kwargs={'seed': 42})
+        yield mb_calibration_to_rmsd
+
+    @pytest.mark.parametrize(
+        "arg_calib_params",
+        [
+            ("melt_f",),
+            ("prcp_fac",),
+            ("temp_bias",),
+            ("melt_f", "prcp_fac"),
+            ("melt_f", "temp_bias"),
+            ("prcp_fac", "temp_bias"),
+            ("melt_f", "prcp_fac", "temp_bias"),
+        ],
+        ids=lambda p: "-".join(p),
+    )
+    def test_mb_calibration_to_rmsd(self, arg_calib_params, _rmsd_calib):
+
+        from functools import partial
+        from oggm.core.massbalance import mb_calibration_from_scalar_mb
+
+        mb_calibration_to_rmsd = _rmsd_calib
+        mb_calibration_from_scalar_mb = partial(
+            mb_calibration_from_scalar_mb, overwrite_gdir=True
+        )
+
+        gdir = self._build_calib_gdir()
+        mbdf = gdir.get_ref_mb_data()
+        ref_mb = mbdf["ANNUAL_BALANCE"]  # Series, keeps year index
+        years = mbdf.index
+        ref_period = f"{years[0]}-01-01_{years[-1] + 1}-01-01"
+
+        mb_calibration_to_rmsd(
+            gdir, ref_df=ref_mb, calibrate_params=arg_calib_params
+        )
+        rmsd_mb = self._get_specific_mb(gdir, years)
+
+        # All calibrated parameters stay within configured bounds
+        pdf = gdir.read_json("mb_calib")
+        for param in ["melt_f", "prcp_fac", "temp_bias"]:
+            assert (
+            cfg.PARAMS[f"{param}_min"]
+            <= pdf[param]
+            <= cfg.PARAMS[f"{param}_max"]
+        )
+
+        # RMSD minimisation means it won't match exactly but should be
+        # relatively close.
+        coeff_atol = 0.35
+        if not len(arg_calib_params) > 1:
+            mean_atol = 100
+        elif "prcp_fac" not in arg_calib_params:
+            mean_atol = 15  # relaxed because prcp_fac drives convergence
+            coeff_atol = 0.45
+        else:
+            mean_atol = 10
+
+        np.testing.assert_allclose(
+            ref_mb.mean(), rmsd_mb.mean(), atol=mean_atol
+        )
+        np.testing.assert_allclose(
+            1, np.corrcoef(ref_mb.values, rmsd_mb.values)[0, 1], atol=coeff_atol
+        )
+        np.testing.assert_allclose(0, (rmsd_mb - ref_mb).mean(), atol=100)
+
+        # RMSD calibration must beat scalar calibration of leading parameter.
+        mb_calibration_from_scalar_mb(
+            gdir,  # OK to reuse gdir as each calibration overwrites mb_calib
+            ref_mb=ref_mb.mean(),
+            ref_period=ref_period,
+            calibrate_param1=arg_calib_params[0],
+        )
+        scalar_mb = self._get_specific_mb(gdir, years)
+        np.testing.assert_array_less(
+            utils.rmsd(rmsd_mb, ref_mb), utils.rmsd(scalar_mb, ref_mb)
+        )
+
+    def test_mb_calibration_to_rmsd_order_independence(self, _rmsd_calib):
+
+        mb_calibration_to_rmsd = _rmsd_calib
+
+        gdir = self._build_calib_gdir()
+        mbdf = gdir.get_ref_mb_data()
+        ref_mb = mbdf["ANNUAL_BALANCE"]
+        years = mbdf.index
+
+        # Check all permutations of parameters gather the same results for
+        # differential evolution, as it's stochastic and so may differ slightly
+        # (hence rtol here)
+        mb_calibration_to_rmsd(
+            gdir,
+            ref_df=ref_mb,
+            calibrate_params=("melt_f", "prcp_fac", "temp_bias"),
+        )
+        base = self._get_specific_mb(gdir, years)
+
+        permutations = [('prcp_fac', 'temp_bias', 'melt_f'),
+                        ('temp_bias', 'melt_f', 'prcp_fac')]
+        for params in permutations:
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb, calibrate_params=params)
+            perm = self._get_specific_mb(gdir, years)
+            np.testing.assert_allclose(base.values, perm.values, rtol=0.01)
+
+    def test_mb_calibration_to_rmsd_invalid_bounds(self, _rmsd_calib):
+
+        mb_calibration_to_rmsd = _rmsd_calib
+
+        gdir = self._build_calib_gdir()
+        ref_mb = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
+
+        # Unrealistic / invalid bounds force differential evolution to fail
+        with pytest.raises(RuntimeError):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                   calibrate_params=('melt_f',),
+                                   melt_f_min=np.nan)
+
+        # Invalid bounds since max < min
+        with pytest.raises(RuntimeError):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                   calibrate_params=('temp_bias',),
+                                   temp_bias_min=2.0,
+                                   temp_bias_max=-1.0)
+
+        # Infinite bounds, which will cause DE to fail
+        with pytest.raises(RuntimeError):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                   calibrate_params=('temp_bias',),
+                                   temp_bias_min=-np.inf,
+                                   temp_bias_max=np.inf)
+
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
 
@@ -2539,18 +2692,22 @@ class TestInversion(unittest.TestCase):
         massbalance.mb_calibration_from_wgms_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
         inversion.prepare_for_inversion(gdir)
-        df = workflow.calibrate_inversion_from_consensus(gdir)
+        ref_table = 'consensus'
+        df = workflow.calibrate_inversion_from_ref_table(gdir,
+                                                         ref_table=ref_table)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
         # Make it fail
         with pytest.raises(ValueError):
             a = (0.1, 3)
             gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
-            workflow.calibrate_inversion_from_consensus(gdir,
+            workflow.calibrate_inversion_from_ref_table(gdir,
+                                                        ref_table=ref_table,
                                                         a_bounds=a)
 
         a = (0.1, 5)
         gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
-        df = workflow.calibrate_inversion_from_consensus(gdir,
+        df = workflow.calibrate_inversion_from_ref_table(gdir,
+                                                         ref_table=ref_table,
                                                          a_bounds=a,
                                                          error_on_mismatch=False)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.08)
@@ -2558,8 +2715,9 @@ class TestInversion(unittest.TestCase):
         # With fs it can work
         a = (0.1, 3)
         gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
-        df = workflow.calibrate_inversion_from_consensus(gdir,
+        df = workflow.calibrate_inversion_from_ref_table(gdir,
                                                          overwrite_observations=True,
+                                                         ref_table=ref_table,
                                                          a_bounds=a,
                                                          apply_fs_on_mismatch=True)
         np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.01)
@@ -2580,13 +2738,14 @@ class TestInversion(unittest.TestCase):
         dfo = workflow.invert_from_params(gdir, params_df=dfi)
         np.testing.assert_allclose(df.vol_itmix_m3, dfo.vol_oggm_m3, rtol=0.01)
 
-        df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        dl_path = "https://cluster.klima.uni-bremen.de/~oggm/g2ti/rgi62_itmix_df_v20260617.parquet"
+        df = pd.read_parquet(utils.file_downloader(dl_path))
 
         # Works with Series
-        df = df.loc[gdir.rgi_id]
         out = workflow.calibrate_inversion_from_volume_entity_task(
             gdir, ref_volume_m3=df['vol_itmix_m3'])
 
+        df = df.loc[gdir.rgi_id]
         np.testing.assert_allclose(df.vol_itmix_m3,
                                    out['vol_oggm_m3'],
                                    rtol=0.01)

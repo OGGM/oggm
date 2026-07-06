@@ -43,8 +43,8 @@ tasks.mb_calibration_from_wgms_mb(gdir)
 tasks.apparent_mb_from_any_mb(gdir, mb_years=(1970, 2000))
 tasks.prepare_for_inversion(gdir)
 refv = 577852773  # From ITMIX
-df = workflow.calibrate_inversion_from_consensus(gdir, volume_m3_reference=refv)
-np.testing.assert_allclose(refv, df.vol_oggm_m3, rtol=0.01)
+out = workflow.calibrate_inversion_from_volume(gdir, vol_ref_m3=refv)
+np.testing.assert_allclose(refv, out['vol_oggm_m3'], rtol=0.01)
 
 cl = gdir.read_pickle('inversion_input')[-1]
 mbmod = massbalance.ConstantMassBalance(gdir, y0=1985)

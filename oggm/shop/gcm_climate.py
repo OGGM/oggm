@@ -254,7 +254,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
     else:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/'
-    
+
     path = f'{gcm_server}/cmip6/isimip3b/flat/2025.11.25/monthly/'
     add = '_global_monthly_flat_glaciers_v2025.11.25.nc'
 

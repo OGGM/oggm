@@ -803,7 +803,7 @@ class Test_climate_datasets:
 
 class Test_bedtopo:
 
-    def test_add_consensus(self, class_case_dir, monkeypatch):
+    def test_add_consensus(self, class_case_dir, rgi62_itmix_df, monkeypatch):
 
         # Init
         cfg.initialize()
@@ -846,7 +846,7 @@ class Test_bedtopo:
         assert utils.rmsd(ref, mine) < 2
 
         # Check vol
-        cdf = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+        cdf = pd.read_parquet(rgi62_itmix_df, engine='pyarrow')
         ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
         my_vol = mine.sum() * gdir.grid.dx**2
         np.testing.assert_allclose(my_vol, ref_vol)
@@ -896,7 +896,7 @@ class Test_Glathida:
 
         # use our files
         base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
-                    'glathida/glathida_2023-11-16_rgi_{}.h5')
+                    'glathida/glathida_2023-11-16_rgi_{}.parquet')
         monkeypatch.setattr(glathida, 'GTD_BASE_URL', base_url)
 
         df = glathida.glathida_to_gdir(gdir)

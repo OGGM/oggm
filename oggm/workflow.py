@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+import warnings
 from collections.abc import Sequence
 # External libs
 import multiprocessing
@@ -27,6 +28,21 @@ except ImportError:
 
 # Module logger
 log = logging.getLogger(__name__)
+
+# Default reference volume tables ("IceBoost v2") used by
+# calibrate_inversion_from_ref_table, one parquet file per RGI version /
+# subtype (RGI6, RGI7 glaciers '7G', RGI7 complexes '7C')
+ICEBOOST_V2_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
+                        'ice_thickness/iceboost_v2/')
+ICEBOOST_V2_FILES = {
+    '6': 'iceboostv2_compiled_rgi62_v20260701.parquet',
+    '7G': 'iceboostv2_compiled_rgi70G_v20260701.parquet',
+    '7C': 'iceboostv2_compiled_rgi70C_v20260701.parquet',
+}
+
+# Farinotti et al. (2019) consensus (ITMIX) reference volume table (RGI6 only)
+CONSENSUS_REF_TABLE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/g2ti/'
+                           'rgi62_itmix_df_v20260617.parquet')
 
 # Multiprocessing Pool
 _mp_manager = None
@@ -263,10 +279,22 @@ def gdir_from_tar(entity, from_tar):
     except AttributeError:
         rgi_id = entity
 
-    from_tar = os.path.join(from_tar, '{}'.format(rgi_id[:8]),
-                            '{}.tar' .format(rgi_id[:11]))
-    assert os.path.exists(from_tar), 'tarfile does not exist'
-    from_tar = os.path.join(from_tar.replace('.tar', ''), rgi_id + '.tar.gz')
+    # The region dir, the new 100-glacier bundle name and the old
+    # 1000-glacier bundle name use the same slices for RGI6 and RGI7.
+    # TODO: add support for bundle sizes of 10 and 1
+    region = rgi_id[:-6]
+    new_bundle = f"{region}.{rgi_id[-5:-2]}"
+    new_path = os.path.join(from_tar, region, new_bundle + ".tar")
+    old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
+    if os.path.exists(new_path):
+        from_tar = new_path
+    elif os.path.exists(old_path):
+        from_tar = old_path
+    else:
+        raise FileNotFoundError(
+            "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
+        )
+    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
@@ -638,21 +666,92 @@ def inversion_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
                                 add_to_log_file=add_to_log_file)
 
 
+def _read_ref_table_file(fpath):
+    """Read a reference volume table from a parquet or hdf file."""
+    if str(fpath).endswith('.parquet'):
+        return pd.read_parquet(fpath)
+    return pd.read_hdf(fpath)
+
+
+def _resolve_ref_volume_table(gdirs, ref_table):
+    """Load and normalise a reference volume table.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        used to pick the default table based on the RGI version
+    ref_table : None or pd.DataFrame or str
+        the reference table to use (see
+        :py:func:`calibrate_inversion_from_ref_table`)
+
+    Returns
+    -------
+    (df, ref_col) : the reference dataframe (indexed by RGI id) and the name
+        of the column holding the reference volume, in m3.
+    """
+    if ref_table is None:
+        ref_table = 'iceboost'
+
+    if isinstance(ref_table, pd.DataFrame):
+        df = ref_table.copy()
+    elif ref_table == 'iceboost':
+        # Pick the IceBoost v2 table matching the RGI version.
+        # gdir.rgi_version is '6x' for RGI6 and '70G'/'70C' for RGI7.
+        rgi_version = gdirs[0].rgi_version
+        key = '6' if rgi_version[0] == '6' else rgi_version[0] + rgi_version[-1]
+        try:
+            fname = ICEBOOST_V2_FILES[key]
+        except KeyError:
+            raise InvalidParamsError(
+                'No IceBoost reference volume table available for RGI version '
+                '"{}". Provide one with the `ref_table` argument.'
+                ''.format(rgi_version))
+        fpath = utils.file_downloader(ICEBOOST_V2_BASE_URL + fname)
+        df = _read_ref_table_file(fpath)
+    elif ref_table == 'consensus':
+        # Farinotti et al. (2019) consensus (ITMIX) estimate (RGI6 only)
+        fpath = utils.file_downloader(CONSENSUS_REF_TABLE_URL)
+        df = _read_ref_table_file(fpath)
+    else:
+        # A local path or a URL to a parquet or hdf file
+        fpath = ref_table
+        if '://' in str(ref_table):
+            fpath = utils.file_downloader(ref_table)
+        df = _read_ref_table_file(fpath)
+
+    # Normalise the reference volume to a column in m3
+    if 'vol_itmix_m3' in df.columns:
+        # Legacy consensus (ITMIX) table, already in m3
+        ref_col = 'vol_itmix_m3'
+    elif 'vol_km3' in df.columns:
+        # IceBoost tables store the volume in km3
+        ref_col = 'vol_ref_m3'
+        df[ref_col] = df['vol_km3'] * 1e9
+    else:
+        raise InvalidParamsError(
+            'The reference volume table must contain either a `vol_km3` or a '
+            '`vol_itmix_m3` column, but has: {}'.format(list(df.columns)))
+
+    return df, ref_col
+
+
 @global_task(log)
-def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
-                                    observations_filesuffix='',
-                                    overwrite_observations=False,
-                                    ref_volume_m3=None,
-                                    ref_volume_year=None,
-                                    rgi_ids_in_ref_volume=None,
-                                    input_filesuffix=None,
-                                    output_filesuffix=None,
-                                    fs=0, a_bounds=(0.1, 10),
-                                    apply_fs_on_mismatch=False,
-                                    error_on_mismatch=True,
-                                    filter_inversion_output=True,
-                                    add_to_log_file=True):
-    """Fit the total volume of the glaciers to the provided estimate.
+def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
+                                       observations_filesuffix='',
+                                       overwrite_observations=True,
+                                       ref_volume_m3=None,
+                                       ref_volume_year=None,
+                                       rgi_ids_in_ref_volume=None,
+                                       input_filesuffix=None,
+                                       output_filesuffix=None,
+                                       ref_table=None,
+                                       ignore_missing=True,
+                                       fs=0, a_bounds=(0.1, 10),
+                                       apply_fs_on_mismatch=False,
+                                       error_on_mismatch=True,
+                                       filter_inversion_output=True,
+                                       add_to_log_file=True):
+    """Fit the total volume of the glaciers to a reference volume table.
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
     a valid inverted volume.
@@ -672,7 +771,9 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
         overwrite_observations to True.
     overwrite_observations : bool
         If you want to overwrite already existing observation values in the
-        provided observations file set this to True. Default is False.
+        provided observations file set this to True. If this is False the
+        volumes saved in the observation file are used as the reference.
+        Default is True.
     ref_volume_m3 : float
         Option to give an own total glacier volume to match to
     ref_volume_year : int or None
@@ -689,6 +790,21 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
     output_filesuffix: str
         The filesuffix used for saving resulting inversion files to the gdir. If
         None the settings_filesuffix will be used.
+    ref_table : None or str or pd.DataFrame
+        the reference volume table to calibrate against. One of:
+        - ``'iceboost'`` (the default, also selected when None): the IceBoost
+          v2 product matching the RGI version of the glaciers is downloaded
+          and used.
+        - ``'consensus'``: the Farinotti et al. (2019) consensus (ITMIX)
+          estimate (RGI6 only).
+        - a pandas DataFrame, or a path/URL to a parquet or hdf file: a custom
+          table, indexed by RGI id. It must contain either a ``vol_km3``
+          column (volume in km3, as in the IceBoost products, the recommended
+          format) or a ``vol_itmix_m3`` column (volume in m3, as in the
+          consensus estimate).
+    ignore_missing : bool
+        set this to true to silence the error if some glaciers could not be
+        found in the reference table.
     fs : float
         invert with sliding (default: no)
     a_bounds: tuple
@@ -718,6 +834,7 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
         output_filesuffix = settings_filesuffix
 
     gdirs = utils.tolist(gdirs)
+    rids = [gdir.rgi_id for gdir in gdirs]
 
     for gdir in gdirs:
         gdir.observations_filesuffix = observations_filesuffix
@@ -729,7 +846,24 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
     else:
         gdirs_use = gdirs
 
-    if any('ref_volume_m3' in gdir.observations for gdir in gdirs):
+    if overwrite_observations:
+        # A per-glacier reference table is only needed when matching individual
+        # volumes. When matching a single total volume (volume_m3_reference) and
+        # no table was explicitly provided, we skip loading/downloading it.
+        if ref_volume_m3 is not None and ref_table is None:
+            df = pd.DataFrame(index=rids)
+            ref_col = None
+        else:
+            # Get the ref data for the glaciers we have
+            df, ref_col = _resolve_ref_volume_table(gdirs, ref_table)
+
+            found_ids = df.index.intersection(rids)
+            if not ignore_missing and (len(found_ids) != len(rids)):
+                raise InvalidWorkflowError('Could not find matching indices in the '
+                                           'reference table for all provided '
+                                           'glaciers. Set ignore_missing=True to '
+                                           'ignore this error.')
+    else:
         ref_volume_m3_file = sum([gdir.observations['ref_volume_m3']['value']
                                   for gdir in gdirs_use])
         if ref_volume_m3 is None:
@@ -771,16 +905,19 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
         return odf
 
     def to_minimize(x):
-        log.workflow('Volume estimate optimisation with '
+        log.workflow('Reference volume optimisation with '
                      'A factor: {} and fs: {}'.format(x, fs))
         odf = compute_vol(x)
-        return ref_volume_m3 - odf.oggm.sum()
+        if ref_volume_m3 is None:
+            return odf[ref_col].sum() - odf.oggm.sum()
+        else:
+            return ref_volume_m3 - odf.oggm.sum()
 
     try:
         out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
                                          full_output=True)
         if r.converged:
-            log.workflow('calibrate_inversion_from_volume '
+            log.workflow('calibrate_inversion_from_ref_table '
                          'converged after {} iterations and fs={}. The '
                          'resulting Glen A factor is {}.'
                          ''.format(r.iterations, fs, out_fac))
@@ -790,9 +927,13 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
         # Ok can't find an A. Log for debug:
         odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
         odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
-        ref_vol_1 = ref_volume_m3 * 1e-9
-        ref_vol_2 = ref_volume_m3 * 1e-9
-        msg = ('calibration from volume estimate CAN\'T converge with fs={}.\n'
+        if ref_volume_m3 is None:
+            ref_vol_1 = odf1[ref_col]
+            ref_vol_2 = odf2[ref_col]
+        else:
+            ref_vol_1 = ref_volume_m3 * 1e-9
+            ref_vol_2 = ref_volume_m3 * 1e-9
+        msg = ('calibration from reference table CAN\'T converge with fs={}.\n'
                'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for A factor {}\n'
                'Ref={:.3f} OGGM={:.3f} for A factor {}'
                ''.format(fs,
@@ -800,19 +941,21 @@ def calibrate_inversion_from_volume(gdirs, settings_filesuffix='',
                          ref_vol_2, odf2.oggm, a_bounds[1]))
         if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
             do_filter = filter_inversion_output
-            return calibrate_inversion_from_volume(gdirs,
-                                                   settings_filesuffix=settings_filesuffix,
-                                                   observations_filesuffix=observations_filesuffix,
-                                                   overwrite_observations=overwrite_observations,
-                                                   ref_volume_m3=ref_volume_m3,
-                                                   rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
-                                                   input_filesuffix=input_filesuffix,
-                                                   output_filesuffix=output_filesuffix,
-                                                   fs=5.7e-20, a_bounds=a_bounds,
-                                                   apply_fs_on_mismatch=False,
-                                                   error_on_mismatch=error_on_mismatch,
-                                                   filter_inversion_output=do_filter,
-                                                   add_to_log_file=add_to_log_file)
+            return calibrate_inversion_from_ref_table(gdirs,
+                                                      settings_filesuffix=settings_filesuffix,
+                                                      observations_filesuffix=observations_filesuffix,
+                                                      overwrite_observations=overwrite_observations,
+                                                      ref_volume_m3=ref_volume_m3,
+                                                      rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+                                                      input_filesuffix=input_filesuffix,
+                                                      output_filesuffix=output_filesuffix,
+                                                      ref_table=ref_table,
+                                                      ignore_missing=ignore_missing,
+                                                      fs=5.7e-20, a_bounds=a_bounds,
+                                                      apply_fs_on_mismatch=False,
+                                                      error_on_mismatch=error_on_mismatch,
+                                                      filter_inversion_output=do_filter,
+                                                      add_to_log_file=add_to_log_file)
         if error_on_mismatch:
             raise ValueError(msg)
 
@@ -913,6 +1056,89 @@ def invert_from_params(gdirs,
     return df
 
 
+@global_task(log)
+def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
+                                       observations_filesuffix='',
+                                       overwrite_observations=False,
+                                       input_filesuffix=None,
+                                       output_filesuffix=None,
+                                       ignore_missing=True,
+                                       fs=0, a_bounds=(0.1, 10),
+                                       apply_fs_on_mismatch=False,
+                                       error_on_mismatch=True,
+                                       filter_inversion_output=True,
+                                       ref_volume_m3=None,
+                                       add_to_log_file=True):
+    """Fit the total volume of the glaciers to the 2019 consensus estimate.
+
+    .. deprecated::
+        Use :py:func:`calibrate_inversion_from_ref_table` instead, which
+        supports more recent reference volume products. This function is kept
+        for backwards compatibility and keeps calibrating against the
+        Farinotti et al. (2019) consensus estimate.
+
+    This method finds the "best Glen A" to match all glaciers in gdirs with
+    a valid inverted volume.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    ignore_missing : bool
+        set this to true to silence the error if some glaciers could not be
+        found in the consensus estimate.
+    fs : float
+        invert with sliding (default: no)
+    a_bounds: tuple
+        factor to apply to default A
+    apply_fs_on_mismatch: false
+        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
+        Oerlemans) and try to optimize A again.
+    error_on_mismatch: bool
+        sometimes the given bounds do not allow to find a zero mismatch:
+        this will normally raise an error, but you can switch this off,
+        use the closest value instead and move on.
+    filter_inversion_output : bool
+        whether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
+    ref_volume_m3 : float
+        Option to give an own total glacier volume to match to
+    add_to_log_file : bool
+        if the called entity tasks should write into log of gdir. Default True
+
+    Returns
+    -------
+    a dataframe with the individual glacier volumes
+    """
+
+    warnings.warn('`calibrate_inversion_from_consensus` is deprecated. Use '
+                  '`calibrate_inversion_from_ref_table` instead, which '
+                  'supports more recent reference volume products. To keep '
+                  'calibrating against the Farinotti et al. (2019) consensus '
+                  'estimate, pass that table explicitly via `ref_table`.',
+                  FutureWarning)
+
+    # Preserve the historical behaviour: calibrate against the Farinotti
+    # et al. (2019) consensus (ITMIX) table.
+    return calibrate_inversion_from_ref_table(
+        gdirs,
+        settings_filesuffix='',
+        observations_filesuffix='',
+        overwrite_observations=False,
+        input_filesuffix=None,
+        output_filesuffix=None,
+        ref_table='consensus',
+        ignore_missing=ignore_missing,
+        fs=fs,
+        a_bounds=a_bounds,
+        apply_fs_on_mismatch=apply_fs_on_mismatch,
+        error_on_mismatch=error_on_mismatch,
+        filter_inversion_output=filter_inversion_output,
+        ref_volume_m3=ref_volume_m3,
+        add_to_log_file=add_to_log_file,
+    )
+
+
 @entity_task(log, writes=['inversion_output'])
 def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
                                                 fs=0, a_bounds=(0.1, 10),
@@ -921,7 +1147,7 @@ def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
                                                 filter_inversion_output=True):
     """Fit the volume of a single glacier to a reference volume estimate.
 
-    This is the entity task version of calibrate_inversion_from_consensus.
+    This is the entity task version of calibrate_inversion_from_ref_table.
     It finds the "best Glen A" to match the reference volume for a single glacier.
 
     TODO: needs to be updated for new settings and observations handling
@@ -1030,125 +1256,6 @@ def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
         'fs': fs,
         'a_factor': out_fac
     }
-
-
-@global_task(log)
-def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
-                                       observations_filesuffix='',
-                                       overwrite_observations=False,
-                                       input_filesuffix=None,
-                                       output_filesuffix=None,
-                                       ignore_missing=True,
-                                       fs=0, a_bounds=(0.1, 10),
-                                       apply_fs_on_mismatch=False,
-                                       error_on_mismatch=True,
-                                       filter_inversion_output=True,
-                                       add_to_log_file=True):
-    """Fit the total volume of the glaciers to the 2019 consensus estimate.
-
-    This method finds the "best Glen A" to match all glaciers in gdirs with
-    a valid inverted volume.
-
-    Parameters
-    ----------
-    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
-        the glacier directories to process
-    settings_filesuffix: str
-        You can use a different set of settings by providing a filesuffix. This
-        is useful for sensitivity experiments.
-    observations_filesuffix: str
-        You can provide a filesuffix where the reference volume used will be
-        stored.
-    overwrite_observations : bool
-        If you want to overwrite already existing observation values in the
-        provided observations file set this to True. Default is False.
-    input_filesuffix: str
-        The filesuffix of the input inversion flowlines. If None the
-        settings_filesuffix will be used.
-    output_filesuffix: str
-        The filesuffix used for saving resulting inversion files to the gdir. If
-        None the settings_filesuffix will be used.
-    ignore_missing : bool
-        set this to true to silence the error if some glaciers could not be
-        found in the consensus estimate.
-    fs : float
-        invert with sliding (default: no)
-    a_bounds: tuple
-        factor to apply to default A
-    apply_fs_on_mismatch: false
-        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
-        Oerlemans) and try to optimize A again.
-    error_on_mismatch: bool
-        sometimes the given bounds do not allow to find a zero mismatch:
-        this will normally raise an error, but you can switch this off,
-        use the closest value instead and move on.
-    filter_inversion_output : bool
-        whether or not to apply terminus thickness filtering on the inversion
-        output (needs the downstream lines to work).
-    volume_m3_reference : float
-        Option to give an own total glacier volume to match to
-    add_to_log_file : bool
-        if the called entity tasks should write into log of gdir. Default True
-
-    Returns
-    -------
-    a dataframe with the individual glacier volumes
-    """
-
-    if input_filesuffix is None:
-        input_filesuffix = settings_filesuffix
-
-    if output_filesuffix is None:
-        output_filesuffix = settings_filesuffix
-
-    gdirs = utils.tolist(gdirs)
-
-    # Get the ref data for the glaciers we have
-    df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
-    rids = [gdir.rgi_id for gdir in gdirs]
-
-    found_ids = df.index.intersection(rids)
-    if not ignore_missing and (len(found_ids) != len(rids)):
-        raise InvalidWorkflowError('Could not find matching indices in the '
-                                   'consensus estimate for all provided '
-                                   'glaciers. Set ignore_missing=True to '
-                                   'ignore this error.')
-
-    df = df.reindex(rids)
-
-    # only use those glaciers which have an itmix estimate
-    odf = df.copy().dropna()
-    ref_volume_m3 = odf.vol_itmix_m3.sum()
-    rgi_ids_in_ref_volume = list(odf.index)
-
-    # do the calibration
-    df_oggm = calibrate_inversion_from_volume(
-        gdirs, settings_filesuffix=settings_filesuffix,
-        observations_filesuffix=observations_filesuffix,
-        overwrite_observations=overwrite_observations,
-        ref_volume_m3=ref_volume_m3,
-        rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
-        input_filesuffix=input_filesuffix,
-        output_filesuffix=output_filesuffix,
-        fs=fs, a_bounds=a_bounds,
-        apply_fs_on_mismatch=apply_fs_on_mismatch,
-        error_on_mismatch=error_on_mismatch,
-        filter_inversion_output=filter_inversion_output,
-        add_to_log_file=add_to_log_file)
-
-    # add the oggm volume to the dataframe which will be returned
-    df['vol_oggm_m3'] = df_oggm['vol_oggm_m3']
-
-    # add the original estimates to the observations file
-    for gdir in gdirs:
-        gdir.observations_filesuffix = observations_filesuffix
-        ref_volume_sinlge = gdir.observations['ref_volume_m3']
-        for col in df.columns:
-            if col != 'vol_oggm_m3':
-                ref_volume_sinlge[col] = df[col].loc[gdir.rgi_id]
-        gdir.observations['ref_volume_m3'] = ref_volume_sinlge
-
-    return df
 
 
 @global_task(log)

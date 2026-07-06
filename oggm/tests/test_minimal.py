@@ -1,10 +1,14 @@
 import pytest
 pytestmark = pytest.mark.test_env("minimal")
 
+import os
+import shutil
+import tempfile
 import unittest
 from functools import partial
 
 import numpy as np
+import xarray as xr
 from numpy.testing import assert_allclose
 
 # Local imports
@@ -95,11 +99,83 @@ class TestIdealisedCases(unittest.TestCase):
         df = model.get_diagnostics()
         assert (df['ice_velocity'].max() * cfg.SEC_IN_YEAR) > 10
 
+    def test_store_output_on_error(self):
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            diag_path = os.path.join(tmpdir, 'diag.nc')
+            geom_path = os.path.join(tmpdir, 'geom.nc')
+
+            # Off by default - enable it (as a projection workflow would)
+            cfg.PARAMS['store_output_on_error'] = True
+
+            def make_model():
+                fls = dummy_constant_bed()
+                # Low ELA so the glacier grows out of the domain mid-run
+                mb = LinearMassBalance(1800.)
+                return FluxBasedModel(fls, mb_model=mb,
+                                      check_for_boundaries=True)
+
+            # Enabled: the error is re-raised but the truncated files are
+            # written.
+            model = make_model()
+            with pytest.raises(RuntimeError, match='domain boundaries'):
+                model.run_until_and_store(300,
+                                          diag_path=diag_path,
+                                          geom_path=geom_path)
+
+            assert os.path.exists(diag_path)
+            with xr.open_dataset(diag_path) as ds:
+                # Truncated to the last completed year (< requested 300)
+                assert ds['time'].size > 0
+                assert int(ds['time'][-1]) < 300
+                # No nan tail left
+                assert np.isfinite(ds['volume_m3'].values).all()
+                # Flagged as partial
+                assert ds.attrs['partial_output'] == 'True'
+                assert 'domain boundaries' in ds.attrs['error_during_run']
+
+            # The geometry file is also written and readable by FileModel
+            from oggm.core.flowline import FileModel
+            fmod = FileModel(geom_path)
+            assert fmod.years[-1] < 300
+
+            # store_output_on_error=False: nothing is written, error raised
+            os.remove(diag_path)
+            os.remove(geom_path)
+            model = make_model()
+            with pytest.raises(RuntimeError, match='domain boundaries'):
+                model.run_until_and_store(300,
+                                          diag_path=diag_path,
+                                          geom_path=geom_path,
+                                          store_output_on_error=False)
+            assert not os.path.exists(diag_path)
+
+            # Truncation must not depend on 'volume' being stored
+            os.remove(geom_path)
+            ovars = cfg.PARAMS['store_diagnostic_variables']
+            cfg.PARAMS['store_diagnostic_variables'] = ['area', 'length']
+            try:
+                model = make_model()
+                with pytest.raises(RuntimeError, match='domain boundaries'):
+                    model.run_until_and_store(300, diag_path=diag_path)
+                with xr.open_dataset(diag_path) as ds:
+                    assert 'volume_m3' not in ds
+                    assert int(ds['time'][-1]) < 300
+                    assert np.isfinite(ds['area_m2'].values).all()
+                    assert ds.attrs['partial_output'] == 'True'
+            finally:
+                cfg.PARAMS['store_diagnostic_variables'] = ovars
+        finally:
+            shutil.rmtree(tmpdir)
+
 
 class TestSia2d(unittest.TestCase):
 
     def setUp(self):
         cfg.initialize_minimal()
+        # this idealised case compares length to the raw geometry
+        cfg.PARAMS['min_ice_thick_for_length'] = 0
 
     def tearDown(self):
         pass

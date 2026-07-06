@@ -527,6 +527,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
     k = 'error_when_glacier_reaches_boundaries'
     PARAMS[k] = cp.as_bool(k)
     PARAMS['store_model_geometry'] = cp.as_bool('store_model_geometry')
+    PARAMS['store_output_on_error'] = cp.as_bool('store_output_on_error')
     PARAMS['store_fl_diagnostics'] = cp.as_bool('store_fl_diagnostics')
 
     # Climate
@@ -585,7 +586,7 @@ def initialize_minimal(file=None, logging_level='INFO', params=None):
            'free_board_marine_terminating', 'use_kcalving_for_inversion',
            'error_when_glacier_reaches_boundaries', 'glacier_length_method',
            'use_inversion_params_for_run',
-           'tidewater_type', 'store_model_geometry',
+           'tidewater_type', 'store_model_geometry', 'store_output_on_error',
            'store_diagnostic_variables', 'store_fl_diagnostic_variables',
            'geodetic_mb_period', 'store_fl_diagnostics',
            'prcp_fac', 'downstream_line_shape', 'keep_multipolygon_outlines']
