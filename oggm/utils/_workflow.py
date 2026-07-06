@@ -2675,8 +2675,7 @@ def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
     """Find the UTM projection covering a given point on the globe.
 
     UTM is only defined between 80°S and 84°N. For locations outside of this
-    band (i.e. the high Arctic and most of Antarctica) no UTM zone exists and
-    this raises an informative error instead of a cryptic ``IndexError``.
+    band no UTM zone exists and an ``InvalidParamsError`` is raised.
 
     Parameters
     ----------
@@ -2711,9 +2710,8 @@ def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
         raise InvalidParamsError(
             f"No UTM zone is defined for the location "
             f"(lon={lon:.4f}, lat={lat:.4f}). UTM is only valid between "
-            f"80°S and 84°N, so it cannot be used for glaciers in the high "
-            f"Arctic or in Antarctica. Set cfg.PARAMS['map_proj'] = 'tmerc' "
-            f"to model glaciers at these latitudes."
+            f"80°S and 84°N. Set cfg.PARAMS['map_proj'] = 'tmerc' for "
+            f"locations outside this band."
         )
     return utm_crs_list[0].code
 

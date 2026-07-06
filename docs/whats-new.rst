@@ -43,10 +43,9 @@ Bug fixes
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Fixed test runtime due to unnecessary downloads (:pull:`1934`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- `map_proj='utm'` now raises a clear `InvalidParamsError` instead of a cryptic
-  `IndexError` when a glacier lies beyond UTM's validity band (north of 84°N or
-  south of 80°S, e.g. in the high Arctic or Antarctica), pointing users to
-  `map_proj='tmerc'` (:pull:`1946`).
+- `map_proj='utm'` now raises a clear `InvalidParamsError` when a glacier lies
+  beyond UTM's validity band (north of 84°N or south of 80°S), pointing users
+  to `map_proj='tmerc'` (:pull:`1946`).
 - GH workflows will timeout after one hour to prevent hanging tests from
   blocking runners or reaching usage limits (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
