@@ -292,6 +292,35 @@ class TestLayeredGdir:
         np.testing.assert_allclose(new_group["w"].values, np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
+    def test_convert_pickles_to_zarr(self, tmp_path, hef_gdir):
+        """Pickles are rewritten into the zarr store and then removed,
+        with the data reading back equivalently."""
+        from oggm.utils import compat
+
+        rid = hef_gdir.rgi_id
+        workbase = str(tmp_path / "work")
+        workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
+        shutil.copytree(hef_gdir.dir, workdir)
+        gdir = oggm.GlacierDirectory(rid, base_dir=workbase)
+
+        # Simulate pickle-only dataset by writing back out as pickles.
+        # Write_pickle drops the zarr group
+        names = ["inversion_flowlines", "model_flowlines"]
+        original = {n: gdir.read_store(n) for n in names}
+        for n in names:
+            gdir.write_pickle(original[n], n)
+            assert os.path.isfile(os.path.join(gdir.dir, f"{n}.pkl"))
+            assert not os.path.isdir(
+                os.path.join(gdir.dir, "data_store.zarr", n)
+            )
+
+        compat._convert_pickles_to_zarr(gdir)
+
+        for n in names:
+            assert not os.path.isfile(os.path.join(gdir.dir, f"{n}.pkl"))
+            assert os.path.isdir(os.path.join(gdir.dir, "data_store.zarr", n))
+            assert len(gdir.read_store(n)) == len(original[n])
+
 
 class TestDeltaServer:
     """End-to-end: init_glacier_directories against a delta-file server."""

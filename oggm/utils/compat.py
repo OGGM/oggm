@@ -15,6 +15,7 @@ are required. The dataset identity comes from an explicit tag rather
 than a URL.
 """
 
+import glob
 import logging
 import os
 
@@ -35,6 +36,40 @@ log = logging.getLogger(__name__)
 _TREE_INVARIANTS = ("dem.tif", "glacier_grid.json", "dem_source.txt")
 
 
+def _convert_pickles_to_zarr(gdir):
+    """Rewrite a glacier directory's pickles into the zarr data store.
+
+    One-way (not reversible): every ``.pkl`` that ``write_store`` can turn
+    into a ``data_store.zarr/<group>`` is deleted afterwards, so the
+    directory holds the same information in zarr form only. Suffixed
+    variants (e.g. ``model_flowlines_dyn_melt_f_calib.pkl``) are handled by
+    globbing each pickle BASENAME stem. Any pickle that ``write_store``
+    cannot convert (it falls back to pickle) keeps its ``.pkl``, so no data
+    is ever lost.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory to convert in place.
+    """
+    pkl_basenames = [
+        k
+        for k, v in cfg.BASENAMES.items()
+        if isinstance(v, str) and v.endswith(".pkl")
+    ]
+    store_dir = os.path.join(gdir.dir, "data_store.zarr")
+    for base in pkl_basenames:
+        stem = cfg.BASENAMES[base][:-4]
+        for fp in glob.glob(os.path.join(gdir.dir, f"{stem}*.pkl")):
+            suffix = os.path.basename(fp)[len(stem) : -4]
+            data = gdir.read_pickle(base, filesuffix=suffix)
+            gdir.write_store(data, base, filesuffix=suffix)
+            if os.path.isdir(os.path.join(store_dir, f"{base}{suffix}")):
+                # zarr write succeeded; drop the now-redundant pickle
+                os.remove(fp)
+            # else write_store fell back to pickle: leave the .pkl in place
+
+
 def convert_prepro_to_deltas(
     rgi_ids: list[str],
     base_urls: dict[int, str],
@@ -44,6 +79,7 @@ def convert_prepro_to_deltas(
     output_dir: str,
     dataset_tag: str,
     max_level: int = 5,
+    convert_to_zarr: bool = False,
 ):
     """Convert cumulative prepro artifacts into per-level delta bundles.
 
@@ -81,6 +117,12 @@ def convert_prepro_to_deltas(
         Must **not** be a source URL.
     max_level : int, default=5
         Convert levels up to and including this one.
+    convert_to_zarr : bool, default=False
+        If True, rewrite each glacier's pickle files into its
+        ``data_store.zarr`` store (and delete the pickles) before
+        tarring, so the output tree ships zarr instead of pickles.
+        This is a one-way process, but the output holds the same
+        information as the input pickles.
 
     Returns
     -------
@@ -117,6 +159,8 @@ def convert_prepro_to_deltas(
 
             stage_dir = os.path.join(out_root, f"L{lvl}")
             for gdir in gdirs:
+                if convert_to_zarr:
+                    _convert_pickles_to_zarr(gdir)
                 include = _write_artifact_manifest(
                     gdir=gdir,
                     level=lvl,
