@@ -2120,14 +2120,15 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(smb.mean(), 0, atol=1e-6)
 
     @pytest.mark.slow
-    def test_sfc_type_mb_model_calib_dynamics(self, hef_gdir):
+    def test_sfc_type_mb_model_calib_dynamics(self):
 
         # sfc tracking only works with a single flowline
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')[0]
 
         # add daily climate
         tasks.process_gswp3_w5e5_data(gdir, daily=True)

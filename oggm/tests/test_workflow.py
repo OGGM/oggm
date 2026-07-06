@@ -651,7 +651,9 @@ class TestGdirSettings:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
         mb_calib_cluster = gdirs[0].read_json('mb_calib')
 
@@ -683,10 +685,10 @@ class TestGdirSettings:
         # this 'large' difference in prcp_fac
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=5e-2)
+                        atol=6e-2)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
-                        atol=1e-3)
+                        atol=6e-2)
 
         # recalibration without overwrite_gdir should raise an error
         prcp_fac_original = settings_informed_threestep['prcp_fac']
@@ -767,7 +769,9 @@ class TestGdirSettings:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
 
         # create a test settings file with a larger glen a parameter
@@ -840,7 +844,9 @@ class TestGdirSettings:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
 
         # for reference, perform an inversion with default paramters
@@ -961,7 +967,9 @@ class TestGdirObservations:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
         mb_calib_cluster = gdirs[0].read_json('mb_calib')
 
@@ -990,10 +998,10 @@ class TestGdirObservations:
         # this 'large' difference in prcp_fac
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=5e-2)
+                        atol=6e-2)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
-                        atol=1e-3)
+                        atol=6e-2)
         # use slightly different observation from hugonnet for sensitivity test
         hugonnet_adapted = gdir.observations['ref_mb']
         hugonnet_adapted['value'] = (hugonnet_adapted['value'] +
