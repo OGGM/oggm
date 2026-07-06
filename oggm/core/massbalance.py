@@ -4220,7 +4220,7 @@ def mb_calibration_to_rmsd(gdir, *,
 
 
 @entity_task(log, writes=['mb_calib'])
-def mb_calibration_from_hugonnet_mb(gdir, *,
+def mb_calibration_from_geodetic_mb(gdir, *,
                                     settings_filesuffix='',
                                     observations_filesuffix='',
                                     use_observations_file=False,
@@ -4571,7 +4571,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
     calibration.
 
     This task can be called by other, "higher level" tasks, for example
-    :py:func:`oggm.core.massbalance.mb_calibration_from_hugonnet_mb` or
+    :py:func:`oggm.core.massbalance.mb_calibration_from_geodetic_mb` or
     :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
 
     Note that this does not compute the apparent mass balance at
@@ -4601,7 +4601,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         average (kg m-2 yr-1) or as a cumulative value (kg m-2) over the
         provided ref_mb_period. The correct unit must be set in ref_mb_unit.
         To use available observations, see
-        :py:func:`oggm.core.massbalance.mb_calibration_from_hugonnet_mb` or
+        :py:func:`oggm.core.massbalance.mb_calibration_from_geodetic_mb` or
         :py:func:`oggm.core.massbalance.mb_calibration_from_wgms_mb`.
     ref_mb_unit : str, optional
         The unit of ref_mb`. Options are:

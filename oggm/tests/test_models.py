@@ -6034,13 +6034,13 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
-                                     gdir,)
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdir, )
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False,)
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_volume(
+        workflow.calibrate_inversion_from_ref_table(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
             ref_volume_m3=vol_m3_ref,
@@ -6629,13 +6629,13 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      gdir, )
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False, )
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_volume(
+        workflow.calibrate_inversion_from_ref_table(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
             ref_volume_m3=vol_m3_ref,

@@ -555,7 +555,7 @@ def climate_tasks(gdirs, settings_filesuffix='', input_filesuffix=None,
     execute_entity_task(tasks.process_climate_data, gdirs,
                         settings_filesuffix=settings_filesuffix)
     # mass balance and the apparent mass balance
-    execute_entity_task(tasks.mb_calibration_from_hugonnet_mb, gdirs,
+    execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
                         settings_filesuffix=settings_filesuffix,
                         override_missing=override_missing,
                         overwrite_gdir=overwrite_gdir)
@@ -848,7 +848,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
 
     if overwrite_observations:
         # A per-glacier reference table is only needed when matching individual
-        # volumes. When matching a single total volume (volume_m3_reference) and
+        # volumes. When matching a single total volume (ref_volume_m3) and
         # no table was explicitly provided, we skip loading/downloading it.
         if ref_volume_m3 is not None and ref_table is None:
             df = pd.DataFrame(index=rids)
@@ -863,6 +863,8 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                                            'reference table for all provided '
                                            'glaciers. Set ignore_missing=True to '
                                            'ignore this error.')
+
+            df = df.reindex(rids)
     else:
         ref_volume_m3_file = sum([gdir.observations['ref_volume_m3']['value']
                                   for gdir in gdirs_use])
@@ -883,13 +885,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                 if 'ref_volume_m3' in gdir.observations:
                     gdir.observations['ref_volume_m3']['value'] = None
 
+        df = pd.DataFrame(index=rids)
+        ref_col = None
+
     # Optimize the diff to ref, using the settings of the first gdir
     gdirs_use[0].settings_filesuffix = settings_filesuffix
     def_a = gdirs_use[0].settings['inversion_glen_a']
-
-    # create a container to store the individual modelled glacier volumes
-    rids = [gdir.rgi_id for gdir in gdirs_use]
-    df = pd.DataFrame(index=rids)
 
     def compute_vol(x):
         inversion_tasks(gdirs_use, settings_filesuffix=settings_filesuffix,
@@ -941,21 +942,23 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                          ref_vol_2, odf2.oggm, a_bounds[1]))
         if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
             do_filter = filter_inversion_output
-            return calibrate_inversion_from_ref_table(gdirs,
-                                                      settings_filesuffix=settings_filesuffix,
-                                                      observations_filesuffix=observations_filesuffix,
-                                                      overwrite_observations=overwrite_observations,
-                                                      ref_volume_m3=ref_volume_m3,
-                                                      rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
-                                                      input_filesuffix=input_filesuffix,
-                                                      output_filesuffix=output_filesuffix,
-                                                      ref_table=ref_table,
-                                                      ignore_missing=ignore_missing,
-                                                      fs=5.7e-20, a_bounds=a_bounds,
-                                                      apply_fs_on_mismatch=False,
-                                                      error_on_mismatch=error_on_mismatch,
-                                                      filter_inversion_output=do_filter,
-                                                      add_to_log_file=add_to_log_file)
+            return calibrate_inversion_from_ref_table(
+                gdirs,
+                settings_filesuffix=settings_filesuffix,
+                observations_filesuffix=observations_filesuffix,
+                overwrite_observations=overwrite_observations,
+                ref_volume_m3=ref_volume_m3,
+                ref_volume_year=ref_volume_year,
+                rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+                input_filesuffix=input_filesuffix,
+                output_filesuffix=output_filesuffix,
+                ref_table=ref_table,
+                ignore_missing=ignore_missing,
+                fs=5.7e-20, a_bounds=a_bounds,
+                apply_fs_on_mismatch=False,
+                error_on_mismatch=error_on_mismatch,
+                filter_inversion_output=do_filter,
+                add_to_log_file=add_to_log_file)
         if error_on_mismatch:
             raise ValueError(msg)
 
@@ -966,8 +969,6 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                      ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A for all gdirs
-    rids = [gdir.rgi_id for gdir in gdirs]
-    df = pd.DataFrame(index=rids)
     inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
                     input_filesuffix=input_filesuffix,
                     output_filesuffix=output_filesuffix,
@@ -1068,6 +1069,7 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
                                        ref_volume_m3=None,
+                                       ref_volume_year=None,
                                        add_to_log_file=True):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
@@ -1084,6 +1086,26 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
+    observations_filesuffix: str
+        You can provide a filesuffix for the reference volume to use. If you
+        provide ref_volume_m3, then this values will be stored in the
+        observations file, if ref_volume_m3 is not already present. If you want
+        to force to use the provided values and override the current ones, set
+        overwrite_observations to True.
+    overwrite_observations : bool
+        If you want to overwrite already existing observation values in the
+        provided observations file set this to True. If this is False the
+        volumes saved in the observation file are used as the reference.
+        Default is True.
+    input_filesuffix: str
+        The filesuffix of the input inversion flowlines. If None the
+        settings_filesuffix will be used.
+    output_filesuffix: str
+        The filesuffix used for saving resulting inversion files to the gdir. If
+        None the settings_filesuffix will be used.
     ignore_missing : bool
         set this to true to silence the error if some glaciers could not be
         found in the consensus estimate.
@@ -1103,6 +1125,9 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
         output (needs the downstream lines to work).
     ref_volume_m3 : float
         Option to give an own total glacier volume to match to
+    ref_volume_year : int or None
+        The year when the reference volume is valid. If None the RGI date is
+        used.
     add_to_log_file : bool
         if the called entity tasks should write into log of gdir. Default True
 
@@ -1122,11 +1147,11 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
     # et al. (2019) consensus (ITMIX) table.
     return calibrate_inversion_from_ref_table(
         gdirs,
-        settings_filesuffix='',
-        observations_filesuffix='',
-        overwrite_observations=False,
-        input_filesuffix=None,
-        output_filesuffix=None,
+        settings_filesuffix=settings_filesuffix,
+        observations_filesuffix=observations_filesuffix,
+        overwrite_observations=overwrite_observations,
+        input_filesuffix=input_filesuffix,
+        output_filesuffix=output_filesuffix,
         ref_table='consensus',
         ignore_missing=ignore_missing,
         fs=fs,
@@ -1135,30 +1160,59 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
         error_on_mismatch=error_on_mismatch,
         filter_inversion_output=filter_inversion_output,
         ref_volume_m3=ref_volume_m3,
+        ref_volume_year=ref_volume_year,
         add_to_log_file=add_to_log_file,
     )
 
 
 @entity_task(log, writes=['inversion_output'])
-def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
-                                                fs=0, a_bounds=(0.1, 10),
-                                                apply_fs_on_mismatch=False,
-                                                error_on_mismatch=True,
-                                                filter_inversion_output=True):
+def calibrate_inversion_from_volume(gdir,
+                                    settings_filesuffix='',
+                                    observations_filesuffix='',
+                                    overwrite_observations=True,
+                                    input_filesuffix=None,
+                                    output_filesuffix=None,
+                                    ref_volume_m3=None,
+                                    ref_volume_year=None,
+                                    fs=0, a_bounds=(0.1, 10),
+                                    apply_fs_on_mismatch=False,
+                                    error_on_mismatch=True,
+                                    filter_inversion_output=True):
     """Fit the volume of a single glacier to a reference volume estimate.
 
     This is the entity task version of calibrate_inversion_from_ref_table.
     It finds the "best Glen A" to match the reference volume for a single glacier.
 
-    TODO: needs to be updated for new settings and observations handling
-
     Parameters
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
+    observations_filesuffix: str
+        You can provide a filesuffix for the reference volume to use. If you
+        provide ref_volume_m3, then this values will be stored in the
+        observations file, if ref_volume_m3 is not already present. If you want
+        to force to use the provided values and override the current ones, set
+        overwrite_observations to True.
+    overwrite_observations : bool
+        If you want to overwrite already existing observation values in the
+        provided observations file set this to True. If this is False the
+        volumes saved in the observation file are used as the reference.
+        Default is True.
+    input_filesuffix: str
+        The filesuffix of the input inversion flowlines. If None the
+        settings_filesuffix will be used.
+    output_filesuffix: str
+        The filesuffix used for saving resulting inversion files to the gdir. If
+        None the settings_filesuffix will be used.
     ref_volume_m3 : float
         the reference volume in m3 to match. If float, take it,
         if pd.Series, select the glacier, if None, error.
+    ref_volume_year : int or None
+        The year when the reference volume is valid. If None the RGI date is
+        used.
     fs : float
         invert with sliding (default: no)
     a_bounds: tuple
@@ -1179,8 +1233,11 @@ def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
     dict with the glacier volume and the calibrated parameters
     """
 
-    if ref_volume_m3 is None:
-        raise InvalidParamsError('vol_ref_m3 must be provided (float or Series).')
+    if input_filesuffix is None:
+        input_filesuffix = settings_filesuffix
+
+    if output_filesuffix is None:
+        output_filesuffix = settings_filesuffix
 
     if isinstance(ref_volume_m3, pd.Series):
         try:
@@ -1189,20 +1246,55 @@ def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
             raise InvalidParamsError(f'vol_ref_m3 series has no entry '
                                      f'for {gdir.rgi_id}.')
 
-    # Optimize the diff to ref
-    def_a = cfg.PARAMS['inversion_glen_a']
+    if not overwrite_observations:
+        ref_volume_m3_file = gdir.observations['ref_volume_m3']['value']
+        if ref_volume_m3 is None:
+            # if no reference volume is provided use the one from the obs-file
+            ref_volume_m3 = ref_volume_m3_file
+        elif np.isclose(ref_volume_m3_file, ref_volume_m3, rtol=1e-2):
+            # ok the provided ref volume is the same as stored in the obs-file
+            pass
+        else:
+            raise InvalidWorkflowError(
+                'You have provided an reference volume, but their is already '
+                'one stored in the current observations file (filesuffix = '
+                f'{observations_filesuffix})! If you want to overwrite set '
+                f'overwrite_observations = True.')
 
-    if cfg.PARAMS['use_kcalving_for_inversion']:
+    if ref_volume_m3 is None:
+        raise InvalidParamsError('vol_ref_m3 must be provided (float or Series).')
+
+    # Optimize the diff to ref
+    def_a = gdir.settings['inversion_glen_a']
+
+    if gdir.settings['use_kcalving_for_inversion']:
         raise NotImplementedError('Calving not implemented yet')
 
     def compute_vol(x):
         # Run inversion tasks for this glacier
-        tasks.prepare_for_inversion(gdir, add_to_log_file=False)
-        tasks.mass_conservation_inversion(gdir, glen_a=x*def_a, fs=fs,
+        tasks.prepare_for_inversion(gdir,
+                                    settings_filesuffix=settings_filesuffix,
+                                    # only use input_filesuffix for first task as
+                                    # subsequent task use the results of previous
+                                    # tasks
+                                    input_filesuffix=input_filesuffix,
+                                    output_filesuffix=output_filesuffix,
+                                    add_to_log_file=False)
+        tasks.mass_conservation_inversion(gdir,
+                                          settings_filesuffix=settings_filesuffix,
+                                          input_filesuffix=output_filesuffix,
+                                          output_filesuffix=output_filesuffix,
+                                          glen_a=x*def_a, fs=fs,
                                           add_to_log_file=False)
         if filter_inversion_output:
-            tasks.filter_inversion_output(gdir, add_to_log_file=False)
-        vol = tasks.get_inversion_volume(gdir, add_to_log_file=False)
+            tasks.filter_inversion_output(gdir,
+                                          settings_filesuffix=settings_filesuffix,
+                                          input_filesuffix=output_filesuffix,
+                                          output_filesuffix=output_filesuffix,
+                                          add_to_log_file=False)
+        vol = tasks.get_inversion_volume(gdir,
+                                         input_filesuffix=output_filesuffix,
+                                         add_to_log_file=False)
         return vol
 
     def to_minimize(x):
@@ -1229,8 +1321,15 @@ def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
                f'Bound values (m3):\nRef={ref_volume_m3:.0f} OGGM={vol1:.0f} for A factor {a_bounds[0]}\n'
                f'Ref={ref_volume_m3:.0f} OGGM={vol2:.0f} for A factor {a_bounds[1]}')
         if apply_fs_on_mismatch and fs == 0 and vol2 > ref_volume_m3:
-            return calibrate_inversion_from_volume_entity_task(
-                gdir, ref_volume_m3=ref_volume_m3,
+            return calibrate_inversion_from_volume(
+                gdir,
+                settings_filesuffix=settings_filesuffix,
+                observations_filesuffix=observations_filesuffix,
+                overwrite_observations=overwrite_observations,
+                input_filesuffix=input_filesuffix,
+                output_filesuffix=output_filesuffix,
+                ref_volume_m3=ref_volume_m3,
+                ref_volume_year=ref_volume_year,
                 fs=5.7e-20, a_bounds=a_bounds,
                 apply_fs_on_mismatch=False, error_on_mismatch=error_on_mismatch,
                 filter_inversion_output=filter_inversion_output)
@@ -1243,12 +1342,34 @@ def calibrate_inversion_from_volume_entity_task(gdir, ref_volume_m3=None,
         log.info(f'We use A factor = {out_fac} and fs = {fs} and move on.')
 
     # Compute the final volume with the correct A
-    tasks.prepare_for_inversion(gdir)
-    tasks.mass_conservation_inversion(gdir, glen_a=out_fac*def_a, fs=fs)
+    tasks.prepare_for_inversion(gdir,
+                                settings_filesuffix=settings_filesuffix,
+                                # only use input_filesuffix for first task as
+                                # subsequent task use the results of previous
+                                # tasks
+                                input_filesuffix=input_filesuffix,
+                                output_filesuffix=output_filesuffix,)
+    tasks.mass_conservation_inversion(gdir,
+                                      settings_filesuffix=settings_filesuffix,
+                                      input_filesuffix=output_filesuffix,
+                                      output_filesuffix=output_filesuffix,
+                                      glen_a=out_fac*def_a, fs=fs)
     if filter_inversion_output:
-        tasks.filter_inversion_output(gdir)
+        tasks.filter_inversion_output(gdir,
+                                      settings_filesuffix=settings_filesuffix,
+                                      input_filesuffix=output_filesuffix,
+                                      output_filesuffix=output_filesuffix,
+                                      )
 
-    final_vol = tasks.get_inversion_volume(gdir)
+    final_vol = tasks.get_inversion_volume(gdir,
+                                           input_filesuffix=output_filesuffix,
+                                           )
+
+    # save in observation file
+    gdir.observations['ref_volume_m3'] = {
+        'value': final_vol,
+        'year': gdir.rgi_date + 1 if ref_volume_year is None else ref_volume_year,
+    }
 
     return {
         'vol_oggm_m3': final_vol,

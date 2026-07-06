@@ -2742,7 +2742,8 @@ class TestInversion(unittest.TestCase):
         df = pd.read_parquet(utils.file_downloader(dl_path))
 
         # Works with Series
-        out = workflow.calibrate_inversion_from_volume_entity_task(
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
             gdir, ref_volume_m3=df['vol_itmix_m3'])
 
         df = df.loc[gdir.rgi_id]
@@ -2752,7 +2753,8 @@ class TestInversion(unittest.TestCase):
         assert out['fs'] == 0
 
         # Works with float
-        out = workflow.calibrate_inversion_from_volume_entity_task(
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
             gdir, ref_volume_m3=df.vol_itmix_m3)
 
         np.testing.assert_allclose(df.vol_itmix_m3,
@@ -2762,8 +2764,9 @@ class TestInversion(unittest.TestCase):
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
         user_provided_volume_m3 = df.vol_itmix_m3 - delta_volume_m3
-        out = workflow.calibrate_inversion_from_volume_entity_task(
+        out = workflow.calibrate_inversion_from_volume(
               gdir,
               apply_fs_on_mismatch=True,
               ref_volume_m3=user_provided_volume_m3)
@@ -2771,6 +2774,39 @@ class TestInversion(unittest.TestCase):
                                    out['vol_oggm_m3'],
                                    rtol=0.01)
         assert out['fs'] > 0
+
+        # test using observation from file
+        glen_a_target = gdir.settings['inversion_glen_a']
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        assert glen_a_target != gdir.settings['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, overwrite_observations=False,
+            apply_fs_on_mismatch=True,)
+        np.testing.assert_allclose(glen_a_target,
+                                   gdir.settings['inversion_glen_a'],
+                                   rtol=1e-3)
+        np.testing.assert_allclose(user_provided_volume_m3,
+                                   out['vol_oggm_m3'],
+                                   rtol=0.01)
+        assert out['fs'] > 0
+        np.testing.assert_allclose(glen_a_target, out['glen_a'],
+                                   rtol=1e-3)
+
+        err_msg = ('You have provided an reference volume, but their is '
+                   'already one stored in the current observations file *')
+        with pytest.raises(InvalidWorkflowError, match=err_msg):
+            workflow.calibrate_inversion_from_volume(
+                gdir, overwrite_observations=False, ref_volume_m3=2,
+                apply_fs_on_mismatch=True, )
+
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, overwrite_observations=False,
+            ref_volume_m3=gdir.observations['ref_volume_m3']['value'],
+            apply_fs_on_mismatch=True, )
+        assert out['fs'] > 0
+        np.testing.assert_allclose(glen_a_target, out['glen_a'],
+                                   rtol=2e-3)
 
     @pytest.mark.slow
     def test_invert_hef_shapes(self):
@@ -3185,7 +3221,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_hugonnet_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -3244,7 +3280,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_hugonnet_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
         inversion.find_inversion_calving_from_any_mb(gdir)
 
