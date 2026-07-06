@@ -534,7 +534,6 @@ class TestZarrUtilities:
         result = oggmzarr.get_pickle_data([Path("scalar.pkl")], _MockGDir())
         assert "scalar" not in result
 
-
     """Round-trip ``geometries`` (polygons with holes, MultiPolygons,
     catchment_indices) through the zarr conversion helpers."""
 
@@ -623,7 +622,7 @@ class TestZarrUtilities:
             np.array([[5, 6]]),
         ]
 
-        gdir.write_store(geom, "geometries", filesuffix="zarrtest")
+        gdir.write_store(geom, "geometries", filesuffix="_zarrtest")
 
         # Check it's really zarr, group and flattened ring arrays exist
         zarr_fp = gdir.get_filepath("data_store").replace(".pkl", ".zarr")
@@ -631,7 +630,7 @@ class TestZarrUtilities:
         assert os.path.isdir(group_dir)
         assert os.path.isdir(os.path.join(group_dir, "polygon_hr", "vertices"))
 
-        back = gdir.read_store("geometries", filesuffix="zarrtest")
+        back = gdir.read_store("geometries", filesuffix="_zarrtest")
         assert back["polygon_hr"].equals(geom["polygon_hr"])
         assert len(list(back["polygon_hr"].interiors)) == 1
         assert back["polygon_pix"].equals(geom["polygon_pix"])
@@ -641,6 +640,29 @@ class TestZarrUtilities:
             back["catchment_indices"], geom["catchment_indices"]
         ):
             assert_allclose(got, exp)
+
+    def test_underscore_prefixed_filesuffix_group_name(
+        self, tmp_path, hef_gdir
+    ):
+        """A '_'-prefixed filesuffix (OGGM convention) must yield a single
+        underscore in the zarr group name."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        data = {"flux": np.array([1.0, 2.0, 3.0])}
+        gdir.write_store(data, "inversion_input", filesuffix="_historical")
+
+        zarr_fp = gdir.get_filepath("data_store").replace(".pkl", ".zarr")
+        assert os.path.isdir(
+            os.path.join(zarr_fp, "inversion_input_historical")
+        )
+        assert not os.path.exists(
+            os.path.join(zarr_fp, "inversion_input__historical")
+        )
+
+        back = gdir.read_store("inversion_input", filesuffix="_historical")
+        assert_allclose(back[0]["flux"], data["flux"])
 
 
 def _write_datatree_to_zarr(data_tree, fp):
