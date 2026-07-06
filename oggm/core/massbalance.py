@@ -5461,11 +5461,11 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         smb = 0
         for yr in mb_years:
             # some models have a climatic and ice mb (e.g. SfcTIModel), for
-            # inversion we want ice; if not available it is ignored; Similarly
-            # some models include a bucket height, and we can add this height on
-            # top to the ice surface height
+            # inversion we use climatic; if not available it is ignored;
+            # Similarly some models include a bucket height, and we can add this
+            # height on top to the ice surface height
             amb = mb_model.get_annual_mb(fl.surface_h, fls=fls, fl_id=fl_id, year=yr,
-                                         climatic_mb_or_ice_mb='ice_mb',
+                                         climatic_mb_or_ice_mb='climatic_mb',
                                          include_mb_model_heights=include_mb_model_heights
                                          )
             amb *= mb_model.sec_in_year(year=yr) * rho
