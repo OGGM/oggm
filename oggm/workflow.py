@@ -843,15 +843,17 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
     if rgi_ids_in_ref_volume is not None:
         gdirs_use = [gdir for gdir in gdirs
                      if gdir.rgi_id in rgi_ids_in_ref_volume]
+        rids_use = [gdir.rgi_id for gdir in gdirs_use]
     else:
         gdirs_use = gdirs
+        rids_use = rids
 
     if overwrite_observations:
         # A per-glacier reference table is only needed when matching individual
         # volumes. When matching a single total volume (ref_volume_m3) and
         # no table was explicitly provided, we skip loading/downloading it.
         if ref_volume_m3 is not None and ref_table is None:
-            df = pd.DataFrame(index=rids)
+            df = pd.DataFrame(index=rids_use)
             ref_col = None
         else:
             # Get the ref data for the glaciers we have
@@ -885,7 +887,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                 if 'ref_volume_m3' in gdir.observations:
                     gdir.observations['ref_volume_m3']['value'] = None
 
-        df = pd.DataFrame(index=rids)
+        df = pd.DataFrame(index=rids_use)
         ref_col = None
 
     # Optimize the diff to ref, using the settings of the first gdir
@@ -903,7 +905,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs_use,
                                           input_filesuffix=output_filesuffix,
                                           add_to_log_file=add_to_log_file)
-        return odf
+        # if the user provides a glacier volume all glaciers are considered,
+        # dropna() below excludes glaciers with no reference volume available
+        if ref_volume_m3 is None:
+            return odf.dropna(subset=[ref_col, 'oggm'])
+        else:
+            return odf
 
     def to_minimize(x):
         log.workflow('Reference volume optimisation with '
@@ -969,6 +976,8 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                      ''.format(out_fac, fs))
 
     # Compute the final volume with the correct A for all gdirs
+    if len(rids_use) != len(rids):
+        df = pd.DataFrame(index=rids)
     inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
                     input_filesuffix=input_filesuffix,
                     output_filesuffix=output_filesuffix,

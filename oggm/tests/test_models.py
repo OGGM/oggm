@@ -248,11 +248,11 @@ class TestInitPresentDayFlowline:
             tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
             ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
             ref_mb = mbdf.ANNUAL_BALANCE.mean()
-            ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+            ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
             tasks.mb_calibration_from_scalar_mb(
                 gdir,
                 ref_mb=ref_mb,
-                ref_mb_period=ref_period,
+                ref_mb_period=ref_mb_period,
                 mb_model_class=cl,
                 settings_filesuffix="_daily",
                 observations_filesuffix='_daily',
@@ -372,11 +372,11 @@ class TestInitFlowlineOtherGlacier:
         centerlines.catchment_width_correction(gdir)
         cfg.PARAMS['baseline_climate'] = ''
         climate.process_custom_climate_data(gdir)
-        ref_period = '1980-01-01_2000-01-01'
+        ref_mb_period = '1980-01-01_2000-01-01'
         ref_mb = -500
         massbalance.mb_calibration_from_scalar_mb(gdir,
                                                   ref_mb=ref_mb,
-                                                  ref_mb_period=ref_period)
+                                                  ref_mb_period=ref_mb_period)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1980, 2000))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir)
@@ -1182,12 +1182,12 @@ class TestMassBalanceModels:
         # need to recalibrate for daily first
         mbdf = hef_gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         ref_mb = mbdf.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # before recalibration compare specific mb of monthly and daily with
         # same parameters
         fls = gdir.read_pickle('inversion_flowlines')
-        y0, y1 = ref_period.split('_')
+        y0, y1 = ref_mb_period.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
         years = np.arange(y0, y1)
@@ -1205,7 +1205,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_monthly',
             observations_filesuffix='_monthly',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             mb_model_class=massbalance.MonthlyTIModel,
             input_filesuffix='_monthly',
         )
@@ -1213,7 +1213,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_daily',
             observations_filesuffix='_daily',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             mb_model_class=massbalance.DailyTIModel)
 
         settings_monthly = ModelSettings(gdir, filesuffix='_monthly')
@@ -2136,7 +2136,7 @@ class TestMassBalanceModels:
         # data for calibration
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         ref_mb = mbdf.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # prepare settings for pure Daily and SfcTypeDaily
         ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
@@ -2147,7 +2147,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_daily',
             observations_filesuffix='_daily',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             calibrate_param1='prcp_fac',
             calibrate_param2='melt_f',
             calibrate_param3='temp_bias',
@@ -2157,7 +2157,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_daily_sfc',
             observations_filesuffix='_daily_sfc',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             calibrate_param1='prcp_fac',
             calibrate_param2='melt_f',
             calibrate_param3='temp_bias',
@@ -6069,14 +6069,14 @@ class TestDynamicSpinup:
         for fl in fls:
             ref_value_dynamic_spinup += getattr(fl, var_name)
 
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_mb_period = cfg.PARAMS['geodetic_mb_period']
 
-        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_mb_period.split('_')
         yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period].iloc[0]
         ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda = float(sel['err_dmdtda'])
@@ -6264,14 +6264,14 @@ class TestDynamicSpinup:
         for fl in fls:
             ref_value_dynamic_spinup += getattr(fl, var_name)
 
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_mb_period = cfg.PARAMS['geodetic_mb_period']
 
-        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_mb_period.split('_')
         yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period]
         ref_dmdtda = float(sel['dmdtda'].iloc[0])
         ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda = float(sel['err_dmdtda'].iloc[0])
@@ -6511,7 +6511,7 @@ class TestDynamicSpinup:
                                 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
             df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-            sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+            sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period].iloc[0]
             ref_dmdtda = float(sel['dmdtda'])
             ref_dmdtda *= 1000  # kg m-2 yr-1
             err_ref_dmdtda = float(sel['err_dmdtda'])
@@ -6652,14 +6652,14 @@ class TestDynamicSpinup:
             gdir.settings['melt_f'] = melt_f_orig
 
         # value we want to match after dynamic melt_f calibration
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_mb_period = cfg.PARAMS['geodetic_mb_period']
 
-        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_mb_period.split('_')
         yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period].iloc[0]
         ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda = float(sel['err_dmdtda'])
