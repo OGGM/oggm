@@ -248,11 +248,11 @@ class TestInitPresentDayFlowline:
             tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
             ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
             ref_mb = mbdf.ANNUAL_BALANCE.mean()
-            ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+            ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
             tasks.mb_calibration_from_scalar_mb(
                 gdir,
                 ref_mb=ref_mb,
-                ref_mb_period=ref_period,
+                ref_mb_period=ref_mb_period,
                 mb_model_class=cl,
                 settings_filesuffix="_daily",
                 observations_filesuffix='_daily',
@@ -372,11 +372,11 @@ class TestInitFlowlineOtherGlacier:
         centerlines.catchment_width_correction(gdir)
         cfg.PARAMS['baseline_climate'] = ''
         climate.process_custom_climate_data(gdir)
-        ref_period = '1980-01-01_2000-01-01'
+        ref_mb_period = '1980-01-01_2000-01-01'
         ref_mb = -500
         massbalance.mb_calibration_from_scalar_mb(gdir,
                                                   ref_mb=ref_mb,
-                                                  ref_mb_period=ref_period)
+                                                  ref_mb_period=ref_mb_period)
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1980, 2000))
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir)
@@ -1182,12 +1182,12 @@ class TestMassBalanceModels:
         # need to recalibrate for daily first
         mbdf = hef_gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         ref_mb = mbdf.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # before recalibration compare specific mb of monthly and daily with
         # same parameters
         fls = gdir.read_pickle('inversion_flowlines')
-        y0, y1 = ref_period.split('_')
+        y0, y1 = ref_mb_period.split('_')
         y0 = int(y0.split('-')[0])
         y1 = int(y1.split('-')[0])
         years = np.arange(y0, y1)
@@ -1205,7 +1205,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_monthly',
             observations_filesuffix='_monthly',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             mb_model_class=massbalance.MonthlyTIModel,
             input_filesuffix='_monthly',
         )
@@ -1213,7 +1213,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_daily',
             observations_filesuffix='_daily',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             mb_model_class=massbalance.DailyTIModel)
 
         settings_monthly = ModelSettings(gdir, filesuffix='_monthly')
@@ -2120,14 +2120,15 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(smb.mean(), 0, atol=1e-6)
 
     @pytest.mark.slow
-    def test_sfc_type_mb_model_calib_dynamics(self, hef_gdir):
+    def test_sfc_type_mb_model_calib_dynamics(self):
 
         # sfc tracking only works with a single flowline
         gdir = workflow.init_glacier_directories(
             ['RGI60-11.00897'],  # Hintereisferner
             from_prepro_level=3, prepro_border=160,
-            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/gdirs/'
-                            'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')[0]
 
         # add daily climate
         tasks.process_gswp3_w5e5_data(gdir, daily=True)
@@ -2135,7 +2136,7 @@ class TestMassBalanceModels:
         # data for calibration
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
         ref_mb = mbdf.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # prepare settings for pure Daily and SfcTypeDaily
         ModelSettings(gdir, filesuffix='_daily', parent_filesuffix='')
@@ -2146,7 +2147,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_daily',
             observations_filesuffix='_daily',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             calibrate_param1='prcp_fac',
             calibrate_param2='melt_f',
             calibrate_param3='temp_bias',
@@ -2156,7 +2157,7 @@ class TestMassBalanceModels:
             gdir, settings_filesuffix='_daily_sfc',
             observations_filesuffix='_daily_sfc',
             overwrite_gdir=True,
-            ref_mb=ref_mb, ref_mb_period=ref_period,
+            ref_mb=ref_mb, ref_mb_period=ref_mb_period,
             calibrate_param1='prcp_fac',
             calibrate_param2='melt_f',
             calibrate_param3='temp_bias',
@@ -6034,13 +6035,13 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
-                                     gdir,)
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdir, )
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False,)
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_volume(
+        workflow.calibrate_inversion_from_ref_table(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
             ref_volume_m3=vol_m3_ref,
@@ -6068,14 +6069,14 @@ class TestDynamicSpinup:
         for fl in fls:
             ref_value_dynamic_spinup += getattr(fl, var_name)
 
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_mb_period = cfg.PARAMS['geodetic_mb_period']
 
-        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_mb_period.split('_')
         yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period].iloc[0]
         ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda = float(sel['err_dmdtda'])
@@ -6263,14 +6264,14 @@ class TestDynamicSpinup:
         for fl in fls:
             ref_value_dynamic_spinup += getattr(fl, var_name)
 
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_mb_period = cfg.PARAMS['geodetic_mb_period']
 
-        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_mb_period.split('_')
         yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period]
         ref_dmdtda = float(sel['dmdtda'].iloc[0])
         ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda = float(sel['err_dmdtda'].iloc[0])
@@ -6510,7 +6511,7 @@ class TestDynamicSpinup:
                                 'oggm_v1.6/L3-L5_files/2023.1/elev_bands/W5E5/')[0]
 
             df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-            sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+            sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period].iloc[0]
             ref_dmdtda = float(sel['dmdtda'])
             ref_dmdtda *= 1000  # kg m-2 yr-1
             err_ref_dmdtda = float(sel['err_dmdtda'])
@@ -6629,13 +6630,13 @@ class TestDynamicSpinup:
 
         # redo the calibration and inversion to be sure we start from a clean
         # state which is up to date with the current oggm implementation
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      gdir, )
         tasks.apparent_mb_from_any_mb(gdir, add_to_log_file=False, )
         # do inversion with A calibration to current volume
         fls_ref = gdir.read_pickle('model_flowlines')
         vol_m3_ref = np.sum([f.volume_m3 for f in fls_ref])
-        workflow.calibrate_inversion_from_volume(
+        workflow.calibrate_inversion_from_ref_table(
             [gdir], apply_fs_on_mismatch=True, error_on_mismatch=False,
             filter_inversion_output=True,
             ref_volume_m3=vol_m3_ref,
@@ -6651,14 +6652,14 @@ class TestDynamicSpinup:
             gdir.settings['melt_f'] = melt_f_orig
 
         # value we want to match after dynamic melt_f calibration
-        ref_period = cfg.PARAMS['geodetic_mb_period']
+        ref_mb_period = cfg.PARAMS['geodetic_mb_period']
 
-        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_period.split('_')
+        yr0_ref_dmdtda, yr1_ref_dmdtda = ref_mb_period.split('_')
         yr0_ref_dmdtda = int(yr0_ref_dmdtda.split('-')[0])
         yr1_ref_dmdtda = int(yr1_ref_dmdtda.split('-')[0])
 
         df_ref_dmdtda = utils.get_geodetic_mb_dataframe().loc[gdir.rgi_id]
-        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_period].iloc[0]
+        sel = df_ref_dmdtda.loc[df_ref_dmdtda['period'] == ref_mb_period].iloc[0]
         ref_dmdtda = float(sel['dmdtda'])
         ref_dmdtda *= 1000  # kg m-2 yr-1
         err_ref_dmdtda = float(sel['err_dmdtda'])

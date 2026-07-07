@@ -507,10 +507,10 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
 
     ref_mb = mbdf.mean()
-    ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+    ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
     massbalance.mb_calibration_from_scalar_mb(gdir,
                                               ref_mb=ref_mb,
-                                              ref_mb_period=ref_period)
+                                              ref_mb_period=ref_mb_period)
     massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
     inversion.prepare_for_inversion(gdir)
 
@@ -621,7 +621,7 @@ def init_columbia_eb(dir_name, reset=False):
     centerlines.fixed_dx_elevation_band_flowline(gdir)
     centerlines.compute_downstream_line(gdir)
     tasks.process_dummy_cru_file(gdir, seed=0)
-    tasks.mb_calibration_from_hugonnet_mb(gdir)
+    tasks.mb_calibration_from_geodetic_mb(gdir)
     tasks.apparent_mb_from_any_mb(gdir)
     tasks.find_inversion_calving_from_any_mb(gdir)
     return gdir

@@ -299,7 +299,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
             target_use['value'] /= unit_conversion  # convert to km2
         elif obs_var == 'ref_volume_m3':
             # we add here a warning, because in the new workflow the
-            # ref_volume_m3 is added during calibrate_inversion_from_consensus
+            # ref_volume_m3 is added during calibrate_inversion_from_ref_table
             log.warning("You seem to be using 'older' preprocessed directories "
                         "with a more recent version of OGGM. While this is "
                         "possible be aware that the handling of observations "
@@ -1123,7 +1123,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     'dynamic_melt_f_run_with_dynamic_spinup_fallback'). This
     function defines a new melt_f in the glacier directory and conducts an
     inversion calibrating A to match 'ref_volume_m3' with this new melt_f
-    ('calibrate_inversion_from_volume'). Afterwards a dynamic spinup is
+    ('calibrate_inversion_from_ref_table'). Afterwards a dynamic spinup is
     conducted to match 'minimise_for' (for more info look at docstring of
     'run_dynamic_spinup'). And in the end the geodetic mass balance of the
     current run is calculated (between the period [yr0_ref_mb, yr1_ref_mb]) and
@@ -1290,7 +1290,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
     if not isinstance(local_variables, dict):
         raise ValueError('You must provide a dict for local_variables!')
 
-    from oggm.workflow import calibrate_inversion_from_volume
+    from oggm.workflow import calibrate_inversion_from_ref_table
 
     if set_local_variables:
         # clear the provided dictionary and set the first elements
@@ -1373,7 +1373,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                                     mb_model_class=mb_model_class,
                                     )
             # do inversion with A calibration to current volume
-            calibrate_inversion_from_volume(
+            calibrate_inversion_from_ref_table(
                 [gdir], settings_filesuffix=settings_filesuffix,
                 apply_fs_on_mismatch=True, error_on_mismatch=False,
                 filter_inversion_output=True,
@@ -1605,7 +1605,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
     :py:class:`oggm.core.flowline.evolution_model`
         The final model after the run.
     """
-    from oggm.workflow import calibrate_inversion_from_volume
+    from oggm.workflow import calibrate_inversion_from_ref_table
 
     if output_filesuffix is None:
         output_filesuffix = settings_filesuffix
@@ -1625,7 +1625,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
                                         settings_filesuffix=settings_filesuffix,
                                         mb_model_class=mb_model_class,
                                         add_to_log_file=False)
-                calibrate_inversion_from_volume(
+                calibrate_inversion_from_ref_table(
                     [gdir], settings_filesuffix=settings_filesuffix,
                     apply_fs_on_mismatch=True, error_on_mismatch=False,
                     filter_inversion_output=True,

@@ -1450,7 +1450,7 @@ class TestClimate:
         mbdf = gdir.get_ref_mb_data()
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ANNUAL_BALANCE.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # this function cleanes the observations file before each test
         def reset_observation_file(gdir):
@@ -1462,7 +1462,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_default',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period)
+                                      ref_mb_period=ref_mb_period)
 
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir,
@@ -1486,7 +1486,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_temp_bias',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir,
@@ -1510,7 +1510,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_prcp_fac',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='prcp_fac')
 
         mb_new = massbalance.MonthlyTIModel(gdir,
@@ -1539,12 +1539,12 @@ class TestClimate:
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period)
+                                          ref_mb_period=ref_mb_period)
         reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_large_mb',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir,
@@ -1570,12 +1570,12 @@ class TestClimate:
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period)
+                                          ref_mb_period=ref_mb_period)
         reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_small_mb',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param2='temp_bias')
 
         mb_new = massbalance.MonthlyTIModel(gdir,
@@ -1602,13 +1602,13 @@ class TestClimate:
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac')
         reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_very_large',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias')
 
@@ -1634,13 +1634,13 @@ class TestClimate:
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac')
         reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_very_small',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias')
 
@@ -1666,14 +1666,14 @@ class TestClimate:
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac')
 
         with pytest.raises(RuntimeError):
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac',
                                           calibrate_param2='temp_bias')
 
@@ -1681,7 +1681,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_extreme_small',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias',
                                       calibrate_param3='melt_f')
@@ -1708,7 +1708,7 @@ class TestClimate:
             reset_observation_file(gdir)
             mb_calibration_from_scalar_mb(gdir,
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac',
                                           calibrate_param2='temp_bias',
                                           calibrate_param3='melt_f')
@@ -1729,7 +1729,7 @@ class TestClimate:
             mb_calibration_from_scalar_mb(gdir,
                                           settings_filesuffix='_extreme_large',
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac')
 
         with pytest.raises(RuntimeError):
@@ -1737,7 +1737,7 @@ class TestClimate:
             mb_calibration_from_scalar_mb(gdir,
                                           settings_filesuffix='_extreme_large',
                                           ref_mb=ref_mb,
-                                          ref_mb_period=ref_period,
+                                          ref_mb_period=ref_mb_period,
                                           calibrate_param1='prcp_fac',
                                           calibrate_param2='temp_bias')
 
@@ -1745,7 +1745,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_extreme_large',
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='prcp_fac',
                                       calibrate_param2='temp_bias',
                                       calibrate_param3='melt_f')
@@ -1910,14 +1910,14 @@ class TestClimate:
         reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       use_2d_mb=False)
         mb_calib_1d = gdir.read_yml('settings')
 
         reset_observation_file(gdir)
         mb_calibration_from_scalar_mb(gdir,
                                       ref_mb=ref_mb,
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       use_2d_mb=True)
         mb_calib_2d = gdir.read_yml('settings')
         # the calibration results for the melt factor should be close to each
@@ -2075,13 +2075,13 @@ class TestClimate:
         climate.process_custom_climate_data(gdir)
 
         ref_mb = mbdf.ANNUAL_BALANCE
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
 
         # Now calibrate to just the melt_f
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_melt_scalar',
                                       ref_mb=ref_mb.mean(),
-                                      ref_mb_period=ref_period)
+                                      ref_mb_period=ref_mb_period)
         h, w = gdir.get_inversion_flowline_hw()
         mb_new = massbalance.MonthlyTIModel(gdir,
                                             settings_filesuffix='_melt_scalar')
@@ -2091,7 +2091,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_pr_scalar',
                                       ref_mb=ref_mb.mean(),
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='prcp_fac')
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -2103,7 +2103,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(gdir,
                                       settings_filesuffix='_tp_scalar',
                                       ref_mb=ref_mb.mean(),
-                                      ref_mb_period=ref_period,
+                                      ref_mb_period=ref_mb_period,
                                       calibrate_param1='temp_bias')
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -2325,7 +2325,7 @@ class TestClimate:
         mbdf = gdir.get_ref_mb_data()
         ref_mb = mbdf["ANNUAL_BALANCE"]  # Series, keeps year index
         years = mbdf.index
-        ref_period = f"{years[0]}-01-01_{years[-1] + 1}-01-01"
+        ref_mb_period = f"{years[0]}-01-01_{years[-1] + 1}-01-01"
 
         mb_calibration_to_rmsd(
             gdir, ref_df=ref_mb, calibrate_params=arg_calib_params
@@ -2333,11 +2333,10 @@ class TestClimate:
         rmsd_mb = self._get_specific_mb(gdir, years)
 
         # All calibrated parameters stay within configured bounds
-        pdf = gdir.read_json("mb_calib")
         for param in ["melt_f", "prcp_fac", "temp_bias"]:
             assert (
             cfg.PARAMS[f"{param}_min"]
-            <= pdf[param]
+            <= gdir.settings[param]
             <= cfg.PARAMS[f"{param}_max"]
         )
 
@@ -2364,7 +2363,7 @@ class TestClimate:
         mb_calibration_from_scalar_mb(
             gdir,  # OK to reuse gdir as each calibration overwrites mb_calib
             ref_mb=ref_mb.mean(),
-            ref_period=ref_period,
+            ref_mb_period=ref_mb_period,
             calibrate_param1=arg_calib_params[0],
         )
         scalar_mb = self._get_specific_mb(gdir, years)
@@ -2449,8 +2448,8 @@ class TestClimate:
         mbdf = gdir.get_ref_mb_data()
         mbdf['ref_mb'] = mbdf['ANNUAL_BALANCE']
         ref_mb = mbdf.ref_mb.mean()
-        ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
-        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb, ref_mb_period=ref_period)
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb, ref_mb_period=ref_mb_period)
         mb_new = massbalance.MonthlyTIModel(gdir)
 
         h, w = gdir.get_inversion_flowline_hw()
@@ -2474,7 +2473,7 @@ class TestClimate:
         gdir.write_pickle(fls, 'inversion_flowlines')
 
         mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
-                                      ref_mb_period=ref_period)
+                                      ref_mb_period=ref_mb_period)
         mb_new = massbalance.MultipleFlowlineMassBalance(gdir,
                                                          use_inversion_flowlines=True)
 
@@ -2742,7 +2741,8 @@ class TestInversion(unittest.TestCase):
         df = pd.read_parquet(utils.file_downloader(dl_path))
 
         # Works with Series
-        out = workflow.calibrate_inversion_from_volume_entity_task(
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
             gdir, ref_volume_m3=df['vol_itmix_m3'])
 
         df = df.loc[gdir.rgi_id]
@@ -2752,7 +2752,8 @@ class TestInversion(unittest.TestCase):
         assert out['fs'] == 0
 
         # Works with float
-        out = workflow.calibrate_inversion_from_volume_entity_task(
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
             gdir, ref_volume_m3=df.vol_itmix_m3)
 
         np.testing.assert_allclose(df.vol_itmix_m3,
@@ -2762,8 +2763,9 @@ class TestInversion(unittest.TestCase):
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
         user_provided_volume_m3 = df.vol_itmix_m3 - delta_volume_m3
-        out = workflow.calibrate_inversion_from_volume_entity_task(
+        out = workflow.calibrate_inversion_from_volume(
               gdir,
               apply_fs_on_mismatch=True,
               ref_volume_m3=user_provided_volume_m3)
@@ -2771,6 +2773,39 @@ class TestInversion(unittest.TestCase):
                                    out['vol_oggm_m3'],
                                    rtol=0.01)
         assert out['fs'] > 0
+
+        # test using observation from file
+        glen_a_target = gdir.settings['inversion_glen_a']
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        assert glen_a_target != gdir.settings['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, overwrite_observations=False,
+            apply_fs_on_mismatch=True,)
+        np.testing.assert_allclose(glen_a_target,
+                                   gdir.settings['inversion_glen_a'],
+                                   rtol=1e-3)
+        np.testing.assert_allclose(user_provided_volume_m3,
+                                   out['vol_oggm_m3'],
+                                   rtol=0.01)
+        assert out['fs'] > 0
+        np.testing.assert_allclose(glen_a_target, out['glen_a'],
+                                   rtol=1e-3)
+
+        err_msg = ('You have provided an reference volume, but their is '
+                   'already one stored in the current observations file *')
+        with pytest.raises(InvalidWorkflowError, match=err_msg):
+            workflow.calibrate_inversion_from_volume(
+                gdir, overwrite_observations=False, ref_volume_m3=2,
+                apply_fs_on_mismatch=True, )
+
+        gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, overwrite_observations=False,
+            ref_volume_m3=gdir.observations['ref_volume_m3']['value'],
+            apply_fs_on_mismatch=True, )
+        assert out['fs'] > 0
+        np.testing.assert_allclose(glen_a_target, out['glen_a'],
+                                   rtol=2e-3)
 
     @pytest.mark.slow
     def test_invert_hef_shapes(self):
@@ -3185,7 +3220,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_hugonnet_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -3244,7 +3279,7 @@ class TestCoxeCalving(unittest.TestCase):
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_hugonnet_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
         inversion.find_inversion_calving_from_any_mb(gdir)
 

@@ -1269,7 +1269,7 @@ class FlowlineModel(object):
                                      'hemisphere.')
 
         if store_output_on_error is None:
-            store_output_on_error = cfg.PARAMS['store_output_on_error']
+            store_output_on_error = self.settings['store_output_on_error']
 
         # Do we have a spinup?
         do_fixed_spinup = fixed_geometry_spinup_yr is not None

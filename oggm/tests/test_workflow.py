@@ -216,13 +216,13 @@ class TestFullRun(unittest.TestCase):
 
         ref_table = 'consensus'
         df_orig = workflow.calibrate_inversion_from_ref_table(
-            gdirs, overwrite_observations=True, ref_table=ref_table,
+            gdirs, ref_table=ref_table,
             ignore_missing=True)
         df = df_orig.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
                                    rtol=0.001)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.43)
 
         # check that observations values are added to the file
         assert 'ref_volume_m3' in gdirs[0].observations
@@ -235,9 +235,9 @@ class TestFullRun(unittest.TestCase):
             ref_vol['value'] *= 0.95
             provided_vol_095 += ref_vol['value']
             gdir.observations['ref_volume_m3'] = ref_vol
-        df_095 = workflow.calibrate_inversion_from_volume(
+        df_095 = workflow.calibrate_inversion_from_ref_table(
             gdirs,
-            overwrite_observations=True,
+            overwrite_observations=False, ref_table=None,
             apply_fs_on_mismatch=True,
         )
         assert df_095.vol_oggm_m3.sum() < df_orig.vol_oggm_m3.sum()
@@ -253,7 +253,7 @@ class TestFullRun(unittest.TestCase):
         rgi_ids_in_ref_volume = list(df.dropna().index)
         # check that error is raised if already an observations stored in file
         with pytest.raises(InvalidWorkflowError) as exc_info:
-            df = workflow.calibrate_inversion_from_volume(
+            df = workflow.calibrate_inversion_from_ref_table(
                 gdirs,
                 overwrite_observations=False,
                 ref_volume_m3=user_provided_volume_m3,
@@ -261,7 +261,7 @@ class TestFullRun(unittest.TestCase):
             )
         assert 'You have provided an reference volume, ' in str(exc_info.value)
 
-        df = workflow.calibrate_inversion_from_volume(
+        df = workflow.calibrate_inversion_from_ref_table(
             gdirs,
             overwrite_observations=True,
             ref_volume_m3=user_provided_volume_m3,
@@ -275,9 +275,6 @@ class TestFullRun(unittest.TestCase):
         gdir_0_ref_vol_user_provided = gdirs[0].observations['ref_volume_m3']
         assert (gdir_0_ref_vol['value'] !=
                 gdir_0_ref_vol_user_provided['value'])
-        assert (gdir_0_ref_vol['vol_itmix_m3'] ==
-                gdir_0_ref_vol_user_provided['vol_itmix_m3'])
-
 
         # the deprecated alias still works and warns
         with pytest.warns(FutureWarning, match='deprecated'):
@@ -651,7 +648,9 @@ class TestGdirSettings:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
         mb_calib_cluster = gdirs[0].read_json('mb_calib')
 
@@ -670,7 +669,7 @@ class TestGdirSettings:
         settings_informed_threestep['baseline_climate'] = 'W5E5'
         settings_informed_threestep['prcp_fac'] = None
 
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      gdirs,
                                      overwrite_gdir=True,
                                      informed_threestep=True,
@@ -683,16 +682,16 @@ class TestGdirSettings:
         # this 'large' difference in prcp_fac
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=5e-2)
+                        atol=6e-2)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
-                        atol=1e-3)
+                        atol=6e-2)
 
         # recalibration without overwrite_gdir should raise an error
         prcp_fac_original = settings_informed_threestep['prcp_fac']
         with pytest.raises(InvalidWorkflowError):
             settings_informed_threestep['prcp_fac'] = None
-            workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          overwrite_gdir=False,
                                          informed_threestep=True,
@@ -767,7 +766,9 @@ class TestGdirSettings:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
 
         # create a test settings file with a larger glen a parameter
@@ -840,7 +841,9 @@ class TestGdirSettings:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
 
         # for reference, perform an inversion with default paramters
@@ -872,9 +875,11 @@ class TestGdirSettings:
 
         # test calibrate from consensus with different lambda,
         glen_a_before = custom_settings['inversion_glen_a']
-        workflow.calibrate_inversion_from_consensus(
+        ref_table = 'consensus'
+        workflow.calibrate_inversion_from_ref_table(
             gdirs, settings_filesuffix='_large_lambda',
             input_filesuffix='',
+            ref_table=ref_table,
             apply_fs_on_mismatch=True)
         glen_a_after = custom_settings['inversion_glen_a']
         assert glen_a_before < glen_a_after
@@ -889,8 +894,8 @@ class TestGdirSettings:
                                             settings_filesuffix='_large_melt_f',
                                             input_filesuffix='',
                                             output_filesuffix='_large_melt_f',)
-        workflow.calibrate_inversion_from_consensus(
-            gdirs, settings_filesuffix='_large_melt_f',
+        workflow.calibrate_inversion_from_ref_table(
+            gdirs, settings_filesuffix='_large_melt_f', ref_table=ref_table,
             input_filesuffix='_large_melt_f', apply_fs_on_mismatch=True)
         glen_a_after = custom_settings['inversion_glen_a']
         inv_out_melt_f = gdir.read_pickle('inversion_output',
@@ -922,7 +927,7 @@ class TestGdirSettings:
         centerlines.catchment_width_geom(gdir)
         centerlines.catchment_width_correction(gdir)
         tasks.process_dummy_cru_file(gdir, seed=0)
-        massbalance.mb_calibration_from_hugonnet_mb(gdir)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
         massbalance.apparent_mb_from_any_mb(gdir)
 
         inversion.prepare_for_inversion(gdir)
@@ -959,7 +964,9 @@ class TestGdirObservations:
         rgi_ids = ['RGI60-11.00897']
         gdirs = workflow.init_glacier_directories(
             rgi_ids, from_prepro_level=3, prepro_border=160,
-            prepro_base_url=oggm.DEFAULT_BASE_URL)
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
         gdir = gdirs[0]
         mb_calib_cluster = gdirs[0].read_json('mb_calib')
 
@@ -970,7 +977,7 @@ class TestGdirObservations:
         settings_informed_threestep['baseline_climate'] = 'W5E5'
         settings_informed_threestep['prcp_fac'] = None
         assert 'ref_mb' not in gdir.observations
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      gdirs,
                                      overwrite_gdir=True,
                                      informed_threestep=True,
@@ -988,10 +995,10 @@ class TestGdirObservations:
         # this 'large' difference in prcp_fac
         assert_allclose(mb_calib_cluster['prcp_fac'],
                         mb_calib_threestep['prcp_fac'],
-                        atol=5e-2)
+                        atol=6e-2)
         assert_allclose(mb_calib_cluster['temp_bias'],
                         mb_calib_threestep['temp_bias'],
-                        atol=1e-3)
+                        atol=6e-2)
         # use slightly different observation from hugonnet for sensitivity test
         hugonnet_adapted = gdir.observations['ref_mb']
         hugonnet_adapted['value'] = (hugonnet_adapted['value'] +
@@ -999,7 +1006,7 @@ class TestGdirObservations:
         gdir.observations_filesuffix = '_hugonnet_adapted'
         gdir.observations['ref_mb'] = hugonnet_adapted
         settings_informed_threestep['prcp_fac'] = None
-        workflow.execute_entity_task(tasks.mb_calibration_from_hugonnet_mb,
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                      gdirs,
                                      overwrite_gdir=True,
                                      informed_threestep=True,

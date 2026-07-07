@@ -1456,7 +1456,9 @@ class TestPreproCLI:
             assert kwargs['border'] == 120
 
     @pytest.mark.slow
-    def test_full_run_defaults(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_full_run_defaults(self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1473,6 +1475,7 @@ class TestPreproCLI:
                           intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          mb_model_class=mb_model_class,
                           inversion_volume_dataset='consensus',
                           continue_on_error=False,
                           override_params={}
@@ -1603,9 +1606,12 @@ class TestPreproCLI:
         with xr.open_dataset(fp) as ods:
             ref = ods.volume
             new = ods.volume_fixed_geom
+            # SfcTypeTIModel's snow tracking makes the fixed-geometry
+            # approximation less accurate than for MonthlyTIModel
+            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.15
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.05)
+                                       rtol=rtol)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
@@ -1687,7 +1693,7 @@ class TestPreproCLI:
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        ref_period = '2000-01-01_2010-01-01'
+        ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf,
@@ -1698,7 +1704,7 @@ class TestPreproCLI:
                           centerlines=True,
                           inversion_volume_dataset='consensus',
                           continue_on_error=False,
-                          override_params={'geodetic_mb_period': ref_period,
+                          override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
                                            }
@@ -1749,7 +1755,7 @@ class TestPreproCLI:
 
         odf = pd.DataFrame(dfm.loc[2000:2009].mean(), columns=['SMB'])
         ref_mb = utils.get_geodetic_mb_dataframe().loc[odf.index]
-        ref_mb = ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda']
+        ref_mb = ref_mb.loc[ref_mb['period'] == ref_mb_period]['dmdtda']
         odf['ref'] = ref_mb * 1000  # kg m-2 yr-1
         np.testing.assert_allclose(odf['SMB'], odf['ref'])
 
@@ -1832,7 +1838,10 @@ class TestPreproCLI:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_elev_bands_and_spinup_run_with_different_evolution_models(
+            self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1852,7 +1861,7 @@ class TestPreproCLI:
 
             # change the reference geodetic mb period, because the climate data of
             # the test glaciers only go up to 2015
-            ref_period = '2000-01-01_2010-01-01'
+            ref_mb_period = '2000-01-01_2010-01-01'
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
@@ -1861,9 +1870,10 @@ class TestPreproCLI:
                               inversion_volume_dataset='consensus',
                               store_fl_diagnostics=True,
                               continue_on_error=False,
+                              mb_model_class=mb_model_class,
                               mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
-                              override_params={'geodetic_mb_period': ref_period,
+                              override_params={'geodetic_mb_period': ref_mb_period,
                                                'baseline_climate': 'CRU',
                                                'evolution_model': evolution_model,
                                                'downstream_line_shape': downstream_line_shape,
@@ -2106,7 +2116,7 @@ class TestPreproCLI:
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
-        ref_period = '2000-01-01_2010-01-01'
+        ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf, intersects_file=inter,
@@ -2115,7 +2125,7 @@ class TestPreproCLI:
                           disable_mp=False,
                           inversion_volume_dataset='consensus',
                           logging_level='INFO', max_level=5, elev_bands=True,
-                          override_params={'geodetic_mb_period': ref_period,
+                          override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
                                            }
