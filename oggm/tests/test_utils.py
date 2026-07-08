@@ -2015,6 +2015,83 @@ def make_fake_zipdir(dir_path, fakefile=None, base_dir=None,
     return dir_path + extension
 
 
+class TestDownloadCacheAtomicity:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_path):
+        cfg.initialize()
+        cfg.PATHS["dl_cache_dir"] = str(tmp_path / "dl_cache")
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        utils.mkdir(cfg.PATHS["dl_cache_dir"])
+        utils.mkdir(cfg.PATHS["working_dir"])
+        self.name = "example.com/atomic_test.txt"
+        self.final = os.path.join(cfg.PATHS["dl_cache_dir"], self.name)
+
+    def test_dl_func_never_sees_the_final_path(self):
+        seen = {}
+
+        def dl(path):
+            seen["path"] = path
+            assert not os.path.exists(self.final)
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, dl)
+        assert out == self.final
+        assert seen["path"] != self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+        # nothing but the finished file may remain in the cache dir
+        assert os.listdir(os.path.dirname(self.final)) == [
+            os.path.basename(self.final)
+        ]
+
+    def test_failed_download_leaves_no_cache_entry(self):
+
+        def bad(path):
+            with open(path, "w") as f:
+                f.write("parti")
+            raise OSError("connection lost")
+
+        with pytest.raises(OSError):
+            _downloads._cached_download_helper(self.name, bad)
+        assert not os.path.exists(self.final)
+
+        # the next attempt self-heals
+        def good(path):
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, good)
+        assert out == self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+
+    def test_stale_tmp_from_hard_kill_is_never_served(self):
+        # a hard-killed process left a partial tmp behind
+        utils.mkdir(os.path.dirname(self.final))
+        with open(self.final + ".tmp", "w") as f:
+            f.write("garbage")
+
+        def good(path):
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, good)
+        assert out == self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+
+    def test_probe_dl_func_returning_none(self):
+        # no file may be created
+        out = _downloads._cached_download_helper(self.name, lambda p: None)
+        assert out is None
+        assert not os.path.exists(self.final)
+
+
 class FakeDownloadManager():
     """We mess around with oggm internals, so the last we can do is to try
     to keep things clean after the tests."""

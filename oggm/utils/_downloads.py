@@ -244,14 +244,19 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
 
     mkdir(os.path.dirname(cache_path))
 
+    # so a killed process can never leave a truncated file in cache
+    tmp_path = cache_path + ".tmp"
     try:
-        cache_path = _call_dl_func(dl_func, cache_path)
+        dl_path = _call_dl_func(dl_func, tmp_path)
     except BaseException:
-        if os.path.exists(cache_path):
-            os.remove(cache_path)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
         raise
 
-    return cache_path
+    if dl_path == tmp_path:
+        os.replace(tmp_path, cache_path)
+        return cache_path
+    return dl_path
 
 
 def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
