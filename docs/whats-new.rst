@@ -146,6 +146,9 @@ Bug fixes
   use ``mass_kg`` directly instead of deriving mass from ``volume`` and
   ``cfg.PARAMS['ice_density']`` (:pull:`1928`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a bug in ``compile_to_netcdf`` decorator, avoiding to raise an error if
+  a single chunk failes (:pull:`1954`).
+  By Copilot and `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
