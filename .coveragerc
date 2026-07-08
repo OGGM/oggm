@@ -43,4 +43,4 @@ exclude_lines =
 ignore_errors = True
 
 [html]
-directory = ../logs/coverage
+directory = coverage_html_report
