@@ -1002,29 +1002,34 @@ class compile_to_netcdf(object):
                                       'compile_tmp_{:06d}.nc'.format(i))
                          for i in range(len(sub_gdirs))]
 
-            try:
-                for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+            valid_tmp_paths = []
+            failed_exception = None
+            for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+                try:
                     task_func(sgdirs, input_filesuffix=input_filesuffix,
                               path=spath, **kwargs)
-            except BaseException:
-                # If something wrong, delete the tmp files
-                for f in tmp_paths:
+                    valid_tmp_paths.append(spath)
+                except BaseException as err:
+                    failed_exception = err
+                    # If this chunk failed, remove its temporary file
                     try:
-                        os.remove(f)
+                        os.remove(spath)
                     except FileNotFoundError:
                         pass
-                raise
+
+            if not valid_tmp_paths:
+                raise failed_exception
 
             # Ok, now merge and return
             try:
-                with xr.open_mfdataset(tmp_paths, combine='nested',
+                with xr.open_mfdataset(valid_tmp_paths, combine='nested',
                                        concat_dim='rgi_id') as ds:
                     # the .load() is actually quite uncool here, but it solves
                     # an unbelievable stalling problem in multiproc
                     ds.load().to_netcdf(path)
             except TypeError:
                 # xr < v 0.13
-                with xr.open_mfdataset(tmp_paths, concat_dim='rgi_id') as ds:
+                with xr.open_mfdataset(valid_tmp_paths, concat_dim='rgi_id') as ds:
                     # the .load() is actually quite uncool here, but it solves
                     # an unbelievable stalling problem in multiproc
                     ds.load().to_netcdf(path)
