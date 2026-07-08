@@ -1022,18 +1022,25 @@ class compile_to_netcdf(object):
                                       'compile_tmp_{:06d}.nc'.format(i))
                          for i in range(len(sub_gdirs))]
 
-            try:
-                for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+            good_paths = []
+            failed_exception = None
+            for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+                try:
                     task_func(sgdirs, input_filesuffix=input_filesuffix,
                               path=spath, **kwargs)
-            except BaseException:
-                # If something wrong, delete the tmp files
-                for f in tmp_paths:
+                    good_paths.append(spath)
+                except BaseException as err:
+                    failed_exception = err
+                    # If this chunk failed, remove its temporary file
                     try:
-                        os.remove(f)
+                        os.remove(spath)
                     except FileNotFoundError:
                         pass
-                raise
+
+            if not good_paths:
+                raise failed_exception
+
+            tmp_paths = good_paths
 
             # Ok, now merge and return
             try:
