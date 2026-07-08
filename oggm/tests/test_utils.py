@@ -20,6 +20,7 @@ from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
 from oggm.cfg import SEC_IN_YEAR
+from oggm.utils._workflow import compile_to_netcdf
 from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
@@ -935,6 +936,27 @@ class TestWorkflowUtils:
         ds_2 = utils.compile_run_output([gdirs[1], gdirs[0]],
                                         input_filesuffix=filesuffix)
         check_result(ds_2)
+
+    def test_compile_to_netcdf_allows_failing_chunks(self, tmpdir, test_dir):
+
+        logger = mock.Mock()
+        cfg.PATHS['working_dir'] = test_dir
+
+        @compile_to_netcdf(logger)
+        def _compile_dummy(gdirs, path=True, **kwargs):
+            gid = gdirs[0]
+            if gid.startswith('bad'):
+                raise RuntimeError('Found no valid glaciers!')
+            ds = xr.Dataset(coords={'rgi_id': [gid]})
+            ds['value'] = ('rgi_id', [1.])
+            ds.to_netcdf(path)
+
+        out = os.path.join(tmpdir, 'compiled.nc')
+        _compile_dummy(['bad_1', 'bad_2', 'good_1'], path=out, tmp_file_size=2)
+        with xr.open_dataset(out) as ds:
+            assert ds.rgi_id.values.tolist() == ['good_1']
+        with pytest.raises(RuntimeError, match='Found no valid glaciers!'):
+            _compile_dummy(['bad_1', 'bad_2'], path=out, tmp_file_size=1)
 
 
 class TestStartFromTar:
