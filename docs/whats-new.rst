@@ -9,9 +9,6 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
-- Added support for processing GSWP3+W5E5 and W5E5 data in ``oggm.shop`` at
-  a daily resolution (:pull:`1800`).
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
   (:pull:`1800`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
@@ -107,6 +104,13 @@ Enhancements
   :pull:`1830`, :pull:`1831`, :pull:`1899`, :pull:`1916`, :pull:`1928`,
   :pull:`1939`, :pull:`1944`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New ``mb_diagnostics.nc`` files to store the ``SfcTypeTIModel`` state at the
+  end of a dynamic run. In particular, these files can be used to initialize the
+  buckets again to continue a dynamic run (e.g. to run multiple projections, all
+  starting from the same model state). It is also possible to store a
+  ``MultipleFlowlineMassBalance``, when working with multiple flowlines
+  (:pull:`1899`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - New model output variable ``mass_kg``, the total glacier mass. When using
   ``SfcTypeTIModel``, volume, mass and thickness diagnostics are further
   split into an ice and a firn/snow part (``volume_ice_m3``/
@@ -181,12 +185,17 @@ Breaking changes
   not need to know where a parameter is stored to look it up). All OGGM
   tasks now accept a ``settings_filesuffix`` keyword argument, and tasks
   that use observations also accept ``observations_filesuffix``, which makes
-  it much more convenient to run sensitivity studies (:pull:`1777`,
+  it much more convenient to run sensitivity studies. For backwards
+  compatibility, parameters are still added to diagnostics (:pull:`1777`,
   :pull:`1785`, :pull:`1788`, :pull:`1795`, :pull:`1833`, :pull:`1882`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - ``MassBalanceModel`` and ``FlowlineModel`` now take the actual number of
   days per month into account; previously all months were assumed to have
   the same length (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- ``MassBalanceModel.get_specific_mb`` now supports three different
+  ``time_resolution``s: annual, monthly and daily (:pull:`1800`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
   `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Renamed ``gdir.write_monthly_climate_file`` to ``gdir.write_climate_file``,
@@ -199,9 +208,15 @@ Breaking changes
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
   `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Renamed observation variable names for consistency across all tasks: the
-  reference mass balance period ``ref_period`` is now ``ref_mb_period``, and
-  the reference volume ``volume_m3_reference`` is now ``ref_volume_m3``
+  reference mass balance period ``ref_period`` is now ``ref_mb_period``,
+  the reference volume ``volume_m3_reference`` is now ``ref_volume_m3``,
+  the reference mass balance in dynamic melt_f calibartion ``ref_dmdtda`` is now
+  ``ref_mb``,  ``err_ref_dmdtda`` is now ``ref_mb_err`` and
+  ``err_dmdtda_scaling_factor`` is now ``ref_mb_err_scaling_factor``
   (:pull:`1795`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Renamed ``rho`` to ``ice_density`` at several locations, to not get confused
+  with ``snow_density``, intoduced with ``SfcTypeTIModel`` (:pull:`1899`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 v1.6.3 (April 13, 2026)
