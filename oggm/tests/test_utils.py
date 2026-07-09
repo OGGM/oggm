@@ -86,6 +86,24 @@ class TestFuncs(object):
         c = utils.smooth1d(a, 3)
         assert_allclose(b, c)
 
+    def test_utm_proj4_from_lonlat(self):
+
+        # A forced zone is returned as-is, without any lookup
+        assert utils.utm_proj4_from_lonlat(0, 0, utm_zone=32) == \
+            {'proj': 'utm', 'zone': 32}
+
+        # Regular mid-latitude points resolve to their EPSG UTM code
+        # (lon=10, lat=45 -> zone 32N -> EPSG:32632)
+        assert utils.utm_proj4_from_lonlat(10, 45) == '32632'
+        # Southern hemisphere -> 327xx
+        assert utils.utm_proj4_from_lonlat(10, -45) == '32732'
+
+        # Beyond UTM's validity band (>84N, <80S) there is no zone: we want a
+        # clear InvalidParamsError, not a cryptic IndexError (see #1945).
+        for lat in [85, 89, -81, -89]:
+            with pytest.raises(InvalidParamsError):
+                utils.utm_proj4_from_lonlat(10, lat)
+
     def test_filter_rgi_name(self):
 
         name = 'Tustumena Glacier                              \x9c'

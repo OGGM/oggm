@@ -2786,6 +2786,51 @@ def robust_tar_extract(
         os.remove(from_tar)
 
 
+def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
+    """Find the UTM projection covering a given point on the globe.
+
+    UTM is only defined between 80°S and 84°N. For locations outside of this
+    band no UTM zone exists and an ``InvalidParamsError`` is raised.
+
+    Parameters
+    ----------
+    lon : float
+        the point longitude (degrees). Ignored if ``utm_zone`` is provided.
+    lat : float
+        the point latitude (degrees). Ignored if ``utm_zone`` is provided.
+    utm_zone : int, optional
+        force a specific UTM zone number (e.g. the one shipped with RGI7),
+        in which case ``lon`` and ``lat`` are not used for the lookup.
+
+    Returns
+    -------
+    The CRS specification (a proj4 dict or an EPSG code string) understood
+    by pyproj.
+    """
+    if utm_zone:
+        return {'proj': 'utm', 'zone': utm_zone}
+
+    from pyproj.aoi import AreaOfInterest
+    from pyproj.database import query_utm_crs_info
+    utm_crs_list = query_utm_crs_info(
+        datum_name="WGS 84",
+        area_of_interest=AreaOfInterest(
+            west_lon_degree=lon,
+            south_lat_degree=lat,
+            east_lon_degree=lon,
+            north_lat_degree=lat,
+        ),
+    )
+    if not utm_crs_list:
+        raise InvalidParamsError(
+            f"No UTM zone is defined for the location "
+            f"(lon={lon:.4f}, lat={lat:.4f}). UTM is only valid between "
+            f"80°S and 84°N. Set cfg.PARAMS['map_proj'] = 'tmerc' for "
+            f"locations outside this band."
+        )
+    return utm_crs_list[0].code
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -3165,23 +3210,10 @@ class GlacierDirectory(object):
     def _reproject_and_write_shapefile(self, entity):
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
-            if entity.get('utm_zone', False):
-                # RGI7 has an utm zone
-                proj4_str = {'proj': 'utm', 'zone': entity['utm_zone']}
-            else:
-                # Find it out
-                from pyproj.aoi import AreaOfInterest
-                from pyproj.database import query_utm_crs_info
-                utm_crs_list = query_utm_crs_info(
-                    datum_name="WGS 84",
-                    area_of_interest=AreaOfInterest(
-                        west_lon_degree=self.cenlon,
-                        south_lat_degree=self.cenlat,
-                        east_lon_degree=self.cenlon,
-                        north_lat_degree=self.cenlat,
-                    ),
-                )
-                proj4_str = utm_crs_list[0].code
+            # RGI7 ships a UTM zone; otherwise we look it up from the center
+            proj4_str = utm_proj4_from_lonlat(
+                self.cenlon, self.cenlat,
+                utm_zone=entity.get('utm_zone', False))
         elif cfg.PARAMS['map_proj'] == 'tmerc':
             params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
                           k=0.9996, x_0=0, y_0=0, datum='WGS84')
