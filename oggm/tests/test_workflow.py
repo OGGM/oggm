@@ -1,6 +1,7 @@
 import os
 import shutil
 import unittest
+from packaging.version import Version
 import pickle
 import warnings
 import pytest
@@ -17,15 +18,22 @@ salem = pytest.importorskip('salem')
 gpd = pytest.importorskip('geopandas')
 
 # Locals
+import oggm
 import oggm.cfg as cfg
 from oggm import workflow
-from oggm.utils import get_demo_file, write_centerlines_to_shape
+from oggm.utils import get_demo_file, write_centerlines_to_shape, ModelSettings
 from oggm.tests import mpl_image_compare
 from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
 from oggm.shop import cru
-from oggm.core import flowline
+from oggm.core import flowline, gis, inversion, centerlines, massbalance
 from oggm import tasks
 from oggm import utils
+from oggm.core.massbalance import (MonthlyTIModel, MultipleFlowlineMassBalance,
+                                   apparent_mb_from_any_mb)
+from oggm.core.flowline import (run_from_climate_data, run_random_climate,
+                                init_present_time_glacier, run_constant_climate, MixedBedFlowline)
+from oggm.core.inversion import get_inversion_volume
+from oggm.exceptions import InvalidWorkflowError
 
 # Globals
 pytestmark = pytest.mark.test_env("workflow")
@@ -161,7 +169,7 @@ def random_for_plot():
             pickle.dump('none', f)
     except FileNotFoundError:
         pass
-    gdirs = up_to_inversion()
+    gdirs = up_to_inversion(reset=True)
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
     workflow.execute_entity_task(flowline.run_random_climate, gdirs, y0=1985,
@@ -174,7 +182,7 @@ class TestFullRun(unittest.TestCase):
     @pytest.mark.slow
     def test_some_characs(self):
 
-        gdirs = up_to_inversion()
+        gdirs = up_to_inversion(reset=True)
 
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics(gdirs,
@@ -184,7 +192,7 @@ class TestFullRun(unittest.TestCase):
         assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
 
         self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
-        assert np.all(dfc.iloc[:2].calving_rate_myr > 100)
+        assert np.all(dfc.iloc[:2].calving_rate_myr.values > 100)
         assert np.all(dfc.inv_volume_km3 > 0)
         assert np.all(dfc.bias == 0)
         assert np.all(dfc.temp_bias == 0)
@@ -209,25 +217,66 @@ class TestFullRun(unittest.TestCase):
         assert cfg.PARAMS['lru_maxsize'] == 123
 
         ref_table = 'consensus'
-        df = workflow.calibrate_inversion_from_ref_table(gdirs,
-                                                         ref_table=ref_table,
-                                                         ignore_missing=True)
-        df = df.dropna()
+        df_orig = workflow.calibrate_inversion_from_ref_table(
+            gdirs, ref_table=ref_table,
+            ignore_missing=True)
+        df = df_orig.dropna()
         np.testing.assert_allclose(df.vol_itmix_m3.sum(),
                                    df.vol_oggm_m3.sum(),
-                                   rtol=0.01)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.41)
+                                   rtol=0.001)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.43)
+
+        # check that observations values are added to the file
+        assert 'ref_volume_m3' in gdirs[0].observations
+        gdir_0_ref_vol = gdirs[0].observations['ref_volume_m3']
+
+        # test that using observations from file is working
+        provided_vol_095 = 0
+        for gdir in gdirs:
+            ref_vol = gdir.observations['ref_volume_m3']
+            ref_vol['value'] *= 0.95
+            provided_vol_095 += ref_vol['value']
+            gdir.observations['ref_volume_m3'] = ref_vol
+        df_095 = workflow.calibrate_inversion_from_ref_table(
+            gdirs,
+            overwrite_observations=False, ref_table=None,
+            apply_fs_on_mismatch=True,
+        )
+        assert df_095.vol_oggm_m3.sum() < df_orig.vol_oggm_m3.sum()
+        assert (gdirs[0].observations['ref_volume_m3']['value'] <
+                gdir_0_ref_vol['value'])
+        np.testing.assert_allclose(
+            provided_vol_095, df_095['vol_oggm_m3'].sum(), rtol=1e-2)
 
         # test user provided volume is working
         delta_volume_m3 = 100000000
         user_provided_volume_m3 = df.vol_itmix_m3.sum() - delta_volume_m3
-        df = workflow.calibrate_inversion_from_ref_table(
-            gdirs, ref_table=ref_table, ignore_missing=True,
-            volume_m3_reference=user_provided_volume_m3)
+        # we only use those which have an itmix volume
+        rgi_ids_in_ref_volume = list(df.dropna().index)
+        # check that error is raised if already an observations stored in file
+        with pytest.raises(InvalidWorkflowError) as exc_info:
+            df = workflow.calibrate_inversion_from_ref_table(
+                gdirs,
+                overwrite_observations=False,
+                ref_volume_m3=user_provided_volume_m3,
+                rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+            )
+        assert 'You have provided an reference volume, ' in str(exc_info.value)
 
-        np.testing.assert_allclose(user_provided_volume_m3,
-                                   df.vol_oggm_m3.sum(),
-                                   rtol=0.01)
+        df = workflow.calibrate_inversion_from_ref_table(
+            gdirs,
+            overwrite_observations=True,
+            ref_volume_m3=user_provided_volume_m3,
+            rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
+        )
+
+        np.testing.assert_allclose(
+            user_provided_volume_m3,
+            df.loc[rgi_ids_in_ref_volume].vol_oggm_m3.sum(),
+            rtol=0.001)
+        gdir_0_ref_vol_user_provided = gdirs[0].observations['ref_volume_m3']
+        assert (gdir_0_ref_vol['value'] !=
+                gdir_0_ref_vol_user_provided['value'])
 
         # the deprecated alias still works and warns
         with pytest.warns(FutureWarning, match='deprecated'):
@@ -458,7 +507,7 @@ def test_plot_region_inversion():
 
     pytest.importorskip('pytest_mpl')
 
-    gdirs = up_to_inversion()
+    gdirs = up_to_inversion(reset=True)
 
     # We prepare for the plot, which needs our own map to proceed.
     # Lets do a local mercator grid
@@ -581,6 +630,452 @@ def test_rgi7_complex_glacier_dirs():
 
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
+
+@pytest.fixture(scope='class')
+def with_class_wd(request, test_dir, hef_gdir):
+    # dependency on hef_gdir to ensure proper initialization order
+    prev_wd = cfg.PATHS['working_dir']
+    cfg.PATHS['working_dir'] = os.path.join(
+        test_dir, request.cls.__name__ + '_wd')
+    utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+    yield
+    # teardown
+    cfg.PATHS['working_dir'] = prev_wd
+
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestGdirSettings:
+
+    @pytest.mark.skipif((Version(np.__version__) < Version('2.0')),
+                        reason='requires NumPy >= 2.0')
+    @pytest.mark.slow
+    def test_settings_massbalance(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
+        gdir = gdirs[0]
+        mb_calib_cluster = gdirs[0].read_json('mb_calib')
+
+        # checking for backwards compatibility
+        mb_model_cluster = MonthlyTIModel(gdir)
+        assert mb_model_cluster.melt_f == mb_calib_cluster['melt_f']
+        assert mb_model_cluster.prcp_fac == mb_calib_cluster['prcp_fac']
+        assert mb_model_cluster.temp_bias == mb_calib_cluster['temp_bias']
+
+        # test usage of individual settings file for the informed threestep,
+        # should result in the same parameters as on the cluster
+        settings_informed_threestep = ModelSettings(gdir,
+                                                    filesuffix='_informed_threestep')
+        settings_informed_threestep['use_temp_bias_from_file'] = True
+        settings_informed_threestep['use_winter_prcp_fac'] = True
+        settings_informed_threestep['baseline_climate'] = 'W5E5'
+        settings_informed_threestep['prcp_fac'] = None
+
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     informed_threestep=True,
+                                     settings_filesuffix='_informed_threestep',
+                                     )
+        mb_calib_threestep = gdirs[0].read_yml('settings',
+                                               '_informed_threestep')
+        assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        # now MonthlyTIModel takes length of months into account which explains
+        # this 'large' difference in prcp_fac
+        assert_allclose(mb_calib_cluster['prcp_fac'],
+                        mb_calib_threestep['prcp_fac'],
+                        atol=6e-2)
+        assert_allclose(mb_calib_cluster['temp_bias'],
+                        mb_calib_threestep['temp_bias'],
+                        atol=6e-2)
+
+        # recalibration without overwrite_gdir should raise an error
+        prcp_fac_original = settings_informed_threestep['prcp_fac']
+        with pytest.raises(InvalidWorkflowError):
+            settings_informed_threestep['prcp_fac'] = None
+            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                         gdirs,
+                                         overwrite_gdir=False,
+                                         informed_threestep=True,
+                                         settings_filesuffix='_informed_threestep',
+                                         )
+
+        settings_informed_threestep['prcp_fac'] = prcp_fac_original
+
+        # test MassBalance settings during dynamic run
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_adapted_melt_f',
+                                        parent_filesuffix='_informed_threestep'
+                                        )
+        custom_settings['melt_f'] *= 1.05
+
+        with pytest.raises(FileNotFoundError):
+            ModelSettings(gdir,
+                          filesuffix='_no_parent',
+                          parent_filesuffix='_not_existing',
+                          )
+        workflow.execute_entity_task(init_present_time_glacier, gdirs)
+        model_orig = run_from_climate_data(gdir, ye=2020)
+        mb_model_custom = MultipleFlowlineMassBalance(
+            gdir,
+            mb_model_class=MonthlyTIModel,
+            settings_filesuffix='_adapted_melt_f',
+        )
+
+        model_custom = run_from_climate_data(gdir, ye=2020,
+                                             mb_model=mb_model_custom,
+                                             output_filesuffix='_custom')
+        # original volume should be larger due to smaller original melt_f
+        assert model_orig.volume_m3 > model_custom.volume_m3
+
+        # should also work with just providing the run_settings to run-task
+        model_custom_2 = run_from_climate_data(gdir, ye=2020,
+                                               settings_filesuffix='_adapted_melt_f',
+                                               output_filesuffix='_custom_2')
+        assert model_custom.volume_m3 == model_custom_2.volume_m3
+
+        # test run_random_climate
+        random_orig = run_random_climate(gdir, nyears=100, y0=2000, seed=0)
+        random_custom = run_random_climate(gdir, nyears=100, y0=2000, seed=0,
+                                           settings_filesuffix='_adapted_melt_f',)
+        assert random_custom.volume_m3 < random_orig.volume_m3
+
+        # test run_constant_climate
+        const_orig = run_constant_climate(gdir, nyears=100, y0=2000)
+        const_custom = run_constant_climate(gdir, nyears=100, y0=2000,
+                                            settings_filesuffix='_adapted_melt_f',)
+        assert const_custom.volume_m3 < const_orig.volume_m3
+
+        # try climate_tasks with different baseline_climate
+        # first test for current setting
+        assert gdir.get_climate_info()['baseline_climate_source'] == 'GSWP3_W5E5'
+        # now change baseline climate in run_settings
+        custom_settings = ModelSettings(gdir, filesuffix='_adapted_baseline')
+        custom_settings['baseline_climate'] = 'ERA5'
+        custom_settings['geodetic_mb_period'] = '2000-01-01_2010-01-01'  # ERA5 only unitl 2018
+        # ERA5 only available until 2018
+        #custom_settings['geodetic_mb_period'] = '2000-01-01_2018-01-01'
+        workflow.climate_tasks(gdirs, settings_filesuffix='_adapted_baseline',
+                               input_filesuffix='',
+                               override_missing='-1000')
+        # Now it should be W5E5
+        assert gdir.get_climate_info()['baseline_climate_source'] == 'ERA5'
+
+    @pytest.mark.skipif((Version(np.__version__) < Version('2.0')),
+                        reason='requires NumPy >= 2.0')
+    @pytest.mark.slow
+    def test_settings_dynamics(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # create a test settings file with a larger glen a parameter
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_glen_a',)
+        custom_settings['inversion_glen_a'] = gdir.get_diagnostics()['inversion_glen_a'] * 10
+
+        # test run_random_climate
+        random_orig = run_random_climate(gdir, nyears=100, y0=2000, seed=0)
+        random_big = run_random_climate(gdir, settings_filesuffix='_large_glen_a',
+                                        nyears=100, y0=2000, seed=0)
+        assert random_big.volume_m3 < random_orig.volume_m3
+
+        # test run_constant_climate
+        const_orig = run_constant_climate(gdir, nyears=100, y0=2000)
+        const_big = run_constant_climate(gdir,
+                                         settings_filesuffix='_large_glen_a',
+                                         nyears=100, y0=2000)
+        assert const_big.volume_m3 < const_orig.volume_m3
+
+        # test run_from_climate_data
+        clim_orig = run_from_climate_data(gdir, ye=2020)
+        clim_big = run_from_climate_data(gdir,
+                                         settings_filesuffix='_large_glen_a',
+                                         ye=2020)
+        assert clim_big.volume_m3 < clim_orig.volume_m3
+
+        # test run_with_hydro
+        default_settings = ModelSettings(gdir)
+        default_settings['store_model_geometry'] = True
+        tasks.run_with_hydro(gdir, run_task=tasks.run_from_climate_data, ye=2020,
+                             output_filesuffix='_hydro_orig')
+        custom_settings['store_model_geometry'] = True
+        tasks.run_with_hydro(gdir, settings_filesuffix='_large_glen_a',
+                             run_task=tasks.run_from_climate_data, ye=2020,
+                             output_filesuffix='_hydro_big')
+        ds_hydro_orig = utils.compile_run_output(gdir,
+                                                 input_filesuffix='_hydro_orig')
+        ds_hydro_big = utils.compile_run_output(gdir,
+                                                input_filesuffix='_hydro_big')
+        assert ds_hydro_big.volume.values[-1] < ds_hydro_orig.volume.values[-1]
+
+        # test for cfl error with small cfl number in run_settings
+        custom_settings['cfl_number'] = 1e-6
+        with pytest.raises(RuntimeError):
+            run_from_climate_data(gdir, settings_filesuffix='_large_glen_a',
+                                  ys=2000, ye=2020)
+        # SemiImplicit model does not use the cfl_number as it is fixed
+        custom_settings['evolution_model'] = 'SemiImplicit'
+        run_from_climate_data(gdir, settings_filesuffix='_large_glen_a',
+                              ys=2000, ye=2020,
+                              output_filesuffix='_rand_orig_thick')
+
+        # Initialize a new flowline an check if settings are used for
+        custom_settings['min_ice_thick_for_length'] = 50
+        run_from_climate_data(gdir, settings_filesuffix='_large_glen_a',
+                              ys=2000, ye=2020,
+                              output_filesuffix='_rand_larger_thick')
+        ds_orig_thick = utils.compile_run_output(
+            gdir, input_filesuffix='_rand_orig_thick')
+        ds_larger_thick = utils.compile_run_output(
+            gdir, input_filesuffix='_rand_larger_thick')
+
+        assert np.all(ds_orig_thick.length >= ds_larger_thick.length)
+
+    @pytest.mark.skipif((Version(np.__version__) < Version('2.0')),
+                        reason='requires NumPy >= 2.0')
+    @pytest.mark.slow
+    def test_settings_inversion(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
+        gdir = gdirs[0]
+
+        # for reference, perform an inversion with default paramters
+        workflow.inversion_tasks(gdir)
+        default_volume = get_inversion_volume(gdir)
+
+        # test with a larger glen a parameter in the settings file
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_glen_a', )
+        custom_settings['inversion_glen_a'] = gdir.settings['inversion_glen_a'] * 10
+        workflow.inversion_tasks(gdir, settings_filesuffix='_large_glen_a',
+                                 input_filesuffix='')
+        assert default_volume > get_inversion_volume(gdir,
+                                                     input_filesuffix='_large_glen_a')
+
+        # test with different lambda value
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_lambda',
+                                        )
+        custom_settings['trapezoid_lambdas'] = gdir.settings['trapezoid_lambdas'] * 1.5
+        workflow.inversion_tasks(gdir, settings_filesuffix='_large_lambda',
+                                 input_filesuffix='')
+        inv_out_default = gdir.read_store('inversion_output')
+        inv_out_lambda = gdir.read_store('inversion_output',
+                                          filesuffix='_large_lambda')
+        # do not look at last 5 grid points because of filter_inversion_output
+        assert np.all(inv_out_default[0]['thick'][:-5] <
+                      inv_out_lambda[0]['thick'][:-5])
+
+        # test calibrate from consensus with different lambda,
+        glen_a_before = custom_settings['inversion_glen_a']
+        ref_table = 'consensus'
+        workflow.calibrate_inversion_from_ref_table(
+            gdirs, settings_filesuffix='_large_lambda',
+            input_filesuffix='',
+            ref_table=ref_table,
+            apply_fs_on_mismatch=True)
+        glen_a_after = custom_settings['inversion_glen_a']
+        assert glen_a_before < glen_a_after
+
+        # test calibration from consensus with different melt_f, including
+        # apparent mass balance
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_melt_f',
+                                        )
+        custom_settings['melt_f'] = gdir.settings['melt_f'] * 1.1
+        massbalance.apparent_mb_from_any_mb(gdir,
+                                            settings_filesuffix='_large_melt_f',
+                                            input_filesuffix='',
+                                            output_filesuffix='_large_melt_f',)
+        workflow.calibrate_inversion_from_ref_table(
+            gdirs, settings_filesuffix='_large_melt_f', ref_table=ref_table,
+            input_filesuffix='_large_melt_f', apply_fs_on_mismatch=True)
+        glen_a_after = custom_settings['inversion_glen_a']
+        inv_out_melt_f = gdir.read_store('inversion_output',
+                                          filesuffix='_large_melt_f')
+        # with larger melt_f the residual of the apparent mass balance must be
+        # larger, to compensate for the more negative mb
+        assert (gdir.get_diagnostics()['apparent_mb_from_any_mb_residual'] <
+                custom_settings['apparent_mb_from_any_mb_residual'])
+        # hence also the resulting flux must be more negative everywhere
+        assert np.all(inv_out_default[0]['flux'] < inv_out_melt_f[0]['flux'])
+
+        # test inversion calving with settings
+        coxe_file = get_demo_file('rgi_RGI50-01.10299.shp')
+        cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
+        entity = gpd.read_file(coxe_file).iloc[0]
+        entity.RGIId = 'RGI60-01.10299'
+        cfg.PARAMS['use_kcalving_for_inversion'] = True
+        cfg.PARAMS['use_kcalving_for_run'] = True
+
+        gdir = oggm.GlacierDirectory(entity)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.compute_downstream_line(gdir)
+        centerlines.compute_downstream_bedshape(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+        centerlines.catchment_width_correction(gdir)
+        tasks.process_dummy_cru_file(gdir, seed=0)
+        massbalance.mb_calibration_from_geodetic_mb(gdir)
+        massbalance.apparent_mb_from_any_mb(gdir)
+
+        inversion.prepare_for_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
+        cls1 = gdir.read_store('inversion_output')
+        # Increase calving for this one using settings
+        custom_settings = ModelSettings(gdir,
+                                        filesuffix='_large_k',
+                                        parent_filesuffix=''
+                                        )
+        custom_settings['inversion_calving_k'] = 1
+
+        res_bef = gdir.settings['apparent_mb_from_any_mb_residual']
+        out = inversion.find_inversion_calving_from_any_mb(
+            gdir, settings_filesuffix='_large_k', output_filesuffix='_large_k',
+        )
+        cls2 = gdir.read_store('inversion_output', filesuffix='_large_k')
+
+        # Calving increases the volume and adds a residual
+        v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
+        v_new = np.sum([np.sum(fl['volume']) for fl in cls2])
+        assert v_ref < v_new
+        res_aft = custom_settings['apparent_mb_from_any_mb_residual']
+        assert res_aft > res_bef
+
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestGdirObservations:
+
+    @pytest.mark.skipif((Version(np.__version__) < Version('2.0')),
+                        reason='requires NumPy >= 2.0')
+    @pytest.mark.slow
+    def test_observations_ref_mb(self):
+        rgi_ids = ['RGI60-11.00897']
+        gdirs = workflow.init_glacier_directories(
+            rgi_ids, from_prepro_level=3, prepro_border=160,
+            prepro_base_url='https://cluster.klima.uni-bremen.de/~oggm/'
+                            'test_gdirs/oggm_v1.6/L3-L5_files/2023.1/'
+                            'elev_bands/W5E5/')
+        gdir = gdirs[0]
+        mb_calib_cluster = gdirs[0].read_json('mb_calib')
+
+        settings_informed_threestep = ModelSettings(gdir,
+                                                    filesuffix='_informed_threestep')
+        settings_informed_threestep['use_temp_bias_from_file'] = True
+        settings_informed_threestep['use_winter_prcp_fac'] = True
+        settings_informed_threestep['baseline_climate'] = 'W5E5'
+        settings_informed_threestep['prcp_fac'] = None
+        assert 'ref_mb' not in gdir.observations
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     informed_threestep=True,
+                                     settings_filesuffix='_informed_threestep',
+                                     )
+        # check that observation was added to the observation files and that the
+        # result is the same as the previous implementation
+        assert 'ref_mb' in gdir.observations
+        for key in ['value', 'unit', 'err', 'period']:
+            assert key in gdir.observations['ref_mb']
+        mb_calib_threestep = gdirs[0].read_yml('settings',
+                                               '_informed_threestep')
+        assert mb_calib_cluster['melt_f'] == mb_calib_threestep['melt_f']
+        # now MonthlyTIModel takes length of months into account which explains
+        # this 'large' difference in prcp_fac
+        assert_allclose(mb_calib_cluster['prcp_fac'],
+                        mb_calib_threestep['prcp_fac'],
+                        atol=6e-2)
+        assert_allclose(mb_calib_cluster['temp_bias'],
+                        mb_calib_threestep['temp_bias'],
+                        atol=6e-2)
+        # use slightly different observation from hugonnet for sensitivity test
+        hugonnet_adapted = gdir.observations['ref_mb']
+        hugonnet_adapted['value'] = (hugonnet_adapted['value'] +
+                                     hugonnet_adapted['err'] / 2)
+        gdir.observations_filesuffix = '_hugonnet_adapted'
+        gdir.observations['ref_mb'] = hugonnet_adapted
+        settings_informed_threestep['prcp_fac'] = None
+        workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                     gdirs,
+                                     overwrite_gdir=True,
+                                     informed_threestep=True,
+                                     settings_filesuffix='_informed_threestep',
+                                     observations_filesuffix='_hugonnet_adapted',
+                                     use_observations_file=True,
+                                     )
+        mb_calib_hugonnet_adapted = gdirs[0].read_yml('settings',
+                                                      '_informed_threestep')
+        # with a less negative geodetic mass balance we need more mass input,
+        # with the same melt_f
+        assert mb_calib_threestep['melt_f'] == mb_calib_hugonnet_adapted['melt_f']
+        assert mb_calib_threestep['prcp_fac'] < mb_calib_hugonnet_adapted['prcp_fac']
+
+        # set back to default for the following tests
+        gdir.observations_filesuffix = ''
+
+        # different combinations of providing observation in file and as kwarg
+        ref_mb = gdir.observations['ref_mb']['value']
+        ref_mb_unit = gdir.observations['ref_mb']['unit']
+        ref_mb_err = gdir.observations['ref_mb']['err']
+        ref_mb_period = gdir.observations['ref_mb']['period']
+        # provided and file observations the same without overwriting should work
+        tasks.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='', overwrite_observations=False,
+            ref_mb=ref_mb, ref_mb_unit=ref_mb_unit, ref_mb_err=ref_mb_err,
+            ref_mb_period=ref_mb_period, ref_mb_years=None,
+            write_to_gdir=False,
+        )
+        # providing different in file and kwargs should raise
+        with pytest.raises(InvalidWorkflowError) as exc_info:
+            tasks.mb_calibration_from_scalar_mb(
+                gdir, observations_filesuffix='', overwrite_observations=False,
+                ref_mb=ref_mb-100, ref_mb_err=ref_mb_err,
+                ref_mb_period=ref_mb_period, ref_mb_years=None,
+                write_to_gdir=False,
+            )
+        assert 'You provided a reference mass balance, but' in str(exc_info.value)
+        # but is allowed when overwrite is True
+        tasks.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='', overwrite_observations=True,
+            ref_mb=ref_mb-100, ref_mb_err=ref_mb_err,
+            ref_mb_period=ref_mb_period, ref_mb_years=None,
+            write_to_gdir=False,
+        )
+        assert ref_mb - gdir.observations['ref_mb']['value'] == 100
+        # use an empty observations file and provide through kwargs
+        tasks.mb_calibration_from_scalar_mb(
+            gdir, observations_filesuffix='_empty', overwrite_observations=False,
+            ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+            ref_mb_period=ref_mb_period, ref_mb_years=None,
+            write_to_gdir=False,
+        )
+        assert 'ref_mb' in gdir.observations
+        # provide nothing should raise
+        with pytest.raises(InvalidWorkflowError) as exc_info:
+            tasks.mb_calibration_from_scalar_mb(
+                gdir, observations_filesuffix='empty2',
+                overwrite_observations=False,
+                ref_mb=None, ref_mb_err=None,
+                ref_mb_period=None, ref_mb_years=None,
+                write_to_gdir=False,
+            )
+        assert 'You have not provided an reference' in str(exc_info.value)
 
 
 class TestZarrWorkflow:

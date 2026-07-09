@@ -1321,7 +1321,7 @@ def compute_downstream_bedshape(gdir):
     out['surface_h'] = hgts
     out['w0s'] = w0s
     from oggm.utils.geozarr import convert_pickles_to_datatree
-    convert_pickles_to_datatree({'downstream_line': gdir.read_store('downstream_line')})
+    # convert_pickles_to_datatree({'downstream_line': gdir.read_store('downstream_line')})
     gdir.write_store(out, 'downstream_line')
 
 

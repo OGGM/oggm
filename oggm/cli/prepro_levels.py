@@ -24,6 +24,7 @@ import geopandas as gpd
 import oggm.cfg as cfg
 from oggm import utils, workflow, tasks, GlacierDirectory
 from oggm.core import gis
+from oggm.core.massbalance import MonthlyTIModel, SfcTypeTIModel
 from oggm.exceptions import InvalidParamsError, InvalidDEMError, InvalidWorkflowError
 
 # Module logger
@@ -106,6 +107,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       elev_bands=False, centerlines=False,
                       override_params=None, skip_inversion=False,
                       inversion_volume_dataset='iceboost',
+                      mb_model_class='MonthlyTIModel',
                       mb_calibration_strategy='informed_threestep',
                       geodetic_mb_file_path=None,
                       temp_bias_file_path=None,
@@ -119,7 +121,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       custom_climate_task_kwargs=None,
                       start_level=None, start_base_url=None, max_level=5,
                       logging_level='WORKFLOW',
-                      dynamic_spinup=False, err_dmdtda_scaling_factor=0.2,
+                      dynamic_spinup=False, ref_mb_err_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
                       dynamic_spinup_periods_to_try=None,
                       continue_on_error=True, store_fl_diagnostics=False):
@@ -167,6 +169,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         compute all flowlines based on the Huss & Farinotti 2012 method.
     centerlines : bool
         compute all flowlines based on the OGGM centerline(s) method.
+    mb_model_class : str
+        The mb_model_class to use. Options are 'MonthlyTIModel' (default) and
+        'SfcTypeTIModel'.
     mb_calibration_strategy : str
         how to calibrate the massbalance. Currently one of:
         - 'informed_threestep' (default)
@@ -253,7 +258,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     dynamic_spinup : str
         include a dynamic spinup matching 'area/dmdtda' OR 'volume/dmdtda' at
         the RGI-date
-    err_dmdtda_scaling_factor : float
+    ref_mb_err_scaling_factor : float
         scaling factor to reduce individual geodetic mass balance uncertainty
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
@@ -321,6 +326,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if centerlines:
         override_params['downstream_line_shape'] = 'parabola'
         override_params['evolution_model'] = 'FluxBased'
+
+    # define the default melt_f depending on the the used mb_model_class
+    if mb_model_class == 'MonthlyTIModel':
+        override_params['melt_f'] = 5.
+        mb_model_class = MonthlyTIModel
+        store_mb_diagnostics = False
+    elif mb_model_class == 'SfcTypeTIModel':
+        # TODO: According to Schuster et al. (2023) Figure 1, the default melt_f
+        # should be larger when including snow tacking (around 6. to 7.). If we
+        # change this we also need to include this for the preparation of the
+        # three step calibration. Currently I stick to the same value as the
+        # MonthlyTIModel.
+        override_params['melt_f'] = 5.
+        mb_model_class = SfcTypeTIModel
+        store_mb_diagnostics = True
+    else:
+        raise NotImplementedError(f"Unknown mb_model: {mb_model_class}")
 
     # Other things that make sense
     override_params['store_model_geometry'] = True
@@ -771,6 +793,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          informed_threestep=True,
+                                         mb_model_class=mb_model_class,
                                          use_regional_avg=use_regional_avg,
                                          file_path=geodetic_mb_file_path,
                                          temp_bias_file_path=temp_bias_file_path)
@@ -779,6 +802,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          gdirs,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias',
+                                         mb_model_class=mb_model_class,
                                          use_regional_avg=use_regional_avg,
                                          file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'temp_melt':
@@ -786,6 +810,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          gdirs,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f',
+                                         mb_model_class=mb_model_class,
                                          use_regional_avg=use_regional_avg,
                                          file_path=geodetic_mb_file_path)
         else:
@@ -793,7 +818,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      f'{mb_calibration_strategy}')
 
         if not skip_inversion:
-            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs)
+            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
+                                         mb_model_class=mb_model_class,)
 
             filter = border >= 20
 
@@ -843,7 +869,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = sum_dir / f'climate_statistics_{rgi_reg}.csv'
         utils.compile_climate_statistics(gdirs, path=opath)
         opath = sum_dir / f'fixed_geometry_mass_balance_{rgi_reg}.csv'
-        utils.compile_fixed_geometry_mass_balance(gdirs, path=opath)
+        utils.compile_fixed_geometry_mass_balance(gdirs, path=opath,
+                                                  mb_model_class=mb_model_class)
 
         # L3 OK - compress all in output directory
         log.workflow('L3 done. Writing to tar...')
@@ -897,9 +924,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # conduct historical run before dynamic melt_f calibration
         # (for comparison to old default behavior)
-        workflow.execute_entity_task(tasks.run_from_climate_data, gdirs,
-                                     min_ys=y0, ye=ye,
-                                     output_filesuffix='_historical')
+        workflow.execute_entity_task(
+            tasks.run_from_climate_data, gdirs,
+            min_ys=y0, ye=ye, mb_model_class=mb_model_class,
+            save_mb_diagnostics_filesuffix='_historical' if store_mb_diagnostics else None,
+            output_filesuffix='_historical'
+        )
         # Now compile the output
         opath = Path(sum_dir) / f'historical_run_output_{rgi_reg}.nc'
         utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
@@ -914,9 +944,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             melt_f_max = cfg.PARAMS['melt_f_max']
             workflow.execute_entity_task(
                 tasks.run_dynamic_melt_f_calibration, gdirs,
-                err_dmdtda_scaling_factor=err_dmdtda_scaling_factor,
+                ref_mb_err_scaling_factor=ref_mb_err_scaling_factor,
                 ys=dynamic_spinup_start_year, ye=ye,
                 melt_f_max=melt_f_max,
+                mb_model_class=mb_model_class,
                 kwargs_run_function={'minimise_for': minimise_for,
                                      'spinup_periods_to_try':
                                          dynamic_spinup_periods_to_try
@@ -926,6 +957,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                           'spinup_periods_to_try':
                                               dynamic_spinup_periods_to_try
                                           },
+                save_mb_diagnostics_filesuffix=('_spinup_historical'
+                                                if store_mb_diagnostics else None),
                 output_filesuffix='_spinup_historical',)
             # Now compile the output
             opath = sum_dir / f'spinup_historical_run_output_{rgi_reg}.nc'
@@ -1055,6 +1088,9 @@ def parse_args(args):
                         help='do not run the inversion (level 3 files). '
                              'this is a temporary workaround for workflows '
                              'that wont run that far into level 3.')
+    parser.add_argument('--mb-model-class', type=str, default='MonthlyTIModel',
+                        help='the mass balance model class to use. Options are '
+                             'MonthlyTIModel (default) or SfcTypeTIModel.')
     parser.add_argument('--inversion-volume-dataset', type=str,
                         default='iceboost',
                         choices=['iceboost', 'consensus'],
@@ -1158,7 +1194,7 @@ def parse_args(args):
                              "the RGI-date, AND mass-change from Hugonnet "
                              "in the period 2000-2020 (dynamic melt_f "
                              "calibration).")
-    parser.add_argument('--err-dmdtda-scaling-factor', type=float, default=0.2,
+    parser.add_argument('--ref-mb-err-scaling-factor', type=float, default=0.2,
                         help="scaling factor to account for correlated "
                              "uncertainties of geodetic mass balance "
                              "observations when looking at regional scale. "
@@ -1256,9 +1292,10 @@ def parse_args(args):
                 custom_climate_task=args.custom_climate_task,
                 custom_climate_task_kwargs=args.custom_climate_task_kwargs,
                 dynamic_spinup=dynamic_spinup,
-                err_dmdtda_scaling_factor=args.err_dmdtda_scaling_factor,
+                ref_mb_err_scaling_factor=args.ref_mb_err_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
                 dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
+                mb_model_class=args.mb_model_class,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
                 temp_bias_file_path=args.temp_bias_file_path,

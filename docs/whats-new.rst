@@ -9,6 +9,30 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
+  (:pull:`1800`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- New global task ``calibrate_inversion_from_ref_table`` generalises
+  ``calibrate_inversion_from_consensus`` to calibrate the ice thickness
+  inversion against an arbitrary reference volume table (given as a DataFrame,
+  a path or a URL). By default it now uses the IceBoost v2 products, with the
+  RGI6 or RGI7 table selected automatically from the glacier directories.
+  ``calibrate_inversion_from_consensus`` is deprecated but still available: it
+  keeps calibrating against the Farinotti et al. (2019) consensus estimate.
+  Note that the default reference for RGI6 ``run_prepro_levels`` inversions
+  changes accordingly from the consensus estimate to IceBoost v2 (:pull:`1942`).
+- New ``cfg.PARAMS['store_output_on_error']`` (default ``False``): when a run
+  fails mid-simulation (e.g. a glacier growing out of its domain), the output
+  files (diagnostics, geometry and flowline diagnostics) are written truncated
+  to the last successfully completed year before the error is re-raised,
+  instead of losing all output. This is meant for projections; preprocessing
+  and spinup runs should keep failing loudly (hence the ``False`` default).
+  Truncated files carry a ``partial_output`` global attribute, and
+  ``run_with_hydro`` also adds the hydro diagnostics to them. ``compile_run_output``
+  merges files of different lengths onto a common time axis and now always
+  reports two per-glacier variables, ``is_partial_output`` and
+  ``error_during_run`` (:pull:`1929`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``area_min_h`` is now a default diagnostic output variable: it is the
   glacier area computed from grid points thicker than
   ``cfg.PARAMS['min_ice_thick_for_area']`` (2 m), which avoids area spikes due
@@ -51,6 +75,59 @@ Enhancements
 - Test optimisations for climate, mass balance calibration, and dynamic
   spinup (:pull:`1933`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Added ``DailyTIModel``, adapted from the
+  `massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_
+  (developed by `Lilian Schuster <https://github.com/lilianschuster>`_). It is
+  in principle the same as ``MonthlyTIModel`` but at daily resolution. A new
+  ``get_daily_mb`` method was added to the ``MassBalanceModel`` class
+  (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- New utility functions ``get_days_of_year``, ``get_seconds_of_year``,
+  ``get_days_of_month`` and ``get_seconds_of_month``, which take the actual
+  length of a month into account and can optionally account for leap years.
+  For the same reason, new ``sec_in_month`` and ``sec_in_year`` methods were
+  added to the ``MassBalanceModel`` class (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- ``floatyear_to_date`` and ``date_to_floatyear`` now optionally support
+  daily resolution and take leap years into account (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Added a new ``SfcTypeTIModel`` mass balance model, based on
+  `Lilian Schuster <https://github.com/lilianschuster>`_'s work in the
+  `massbalance-sandbox <https://github.com/OGGM/massbalance-sandbox>`_. This
+  mass balance model includes a bucket system that tracks the conversion of
+  fresh snow to glacier ice, with each bucket having its own melt factor and
+  density (currently experimental). You can use ``SfcTypeTIModel`` together with
+  ``MonthlyTIModel`` or ``DailyTIModel`` (:pull:`1801`, :pull:`1805`,
+  :pull:`1830`, :pull:`1831`, :pull:`1899`, :pull:`1916`, :pull:`1928`,
+  :pull:`1939`, :pull:`1944`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New ``mb_diagnostics.nc`` files to store the ``SfcTypeTIModel`` state at the
+  end of a dynamic run. In particular, these files can be used to initialize the
+  buckets again to continue a dynamic run (e.g. to run multiple projections, all
+  starting from the same model state). It is also possible to store a
+  ``MultipleFlowlineMassBalance``, when working with multiple flowlines
+  (:pull:`1899`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New model output variable ``mass_kg``, the total glacier mass. When using
+  ``SfcTypeTIModel``, volume, mass and thickness diagnostics are further
+  split into an ice and a firn/snow part (``volume_ice_m3``/
+  ``volume_firn_m3``, ``mass_ice_kg``/``mass_firn_kg``,
+  ``thickness_ice_m``/``thickness_firn_m`` for the flowline diagnostics),
+  with the standard (unsuffixed) variable being their sum. This behavior can
+  be disabled with the new ``FlowlineModel`` keyword
+  ``include_firn_outputs=False``, in which case only the ice part is stored
+  under the standard variable name (:pull:`1899`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- ``mb_calibration_from_scalar_mb`` now allows arbitrary "non-full-year"
+  reference periods for the provided reference mass balance (:pull:`1819`,
+  :pull:`1828`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Added two new CI test environments, ``models_dynamics`` and ``models_mb``,
+  to parallelise test execution (:pull:`1907`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -61,9 +138,20 @@ Bug fixes
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - Fixed test runtime due to unnecessary downloads (:pull:`1934`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- `map_proj='utm'` now raises a clear `InvalidParamsError` when a glacier lies
+  beyond UTM's validity band (north of 84°N or south of 80°S), pointing users
+  to `map_proj='tmerc'` (:pull:`1946`).
 - GH workflows will timeout after one hour to prevent hanging tests from
   blocking runners or reaching usage limits (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Fixed the modelled dmdtda calculation in the dynamic melt_f calibration
+  (``dynamic_melt_f_run`` and ``dynamic_melt_f_run_with_dynamic_spinup``) to
+  use ``mass_kg`` directly instead of deriving mass from ``volume`` and
+  ``cfg.PARAMS['ice_density']`` (:pull:`1928`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a bug in ``compile_to_netcdf`` decorator, avoiding to raise an error if
+  a single chunk failes (:pull:`1954`).
+  By Copilot and `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -94,6 +182,48 @@ Breaking changes
   core dependency and removes ``tables`` (pytables), which we are very glad to
   see go as it was a recurrent source of installation pain (:pull:`1924`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Added a new way of handling model parameters, settings and observations.
+  Previously these were scattered across several locations (``cfg.PARAMS``,
+  ``mb_calib.json``, ``gdir.get_diagnostics``); everything is now centralised
+  in two new per-glacier files, ``settings.yml`` and ``observations.yml``.
+  Global parameters are still stored in ``cfg.PARAMS``, but can now also be
+  accessed through the same interface as glacier-specific settings (you do
+  not need to know where a parameter is stored to look it up). All OGGM
+  tasks now accept a ``settings_filesuffix`` keyword argument, and tasks
+  that use observations also accept ``observations_filesuffix``, which makes
+  it much more convenient to run sensitivity studies. For backwards
+  compatibility, parameters are still added to diagnostics (:pull:`1777`,
+  :pull:`1785`, :pull:`1788`, :pull:`1795`, :pull:`1833`, :pull:`1882`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- ``MassBalanceModel`` and ``FlowlineModel`` now take the actual number of
+  days per month into account; previously all months were assumed to have
+  the same length (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- ``MassBalanceModel.get_specific_mb`` now supports three different
+  ``time_resolution``s: annual, monthly and daily (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Renamed ``gdir.write_monthly_climate_file`` to ``gdir.write_climate_file``,
+  which can now also write daily climate data (:pull:`1800`, :pull:`1808`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_,
+  `Nicolas Gampierakis <https://github.com/gampnico>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_
+- Renamed ``utils.monthly_timeseries`` to ``utils.float_years_timeseries``,
+  which can now also create timeseries at daily resolution (:pull:`1800`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Renamed observation variable names for consistency across all tasks: the
+  reference mass balance period ``ref_period`` is now ``ref_mb_period``,
+  the reference volume ``volume_m3_reference`` is now ``ref_volume_m3``,
+  the reference mass balance in dynamic melt_f calibartion ``ref_dmdtda`` is now
+  ``ref_mb``,  ``err_ref_dmdtda`` is now ``ref_mb_err`` and
+  ``err_dmdtda_scaling_factor`` is now ``ref_mb_err_scaling_factor``
+  (:pull:`1795`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Renamed ``rho`` to ``ice_density`` at several locations, to not get confused
+  with ``snow_density``, intoduced with ``SfcTypeTIModel`` (:pull:`1899`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 v1.6.3 (April 13, 2026)
 -----------------------
