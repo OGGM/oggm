@@ -12,6 +12,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import xarray as xr
+import cftime
 from numpy.testing import assert_array_equal, assert_allclose
 
 import oggm
@@ -19,6 +20,7 @@ from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
 from oggm.cfg import SEC_IN_YEAR
+from oggm.utils._workflow import compile_to_netcdf
 from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
@@ -115,23 +117,21 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [12, 12])
 
-        yr = 1998 + 2 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 3)
+        # test a leap year
+        y, m, d = utils.floatyear_to_date(1980.1612021857923, return_day=True)
+        assert y == 1980
+        assert m == 2
+        assert d == 29
 
-        yr = 1998 + 1 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 2)
-
-        # tests for floating point precision
-        yr = 1 + 1/12 - 1/12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1, 1)
-
-        for i in range(12):
-            yr = 2000
-            r = utils.floatyear_to_date(yr + i / 12)
-            assert r == (yr, i + 1)
+        # test correct floor behaviour, this is very close to 1981.09.01
+        y, m, d = utils.floatyear_to_date(1981.6657534246575, return_day=True)
+        assert y == 1981
+        assert m == 8
+        assert d == 31
+        y, m, d = utils.floatyear_to_date(1981.6657534246576, return_day=True)
+        assert y == 1981
+        assert m == 9
+        assert d == 1
 
     def test_date_to_floatyear(self):
 
@@ -160,30 +160,149 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, 2099)
+        myr = utils.float_years_timeseries(1800, 2099)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, ny=300)
+        myr = utils.float_years_timeseries(1800, ny=300)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-1', freq='M')
-        myr = utils.monthly_timeseries(1, 6000)
+        myr = utils.float_years_timeseries(1, 6000)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-12', freq='M')
-        myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
+        myr = utils.float_years_timeseries(1, 6000, include_last_year=True)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         with pytest.raises(ValueError):
-            utils.monthly_timeseries(1)
+            utils.float_years_timeseries(1)
+
+        # test daily timeseries
+        myr = utils.float_years_timeseries(1800, 2099, daily=True)
+        time = pd.date_range('1/1/1800', periods=len(myr), freq='D')
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        myr = utils.float_years_timeseries(1800, ny=300, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01', '6000-1', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01-01', '6000-12-31', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, daily=True,
+                                           include_last_year=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+    def test_round_trip_floating_point_year(self):
+        # monthly round trip for all dates between 0000 and 3000
+        months_arr = np.arange(np.datetime64('0000-01', 'M'),
+                               np.datetime64('3001-01', 'M'),
+                               dtype='datetime64[M]')
+        years = months_arr.astype('datetime64[Y]').astype(int) + 1970
+        months = (months_arr.astype('datetime64[M]').astype(int) % 12) + 1
+
+        fy = utils.date_to_floatyear(years, months)
+        y2, m2 = utils.floatyear_to_date(fy)
+
+        ok = (years == y2) & (months == m2)
+        assert sum(~ok) == 0
+
+        y2, m2, d2 = utils.floatyear_to_date(fy, return_day=True)
+        ok = (years == y2) & (months == m2) & ([d == 1 for d in d2])
+        assert sum(~ok) == 0
+
+        # daily roundtrip for all dates between 0000 and 3000
+        start = np.datetime64('0000-01-01', 'D')
+        end_exclusive = np.datetime64('3001-01-01', 'D')
+        dates = np.arange(start, end_exclusive, dtype='datetime64[D]')
+
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        mstart = dates.astype('datetime64[M]').astype('datetime64[D]')
+        days = (dates - mstart).astype(int) + 1
+
+        fy = utils.date_to_floatyear(years, months, days)
+        y2, m2, d2 = utils.floatyear_to_date(fy, return_day=True)
+
+        ok = (years == y2) & (months == m2) & (days == d2)
+        assert sum(~ok) == 0
+
+    def test_get_time_functions(self):
+        """Test scalar and array behavior of get_{days,seconds}_of_{year,month}."""
+        from oggm.utils._funcs import (get_days_of_year, get_seconds_of_year,
+                                       get_days_of_month, get_seconds_of_month)
+
+        # --- scalar input must return int ---
+        # no-leap: always 365
+        assert get_days_of_year(1980.0) == 365
+        assert isinstance(get_days_of_year(1980.0), int)
+        # leap-year aware: 1980 and 1984 are leap, 1981–1983 are not
+        assert get_days_of_year(1980.0, use_leap_years=True) == 366
+        assert isinstance(get_days_of_year(1980.0, use_leap_years=True), int)
+        assert get_days_of_year(1981.0, use_leap_years=True) == 365
+        assert get_days_of_year(1984.0, use_leap_years=True) == 366
+
+        assert get_seconds_of_year(1980.0) == 365 * 86400
+        assert get_seconds_of_year(1980.0, use_leap_years=True) == 366 * 86400
+        assert get_seconds_of_year(1981.0, use_leap_years=True) == 365 * 86400
+
+        # February: 29 days in a leap year, 28 otherwise
+        feb_1980 = utils.date_to_floatyear(1980, 2)
+        feb_1981 = utils.date_to_floatyear(1981, 2)
+        assert get_days_of_month(feb_1980, use_leap_years=True) == 29
+        assert get_days_of_month(feb_1981, use_leap_years=True) == 28
+        assert get_days_of_month(feb_1980, use_leap_years=False) == 28
+        assert isinstance(get_days_of_month(feb_1980, use_leap_years=True), int)
+
+        assert get_seconds_of_month(feb_1980, use_leap_years=True) == 29 * 86400
+        assert get_seconds_of_month(feb_1981, use_leap_years=True) == 28 * 86400
+
+        # --- array input must return np.ndarray of int64 ---
+        years = np.array([1980., 1981., 1982., 1983., 1984.])
+
+        days = get_days_of_year(years, use_leap_years=True)
+        assert isinstance(days, np.ndarray)
+        np.testing.assert_array_equal(days, [366, 365, 365, 365, 366])
+
+        secs = get_seconds_of_year(years, use_leap_years=True)
+        assert isinstance(secs, np.ndarray)
+        np.testing.assert_array_equal(secs, days * 86400)
+
+        # no-leap array: all 365
+        days_noleap = get_days_of_year(years, use_leap_years=False)
+        assert isinstance(days_noleap, np.ndarray)
+        np.testing.assert_array_equal(days_noleap, np.full(5, 365))
+
+        # monthly array for 1980 (leap year): February must have 29 days
+        monthly = utils.float_years_timeseries(1980., 1981.)
+        days_per_month = get_days_of_month(monthly, use_leap_years=True)
+        assert isinstance(days_per_month, np.ndarray)
+        _, m = utils.floatyear_to_date(monthly)
+        np.testing.assert_array_equal(days_per_month[m == 2], [29])
+
+        secs_per_month = get_seconds_of_month(monthly, use_leap_years=True)
+        np.testing.assert_array_equal(secs_per_month, days_per_month * 86400)
 
     @pytest.mark.parametrize("d,w", [
         (np.arange(10), np.arange(10)),
@@ -201,6 +320,25 @@ class TestFuncs(object):
         d, w = ([0], [0])
         with pytest.raises(ZeroDivisionError):
             utils.weighted_average_1d(d, weights=w)
+
+    @pytest.mark.parametrize("d,w", [
+        (np.arange(10), np.arange(10)),
+        (np.arange(10)-5, np.arange(10)-5),
+        (np.random.random(1000), np.random.random(1000)),
+        ([[2, 1]], [1]),
+        ([[0, 1]], [1]),
+    ])
+    def test_weighted_avg_2d(self, d, w):
+        if not isinstance(d, list):
+            d = d[:, None] + d
+        r1 = utils.weighted_average_2d(d, weights=w)
+        r2 = np.average(d, weights=w, axis=0)
+        assert_allclose(r1, r2)
+
+    def test_weighted_avg_2d_fail(self):
+        d, w = ([0, 0], [0])
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_average_2d(d, weights=w)
 
     @pytest.mark.parametrize(
             "in_data,out_type",
@@ -308,6 +446,202 @@ class TestFuncs(object):
         y, m = utils.hydrodate_to_calendardate(y, m, start_month=1)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
+
+    def get_cftime_index(
+        self, start_day: int = 65286, years: int = 3
+    ) -> np.ndarray:
+        """Get a time index with cftime datetimes."""
+        end_day = start_day + (365 * years) + 1
+        days = np.arange(start_day, end_day)
+        units = "days since 1801-01-01"
+        time_index = cftime.num2date(days[:], units=units, calendar="standard")
+        return time_index
+
+    def test_get_cftime_index(self):
+        test_time_index = cftime.num2date(
+            np.arange(65286, 66382),
+            units="days since 1801-01-01",
+            calendar="standard",
+        )
+        compare_time_index = self.get_cftime_index(start_day=65286, years=3)
+        assert len(compare_time_index) == len(test_time_index)
+        assert (compare_time_index[:] == test_time_index[:]).all()
+
+    def get_expected_hydrodate_matrix(self, julian_year=1979):
+        """Get expected hydrological months and years.
+
+        Generates expected hydrological months and years for all
+        Julian months and possible hydrological start months.
+
+        Parameters
+        ----------
+        julian_year : int, default 1979
+            The reference calendar year.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Two matrices M[i,j], Y[i,j] where i is a hydrological year's
+            start month and j is the Julian calendar month.
+            * Month matrix: the element at (i,j) is the expected
+            hydrological month. Diagonal = 1.
+            * Year matrix: the element at (i, j) is the expected
+            hydrological year. Diagonal and above = julian_year,
+            below the diagonal = julian_year - 1.
+
+        """
+        nx = 13
+        months = np.diag(np.full(nx - 1, 1))
+        for i in range(2, nx):
+            months = (
+                months
+                + np.diag(np.full(nx - i, i), i - 1)
+                + np.diag(np.full(nx - i, nx + 1 - i), -i + 1)
+            )
+
+        years = np.full(nx * nx, julian_year).reshape(nx, nx)
+        years += np.tril(np.full(nx, -1), -1)
+
+        return months, years
+
+    @pytest.mark.parametrize("julian_year", [1979, 1980])  # leap year
+    def test_get_expected_hydrodate_matrix(self, julian_year):
+
+        months, years = self.get_expected_hydrodate_matrix(
+            julian_year=julian_year
+        )
+        nx = 12
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            np.testing.assert_array_equal(
+                months[0, i:], np.arange(i + 1, nx + 1)
+            )
+            np.testing.assert_array_less(months, nx + 1)
+            np.testing.assert_array_less(-months, 0)  # no array_greater
+
+        np.testing.assert_array_less(years, julian_year + 1)
+        np.testing.assert_array_equal(
+            years[np.triu_indices_from(years, 0)], julian_year
+        )
+        np.testing.assert_array_equal(
+            years[np.tril_indices_from(years, -1)], julian_year - 1
+        )
+
+    def get_expected_julian_matrix(self, hydro_year=1979) -> tuple:
+        """Get expected hydrological months and years.
+
+        Generates expected hydrological months and years for all
+        Julian months and possible hydrological start months.
+
+        Parameters
+        ----------
+        hydro_year : int, default 1979
+            The reference hydrological year.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Two matrices M[i,j], Y[i,j] where i is a hydrological year's
+            start month and j is the hydrological calendar month.
+            * Month matrix: the element at (i,j) is the expected
+            Julian month. Diagonal = 1.
+            * Year matrix: the element at (i, j) is the expected
+            Julian year. Diagonal and below = hydrological_year + 1,
+            above the diagonal = hydrological_year
+        """
+        nx = 12
+        months = np.zeros((nx, nx), dtype=int)
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            months[i, :] = np.arange(1 + i, nx + i + 1)
+        mask = np.where(months > nx)
+        months[mask] = months[mask] - nx
+
+        years = np.full(nx * nx, hydro_year).reshape(nx, nx)
+        years[mask] += 1
+
+        return months, years
+
+    @pytest.mark.parametrize("hydro_year", [1979, 1980])  # leap year
+    def test_get_expected_julian_matrix(self, hydro_year):
+
+        months, years = self.get_expected_julian_matrix(hydro_year=hydro_year)
+        months = np.fliplr(months)  # all elements in a diag are equal
+        years = np.fliplr(years)
+        nx = 12
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            np.testing.assert_array_less(months, nx + 1)
+            np.testing.assert_array_less(-months, 0)  # no array_greater
+
+        np.testing.assert_array_less(years, hydro_year + 2)
+        np.testing.assert_array_less(-years, -hydro_year + 1)
+        np.testing.assert_array_equal(
+            years[np.triu_indices_from(years, 0)], hydro_year
+        )
+        np.testing.assert_array_equal(
+            years[np.tril_indices_from(years, -1)], hydro_year + 1
+        )
+
+    @pytest.mark.parametrize("julian_year", [1979, 1980])  # leap year
+    @pytest.mark.parametrize(
+        "start_month", np.arange(1, 13), ids=[f"{i}" for i in np.arange(1, 13)]
+    )
+    def test_calendardate_to_hydrodate_cftime(self, start_month, julian_year):
+        expected_months, _ = self.get_expected_hydrodate_matrix(
+            julian_year=julian_year
+        )
+        for julian_start_month in range(1, 13):
+            cf_date = cftime.datetime(
+                julian_year, julian_start_month, 1, calendar="standard"
+            )
+            julian_start_day = cftime.date2num(
+                cf_date, units="days since 1801-01-01"
+            )
+            time_index = self.get_cftime_index(start_day=julian_start_day)
+
+            compare_index = utils.calendardate_to_hydrodate_cftime(
+                dates=time_index, start_month=start_month
+            )
+            assert len(compare_index) == len(time_index)
+            expected = expected_months[start_month - 1, julian_start_month - 1]
+            if start_month <= julian_start_month:
+                assert compare_index[0].year == julian_year
+                assert compare_index[0].month == expected
+            else:
+                assert compare_index[0].year == julian_year - 1
+                assert compare_index[0].month == expected
+            assert compare_index[0].day == 1
+
+    @pytest.mark.parametrize("hydro_year", [1979, 1980])  # leap year
+    @pytest.mark.parametrize(
+        "start_month", np.arange(1, 13), ids=[f"{i}" for i in np.arange(1, 13)]
+    )
+    def test_hydrodate_to_calendardate_cftime(self, start_month, hydro_year):
+        expected_months, _ = self.get_expected_julian_matrix(
+            hydro_year=hydro_year
+        )
+        for hydro_start_month in range(1, 13):
+            cf_date = cftime.datetime(
+                hydro_year, hydro_start_month, 1, calendar="standard"
+            )
+            hydro_start_day = cftime.date2num(
+                cf_date, units="days since 1801-01-01"
+            )
+            time_index = self.get_cftime_index(start_day=hydro_start_day)
+
+            compare_index = utils.hydrodate_to_calendardate_cftime(
+                dates=time_index, start_month=start_month
+            )
+            assert len(compare_index) == len(time_index)
+            expected = expected_months[start_month - 1, hydro_start_month - 1]
+            if start_month + hydro_start_month > 13:
+                assert compare_index[0].year == hydro_year + 1
+                assert compare_index[0].month == expected
+            else:
+                assert compare_index[0].year == hydro_year
+                assert compare_index[0].month == expected
+            assert compare_index[0].day == 1
 
     def test_rgi_meta(self):
         cfg.initialize()
@@ -545,7 +879,7 @@ class TestWorkflowUtils:
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
                              'melt_residual_on_glacier', 'model_mb',
-                             'residual_mb', 'snow_bucket']
+                             'residual_mb', 'snow_bucket', 'mass']
         for gi in range(10):
             allowed_data_vars += [f'terminus_thick_{gi}']
 
@@ -593,6 +927,7 @@ class TestWorkflowUtils:
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier'].values))
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier_monthly'].values))
+            assert 'mass_kg' in ds.data_vars
 
         check_result(ds_1)
 
@@ -601,6 +936,27 @@ class TestWorkflowUtils:
         ds_2 = utils.compile_run_output([gdirs[1], gdirs[0]],
                                         input_filesuffix=filesuffix)
         check_result(ds_2)
+
+    def test_compile_to_netcdf_allows_failing_chunks(self, tmpdir, test_dir):
+
+        logger = mock.Mock()
+        cfg.PATHS['working_dir'] = test_dir
+
+        @compile_to_netcdf(logger)
+        def _compile_dummy(gdirs, path=True, **kwargs):
+            gid = gdirs[0]
+            if gid.startswith('bad'):
+                raise RuntimeError('Found no valid glaciers!')
+            ds = xr.Dataset(coords={'rgi_id': [gid]})
+            ds['value'] = ('rgi_id', [1.])
+            ds.to_netcdf(path)
+
+        out = os.path.join(tmpdir, 'compiled.nc')
+        _compile_dummy(['bad_1', 'bad_2', 'good_1'], path=out, tmp_file_size=2)
+        with xr.open_dataset(out) as ds:
+            assert ds.rgi_id.values.tolist() == ['good_1']
+        with pytest.raises(RuntimeError, match='Found no valid glaciers!'):
+            _compile_dummy(['bad_1', 'bad_2'], path=out, tmp_file_size=1)
 
 
 class TestStartFromTar:
@@ -1087,11 +1443,11 @@ class TestPreproCLI:
                                            '--elev-bands',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
-                                           '--err-dmdtda-scaling-factor', '0.5',
+                                           '--ref-mb-err-scaling-factor', '0.5',
                                            ])
 
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
-        assert kwargs['err_dmdtda_scaling_factor'] == 0.5
+        assert kwargs['ref_mb_err_scaling_factor'] == 0.5
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1122,7 +1478,9 @@ class TestPreproCLI:
             assert kwargs['border'] == 120
 
     @pytest.mark.slow
-    def test_full_run_defaults(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_full_run_defaults(self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1139,6 +1497,7 @@ class TestPreproCLI:
                           intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          mb_model_class=mb_model_class,
                           inversion_volume_dataset='consensus',
                           continue_on_error=False,
                           override_params={}
@@ -1269,9 +1628,12 @@ class TestPreproCLI:
         with xr.open_dataset(fp) as ods:
             ref = ods.volume
             new = ods.volume_fixed_geom
+            # SfcTypeTIModel's snow tracking makes the fixed-geometry
+            # approximation less accurate than for MonthlyTIModel
+            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.15
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.05)
+                                       rtol=rtol)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
@@ -1353,7 +1715,7 @@ class TestPreproCLI:
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        ref_period = '2000-01-01_2010-01-01'
+        ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf,
@@ -1364,7 +1726,7 @@ class TestPreproCLI:
                           centerlines=True,
                           inversion_volume_dataset='consensus',
                           continue_on_error=False,
-                          override_params={'geodetic_mb_period': ref_period,
+                          override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
                                            }
@@ -1415,7 +1777,7 @@ class TestPreproCLI:
 
         odf = pd.DataFrame(dfm.loc[2000:2009].mean(), columns=['SMB'])
         ref_mb = utils.get_geodetic_mb_dataframe().loc[odf.index]
-        ref_mb = ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda']
+        ref_mb = ref_mb.loc[ref_mb['period'] == ref_mb_period]['dmdtda']
         odf['ref'] = ref_mb * 1000  # kg m-2 yr-1
         np.testing.assert_allclose(odf['SMB'], odf['ref'])
 
@@ -1498,7 +1860,10 @@ class TestPreproCLI:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_elev_bands_and_spinup_run_with_different_evolution_models(
+            self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1518,7 +1883,7 @@ class TestPreproCLI:
 
             # change the reference geodetic mb period, because the climate data of
             # the test glaciers only go up to 2015
-            ref_period = '2000-01-01_2010-01-01'
+            ref_mb_period = '2000-01-01_2010-01-01'
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
@@ -1527,9 +1892,10 @@ class TestPreproCLI:
                               inversion_volume_dataset='consensus',
                               store_fl_diagnostics=True,
                               continue_on_error=False,
+                              mb_model_class=mb_model_class,
                               mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
-                              override_params={'geodetic_mb_period': ref_period,
+                              override_params={'geodetic_mb_period': ref_mb_period,
                                                'baseline_climate': 'CRU',
                                                'evolution_model': evolution_model,
                                                'downstream_line_shape': downstream_line_shape,
@@ -1772,7 +2138,7 @@ class TestPreproCLI:
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
-        ref_period = '2000-01-01_2010-01-01'
+        ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf, intersects_file=inter,
@@ -1781,7 +2147,7 @@ class TestPreproCLI:
                           disable_mp=False,
                           inversion_volume_dataset='consensus',
                           logging_level='INFO', max_level=5, elev_bands=True,
-                          override_params={'geodetic_mb_period': ref_period,
+                          override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
                                            }

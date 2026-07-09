@@ -173,15 +173,15 @@ def process_gcm_data(gdir, prcp=None, temp=None,
             ts_pre = prcp  # mm month-1
             source = source + '_no_OGGM_bias_correction'
 
-        gdir.write_monthly_climate_file(temp.time.values,
-                                        ts_pre.values, ts_tmp.values,
-                                        float(ds_ref.ref_hgt),
-                                        prcp.lon.values, prcp.lat.values,
-                                        time_unit=time_unit,
-                                        calendar=calendar,
-                                        file_name='gcm_data',
-                                        source=source,
-                                        filesuffix=output_filesuffix)
+        gdir.write_climate_file(temp.time.values,
+                                ts_pre.values, ts_tmp.values,
+                                float(ds_ref.ref_hgt),
+                                prcp.lon.values, prcp.lat.values,
+                                time_unit=time_unit,
+                                calendar=calendar,
+                                file_name='gcm_data',
+                                source=source,
+                                filesuffix=output_filesuffix)
 
 
 @entity_task(log, writes=['gcm_data'])
@@ -207,10 +207,11 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         append a suffix to the filename (useful for ensemble experiments).
         If it is not set, we create a filesuffix with applied ensemble and ssp
     member : str
-        ensemble member gcm that you want to process (five primary gcms, additional nine secondary gcms available)
+        ensemble member gcm that you want to process (five primary gcms,
+        additional nine secondary gcms available)
     ssp : str
-        ssp scenario to process ('ssp126', 'ssp370' or 'ssp585' are available for all GCMs,
-        additional ssps are available for some GCMs)
+        ssp scenario to process ('ssp126', 'ssp370' or 'ssp585' are available
+        for all GCMs, additional ssps are available for some GCMs)
     year_range : tuple of str
         the year range for which the anomalies are computed
         (passed to process_gcm_gdata). Default for ISIMIP3b `('1979', '2014')`
@@ -253,7 +254,7 @@ def process_monthly_isimip_data(gdir, output_filesuffix='',
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/test_climate/'
     else:
         gcm_server = 'https://cluster.klima.uni-bremen.de/~oggm/'
-    
+
     path = f'{gcm_server}/cmip6/isimip3b/flat/2025.11.25/monthly/'
     add = '_global_monthly_flat_glaciers_v2025.11.25.nc'
 

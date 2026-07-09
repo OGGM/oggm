@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - dev
   pull_request:
     branches:
       - master
+      - dev
 
 jobs:
   test:
@@ -17,7 +19,8 @@ jobs:
         test-env:
           - prepro
           - numerics
-          - models
+          - models_mb
+          - models_dynamics
           - benchmark
           - utils
           - workflow-single

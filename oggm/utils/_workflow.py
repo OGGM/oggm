@@ -55,6 +55,10 @@ try:
     import pyproj
 except ImportError:
     pass
+try:
+    import yaml
+except ImportError:
+    pass
 
 # Python 3.12+ gives a deprecation warning if TarFile.extraction_filter is None.
 # https://docs.python.org/3.12/library/tarfile.html#tarfile-extraction-filter
@@ -243,6 +247,12 @@ def show_versions(logger=None):
         logger.workflow('\n'.join(out))
 
     return '\n'.join(out)
+
+
+def raise_oob_error(data: np.ndarray, name: str, msg: str = ""):
+    """Raises an out-of-bound error and displays data bounds."""
+    text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
+    raise ValueError(text)
 
 
 class SuperclassMeta(type):
@@ -471,6 +481,12 @@ class entity_task(object):
                          return_value=True, continue_on_error=None,
                          add_to_log_file=True, **kwargs):
 
+            settings_filesuffix = kwargs.get('settings_filesuffix', '')
+            gdir.settings_filesuffix = settings_filesuffix
+
+            observations_filesuffix = kwargs.get('observations_filesuffix', '')
+            gdir.observations_filesuffix = observations_filesuffix
+
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
 
@@ -480,8 +496,11 @@ class entity_task(object):
             task_name = task_func.__name__
 
             # Filesuffix are typically used to differentiate tasks
-            fsuffix = (kwargs.get('filesuffix', False) or
-                       kwargs.get('output_filesuffix', False))
+            fsuffix = settings_filesuffix
+            if kwargs.get('filesuffix', False):
+                fsuffix += kwargs.get('filesuffix', False)
+            if kwargs.get('output_filesuffix', False):
+                fsuffix += kwargs.get('output_filesuffix', False)
             if fsuffix:
                 task_name += fsuffix
 
@@ -496,13 +515,13 @@ class entity_task(object):
 
             # Run the task
             try:
-                if cfg.PARAMS['task_timeout'] > 0:
+                if gdir.settings['task_timeout'] > 0:
                     signal.signal(signal.SIGALRM, _timeout_handler)
-                    signal.alarm(cfg.PARAMS['task_timeout'])
+                    signal.alarm(gdir.settings['task_timeout'])
                 ex_t = time.time()
                 out = task_func(gdir, **kwargs)
                 ex_t = time.time() - ex_t
-                if cfg.PARAMS['task_timeout'] > 0:
+                if gdir.settings['task_timeout'] > 0:
                     signal.alarm(0)
                 if task_name != 'gdir_to_tar':
                     if add_to_log_file:
@@ -526,7 +545,8 @@ class entity_task(object):
                 return out
 
         _entity_task.__dict__['is_entity_task'] = True
-        # adds the possibility to use a function, decorated as entity_task, without its decoration.
+        # adds the possibility to use a function, decorated as entity_task,
+        # without its decoration.
         _entity_task.unwrapped = task_func
         return _entity_task
 
@@ -1002,18 +1022,25 @@ class compile_to_netcdf(object):
                                       'compile_tmp_{:06d}.nc'.format(i))
                          for i in range(len(sub_gdirs))]
 
-            try:
-                for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+            good_paths = []
+            failed_exception = None
+            for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+                try:
                     task_func(sgdirs, input_filesuffix=input_filesuffix,
                               path=spath, **kwargs)
-            except BaseException:
-                # If something wrong, delete the tmp files
-                for f in tmp_paths:
+                    good_paths.append(spath)
+                except BaseException as err:
+                    failed_exception = err
+                    # If this chunk failed, remove its temporary file
                     try:
-                        os.remove(f)
+                        os.remove(spath)
                     except FileNotFoundError:
                         pass
-                raise
+
+            if not good_paths:
+                raise failed_exception
+
+            tmp_paths = good_paths
 
             # Ok, now merge and return
             try:
@@ -1161,7 +1188,9 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                          # as it is a variable in gdirs v1.6 2023.1
                          'area_m2', 'area_min_h_m2', 'length_m', 'calving_m3',
                          'calving_rate_myr', 'off_area',
-                         'on_area', 'model_mb', 'is_fixed_geometry_spinup']
+                         'on_area', 'model_mb', 'is_fixed_geometry_spinup',
+                         'volume_ice_m3', 'volume_firn_m3', 'mass_kg',
+                         'mass_ice_kg', 'mass_firn_kg']
     for gi in range(10):
         allowed_data_vars += [f'terminus_thick_{gi}']
     # this hydro variables can be _monthly or _daily
@@ -1618,7 +1647,8 @@ def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
 
 
 @entity_task(log)
-def glacier_statistics(gdir, inversion_only=False, apply_func=None):
+def glacier_statistics(gdir, settings_filesuffix='',
+                       inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1798,8 +1828,10 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # MB calib
-            mb_calib = gdir.read_json('mb_calib')
-            for k, v in mb_calib.items():
+            for k in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                      'reference_mb', 'reference_mb_err', 'reference_period',
+                      'mb_global_params', 'baseline_climate_source']:
+                v = gdir.settings[k]
                 if np.isscalar(v):
                     d[k] = v
                 else:
@@ -2023,14 +2055,17 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
 
 
 @global_task(log)
-def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
+def compile_fixed_geometry_mass_balance(gdirs, settings_filesuffix='',
+                                        filesuffix='',
                                         path=True, csv=False,
                                         use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None,
                                         climate_filename='climate_historical',
                                         climate_input_filesuffix='',
                                         temperature_bias=None,
-                                        precipitation_factor=None):
+                                        precipitation_factor=None,
+                                        mb_model_class=None,
+                                        ):
 
     """Compiles a table of specific mass balance timeseries for all glaciers.
 
@@ -2041,6 +2076,9 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -2069,17 +2107,22 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_fac']
+    mb_model_class : MassBalanceModel, defaults to ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     """
 
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import fixed_geometry_mass_balance
 
     out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
+                                 settings_filesuffix=settings_filesuffix,
                                  use_inversion_flowlines=use_inversion_flowlines,
                                  ys=ys, ye=ye, years=years, climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
-                                 precipitation_factor=precipitation_factor)
+                                 precipitation_factor=precipitation_factor,
+                                 mb_model_class=mb_model_class,
+                                 )
 
     for idx, s in enumerate(out_df):
         if s is None:
@@ -2106,7 +2149,8 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 
 
 @global_task(log)
-def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
+def compile_ela(gdirs, settings_filesuffix='', filesuffix='',
+                path=True, csv=False, ys=None, ye=None,
                 years=None, climate_filename='climate_historical', temperature_bias=None,
                 precipitation_factor=None, climate_input_filesuffix='',
                 mb_model_class=None):
@@ -2120,6 +2164,9 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -2154,7 +2201,9 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     if mb_model_class is None:
         mb_model_class = MonthlyTIModel
 
-    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years,
+    out_df = execute_entity_task(compute_ela, gdirs,
+                                 settings_filesuffix=settings_filesuffix,
+                                 ys=ys, ye=ye, years=years,
                                  climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
@@ -2340,6 +2389,7 @@ def raw_climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                                                                f'{fs[-4:]}-12-01'))
                     # check if we have the full time period
                     n_years = int(fs[-4:]) - int(fs[:4]) + 1
+                    # BUG: fails with daily data
                     assert len(ds_pr_winter.time) == n_years * 7, 'chosen time-span invalid'
                     ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
                     d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
@@ -2474,8 +2524,9 @@ def extend_past_climate_run(past_run_file=None,
             ods[vn] = ods[vn].astype(int)
 
         # New vars
-        for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_min_h', 'length', 'calving', 'calving_rate']:
+        for vn in ['volume', 'volume_ice', 'volume_firn', 'volume_m3_min_h',
+                   'volume_bsl', 'volume_bwl', 'area', 'area_min_h', 'length',
+                   'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
@@ -2545,6 +2596,18 @@ def extend_past_climate_run(past_run_file=None,
                 # +1 because calving rate at year 0 is unknown from the dyns model
                 orig_calv_rate_ts[:fid+1] = calv_rate
                 ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
+
+            if 'volume_ice' in ods.data_vars:
+                # we can not calculate a ice volume for the fixed geometry
+                orig_volume_ice_ts = ods.volume_ice_ext.data[:, i]
+                orig_volume_ice_ts[:fid] = np.nan
+                ods.volume_ice_ext.data[:, i] = orig_volume_ice_ts
+
+            if 'volume_firn' in ods.data_vars:
+                # we can not calculate a ice volume for the fixed geometry
+                orig_volume_firn_ts = ods.volume_firn_ext.data[:, i]
+                orig_volume_firn_ts[:fid] = np.nan
+                ods.volume_firn_ext.data[:, i] = orig_volume_firn_ts
 
             # Extend vol bsl by assuming that % stays constant
             if 'volume_bsl' in ods.data_vars:
@@ -2796,7 +2859,9 @@ class GlacierDirectory(object):
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False):
+                 from_tar=False, delete_tar=False, settings_filesuffix='',
+                 observations_filesuffix='',
+                 add_parent_values_to_settings=False):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2814,6 +2879,13 @@ class GlacierDirectory(object):
             will check for a tar file at the expected location in `base_dir`.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
+        settings_filesuffix : str, default=''
+            a filesuffix for a settings file to use
+        observations_filesuffix : str, default=''
+            a filesuffix for a observations file to use
+        add_parent_values_to_settings : bool, default=False
+            if True and a settings value is read from the parent settings file
+            this value is also added to the current settings file
         """
 
         if base_dir is None:
@@ -2866,8 +2938,39 @@ class GlacierDirectory(object):
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
 
+        # Root directory
+        self.base_dir = os.path.normpath(base_dir)
+        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
+                                self.rgi_id[:-3], self.rgi_id)
+
+        # Do we have to extract the files first?
+        if (reset or from_tar) and os.path.exists(self.dir):
+            shutil.rmtree(self.dir)
+
+        if from_tar:
+            if from_tar is True:
+                from_tar = self.dir + '.tar.gz'
+            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            write_shp = False
+        else:
+            mkdir(self.dir)
+
+        if not os.path.isdir(self.dir):
+            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
+
+        # define the initial settings for this gdir
+        self.add_parent_values_to_settings = add_parent_values_to_settings
+        self._settings_filesuffix = settings_filesuffix
+        self.settings = self._get_settings_class(
+            filesuffix=settings_filesuffix)
+
+        # define the initial observations for this gdir
+        self._observations_filesuffix = observations_filesuffix
+        self.observations = self._get_observations_class(
+            filesuffix=observations_filesuffix)
+
         # Do we want to use the RGI center point or ours?
-        if cfg.PARAMS['use_rgi_area']:
+        if self.settings['use_rgi_area']:
             if is_rgi7:
                 self.cenlon = float(rgi_entity.cenlon)
                 self.cenlat = float(rgi_entity.cenlat)
@@ -3025,25 +3128,6 @@ class GlacierDirectory(object):
                         'to 2019 for workflow reasons.')
             rgi_date = 2019
         self.rgi_date = rgi_date
-        # Root directory
-        self.base_dir = os.path.normpath(base_dir)
-        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
-                                self.rgi_id[:-3], self.rgi_id)
-
-        # Do we have to extract the files first?
-        if (reset or from_tar) and os.path.exists(self.dir):
-            shutil.rmtree(self.dir)
-
-        if from_tar:
-            if from_tar is True:
-                from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
-            write_shp = False
-        else:
-            mkdir(self.dir)
-
-        if not os.path.isdir(self.dir):
-            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
@@ -3466,17 +3550,67 @@ class GlacierDirectory(object):
         with open(fp, 'w') as f:
             json.dump(var, f, default=np_convert)
 
-    def get_climate_info(self, input_filesuffix=''):
+    def read_yml(self, filename, filesuffix='', allow_empty=False):
+        """Reads a yml file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
+
+        Returns
+        -------
+        A dictionary read from the yml file
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = yaml.safe_load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = yaml.safe_load(f)
+        return out
+
+    def write_yml(self, var, filename, filesuffix=''):
+        """ Writes a variable to a yml file on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to yml (must be a dictionary)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'w') as f:
+            yaml.dump(var, f)
+
+    def get_climate_info(self, filename='climate_historical',
+                         input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
 
         Parameters
         ----------
+        filename : str
+            the filename of the climate file we want to get the info.
+            Default is 'climate_historical'.
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used.
         """
         out = {}
         try:
-            f = self.get_filepath('climate_historical',
+            f = self.get_filepath(filename,
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
@@ -3570,14 +3704,15 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         _write_shape_to_disk(var, fp, to_tar=cfg.PARAMS['use_tar_shapefiles'])
 
-    def write_monthly_climate_file(self, time, prcp, temp,
-                                   ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
-                                   temp_std=None,
-                                   time_unit=None,
-                                   calendar=None,
-                                   source=None,
-                                   file_name='climate_historical',
-                                   filesuffix=''):
+    def write_climate_file(self, time, prcp, temp,
+                           ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
+                           temp_std=None,
+                           time_unit=None,
+                           calendar=None,
+                           source=None,
+                           file_name='climate_historical',
+                           filesuffix='',
+                           daily=False):
         """Creates a netCDF4 file with climate data timeseries.
 
         Parameters
@@ -3610,6 +3745,9 @@ class GlacierDirectory(object):
             How to name the file
         filesuffix : str
             Apply a suffix to the file
+        daily : bool, default False
+            Temporal resolution of the data. If True, adjust variable
+            long name in NetCDF file.
         """
 
         if isinstance(prcp, xr.DataArray):
@@ -3682,14 +3820,27 @@ class GlacierDirectory(object):
             timev[:] = numdate
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
-            v.units = 'kg m-2'
-            v.long_name = 'total monthly precipitation amount'
+            v.units = "kg m-2"
+
+            if not daily:
+                resolution = "monthly"
+            else:
+                resolution = "daily"
+                if not len(prcp) > (nc.yr_1 - nc.yr_0 + 1) * 28 * 12:
+                    raise ValueError(
+                        f"Data is not in daily resolution: {len(prcp)}"
+                    )
+                elif not (prcp.max() > 1):
+                    raise_oob_error(
+                        prcp, "Precipitation", "Check units are in kg m-2."
+                    )
+            v.long_name = f"total {resolution} precipitation amount"
 
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
             v.units = 'degC'
-            v.long_name = '2m temperature at height ref_hgt'
+            v.long_name = f'2m {resolution} temperature at height ref_hgt'
             v[:] = temp
 
             if temp_std is not None:
@@ -3697,6 +3848,12 @@ class GlacierDirectory(object):
                 v.units = 'degC'
                 v.long_name = 'standard deviation of daily temperatures'
                 v[:] = temp_std
+                if daily and not np.all(v[:].data < 1e5):
+                    raise_oob_error(
+                        temp_std,
+                        "Temperature STD",
+                        "Ensure there are no fill values.",
+                    )
 
     def get_inversion_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
@@ -4046,6 +4203,341 @@ class GlacierDirectory(object):
         # OK all good
         return None
 
+    @property
+    def settings_filesuffix(self):
+        return self._settings_filesuffix
+
+    @settings_filesuffix.setter
+    def settings_filesuffix(self, value):
+        self._settings_filesuffix = value
+        self.settings = self._get_settings_class(filesuffix=value)
+
+    def _get_settings_class(self, filesuffix, **kwargs):
+        return ModelSettings(
+            self, filesuffix=filesuffix, always_reload_data=False,
+            add_parent_values=self.add_parent_values_to_settings, **kwargs)
+
+    def _create_new_settings_or_observations(self, name, filesuffix, data=None,
+                                             ignore_existing=False,
+                                             overwrite=False, **kwargs):
+        """Create a new settings.yml or observations.yml file with content.
+
+        Parameters
+        ----------
+        name : str
+            Whether to create a 'settings' or 'observations' file.
+        filesuffix : str
+            The filesuffix identifying the settings or observations file.
+        data : dict, optional
+            The data to write into the file.
+        ignore_existing : bool
+            If False (default), raises an error if the file already exists.
+            If True, adds the new data to the existing file (see also
+            ``overwrite``).
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        **kwargs
+            Passed to the underlying settings or observations class (e.g.
+            ``parent_filesuffix`` for settings files).
+
+        Returns
+        -------
+        None
+        """
+        path = Path(self.get_filepath(name,
+                                      filesuffix=filesuffix))
+
+        if path.exists() and not ignore_existing:
+            raise ValueError(f"{name}{filesuffix}.yml already "
+                             f"exists. You can ignore by using "
+                             f"ignore_existing=True.")
+
+        if data is None:
+            data = {}
+
+        # this will create a new file if it does not exist
+        if name == 'settings':
+            self._get_settings_class(filesuffix=filesuffix, **kwargs)
+            self.write_to_settings(data, filesuffix=filesuffix,
+                                   overwrite=overwrite)
+        elif name == 'observations':
+            self._get_observations_class(filesuffix=filesuffix,
+                                         **kwargs)
+            self.write_to_observations(data, filesuffix=filesuffix,
+                                       overwrite=overwrite)
+        else:
+            raise NotImplementedError()
+
+        return None
+
+    def _read_settings_and_observations(self, name, filesuffix, keys,
+                                        **kwargs):
+        """Read variables from a settings.yml or observations.yml file.
+
+        Parameters
+        ----------
+        name : str
+            Whether to read from 'settings' or 'observations'.
+        filesuffix : str
+            The filesuffix identifying the settings or observations file.
+        keys : str or list or None
+            The parameter name(s) to return. If None, all stored parameters
+            are returned.
+        **kwargs
+            Passed to the underlying settings or observations class.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the requested parameters and the
+            ``filesuffix`` of the file they were read from.
+        """
+        out = {f"filesuffix": filesuffix}
+
+        if keys is None:
+            if name == 'settings':
+                keys = self.get_stored_settings(filesuffix=filesuffix)
+            elif name == 'observations':
+                keys = self.get_stored_observations(
+                    filesuffix=filesuffix)
+            else:
+                raise NotImplementedError()
+
+        if not isinstance(keys, list):
+            keys = [keys]
+
+        if name == 'settings':
+            data = self._get_settings_class(
+                filesuffix=filesuffix, **kwargs)
+        elif name == 'observations':
+            data = self._get_observations_class(
+                filesuffix=filesuffix, **kwargs)
+
+        for v in keys:
+            out[v] = data[v]
+
+        return out
+
+    def _write_to_settings_and_observations(self, name, filesuffix, data,
+                                            overwrite=False, **kwargs):
+        """Write variables to a settings.yml or observations.yml file.
+
+        Parameters
+        ----------
+        name : str
+            Whether to write to 'settings' or 'observations'.
+        filesuffix : str
+            The filesuffix identifying the file. The file is created if it
+            does not exist yet.
+        data : dict
+            The data to write.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        **kwargs
+            Passed to the underlying settings or observations class.
+
+        Returns
+        -------
+        None
+        """
+        if name == 'settings':
+            yml_file_handler = self._get_settings_class(
+                filesuffix=filesuffix, **kwargs)
+        elif name == 'observations':
+            yml_file_handler = self._get_observations_class(
+                filesuffix=filesuffix, **kwargs)
+        else:
+            raise NotImplementedError()
+
+        if not overwrite:
+            existing_data = self._get_stored_settings_and_observations(
+                name=name, filesuffix=filesuffix)
+
+        for k, v in data.items():
+            if not overwrite:
+                if k in existing_data:
+                    raise ValueError(
+                        f"{k} present in {name}{filesuffix}.yml, use "
+                        f"overwrite=True if you want to overwrite.")
+
+            yml_file_handler[k] = v
+
+        return None
+
+    def _get_stored_settings_and_observations(self, name, filesuffix):
+        return list(self.read_yml(name, filesuffix=filesuffix,
+                                  allow_empty=True).keys())
+
+    def create_new_settings(self, filesuffix, data=None,
+                            parent_filesuffix=None, ignore_existing=False,
+                            overwrite=False, **kwargs):
+        """Create a new settings file (settings<filesuffix>.yml).
+
+        Parameters
+        ----------
+        filesuffix : str
+            Identifier for the new settings file. Use an empty string for the
+            default ``settings.yml``.
+        data : dict, optional
+            Parameters to store in the new file.
+        parent_filesuffix : str, optional
+            The filesuffix of the settings file to use as a fallback when a
+            parameter is not found in this file. Defaults to ``cfg.PARAMS`` to
+            fall back to the global configuration.
+        ignore_existing : bool
+            If False (default), raises an error if the file already exists.
+            If True, adds ``data`` to the existing file.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        return self._create_new_settings_or_observations(
+            name='settings', filesuffix=filesuffix, data=data,
+            ignore_existing=ignore_existing, overwrite=overwrite,
+            parent_filesuffix=parent_filesuffix, **kwargs)
+
+    def read_settings(self, keys=None, filesuffix='', **kwargs):
+        """Read parameters from a settings file.
+
+        Follows the parent chain defined by ``parent_filesuffix`` until the
+        requested parameter is found, falling back to ``cfg.PARAMS`` if
+        needed.
+
+        Parameters
+        ----------
+        keys : str or list, optional
+            The parameter name(s) to retrieve. If None, all stored parameters
+            are returned.
+        filesuffix : str
+            The filesuffix identifying the settings file to read from.
+            Defaults to the default ``settings.yml`` (empty string).
+
+        Returns
+        -------
+        dict
+            A dictionary containing the requested parameters and the
+            ``filesuffix`` of the file they were read from.
+        """
+        return self._read_settings_and_observations(
+            name='settings', filesuffix=filesuffix, keys=keys,
+            **kwargs)
+
+    def write_to_settings(self, data, filesuffix='', overwrite=False,
+                          **kwargs):
+        """Write parameters to a settings file.
+
+        Parameters
+        ----------
+        data : dict
+            The parameters to write.
+        filesuffix : str
+            The filesuffix identifying the settings file to write to.
+            The file is created if it does not exist yet.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        return self._write_to_settings_and_observations(
+            name='settings', filesuffix=filesuffix, data=data,
+            overwrite=overwrite, **kwargs)
+
+    def get_stored_settings(self, filesuffix=''):
+        return self._get_stored_settings_and_observations(
+            name='settings', filesuffix=filesuffix)
+
+    @property
+    def observations_filesuffix(self):
+        return self._observations_filesuffix
+
+    @observations_filesuffix.setter
+    def observations_filesuffix(self, value):
+        self._observations_filesuffix = value
+        self.observations = self._get_observations_class(filesuffix=value)
+
+    def _get_observations_class(self, filesuffix, **kwargs):
+        return Observations(self, filesuffix=filesuffix, **kwargs)
+
+    def create_new_observations(self, filesuffix, data=None,
+                                ignore_existing=False, overwrite=False,
+                                **kwargs):
+        """Create a new observations file (observations<filesuffix>.yml).
+
+        Parameters
+        ----------
+        filesuffix : str
+            Identifier for the new observations file. Use an empty string for
+            the default ``observations.yml``.
+        data : dict, optional
+            Observations to store in the new file. Each entry should follow
+            the standard structure with at least a ``'value'`` key and a
+            ``'year'`` or ``'period'`` key.
+        ignore_existing : bool
+            If False (default), raises an error if the file already exists.
+            If True, adds ``data`` to the existing file.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        self._create_new_settings_or_observations(
+            name='observations', filesuffix=filesuffix, data=data,
+            ignore_existing=ignore_existing, overwrite=overwrite, **kwargs)
+
+    def read_observations(self, keys=None, filesuffix='',
+                          **kwargs):
+        """Read observations from an observations file.
+
+        Parameters
+        ----------
+        keys : str or list, optional
+            The observation name(s) to retrieve. If None, all stored
+            observations are returned.
+        filesuffix : str
+            The filesuffix identifying the observations file to read from.
+            Defaults to the default ``observations.yml`` (empty string).
+
+        Returns
+        -------
+        dict
+            A dictionary containing the requested observations and the
+            ``filesuffix`` of the file they were read from.
+        """
+        return self._read_settings_and_observations(
+            name='observations', filesuffix=filesuffix, keys=keys,
+            **kwargs)
+
+    def write_to_observations(self, data, filesuffix='',
+                              overwrite=False, **kwargs):
+        """Write observations to an observations file.
+
+        Parameters
+        ----------
+        data : dict
+            The observations to write. Each entry should follow the standard
+            structure with at least a ``'value'`` key and a ``'year'`` or
+            ``'period'`` key.
+        filesuffix : str
+            The filesuffix identifying the observations file to write to.
+            The file is created if it does not exist yet.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        return self._write_to_settings_and_observations(
+            name='observations', filesuffix=filesuffix, data=data,
+            overwrite=overwrite, **kwargs)
+
+    def get_stored_observations(self, filesuffix=''):
+        return self._get_stored_settings_and_observations(
+            name='observations', filesuffix=filesuffix)
+
 
 @entity_task(log)
 def copy_to_basedir(gdir, base_dir=None, setup='run'):
@@ -4078,7 +4570,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id[:-3], gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -4086,14 +4578,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
-                 'mb_calib', 'climate_historical', 'gridded_data',
+                 'settings', 'climate_historical', 'gridded_data',
                  'gcm_data', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
@@ -4388,3 +4880,256 @@ def base_dir_to_tar(
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
+
+
+class YAMLFileObject(object):
+    def __init__(self, path, allow_empty=True, always_reload_data=True):
+        self.path = Path(path)
+        self.allow_empty = allow_empty
+        self.always_reload_data = always_reload_data
+        self.data = self._load()
+
+    def _load(self):
+        if self.path.exists():
+            with open(self.path, 'r') as f:
+                return yaml.safe_load(f) or {}
+        elif not self.allow_empty:
+            raise FileNotFoundError(self.path)
+        return {}
+
+    def _save(self):
+        with open(self.path, 'w') as f:
+            yaml.safe_dump(self.data, f)
+
+    def _check_yaml_serializable(self, value):
+        try:
+            yaml.safe_dump(value)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Value '{value}' is not YAML serializable ({e})")
+
+    def _to_native_type(self, value):
+        if isinstance(value, (np.generic,)):
+            return value.item()
+        elif isinstance(value, dict):
+            return {k: self._to_native_type(v) for k, v in value.items()}
+        elif isinstance(value, list) or isinstance(value, np.ndarray):
+            return [self._to_native_type(v) for v in value]
+        return value
+
+    def get(self, key):
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
+        if key in self.data:
+            return self.data[key]
+        else:
+            raise KeyError(f"Key '{key}' not found!")
+
+    def set(self, key, value):
+        # to be always synced, if several objects work on the same file
+        self.data = self._load()
+        value = self._to_native_type(value)
+        self._check_yaml_serializable(value)
+        self.data[key] = value
+        self._save()
+
+    def __getitem__(self, key):
+        return self.get(key)
+
+    def __setitem__(self, key, value):
+        self.set(key, value)
+
+    def __repr__(self):
+        return repr(self.data)
+
+    def __contains__(self, key):
+        return key in self.data
+
+
+class ModelSettings(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
+                 reset_parent_filesuffix=False, allow_empty=True,
+                 always_reload_data=True, add_parent_values=False,
+                 ):
+        path = gdir.get_filepath('settings', filesuffix=filesuffix)
+
+        super(ModelSettings, self).__init__(path, allow_empty=allow_empty,
+                                            always_reload_data=always_reload_data,
+                                            )
+
+        # this is to inherit parameters from other setting files, the other file
+        # is stored with the parent_filesuffix
+        if 'parent_filesuffix' not in self.data:
+            if parent_filesuffix is not None:
+                self.set('parent_filesuffix', parent_filesuffix)
+            else:
+                # by default cfg.PARAMS is always the parent
+                self.set('parent_filesuffix', 'cfg.PARAMS')
+        elif isinstance(parent_filesuffix, str):
+            if self['parent_filesuffix'] != parent_filesuffix:
+                if not reset_parent_filesuffix:
+                    raise InvalidWorkflowError(
+                        f"Current parent_filesuffix="
+                        f"{self['parent_filesuffix']}, you provided "
+                        f"{parent_filesuffix}. If you want to set a new value "
+                        f"you can use reset_parent_filesuffix=True")
+                else:
+                    self.set('parent_filesuffix', parent_filesuffix)
+
+        self.filesuffix = filesuffix
+        if self.data['parent_filesuffix'] == 'cfg.PARAMS':
+            self.defaults = cfg.PARAMS.copy()
+        else:
+            self.defaults = ModelSettings(gdir,
+                                          filesuffix=self.data['parent_filesuffix'],
+                                          # check if parent exists
+                                          allow_empty=False,
+                                          always_reload_data=always_reload_data,
+                                          add_parent_values=add_parent_values,
+                                          )
+        self.gdir = gdir
+        self.add_default_values = add_parent_values
+
+    def get(self, key):
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
+        if key in self.data:
+            return self.data[key]
+
+        # the following is for backwards compatibility
+        if self.data['parent_filesuffix'] == 'cfg.PARAMS':
+            if key in ['bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                       'mb_global_params', 'baseline_climate_source']:
+                # this is for backwards compatibility when mb_calib files was used
+                try:
+                    value = self.gdir.read_json('mb_calib')[key]
+                    if self.add_default_values:
+                        self.set(key, value)
+                    return value
+                except FileNotFoundError:
+                    pass
+
+            if key in ['inversion_glen_a', 'inversion_fs', 'calving_water_level',
+                       ]:  # TODO: add calving variables
+                # this is for backwards compatibility when some parameters were
+                # stored in the diagnostics
+                try:
+                    value = self.gdir.get_diagnostics()[key]
+                    if self.add_default_values:
+                        self.set(key, value)
+                    return value
+                except KeyError:
+                    pass
+
+        # We try to get the parameter from the parent
+        try:
+            value = self.defaults[key]
+            # optionally add key from defaults to the settings file
+            if self.add_default_values:
+                self.set(key, value)
+            return value
+        except KeyError:
+            raise KeyError(f"Key '{key}' not found!")
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data: {repr(self.data)}")
+
+
+class Observations(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', allow_empty=True,
+                 always_reload_data=True,
+                 ):
+        path = gdir.get_filepath('observations', filesuffix=filesuffix)
+
+        super(Observations, self).__init__(path, allow_empty=allow_empty,
+                                           always_reload_data=always_reload_data,
+                                           )
+
+        self.filesuffix = filesuffix
+        self.gdir = gdir
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data: {repr(self.data)}")
+
+
+def compile_settings(gdirs, keys, filesuffix=''):
+    """Compile parameter values from settings files across one or more glacier
+    directories into a single DataFrame.
+
+    Parameters
+    ----------
+    gdirs : :py:class:`oggm.GlacierDirectory` or list thereof
+        The glacier directory or directories to read settings from.
+    keys : str or list
+        The parameter name(s) to retrieve from each settings file.
+    filesuffix : str or list of str
+        The filesuffix or list of filesuffixes identifying the settings files
+        to read from. Defaults to the default ``settings.yml`` (empty string).
+
+    Returns
+    -------
+    pandas.DataFrame
+        A DataFrame with one row per (gdir, filesuffix) combination. Columns
+        include ``rgi_id``, ``filesuffix``, and one column per requested
+        parameter.
+    """
+    if not isinstance(gdirs, list):
+        gdirs = [gdirs]
+
+    if not isinstance(filesuffix, list):
+        filesuffix = [filesuffix]
+
+    data = []
+    for gdir in gdirs:
+        for suffix in filesuffix:
+            out = {'rgi_id': gdir.rgi_id}
+            out.update(gdir.read_settings(
+                keys, filesuffix=suffix))
+            data.append(out)
+
+    return pd.DataFrame(data)
+
+
+def create_new_settings(gdirs, filesuffix, data=None,
+                        parent_filesuffix=None, ignore_existing=False,
+                        overwrite=False, **kwargs):
+    """Create a new settings file for each glacier directory in a list.
+
+    Convenience wrapper around :py:meth:`GlacierDirectory.create_new_settings`
+    that applies the same settings file to multiple glacier directories at
+    once.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        The glacier directories to create settings files for.
+    filesuffix : str
+        Identifier for the new settings file. Use an empty string for the
+        default ``settings.yml``.
+    data : dict, optional
+        Parameters to store in the new file.
+    parent_filesuffix : str, optional
+        The filesuffix of the settings file to use as a fallback when a
+        parameter is not found in this file.
+    ignore_existing : bool
+        If False (default), raises an error if the file already exists.
+        If True, adds ``data`` to the existing file.
+    overwrite : bool
+        If False (default), raises an error if any key in ``data`` is already
+        present in the file. If True, existing values are overwritten silently.
+    """
+    for gdir in gdirs:
+        try:
+            gdir.create_new_settings(filesuffix=filesuffix,
+                                     data=data,
+                                     parent_filesuffix=parent_filesuffix,
+                                     ignore_existing=ignore_existing,
+                                     overwrite=overwrite,
+                                     **kwargs)
+        except ValueError as e:
+            raise ValueError(f"{gdir.rgi_id}: {e}")
