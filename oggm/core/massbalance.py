@@ -1479,7 +1479,7 @@ def decide_winter_precip_factor(gdir):
         w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
 
     climsource = gdir.get_climate_info()['baseline_climate_source']
-    if 'w5e5' in climsource.lower():
+    if ('w5e5' in climsource.lower()) or ('lmr_mira' in climsource.lower()):
         # from OGGM calibration to winter MB, LOG
         # repeated by Lily in November 2025 with newest gdirs
         # using t_melt=-1, cte lapse rate, monthly resolution
@@ -1941,9 +1941,9 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
         if cfg.PARAMS['prcp_fac'] is not None:
-            raise InvalidParamsError('With `informed_threestep` you cannot use '
-                                     'a preset prcp_fac - we need to rely on '
-                                     'decide_winter_precip_factor().')
+            prcp_fac = cfg.PARAMS['prcp_fac']
+        else:
+            prcp_fac = decide_winter_precip_factor(gdir)
 
         # Some magic heuristics - we just decide to calibrate
         # precip -> melt_f -> temp but informed by previous data.
@@ -1953,7 +1953,6 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
         # We use the precip factor but allow it to vary between 0.8, 1.2 of
         # the previous value (uncertainty).
-        prcp_fac = decide_winter_precip_factor(gdir)
         mi, ma = cfg.PARAMS['prcp_fac_min'], cfg.PARAMS['prcp_fac_max']
         prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
         prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
