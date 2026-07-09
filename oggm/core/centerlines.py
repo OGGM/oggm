@@ -905,7 +905,7 @@ def compute_centerlines(gdir, heads=None):
         raise InvalidParamsError('`force_one_flowline` is deprecated')
 
     # open
-    geom = gdir.read_pickle('geometries')
+    geom = gdir.read_store('geometries')
     grids_file = gdir.get_filepath('gridded_data')
     with utils.ncDataset(grids_file) as nc:
         # Variables
@@ -974,7 +974,7 @@ def compute_centerlines(gdir, heads=None):
                             'found!'.format(gdir.rgi_id))
 
     # Write the data
-    gdir.write_pickle(cls, 'centerlines')
+    gdir.write_store(cls, 'centerlines')
 
     if is_first_call:
         # For diagnostics of filtered centerlines
@@ -1009,7 +1009,7 @@ def compute_downstream_line(gdir):
     # Look for the starting points
     try:
         # Normal OGGM flowlines
-        p = gdir.read_pickle('centerlines')[-1].tail
+        p = gdir.read_store('centerlines')[-1].tail
         head = (int(p.y), int(p.x))
     except FileNotFoundError:
         # Squeezes lines
@@ -1050,7 +1050,7 @@ def compute_downstream_line(gdir):
     if line is None:
         raise GeometryError('Downstream line not found')
 
-    cl = gdir.read_pickle('inversion_flowlines')[-1]
+    cl = gdir.read_store('inversion_flowlines')[-1]
     if cl.line is not None:
         # normal OGGM lines
         lline, dline = _line_extend(cl.line, line, cl.dx)
@@ -1060,7 +1060,7 @@ def compute_downstream_line(gdir):
         _, dline = _line_extend(shpg.LineString(), line, cl.dx)
         out = dict(full_line=None, downstream_line=dline)
 
-    gdir.write_pickle(out, 'downstream_line')
+    gdir.write_store(out, 'downstream_line')
 
 
 def _approx_parabola(x, y, y0=0):
@@ -1282,8 +1282,8 @@ def compute_downstream_bedshape(gdir):
         return
 
     # We make a flowline out of the downstream for simplicity
-    tpl = gdir.read_pickle('inversion_flowlines')[-1]
-    cl = gdir.read_pickle('downstream_line')['downstream_line']
+    tpl = gdir.read_store('inversion_flowlines')[-1]
+    cl = gdir.read_store('downstream_line')['downstream_line']
     cl = Centerline(cl, dx=tpl.dx, map_dx=gdir.grid.dx)
 
     # Topography
@@ -1316,11 +1316,13 @@ def compute_downstream_bedshape(gdir):
     assert np.all(w0s >= w0_min), 'np.all(w0s >= w0_min)'
 
     # write output
-    out = gdir.read_pickle('downstream_line')
+    out = gdir.read_store('downstream_line')
     out['bedshapes'] = bs
     out['surface_h'] = hgts
     out['w0s'] = w0s
-    gdir.write_pickle(out, 'downstream_line')
+    from oggm.utils.geozarr import convert_pickles_to_datatree
+    # convert_pickles_to_datatree({'downstream_line': gdir.read_store('downstream_line')})
+    gdir.write_store(out, 'downstream_line')
 
 
 def _mask_to_polygon(mask, gdir=None):
@@ -1562,8 +1564,8 @@ def catchment_area(gdir):
     """
 
     # Variables
-    cls = gdir.read_pickle('centerlines')
-    geom = gdir.read_pickle('geometries')
+    cls = gdir.read_store('centerlines')
+    geom = gdir.read_store('geometries')
     glacier_pix = geom['polygon_pix']
     fpath = gdir.get_filepath('gridded_data')
     with utils.ncDataset(fpath) as nc:
@@ -1576,7 +1578,7 @@ def catchment_area(gdir):
     if len(cls) == 1:
         cl_catchments = [np.array(np.nonzero(glacier_mask == 1)).T]
         geom['catchment_indices'] = cl_catchments
-        gdir.write_pickle(geom, 'geometries')
+        gdir.write_store(geom, 'geometries')
         return
 
     # Cost array
@@ -1659,7 +1661,7 @@ def catchment_area(gdir):
 
     # Write the data
     geom['catchment_indices'] = cl_catchments
-    gdir.write_pickle(geom, 'geometries')
+    gdir.write_store(geom, 'geometries')
 
 
 @entity_task(log, writes=['flowline_catchments', 'catchments_intersects'])
@@ -1676,7 +1678,7 @@ def catchment_intersections(gdir):
         where to write the data
     """
 
-    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
+    catchment_indices = gdir.read_store('geometries')['catchment_indices']
 
     # Loop over the lines
     mask = np.zeros((gdir.grid.ny, gdir.grid.nx))
@@ -1722,7 +1724,7 @@ def initialize_flowlines(gdir):
     """
 
     # variables
-    cls = gdir.read_pickle('centerlines')
+    cls = gdir.read_store('centerlines')
 
     # Initialise the flowlines
     dx = cfg.PARAMS['flowline_dx']
@@ -1811,7 +1813,7 @@ def initialize_flowlines(gdir):
         fl.set_flows_to(fls[cls.index(cl.flows_to)])
 
     # Write the data
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    gdir.write_store(fls, 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'centerlines')
     if do_filter:
         out = diag_n_bad_slopes/diag_n_pix
@@ -1831,8 +1833,8 @@ def catchment_width_geom(gdir):
     """
 
     # variables
-    flowlines = gdir.read_pickle('inversion_flowlines')
-    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
+    flowlines = gdir.read_store('inversion_flowlines')
+    catchment_indices = gdir.read_store('geometries')['catchment_indices']
 
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
@@ -1928,8 +1930,8 @@ def catchment_width_geom(gdir):
         fl.geometrical_widths = wlines
         fl.is_rectangular = is_rectangular
 
-    # Overwrite pickle
-    gdir.write_pickle(flowlines, 'inversion_flowlines')
+    # Overwrite
+    gdir.write_store(flowlines, 'inversion_flowlines')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -1949,8 +1951,8 @@ def catchment_width_correction(gdir):
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines')
-    catchment_indices = gdir.read_pickle('geometries')['catchment_indices']
+    fls = gdir.read_store('inversion_flowlines')
+    catchment_indices = gdir.read_store('geometries')['catchment_indices']
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
@@ -2077,8 +2079,8 @@ def catchment_width_correction(gdir):
     for fl in fls:
         fl.widths *= fac
 
-    # Overwrite centerlines
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    # Overwrite
+    gdir.write_store(fls, 'inversion_flowlines')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -2099,7 +2101,7 @@ def terminus_width_correction(gdir, new_width=None):
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_store('inversion_flowlines')
     fl = fls[-1]
     mapdx = gdir.grid.dx
 
@@ -2120,8 +2122,8 @@ def terminus_width_correction(gdir, new_width=None):
     width[:-5] = width[:-5] * cor_factor
     fl.widths = width
 
-    # Overwrite centerlines
-    gdir.write_pickle(fls, 'inversion_flowlines')
+    # Overwrite
+    gdir.write_store(fls, 'inversion_flowlines')
 
 
 def intersect_downstream_lines(gdir, candidates=None):
@@ -2152,7 +2154,7 @@ def intersect_downstream_lines(gdir, candidates=None):
     buffer = cfg.PARAMS['kbuffer']
 
     # get main glacier downstream line and CRS
-    dline = gdir.read_pickle('downstream_line')['full_line']
+    dline = gdir.read_store('downstream_line')['full_line']
     crs = gdir.grid
 
     # return list
@@ -2165,7 +2167,7 @@ def intersect_downstream_lines(gdir, candidates=None):
             continue
 
         # get tributary glacier downstream line and CRS
-        _dline = trib.read_pickle('downstream_line')['full_line']
+        _dline = trib.read_store('downstream_line')['full_line']
         _crs = trib.grid
 
         # use salem to transform the grids
@@ -2449,5 +2451,5 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
         fl.is_rectangular[-5:] = True
         fl.is_trapezoid[-5:] = False
 
-    gdir.write_pickle([fl], 'inversion_flowlines')
+    gdir.write_store([fl], 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'elevation_band')
