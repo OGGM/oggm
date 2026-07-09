@@ -1479,7 +1479,7 @@ def decide_winter_precip_factor(gdir):
         w_prcp = float((ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean())
 
     climsource = gdir.get_climate_info()['baseline_climate_source']
-    if 'w5e5' in climsource.lower():
+    if ('w5e5' in climsource.lower()) or ('lmr_mira' in climsource.lower()):
         # from OGGM calibration to winter MB, LOG
         # repeated by Lily in November 2025 with newest gdirs
         # using t_melt=-1, cte lapse rate, monthly resolution
