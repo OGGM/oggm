@@ -1368,6 +1368,38 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(ds_daily.volume[-1], ds_monthly.volume[-1],
                                    atol=3e7)
 
+    def test_temp_melt_not_persisted_by_ctor(self, hef_gdir):
+        """Constructing model with explicit default temp_melt shouldn't
+        write to gdir settings file, and calib params check should catch
+        the mismatch.
+        """
+
+        tasks.process_gswp3_w5e5_data(hef_gdir, daily=True)
+        gdir = hef_gdir
+
+        stored_before = gdir.get_stored_settings()
+        assert "temp_melt" not in stored_before
+
+        # DailyTIModel defaults temp_melt=0.0 while gdir calibrated with
+        # monthly model (temp_melt=-1)
+        with pytest.raises(InvalidWorkflowError, match="temp_melt"):
+            massbalance.DailyTIModel(gdir)
+
+        # explicit kwarg mismatching the calibration also raises
+        with pytest.raises(InvalidWorkflowError, match="temp_melt"):
+            massbalance.MonthlyTIModel(gdir, temp_melt=5.0)
+
+        # opting out of the check works, uses value for instance
+        mb_mod = massbalance.DailyTIModel(gdir, check_calib_params=False)
+        assert mb_mod.temp_melt == 0.0
+
+        # and in no case is anything written to settings file
+        assert gdir.get_stored_settings() == stored_before
+
+        # monthly model still fine
+        mb_mod = massbalance.MonthlyTIModel(gdir)
+        assert mb_mod.temp_melt == gdir.settings["temp_melt"]
+
     @pytest.mark.slow
     def test_sfc_type_mb_model(self, hef_gdir):
 

@@ -152,6 +152,10 @@ Bug fixes
 - Fixed a bug in ``compile_to_netcdf`` decorator, avoiding to raise an error if
   a single chunk failes (:pull:`1954`).
   By Copilot and `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Model constructors no longer silently persist a non-default ``temp_melt`` to
+  the gdir settings file. ``check_calib_params`` now validates the effective
+  model parameters instead of the settings file, and calibration tasks record ``mb_global_params`` from the model used.
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
