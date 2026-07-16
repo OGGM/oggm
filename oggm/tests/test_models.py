@@ -63,7 +63,8 @@ DOM_BORDER = 80
 
 ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length', 'mass',
              'calving', 'calving_rate', 'off_area', 'on_area', 'melt_off_glacier',
-             'melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
+             'melt_on_glacier', 'snow_melt_on_glacier', 'firn_melt_on_glacier',
+             'ice_melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
              'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
              'residual_mb', 'snow_bucket']
 
@@ -1553,6 +1554,56 @@ class TestMassBalanceModels:
             # +1 because index starts with 0
             assert max_used_index + 1 == mb_mod._climatic_mb.shape[0]
 
+            # check the melt split by surface type
+            snow_melt, firn_melt, ice_melt = mb_mod.get_annual_melt(
+                year=target_year_annual)
+            # melt can never be negative
+            assert np.all(snow_melt >= 0)
+            assert np.all(firn_melt >= 0)
+            assert np.all(ice_melt >= 0)
+            # for HEF there is some snow and ice melt in this year
+            assert np.sum(snow_melt) > 0
+            assert np.sum(ice_melt) > 0
+            # firn only melts in years when the melt at a grid point eats
+            # through all buckets younger than one year; this happens at some
+            # point during the modelled period (e.g. summer 2003), but not
+            # necessarily in the target year
+            assert mb_mod.firn_melt.values.sum() > 0
+            # the components sum up to solid precipitation minus climatic mb
+            # (which shows that pure aging is never counted as melt)
+            mb_out = mb_mod.get_annual_mb(heights=h, year=target_year_annual,
+                                          add_climate=True)
+            annual_mb, _, _, _, prcpsol = mb_out
+            annual_mb_kg = (annual_mb * mb_mod.sec_in_year(target_year_annual)
+                            * mb_mod.mbmod.ice_density) + mb_mod.mbmod.bias
+            np.testing.assert_allclose(snow_melt + firn_melt + ice_melt,
+                                       prcpsol - annual_mb_kg,
+                                       atol=1e-6)
+
+            if clim_res in ['monthly', 'daily']:
+                # the monthly melt components sum up to the annual ones
+                monthly_sums = np.zeros((3, len(h)))
+                for month in np.arange(1, 13):
+                    melts = mb_mod.get_monthly_melt(
+                        year=date_to_floatyear(y=target_year_annual, m=month))
+                    for c, melt in enumerate(melts):
+                        monthly_sums[c] += melt
+                np.testing.assert_allclose(monthly_sums[0], snow_melt,
+                                           atol=1e-6)
+                np.testing.assert_allclose(monthly_sums[1], firn_melt,
+                                           atol=1e-6)
+                np.testing.assert_allclose(monthly_sums[2], ice_melt,
+                                           atol=1e-6)
+
+                # aging is not counted as melt: at the highest grid point in
+                # deep winter there is no melt at all, although the buckets
+                # aged (and with monthly aging even snow became firn); only
+                # floating point noise is allowed
+                melts_jan = mb_mod.get_monthly_melt(
+                    year=date_to_floatyear(y=target_year_annual, m=1))
+                for melt in melts_jan:
+                    np.testing.assert_allclose(melt[0], 0, atol=1e-9)
+
         if do_plot:
             # compare sfc tracking to mb_models without surface tracking
             mb_mod_daily = massbalance.DailyTIModel(
@@ -1860,6 +1911,15 @@ class TestMassBalanceModels:
             np.testing.assert_allclose(
                 m1._mb_heights[:m1._current_index],
                 m2._mb_heights[:m2._current_index])
+            np.testing.assert_allclose(
+                m1._snow_melt[:m1._current_index],
+                m2._snow_melt[:m2._current_index])
+            np.testing.assert_allclose(
+                m1._firn_melt[:m1._current_index],
+                m2._firn_melt[:m2._current_index])
+            np.testing.assert_allclose(
+                m1._ice_melt[:m1._current_index],
+                m2._ice_melt[:m2._current_index])
             assert m1.buckets == m2.buckets
             np.testing.assert_allclose(
                 list(m1.melt_f_buckets.values()),
@@ -2435,8 +2495,7 @@ class TestMassBalanceModels:
             continues_mb.flowline_mb_models[0].mb_buckets_np,
             proj_mb_mod.mb_buckets_np, )
 
-        # test run_with_hydro, just testing if it runs without errors
-        # TODO: run_with_hydro needs to be adapted for SfcTypeTIModel
+        # test run_with_hydro with both models
         gdir.settings_filesuffix = '_daily'
         gdir.settings['store_model_geometry'] = True
         tasks.run_with_hydro(
@@ -2446,6 +2505,8 @@ class TestMassBalanceModels:
             climate_input_filesuffix='_daily', ys=1980, ye=2020,
             output_filesuffix='_daily_hydro')
 
+        # for SfcTypeTIModel use_previous_mbs is set inside run_with_hydro,
+        # because the stored mb values of the dynamical run are revisited
         gdir.settings_filesuffix = '_daily_sfc'
         gdir.settings['store_model_geometry'] = True
         tasks.run_with_hydro(
@@ -2454,13 +2515,65 @@ class TestMassBalanceModels:
             mb_model_class=partial(
                 massbalance.SfcTypeTIModel,
                 mb_model_class=massbalance.DailyTIModel,
-                ys=mbdf.index[0],
-                # run_with_hydro revisit the mb_values, we need to allow this
-                use_previous_mbs=True,
-            ),
+                ys=mbdf.index[0]),
             climate_input_filesuffix='_daily',
+            store_monthly_hydro=True,
             ys=1980, ye=2020,
             output_filesuffix='_daily_sfc_hydro')
+
+        # without surface type tracking the melt components are NaN
+        with xr.open_dataset(
+                gdir.get_filepath('model_diagnostics',
+                                  filesuffix='_daily_hydro')) as ds:
+            ds_hydro = ds.load()
+        for vn in ['snow_melt_on_glacier', 'firn_melt_on_glacier',
+                   'ice_melt_on_glacier']:
+            assert np.all(np.isnan(ds_hydro[vn]))
+
+        with xr.open_dataset(
+                gdir.get_filepath('model_diagnostics',
+                                  filesuffix='_daily_sfc_hydro')) as ds:
+            ds_hydro_sfc = ds.load()
+
+        # the last year of the hydro output is always NaN
+        odf_sfc = ds_hydro_sfc.isel(time=slice(0, -1))
+
+        # after the corrections the hydro output is mass conserving: the
+        # on-glacier mass balance corresponds to the total mass change of the
+        # dynamical run (incl. snow and firn buckets)
+        np.testing.assert_allclose(
+            odf_sfc['snowfall_on_glacier'].values -
+            odf_sfc['melt_on_glacier'].values,
+            ds_hydro_sfc['mass_kg'].values[1:] -
+            ds_hydro_sfc['mass_kg'].values[:-1])
+
+        # with surface type tracking the melt components sum up to the total
+        # on-glacier melt, annually and monthly
+        melt_sum = (odf_sfc['snow_melt_on_glacier'] +
+                    odf_sfc['firn_melt_on_glacier'] +
+                    odf_sfc['ice_melt_on_glacier'])
+        np.testing.assert_allclose(melt_sum.values,
+                                   odf_sfc['melt_on_glacier'].values)
+        melt_sum_monthly = (odf_sfc['snow_melt_on_glacier_monthly'] +
+                            odf_sfc['firn_melt_on_glacier_monthly'] +
+                            odf_sfc['ice_melt_on_glacier_monthly'])
+        np.testing.assert_allclose(melt_sum_monthly.values,
+                                   odf_sfc['melt_on_glacier_monthly'].values,
+                                   atol=1e-6)
+
+        # all components are non-negative and each surface type contributes
+        # some melt over the entire period
+        for vn in ['snow_melt_on_glacier', 'firn_melt_on_glacier',
+                   'ice_melt_on_glacier']:
+            assert np.all(odf_sfc[vn].values >= 0)
+            assert odf_sfc[vn].sum() > 0
+
+        # most of the melt should come from snow and ice, firn melt is the
+        # smallest contribution
+        assert (odf_sfc['firn_melt_on_glacier'].sum() <
+                odf_sfc['snow_melt_on_glacier'].sum())
+        assert (odf_sfc['firn_melt_on_glacier'].sum() <
+                odf_sfc['ice_melt_on_glacier'].sum())
 
         if do_plot:
             def plot_runoff(filesuffix, title):

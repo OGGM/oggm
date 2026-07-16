@@ -1195,6 +1195,8 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
         allowed_data_vars += [f'terminus_thick_{gi}']
     # this hydro variables can be _monthly or _daily
     hydro_vars = ['melt_off_glacier', 'melt_on_glacier',
+                  'snow_melt_on_glacier', 'firn_melt_on_glacier',
+                  'ice_melt_on_glacier',
                   'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                   'snowfall_off_glacier', 'snowfall_on_glacier',
                   'melt_residual_off_glacier', 'melt_residual_on_glacier',
