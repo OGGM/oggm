@@ -142,7 +142,7 @@ Enhancements
   this, ``SfcTypeTIModel`` now tracks the melt per surface type (new
   ``get_annual_melt`` and ``get_monthly_melt`` methods and ``snow_melt``,
   ``firn_melt`` and ``ice_melt`` properties), whereby pure aging of the
-  buckets is never counted as melt (:pull:`XXXX`).
+  buckets is never counted as melt (:pull:`1959`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
