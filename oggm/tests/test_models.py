@@ -1031,36 +1031,35 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(prcp_d, prcp_m)
         np.testing.assert_allclose(t_d, t_m, atol=0.02)
 
+        # for checking how much has changed to OGGM v1.6 here a hard coded
+        mb_annual_oggm_v16 = [
+            -1.42297448e-07, -1.41160282e-07, -1.39199219e-07, -1.36113197e-07,
+            -1.31840437e-07, -1.26940610e-07, -1.21949801e-07, -1.17948533e-07,
+            -1.14388734e-07, -1.11166865e-07, -1.08178550e-07, -1.05308084e-07,
+            -1.02515762e-07, -9.96907271e-08, -9.67172896e-08, -9.36011930e-08,
+            -9.03592687e-08, -8.69923123e-08, -8.29093380e-08, -7.90813507e-08,
+            -7.55444959e-08, -7.24727279e-08, -6.93747120e-08, -6.63505138e-08,
+            -6.35754355e-08, -6.11641273e-08, -5.89809293e-08, -5.67949353e-08,
+            -5.44956761e-08, -5.20240215e-08, -4.93213255e-08, -4.63693337e-08,
+            -4.31273607e-08, -3.95146795e-08, -3.55167024e-08, -3.16922755e-08,
+            -2.85680526e-08, -2.60397302e-08, -2.37143703e-08, -2.13926889e-08,
+            -1.90271618e-08, -1.73486999e-08, -1.65511508e-08, -1.39938251e-08,
+            -1.14532445e-08, -8.95108401e-09, -8.90165026e-09, -6.43941025e-09,
+            -3.79873736e-09, -8.85807717e-10,  2.50943975e-09,  4.80588815e-09,
+            6.39301260e-09,  1.01207768e-08,  1.35185100e-08,  1.59884941e-08,
+            1.70314225e-08,  2.04225150e-08,  2.35563242e-08,  2.53007150e-08,
+            2.65123374e-08,  2.91862845e-08,  3.14872294e-08,  3.31400347e-08,
+            3.39361834e-08,  3.73918160e-08,  3.92227052e-08,  4.10314532e-08,
+            4.13874876e-08,  4.39342346e-08,  4.43393872e-08,  4.58317424e-08,
+            4.86526460e-08,  4.93663560e-08,  5.36643971e-08,  5.41680453e-08,
+            5.84341486e-08,  6.00092412e-08,  6.30844863e-08,  6.58271495e-08,
+            6.76431998e-08,  7.15019273e-08,  7.21872267e-08,  7.61114775e-08,
+            7.71056592e-08,  7.76305573e-08,  8.12629938e-08,  8.45592440e-08,
+            8.70176740e-08,  8.83996244e-08]
+        np.testing.assert_allclose(mb_annual_oggm_v16, mb_annual_m, atol=1.3e-9)
+
         # plot for looking at how mb gradient is changing
         if do_plot:
-            # for checking how much has changed to OGGM v1.6 here a hard coded
-            mb_annual_oggm_v16 = [
-                -1.42297448e-07, -1.41160282e-07, -1.39199219e-07, -1.36113197e-07,
-                -1.31840437e-07, -1.26940610e-07, -1.21949801e-07, -1.17948533e-07,
-                -1.14388734e-07, -1.11166865e-07, -1.08178550e-07, -1.05308084e-07,
-                -1.02515762e-07, -9.96907271e-08, -9.67172896e-08, -9.36011930e-08,
-                -9.03592687e-08, -8.69923123e-08, -8.29093380e-08, -7.90813507e-08,
-                -7.55444959e-08, -7.24727279e-08, -6.93747120e-08, -6.63505138e-08,
-                -6.35754355e-08, -6.11641273e-08, -5.89809293e-08, -5.67949353e-08,
-                -5.44956761e-08, -5.20240215e-08, -4.93213255e-08, -4.63693337e-08,
-                -4.31273607e-08, -3.95146795e-08, -3.55167024e-08, -3.16922755e-08,
-                -2.85680526e-08, -2.60397302e-08, -2.37143703e-08, -2.13926889e-08,
-                -1.90271618e-08, -1.73486999e-08, -1.65511508e-08, -1.39938251e-08,
-                -1.14532445e-08, -8.95108401e-09, -8.90165026e-09, -6.43941025e-09,
-                -3.79873736e-09, -8.85807717e-10,  2.50943975e-09,  4.80588815e-09,
-                6.39301260e-09,  1.01207768e-08,  1.35185100e-08,  1.59884941e-08,
-                1.70314225e-08,  2.04225150e-08,  2.35563242e-08,  2.53007150e-08,
-                2.65123374e-08,  2.91862845e-08,  3.14872294e-08,  3.31400347e-08,
-                3.39361834e-08,  3.73918160e-08,  3.92227052e-08,  4.10314532e-08,
-                4.13874876e-08,  4.39342346e-08,  4.43393872e-08,  4.58317424e-08,
-                4.86526460e-08,  4.93663560e-08,  5.36643971e-08,  5.41680453e-08,
-                5.84341486e-08,  6.00092412e-08,  6.30844863e-08,  6.58271495e-08,
-                6.76431998e-08,  7.15019273e-08,  7.21872267e-08,  7.61114775e-08,
-                7.71056592e-08,  7.76305573e-08,  8.12629938e-08,  8.45592440e-08,
-                8.70176740e-08,  8.83996244e-08]
-            np.testing.assert_allclose(mb_annual_oggm_v16, mb_annual_m,
-                                       atol=1.3e-9)
-
             plt.plot(prcpsol_d, h, label='daily')
             plt.plot(prcpsol_m, h, label='monthly')
             plt.title(f'annual solid prcp for {yr}')
@@ -1097,35 +1096,36 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(prcp_d, prcp_m)
         np.testing.assert_allclose(t_d, t_m, atol=1e-4)
 
+        # for checking how much has changed to OGGM v1.6 here a hard coded
+        mb_monthly_oggm_v16 = [
+            -5.13190966e-07, -5.11211812e-07, -5.07798727e-07, -5.02498359e-07,
+            -4.95374449e-07, -4.87205038e-07, -4.78881443e-07, -4.71262960e-07,
+            -4.64485043e-07, -4.58350551e-07, -4.52660749e-07, -4.47195333e-07,
+            -4.41878705e-07, -4.36499791e-07, -4.30838316e-07, -4.24905215e-07,
+            -4.18732537e-07, -4.12321795e-07, -4.05990839e-07, -4.00175269e-07,
+            -3.94790126e-07, -3.89446968e-07, -3.84058153e-07, -3.78797739e-07,
+            -3.73970655e-07, -3.69776327e-07, -3.65978784e-07, -3.62176377e-07,
+            -3.58176952e-07, -3.53877655e-07, -3.49176475e-07, -3.44041660e-07,
+            -3.38402440e-07, -3.31937059e-07, -3.24663937e-07, -3.17706537e-07,
+            -3.12022949e-07, -3.07423423e-07, -3.03193127e-07, -2.98969523e-07,
+            -2.94666154e-07, -2.91612695e-07, -2.90161794e-07, -2.85509505e-07,
+            -2.80887679e-07, -2.76335747e-07, -2.76245818e-07, -2.71766509e-07,
+            -2.66962595e-07, -2.61663392e-07, -2.55486755e-07, -2.50892238e-07,
+            -2.46389327e-07, -2.34266499e-07, -2.21147635e-07, -2.11610869e-07,
+            -2.07584057e-07, -1.94490833e-07, -1.82390996e-07, -1.75655792e-07,
+            -1.70977641e-07, -1.60653361e-07, -1.51769266e-07, -1.45387680e-07,
+            -1.42313699e-07, -1.28971282e-07, -1.21902102e-07, -1.10290002e-07,
+            -1.07780730e-07, -8.98316793e-08, -8.69762307e-08, -7.64583579e-08,
+            -6.02983722e-08, -5.64291333e-08, -3.31281440e-08, -3.03977137e-08,
+            -8.33160424e-09, -1.40054651e-09,  1.21318019e-08,  2.42006525e-08,
+            3.21920240e-08,  4.91720184e-08,  5.21876188e-08,  6.94559431e-08,
+            7.11095569e-08,  7.11095569e-08,  7.11095569e-08,  7.11095569e-08,
+            7.11095569e-08,  7.11095569e-08]
+        np.testing.assert_allclose(mb_monthly_oggm_v16, mb_monthly_m,
+                                   atol=1.3e-9)
+
         # plot for looking at how mb gradient is changing
         if do_plot:
-            mb_monthly_oggm_v16 = [
-                -5.13190966e-07, -5.11211812e-07, -5.07798727e-07, -5.02498359e-07,
-                -4.95374449e-07, -4.87205038e-07, -4.78881443e-07, -4.71262960e-07,
-                -4.64485043e-07, -4.58350551e-07, -4.52660749e-07, -4.47195333e-07,
-                -4.41878705e-07, -4.36499791e-07, -4.30838316e-07, -4.24905215e-07,
-                -4.18732537e-07, -4.12321795e-07, -4.05990839e-07, -4.00175269e-07,
-                -3.94790126e-07, -3.89446968e-07, -3.84058153e-07, -3.78797739e-07,
-                -3.73970655e-07, -3.69776327e-07, -3.65978784e-07, -3.62176377e-07,
-                -3.58176952e-07, -3.53877655e-07, -3.49176475e-07, -3.44041660e-07,
-                -3.38402440e-07, -3.31937059e-07, -3.24663937e-07, -3.17706537e-07,
-                -3.12022949e-07, -3.07423423e-07, -3.03193127e-07, -2.98969523e-07,
-                -2.94666154e-07, -2.91612695e-07, -2.90161794e-07, -2.85509505e-07,
-                -2.80887679e-07, -2.76335747e-07, -2.76245818e-07, -2.71766509e-07,
-                -2.66962595e-07, -2.61663392e-07, -2.55486755e-07, -2.50892238e-07,
-                -2.46389327e-07, -2.34266499e-07, -2.21147635e-07, -2.11610869e-07,
-                -2.07584057e-07, -1.94490833e-07, -1.82390996e-07, -1.75655792e-07,
-                -1.70977641e-07, -1.60653361e-07, -1.51769266e-07, -1.45387680e-07,
-                -1.42313699e-07, -1.28971282e-07, -1.21902102e-07, -1.10290002e-07,
-                -1.07780730e-07, -8.98316793e-08, -8.69762307e-08, -7.64583579e-08,
-                -6.02983722e-08, -5.64291333e-08, -3.31281440e-08, -3.03977137e-08,
-                -8.33160424e-09, -1.40054651e-09,  1.21318019e-08,  2.42006525e-08,
-                3.21920240e-08,  4.91720184e-08,  5.21876188e-08,  6.94559431e-08,
-                7.11095569e-08,  7.11095569e-08,  7.11095569e-08,  7.11095569e-08,
-                7.11095569e-08,  7.11095569e-08]
-            np.testing.assert_allclose(mb_monthly_oggm_v16, mb_monthly_m,
-                                       atol=1.3e-9)
-
             plt.plot(prcpsol_d, h, label='daily')
             plt.plot(prcpsol_m, h, label='monthly')
             plt.title(f'monthly solid prcp for {m:02d}.{yr}')
@@ -1737,15 +1737,20 @@ class TestMassBalanceModels:
                                        mb_model_class=massbalance.DailyTIModel,
                                        ys=1800, check_calib_params=False,)
 
-        with pytest.raises(InvalidWorkflowError,
-                           match='The current buckets are valid for *'):
-            mb_mod = massbalance.SfcTypeTIModel(
-                gdir, settings_filesuffix='_daily',
-                mb_model_class=massbalance.DailyTIModel, ys=2000,
-                use_previous_mbs=False, check_calib_params=False, )
-            mb_mod.get_annual_mb(heights=h, year=2000)
-            # calling the same year a second time with use_previous_mbs=False
-            # should raise
+        mb_mod = massbalance.SfcTypeTIModel(
+            gdir,
+            settings_filesuffix="_daily",
+            mb_model_class=massbalance.DailyTIModel,
+            ys=2000,
+            use_previous_mbs=False,
+            check_calib_params=False,
+        )
+        mb_mod.get_annual_mb(heights=h, year=2000)
+        # calling the same year a second time with use_previous_mbs=False
+        # should raise
+        with pytest.raises(
+            InvalidWorkflowError, match="The current buckets are valid for"
+        ):
             mb_mod.get_annual_mb(heights=h, year=2000)
 
         # Look at different options of defining the melt_f per bucket
@@ -5285,9 +5290,20 @@ class TestHEF:
                              bias=0, output_filesuffix='_def')
         run_constant_climate(gdir_calving, nyears=10, y0=1985,
                              bias=0, output_filesuffix='_def')
-        utils.compile_run_output([gdir_calving, hef_gdir],
-                                 input_filesuffix='_def',
-                                 tmp_file_size=1)
+        # tmp_file_size=1 means compiled output is written to disk and
+        # not returned
+        assert (
+            utils.compile_run_output(
+                [gdir_calving, hef_gdir], input_filesuffix="_def", tmp_file_size=1
+            )
+            is None
+        )
+        fp = os.path.join(cfg.PATHS["working_dir"], "run_output_def.nc")
+        with xr.open_dataset(fp) as ds:
+            ds = ds.load()
+        assert sorted(ds.rgi_id.data) == sorted([gdir_calving.rgi_id, hef_gdir.rgi_id])
+        assert np.all(np.isfinite(ds.volume.data))
+        assert np.all(ds.volume.data > 0)
 
         # This should work although one calves the other not
         cfg.PARAMS['use_kcalving_for_run'] = True
@@ -5300,6 +5316,18 @@ class TestHEF:
         utils.compile_run_output([gdir_calving, hef_gdir],
                                  input_filesuffix='_def',
                                  tmp_file_size=1)
+        with xr.open_dataset(fp) as ds:
+            ds = ds.load()
+        # gdir_calving is copy of HEF flagged tidewater, but no calving
+        # actually occurs, so test finite, non-negative and non-decreasing.
+        assert 'calving' in ds
+        for i in range(2):
+            calving = ds.calving.isel(rgi_id=i).data
+            assert np.all(np.isfinite(calving))
+            assert np.all(calving >= 0)
+            assert np.all(np.diff(calving) >= 0)
+        assert np.all(np.isfinite(ds.volume.data))
+        assert np.all(ds.volume.data > 0)
 
     def test_start_from_spinup(self, hef_gdir):
 
@@ -5589,8 +5617,7 @@ class TestHEF:
             with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
                 ds_iqr = ds.load()
 
-            # the median flowline should never be the smallest or largest
-            # value, compared to the values of the runs (as we have three runs)
+            # computed quantiles should match run quantiles
             variables_to_check = ['volume_m3', 'area_m2', 'thickness_m']
             for var in variables_to_check:
                 var_das = []
@@ -5602,21 +5629,22 @@ class TestHEF:
                 var_max = var_stack.max(dim='runs')
 
                 var_median = ds_median[var]
-                is_median_equal_to_min = (var_median == var_min).any()
-                is_median_equal_to_max = (var_median == var_max).any()
+                np.testing.assert_allclose(var_median, var_stack.median(dim="runs"))
+                assert (var_min <= var_median).all()
+                assert (var_median <= var_max).all()
 
-                assert is_median_equal_to_min
-                assert is_median_equal_to_max
+                var_5th = ds_iqr.loc[{"quantile": 0.05}][var]
+                var_95th = ds_iqr.loc[{"quantile": 0.95}][var]
+                np.testing.assert_allclose(
+                    var_5th, var_stack.quantile(0.05, dim="runs")
+                )
+                np.testing.assert_allclose(
+                    var_95th, var_stack.quantile(0.95, dim="runs")
+                )
 
                 # median should be larger/smaller than 5th/95th quantile
-                var_5th = ds_iqr.loc[{'quantile': 0.05}][var]
-                var_95th = ds_iqr.loc[{'quantile': 0.95}][var]
-
-                is_median_larger_than_5th_q = (var_median >= var_5th).all()
-                is_median_smaller_than_95th_q = (var_median <= var_95th).all()
-
-                assert is_median_larger_than_5th_q
-                assert is_median_smaller_than_95th_q
+                assert (var_median >= var_5th).all()
+                assert (var_median <= var_95th).all()
 
 
 @pytest.mark.usefixtures('with_class_wd')
@@ -5979,9 +6007,13 @@ class TestDynamicSpinup:
                     run_with_fixed_spinup.time.values[0])
             assert run_with_fixed_spinup.time.values[0] == 1979
 
-    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.parametrize("minimise_for", ["area", "volume"])
     @pytest.mark.slow
-    @pytest.mark.skip
+    @pytest.mark.skip(
+        reason="Disabled since the new MB calibration "
+        "(PR #1527). Needs a rewrite for the new "
+        "architecture before it can run again"
+    )
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_spinup_special_cases(self, hef_gdir, minimise_for):
 
@@ -6258,10 +6290,14 @@ class TestDynamicSpinup:
             # smaller after calibration
             assert gdir.settings['melt_f'] < melt_f_before
 
-    @pytest.mark.parametrize('do_inversion', [True, False])
-    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.parametrize("do_inversion", [True, False])
+    @pytest.mark.parametrize("minimise_for", ["area", "volume"])
     @pytest.mark.slow
-    @pytest.mark.skip
+    @pytest.mark.skip(
+        reason="Disabled since the new MB calibration "
+        "(PR #1527). Needs a rewrite for the new "
+        "architecture before it can run again"
+    )
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_melt_f_calibration_with_dynamic_spinup_special_cases(
             self, minimise_for, do_inversion):
@@ -7830,7 +7866,10 @@ def merged_hef_cfg(class_case_dir):
 class TestMergedHEF:
 
     @pytest.mark.slow
-    @pytest.mark.skip
+    @pytest.mark.skip(
+        reason="Merged simulations currently crash: "
+        "FlowlineModel rejects the merged flowlines"
+    )
     def test_merged_simulation(self):
         import geopandas as gpd
 
