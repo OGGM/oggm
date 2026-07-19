@@ -2167,6 +2167,7 @@ class TestPreproCLI:
                           logging_level='INFO', max_level=5, elev_bands=True,
                           override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
+                                           'map_proj': 'tmerc',
                                            'prcp_fac': 2.5,
                                            }
                           )

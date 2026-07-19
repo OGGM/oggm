@@ -465,6 +465,7 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['temp_bias_min'] = -10
     cfg.PARAMS['temp_bias_max'] = 10
+    cfg.PARAMS['map_proj'] = 'tmerc'
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
@@ -570,6 +571,7 @@ def init_columbia(reset=False):
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
     cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity, reset=reset)
@@ -609,6 +611,7 @@ def init_columbia_eb(dir_name, reset=False):
     cfg.PARAMS['prcp_fac'] = 2.5
     cfg.PARAMS['baseline_climate'] = 'CRU'
     cfg.PARAMS['evolution_model'] = 'FluxBased'
+    cfg.PARAMS['map_proj'] = 'tmerc'
 
     entity = gpd.read_file(get_demo_file('01_rgi60_Columbia.shp')).iloc[0]
     gdir = oggm.GlacierDirectory(entity)
