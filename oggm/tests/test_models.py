@@ -6032,6 +6032,7 @@ class TestDynamicSpinup:
                 hef_gdir,
                 minimise_for=minimise_for)
         hef_gdir.settings['use_kcalving_for_run'] = False
+        cfg.PARAMS['use_inversion_params_for_run'] = True
 
         # test that fixed_geometry_spinup is added correctly if spinup period
         # is shorten due to too large precision
@@ -6039,7 +6040,6 @@ class TestDynamicSpinup:
             run_dynamic_spinup(
                 hef_gdir,
                 spinup_start_yr=1979,
-                min_spinup_period=5,
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
@@ -6051,7 +6051,6 @@ class TestDynamicSpinup:
             run_dynamic_spinup(
                 hef_gdir,
                 spinup_start_yr=1979,
-                min_spinup_period=5,
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
