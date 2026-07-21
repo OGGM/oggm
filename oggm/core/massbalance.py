@@ -570,15 +570,23 @@ class MonthlyTIModel(MassBalanceModel):
         if prcp_fac is None:
             prcp_fac = self.calib_params['prcp_fac']
 
+        # Global parameters
+        self.temp_all_solid = gdir.settings['temp_all_solid']
+        self.temp_all_liq = gdir.settings['temp_all_liq']
+        if temp_melt is None:
+            temp_melt = gdir.settings['temp_melt']
+        self.temp_melt = temp_melt
+        self.temp_default_gradient = gdir.settings['temp_default_gradient']
+
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
             mb_calib = self.calib_params['mb_global_params']
             for k, v in mb_calib.items():
-                if v != self.gdir.settings[k]:
+                if v != getattr(self, k):
                     msg = ('You seem to use different mass balance parameters '
                            'than used for the calibration: '
-                           f"you use gdir.settings['{k}']={gdir.settings[k]} while "
-                           f"it was calibrated with gdir.settings['{k}']={v}. "
+                           f'you use {k}={getattr(self, k)} while '
+                           f'it was calibrated with {k}={v}. '
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
@@ -596,19 +604,9 @@ class MonthlyTIModel(MassBalanceModel):
         self.melt_f = melt_f
         self.bias = bias
 
-        # Global parameters
-        self.temp_all_solid = gdir.settings['temp_all_solid']
-        self.temp_all_liq = gdir.settings['temp_all_liq']
-        if temp_melt is None:
-            self.temp_melt = gdir.settings['temp_melt']
-        else:
-            gdir.settings['temp_melt'] = temp_melt
-            self.temp_melt = temp_melt
-
         # check if valid prcp_fac is used
         if prcp_fac <= 0:
             raise InvalidParamsError('prcp_fac has to be above zero!')
-        self.temp_default_gradient = gdir.settings['temp_default_gradient']
 
         # Public attrs
         self.hemisphere = gdir.hemisphere
@@ -3907,6 +3905,17 @@ def decide_winter_precip_factor(gdir):
                        gdir.settings['prcp_fac_max'])
 
 
+def _mb_global_params_from_model(mb_mod):
+    """Effective MB_GLOBAL_PARAMS of a (possibly wrapped) TI model.
+
+    These can differ from the gdir settings, e.g. DailyTIModel defaults
+    to temp_melt=0.0 regardless of settings['temp_melt'].
+    """
+    mod = getattr(mb_mod, "flowline_mb_models", [mb_mod])[0]
+    mod = getattr(mod, "mbmod", mod)  # e.g. SfcTypeTIModel
+    return {k: getattr(mod, k) for k in MB_GLOBAL_PARAMS}
+
+
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='',
                                 observations_filesuffix='',
@@ -4200,7 +4209,7 @@ def mb_calibration_to_rmsd(gdir, *,
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    df['mb_global_params'] = {k: gdir.settings[k] for k in MB_GLOBAL_PARAMS}
+    df['mb_global_params'] = _mb_global_params_from_model(mb_mod)
     df['baseline_climate_source'] = gdir.get_climate_info(
         filename=mb_mod.filename, input_filesuffix=mb_mod.input_filesuffix
     )['baseline_climate_source']
@@ -4981,7 +4990,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
 
     # Add the climate related params to the GlacierDir to make sure
     # other tools cannot fool around without re-calibration
-    df['mb_global_params'] = {k: gdir.settings[k] for k in MB_GLOBAL_PARAMS}
+    df['mb_global_params'] = _mb_global_params_from_model(mb_mod)
     df['baseline_climate_source'] = gdir.get_climate_info(
         filename=mb_mod.filename, input_filesuffix=mb_mod.input_filesuffix
     )['baseline_climate_source']
