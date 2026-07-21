@@ -128,6 +128,22 @@ Enhancements
 - Added two new CI test environments, ``models_dynamics`` and ``models_mb``,
   to parallelise test execution (:pull:`1907`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- ``run_with_hydro`` now fully supports mass balance models with surface type
+  tracking (e.g. ``SfcTypeTIModel``). The mass-conservation correction of the
+  on-glacier melt is now based on the total glacier mass of the dynamical run
+  (``mass_kg``, which includes the snow and firn buckets with their lower
+  densities) instead of the ice volume times a fixed ice density. For this,
+  'mass' is now required in ``cfg.PARAMS['store_diagnostic_variables']`` (it
+  is part of the defaults). For mass balance models with surface type
+  tracking, the on-glacier melt is additionally split into the new default
+  output variables ``snow_melt_on_glacier`` (buckets younger than one year),
+  ``firn_melt_on_glacier`` and ``ice_melt_on_glacier``, which always sum up
+  to ``melt_on_glacier`` (for other mass balance models they are NaN). For
+  this, ``SfcTypeTIModel`` now tracks the melt per surface type (new
+  ``get_annual_melt`` and ``get_monthly_melt`` methods and ``snow_melt``,
+  ``firn_melt`` and ``ice_melt`` properties), whereby pure aging of the
+  buckets is never counted as melt (:pull:`1959`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
