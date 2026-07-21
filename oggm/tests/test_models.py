@@ -6039,6 +6039,7 @@ class TestDynamicSpinup:
             run_dynamic_spinup(
                 hef_gdir,
                 spinup_start_yr=1979,
+                min_spinup_period=5,
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_without_fixed_spinup',
@@ -6050,6 +6051,7 @@ class TestDynamicSpinup:
             run_dynamic_spinup(
                 hef_gdir,
                 spinup_start_yr=1979,
+                min_spinup_period=5,
                 precision_percent=0.0027,
                 minimise_for=minimise_for,
                 output_filesuffix='_with_fixed_spinup',
