@@ -1627,7 +1627,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2020
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
@@ -1900,7 +1900,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
@@ -2018,7 +2018,7 @@ class TestPreproCLI:
             assert isinstance(model, FlowlineModel)
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_historical'))
-            assert model.y0 == 2004
+            assert model.y0 == 1979
             assert model.last_yr == 2015
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_spinup_historical'))
@@ -2170,7 +2170,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
