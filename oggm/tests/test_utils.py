@@ -1722,6 +1722,38 @@ class TestPreproCLI:
         assert gtiff_ds.isel(band=0).sum() > 0
 
     @pytest.mark.slow
+    def test_store_hydro_output(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
+
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          max_level=4,
+                          inversion_volume_dataset='consensus',
+                          store_hydro_output=True,
+                          continue_on_error=False,
+                          override_params={}
+                          )
+
+        opath = os.path.join(odir, 'RGI61', 'b_020', 'L4', 'summary',
+                             'historical_run_output_11.nc')
+        with xr.open_dataset(opath) as ds:
+            assert 'melt_on_glacier' in ds
+            assert 'liq_prcp_off_glacier' in ds
+
+    @pytest.mark.slow
     def test_full_run_cru_centerlines(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
