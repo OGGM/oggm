@@ -893,6 +893,8 @@ class TestWorkflowUtils:
                              'area_min_h', 'length', 'calving', 'calving_rate',
                              'off_area', 'on_area',
                              'melt_off_glacier', 'melt_on_glacier',
+                             'snow_melt_on_glacier', 'firn_melt_on_glacier',
+                             'ice_melt_on_glacier',
                              'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
@@ -946,6 +948,13 @@ class TestWorkflowUtils:
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier_monthly'].values))
             assert 'mass_kg' in ds.data_vars
+            # the melt split components are only computed for mb models with
+            # surface type tracking, here they should be present but NaN
+            assert 'snow_melt_on_glacier' in ds.data_vars
+            assert 'firn_melt_on_glacier' in ds.data_vars
+            assert 'ice_melt_on_glacier' in ds.data_vars
+            assert np.all(np.isnan(
+                ds.loc[{'rgi_id': gdirs[1].rgi_id}]['snow_melt_on_glacier'].values))
 
         check_result(ds_1)
 

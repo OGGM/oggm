@@ -1580,6 +1580,16 @@ class SfcTypeTIModel(MassBalanceModel):
         # we also add a snow and an ice bucket
         self.buckets = ["snow"] + firn_buckets + ["ice"]
 
+        # number of buckets considered as "snow" (age < 1 year) when splitting
+        # the melt by surface type; all older (non-ice) buckets are firn. Note
+        # that with annual aging last summer's snow already becomes "firn" at
+        # the January aging step, even if it is younger than one year (an
+        # inherent discretisation artefact of annual aging).
+        if self.aging_frequency == "annual":
+            self._nr_snow_buckets = 1
+        else:
+            self._nr_snow_buckets = min(12, len(self.buckets) - 1)
+
         # set a template for an empty bucket and mb containers
         self._empty_mb_buckets_np = np.zeros((len(self.buckets_grid_point_label),
                                               len(self.buckets)))
@@ -1692,6 +1702,11 @@ class SfcTypeTIModel(MassBalanceModel):
         self._climatic_mb = np.empty(output_shape)  # kg m-2
         self._ice_mb = np.empty(output_shape)  # kg m-2
         self._mb_heights = np.empty(output_shape)  # m
+        # melt split by surface type, see
+        # _apply_climate_step_and_aging_to_buckets
+        self._snow_melt = np.empty(output_shape)  # kg m-2
+        self._firn_melt = np.empty(output_shape)  # kg m-2
+        self._ice_melt = np.empty(output_shape)  # kg m-2
         self._year_to_index = {}  # saving the array positions of years
         self._current_index = 0  # keep track of last added position
 
@@ -1748,29 +1763,42 @@ class SfcTypeTIModel(MassBalanceModel):
                             index=self.buckets_grid_point_label,
                             columns=self.buckets[:-1],)
 
-    @property
-    def climatic_mb(self):
+    def _stored_array_as_dataframe(self, arr):
+        # returns one of the per-timestep storage arrays as a DataFrame with
+        # the timesteps as columns and the grid points as index
         pd_dict = {}
         for year in self._year_to_index:
-            pd_dict[year] = self._climatic_mb[[self._year_to_index[year]]][0]
+            pd_dict[year] = arr[[self._year_to_index[year]]][0]
         return pd.DataFrame(pd_dict,
                             index=self.buckets_grid_point_label)
+
+    @property
+    def climatic_mb(self):
+        return self._stored_array_as_dataframe(self._climatic_mb)
 
     @property
     def ice_mb(self):
-        pd_dict = {}
-        for year in self._year_to_index:
-            pd_dict[year] = self._ice_mb[[self._year_to_index[year]]][0]
-        return pd.DataFrame(pd_dict,
-                            index=self.buckets_grid_point_label)
+        return self._stored_array_as_dataframe(self._ice_mb)
 
     @property
     def mb_heights(self):
-        pd_dict = {}
-        for year in self._year_to_index:
-            pd_dict[year] = self._mb_heights[[self._year_to_index[year]]][0]
-        return pd.DataFrame(pd_dict,
-                            index=self.buckets_grid_point_label)
+        return self._stored_array_as_dataframe(self._mb_heights)
+
+    @property
+    def snow_melt(self):
+        # melt of buckets younger than one year, in kg m-2 per climate step
+        return self._stored_array_as_dataframe(self._snow_melt)
+
+    @property
+    def firn_melt(self):
+        # melt of buckets older than one year, in kg m-2 per climate step
+        return self._stored_array_as_dataframe(self._firn_melt)
+
+    @property
+    def ice_melt(self):
+        # gross ice melt in kg m-2 per climate step (in contrast to ice_mb,
+        # which also includes newly formed ice from aging)
+        return self._stored_array_as_dataframe(self._ice_melt)
 
     @property
     def columns_thickness_m(self):
@@ -1962,6 +1990,11 @@ class SfcTypeTIModel(MassBalanceModel):
         # all solid precip. goes into fresh snow bucket before we start melting
         snow_buckets_new[:, 0] += prcpsol
 
+        if save_mbs:
+            # remember the pre-melt state (incl. fresh snow) so we can split
+            # the melt by surface type after melting
+            buckets_before_melt = snow_buckets_new.copy()
+
         # now calculate cumulative tfm needed to melt each bucket and subtract
         # available tmelt, finally we convert back to mass in each bucket
         # (nr_grid_points, nr_buckets)
@@ -2012,6 +2045,28 @@ class SfcTypeTIModel(MassBalanceModel):
 
             # save the climatic mb of this timestep
             self._climatic_mb[self._current_index] = delta_kg_m2
+
+            # Split the melt by surface type: everything that left the snow
+            # and firn buckets within this climate step is melt (the aging
+            # below only moves mass between buckets and is therefore never
+            # counted as melt). "Snow" are the buckets younger than one year.
+            # Note that snow_melt + firn_melt + ice_melt = prcpsol -
+            # climatic_mb for each timestep. The clip removes tiny negative
+            # values caused by floating point errors of the cumsum above.
+            per_bucket_melt = np.clip(buckets_before_melt - snow_buckets_new,
+                                      0., None)
+            nr_snow = self._nr_snow_buckets
+            self._snow_melt[self._current_index] = \
+                per_bucket_melt[:, :nr_snow].sum(axis=1)
+            self._firn_melt[self._current_index] = \
+                per_bucket_melt[:, nr_snow:].sum(axis=1)
+            # ice melt is the gross melt of ice where all snow and firn
+            # buckets have melted completely (in contrast to _ice_mb, which
+            # also includes newly formed ice from aging)
+            self._ice_melt[self._current_index] = 0.
+            if ice_melt_kg_m2 is not None:
+                self._ice_melt[self._current_index][all_melted_grid_points] = \
+                    ice_melt_kg_m2
 
         # save the mb of ice, this includes potential ice gain from aging after
         # the call of _bucket_aging and melt where all snow/firn buckets are
@@ -2250,6 +2305,55 @@ class SfcTypeTIModel(MassBalanceModel):
             self._apply_climate_step_and_aging_to_buckets(heights=heights,
                                                           year=yr)
 
+    def _stored_timestep_indices(self, year, mb_resolution):
+        """Indices into the stored timestep arrays contributing to the given
+        year (mb_resolution='annual') or month (mb_resolution='monthly')."""
+        if mb_resolution == 'annual':
+            if self.climate_resolution == 'annual':
+                keys = [year]
+            elif self.climate_resolution == 'monthly':
+                keys = float_years_timeseries(y0=year, y1=year + 1,
+                                              daily=False)[:-1]
+            elif self.climate_resolution == 'daily':
+                keys = float_years_timeseries(y0=year, y1=year + 1,
+                                              daily=True)[:-1]
+            else:
+                raise NotImplementedError(
+                    f"'climate_resolution': {self.climate_resolution}")
+        elif mb_resolution == 'monthly':
+            if self.climate_resolution == 'annual':
+                raise NotImplementedError('You can not get monthly values '
+                                          'with an annual climate resolution!')
+            elif self.climate_resolution == 'monthly':
+                keys = [year]
+            elif self.climate_resolution == 'daily':
+                y_start, m_start, d_start = floatyear_to_date(year,
+                                                              return_day=True)
+                float_days = float_years_timeseries(
+                    y0=year, y1=year + 1, daily=True)[:-1]
+                # only keep days larger equal than the start of the month
+                float_days = [day for day in float_days
+                              if day >= date_to_floatyear(y_start, m_start, 1)]
+                # only keep days smaller the start of the next month
+                m_end = m_start + 1 if m_start != 12 else 1
+                y_end = y_start if m_start != 12 else y_start + 1
+                keys = [day for day in float_days
+                        if day < date_to_floatyear(y_end, m_end, 1)]
+            else:
+                raise NotImplementedError(
+                    f"'climate_resolution': {self.climate_resolution}")
+        else:
+            raise NotImplementedError(f"mb_resolution: {mb_resolution}")
+
+        try:
+            return [self._year_to_index[key] for key in keys]
+        except KeyError as e:
+            raise InvalidWorkflowError(
+                f'No stored mass balance available for the timestep '
+                f'{e.args[0]}. This model only stores values for timesteps '
+                'which were computed before (e.g. through get_annual_mb or '
+                'during a dynamical model run).')
+
     def get_annual_mb(self,
                       heights: ArrayLike,
                       year: int or float,
@@ -2317,21 +2421,8 @@ class SfcTypeTIModel(MassBalanceModel):
 
         # ok now everything should be available, and we can sum up annual values
         # as needed
-        if self.climate_resolution == 'annual':
-            annual_mb = mbs[self._year_to_index[year]]
-        elif self.climate_resolution == 'monthly':
-            float_months = float_years_timeseries(y0=year, y1=year+1,
-                                                  daily=False)[:-1]
-            idx = [self._year_to_index[yr] for yr in float_months]
-            annual_mb = np.sum(mbs[idx], axis=0)
-        elif self.climate_resolution == 'daily':
-            float_days = float_years_timeseries(y0=year, y1=year+1,
-                                                daily=True)[:-1]
-            idx = [self._year_to_index[yr] for yr in float_days]
-            annual_mb = np.sum(mbs[idx], axis=0)
-        else:
-            raise NotImplementedError(
-                f"'climate_resolution': {self.climate_resolution}")
+        idx = self._stored_timestep_indices(year, mb_resolution='annual')
+        annual_mb = np.sum(mbs[idx], axis=0)
 
         # convert from kg m-2 to m s-1
         annual_mb = ((annual_mb - self.mbmod.bias) / self.sec_in_year(year) /
@@ -2414,30 +2505,8 @@ class SfcTypeTIModel(MassBalanceModel):
 
         # ok now everything should be available, and we can sum up monthly
         # values as needed
-        if self.climate_resolution == 'annual':
-            raise NotImplementedError('You can not get a monthly mb with an '
-                                      'annual climate resolution!')
-        elif self.climate_resolution == 'monthly':
-            monthly_mb = mbs[self._year_to_index[year]]
-        elif self.climate_resolution == 'daily':
-            y_start, m_start, d_start = floatyear_to_date(year,
-                                                          return_day=True)
-            float_days = float_years_timeseries(
-                y0=year, y1=year + 1, daily=True)[:-1]
-            # only keep days larger equal than the start of the month
-            float_days = [day for day in float_days
-                          if day >= date_to_floatyear(y_start, m_start, 1)]
-            # only keep days smaller the start of the next month
-            m_end = m_start + 1 if m_start != 12 else 1
-            y_end = y_start if m_start != 12 else y_start + 1
-            float_days = [day for day in float_days
-                          if day < date_to_floatyear(y_end, m_end, 1)]
-
-            idx = [self._year_to_index[yr] for yr in float_days]
-            monthly_mb = np.sum(mbs[idx], axis=0)
-        else:
-            raise NotImplementedError(
-                f"'climate_resolution': {self.climate_resolution}")
+        idx = self._stored_timestep_indices(year, mb_resolution='monthly')
+        monthly_mb = np.sum(mbs[idx], axis=0)
 
         # convert from kg m-2 to m s-1
         monthly_mb = ((monthly_mb / self.sec_in_month(year=year) -
@@ -2545,6 +2614,59 @@ class SfcTypeTIModel(MassBalanceModel):
         else:
             return daily_mb
 
+    def get_annual_melt(self, year):
+        """Get the annual melt mass split by surface type (snow, firn, ice).
+
+        The values are taken from the stored timesteps of this model
+        instance, i.e. the requested year must already have been computed
+        (e.g. through get_annual_mb or during a dynamical model run). Snow
+        is defined as the buckets younger than one year (with
+        aging_frequency='annual' this is only the freshest bucket), firn are
+        all older buckets and ice melt is the gross melt of the ice below
+        the buckets. Aging of the buckets (e.g. snow becoming firn or firn
+        becoming ice) is no melt and not included. In contrast to
+        get_annual_mb, a potential mass balance bias (mbmod.bias) is not
+        included here.
+
+        Parameters
+        ----------
+        year : int or float
+            Year in calendar float year or as int.
+
+        Returns
+        -------
+        tuple of np.ndarray
+            (snow_melt, firn_melt, ice_melt), each in kg m-2 yr-1 on the grid
+            points defined at initialisation. The sum of the three equals the
+            solid precipitation minus the climatic mass balance.
+        """
+        idx = self._stored_timestep_indices(year, mb_resolution='annual')
+        return (np.sum(self._snow_melt[idx], axis=0),
+                np.sum(self._firn_melt[idx], axis=0),
+                np.sum(self._ice_melt[idx], axis=0))
+
+    def get_monthly_melt(self, year):
+        """Get the monthly melt mass split by surface type (snow, firn, ice).
+
+        Same as get_annual_melt, but for a single month.
+
+        Parameters
+        ----------
+        year : float
+            Year in calendar float year.
+
+        Returns
+        -------
+        tuple of np.ndarray
+            (snow_melt, firn_melt, ice_melt), each in kg m-2 month-1 on the
+            grid points defined at initialisation. The sum of the three
+            equals the solid precipitation minus the climatic mass balance.
+        """
+        idx = self._stored_timestep_indices(year, mb_resolution='monthly')
+        return (np.sum(self._snow_melt[idx], axis=0),
+                np.sum(self._firn_melt[idx], axis=0),
+                np.sum(self._ice_melt[idx], axis=0))
+
     def is_year_valid(self, year):
         return self.mbmod.is_year_valid(year)
 
@@ -2644,6 +2766,24 @@ class SfcTypeTIModel(MassBalanceModel):
                 dims=['time', 'grid_point'],
                 attrs={'units': 'm',
                        'long_name': 'heights used per timestep'},
+            ),
+            'snow_melt': xr.DataArray(
+                self._snow_melt[:current_index],
+                dims=['time', 'grid_point'],
+                attrs={'units': 'kg m-2',
+                       'long_name': 'snow melt per timestep'},
+            ),
+            'firn_melt': xr.DataArray(
+                self._firn_melt[:current_index],
+                dims=['time', 'grid_point'],
+                attrs={'units': 'kg m-2',
+                       'long_name': 'firn melt per timestep'},
+            ),
+            'ice_melt': xr.DataArray(
+                self._ice_melt[:current_index],
+                dims=['time', 'grid_point'],
+                attrs={'units': 'kg m-2',
+                       'long_name': 'gross ice melt per timestep'},
             ),
         }
 
@@ -2906,6 +3046,16 @@ class SfcTypeTIModel(MassBalanceModel):
                     model._ice_mb[:current_index] = ds['ice_mb'].values
                     model._mb_heights[:current_index] = (
                         ds['mb_heights_stored'].values)
+                    # melt split by surface type (files saved before its
+                    # introduction do not contain it -> set to NaN)
+                    for attr_name, var_name in [('_snow_melt', 'snow_melt'),
+                                                ('_firn_melt', 'firn_melt'),
+                                                ('_ice_melt', 'ice_melt')]:
+                        arr = getattr(model, attr_name)
+                        if var_name in ds:
+                            arr[:current_index] = ds[var_name].values
+                        else:
+                            arr[:current_index] = np.nan
 
                     # 'time' coordinate holds the float-year keys; array
                     # indices are simply 0…N-1
