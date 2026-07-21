@@ -124,7 +124,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       dynamic_spinup=False, ref_mb_err_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
                       dynamic_spinup_periods_to_try=None,
-                      continue_on_error=True, store_fl_diagnostics=False):
+                      continue_on_error=True, store_fl_diagnostics=False,
+                      store_hydro_output=False, store_monthly_hydro=True,
+                      ref_area_yr=None):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -274,6 +276,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     store_fl_diagnostics : bool
         if True, also compute and store flowline diagnostics during preprocessing.
         This can increase data usage quite a bit.
+    store_hydro_output : bool
+        if True, also store the hydrological model output.
+    store_monthly_hydro : bool
+        if True and store_hydro_output is True the hydrological mode output will
+        also be stored in a monthly resolution (see flowline.run_with_hydro)
+    ref_area_yr : int
+        the hydrological output is computed over a reference area, which
+        per default is the largest area covered by the glacier in the simulation
+        period. Use this kwarg to force a specific area to the state of the
+        glacier at the provided simulation year.
     """
 
     # Input check
@@ -917,44 +929,74 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             except BaseException:
                 i += 1
 
+        # here we define the actual start date of the model outputs
+        if y0 > dynamic_spinup_start_year:
+            dynamic_spinup_start_year = y0
+
         # conduct historical run before dynamic melt_f calibration
         # (for comparison to old default behavior)
-        workflow.execute_entity_task(
-            tasks.run_from_climate_data, gdirs,
-            min_ys=y0, ye=ye, mb_model_class=mb_model_class,
-            save_mb_diagnostics_filesuffix='_historical' if store_mb_diagnostics else None,
-            output_filesuffix='_historical'
-        )
+        kwargs_run_from_climate_data = {
+            'min_ys': y0, 'ye': ye, 'mb_model_class': mb_model_class,
+            'save_mb_diagnostics_filesuffix': '_historical' if store_mb_diagnostics else None,
+            'output_filesuffix': '_historical',
+            'fixed_geometry_spinup_yr': dynamic_spinup_start_year,
+        }
+        if not store_hydro_output:
+            workflow.execute_entity_task(
+                tasks.run_from_climate_data, gdirs,
+                **kwargs_run_from_climate_data
+            )
+        else:
+            workflow.execute_entity_task(
+                tasks.run_with_hydro, gdirs,
+                run_task=tasks.run_from_climate_data,
+                store_monthly_hydro=store_monthly_hydro,
+                ref_area_yr=ref_area_yr,
+                **kwargs_run_from_climate_data
+            )
         # Now compile the output
         opath = Path(sum_dir) / f'historical_run_output_{rgi_reg}.nc'
         utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
 
         # conduct dynamic spinup if wanted
         if dynamic_spinup:
-            if y0 > dynamic_spinup_start_year:
-                dynamic_spinup_start_year = y0
 
             minimise_for = dynamic_spinup.split('/')[0]
 
             melt_f_max = cfg.PARAMS['melt_f_max']
-            workflow.execute_entity_task(
-                tasks.run_dynamic_melt_f_calibration, gdirs,
-                ref_mb_err_scaling_factor=ref_mb_err_scaling_factor,
-                ys=dynamic_spinup_start_year, ye=ye,
-                melt_f_max=melt_f_max,
-                mb_model_class=mb_model_class,
-                kwargs_run_function={'minimise_for': minimise_for,
-                                     'spinup_periods_to_try':
-                                         dynamic_spinup_periods_to_try
-                                     },
-                ignore_errors=True,
-                kwargs_fallback_function={'minimise_for': minimise_for,
-                                          'spinup_periods_to_try':
-                                              dynamic_spinup_periods_to_try
-                                          },
-                save_mb_diagnostics_filesuffix=('_spinup_historical'
-                                                if store_mb_diagnostics else None),
-                output_filesuffix='_spinup_historical',)
+            kwargs_run_dynamic_melt_f_calibration = {
+                'ref_mb_err_scaling_factor': ref_mb_err_scaling_factor,
+                'ys': dynamic_spinup_start_year, 'ye': ye,
+                'melt_f_max': melt_f_max,
+                'mb_model_class': mb_model_class,
+                'kwargs_run_function': {'minimise_for': minimise_for,
+                                        'spinup_periods_to_try':
+                                            dynamic_spinup_periods_to_try
+                                        },
+                'ignore_errors': True,
+                'kwargs_fallback_function': {'minimise_for': minimise_for,
+                                             'spinup_periods_to_try':
+                                                 dynamic_spinup_periods_to_try
+                                             },
+                'save_mb_diagnostics_filesuffix': ('_spinup_historical'
+                                                   if store_mb_diagnostics else None),
+                'output_filesuffix': '_spinup_historical',
+            }
+
+            if not store_hydro_output:
+                workflow.execute_entity_task(
+                    tasks.run_dynamic_melt_f_calibration, gdirs,
+                    **kwargs_run_dynamic_melt_f_calibration
+                    )
+            else:
+                workflow.execute_entity_task(
+                    tasks.run_with_hydro, gdirs,
+                    run_task=tasks.run_dynamic_melt_f_calibration,
+                    store_monthly_hydro=store_monthly_hydro,
+                    ref_area_yr=ref_area_yr,
+                    **kwargs_run_dynamic_melt_f_calibration
+                )
+
             # Now compile the output
             opath = sum_dir / f'spinup_historical_run_output_{rgi_reg}.nc'
             utils.compile_run_output(gdirs, path=opath,
@@ -1217,6 +1259,16 @@ def parse_args(args):
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
                              "a bit.")
+    parser.add_argument('--store-hydro-output', nargs='?', const=True, default=False,
+                        help='Add optional hydrological model output')
+    parser.add_argument('--store-monthly-hydro', nargs='?', const=True, default=True,
+                        help='If store-hydro-output is True, also store the '
+                             'hydrological model output in monthly resolution.')
+    parser.add_argument('--ref-area-yr', type=int, default=None,
+                        help='Force the reference area used for the hydrological '
+                             'output to the glacier state of the given simulation '
+                             'year, instead of the largest area during the '
+                             'simulation period.')
     parser.add_argument('--override-params', type=json.loads, default=None)
 
     args = parser.parse_args(args)
@@ -1295,6 +1347,9 @@ def parse_args(args):
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
                 temp_bias_file_path=args.temp_bias_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
+                store_hydro_output=args.store_hydro_output,
+                store_monthly_hydro=args.store_monthly_hydro,
+                ref_area_yr=args.ref_area_yr,
                 override_params=args.override_params,
                 )
 

@@ -144,6 +144,16 @@ Enhancements
   ``firn_melt`` and ``ice_melt`` properties), whereby pure aging of the
   buckets is never counted as melt (:pull:`1959`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New ``store_hydro_output`` kwarg in ``run_prepro_levels`` (and
+  ``--store-hydro-output`` CLI flag) to also compute and store hydrological
+  model output during preprocessing, via ``run_with_hydro``. The accompanying
+  ``store_monthly_hydro`` kwarg (and ``--store-monthly-hydro`` CLI flag,
+  default ``True``) additionally stores this hydrological output at monthly
+  resolution. The new ``ref_area_yr`` kwarg (and ``--ref-area-yr`` CLI flag)
+  lets users force the hydrological reference area to the glacier state of a
+  given simulation year, instead of the default largest area during the
+  simulation period (:pull:`1965`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
