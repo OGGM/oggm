@@ -125,7 +125,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       dynamic_spinup_start_year=1979,
                       dynamic_spinup_periods_to_try=None,
                       continue_on_error=True, store_fl_diagnostics=False,
-                      store_hydro_output=False):
+                      store_hydro_output=False, store_monthly_hydro=True,
+                      ref_area_yr=None):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -277,6 +278,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         This can increase data usage quite a bit.
     store_hydro_output : bool
         if True, also store the hydrological model output.
+    store_monthly_hydro : bool
+        if True and store_hydro_output is True the hydrological mode output will
+        also be stored in a monthly resolution (see flowline.run_with_hydro)
+    ref_area_yr : int
+        the hydrological output is computed over a reference area, which
+        per default is the largest area covered by the glacier in the simulation
+        period. Use this kwarg to force a specific area to the state of the
+        glacier at the provided simulation year.
     """
 
     # Input check
@@ -920,12 +929,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             except BaseException:
                 i += 1
 
+        # here we define the actual start date of the model outputs
+        if y0 > dynamic_spinup_start_year:
+            dynamic_spinup_start_year = y0
+
         # conduct historical run before dynamic melt_f calibration
         # (for comparison to old default behavior)
         kwargs_run_from_climate_data = {
             'min_ys': y0, 'ye': ye, 'mb_model_class': mb_model_class,
             'save_mb_diagnostics_filesuffix': '_historical' if store_mb_diagnostics else None,
             'output_filesuffix': '_historical',
+            'fixed_geometry_spinup_yr': dynamic_spinup_start_year,
         }
         if not store_hydro_output:
             workflow.execute_entity_task(
@@ -936,6 +950,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             workflow.execute_entity_task(
                 tasks.run_with_hydro, gdirs,
                 run_task=tasks.run_from_climate_data,
+                store_monthly_hydro=store_monthly_hydro,
+                ref_area_yr=ref_area_yr,
                 **kwargs_run_from_climate_data
             )
         # Now compile the output
@@ -944,8 +960,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # conduct dynamic spinup if wanted
         if dynamic_spinup:
-            if y0 > dynamic_spinup_start_year:
-                dynamic_spinup_start_year = y0
 
             minimise_for = dynamic_spinup.split('/')[0]
 
@@ -978,6 +992,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 workflow.execute_entity_task(
                     tasks.run_with_hydro, gdirs,
                     run_task=tasks.run_dynamic_melt_f_calibration,
+                    store_monthly_hydro=store_monthly_hydro,
+                    ref_area_yr=ref_area_yr,
                     **kwargs_run_dynamic_melt_f_calibration
                 )
 
@@ -1245,6 +1261,14 @@ def parse_args(args):
                              "a bit.")
     parser.add_argument('--store-hydro-output', nargs='?', const=True, default=False,
                         help='Add optional hydrological model output')
+    parser.add_argument('--store-monthly-hydro', nargs='?', const=True, default=True,
+                        help='If store-hydro-output is True, also store the '
+                             'hydrological model output in monthly resolution.')
+    parser.add_argument('--ref-area-yr', type=int, default=None,
+                        help='Force the reference area used for the hydrological '
+                             'output to the glacier state of the given simulation '
+                             'year, instead of the largest area during the '
+                             'simulation period.')
     parser.add_argument('--override-params', type=json.loads, default=None)
 
     args = parser.parse_args(args)
@@ -1324,6 +1348,8 @@ def parse_args(args):
                 temp_bias_file_path=args.temp_bias_file_path,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 store_hydro_output=args.store_hydro_output,
+                store_monthly_hydro=args.store_monthly_hydro,
+                ref_area_yr=args.ref_area_yr,
                 override_params=args.override_params,
                 )
 
