@@ -48,7 +48,8 @@ from oggm.core.dynamic_spinup import (
     dynamic_melt_f_run_with_dynamic_spinup,
     dynamic_melt_f_run_with_dynamic_spinup_fallback,
     dynamic_melt_f_run,
-    dynamic_melt_f_run_fallback)
+    dynamic_melt_f_run_fallback,
+    define_new_melt_f_in_gdir)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -6958,6 +6959,62 @@ class TestDynamicSpinup:
             init_model_filesuffix='_one_yr',
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)
+
+    def test_run_dynamic_melt_f_calibration_recovers_from_error_at_limit(
+            self, hef_gdir):
+        # if run_function fails with melt_f at a limit, calibration
+        # should retry with a different limit instead of falling back.
+        gdir = hef_gdir
+        melt_f_initial = gdir.settings['melt_f']
+        ref_mb = -500.
+        ref_mb_err = 100.
+
+        calls = []
+
+        def fake_run_function(gdir, melt_f=None, set_local_variables=False,
+                              **kwargs):
+            if set_local_variables:
+                return
+            define_new_melt_f_in_gdir(gdir, melt_f)
+            calls.append(melt_f)
+            if len(calls) == 1:
+                # large negative mismatch pushes the second guess above the
+                # upper melt_f limit
+                return None, ref_mb - 10 * ref_mb_err
+            elif len(calls) == 2:
+                # fail while melt_f sits at the upper limit
+                raise RuntimeError('planned error at melt_f limit')
+            return None, ref_mb
+
+        def fake_fallback_function(*args, **kwargs):
+            raise AssertionError('fallback_function must not be called')
+
+        try:
+            run_dynamic_melt_f_calibration(
+                gdir, observations_filesuffix='_recovery_test',
+                ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+                ref_mb_period='1980-01-01_2000-01-01',
+                ys=1980, ye=2000,
+                melt_f_min=1, melt_f_max=1000 * 12 / 365,
+                melt_f_max_step_length_minimum=1.,
+                run_function=fake_run_function,
+                fallback_function=fake_fallback_function,
+                output_filesuffix='_dyn_melt_f_recovery')
+
+            # first guess, failing run at the upper limit, successful retry
+            assert len(calls) == 3
+            assert np.isclose(calls[0], melt_f_initial)
+            # second guess was clipped to the upper limit
+            # (melt_f_max_step_length is pinned to 1 in this setup)
+            assert np.isclose(calls[1], melt_f_initial + 1.)
+            # retry failing threshold in steps of melt_f_max_step_length / 10
+            assert np.isclose(calls[2],
+                              np.round(melt_f_initial + 1. - 0.1, decimals=1))
+            assert gdir.settings['used_spinup_option'] == \
+                   'dynamic melt_f calibration (full success)'
+        finally:
+            # restore for other tests sharing the fixture
+            gdir.settings['melt_f'] = melt_f_initial
 
 
 @pytest.mark.usefixtures('with_class_wd')
