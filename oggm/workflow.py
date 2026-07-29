@@ -8,6 +8,7 @@ import shutil
 import warnings
 import tarfile
 import multiprocessing
+import zipfile
 from collections.abc import Sequence
 
 # External libs
@@ -291,12 +292,13 @@ def execute_parallel_tasks(gdir, tasks):
 
 
 def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
-    """Read a glacier's level manifest from inside a cached bundle tar.
+    """Read a glacier's level manifest from inside a cached bundle.
 
     Parameters
     ----------
     tar_base : str
-        Path to the cached bundle tar file.
+        Path to the cached bundle file. Supports legacy and v1 tars, or
+        v2 zip.
     rgi_id : str
         The glacier's RGI ID.
     level : int
@@ -306,11 +308,25 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
     -------
     dict | None
         The parsed ``L{level}.manifest.json`` of the glacier's member
-        tarfile, or None for legacy (pre-manifest) bundles.
+        archive, or None for legacy (pre-manifest) bundles.
     """
     bundle_dir = os.path.basename(tar_base)
-    if bundle_dir.endswith(".tar"):
+    if bundle_dir.endswith((".tar", ".zip")):
         bundle_dir = bundle_dir[:-4]
+    if tar_base.endswith(".zip"):
+        # zip-of-zip bundle; member names always use '/'
+        try:
+            with zipfile.ZipFile(tar_base) as outer:
+                with outer.open(f"{bundle_dir}/{rgi_id}.zip") as fobj:
+                    with zipfile.ZipFile(fobj) as inner:
+                        with inner.open(
+                            f"{rgi_id}/L{level}.manifest.json"
+                        ) as mf:
+                            return json.load(mf)
+        # KeyError means a bundle without a manifest
+        # BadZipFile means a possible truncated download
+        except (KeyError, zipfile.BadZipFile, OSError):
+            return None
     try:
         with tarfile.open(tar_base, "r") as tf:
             member = tf.getmember(os.path.join(bundle_dir, rgi_id + ".tar.gz"))
@@ -395,7 +411,9 @@ def gdir_from_prepro(entity, from_prepro_level=None,
 
     # Legacy bundles without manifest are cumulative so one fetch is enough
     from_tar = [
-        os.path.join(tb.replace(".tar", ""), rid + ".tar.gz")
+        os.path.join(
+            tb[:-4], rid + (".zip" if tb.endswith(".zip") else ".tar.gz")
+        )
         for _, tb in sorted(tars.items())
     ]
     if len(from_tar) == 1 and not append:
@@ -415,17 +433,19 @@ def gdir_from_tar(entity, from_tar):
     # TODO: add support for bundle sizes of 10 and 1
     region = rgi_id[:-6]
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
+    zip_path = os.path.join(from_tar, region, new_bundle + ".zip")
     new_path = os.path.join(from_tar, region, new_bundle + ".tar")
     old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
-    if os.path.exists(new_path):
-        from_tar = new_path
+    if os.path.exists(zip_path):
+        from_tar = os.path.join(zip_path[:-4], rgi_id + ".zip")
+    elif os.path.exists(new_path):
+        from_tar = os.path.join(new_path[:-4], rgi_id + ".tar.gz")
     elif os.path.exists(old_path):
-        from_tar = old_path
+        from_tar = os.path.join(old_path[:-4], rgi_id + ".tar.gz")
     else:
         raise FileNotFoundError(
             "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
         )
-    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 

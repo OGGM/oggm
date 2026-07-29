@@ -18,6 +18,7 @@ import logging
 import pickle
 import warnings
 import itertools
+import zipfile
 from collections import OrderedDict
 from functools import partial, wraps, lru_cache
 from time import gmtime, strftime
@@ -852,8 +853,10 @@ def _write_shape_to_disk(
     if os.path.exists(fpath):
         os.remove(fpath)
 
-    # List all files that were written as shape
-    fs = glob.glob(fpath.replace('.gz', '').replace('.tar', '.*'))
+    # bare `<stem>.*` glob would catch unrelated siblings like `<stem>.parquet`
+    stem = fpath.replace('.gz', '').replace('.tar', '')
+    side_exts = ('.shp', '.shx', '.dbf', '.prj', '.cpg', '.properties')
+    fs = [stem + ext for ext in side_exts if os.path.exists(stem + ext)]
     # Add them to tar
     with tarfile.open(fpath, mode=mode) as tf:
         for ff in fs:
@@ -1451,16 +1454,18 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
             raise RuntimeError('Found no valid glaciers!')
         try:
             pgdir = gdirs[i]
-            ppath = pgdir.get_filepath(filename=filename,
-                                       filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
+            with pgdir.open_group(
+                filename, filesuffix=input_filesuffix, **_get_xr_cftime_kwargs()
+            ) as ds_clim:
                 ds_clim.time.values
             # If this worked, we have a valid gdir
             break
         except BaseException:
             i += 1
 
-    with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
+    with pgdir.open_group(
+        filename, filesuffix=input_filesuffix, **_get_xr_cftime_kwargs()
+    ) as ds_clim:
         cyrs = ds_clim['time.year']
         cmonths = ds_clim['time.month']
         sm = cfg.PARAMS['hydro_month_' + pgdir.hemisphere]
@@ -1500,9 +1505,8 @@ def compile_climate_input(gdirs, path=True, filename='climate_historical',
 
     for i, gdir in enumerate(gdirs):
         try:
-            ppath = gdir.get_filepath(filename=filename,
-                                      filesuffix=input_filesuffix)
-            with xr.open_dataset(ppath, **_get_xr_cftime_kwargs()) as ds_clim:
+            with gdir.open_group(filename, filesuffix=input_filesuffix,
+                                 **_get_xr_cftime_kwargs()) as ds_clim:
                 prcp[:, i] = ds_clim.prcp.values
                 temp[:, i] = ds_clim.temp.values
                 ref_hgt[i] = ds_clim.ref_hgt
@@ -1737,10 +1741,9 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # Masks related stuff
-            fpath = gdir.get_filepath('gridded_data')
-            with ncDataset(fpath) as nc:
-                mask = nc.variables['glacier_mask'][:] == 1
-                topo = nc.variables['topo'][:][mask]
+            with gdir.open_group('gridded_data') as ds:
+                mask = ds['glacier_mask'].values == 1
+                topo = ds['topo'].values[mask]
             d['dem_mean_elev'] = np.mean(topo)
             d['dem_med_elev'] = np.median(topo)
             d['dem_min_elev'] = np.min(topo)
@@ -1750,11 +1753,10 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # Ext related stuff
-            fpath = gdir.get_filepath('gridded_data')
-            with ncDataset(fpath) as nc:
-                ext = nc.variables['glacier_ext'][:] == 1
-                mask = nc.variables['glacier_mask'][:] == 1
-                topo = nc.variables['topo'][:]
+            with gdir.open_group('gridded_data') as ds:
+                ext = ds['glacier_ext'].values == 1
+                mask = ds['glacier_mask'].values == 1
+                topo = ds['topo'].values
             d['dem_max_elev_on_ext'] = np.max(topo[ext])
             d['dem_min_elev_on_ext'] = np.min(topo[ext])
             a = np.sum(mask & (topo > d['dem_max_elev_on_ext']))
@@ -2342,9 +2344,9 @@ def raw_climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             try:
                 # get non-corrected winter daily mean prcp (kg m-2 day-1)
                 # it is easier to get this directly from the raw climate files
-                fp = gdir.get_filepath('climate_historical',
-                                       filesuffix=input_filesuffix)
-                with xr.open_dataset(fp).prcp as ds_pr:
+                with gdir.open_group(
+                    'climate_historical', filesuffix=input_filesuffix
+                ).prcp as ds_pr:
                     # just select winter months
                     if gdir.hemisphere == 'nh':
                         m_winter = [10, 11, 12, 1, 2, 3, 4]
@@ -2740,6 +2742,75 @@ def robust_tar_extract(
         os.remove(from_tar)
 
 
+def robust_archive_extract(
+    from_archive: str, to_dir: str, delete_archive: bool = False
+) -> None:
+    """Extract a per-glacier archive, including bundle members.
+
+    The zip analog of :func:`robust_tar_extract`, to which non-zip paths
+    are delegated. A path pointing inside a 100-glacier bundle
+    (``.../RGI60-07.000/RGI60-07.00001.zip``) is resolved to the bundle
+    zip and the member is extracted from it (zip-in-zip; all members are
+    STORED so the inner zip can be read in place).
+
+    Parameters
+    ----------
+    from_archive : str
+        Path to the archive to extract.
+    to_dir : str
+        Path to the output extraction directory.
+    delete_archive : bool, default False
+        Whether to delete the archive after extraction.
+    """
+    if not str(from_archive).endswith(".zip"):
+        return robust_tar_extract(
+            from_archive, to_dir, delete_tar=delete_archive
+        )
+
+    if os.path.isfile(from_archive):
+
+        def func():
+            with zipfile.ZipFile(from_archive) as zf:
+                if not zf.namelist():
+                    raise RuntimeError("Empty zipfile")
+                zf.extractall(os.path.dirname(to_dir))
+
+        _back_up_retry(func, FileExistsError)
+    else:
+        # maybe a zip in a bundle zip
+        bname = os.path.basename(from_archive)
+        # is this safer than removesuffix?
+        rgi_id = bname[:-4]
+        # member path from gdir_from_prepro, so parent dir is the bundle name
+        base_zip = os.path.dirname(from_archive) + ".zip"
+        dirbname = os.path.basename(os.path.dirname(from_archive))
+        if not os.path.isfile(base_zip) and len(rgi_id) in (14, 23):
+            # 100-glacier bundle in the region dir, e.g. RGI60-07.000.zip
+            dirbname = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"
+            region_dir = os.path.dirname(os.path.dirname(from_archive))
+            base_zip = os.path.join(region_dir, dirbname + ".zip")
+        if not os.path.isfile(base_zip):
+            raise FileNotFoundError(
+                f"Could not find a zipfile with path: {from_archive}"
+            )
+        if delete_archive:
+            raise InvalidParamsError("Cannot delete zip in zip.")
+
+        def func():
+            with zipfile.ZipFile(base_zip) as outer:
+                # zip member names always use '/'
+                with outer.open(f"{dirbname}/{bname}") as fobj:
+                    with zipfile.ZipFile(fobj) as inner:
+                        if not inner.namelist():
+                            raise RuntimeError("Empty zipfile")
+                        inner.extractall(os.path.dirname(to_dir))
+
+        _back_up_retry(func, RuntimeError)
+
+    if delete_archive:
+        os.remove(from_archive)
+
+
 def _extract_tars(
     from_tar: str, to_dir: str, delete_tar: bool = False, finalize: bool = None
 ):
@@ -2768,7 +2839,7 @@ def _extract_tars(
     """
     tars = from_tar if isinstance(from_tar, (list, tuple)) else [from_tar]
     for ft in tars:
-        robust_tar_extract(ft, to_dir, delete_tar=delete_tar)
+        robust_archive_extract(ft, to_dir, delete_archive=delete_tar)
     if finalize or (finalize is None and len(tars) > 1):
         _finalize_merged_dir(to_dir)
 
@@ -3380,12 +3451,17 @@ class GlacierDirectory(object):
             append a suffix to the filename (useful for model runs). Note
             that the BASENAME remains same.
         """
+        filesuffix = filesuffix or ''
         fp = self.get_filepath(filename, filesuffix=filesuffix,
                                _deprecation_check=_deprecation_check)
-        if '.shp' in fp and cfg.PARAMS['use_tar_shapefiles']:
-            fp = fp.replace('.shp', '.tar')
-            if cfg.PARAMS['use_compression']:
-                fp += '.gz'
+        if '.shp' in fp:
+            # v2 vector format
+            if os.path.exists(fp.replace('.shp', '.parquet')):
+                return True
+            if cfg.PARAMS['use_tar_shapefiles']:
+                fp = fp.replace('.shp', '.tar')
+                if cfg.PARAMS['use_compression']:
+                    fp += '.gz'
         if os.path.exists(fp):
             return True
         # check if data exists as a group in zarr store
@@ -3500,6 +3576,7 @@ class GlacierDirectory(object):
         """
         if chunks is None:
             chunks = {}
+        filesuffix = filesuffix or ''
         fp = self.get_filepath("data_store")
         if filename == "data_store":
             group = None
@@ -3515,6 +3592,120 @@ class GlacierDirectory(object):
             *kwargs)
 
         return out
+
+    def open_group(
+        self, filename: str, filesuffix: str = "", **xr_kwargs
+    ) -> xr.Dataset:
+        """Open a plain dataset group from the glacier's zarr store.
+
+        Preferred way to read v2 files. Top-level method distinct from
+        ``read_store`` which was designed to reconstruct arbitrary
+        pickle objects. Instead, this returns a group as an
+        ``xarray.Dataset`` and is used for netcdf files etc. When the
+        zarr group does not exist, falls back to the v1 legacy netCDF
+        file of the same basename/filesuffix.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **xr_kwargs
+            Passed to ``xr.open_zarr`` / ``xr.open_dataset``
+            (e.g. decoding options).
+
+        Returns
+        -------
+        xr.Dataset
+            The group or legacy file contents.
+        """
+        group = f"{filename}{filesuffix or ''}"
+        # dask fancy indexing/item assignment causes breaks
+        xr_kwargs.setdefault("chunks", None)
+        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
+        if os.path.isdir(os.path.join(zarr_fp, group)):
+            try:
+                return xr.open_zarr(
+                    zarr_fp, group=group, consolidated=True, **xr_kwargs
+                )
+            except (KeyError, zarr.errors.GroupNotFoundError):
+                # group on disk but not yet in consolidated metadata
+                return xr.open_zarr(
+                    zarr_fp, group=group, consolidated=False, **xr_kwargs
+                )
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if os.path.exists(fp):
+            return xr.open_dataset(fp, **xr_kwargs)
+        raise FileNotFoundError(
+            f"No zarr group or legacy file for `{group}` in {self.dir}"
+        )
+
+    def write_group(
+        self,
+        ds: xr.Dataset,
+        filename: str,
+        filesuffix: str = "",
+        mode: str = "a",
+        encoding: dict = None,
+    ) -> None:
+        """Write a plain ``xarray.Dataset`` as a group of the zarr store.
+
+        Preferred way to write v2 files.
+
+        Parameters
+        ----------
+        ds : xr.Dataset
+            The dataset to write. Must be zarr-compatible.
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        mode : {'a', 'w'}, default 'a'
+            'w' removes any existing group first, 'a' adds to or
+            overwrites variables in an existing group with matching
+            dimensions.
+        encoding : dict, optional
+            Passed to ``Dataset.to_zarr``.
+        """
+        group = f"{filename}{filesuffix or ''}"
+        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
+        group_dir = os.path.join(zarr_fp, group)
+        if mode == "w" and os.path.exists(group_dir):
+            # instead of to_zarr(mode='w') so rest of store is untouched
+            shutil.rmtree(group_dir)
+        ds.to_zarr(
+            zarr_fp,
+            group=group,
+            mode="a",
+            zarr_format=cfg.PARAMS["zarr_format"],
+            encoding=encoding,
+            consolidated=False,
+        )
+        zarr.consolidate_metadata(zarr_fp)
+
+    def delete_group(self, filename: str, filesuffix: str = "") -> None:
+        """Remove a group from the zarr store and any legacy netCDF file.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename.
+        """
+        group = f"{filename}{filesuffix or ''}"
+        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
+        group_dir = os.path.join(zarr_fp, group)
+        if os.path.isdir(group_dir):
+            shutil.rmtree(group_dir)
+            try:
+                zarr.consolidate_metadata(zarr_fp)
+            except Exception:
+                pass
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if os.path.exists(fp):
+            os.remove(fp)
 
     def read_store(
         self, filename: str, filesuffix: str = "", *kwargs
@@ -3727,6 +3918,7 @@ class GlacierDirectory(object):
         #     stacklevel=2,
         # )
 
+        filesuffix = filesuffix or ''  # avoid issues with None
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
@@ -3853,6 +4045,7 @@ class GlacierDirectory(object):
             ``write_zarr()`` or ``write_pickle()``.
         """
 
+        filesuffix = filesuffix or ''
         if not use_pickle:
             try:
                 group = f"{filename}{filesuffix}"
@@ -3991,23 +4184,18 @@ class GlacierDirectory(object):
         """
         out = {}
         try:
-            f = self.get_filepath('climate_historical',
-                                  filesuffix=input_filesuffix)
-            with ncDataset(f) as nc:
-                out['baseline_climate_source'] = nc.climate_source
-                try:
-                    out['baseline_yr_0'] = nc.yr_0
-                except AttributeError:
-                    # needed for back-compatibility before v1.6
-                    out['baseline_yr_0'] = nc.hydro_yr_0
-                try:
-                    out['baseline_yr_1'] = nc.yr_1
-                except AttributeError:
-                    # needed for back-compatibility before v1.6
-                    out['baseline_yr_1'] = nc.hydro_yr_1
-                out['baseline_climate_ref_hgt'] = nc.ref_hgt
-                out['baseline_climate_ref_pix_lon'] = nc.ref_pix_lon
-                out['baseline_climate_ref_pix_lat'] = nc.ref_pix_lat
+            with self.open_group('climate_historical',
+                                 filesuffix=input_filesuffix) as ds:
+                attrs = ds.attrs
+            out['baseline_climate_source'] = attrs['climate_source']
+            # hydro_* needed for back-compatibility before v1.6
+            out['baseline_yr_0'] = attrs.get('yr_0',
+                                             attrs.get('hydro_yr_0'))
+            out['baseline_yr_1'] = attrs.get('yr_1',
+                                             attrs.get('hydro_yr_1'))
+            out['baseline_climate_ref_hgt'] = attrs['ref_hgt']
+            out['baseline_climate_ref_pix_lon'] = attrs['ref_pix_lon']
+            out['baseline_climate_ref_pix_lat'] = attrs['ref_pix_lat']
         except FileNotFoundError:
             pass
 
@@ -4037,6 +4225,11 @@ class GlacierDirectory(object):
     def _read_shapefile_from_path(cls, fp):
         if '.shp' not in fp:
             raise ValueError('File ending not that of a shapefile')
+
+        # v2 vector format first, tar/shp path kept for legacy dirs
+        fp_parquet = fp.replace('.shp', '.parquet')
+        if os.path.exists(fp_parquet):
+            return gpd.read_parquet(fp_parquet)
 
         if cfg.PARAMS['use_tar_shapefiles']:
             fp = 'tar://' + fp.replace('.shp', '.tar')
@@ -4081,9 +4274,13 @@ class GlacierDirectory(object):
             file name (must be listed in cfg.BASENAME)
         filesuffix : str
             append a suffix to the filename (useful for experiments).
+
+        v2 vectors use geoparquet. `use_tar_shapefiles` only affects
+        reading legacy directories.
         """
         fp = self.get_filepath(filename, filesuffix=filesuffix)
-        _write_shape_to_disk(var, fp, to_tar=cfg.PARAMS['use_tar_shapefiles'])
+        # index=False mimics shapefiles, which never stored the index
+        var.to_parquet(fp.replace('.shp', '.parquet'), index=False)
 
     def write_monthly_climate_file(self, time, prcp, temp,
                                    ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
@@ -4133,15 +4330,14 @@ class GlacierDirectory(object):
             temp = temp.values
         if isinstance(temp_std, xr.DataArray):
             temp_std = temp_std.values
-        # overwrite as default
+        # remove stale legacy netCDF so v1 fallback of ``open_group``
+        # never serves outdated data
         fpath = self.get_filepath(file_name, filesuffix=filesuffix)
         if os.path.exists(fpath):
             os.remove(fpath)
 
         if source is None:
             raise InvalidParamsError('`source` kwarg is required')
-
-        zlib = cfg.PARAMS['compress_climate_netcdf']
 
         try:
             y0 = time[0].year
@@ -4162,56 +4358,43 @@ class GlacierDirectory(object):
             else:
                 raise InvalidParamsError('Time format not supported')
 
-        with ncDataset(fpath, 'w', format='NETCDF4') as nc:
-            nc.ref_hgt = ref_pix_hgt
-            nc.ref_pix_lon = ref_pix_lon
-            nc.ref_pix_lat = ref_pix_lat
-            nc.ref_pix_dis = haversine(self.cenlon, self.cenlat,
-                                       ref_pix_lon, ref_pix_lat)
-            nc.climate_source = source
+        if calendar is None:
+            calendar = 'standard'
 
-            nc.yr_0 = y0
-            nc.yr_1 = y1
+        data_vars = {
+            'prcp': ('time', np.asarray(prcp, dtype='f4'),
+                     {'units': 'kg m-2',
+                      'long_name': 'total monthly precipitation amount'}),
+            'temp': ('time', np.asarray(temp, dtype='f4'),
+                     {'units': 'degC',
+                      'long_name': '2m temperature at height ref_hgt'}),
+        }
+        if temp_std is not None:
+            data_vars['temp_std'] = (
+                'time', np.asarray(temp_std, dtype='f4'),
+                {'units': 'degC',
+                 'long_name': 'standard deviation of daily temperatures'})
 
-            nc.createDimension('time', None)
-
-            nc.author = 'OGGM'
-            nc.author_info = 'Open Global Glacier Model'
-
-            timev = nc.createVariable('time', 'i4', ('time',))
-
-            tatts = {'units': time_unit}
-            if calendar is None:
-                calendar = 'standard'
-
-            tatts['calendar'] = calendar
-            try:
-                numdate = netCDF4.date2num([t for t in time], time_unit,
-                                           calendar=calendar)
-            except TypeError:
-                # numpy's broken datetime only works for us precision
-                time = time.astype('M8[us]').astype(datetime.datetime)
-                numdate = netCDF4.date2num(time, time_unit, calendar=calendar)
-
-            timev.setncatts(tatts)
-            timev[:] = numdate
-
-            v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
-            v.units = 'kg m-2'
-            v.long_name = 'total monthly precipitation amount'
-
-            v[:] = prcp
-
-            v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
-            v.units = 'degC'
-            v.long_name = '2m temperature at height ref_hgt'
-            v[:] = temp
-
-            if temp_std is not None:
-                v = nc.createVariable('temp_std', 'f4', ('time',), zlib=zlib)
-                v.units = 'degC'
-                v.long_name = 'standard deviation of daily temperatures'
-                v[:] = temp_std
+        ds = xr.Dataset(
+            data_vars=data_vars,
+            coords={'time': [t for t in time]},
+            attrs={
+                'ref_hgt': ref_pix_hgt,
+                'ref_pix_lon': ref_pix_lon,
+                'ref_pix_lat': ref_pix_lat,
+                'ref_pix_dis': haversine(self.cenlon, self.cenlat,
+                                         ref_pix_lon, ref_pix_lat),
+                'climate_source': source,
+                'yr_0': y0,
+                'yr_1': y1,
+                'author': 'OGGM',
+                'author_info': 'Open Global Glacier Model',
+            },
+        )
+        encoding = {'time': {'units': time_unit, 'calendar': calendar,
+                             'dtype': 'int32'}}
+        self.write_group(ds, file_name, filesuffix=filesuffix,
+                         mode='w', encoding=encoding)
 
     def get_inversion_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
@@ -4902,6 +5085,13 @@ def _check_level_compat(manifests: list):
             "Layered prepro levels come from different datasets: "
             f"{sorted(dataset_ids)}"
         )
+    format_versions = {m.get("format_version", 1) for m in manifests}
+    if len(format_versions) > 1:
+        # v1 ships .nc/shapefiles, v2 zarr groups/parquet
+        raise InvalidWorkflowError(
+            "Layered prepro levels have mixed format_versions: "
+            f"{sorted(format_versions)}"
+        )
     included = set()
     for m in manifests:
         included.update(m.get("includes_levels") or [m["level"]])
@@ -5008,6 +5198,7 @@ def write_level_manifest(
     kind: str = "delta",
     border: int | None = None,
     rgi_version: str | None = None,
+    format_version: int = 1,
 ) -> tuple[str, list[str]]:
     """Diffs a glacier directory against a snapshot and writes a manifest.
 
@@ -5049,6 +5240,11 @@ def write_level_manifest(
     rgi_version : str | None, optional
         RGI version of the dataset; defaults to
         ``cfg.PARAMS['rgi_version']``.
+    format_version : int, default 1
+        Payload format of the artifact: 1 for tar bundles of native
+        files (``.nc``, shapefile tars, pickles), 2 for zip bundles of
+        zarr groups + geoparquet. Levels of mixed format_versions
+        cannot be layered.
 
     Returns
     -------
@@ -5097,6 +5293,7 @@ def write_level_manifest(
     manifest_name = f"L{level}.manifest.json"
     manifest = {
         "schema_version": 1,
+        "format_version": int(format_version),
         "kind": kind,
         "rgi_id": rgi_id,
         "level": int(level),
@@ -5130,6 +5327,102 @@ def write_level_manifest(
 
 
 @entity_task(log)
+def gdir_to_archive(
+    gdir: GlacierDirectory,
+    base_dir: str = None,
+    delete: bool = True,
+    include: list = None,
+    fmt: str = "zip",
+) -> str:
+    """Writes the content of a glacier directory to an archive file.
+
+    The archive is located at the same location of the original directory.
+    The glacier directory objects are useless if deleted!
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        The glacier directory to write to an archive.
+    base_dir : str, optional
+        Path to the basedir where to write the directory (defaults to
+        the same location of the original directory).
+    delete : bool, default True
+        Delete the original directory afterwards.
+    include : list of str, optional
+        Only add these paths (relative to the glacier directory) to the
+        archive, e.g. the changed paths from ``write_level_manifest``
+        when building a per-level delta. Directories (such as
+        ``data_store.zarr/<group>``) are added recursively. The default
+        adds the whole directory.
+    fmt : str, default 'zip'
+        ``zip`` writes ``<rgi_id>.zip`` with stored uncompressed
+        members so bundles can be streamed via HTTP-range requests.
+        ``tar`` writes the legacy ``<rgi_id>.tar.gz``.
+
+    Returns
+    -------
+    str
+        The path to the archive file.
+    """
+    if fmt not in ("zip", "tar"):
+        raise InvalidParamsError(f"fmt must be 'zip' or 'tar', got {fmt!r}")
+
+    source_dir = os.path.normpath(gdir.dir)
+    opath = source_dir + (".zip" if fmt == "zip" else ".tar.gz")
+    if base_dir is not None:
+        opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
+        mkdir(os.path.dirname(opath))
+
+    arcbase = os.path.basename(source_dir)
+
+    def _walk_paths():
+        """(abspath, arcname) pairs for the requested content.
+        
+        Zipfile and tarfile have different APIs for adding files, and we
+        need to support both formats.
+        """
+        roots = (
+            [source_dir]
+            if include is None
+            else [os.path.join(source_dir, rel) for rel in sorted(set(include))]
+        )
+        for root in roots:
+            if os.path.isfile(root):
+                yield root, os.path.join(
+                    arcbase, os.path.relpath(root, source_dir)
+                )
+            else:
+                for dirpath, _, filenames in os.walk(root):
+                    for fname in sorted(filenames):
+                        fp = os.path.join(dirpath, fname)
+                        yield fp, os.path.join(
+                            arcbase, os.path.relpath(fp, source_dir)
+                        )
+
+    if fmt == "zip":
+        with zipfile.ZipFile(
+            opath, "w", zipfile.ZIP_STORED, allowZip64=True
+        ) as zf:
+            for fp, arcname in _walk_paths():
+                zf.write(fp, arcname)
+    else:
+        with tarfile.open(opath, "w:gz") as tar:
+            if include is None:
+                tar.add(source_dir, arcname=arcbase)
+            else:
+                for rel in sorted(set(include)):
+                    tar.add(
+                        os.path.join(source_dir, rel),
+                        arcname=os.path.join(arcbase, rel),
+                    )
+
+    if delete:
+        shutil.rmtree(source_dir)
+
+    return opath
+
+
+@entity_task(log)
 def gdir_to_tar(
     gdir: GlacierDirectory,
     base_dir: str = None,
@@ -5138,52 +5431,12 @@ def gdir_to_tar(
 ) -> str:
     """Writes the content of a glacier directory to a tar file.
 
-    The tar file is located at the same location of the original directory.
-    The glacier directory objects are useless if deleted!
-
-    Parameters
-    ----------
-    gdir : :py:class:`oggm.GlacierDirectory`
-        The glacier directory to write to a tar file.
-    base_dir : str, optional
-        Path to the basedir where to write the directory (defaults to
-        the same location of the original directory).
-    delete : bool, default True
-        Delete the original directory afterwards.
-    include : list of str, optional
-        Only add these paths (relative to the glacier directory) to the
-        tar file, e.g. the changed paths from ``write_level_manifest``
-        when building a per-level delta. Directories (such as
-        ``data_store.zarr/<group>``) are added recursively. The default
-        adds the whole directory.
-
-    Returns
-    -------
-    str
-        The path to the tar file.
+    Thin convenience wrapper around :func:`gdir_to_archive` with
+    ``fmt='tar'``. See there for the parameters.
     """
-
-    source_dir = os.path.normpath(gdir.dir)
-    opath = source_dir + '.tar.gz'
-    if base_dir is not None:
-        opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
-        mkdir(os.path.dirname(opath))
-
-    with tarfile.open(opath, "w:gz") as tar:
-        if include is None:
-            tar.add(source_dir, arcname=os.path.basename(source_dir))
-        else:
-            arcbase = os.path.basename(source_dir)
-            for rel in sorted(set(include)):
-                tar.add(
-                    os.path.join(source_dir, rel),
-                    arcname=os.path.join(arcbase, rel),
-                )
-
-    if delete:
-        shutil.rmtree(source_dir)
-
-    return opath
+    return gdir_to_archive.unwrapped(
+        gdir, base_dir=base_dir, delete=delete, include=include, fmt="tar"
+    )
 
 
 def base_dir_to_tar(
@@ -5290,3 +5543,81 @@ def base_dir_to_tar(
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
+
+
+def base_dir_to_bundles(
+    base_dir: Path | str | None = None,
+    delete: bool = True,
+    bundle_size: int = 100,
+    fmt: str = "zip",
+) -> None:
+    """Merge per-glacier archives into bundle files.
+
+    The format-dispatching successor of :func:`base_dir_to_tar` (to
+    which ``fmt='tar'`` delegates). ``fmt='zip'`` groups the per-glacier
+    ``<rgi_id>.zip`` files (from ``gdir_to_archive``) into 100-glacier
+    ``<bundle>.zip`` files with STORED (uncompressed) members, so a
+    remote client can HTTP-range single members out of a bundle.
+
+    Parameters
+    ----------
+    base_dir : Path | str | None
+        Path to the basedir to parse (defaults to the working directory)
+    delete : bool
+        Delete the original per-glacier archives afterwards (default)
+    bundle_size : int, default 100
+        Size of the glacier bundles. zip bundles only support 100.
+    fmt : str, default 'zip'
+        ``'zip'`` or ``'tar'``.
+    """
+    if fmt == "tar":
+        return base_dir_to_tar(base_dir, delete=delete, bundle_size=bundle_size)
+    if fmt != "zip":
+        raise InvalidParamsError(f"fmt must be 'zip' or 'tar', got {fmt!r}")
+    if bundle_size != 100:
+        raise InvalidParamsError(
+            "zip bundles only support bundle_size=100, got {}".format(
+                bundle_size
+            )
+        )
+
+    if base_dir is None:
+        if not cfg.PATHS.get("working_dir", None):
+            raise ValueError("Need a valid PATHS['working_dir']!")
+        base_dir = os.path.join(cfg.PATHS["working_dir"], "per_glacier")
+
+    # Same 100-glacier grouping as base_dir_to_tar, over .zip files
+    bundles = {}
+    src_dirs = set()
+    for dirpath, _, filenames in os.walk(base_dir):
+        for fname in sorted(filenames):
+            if not fname.endswith(".zip"):
+                continue
+            rgi_id = fname[:-4]
+            if not (len(rgi_id) in (14, 23) and "RGI" in rgi_id):
+                continue
+            bundle_name = f"{rgi_id[:-6]}.{rgi_id[-5:-2]}"
+            region_dir = os.path.dirname(dirpath)
+            if bundle_name not in bundles:
+                bundles[bundle_name] = (region_dir, [])
+            bundles[bundle_name][1].append(os.path.join(dirpath, fname))
+            src_dirs.add(dirpath)
+
+    to_delete = []
+    for bundle_name, (region_dir, zip_paths) in sorted(bundles.items()):
+        opath = os.path.join(region_dir, bundle_name + ".zip")
+        with zipfile.ZipFile(
+            opath, "w", zipfile.ZIP_STORED, allowZip64=True
+        ) as zf:
+            for zp in sorted(zip_paths):
+                # bundle_name/<rgi_id>.zip, mirroring the tar bundles
+                zf.write(zp, f"{bundle_name}/{os.path.basename(zp)}")
+        if delete:
+            to_delete.extend(zip_paths)
+
+    for zp in to_delete:
+        os.remove(zp)
+    if delete:
+        for d in src_dirs:
+            if os.path.isdir(d) and not os.listdir(d):
+                os.rmdir(d)

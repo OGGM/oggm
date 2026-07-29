@@ -130,10 +130,10 @@ def _delta_tar_entries(
     --------
     list
         A list of ``(gdir, {'include': changed_paths})`` entries for
-        ``execute_entity_task(utils.gdir_to_tar, entries, ...)``, so
-        each level tar ships only what the level changed. Glaciers whose
-        manifest cannot be written (e.g. errored directories) fall back
-        to a full, manifest-less (legacy) tar.
+        ``execute_entity_task(utils.gdir_to_archive, entries, ...)``, so
+        each level artifact ships only what the level changed. Glaciers
+        whose manifest cannot be written (e.g. errored directories) fall
+        back to a full legacy archive.
     """
     if not dataset_id:
         dataset_id = utils.dataset_id_from_tag(
@@ -151,6 +151,7 @@ def _delta_tar_entries(
                 requires=list(range(level)),
                 border=border,
                 rgi_version=rgi_version,
+                format_version=2,
             )
             states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
             entries.append((gdir, {"include": changed}))
@@ -548,12 +549,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 includes_levels=[0],
                 border=border,
                 rgi_version=rgi_version,
+                format_version=2,
             )
             manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
         level_base_dir = Path(output_base_dir) / 'L0'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        workflow.execute_entity_task(
+            utils.gdir_to_archive, gdirs, delete=False, base_dir=level_base_dir
+        )
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 0:
             _time_log()
             return
@@ -670,9 +673,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         )
         level_base_dir = Path(output_base_dir) / 'L1'
         workflow.execute_entity_task(
-            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
         )
-        utils.base_dir_to_tar(level_base_dir)
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 1:
             _time_log()
             return
@@ -851,9 +857,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         )
         level_base_dir = Path(output_base_dir) / 'L2'
         workflow.execute_entity_task(
-            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
         )
-        utils.base_dir_to_tar(level_base_dir)
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 2:
             _time_log()
             return
@@ -978,9 +987,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         )
         level_base_dir = Path(output_base_dir) / 'L3'
         workflow.execute_entity_task(
-            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
         )
-        utils.base_dir_to_tar(level_base_dir)
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 3:
             _time_log()
             return
@@ -1090,9 +1102,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         )
         level_base_dir = Path(output_base_dir) / 'L4'
         workflow.execute_entity_task(
-            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
         )
-        utils.base_dir_to_tar(level_base_dir)
+        utils.base_dir_to_bundles(level_base_dir)
 
         sum_dir_L4 = sum_dir
 
@@ -1150,11 +1165,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             kind="standalone",
             border=border,
             rgi_version=rgi_version,
+            format_version=2,
         )
     level_base_dir = Path(output_base_dir) / 'L5'
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
+    workflow.execute_entity_task(
+        utils.gdir_to_archive, mini_gdirs, delete=False, base_dir=level_base_dir
+    )
+    utils.base_dir_to_bundles(level_base_dir)
 
     _time_log()
 

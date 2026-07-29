@@ -269,8 +269,7 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         raise NotImplementedError()
 
     # Read input
-    f_ref = gdir.get_filepath('climate_historical', filesuffix=ref_filesuffix)
-    with xr.open_dataset(f_ref) as ds:
+    with gdir.open_group('climate_historical', filesuffix=ref_filesuffix) as ds:
         ref_temp = ds['temp']
         ref_prcp = ds['prcp']
         ref_hgt = float(ds.ref_hgt)
@@ -278,8 +277,9 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         ref_lat = float(ds.ref_pix_lat)
         source = ds.attrs.get('climate_source')
 
-    f_his = gdir.get_filepath('climate_historical', filesuffix=hist_filesuffix)
-    with xr.open_dataset(f_his) as ds:
+    with gdir.open_group(
+        'climate_historical', filesuffix=hist_filesuffix
+    ) as ds:
         hist_temp = ds['temp']
         hist_prcp = ds['prcp']
         # To differentiate both cases
@@ -378,6 +378,6 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     if delete_input_files:
         # Delete all files without suffix
         if ref_filesuffix:
-            os.remove(f_ref)
+            gdir.delete_group('climate_historical', filesuffix=ref_filesuffix)
         if hist_filesuffix:
-            os.remove(f_his)
+            gdir.delete_group('climate_historical', filesuffix=hist_filesuffix)

@@ -912,6 +912,7 @@ def test_get_prepro_gdir_bundle_cache(monkeypatch):
     assert p1 == "/fake/RGI60-11.00.tar"
     assert p2 == "/fake/RGI60-11.00.tar"
     assert calls == [
+        f"{prefix}RGI60-11.000.zip",  # 1st glacier: v2 zip probe (404)
         f"{prefix}RGI60-11.000.tar",  # 1st glacier: new probe (404)
         f"{prefix}RGI60-11.00.tar",   # 1st glacier: old fallback (hit)
         f"{prefix}RGI60-11.00.tar",   # 2nd glacier: straight to old, no probe
@@ -1205,6 +1206,8 @@ class TestPreproCLI:
         # Levels above L0 are deltas, layering the level tars up to N
         # reproduces a full L{N} dir
         def _lev_tars(*levels):
+            # zip bundle member paths (prepro_levels emits zip bundles)
+            bundle = f"{rid[:-6]}.{rid[-5:-2]}"
             return [
                 os.path.join(
                     odir,
@@ -1212,8 +1215,8 @@ class TestPreproCLI:
                     "b_020",
                     f"L{lev}",
                     rid[:8],
-                    rid[:11],
-                    rid + ".tar.gz",
+                    bundle,
+                    rid + ".zip",
                 )
                 for lev in levels
             ]
@@ -1458,6 +1461,8 @@ class TestPreproCLI:
         # Levels above L0 are deltas, layering the level tars up to N
         # reproduces a full L{N} dir
         def _lev_tars(*levels):
+            # zip bundle member paths (prepro_levels emits zip bundles)
+            bundle = f"{rid[:-6]}.{rid[-5:-2]}"
             return [
                 os.path.join(
                     odir,
@@ -1465,8 +1470,8 @@ class TestPreproCLI:
                     "b_020",
                     f"L{lev}",
                     rid[:8],
-                    rid[:11],
-                    rid + ".tar.gz",
+                    bundle,
+                    rid + ".zip",
                 )
                 for lev in levels
             ]
@@ -1610,6 +1615,8 @@ class TestPreproCLI:
             entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
             def _lev_tars(*levels):
+                # zip bundle member paths (prepro_levels emits zips)
+                bundle = f"{rid[:-6]}.{rid[-5:-2]}"
                 return [
                     os.path.join(
                         odir,
@@ -1617,8 +1624,8 @@ class TestPreproCLI:
                         bstr,
                         f"L{lev}",
                         rid[:8],
-                        rid[:11],
-                        rid + ".tar.gz",
+                        bundle,
+                        rid + ".zip",
                     )
                     for lev in levels
                 ]
@@ -1772,6 +1779,8 @@ class TestPreproCLI:
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
         def _lev_tars(*levels):
+            # zip bundle member paths (prepro_levels emits zip bundles)
+            bundle = f"{rid[:-6]}.{rid[-5:-2]}"
             return [
                 os.path.join(
                     odir,
@@ -1779,8 +1788,8 @@ class TestPreproCLI:
                     "b_020",
                     f"L{lev}",
                     rid[:8],
-                    rid[:11],
-                    rid + ".tar.gz",
+                    bundle,
+                    rid + ".zip",
                 )
                 for lev in levels
             ]

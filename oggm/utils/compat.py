@@ -18,13 +18,21 @@ than a URL.
 import glob
 import logging
 import os
+import shutil
+import tempfile
+
+import xarray as xr
 
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError
 from oggm.utils._workflow import (
+    _finalize_merged_dir,
+    base_dir_to_bundles,
     base_dir_to_tar,
     dataset_id_from_tag,
+    gdir_to_archive,
     gdir_to_tar,
+    robust_archive_extract,
     snapshot_gdir_state,
     write_level_manifest,
 )
@@ -34,6 +42,9 @@ log = logging.getLogger(__name__)
 # Shared data files. Divergence between the L0-L2 and L3-L5 source trees
 # means the two trees were generated from different inputs.
 _TREE_INVARIANTS = ("dem.tif", "glacier_grid.json", "dem_source.txt")
+
+# basenames whose netCDF payload moves into the zarr store in v2
+_NC_STORE_BASENAMES = ("gridded_data", "climate_historical", "gcm_data")
 
 
 def _convert_pickles_to_zarr(gdir):
@@ -68,6 +79,287 @@ def _convert_pickles_to_zarr(gdir):
                 # zarr write succeeded; drop the now-redundant pickle
                 os.remove(fp)
             # else write_store fell back to pickle: leave the .pkl in place
+
+
+def _as_gdir(gdir_or_dir):
+    """A GlacierDirectory for either a gdir or a per_glacier-layout path."""
+    if hasattr(gdir_or_dir, "dir"):
+        return gdir_or_dir
+    from oggm import GlacierDirectory
+
+    d = os.path.normpath(gdir_or_dir)
+    # <base_dir>/<region>/<subregion>/<rgi_id>
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(d)))
+    return GlacierDirectory(os.path.basename(d), base_dir=base_dir)
+
+
+def convert_gdir_to_v2(gdir_or_dir, delete_originals: bool = True):
+    """Convert a v1 glacier directory to the v2 payload formats in place.
+
+    - ``gridded_data*.nc`` / ``climate_historical*.nc`` / ``gcm_data*.nc``
+    become groups of ``data_store.zarr``
+    - Shapefiles become geoparquet
+    - Pickles converted to zarr with :func:`_convert_pickles_to_zarr`.
+    - Model-run NetCDFs (``model_geometry*`` etc.) stay untouched.
+    - Already-converted content is left alone.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory or its path, in the usual
+        ``<base>/<region>/<subregion>/<rgi_id>`` layout.
+    delete_originals : bool, default True
+        If True, remove each ``.nc``/shapefile artifact once converted.
+
+    Returns
+    -------
+    GlacierDirectory
+        The converted v2 glacier directory.
+    """
+    gdir = _as_gdir(gdir_or_dir)
+    _convert_pickles_to_zarr(gdir)
+
+    for base in _NC_STORE_BASENAMES:
+        stem = cfg.BASENAMES[base][:-3]  # strip .nc
+        for fp in sorted(glob.glob(os.path.join(gdir.dir, f"{stem}*.nc"))):
+            suffix = os.path.basename(fp)[len(stem) : -3]
+            with xr.open_dataset(fp, decode_cf=False) as ds:
+                gdir.write_group(ds.load(), base, filesuffix=suffix, mode="w")
+            if delete_originals:
+                os.remove(fp)
+
+    shp_basenames = [
+        k
+        for k, v in cfg.BASENAMES.items()
+        if isinstance(v, str) and v.endswith(".shp")
+    ]
+    for base in shp_basenames:
+        stem = cfg.BASENAMES[base][:-4]  # strip .shp
+        found = {}
+        for fp in glob.glob(os.path.join(gdir.dir, f"{stem}*.tar.gz")):
+            found[os.path.basename(fp)[len(stem) : -7]] = fp
+        for fp in glob.glob(os.path.join(gdir.dir, f"{stem}*.shp")):
+            found.setdefault(os.path.basename(fp)[len(stem) : -4], fp)
+        for suffix in sorted(found):
+            gdf = gdir.read_shapefile(base, filesuffix=suffix)
+            gdir.write_shapefile(gdf, base, filesuffix=suffix)
+            if delete_originals:
+                for old in glob.glob(
+                    os.path.join(gdir.dir, f"{stem}{suffix}.*")
+                ):
+                    if not old.endswith(".parquet"):
+                        os.remove(old)
+    return gdir
+
+
+def convert_gdir_to_v16(gdir_or_dir):
+    """Convert a v2 glacier directory in place to the v1.6 format.
+
+    The reverse of :func:`convert_gdir_to_v2`.
+    - gridded/climate/gcm zarr groups become ``.nc`` files again
+    - geoparquet become tarred shapefiles.
+    - Pickle-era store groups are left in the store as ``read_store``
+      reads them either way.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory or its path to convert.
+
+    Returns
+    -------
+    GlacierDirectory
+        The converted v1 glacier directory.
+    """
+    from oggm.utils._workflow import _write_shape_to_disk
+
+    gdir = _as_gdir(gdir_or_dir)
+    store_dir = os.path.join(gdir.dir, "data_store.zarr")
+
+    for base in _NC_STORE_BASENAMES:
+        for group_dir in sorted(glob.glob(os.path.join(store_dir, f"{base}*"))):
+            suffix = os.path.basename(group_dir)[len(base) :]
+            with gdir.open_group(
+                base, filesuffix=suffix, decode_cf=False
+            ) as ds:
+                ds = ds.load()
+            gdir.delete_group(base, filesuffix=suffix)
+            ds.to_netcdf(gdir.get_filepath(base, filesuffix=suffix))
+
+    shp_basenames = [
+        k
+        for k, v in cfg.BASENAMES.items()
+        if isinstance(v, str) and v.endswith(".shp")
+    ]
+    for base in shp_basenames:
+        stem = cfg.BASENAMES[base][:-4]
+        for fp in sorted(glob.glob(os.path.join(gdir.dir, f"{stem}*.parquet"))):
+            suffix = os.path.basename(fp)[len(stem) : -8]
+            gdf = gdir.read_shapefile(base, filesuffix=suffix)
+            # v1.6 dirs must not keep the parquet (reads are
+            # parquet-first)
+            os.remove(fp)
+            _write_shape_to_disk(
+                gdf,
+                gdir.get_filepath(base, filesuffix=suffix),
+                to_tar=cfg.PARAMS["use_tar_shapefiles"],
+            )
+    return gdir
+
+
+def convert_prepro_to_v2_artifacts(
+    delta_tree: str,
+    rgi_ids: list[str],
+    output_dir: str,
+    dataset_tag: str,
+    border: int = 80,
+    rgi_version: str = "62",
+    workdir: str | None = None,
+    max_level: int = 5,
+) -> str:
+    """Convert a local v1 delta tree into v2 artifacts.
+
+    Composes from an existing local delta-format tree produced by
+    :func:`convert_prepro_to_deltas`.
+
+    Per glacier, levels are layered in ascending order. Each
+    materialisations restarts the layering, with deltas stacking on top.
+    L5 remains standalone standalone converts in isolation. Each layered
+    state is converted with :func:`convert_gdir_to_v2`, diffed against the
+    previous converted state, and repackaged as stored zip bundles with
+    ``format_version: 2`` manifests that carry over each v1 level's
+    kind/requires/includes.
+
+    Parameters
+    ----------
+    delta_tree : str
+        Root of the v1 delta tree (the directory holding
+        ``RGI{v}/b_{bbb}/L{n}/...``).
+    rgi_ids : list[str]
+        Glaciers to convert.
+    output_dir : str
+        Root of the v2 output tree
+    dataset_tag : str
+        Tag of the converted dataset. This is hashed into the new
+        ``dataset_id`` as the v2 artifacts are a distinct logical
+        dataset from their v1 source.
+    border : int, default 80
+        Map border of the dataset.
+    rgi_version : str, default '62'
+        RGI version of the dataset.
+    workdir : str | None
+        Scratch directory, defaults to a temporary one.
+    max_level : int, default 5
+        Convert levels up to and including this one.
+
+    Returns
+    -------
+    str
+        The output level-tree root,
+        ``{output_dir}/RGI{rgi_version}/b_{border:03d}``.
+    """
+    from oggm import GlacierDirectory
+    from oggm.workflow import _peek_level_manifest
+
+    tree_root = os.path.join(
+        delta_tree, f"RGI{rgi_version}", f"b_{int(border):03d}"
+    )
+    if not os.path.isdir(tree_root):
+        raise InvalidParamsError(f"No delta tree at {tree_root}")
+    out_root = os.path.join(
+        output_dir, f"RGI{rgi_version}", f"b_{int(border):03d}"
+    )
+    levels = sorted(
+        int(d[1:])
+        for d in os.listdir(tree_root)
+        if d.startswith("L") and d[1:].isdigit() and int(d[1:]) <= max_level
+    )
+    if not levels:
+        raise InvalidParamsError(f"No level dirs under {tree_root}")
+
+    own_workdir = workdir is None
+    if own_workdir:
+        workdir = tempfile.mkdtemp(prefix="oggm_v2_convert_")
+    dataset_id = dataset_id_from_tag(dataset_tag, border, rgi_version)
+
+    try:
+        for rid in rgi_ids:
+            region = rid[:-6]
+            bundle = f"{region}.{rid[-5:-2]}"
+            cum_base = os.path.join(workdir, "cum", rid)
+            prev_state = None
+            for lvl in levels:
+                bundle_tar = os.path.join(
+                    tree_root, f"L{lvl}", region, f"{bundle}.tar"
+                )
+                if not os.path.isfile(bundle_tar):
+                    continue
+                v1m = _peek_level_manifest(bundle_tar, rid, lvl)
+                if v1m is None:
+                    log.warning(
+                        "(%s) L%d has no manifest (legacy cumulative "
+                        "bundle?): skipped.",
+                        rid,
+                        lvl,
+                    )
+                    continue
+                kind = v1m.get("kind", "delta")
+                requires = v1m.get("requires") or []
+                includes = v1m.get("includes_levels") or [lvl]
+                member = os.path.join(
+                    tree_root, f"L{lvl}", region, bundle, rid + ".tar.gz"
+                )
+
+                if kind == "standalone":
+                    base = os.path.join(workdir, f"sa_L{lvl}", rid)
+                else:
+                    base = cum_base
+                    if not requires and os.path.isdir(base):
+                        # materialisations restart the layering
+                        shutil.rmtree(base)
+                gdir_dir = os.path.join(base, region, rid[:-3], rid)
+                os.makedirs(os.path.dirname(gdir_dir), exist_ok=True)
+                robust_archive_extract(member, gdir_dir)
+                # replaced below by the v2 manifest, removing it first
+                # keeps _finalize_merged_dir's compat check on v2 only
+                os.remove(os.path.join(gdir_dir, f"L{lvl}.manifest.json"))
+                _finalize_merged_dir(gdir_dir)
+
+                gdir = GlacierDirectory(rid, base_dir=base)
+                convert_gdir_to_v2(gdir)
+                full = kind == "standalone" or not requires
+                _, changed = write_level_manifest(
+                    gdir,
+                    level=lvl,
+                    prev_state={} if full else (prev_state or {}),
+                    requires=requires,
+                    includes_levels=includes,
+                    kind=kind,
+                    dataset_tag=dataset_tag,
+                    dataset_id=dataset_id,
+                    border=border,
+                    rgi_version=rgi_version,
+                    format_version=2,
+                )
+                stage_dir = os.path.join(out_root, f"L{lvl}")
+                gdir_to_archive.unwrapped(
+                    gdir,
+                    base_dir=stage_dir,
+                    delete=False,
+                    include=None if full else changed,
+                    fmt="zip",
+                )
+                if kind != "standalone":
+                    prev_state = snapshot_gdir_state(gdir.dir)
+        for lvl in levels:
+            stage_dir = os.path.join(out_root, f"L{lvl}")
+            if os.path.isdir(stage_dir):
+                base_dir_to_bundles(stage_dir, delete=True, fmt="zip")
+    finally:
+        if own_workdir:
+            shutil.rmtree(workdir, ignore_errors=True)
+
+    return out_root
 
 
 def convert_prepro_to_deltas(

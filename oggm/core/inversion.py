@@ -756,20 +756,19 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     """
 
     # Variables
-    grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
-    with utils.ncDataset(grids_file) as nc:
-        has_masks = 'glacier_ext_erosion' in nc.variables
+    with gdir.open_group('gridded_data') as ds:
+        has_masks = 'glacier_ext_erosion' in ds
     if not has_masks:
         from oggm.core.gis import gridded_attributes
         gridded_attributes(gdir)
 
-    with utils.ncDataset(grids_file) as nc:
-        topo = nc.variables[topo_variable][:]
-        glacier_mask = nc.variables['glacier_mask'][:]
-        dis_from_border = nc.variables['dis_from_border'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds[topo_variable].values
+        glacier_mask = ds['glacier_mask'].values
+        dis_from_border = ds['dis_from_border'].values
         if add_slope:
-            slope_factor = nc.variables['slope_factor'][:]
+            slope_factor = ds['slope_factor'].values
         else:
             slope_factor = 1.
 
@@ -840,7 +839,8 @@ def distribute_thickness_per_altitude(gdir, add_slope=True,
     thick *= init_vol / tmp_vol
 
     # write
-    with utils.ncDataset(grids_file, 'a') as nc:
+    from oggm.core.gis import GriddedNcdfFile
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -878,20 +878,19 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     """
 
     # Variables
-    grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
-    with utils.ncDataset(grids_file) as nc:
-        has_masks = 'ice_divides' in nc.variables
+    with gdir.open_group('gridded_data') as ds:
+        has_masks = 'ice_divides' in ds
     if not has_masks:
         from oggm.core.gis import gridded_attributes
         gridded_attributes(gdir)
 
-    with utils.ncDataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:]
-        glacier_ext = nc.variables['glacier_ext_erosion'][:]
-        ice_divides = nc.variables['ice_divides'][:]
+    with gdir.open_group('gridded_data') as ds:
+        glacier_mask = ds['glacier_mask'].values
+        glacier_ext = ds['glacier_ext_erosion'].values
+        ice_divides = ds['ice_divides'].values
         if add_slope:
-            slope_factor = nc.variables['slope_factor'][:]
+            slope_factor = ds['slope_factor'].values
         else:
             slope_factor = 1.
 
@@ -943,8 +942,8 @@ def distribute_thickness_interp(gdir, add_slope=True, smooth_radius=None,
     thick *= init_vol / tmp_vol
 
     # write
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file, 'a') as nc:
+    from oggm.core.gis import GriddedNcdfFile
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:
             v = nc.variables[vn]

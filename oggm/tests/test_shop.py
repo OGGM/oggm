@@ -48,7 +48,7 @@ class Test_its_live:
             warnings.filterwarnings("ignore", category=RuntimeWarning)
             its_live.itslive_velocity_to_gdir(gdir)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             mask = ds.glacier_mask.data.astype(bool)
             vx = ds.itslive_vx.where(mask).data
             vy = ds.itslive_vy.where(mask).data
@@ -134,7 +134,7 @@ class Test_millan22:
 
         millan22.millan_thickness_to_gdir(gdir)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             mask = ds.glacier_mask.data.astype(bool)
             thick = ds.millan_ice_thickness.where(mask).data
 
@@ -146,7 +146,7 @@ class Test_millan22:
         # Velocity
         millan22.millan_velocity_to_gdir(gdir)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             mask = ds.glacier_mask.data.astype(bool)
             v = ds.millan_v.where(mask).data
             vx = ds.millan_vx.where(mask).data
@@ -190,7 +190,7 @@ class Test_cook23:
 
         cook23.cook23_to_gdir(gdir)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             mask = ds.glacier_mask.data.astype(bool)
             thick = ds.cook23_thk.where(mask).data
 
@@ -228,7 +228,7 @@ class Test_HugonnetMaps:
 
         hugonnet_maps.hugonnet_to_gdir(gdir)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             mask = ds.glacier_mask.data.astype(bool)
             dhdt = ds.hugonnet_dhdt.where(mask)
 
@@ -395,7 +395,7 @@ class Test_w5e5:
         w5e5.process_w5e5_data(gdir)
         path_clim = gdir.get_filepath('climate_historical')
 
-        ds_clim = xr.open_dataset(path_clim)
+        ds_clim = gdir.open_group('climate_historical')
         assert ds_clim.time[0]['time.year'] == 1979
         assert ds_clim.time[-1]['time.year'] == 2019
         assert ds_clim.time[0]['time.month'] == 1
@@ -429,7 +429,7 @@ class Test_w5e5:
         w5e5.process_gswp3_w5e5_data(gdir)
         path_clim = gdir.get_filepath('climate_historical')
 
-        ds_clim = xr.open_dataset(path_clim)
+        ds_clim = gdir.open_group('climate_historical')
         assert ds_clim.time[0]['time.year'] == 1901
         assert ds_clim.time[-1]['time.year'] == 2019
         assert ds_clim.time[0]['time.month'] == 1
@@ -511,7 +511,12 @@ class Test_ecmwf:
 
         f_ref = gdir.get_filepath('climate_historical', filesuffix='ERA5')
         f_h = gdir.get_filepath('climate_historical', filesuffix='CERA_alone')
-        with xr.open_dataset(f_ref) as ref, xr.open_dataset(f_h) as his:
+        with (
+            gdir.open_group('climate_historical', filesuffix='ERA5') as ref,
+            gdir.open_group(
+                'climate_historical', filesuffix='CERA_alone'
+            ) as his,
+        ):
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
@@ -558,8 +563,13 @@ class Test_ecmwf:
         f_ref = gdir.get_filepath('climate_historical', filesuffix='ERA5')
         f_h = gdir.get_filepath('climate_historical', filesuffix='CERA_repl')
         f_hr = gdir.get_filepath('climate_historical', filesuffix='CERA')
-        with xr.open_dataset(f_ref) as ref, xr.open_dataset(f_h) as his, \
-                xr.open_dataset(f_hr) as his_ref:
+        with (
+            gdir.open_group('climate_historical', filesuffix='ERA5') as ref,
+            gdir.open_group(
+                'climate_historical', filesuffix='CERA_repl'
+            ) as his,
+            gdir.open_group('climate_historical', filesuffix='CERA') as his_ref,
+        ):
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
@@ -600,10 +610,8 @@ class Test_ecmwf:
         tasks.historical_delta_method(gdir,
                                       ref_filesuffix='ERA5',
                                       hist_filesuffix='CERA')
-        assert not os.path.exists(gdir.get_filepath('climate_historical',
-                                                    filesuffix='ERA5'))
-        assert not os.path.exists(gdir.get_filepath('climate_historical',
-                                                    filesuffix='CERA'))
+        assert not gdir.has_file('climate_historical', filesuffix='ERA5')
+        assert not gdir.has_file('climate_historical', filesuffix='CERA')
 
     def test_ecmwf_workflow(self, class_case_dir):
 
@@ -657,7 +665,7 @@ class Test_climate_datasets:
             cfg.PARAMS['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
             f = gdir.get_filepath('climate_historical', filesuffix=base)
-            with xr.open_dataset(f) as ds:
+            with gdir.open_group('climate_historical', filesuffix=base) as ds:
                 ref_hgts.append(ds.ref_hgt)
                 assert ds.ref_pix_dis < 30000
                 dft.append(ds.temp.to_series())
@@ -705,18 +713,18 @@ class Test_climate_datasets:
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
         exps = ['ERA5', 'ERA5dr']
-        files = []
         ref_hgts = []
         for base in exps:
             cfg.PARAMS['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
-            files.append(gdir.get_filepath('climate_historical',
-                                           filesuffix=base))
-            with xr.open_dataset(files[-1]) as ds:
+            with gdir.open_group('climate_historical', filesuffix=base) as ds:
                 ref_hgts.append(ds.ref_hgt)
                 assert ds.ref_pix_dis < 10000
 
-        with xr.open_dataset(files[0]) as d1, xr.open_dataset(files[1]) as d2:
+        with (
+            gdir.open_group('climate_historical', filesuffix=exps[0]) as d1,
+            gdir.open_group('climate_historical', filesuffix=exps[1]) as d2,
+        ):
             # there are some very small differences, likely because of different ERA5 "versions"???
             np.testing.assert_allclose(d1.temp.sel(time=slice('1979', '2018')),
                                        d2.temp.sel(time=slice('1979', '2018')),atol=1e-3)
@@ -750,7 +758,7 @@ class Test_bedtopo:
         cfg.add_to_basenames('consensus', 'consensus.tif')
         gis.rasterio_to_gdir(gdir, ft, 'consensus', resampling='bilinear')
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             mine = ds.consensus_ice_thickness
 
         with rioxr.open_rasterio(gdir.get_filepath('consensus')) as ds:

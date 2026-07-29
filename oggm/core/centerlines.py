@@ -906,12 +906,11 @@ def compute_centerlines(gdir, heads=None):
 
     # open
     geom = gdir.read_store('geometries')
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file) as nc:
+    with gdir.open_group('gridded_data') as ds:
         # Variables
-        glacier_mask = nc.variables['glacier_mask'][:]
-        glacier_ext = nc.variables['glacier_ext'][:]
-        topo = nc.variables['topo_smoothed'][:]
+        glacier_mask = ds['glacier_mask'].values
+        glacier_ext = ds['glacier_ext'].values
+        topo = ds['topo_smoothed'].values
     poly_pix = geom['polygon_pix']
 
     # Find for local maximas on the outline
@@ -1002,9 +1001,9 @@ def compute_downstream_line(gdir):
     if gdir.is_tidewater:
         return
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo_smoothed'][:]
-        glacier_ext = nc.variables['glacier_ext'][:] == 1
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo_smoothed'].values
+        glacier_ext = ds['glacier_ext'].values == 1
 
     # Look for the starting points
     try:
@@ -1287,10 +1286,10 @@ def compute_downstream_bedshape(gdir):
     cl = Centerline(cl, dx=tpl.dx, map_dx=gdir.grid.dx)
 
     # Topography
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo_smoothed'][:]
-        x = nc.variables['x'][:]
-        y = nc.variables['y'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo_smoothed'].values
+        x = ds['x'].values
+        y = ds['y'].values
     xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
     interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
@@ -1567,11 +1566,10 @@ def catchment_area(gdir):
     cls = gdir.read_store('centerlines')
     geom = gdir.read_store('geometries')
     glacier_pix = geom['polygon_pix']
-    fpath = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(fpath) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:]
-        glacier_ext = nc.variables['glacier_ext'][:]
-        topo = nc.variables['topo_smoothed'][:]
+    with gdir.open_group('gridded_data') as ds:
+        glacier_mask = ds['glacier_mask'].values
+        glacier_ext = ds['glacier_ext'].values
+        topo = ds['topo_smoothed'].values
 
     # If we have only one centerline this is going to be easy: take the
     # mask and return
@@ -1735,9 +1733,8 @@ def initialize_flowlines(gdir):
     fls = []
 
     # Topo for heights
-    fpath = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(fpath) as nc:
-        topo = nc.variables['topo_smoothed'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo_smoothed'].values
 
     # Bilinear interpolation
     # Geometries coordinates are in "pixel centered" convention, i.e
@@ -1839,11 +1836,10 @@ def catchment_width_geom(gdir):
     # Topography is to filter the unrealistic lines afterwards.
     # I take the non-smoothed topography
     # I remove the boundary pixs because they are likely to be higher
-    fpath = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(fpath) as nc:
-        topo = nc.variables['topo'][:]
-        mask_ext = nc.variables['glacier_ext'][:]
-        mask_glacier = nc.variables['glacier_mask'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
+        mask_ext = ds['glacier_ext'].values
+        mask_glacier = ds['glacier_mask'].values
     topo[np.where(mask_glacier == 0)] = np.nan
     topo[np.where(mask_ext == 1)] = np.nan
 
@@ -1956,10 +1952,9 @@ def catchment_width_correction(gdir):
 
     # Topography for altitude-area distribution
     # I take the non-smoothed topography and remove the borders
-    fpath = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(fpath) as nc:
-        topo = nc.variables['topo'][:]
-        ext = nc.variables['glacier_ext'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
+        ext = ds['glacier_ext'].values
     topo[np.where(ext == 1)] = np.nan
 
     # Param
@@ -2212,22 +2207,21 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
     out_vars = []
     out_totals = []
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:] == 1
-        topo = nc.variables['topo_smoothed'][:].astype(np.float64)
+    with gdir.open_group('gridded_data') as ds:
+        glacier_mask = ds['glacier_mask'].values == 1
+        topo = ds['topo_smoothed'].values.astype(np.float64)
 
         # Check if there and do not raise when not available
         keep = []
         for var in bin_variables:
-            if var in nc.variables:
+            if var in ds:
                 keep.append(var)
             else:
                 log.warning('{}: var `{}` not found in gridded_data.'
                             ''.format(gdir.rgi_id, var))
         bin_variables = keep
         for var in bin_variables:
-            data = nc.variables[var][:].astype(np.float64)
+            data = ds[var].values.astype(np.float64)
             if var == 'consensus_ice_thickness':
                 # individual handling for consensus thickness as they use a
                 # different glacier mask than oggm (which was already applied)

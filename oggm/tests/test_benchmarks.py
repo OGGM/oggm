@@ -193,7 +193,7 @@ class TestSouthGlacier(unittest.TestCase):
 
         # Check certain things
         gdir = gdirs[0]
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
 
             # The max catchment area should be area of glacier
             assert (ds['catchment_area'].max() ==
@@ -223,7 +223,7 @@ class TestSouthGlacier(unittest.TestCase):
                'oggm_mb_above_z_on_catch',
                ]
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             for vn in vns:
                 df[vn] = ds[vn].isel(x=('z', df['i']), y=('z', df['j']))
 
@@ -281,7 +281,7 @@ class TestSouthGlacier(unittest.TestCase):
         gdir = gdirs[0]
         df = self.get_ref_data(gdir)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
 
             v = ds.distributed_thickness_alt
             df['oggm_alt'] = v.isel(x=('z', df['i']), y=('z', df['j']))
@@ -360,7 +360,7 @@ class TestSouthGlacier(unittest.TestCase):
                                               glen_a=glen_a * x[0],
                                               fs=fs * x[1])
             tasks.distribute_thickness_per_altitude(gdir, smooth_radius=None)
-            with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            with gdir.open_group('gridded_data') as ds:
                 thick = ds.distributed_thickness.isel(x=('z', df['i']),
                                                       y=('z', df['j']))
                 out = (np.abs(thick - df.thick)).mean()
@@ -376,7 +376,7 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs,
                             smooth_radius=None)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             df['oggm'] = ds.distributed_thickness.isel(x=('z', df['i']),
                                                        y=('z', df['j']))
             ds['ref'] = xr.zeros_like(ds.distributed_thickness) * np.nan
@@ -515,9 +515,9 @@ class TestCoxeGlacier(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
 
         # Test that area and area-altitude elev is fine
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo_smoothed'][:]
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
+            topo = ds['topo_smoothed'].values
         rhgt = topo[np.where(mask)][:]
 
         fls = gdir.read_store('inversion_flowlines')

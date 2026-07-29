@@ -3358,7 +3358,10 @@ class TestHEF:
             cftime_kwargs = {'decode_times': decode_times}
         except AttributeError:
             cftime_kwargs = {'use_cftime': True}
-        with xr.open_dataset(fh) as hist, xr.open_dataset(fcesm, **cftime_kwargs) as cesm:
+        with (
+            gdir.open_group('climate_historical') as hist,
+            gdir.open_group('gcm_data', **cftime_kwargs) as cesm,
+        ):
             # Let's do some basic checks
             shist = hist.sel(time=slice('1961', '1990'))
             scesm = cesm.sel(time=slice('1961', '1990'))
@@ -6118,8 +6121,7 @@ class TestDistribute2D:
         with xr.open_dataset(fp) as ds:
             thick = ds.simulated_thickness.load()
 
-        fp = hef_elev_gdir.get_filepath('gridded_data')
-        with xr.open_dataset(fp) as ds:
+        with hef_elev_gdir.open_group('gridded_data') as ds:
             ds = ds.load()
         dx2 = hef_elev_gdir.grid.dx ** 2
 

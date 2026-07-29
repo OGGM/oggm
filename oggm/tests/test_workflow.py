@@ -414,7 +414,7 @@ def test_merge_gridded_data():
 
     # check if distributed volume is the same as inversion volume for each gdir
     for gdir in gdirs:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             ds = ds.load()
 
         inv_volume = df[df.index == gdir.rgi_id]['inv_volume_km3'].values
@@ -579,8 +579,10 @@ def test_rgi7_complex_glacier_dirs():
                            rgi7g_file=rgi7g_file,
                            rgi7c_to_g_links=rgi7c_to_g_links)
 
-    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-        assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
+    with gdir.open_group('gridded_data') as ds:
+        assert ds.sub_entities.values.max() == (
+            len(rgi7c_to_g_links[gdir.rgi_id]) - 1
+        )
 
 
 class TestZarrWorkflow:

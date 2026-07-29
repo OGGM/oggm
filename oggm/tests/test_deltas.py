@@ -475,9 +475,13 @@ class TestDeltaServer:
         calls = []
 
         def fake_file_downloader(www_path, **kwargs):
-            calls.append(www_path)
             local = os.path.join(server, www_path.replace(self.BASE_URL, ""))
-            return local if os.path.isfile(local) else None
+            if not os.path.isfile(local):
+                # probe misses (e.g. the .zip probe on a tar-only server
+                # are not fetches so don't count them
+                return None
+            calls.append(www_path)
+            return local
 
         monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
         monkeypatch.setattr(_downloads, "_prepro_bundle_format", {})

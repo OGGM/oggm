@@ -312,11 +312,11 @@ class TestGIS(unittest.TestCase):
         gis.glacier_masks(gdir)
         gis.gridded_attributes(gdir)
 
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            glacier_mask = nc.variables['glacier_mask'][:]
-            glacier_ext = nc.variables['glacier_ext'][:]
-            glacier_ext_erosion = nc.variables['glacier_ext_erosion'][:]
-            ice_divides = nc.variables['ice_divides'][:]
+        with gdir.open_group('gridded_data') as ds:
+            glacier_mask = ds['glacier_mask'].values
+            glacier_ext = ds['glacier_ext'].values
+            glacier_ext_erosion = ds['glacier_ext_erosion'].values
+            ice_divides = ds['ice_divides'].values
 
         area = np.sum(glacier_mask * gdir.grid.dx**2)
         np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
@@ -346,15 +346,15 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
 
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
+        with gdir.open_group('gridded_data') as ds:
+            area = np.sum(ds['glacier_mask'].values * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
 
             # Check that HEF doesn't "badly" need a divide
-            mask = nc.variables['glacier_mask'][:]
-            ext = nc.variables['glacier_ext'][:]
-            dem = nc.variables['topo'][:]
+            mask = ds['glacier_mask'].values
+            ext = ds['glacier_ext'].values
+            dem = ds['topo'].values
             np.testing.assert_allclose(np.max(dem[mask.astype(bool)]),
                                        np.max(dem[ext.astype(bool)]),
                                        atol=10)
@@ -428,15 +428,11 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         # The test below does NOT pass on OGGM
-        shutil.copyfile(gdir.get_filepath('gridded_data'),
-                        os.path.join(self.testdir, 'default_masks.nc'))
         gis.simple_glacier_masks(gdir)
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
+        with gdir.open_group('gridded_data') as ds:
+            area = np.sum(ds['glacier_mask'].values * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
-        shutil.copyfile(gdir.get_filepath('gridded_data'),
-                        os.path.join(self.testdir, 'simple_masks.nc'))
 
     @pytest.mark.skipif((Version(rasterio.__version__) <
                          Version('1.0')),
@@ -547,7 +543,7 @@ class TestGIS(unittest.TestCase):
         gtiff_path = os.path.join(gdir.dir, f'{gdir.rgi_id}_{target_var}.tif')
         assert os.path.exists(gtiff_path)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             gridded_topo = ds[target_var]
             gtiff_ds = rioxr.open_rasterio(gtiff_path)
             np.allclose(ds.salem.grid.x_coord, gtiff_ds.x)
@@ -730,10 +726,10 @@ class TestCenterlines(unittest.TestCase):
             from oggm.core.centerlines import line_interpol
             from scipy.interpolate import RegularGridInterpolator
             points = line_interpol(line, 0.5)
-            with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-                topo = nc.variables['topo_smoothed'][:]
-                x = nc.variables['x'][:]
-                y = nc.variables['y'][:]
+            with gdir.open_group('gridded_data') as ds:
+                topo = ds['topo_smoothed'].values
+                x = ds['x'].values
+                y = ds['y'].values
             xy = (np.arange(0, len(y) - 0.1, 1), np.arange(0, len(x) - 0.1, 1))
             interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
@@ -925,11 +921,11 @@ class TestElevationBandFlowlines(unittest.TestCase):
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
             evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            otherarea += np.sum(nc.variables['glacier_mask'][:])
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo_smoothed'][:]
+        with gdir.open_group('gridded_data') as ds:
+            otherarea += np.sum(ds['glacier_mask'].values)
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
+            topo = ds['topo_smoothed'].values
         rhgt = topo[np.where(mask)][:]
 
         tdf = gdir.read_shapefile('outlines').iloc[0]
@@ -970,7 +966,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         v1 = inversion.mass_conservation_inversion(gdir)
         inversion.distribute_thickness_per_altitude(gdir)
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             ds1 = ds.load()
 
         # Repeat multiple flowlines workflow
@@ -988,7 +984,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         v2 = inversion.mass_conservation_inversion(gdir)
         inversion.distribute_thickness_per_altitude(gdir)
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             ds2 = ds.load()
 
         # Total volume is different at only 15%
@@ -1071,8 +1067,8 @@ class TestGeometry(unittest.TestCase):
         cis = gdir.read_store('geometries')['catchment_indices']
 
         # The catchment area must be as big as expected
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
 
         mymask_a = mask * 0
         mymask_b = mask * 0
@@ -1192,12 +1188,12 @@ class TestGeometry(unittest.TestCase):
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
             evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            otherarea += np.sum(nc.variables['glacier_mask'][:])
+        with gdir.open_group('gridded_data') as ds:
+            otherarea += np.sum(ds['glacier_mask'].values)
 
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo_smoothed'][:]
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
+            topo = ds['topo_smoothed'].values
         rhgt = topo[np.where(mask)][:]
 
         tdf = gdir.read_shapefile('outlines').iloc[0]
@@ -1307,11 +1303,10 @@ class TestClimate:
             ref_p = nc_r.variables['prcp'][3:-9, 1, 1]
             ref_t = nc_r.variables['temp'][3:-9, 1, 1]
 
-        f = os.path.join(gdir.dir, 'climate_historical.nc')
-        with utils.ncDataset(f) as nc_r:
-            assert ref_h == nc_r.ref_hgt
-            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
-            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+        with gdir.open_group('climate_historical') as nc_r:
+            assert ref_h == nc_r.attrs['ref_hgt']
+            np.testing.assert_allclose(ref_t, nc_r['temp'].values)
+            np.testing.assert_allclose(ref_p, nc_r['prcp'].values)
 
     def test_distribute_climate_parallel(self):
 
@@ -1332,11 +1327,10 @@ class TestClimate:
             ref_p = nc_r.variables['prcp'][3:-9, 1, 1]
             ref_t = nc_r.variables['temp'][3:-9, 1, 1]
 
-        f = os.path.join(gdir.dir, 'climate_historical.nc')
-        with utils.ncDataset(f) as nc_r:
-            assert ref_h == nc_r.ref_hgt
-            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
-            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+        with gdir.open_group('climate_historical') as nc_r:
+            assert ref_h == nc_r.attrs['ref_hgt']
+            np.testing.assert_allclose(ref_t, nc_r['temp'].values)
+            np.testing.assert_allclose(ref_p, nc_r['prcp'].values)
 
     def test_distribute_climate_cru(self):
 
@@ -1364,10 +1358,8 @@ class TestClimate:
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
-        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
-        with xr.open_dataset(f1) as nc_h:
-            with xr.open_dataset(f2) as nc_c:
+        with gdh.open_group('climate_historical') as nc_h:
+            with gdc.open_group('climate_historical') as nc_c:
                 # put on the same altitude
                 # (using default gradient because better)
                 temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
@@ -1403,10 +1395,8 @@ class TestClimate:
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
-        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
-        with xr.open_dataset(f1) as nc_d:
-            with xr.open_dataset(f2) as nc_c:
+        with gdh.open_group('climate_historical') as nc_d:
+            with gdc.open_group('climate_historical') as nc_c:
                 # same altitude
                 assert nc_d.ref_hgt == nc_c.ref_hgt
                 np.testing.assert_allclose(nc_d.temp.mean(), nc_c.temp.mean(),
@@ -1449,10 +1439,8 @@ class TestClimate:
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
-        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
-        with xr.open_dataset(f1) as nc_h:
-            with xr.open_dataset(f2) as nc_c:
+        with gdh.open_group('climate_historical') as nc_h:
+            with gdc.open_group('climate_historical') as nc_c:
                 nc_h = nc_h.sel(time=nc_c.time)
                 np.testing.assert_allclose(nc_h['temp'], nc_c['temp'])
                 # for precip the data changed in between versions, we
@@ -2504,13 +2492,9 @@ class TestInversion(unittest.TestCase):
         inversion.distribute_thickness_per_altitude(gdir,
                                                     varname_suffix='_alt')
 
-        grids_file = gdir.get_filepath('gridded_data')
-        with utils.ncDataset(grids_file) as nc:
-            with warnings.catch_warnings():
-                # https://github.com/Unidata/netcdf4-python/issues/766
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                t1 = nc.variables['distributed_thickness_interp'][:]
-                t2 = nc.variables['distributed_thickness_alt'][:]
+        with gdir.open_group('gridded_data') as ds:
+            t1 = ds['distributed_thickness_interp'].values
+            t2 = ds['distributed_thickness_alt'].values
 
         np.testing.assert_allclose(np.nansum(t1), np.nansum(t2))
 
@@ -2939,21 +2923,19 @@ class TestGCMClimate(unittest.TestCase):
                                           apply_bias_correction=True,
                                           output_filesuffix='_with_OGGM_bc',
                                           testing=True)
-        fh = gdir.get_filepath('climate_historical')
-        # with additional bias correction of OGGM
-        fgcm = gdir.get_filepath('gcm_data',
-                                 filesuffix='_with_OGGM_bc')
-        # without any bias correction of OGGM (as ISIMIP3b is already
-        # externally bias-corrected to W5E5)
-        fgcm_nc = gdir.get_filepath('gcm_data',
-                                    filesuffix='_no_OGGM_bc')
-        # with additional bias correction and with selected time series
-        fgcm_y0_y1 = gdir.get_filepath('gcm_data',
-                                       filesuffix='_with_OGGM_bc_y0_y1')
 
-        with xr.open_dataset(fh) as clim, xr.open_dataset(fgcm) as gcm, \
-                xr.open_dataset(fgcm_nc) as gcm_nc, \
-                xr.open_dataset(fgcm_y0_y1) as gcm_y0_y1:
+        with (
+            gdir.open_group("climate_historical") as clim,
+            # with additional bias correction of OGGM
+            gdir.open_group("gcm_data", filesuffix="_with_OGGM_bc") as gcm,
+            # without any bias correction of OGGM (as ISIMIP3b is
+            # already externally bias-corrected to W5E5)
+            gdir.open_group("gcm_data", filesuffix="_no_OGGM_bc") as gcm_nc,
+            # with additional bias correction and with selected time series
+            gdir.open_group(
+                "gcm_data", filesuffix="_with_OGGM_bc_y0_y1"
+            ) as gcm_y0_y1,
+        ):
             # Let's do some basic checks
             sclim = clim.sel(time=slice('1979', '2014'))
             sgcm = gcm.load().isel(time=((gcm['time.year'] >= 1979) &
@@ -3111,7 +3093,10 @@ class TestGCMClimate(unittest.TestCase):
             cftime_kwargs = {'decode_times': decode_times}
         except AttributeError:
             cftime_kwargs = {'use_cftime': True}
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, **cftime_kwargs) as cesm:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', **cftime_kwargs) as cesm,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -3168,12 +3153,13 @@ class TestGCMClimate(unittest.TestCase):
                                       filesuffix='_CCSM4_y0_y1', y0=1960-15,
                                       y1=2080+15)
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        fcmip_y0_y1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_y0_y1')
-        with xr.open_dataset(fh) as cru, \
-              xr.open_dataset(fcmip) as cmip, \
-              xr.open_dataset(fcmip_y0_y1) as cmip_y0_y1:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as cmip,
+            gdir.open_group(
+                'gcm_data', filesuffix='_CCSM4_y0_y1'
+            ) as cmip_y0_y1,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -3251,9 +3237,10 @@ class TestGCMClimate(unittest.TestCase):
                                       fpath_precip=fp,
                                       filesuffix='_CCSM4')
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as cmip,
+        ):
 
             # Let's do some basic checks
             assert cru['time.year'][0] == 1901
@@ -3316,9 +3303,10 @@ class TestGCMClimate(unittest.TestCase):
                                          fpath_precip=fpath_precip,
                                          output_filesuffix=fs)
 
-            fh = gdir.get_filepath('climate_historical')
-            fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
-            with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+            with (
+                gdir.open_group('climate_historical') as cru,
+                gdir.open_group('gcm_data', filesuffix=fs) as cmip,
+            ):
 
                 # Let's do some basic checks
                 scru = cru.sel(time=slice('1951', '1980'))
@@ -3359,9 +3347,10 @@ class TestGCMClimate(unittest.TestCase):
                                      fpath_temp=fpath_temp,
                                      output_filesuffix=fs)
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix=fs) as cmip,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1951', '1980'))
@@ -3424,9 +3413,10 @@ class TestGCMClimate(unittest.TestCase):
                                             fpath_precip=fpath_precip,
                                             output_filesuffix=fs)
 
-            fh = gdir.get_filepath('climate_historical')
-            fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
-            with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+            with (
+                gdir.open_group('climate_historical') as cru,
+                gdir.open_group('gcm_data', filesuffix=fs) as cmip,
+            ):
 
                 # Let's do some basic checks
                 scru = cru.sel(time=slice('1901', '2000'))
@@ -3484,9 +3474,10 @@ class TestGCMClimate(unittest.TestCase):
                                       fpath_precip=fpath_precip,
                                       filesuffix='_CCSM4')
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as cmip,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -3524,9 +3515,10 @@ class TestGCMClimate(unittest.TestCase):
             np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
 
         # Check that the two variabilies still correlate a lot
-        f1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_ns')
-        f2 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(f1) as ds1, xr.open_dataset(f2) as ds2:
+        with (
+            gdir.open_group('gcm_data', filesuffix='_CCSM4_ns') as ds1,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as ds2,
+        ):
             n = 30*12+1
             ss1 = ds1.temp.rolling(time=n, min_periods=1, center=True).std()
             ss2 = ds2.temp.rolling(time=n, min_periods=1, center=True).std()
@@ -3558,9 +3550,10 @@ class TestGCMClimate(unittest.TestCase):
 
         # CRU
         f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
-        f2 = gdir.get_filepath(filename='climate_historical')
-        with xr.open_dataset(f1) as clim_cru1, \
-                xr.open_dataset(f2) as clim_cru2:
+        with (
+            xr.open_dataset(f1) as clim_cru1,
+            gdir.open_group('climate_historical') as clim_cru2,
+        ):
             np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
                                        clim_cru2.prcp)
             np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
@@ -3583,14 +3576,17 @@ class TestGCMClimate(unittest.TestCase):
         # CESM
         f1 = os.path.join(cfg.PATHS['working_dir'],
                           'climate_input_cesm.nc')
-        f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
         try:
             decode_times = xr.coders.CFDatetimeCoder(use_cftime=True)
             cftime_kwargs = {'decode_times': decode_times}
         except AttributeError:
             cftime_kwargs = {'use_cftime': True}
-        with xr.open_dataset(f1) as clim_cesm1, \
-                xr.open_dataset(f2, **cftime_kwargs) as clim_cesm2:
+        with (
+            xr.open_dataset(f1, **cftime_kwargs) as clim_cesm1,
+            gdir.open_group(
+                filename, filesuffix=filesuffix, **cftime_kwargs
+            ) as clim_cesm2,
+        ):
             np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
                                        clim_cesm2.prcp)
             np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
