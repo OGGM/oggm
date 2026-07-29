@@ -157,6 +157,11 @@ Bug fixes
   model parameters instead of the settings file, and calibration tasks record
   ``mb_global_params`` from the model used (:pull:`1961`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- ``SemiImplicitModel`` now reads its calving parameters from the model settings
+  instead of ``cfg.PARAMS``, so runs using a ``settings_filesuffix`` are no
+  longer silently calving with the default configuration. ``do_calving`` is now
+  also ignored for non-tidewater glaciers (:pull:`1961`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
