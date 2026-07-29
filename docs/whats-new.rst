@@ -182,7 +182,7 @@ Bug fixes
   (e.g. ``oggm_prepro`` on tens of thousands of glaciers): ``GlacierDirectory``
   no longer re-serializes its ``settings``/``observations`` on every task
   dispatched to a worker process. They are now dropped before pickling and
-  rebuilt from disk in the worker instead (:pull:`XXXX`).
+  rebuilt from disk in the worker instead (:pull:`1967`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Breaking changes
