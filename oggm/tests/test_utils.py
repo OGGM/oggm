@@ -894,6 +894,8 @@ class TestWorkflowUtils:
                              'area_min_h', 'length', 'calving', 'calving_rate',
                              'off_area', 'on_area',
                              'melt_off_glacier', 'melt_on_glacier',
+                             'snow_melt_on_glacier', 'firn_melt_on_glacier',
+                             'ice_melt_on_glacier',
                              'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
@@ -947,6 +949,13 @@ class TestWorkflowUtils:
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier_monthly'].values))
             assert 'mass_kg' in ds.data_vars
+            # the melt split components are only computed for mb models with
+            # surface type tracking, here they should be present but NaN
+            assert 'snow_melt_on_glacier' in ds.data_vars
+            assert 'firn_melt_on_glacier' in ds.data_vars
+            assert 'ice_melt_on_glacier' in ds.data_vars
+            assert np.all(np.isnan(
+                ds.loc[{'rgi_id': gdirs[1].rgi_id}]['snow_melt_on_glacier'].values))
 
         check_result(ds_1)
 
@@ -1319,12 +1328,16 @@ class TestPreproCLI:
         assert kwargs['dynamic_spinup_start_year'] == 1979
         assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
+        assert not kwargs['store_hydro_output']
+        assert kwargs['store_monthly_hydro']
+        assert kwargs['ref_area_yr'] is None
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--start-level', '2',
                                            '--mb-calibration-strategy', 'temp_melt',
                                            '--start-base-url', 'http://foo',
+                                           '--ref-area-yr', '2000',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -1336,6 +1349,7 @@ class TestPreproCLI:
         assert kwargs['start_level'] == 2
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
+        assert kwargs['ref_area_yr'] == 2000
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
@@ -1642,7 +1656,7 @@ class TestPreproCLI:
             assert json.load(f)["kind"] == "standalone"
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2020
 
         assert gdir.has_file('model_geometry', filesuffix='_historical')
@@ -1935,7 +1949,7 @@ class TestPreproCLI:
             assert json.load(f)["kind"] == "standalone"
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
@@ -2065,7 +2079,7 @@ class TestPreproCLI:
             assert isinstance(model, FlowlineModel)
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_historical'))
-            assert model.y0 == 2004
+            assert model.y0 == 1979
             assert model.last_yr == 2015
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_spinup_historical'))
@@ -2224,7 +2238,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
