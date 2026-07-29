@@ -35,8 +35,8 @@ dependencies = [
     "xvec>=0.5.2",
     "zarr",
     "pyarrow",
-    "fsspec",
-    "aiohttp",
+    "fsspec>=2026.6.0",
+    "aiohttp>=3.14.1",
 ]
 
 [project.optional-dependencies]
