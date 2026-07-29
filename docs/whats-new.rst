@@ -178,6 +178,12 @@ Bug fixes
 - Fixed a bug in ``compile_to_netcdf`` decorator, avoiding to raise an error if
   a single chunk failes (:pull:`1954`).
   By Copilot and `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a multiprocessing memory blowup in large ``execute_entity_task`` runs
+  (e.g. ``oggm_prepro`` on tens of thousands of glaciers): ``GlacierDirectory``
+  no longer re-serializes its ``settings``/``observations`` on every task
+  dispatched to a worker process. They are now dropped before pickling and
+  rebuilt from disk in the worker instead (:pull:`XXXX`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
