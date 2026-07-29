@@ -3188,6 +3188,22 @@ class GlacierDirectory(object):
         self._mbprofdf = None
         self._mbprofdf_cte_dh = None
 
+    def __getstate__(self):
+        # settings/observations are dropped from the pickled state (and
+        # rebuilt in __setstate__) so that they don't have to be re-shipped
+        # (with a private copy of cfg.PARAMS) on every multiprocessing task
+        state = self.__dict__.copy()
+        del state['settings']
+        del state['observations']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.settings = self._get_settings_class(
+            filesuffix=self._settings_filesuffix)
+        self.observations = self._get_observations_class(
+            filesuffix=self._observations_filesuffix)
+
     def __repr__(self):
 
         summary = ['<oggm.GlacierDirectory>']
