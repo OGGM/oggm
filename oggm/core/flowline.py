@@ -2726,14 +2726,14 @@ class SemiImplicitModel(FlowlineModel):
 
         # Calving params
         if do_calving is None:
-            do_calving = cfg.PARAMS['use_kcalving_for_run']
+            do_calving = self.settings['use_kcalving_for_run']
         self.calving_law = calving_law
-        self.do_calving = do_calving
+        self.do_calving = do_calving and self.is_tidewater
         if calving_k is None:
-            calving_k = cfg.PARAMS['calving_k']
+            calving_k = self.settings['calving_k']
         self.calving_k = calving_k / cfg.SEC_IN_YEAR
         if calving_use_limiter is None:
-            calving_use_limiter = cfg.PARAMS['calving_use_limiter']
+            calving_use_limiter = self.settings['calving_use_limiter']
         self.calving_use_limiter = calving_use_limiter
 
         # Flux gate bookkeeping
