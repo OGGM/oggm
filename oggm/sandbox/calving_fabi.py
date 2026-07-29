@@ -307,7 +307,7 @@ class CalvingFluxBasedModelFabi(FlowlineModel):
                 # - decide on whether calving is happening or not
 
                 rho_ocean = cfg.PARAMS['ocean_density']
-                eff_water_depth = (rho_ocean / self.rho) * water_depth
+                eff_water_depth = (rho_ocean / self.ice_density) * water_depth
 
                 # above_wl -> above floatation
                 ice_above_wl = (fl.bed_below_wl & (fl.thick >= eff_water_depth))
@@ -345,7 +345,7 @@ class CalvingFluxBasedModelFabi(FlowlineModel):
                 if calving_is_happening:
 
                     # Calculate the additional (pull) force
-                    pull_last = 0.5 * G * (self.rho * h ** 2 - rho_ocean * d ** 2)
+                    pull_last = 0.5 * G * (self.ice_density * h ** 2 - rho_ocean * d ** 2)
                     if pull_last < 0:
                         pull_last = 0
 
@@ -372,7 +372,7 @@ class CalvingFluxBasedModelFabi(FlowlineModel):
 
                 # OK now we compute the deformation stress, which might
                 # be slightly different at the front if calving is happening
-                stress = self.rho * G * slope_stag * thick_stag
+                stress = self.ice_density * G * slope_stag * thick_stag
 
                 # Add "stretching stress" to basal shear/driving stress
                 if calving_is_happening:
@@ -384,7 +384,7 @@ class CalvingFluxBasedModelFabi(FlowlineModel):
 
                 # Sliding is increased where there is water
                 # Determine height above buoyancy
-                eff_water_depth_stag = (rho_ocean / self.rho) * water_depth_stag
+                eff_water_depth_stag = (rho_ocean / self.ice_density) * water_depth_stag
                 # Avoid dividing by zero where thick equals water depth
                 z_a_b = utils.clip_min(thick_stag - eff_water_depth_stag, 0.01)
                 z_a_b[thick_stag == 0] = 1  # Stress is zero there
@@ -418,11 +418,11 @@ class CalvingFluxBasedModelFabi(FlowlineModel):
             else:
 
                 # Simplest case (no water): velocity is deformation + sliding
-                rhogh = (self.rho * G * slope_stag)**N
+                rhogh = (self.ice_density * G * slope_stag) ** N
                 ud_stag[:] = (thick_stag**(N + 1)) * self._fd * rhogh
 
                 # Temporary check for above
-                stress = self.rho * G * slope_stag * thick_stag
+                stress = self.ice_density * G * slope_stag * thick_stag
                 vel = thick_stag * stress ** N * self._fd
                 assert np.allclose(ud_stag, vel)
 

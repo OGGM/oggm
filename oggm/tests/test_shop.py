@@ -8,7 +8,7 @@ import oggm
 import xarray as xr
 import numpy as np
 import pandas as pd
-from oggm import utils
+from oggm import utils, GlacierDirectory
 from oggm.utils import get_demo_file
 from oggm.shop import its_live, rgitopo, bedtopo, millan22, cook23, hugonnet_maps, glathida
 from oggm.core import gis, centerlines
@@ -293,26 +293,49 @@ class Test_rgitopo:
 
 
 class Test_w5e5:
+    """Test GSWP3/W5E5 support at various temporal resolutions."""
 
-    def test_get_gswp3_w5e5_file(self):
+    @pytest.fixture(scope="class", name="w5e5_hef_gdir")
+    def fixture_get_w5e5_hef_gdir(
+        self, hef_gdir, class_case_dir
+    ) -> GlacierDirectory:
+        cfg.PATHS["working_dir"] = class_case_dir
+        cfg.PARAMS["use_intersects"] = False
+        cfg.PARAMS["hydro_month_nh"] = 1
+        gdir = hef_gdir
+        return gdir
+
+    def test_fixture_get_w5e5_hef_gdir(self, w5e5_hef_gdir, class_case_dir):
+        test_gdir = w5e5_hef_gdir
+        assert isinstance(test_gdir, GlacierDirectory)
+        assert cfg.PATHS["working_dir"] == class_case_dir
+        assert not cfg.PARAMS["use_intersects"]
+        assert cfg.PARAMS["hydro_month_nh"] == 1
+
+    @pytest.mark.parametrize("dataset", ["", "_daily"])
+    def test_get_gswp3_w5e5_file(self, dataset):
+
         from oggm.shop import w5e5
-        d = 'GSWP3_W5E5'
-        for vars, _ in w5e5.BASENAMES[d].items():
-            assert os.path.isfile(w5e5.get_gswp3_w5e5_file(d, vars))
+
+        d = f"GSWP3_W5E5{dataset}"
+        for variables, _ in w5e5.BASENAMES[d].items():
+            cache_path = w5e5.get_gswp3_w5e5_file(dataset=d, var=variables)
+            assert cache_path is not None
+            assert os.path.isfile(cache_path)
         with pytest.raises(ValueError):
-            w5e5.get_gswp3_w5e5_file(d, 'zoup')
+            w5e5.get_gswp3_w5e5_file(d, "zoup")
 
     def test_glacier_gridpoint_selection(self):
         from oggm.shop import w5e5
         from oggm.shop import ecmwf
-        for d in ['GSWP3_W5E5', 'ERA5']:
+        for d in ['GSWP3_W5E5', 'GSWP3_W5E5_daily', 'ERA5']:
             # test is only done for the `inv` file, as the other files are only
             # downloaded for the HEF gridpoints as they would be too large otherwise.
             # However, the same test and other tests are done for all files
             # (also ISIMIP3b) and all glaciers in this notebook:
             # https://nbviewer.org/urls/cluster.klima.uni-bremen.de/~oggm/
             # climate/notebooks/flatten_glacier_gridpoint_tests.ipynb
-            if d == 'GSWP3_W5E5':
+            if d in ['GSWP3_W5E5', 'GSWP3_W5E5_daily']:
                 res = 0.5
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'inv')) as dinv:
                     dinv = dinv.load()
@@ -323,22 +346,33 @@ class Test_w5e5:
 
             diffs = np.sort(dinv.longitude)[1:] - np.sort(dinv.longitude)[:-1]
             np.testing.assert_allclose(diffs[diffs > 0].min(), res)
-            # previous gswp3_w5e5 version, and two are only necessary for RGI7
-            for coord in [(10.7584, 46.8003),  # HEF
-                          (-70.8931, -72.4474),  # RGI60-19.00124
-                          (51.495, 30.9010),  # RGI60-12.01691
-                          (0, 0),  # random gridpoint not near to a glacier
-                          ( -141.670274, 69.166921),  # in RGI7C, not in RGI6
-                          (-66.855668, -67.535551),  # only in RGI7G, not in RGI6 or in RGI 7C
-                          (-0.039683, 42.695419),  ## glacier near 0
-                          (-179.915527 + 360, 66.276108)  # RGI60-10.05049 	(near -180 longitude)
-                          ]:
+
+            glacier_coords = [(10.7584, 46.8003),  # HEF
+                              (0, 0),  # random gridpoint not near to a glacier
+                              ]
+            # only test the other glaciers with monthly resolution
+            if d in ['GSWP3_W5E5', 'ERA5']:
+                # previous gswp3_w5e5 version, and two are only necessary for RGI7
+                glacier_coords.extend(
+                    [(-70.8931, -72.4474),  # RGI60-19.00124
+                     (51.495, 30.9010),  # RGI60-12.01691
+                     (0, 0),  # random gridpoint not near to a glacier
+                     (-141.670274, 69.166921),  # in RGI7C, not in RGI6
+                     (-66.855668, -67.535551),  # only in RGI7G, not in RGI6 or in RGI 7C
+                     (-179.915527 + 360, 66.276108)  # RGI60-10.05049 	(near -180 longitude)
+                     ]
+                )
+
+            for coord in glacier_coords:
                 lon, lat = coord
-                # for ERA5, all glaciers with longitudes (-0.125, 0.125) should take the longitude 0 data
-                # for glaciers between (-0.125 and 0) longitude, we do not want to transform to +360!!!
+                # for ERA5, all glaciers with longitudes (-0.125, 0.125) should
+                # take the longitude 0 data
+                # for glaciers between (-0.125 and 0) longitude, we do not want
+                # to transform to +360!!!
                 lon = lon + 360 if lon < dinv.longitude.min() - res / 2 else lon
                 if d == 'GSWP3_W5E5':
-                    # in case of GSWP3_W5E5, all glaciers with longitudes (0,1) will use the 0.5 gridpoint,
+                    # in case of GSWP3_W5E5, all glaciers with longitudes (0,1)
+                    # will use the 0.5 gridpoint,
                     # and those within (-1,0) use the 359.5 point
                     # therefore, we only have the 0,360 transformation issue for ERA5
                     np.testing.assert_allclose(dinv.longitude.min() - res / 2, 0)
@@ -362,7 +396,8 @@ class Test_w5e5:
                     assert dist <= ((res/2) ** 2 + (res/2) ** 2) ** 0.5
 
             # this only contains data for a few glaciers, let's still check some basics
-            # both glaciers are not at latitude or longitude 0, but for one glacier we need to pick longitude 0
+            # both glaciers are not at latitude or longitude 0, but for one
+            # glacier we need to pick longitude 0
             if d == 'GSWP3_W5E5':
                 with xr.open_dataset(w5e5.get_gswp3_w5e5_file(d, 'temp_std')) as dtemp_std:
                     assert np.all(dtemp_std.latitude != 0)
@@ -370,7 +405,7 @@ class Test_w5e5:
                     assert dtemp_std.isel(time=0).temp_std.std() > 0
                     assert dtemp_std.longitude.std() > 0
                     assert dtemp_std.latitude.std() > 0
-            else:
+            elif d == 'ERA5':
                 with xr.open_dataset(ecmwf.get_ecmwf_file('ERA5', 'tmp')) as dtemp:
                     assert np.all(dtemp.latitude != 0)
                     assert np.all(dtemp.longitude >= 0)
@@ -381,80 +416,86 @@ class Test_w5e5:
                     assert dtemp.isel(time=0).time.values == np.datetime64('1940-01-01')
                     assert dtemp.isel(time=-1).time.values == np.datetime64('2025-12-01')
 
-    def test_process_w5e5_data(self, class_case_dir):
+    def assert_data_bounds(
+        self, dataset: xr.Dataset, period: tuple = (1901, 2019)
+    ) -> bool:
 
-        # Init
-        cfg.initialize()
-        cfg.PARAMS['use_intersects'] = False
-        cfg.PATHS['working_dir'] = class_case_dir
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        cfg.PARAMS['hydro_month_nh'] = 1
-        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
-        from oggm.shop import w5e5
-        w5e5.process_w5e5_data(gdir)
-        path_clim = gdir.get_filepath('climate_historical')
-
-        ds_clim = xr.open_dataset(path_clim)
-        assert ds_clim.time[0]['time.year'] == 1979
-        assert ds_clim.time[-1]['time.year'] == 2019
-        assert ds_clim.time[0]['time.month'] == 1
-        assert ds_clim.time[-1]['time.month'] == 12
-        assert (ds_clim.ref_hgt > 2000) and (ds_clim.ref_hgt < 3000)
-        assert (ds_clim.temp.mean() < 5) and (ds_clim.temp.mean() > -5)
-        assert ds_clim.temp.min() > -30  # °C
-        assert ds_clim.temp.max() < 30
-        # temp_std
-        assert np.all(ds_clim.temp_std > 0)
-        assert np.all(ds_clim.temp_std <= 10)
-
-        # prcp
-        assert ds_clim.prcp.min() > 0  # kg/m2/month
-        annual_prcp_sum = ds_clim.prcp.groupby('time.year').sum().values
-        assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
-        assert np.all(annual_prcp_sum > 500)  # kg /m2/year
-        assert np.all(annual_prcp_sum < 1500)
-
-    def test_process_gswp3_w5e5_data(self, class_case_dir):
-
-        # Init
-        cfg.initialize()
-        cfg.PARAMS['use_intersects'] = False
-        cfg.PATHS['working_dir'] = class_case_dir
-        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
-        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
-        cfg.PARAMS['hydro_month_nh'] = 1
-        gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
-        from oggm.shop import w5e5
-        w5e5.process_gswp3_w5e5_data(gdir)
-        path_clim = gdir.get_filepath('climate_historical')
-
-        ds_clim = xr.open_dataset(path_clim)
-        assert ds_clim.time[0]['time.year'] == 1901
-        assert ds_clim.time[-1]['time.year'] == 2019
-        assert ds_clim.time[0]['time.month'] == 1
-        assert ds_clim.time[-1]['time.month'] == 12
-        assert (ds_clim.ref_hgt > 2000) and (ds_clim.ref_hgt < 3000)
-        assert (ds_clim.temp.mean() < 5) and (ds_clim.temp.mean() > -5)
-        assert ds_clim.temp.min() > -30  # °C
-        assert ds_clim.temp.max() < 30
-        # temp_std
-        assert np.all(ds_clim.temp_std > 0)
-        assert np.all(ds_clim.temp_std <= 10)
-
+        assert dataset.time[0]["time.year"] == period[0]
+        assert dataset.time[-1]["time.year"] == period[1]
+        assert dataset.time[0]["time.month"] == 1
+        assert dataset.time[-1]["time.month"] == 12
+        assert (dataset.ref_hgt > 2000) and (dataset.ref_hgt < 3000)
+        assert (dataset.temp.mean() < 5) and (dataset.temp.mean() > -5)
+        assert dataset.temp.min() > -30  # °C
+        assert dataset.temp.max() < 30
         # prcp
         try:
-            assert ds_clim.prcp.min() > 0  # kg/m2/month
+            assert dataset.prcp.min() > 0  # kg/m2/month
         except AssertionError:
             # ok, we allow a small amount of months with just 0 prcp,
             # (here it is just one month)
-            assert ds_clim.prcp.quantile(0.001) >= 0
-            assert ds_clim.prcp.min() >= 0
-        annual_prcp_sum = ds_clim.prcp.groupby('time.year').sum().values
-        assert ds_clim.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
+            # values can be zero with daily data
+            assert dataset.prcp.quantile(0.001) >= 0
+            assert dataset.prcp.min() >= 0
+        annual_prcp_sum = dataset.prcp.groupby("time.year").sum().values
+        assert dataset.prcp.max() < annual_prcp_sum.mean()  # kg/m2/month
         assert np.all(annual_prcp_sum > 400)  # kg /m2/year
         assert np.all(annual_prcp_sum < 1500)
-        # no gradient for GSWP3-W5E5!
+
+        return True
+
+    @pytest.mark.parametrize(
+        "daily,filesuffix",
+        [(False, ""), (True, "_daily")],
+    )
+    def test_process_w5e5_data(self, w5e5_hef_gdir, daily, filesuffix):
+
+        gdir = w5e5_hef_gdir
+        from oggm.shop import w5e5
+
+        w5e5.process_w5e5_data(gdir, daily=daily)
+        path_clim = gdir.get_filepath('climate_historical',
+                                      filesuffix=filesuffix)
+        if not daily:
+            assert "daily" not in path_clim
+            assert not os.path.exists(
+                gdir.get_filepath('climate_historical',
+                                  filesuffix='_daily')
+            )
+        else:
+            assert "daily" in path_clim
+            assert os.path.exists(gdir.get_filepath('climate_historical',
+                                                    filesuffix='_daily'))
+        assert os.path.exists(path_clim)
+
+        with xr.open_dataset(path_clim) as ds_clim:
+            self.assert_data_bounds(dataset=ds_clim, period=(1979, 2019))
+        if daily:
+            assert ds_clim.time[0]["time.day"] == 1
+            assert ds_clim.time["time.day"].max() == 31
+        else:
+            assert np.all(ds_clim.temp_std > 0)
+            assert np.all(ds_clim.temp_std <= 10)
+
+    def test_process_gswp3_w5e5_data(self, w5e5_hef_gdir):
+
+        gdir = w5e5_hef_gdir  # init
+        from oggm.shop import w5e5
+
+        w5e5.process_gswp3_w5e5_data(gdir)
+        path_clim = gdir.get_filepath("climate_historical")
+        assert os.path.exists(path_clim)
+
+        period = (1901, 2019)
+
+        with xr.open_dataset(path_clim) as ds_clim:
+            self.assert_data_bounds(dataset=ds_clim, period=period)
+            ds_clim_monthly = ds_clim
+            # temp_std
+            assert np.all(ds_clim.temp_std > 0)
+            assert np.all(ds_clim.temp_std <= 10)
+
+        assert len(ds_clim_monthly.time) == (np.diff(period)[0] + 1) * 12
 
         # test climate statistics with winter_daily_mean_prcp
         df = utils.compile_climate_statistics([gdir], path=False,
@@ -467,7 +508,41 @@ class Test_w5e5:
 
         # we don't have climate data for that time period
         with pytest.raises(KeyError):
-            df['1990-2030_uncorrected_winter_daily_mean_prcp']
+            df["1990-2030_uncorrected_winter_daily_mean_prcp"]
+
+        # test daily implementation
+        w5e5.process_gswp3_w5e5_data(gdir, daily=True)
+        path_clim = gdir.get_filepath("climate_historical", filesuffix="_daily")
+        assert os.path.exists(path_clim)
+
+        with xr.open_dataset(path_clim) as ds_clim:
+            self.assert_data_bounds(dataset=ds_clim, period=period)
+            ds_clim_daily = ds_clim
+
+        # compare monthly with daily
+        # ignoring leap years this should hold
+        assert len(ds_clim_daily.time) > (np.diff(period)[0] + 1) * 365
+
+        # compare grid point selection
+        climate_info_daily = gdir.get_climate_info(input_filesuffix='_daily')
+        climate_info_monthly = gdir.get_climate_info()
+        for key in ['baseline_yr_0', 'baseline_yr_1',
+                    'baseline_climate_ref_hgt', 'baseline_climate_ref_pix_lon',
+                    'baseline_climate_ref_pix_lat']:
+            assert climate_info_daily[key] == climate_info_monthly[key]
+
+        # compare monthly and daily precipitation
+        prcp_sum_from_daily = ds_clim_daily.prcp.resample(time="MS").sum()
+        np.testing.assert_allclose(prcp_sum_from_daily,
+                                   ds_clim_monthly.prcp, atol=1e-4)
+
+        # compare monthly and daily temperature
+        temp_mean_from_daily = ds_clim_daily.temp.resample(time="MS").mean()
+        np.testing.assert_allclose(temp_mean_from_daily,
+                                   ds_clim_monthly.temp, atol=1e-4)
+
+        # TODO: test climate statistics with winter_daily_mean_prcp
+        # Currently utils.compile_climate_statistics doesn't support daily data
 
 
 class Test_ecmwf:
@@ -515,7 +590,7 @@ class Test_ecmwf:
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
-            ci = gdir.get_climate_info('CERA_alone')
+            ci = gdir.get_climate_info(input_filesuffix='CERA_alone')
             assert ci['baseline_climate_source'] == 'CERA|ERA5'
             assert ci['baseline_yr_0'] == 1901
             assert ci['baseline_yr_1'] == 2010
@@ -563,7 +638,7 @@ class Test_ecmwf:
 
             # Let's do some basic checks
             assert ref.attrs['ref_hgt'] == his.attrs['ref_hgt']
-            ci = gdir.get_climate_info('CERA_repl')
+            ci = gdir.get_climate_info(input_filesuffix='CERA_repl')
             assert ci['baseline_climate_source'] == 'CERA+ERA5'
             assert ci['baseline_yr_0'] == 1901
             assert ci['baseline_yr_1'] == 2025
@@ -616,7 +691,7 @@ class Test_ecmwf:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         gdir = workflow.init_glacier_directories(gpd.read_file(hef_file))[0]
 
-        cfg.PARAMS['baseline_climate'] = 'CERA+ERA5L'
+        gdir.settings['baseline_climate'] = 'CERA+ERA5L'
         tasks.process_climate_data(gdir)
         assert gdir.get_filepath('climate_historical')
         # Let's do some basic checks
@@ -625,7 +700,7 @@ class Test_ecmwf:
         assert ci['baseline_yr_0'] == 1901
         assert ci['baseline_yr_1'] == 2018
 
-        cfg.PARAMS['baseline_climate'] = 'CERA|ERA5'
+        gdir.settings['baseline_climate'] = 'CERA|ERA5'
         tasks.process_climate_data(gdir)
         assert gdir.get_filepath('climate_historical')
         # Let's do some basic checks
@@ -654,7 +729,7 @@ class Test_climate_datasets:
         dft = []
         dfp = []
         for base in exps:
-            cfg.PARAMS['baseline_climate'] = base
+            gdir.settings['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
             f = gdir.get_filepath('climate_historical', filesuffix=base)
             with xr.open_dataset(f) as ds:
@@ -708,7 +783,7 @@ class Test_climate_datasets:
         files = []
         ref_hgts = []
         for base in exps:
-            cfg.PARAMS['baseline_climate'] = base
+            gdir.settings['baseline_climate'] = base
             tasks.process_climate_data(gdir, output_filesuffix=base)
             files.append(gdir.get_filepath('climate_historical',
                                            filesuffix=base))
