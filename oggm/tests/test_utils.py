@@ -56,6 +56,11 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
+def _read_prcp_fac(gdir):
+    # module-level so it can be pickled and sent to multiprocessing workers
+    return gdir.settings['prcp_fac']
+
+
 class TestFuncs(object):
 
     def setUp(self):
@@ -878,6 +883,45 @@ class TestWorkflowTools(unittest.TestCase):
         assert file_path in cfg.DATA
         import multiprocessing
         assert type(cfg.DATA) is multiprocessing.managers.DictProxy
+
+    def test_gdir_pickle_excludes_settings_and_observations(self):
+        # settings/observations must not travel through pickle as-is:
+        # GlacierDirectory.__getstate__ drops them and __setstate__
+        # rebuilds them fresh from disk, so that a private copy of
+        # cfg.PARAMS isn't re-shipped on every multiprocessing task
+        import pickle
+
+        gdir = init_hef()
+
+        state = gdir.__getstate__()
+        assert 'settings' not in state
+        assert 'observations' not in state
+
+        gdir_unpickled = pickle.loads(pickle.dumps(gdir))
+        assert gdir_unpickled.settings is not gdir.settings
+        assert gdir_unpickled.observations is not gdir.observations
+        assert (gdir_unpickled.settings['use_rgi_area'] ==
+               gdir.settings['use_rgi_area'])
+
+        # changes written to the settings file on disk must be visible
+        # after unpickling, proving it is reloaded and not a stale copy
+        gdir.settings['prcp_fac'] = 12345
+        gdir_unpickled = pickle.loads(pickle.dumps(gdir))
+        assert gdir_unpickled.settings['prcp_fac'] == 12345
+
+    def test_gdir_settings_survive_multiprocessing(self):
+        # end-to-end check that gdirs sent through a real worker pool
+        # can still read settings correctly after being rebuilt via
+        # GlacierDirectory.__setstate__
+        gdir = init_hef()
+        gdir.settings['prcp_fac'] = 42
+
+        cfg.PARAMS['use_multiprocessing'] = True
+        cfg.PARAMS['mp_processes'] = 2
+        cfg.PARAMS['use_mp_spawn'] = False
+
+        out = workflow.execute_entity_task(_read_prcp_fac, [gdir, gdir])
+        assert out == [42, 42]
 
 
 class TestWorkflowUtils:
