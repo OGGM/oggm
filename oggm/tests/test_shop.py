@@ -458,15 +458,11 @@ class Test_w5e5:
                                       filesuffix=filesuffix)
         if not daily:
             assert "daily" not in path_clim
-            assert not os.path.exists(
-                gdir.get_filepath('climate_historical',
-                                  filesuffix='_daily')
-            )
+            assert not gdir.has_file("climate_historical", filesuffix="_daily")
+
         else:
             assert "daily" in path_clim
-            assert os.path.exists(gdir.get_filepath('climate_historical',
-                                                    filesuffix='_daily'))
-        assert os.path.exists(path_clim)
+            assert gdir.has_file('climate_historical', filesuffix='_daily')
 
         with gdir.open_group('climate_historical', filesuffix=filesuffix) as ds_clim:
             self.assert_data_bounds(dataset=ds_clim, period=(1979, 2019))

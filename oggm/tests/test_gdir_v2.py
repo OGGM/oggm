@@ -198,7 +198,7 @@ class TestClimateFunnel:
         prcp = rng.random(36).astype(np.float32) * 100
         temp = rng.random(36).astype(np.float32) * 10 - 5
 
-        gdir.write_monthly_climate_file(
+        gdir.write_climate_file(
             time,
             prcp,
             temp,
@@ -208,6 +208,7 @@ class TestClimateFunnel:
             source="v2test",
             file_name="gcm_data",
             filesuffix="_v2clim",
+            daily=False,
         )
 
         zarr_fp = gdir.get_filepath("data_store").replace(".pkl", ".zarr")
@@ -239,7 +240,7 @@ class TestClimateFunnel:
         prcp = np.ones(24, np.float32) * 42
         temp = np.zeros(24, np.float32)
 
-        gdir.write_monthly_climate_file(
+        gdir.write__climate_file(
             time,
             prcp,
             temp,
@@ -250,6 +251,7 @@ class TestClimateFunnel:
             source="v2noleap",
             file_name="gcm_data",
             filesuffix="_v2nl",
+            daily=False,
         )
         mb = MonthlyTIModel(gdir, filename="gcm_data", input_filesuffix="_v2nl")
         assert mb.ys == 2000

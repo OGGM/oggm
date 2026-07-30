@@ -4557,7 +4557,7 @@ class GlacierDirectory(object):
             resolution = "monthly"
         else:
             resolution = "daily"
-            if not len(prcp) > (yr_1 - yr_0 + 1) * 28 * 12:
+            if not len(prcp) > (y1 - y0 + 1) * 28 * 12:
                 raise ValueError(
                     f"Data is not in daily resolution: {len(prcp)}"
                 )
@@ -5323,17 +5323,17 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
-        paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
-                        ignore=include_patterns(*paths))
+                        ignore=include_patterns(*('*' + p + '*'
+                                                  for p in paths)))
         """
         include_patterns never ignores directories, so data_store.zarr
         is copied without internal files, resulting in empty store.
-        Here we remove it so next tasks can create a fresh store.
+        Here we replace it with the full store, then keep only the groups
+        matching `paths` (the zarr equivalent of the patterns above).
         """
         _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
-        _keep_zarr_groups(new_dir, "data_store.zarr",
-                          groups_to_keep=['model_flowlines'])
+        _keep_zarr_groups(new_dir, "data_store.zarr", groups_to_keep=paths)
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
@@ -5348,12 +5348,13 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                  'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
-        paths = ('*' + p + '*' for p in paths)
-        shutil.copytree(gdir.dir, new_dir,
-                        ignore=include_patterns(*paths))
+        shutil.copytree(
+            gdir.dir,
+            new_dir,
+            ignore=include_patterns(*("*" + p + "*" for p in paths)),
+        )
         _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
-        _keep_zarr_groups(new_dir, "data_store.zarr",
-                          groups_to_keep=['model_flowlines'])
+        _keep_zarr_groups(new_dir, "data_store.zarr", groups_to_keep=paths)
     elif setup == 'all':
         shutil.copytree(gdir.dir, new_dir)
     else:

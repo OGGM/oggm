@@ -644,11 +644,11 @@ class MonthlyTIModel(MassBalanceModel):
 
         self.years = years[pok]
         self.months = np.array(list(map(lambda x: x.month, time)))[pok]
-            self.days = np.array(list(map(lambda x: x.day, time)))[pok]
+        self.days = np.array(list(map(lambda x: x.day, time)))[pok]
 
-            if check_climate_data:
-                # check for full years, this is overwritten for daily
-                self._check_for_full_years()
+        if check_climate_data:
+            # check for full years, this is overwritten for daily
+            self._check_for_full_years()
 
         # Read timeseries and correct it
         self.temp = (ds["temp"].values[pok].astype(np.float64)
@@ -662,10 +662,10 @@ class MonthlyTIModel(MassBalanceModel):
         self.climate_source = ds.attrs['climate_source']
         self.ys = self.years[0]
         self.ye = self.years[-1]
-            self.ys_float = date_to_floatyear(self.years[0], self.months[0],
-                                              self.days[0])
-            self.ye_float = date_to_floatyear(self.years[-1], self.months[-1],
-                                              self.days[-1])
+        self.ys_float = date_to_floatyear(self.years[0], self.months[0],
+                                            self.days[0])
+        self.ye_float = date_to_floatyear(self.years[-1], self.months[-1],
+                                            self.days[-1])
 
     def __repr__(self):
         """String Representation of the mass balance model"""
