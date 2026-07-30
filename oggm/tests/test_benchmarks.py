@@ -115,7 +115,7 @@ class TestSouthGlacier(unittest.TestCase):
                             pre_file=self.pf)
 
         execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+                            ref_mb_period='2000-01-01_2010-01-01')
 
         mbref = salem.GeoTiff(get_demo_file('mb_SouthGlacier.tif'))
         demref = salem.GeoTiff(get_demo_file('dem_SouthGlacier.tif'))
@@ -128,9 +128,11 @@ class TestSouthGlacier(unittest.TestCase):
         # compute the bias to make it 0 SMB on the 2D DEM
         rho = cfg.PARAMS['ice_density']
         mbmod = ConstantMassBalance(gdirs[0], bias=0, y0=1995)
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
+        sec_in_year = np.mean([mbmod.sec_in_year(yr)
+                               for yr in np.arange(1980, 2011)])
+        mymb = mbmod.get_annual_mb(demref) * sec_in_year * rho
         mbmod = ConstantMassBalance(gdirs[0], y0=1995, bias=np.average(mymb))
-        mymb = mbmod.get_annual_mb(demref) * cfg.SEC_IN_YEAR * rho
+        mymb = mbmod.get_annual_mb(demref) * sec_in_year * rho
         np.testing.assert_allclose(np.average(mymb), 0., atol=1e-3)
 
         # Same for ref
@@ -181,7 +183,7 @@ class TestSouthGlacier(unittest.TestCase):
                             tmp_file=self.tf,
                             pre_file=self.pf)
         execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+                            ref_mb_period='2000-01-01_2010-01-01')
 
         # Tested tasks
         task_list = [
@@ -263,7 +265,7 @@ class TestSouthGlacier(unittest.TestCase):
                             tmp_file=self.tf,
                             pre_file=self.pf)
         execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+                            ref_mb_period='2000-01-01_2010-01-01')
         execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
                             mb_years=[2000, 2009])
 
@@ -341,7 +343,7 @@ class TestSouthGlacier(unittest.TestCase):
                             tmp_file=self.tf,
                             pre_file=self.pf)
         execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+                            ref_mb_period='2000-01-01_2010-01-01')
         execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
                             mb_years=[2000, 2009])
 
@@ -428,7 +430,7 @@ class TestSouthGlacier(unittest.TestCase):
                             tmp_file=self.tf,
                             pre_file=self.pf)
         execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
-                            ref_period='2000-01-01_2010-01-01')
+                            ref_mb_period='2000-01-01_2010-01-01')
         execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
                             mb_years=[2000, 2009])
 
@@ -450,7 +452,7 @@ class TestSouthGlacier(unittest.TestCase):
         execute_entity_task(tasks.mb_calibration_from_geodetic_mb, gdirs,
                             use_regional_avg=True,
                             overwrite_gdir=True,
-                            ref_period='2000-01-01_2005-01-01')
+                            ref_mb_period='2000-01-01_2005-01-01')
         df['region'] = utils.compile_fixed_geometry_mass_balance(gdirs)['RGI60-01.16195']
         assert 0.99 < df.corr().iloc[0, 1] < 1
         assert np.all(df.std() > 450)

@@ -78,7 +78,8 @@ def get_cru_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
+def process_cru_data(gdir, settings_filesuffix='',
+                     tmp_file=None, pre_file=None, y0=None, y1=None,
                      output_filesuffix=None):
     """Processes and writes the CRU baseline climate data for this glacier.
 
@@ -89,6 +90,10 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     tmp_file : str
         path to the CRU temperature file (defaults to the current OGGM chosen
         CRU version)
@@ -108,8 +113,8 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
         previous experiments)
     """
 
-    if cfg.PARAMS['baseline_climate'] != 'CRU':
-        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+    if gdir.settings['baseline_climate'] != 'CRU':
+        raise InvalidParamsError("gdir.settings['baseline_climate'] should be "
                                  "set to CRU")
 
     # read the climatology
@@ -269,10 +274,10 @@ def process_cru_data(gdir, tmp_file=None, pre_file=None, y0=None, y1=None,
     assert np.all(np.isfinite(ts_pre.values))
     assert np.all(np.isfinite(ts_tmp.values))
 
-    gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
-                                    loc_hgt, loc_lon, loc_lat,
-                                    filesuffix=output_filesuffix,
-                                    source=nc_ts_tmp._nc.title[:10])
+    gdir.write_climate_file(time, ts_pre.values, ts_tmp.values,
+                            loc_hgt, loc_lon, loc_lat,
+                            filesuffix=output_filesuffix,
+                            source=nc_ts_tmp._nc.title[:10])
 
     ncclim._nc.close()
     nc_ts_tmp._nc.close()
@@ -395,8 +400,8 @@ def process_dummy_cru_file(gdir, sigma_temp=2, sigma_prcp=0.5, seed=None,
     loc_lat = loc_lat[1]
     assert np.isfinite(loc_hgt)
 
-    gdir.write_monthly_climate_file(time, ts_pre.values, ts_tmp.values,
-                                    loc_hgt, loc_lon, loc_lat,
-                                    filesuffix=output_filesuffix,
-                                    source='CRU CL2 and some randomness')
+    gdir.write_climate_file(time, ts_pre.values, ts_tmp.values,
+                            loc_hgt, loc_lon, loc_lat,
+                            filesuffix=output_filesuffix,
+                            source='CRU CL2 and some randomness')
     ncclim._nc.close()
