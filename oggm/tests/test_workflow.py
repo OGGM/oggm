@@ -871,7 +871,7 @@ class TestGdirSettings:
         custom_settings['trapezoid_lambdas'] = gdir.settings['trapezoid_lambdas'] * 1.5
         workflow.inversion_tasks(gdir, settings_filesuffix='_large_lambda',
                                  input_filesuffix='')
-        inv_out_default = gdir.read_pickle('inversion_output')
+        inv_out_default = gdir.read_store('inversion_output')
         inv_out_lambda = gdir.read_store('inversion_output',
                                           filesuffix='_large_lambda')
         # do not look at last 5 grid points because of filter_inversion_output

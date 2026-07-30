@@ -305,7 +305,7 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                         "with a more recent version of OGGM. While this is "
                         "possible be aware that the handling of observations "
                         "has changed. TODO: add link once new OGGM is released")
-            fls_ref = gdir.read_pickle('model_flowlines',
+            fls_ref = gdir.read_store('model_flowlines',
                                        filesuffix=model_flowlines_filesuffix)
             ref_volume_m3 = {'value': np.sum([f.volume_m3 for f in fls_ref]),
                              'year': gdir.rgi_date + 1}
