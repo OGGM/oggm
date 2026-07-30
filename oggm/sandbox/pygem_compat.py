@@ -117,5 +117,5 @@ def present_time_glacier_from_bins(gdir, data=None,
                                bed_shape=bed_shape, rgi_id=gdir.rgi_id)
 
     # Write the data
-    gdir.write_pickle([nfl], 'model_flowlines')
+    gdir.write_store([nfl], 'model_flowlines')
     return [nfl]

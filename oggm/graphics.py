@@ -271,7 +271,7 @@ def plot_raster(gdirs, var_name=None, cmap='viridis', ax=None, smap=None):
         crs = gdir.grid.center_grid
 
         try:
-            geom = gdir.read_pickle('geometries')
+            geom = gdir.read_store('geometries')
             # Plot boundaries
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='none',
@@ -320,7 +320,7 @@ def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
         crs = gdir.grid.center_grid
 
         try:
-            geom = gdir.read_pickle('geometries')
+            geom = gdir.read_store('geometries')
 
             # Plot boundaries
             poly_pix = geom['polygon_pix']
@@ -366,7 +366,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
     smap.set_data(topo)
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
+        geom = gdir.read_store('geometries')
 
         # Plot boundaries
         poly_pix = geom['polygon_pix']
@@ -379,7 +379,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
                 smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
-        cls = gdir.read_pickle(filename)
+        cls = gdir.read_store(filename)
 
         # Go in reverse order for red always being the longest
         cls = cls[::-1]
@@ -387,7 +387,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for i, (l, c) in enumerate(zip(cls, color)):
             if add_downstream and not gdir.is_tidewater and l is cls[0]:
-                line = gdir.read_pickle('downstream_line')['full_line']
+                line = gdir.read_store('downstream_line')['full_line']
             else:
                 line = l.line
 
@@ -428,7 +428,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     smap.set_topography(topo)
 
     crs = gdir.grid.center_grid
-    geom = gdir.read_pickle('geometries')
+    geom = gdir.read_store('geometries')
 
     # Plot boundaries
     poly_pix = geom['polygon_pix']
@@ -438,14 +438,14 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
         smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
     # plot Centerlines
-    cls = gdir.read_pickle('centerlines')[::-1]
+    cls = gdir.read_store('centerlines')[::-1]
     color = gencolor(len(cls) + 1, cmap=lines_cmap)
     for l, c in zip(cls, color):
         smap.set_geometry(l.line, crs=crs, color=c,
                           linewidth=2.5, zorder=50)
 
     # catchment areas
-    cis = gdir.read_pickle('geometries')['catchment_indices']
+    cis = gdir.read_store('geometries')['catchment_indices']
     for j, ci in enumerate(cis[::-1]):
         mask[tuple(ci.T)] = j+1
 
@@ -483,7 +483,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
+        geom = gdir.read_store('geometries')
 
         # Plot boundaries
         poly_pix = geom['polygon_pix']
@@ -498,7 +498,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
             smap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines
-        cls = gdir.read_pickle('inversion_flowlines')[::-1]
+        cls = gdir.read_store('inversion_flowlines')[::-1]
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for l, c in zip(cls, color):
             smap.set_geometry(l.line, crs=crs, color=c,
@@ -564,8 +564,8 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
     vol = []
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
-        inv = gdir.read_pickle('inversion_output')
+        geom = gdir.read_store('geometries')
+        inv = gdir.read_store('inversion_output')
         # Plot boundaries
         poly_pix = geom['polygon_pix']
         smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
@@ -574,7 +574,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
             smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # Plot Centerlines
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for l, c in zip(cls, inv):
 
             smap.set_geometry(l.line, crs=crs, color='gray',
@@ -641,7 +641,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
         # Try to read geometries.pkl as the glacier boundary,
         # if it can't be found, we use the shapefile to instead.
         try:
-            geom = gdir.read_pickle('geometries')
+            geom = gdir.read_store('geometries')
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
             for l in poly_pix.interiors:
@@ -718,7 +718,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
         modelyr = models[0].yr
 
     for gdir, model in zip(gdirs, models):
-        geom = gdir.read_pickle('geometries')
+        geom = gdir.read_store('geometries')
         poly_pix = geom['polygon_pix']
 
         crs = gdir.grid.center_grid

@@ -3,8 +3,10 @@ import shutil
 import unittest
 from packaging.version import Version
 import pickle
+import warnings
 import pytest
 import json
+import shapely
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -347,7 +349,10 @@ class TestFullRun(unittest.TestCase):
         utils.mkdir(base_dir, reset=True)
         gdirs = workflow.execute_entity_task(utils.copy_to_basedir, gdirs,
                                              base_dir=base_dir, setup='all')
-        os.remove(gdirs[0].get_filepath('centerlines'))
+        path_centerline = gdirs[0].get_filepath('centerlines')
+        for path in [path_centerline,path_centerline.replace(".pkl", ".zarr")]:
+            if os.path.exists(path):
+                os.remove(path)
         cfg.PARAMS['continue_on_error'] = True
         write_centerlines_to_shape(gdirs)
 
@@ -376,7 +381,7 @@ class TestFullRun(unittest.TestCase):
             from oggm.core.massbalance import LinearMassBalance
             from oggm.core.flowline import FluxBasedModel
             mb_mod = LinearMassBalance(ela_h=2500)
-            fls = gd.read_pickle('model_flowlines')
+            fls = gd.read_store('model_flowlines')
             model = FluxBasedModel(fls, mb_model=mb_mod)
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
@@ -866,8 +871,8 @@ class TestGdirSettings:
         custom_settings['trapezoid_lambdas'] = gdir.settings['trapezoid_lambdas'] * 1.5
         workflow.inversion_tasks(gdir, settings_filesuffix='_large_lambda',
                                  input_filesuffix='')
-        inv_out_default = gdir.read_pickle('inversion_output')
-        inv_out_lambda = gdir.read_pickle('inversion_output',
+        inv_out_default = gdir.read_store('inversion_output')
+        inv_out_lambda = gdir.read_store('inversion_output',
                                           filesuffix='_large_lambda')
         # do not look at last 5 grid points because of filter_inversion_output
         assert np.all(inv_out_default[0]['thick'][:-5] <
@@ -898,7 +903,7 @@ class TestGdirSettings:
             gdirs, settings_filesuffix='_large_melt_f', ref_table=ref_table,
             input_filesuffix='_large_melt_f', apply_fs_on_mismatch=True)
         glen_a_after = custom_settings['inversion_glen_a']
-        inv_out_melt_f = gdir.read_pickle('inversion_output',
+        inv_out_melt_f = gdir.read_store('inversion_output',
                                           filesuffix='_large_melt_f')
         # with larger melt_f the residual of the apparent mass balance must be
         # larger, to compensate for the more negative mb
@@ -932,7 +937,7 @@ class TestGdirSettings:
 
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
-        cls1 = gdir.read_pickle('inversion_output')
+        cls1 = gdir.read_store('inversion_output')
         # Increase calving for this one using settings
         custom_settings = ModelSettings(gdir,
                                         filesuffix='_large_k',
@@ -944,7 +949,7 @@ class TestGdirSettings:
         out = inversion.find_inversion_calving_from_any_mb(
             gdir, settings_filesuffix='_large_k', output_filesuffix='_large_k',
         )
-        cls2 = gdir.read_pickle('inversion_output', filesuffix='_large_k')
+        cls2 = gdir.read_store('inversion_output', filesuffix='_large_k')
 
         # Calving increases the volume and adds a residual
         v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
@@ -1071,3 +1076,168 @@ class TestGdirObservations:
                 write_to_gdir=False,
             )
         assert 'You have not provided an reference' in str(exc_info.value)
+
+
+class TestZarrWorkflow:
+    """Tests for any Zarr operations called via workflow or _workflow."""
+
+    @pytest.mark.skip(reason="warning disabled for performance")
+    def test_pickle_warnings(self, hef_gdir):
+        """Test that write_pickle raises a warning if used."""
+        gdir = hef_gdir
+
+        with pytest.warns(
+            PendingDeprecationWarning,
+            match="gdir.write_pickle is deprecated and will be replaced by gdir.write_store in a future OGGM release.",
+        ):
+            gdir.write_pickle(
+                var={"array": [1, 2]},
+                filename="inversion_input",
+                filesuffix="test_pickle",
+            )
+
+    @pytest.mark.skip
+    @pytest.mark.parametrize("arg_filesuffix", ["", "_exp01"])
+    def test_write_zarr(tmp_path, hef_gdir, arg_filesuffix):
+        """Create a zarr store at the expected path."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        ds = xr.Dataset(
+            {
+                "temperature": xr.DataArray(
+                    np.array([1.0, 2.0, 3.0]), dims=["time"]
+                )
+            }
+        )
+        data_tree = xr.DataTree(dataset=ds)
+
+        gdir.write_zarr(
+            data_tree=data_tree,
+            filename="data_store",
+            filesuffix=arg_filesuffix,
+        )
+
+        fp = gdir.get_filepath(filename="data_store", filesuffix=arg_filesuffix)
+        assert os.path.exists(fp)
+
+        with xr.open_zarr(fp, consolidated=True) as ds_read:
+            np.testing.assert_array_equal(
+                ds_read["temperature"].values, [1.0, 2.0, 3.0]
+            )
+
+        # Test that overwrite=True replaces existing zarr content
+
+        ds_new = xr.Dataset(
+            {"val": xr.DataArray(np.array([9.0, 8.0]), dims=["n"])}
+        )
+        gdir.write_zarr(
+            xr.DataTree(dataset=ds_new), "data_store", overwrite=True
+        )
+
+        fp = gdir.get_filepath("data_store")
+        with xr.open_zarr(fp, consolidated=True) as ds_read:
+            np.testing.assert_array_equal(ds_read["val"].values, [9.0, 8.0])
+
+    # @pytest.mark.xfail(reason="zarr is not yet in oggm-sample-data")
+    def test_read_store(self, tmp_path, hef_gdir):
+        """Test that read_store returns xr.DataTree when zarr store exists."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        ds = xr.Dataset(
+            {"flux": xr.DataArray(np.array([1.0, 2.0, 3.0]), dims=["time"])}
+        )
+        data_tree = xr.DataTree()
+        data_tree["inversion_input_test"] = xr.DataTree.from_dict(
+            name="inversion_input_test", data=ds
+        )
+        # until this is included via oggm-sample-data
+        gdir.write_zarr(data_tree=data_tree, filename="data_store", overwrite=False)
+        result = gdir.read_store(filename="inversion_input", filesuffix="_test")
+
+        assert isinstance(result, list)
+        assert isinstance(result[0], dict)
+
+        # This will fail if it reads the pickle instead of the zarr
+        np.testing.assert_array_equal(result[0]["flux"], [1.0, 2.0, 3.0])
+
+    def test_read_store_fallback(self, hef_gdir):
+        """Test read_store falls back to read_pickle if zarr is not found."""
+        from oggm.utils import _workflow
+
+        gdir = hef_gdir
+        # Force use of pickle or this test will never pass once switched to zarr
+        gdir.write_pickle(
+            var=[1, 2, 3],
+            filename="inversion_flowlines",
+            filesuffix="test_pickle",
+        )
+        # reset so test observes the first warning
+        _workflow._warn_zarr_fallback.cache_clear()
+        with pytest.warns(
+            Warning,
+            match="Zarr data not found, attempting to read pickle file instead.",
+        ):
+            ds_read = gdir.read_store(
+                filename="inversion_flowlines", filesuffix="test_pickle"
+            )
+        assert not isinstance(ds_read, xr.DataTree)
+        assert isinstance(ds_read, list)
+
+        # warn-once behaviour
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            ds_read = gdir.read_store(
+                filename="inversion_flowlines", filesuffix="test_pickle"
+            )
+        assert not any(
+            "Zarr data not found" in str(r.message) for r in records
+        )
+        assert isinstance(ds_read, list)
+
+    def test_validate_store(self, hef_gdir):
+        gdir = hef_gdir
+
+        ds = xr.Dataset(
+            {"flux": xr.DataArray(np.array([100.0, 200.0, 300.0]), dims=["x"])}
+        )
+        data_tree = xr.DataTree(dataset=ds, name="inversion_input")
+
+        result = gdir._validate_store(data_tree=data_tree)
+
+        assert isinstance(result, list)
+        assert isinstance(result[0], dict)
+        np.testing.assert_array_equal(result[0]["flux"], [100.0, 200.0, 300.0])
+
+    def test_validate_store_logic(self, hef_gdir):
+        """Test that _validate_store modifies the data_tree as expected."""
+        gdir = hef_gdir
+        downstream_line = gdir.read_store("downstream_line")["downstream_line"]
+        assert isinstance(downstream_line, shapely.LineString)
+
+        # Create a DataTree with a downstream_line variable
+        data_tree = xr.DataTree()
+        ds = xr.Dataset(
+            {
+                "downstream_line": xr.DataArray(
+                    np.array(
+                        shapely.geometry.mapping(downstream_line)["coordinates"]
+                    ),
+                    dims=["x", "y"],
+                )
+            }
+        )
+        data_tree = xr.DataTree(dataset=ds, name="downstream_line")
+        assert data_tree.name == "downstream_line"
+
+        result = gdir._validate_store(data_tree=data_tree)
+
+        assert isinstance(result, dict)
+        assert "downstream_line" in result.keys()
+        assert isinstance(result["downstream_line"], shapely.LineString)
+        assert shapely.LineString(result["downstream_line"]).equals(
+            downstream_line
+        )

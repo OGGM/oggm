@@ -981,7 +981,7 @@ def glacier_masks(gdir):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    gdir.write_pickle(geometries, 'geometries')
+    gdir.write_store(geometries, 'geometries')
 
     # write out the grids in the netcdf file
     with GriddedNcdfFile(gdir) as nc:
@@ -1660,13 +1660,13 @@ def gridded_mb_attributes(gdir):
 
     # Hardest part - MB per catchment
     try:
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
     except FileNotFoundError:
         return
 
     # Make everything we need flat
     # Catchment areas
-    cis = gdir.read_pickle('geometries')['catchment_indices']
+    cis = gdir.read_store('geometries')['catchment_indices']
     for j, ci in enumerate(cis):
         catchment_mask_2d[tuple(ci.T)] = j
 
@@ -1871,7 +1871,7 @@ def merged_glacier_masks(gdir, geometry):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    gdir.write_pickle(geometries, 'geometries')
+    gdir.write_store(geometries, 'geometries')
 
 
 @entity_task(log)
