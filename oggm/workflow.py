@@ -1011,7 +1011,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
 @global_task(log)
 def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
                                        observations_filesuffix='',
-                                       overwrite_observations=False,
+                                       overwrite_observations=True,
                                        input_filesuffix=None,
                                        output_filesuffix=None,
                                        ignore_missing=True,
