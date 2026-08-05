@@ -855,7 +855,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         if ref_volume_m3 is not None and ref_table is None:
             df = pd.DataFrame(index=rids_use)
             ref_col = None
-        else:
+        elif ref_volume_m3 is None and ref_table is not None:
             # Get the ref data for the glaciers we have
             df, ref_col = _resolve_ref_volume_table(gdirs, ref_table)
 
@@ -867,6 +867,9 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                                            'ignore this error.')
 
             df = df.reindex(rids)
+        else:
+            raise ValueError("You either need to provide a ref_volume_m3 or a "
+                             "ref_table!")
     else:
         ref_volume_m3_file = sum([gdir.observations['ref_volume_m3']['value']
                                   for gdir in gdirs_use])
