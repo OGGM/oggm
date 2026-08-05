@@ -914,6 +914,7 @@ class TestWorkflowTools(unittest.TestCase):
         # can still read settings correctly after being rebuilt via
         # GlacierDirectory.__setstate__
         gdir = init_hef()
+        orig_prcp_fac = gdir.settings['prcp_fac']
         gdir.settings['prcp_fac'] = 42
 
         cfg.PARAMS['use_multiprocessing'] = True
@@ -922,6 +923,9 @@ class TestWorkflowTools(unittest.TestCase):
 
         out = workflow.execute_entity_task(_read_prcp_fac, [gdir, gdir])
         assert out == [42, 42]
+
+        # set prcp_fac back for other tests
+        gdir.settings['prcp_fac'] = orig_prcp_fac
 
 
 class TestWorkflowUtils:
