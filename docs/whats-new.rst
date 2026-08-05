@@ -184,6 +184,16 @@ Bug fixes
   dispatched to a worker process. They are now dropped before pickling and
   rebuilt from disk in the worker instead (:pull:`1967`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Model constructors no longer silently persist a non-default ``temp_melt`` to
+  the gdir settings file. ``check_calib_params`` now validates the effective
+  model parameters instead of the settings file, and calibration tasks record
+  ``mb_global_params`` from the model used (:pull:`1961`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- ``SemiImplicitModel`` now reads its calving parameters from the model settings
+  instead of ``cfg.PARAMS``, so runs using a ``settings_filesuffix`` are no
+  longer silently calving with the default configuration. ``do_calving`` is now
+  also ignored for non-tidewater glaciers (:pull:`1961`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

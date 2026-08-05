@@ -1,5 +1,6 @@
 import unittest
 from functools import partial
+from types import SimpleNamespace
 import pytest
 import copy
 import numpy as np
@@ -1596,6 +1597,37 @@ class TestFluxGate(unittest.TestCase):
             plt.show()
 
 
+def test_semi_implicit_calving_params_from_settings():
+    cfg.initialize()
+    settings = cfg.PARAMS.copy()
+    settings["use_kcalving_for_run"] = True
+    settings["calving_k"] = cfg.PARAMS["calving_k"] * 2
+    settings["calving_use_limiter"] = not cfg.PARAMS["calving_use_limiter"]
+    gdir = SimpleNamespace(settings=settings, settings_filesuffix="_calv")
+
+    fls = bu_tidewater_bed(bed_shape="trapezoidal", lambdas=0.0)
+    model = SemiImplicitModel(
+        fls,
+        mb_model=ScalarMassBalance(),
+        gdir=gdir,
+        settings_filesuffix="_calv",
+        is_tidewater=True,
+        water_level=0.0,
+    )
+    assert model.do_calving
+    assert_allclose(model.calving_k, settings["calving_k"] / cfg.SEC_IN_YEAR)
+    assert model.calving_use_limiter == settings["calving_use_limiter"]
+
+    # and calving stays off for land-terminating glaciers
+    model = SemiImplicitModel(
+        bu_tidewater_bed(bed_shape="trapezoidal", lambdas=0.0),
+        mb_model=ScalarMassBalance(),
+        do_calving=True,
+        water_level=0.0,
+    )
+    assert not model.do_calving
+
+
 @pytest.fixture(scope='function',
                 params=[
                 (
@@ -1609,7 +1641,7 @@ class TestFluxGate(unittest.TestCase):
                 (
                     SemiImplicitModel,
                     dict(bed_shape='trapezoidal', lambdas=0.0),
-                    dict(calving_use_limiter=True,
+                    dict(is_tidewater=True, calving_use_limiter=True,
                          flux_gate=0.06, do_calving=True,
                          calving_k=0.2, water_level=0.0
                     ),
@@ -1645,7 +1677,7 @@ class TestKCalving():
         if models_cls is FluxBasedModel:
             model_kwargs.update(is_tidewater=True, do_kcalving=True)
         else:
-            model_kwargs.update(do_calving=True, water_level=0.0)
+            model_kwargs.update(is_tidewater=True, do_calving=True, water_level=0.0)
 
         model = models_cls(bu_tidewater_bed(**bed_kwargs),
                                mb_model=ScalarMassBalance(),
@@ -1733,7 +1765,7 @@ class TestKCalving():
         if models_cls is FluxBasedModel:
             model_kwargs.update(is_tidewater=True, do_kcalving=True)
         else:
-            model_kwargs.update(do_calving=True)
+            model_kwargs.update(is_tidewater=True, do_calving=True)
 
         model = models_cls(
             bu_tidewater_bed(**bed_kwargs),

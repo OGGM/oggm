@@ -276,10 +276,38 @@ class TestFullRun(unittest.TestCase):
         assert (gdir_0_ref_vol['value'] !=
                 gdir_0_ref_vol_user_provided['value'])
 
-        # the deprecated alias still works and warns
+        # the deprecated alias still works, warns, and always calibrates
+        # against the correct (consensus) ref table - regardless of what
+        # was stored in the observations file before (the user provided
+        # volume from the previous calibration call above)
         with pytest.warns(FutureWarning, match='deprecated'):
-            workflow.calibrate_inversion_from_consensus(gdirs,
-                                                        ignore_missing=True)
+            df_consensus = workflow.calibrate_inversion_from_consensus(
+                gdirs, ignore_missing=True)
+        df_consensus = df_consensus.dropna()
+
+        # same ref table as a direct call with ref_table='consensus'
+        np.testing.assert_allclose(df_orig.dropna().vol_itmix_m3.sum(),
+                                   df_consensus.vol_itmix_m3.sum(),
+                                   rtol=1e-9)
+        np.testing.assert_allclose(df_consensus.vol_itmix_m3.sum(),
+                                   df_consensus.vol_oggm_m3.sum(),
+                                   rtol=0.001)
+
+        # the observations file is overwritten with the newly computed
+        # volume (matching the consensus estimate), not the previously
+        # stored user provided one
+        gdir_0_ref_vol_consensus = gdirs[0].observations['ref_volume_m3']
+        assert (gdir_0_ref_vol_consensus['value'] !=
+                gdir_0_ref_vol_user_provided['value'])
+        np.testing.assert_allclose(
+            gdir_0_ref_vol_consensus['value'],
+            df_consensus.loc[gdirs[0].rgi_id, 'vol_oggm_m3'],
+            rtol=1e-6)
+        np.testing.assert_allclose(
+            gdir_0_ref_vol_consensus['value'],
+            gdir_0_ref_vol['value'],
+            rtol=1e-2)
+        assert gdir_0_ref_vol_consensus['year'] == gdir_0_ref_vol['year']
 
     @pytest.mark.slow
     def test_shapefile_output(self):
