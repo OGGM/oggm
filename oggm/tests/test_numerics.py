@@ -1933,7 +1933,9 @@ class TestSia2d(unittest.TestCase):
         assert_allclose(sdmodel.volume_km3 / 3, flmodel.volume_km3, atol=2e-3)
         assert_allclose(sdmodel.area_km2 / 3, flmodel.area_km2, atol=2e-3)
 
+    @pytest.mark.skip(
+        reason="TODO: not implemented yet - add formal test "
+        "like https://github.com/alexjarosch/sia-fluxlim"
+    )
     def test_bueler(self):
-        # TODO: add formal test like Alex's
-        # https://github.com/alexjarosch/sia-fluxlim
         pass

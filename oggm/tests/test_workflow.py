@@ -312,9 +312,12 @@ class TestFullRun(unittest.TestCase):
                                    corner_cutting=3,
                                    simplify_line_after=0.05)
         shp_ext_smooth = salem.read_shapefile(fpath)
-        # This is a bit different of course
+        # This is a bit different of course, but should still be in the
+        # range of measured max rel diff ~0.17.
+        assert (shp_ext['LE_SEGMENT'] > 0).all()
+        assert (shp_ext_smooth['LE_SEGMENT'] > 0).all()
         assert_allclose(shp_ext['LE_SEGMENT'], shp_ext_smooth['LE_SEGMENT'],
-                        rtol=2)
+                        rtol=0.25)
 
         fpath = os.path.join(_TEST_DIR, 'flowlines.shp')
         write_centerlines_to_shape(gdirs, path=fpath, flowlines_output=True)
@@ -573,7 +576,6 @@ def test_rgi7_glacier_dirs():
     hef_rgi7_df = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
     # create GDIR
     gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
-    assert gdir
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 8
     assert gdir.name == 'Hintereisferner'
@@ -601,7 +603,6 @@ def test_rgi7_complex_glacier_dirs():
     hef_rgi7_df = gpd.read_file(get_demo_file('rgi7c_hef.shp'))
     # create GDIR
     gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
-    assert gdir
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 20
     assert gdir.name == ''
