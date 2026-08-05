@@ -905,9 +905,11 @@ class TestWorkflowTools(unittest.TestCase):
 
         # changes written to the settings file on disk must be visible
         # after unpickling, proving it is reloaded and not a stale copy
+        orig_prcp_fac = gdir.settings['prcp_fac']
         gdir.settings['prcp_fac'] = 12345
         gdir_unpickled = pickle.loads(pickle.dumps(gdir))
         assert gdir_unpickled.settings['prcp_fac'] == 12345
+        gdir.settings['prcp_fac'] = orig_prcp_fac
 
     def test_gdir_settings_survive_multiprocessing(self):
         # end-to-end check that gdirs sent through a real worker pool
