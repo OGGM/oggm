@@ -461,6 +461,42 @@ def weighted_average_2d(data, weights):
     return np.multiply(np.transpose(data), weights).sum(axis=1) / scl
 
 
+def weighted_quantile_1d(data, weights, quantile):
+    """The weighted quantile of a 1D array, without dimension checks.
+
+    Parameters
+    ----------
+    data : ArrayLike
+        Must be of shape (n, ).
+    weights : ArrayLike
+        Must be of shape (n, ).
+    quantile : float
+        the quantile to compute, between 0 and 1.
+
+    Returns
+    -------
+    the weighted quantile of the data.
+    """
+    if quantile > 1 or quantile < 0:
+        raise InvalidParamsError('quantile must have a value between 0 and 1.')
+
+    data = np.asarray(data)
+    weights = np.asarray(weights)
+
+    # Sort the data
+    ind_sorted = np.argsort(data)
+    sorted_data = data[ind_sorted]
+    sorted_weights = weights[ind_sorted]
+
+    # Compute the auxiliary arrays
+    sn = np.cumsum(sorted_weights)
+    if sn[-1] == 0:
+        raise ZeroDivisionError("Weights sum to zero, can't be normalized")
+    pn = (sn - 0.5 * sorted_weights) / sn[-1]
+
+    return np.interp(quantile, pn, sorted_data)
+
+
 if Version(np.__version__) < Version('1.17'):
     clip_array = np.clip
 else:

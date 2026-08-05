@@ -64,6 +64,7 @@ Input/Output
     utils.gdir_to_tar
     utils.base_dir_to_tar
     utils.cook_rgidf
+    utils.compute_temp_bias_dataframe
     global_tasks.write_centerlines_to_shape
     global_tasks.compile_glacier_statistics
     global_tasks.compile_run_output
@@ -227,6 +228,7 @@ These commands are available:
 
 - ``oggm_netrc_credentials``
 - ``oggm_prepro``
+- ``oggm_temp_bias``
 - ``oggm_benchmark``
 
 .. autosummary::
@@ -234,6 +236,7 @@ These commands are available:
     :nosignatures:
 
     cli.prepro_levels.run_prepro_levels
+    cli.temp_bias.run_temp_bias
 
 Classes
 =======

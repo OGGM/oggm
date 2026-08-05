@@ -51,6 +51,19 @@ Enhancements
   arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
   (:pull:`1941`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The temperature bias prior file used by the `informed_threestep` calibration
+  can now be created from the command line, instead of with a notebook. The new
+  ``oggm_temp_bias`` command (and the underlying
+  ``utils.compute_temp_bias_dataframe``) summarizes the per-glacier biases of a
+  `temp_melt` preprocessing run per climate grid point and writes the csv file
+  (plus diagnostic plots) which can then be fed back to `oggm_prepro` with
+  ``--temp-bias-file-path``. The climate grid is inferred from the glacier
+  statistics themselves, so this works with any (custom) climate dataset.
+  ``oggm_prepro`` also gets a ``--temp-bias-run`` preset for the preprocessing
+  step itself: it forces the `temp_melt` strategy, stops at level 3, skips the
+  ice thickness inversion and does not write the glacier directory tar files.
+  New utility function ``utils.weighted_quantile_1d``.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to

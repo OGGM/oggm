@@ -1,4 +1,5 @@
 import unittest
+import glob
 import os
 import shutil
 import time
@@ -90,6 +91,42 @@ class TestFuncs(object):
         b = utils.smooth1d(a, 3, kernel=kernel)
         c = utils.smooth1d(a, 3)
         assert_allclose(b, c)
+
+    def test_weighted_quantile_1d(self):
+
+        data = np.array([1., 2., 3., 4., 5.])
+
+        # With equal weights this is the plain median
+        w = np.ones(5)
+        assert_allclose(utils.weighted_quantile_1d(data, w, 0.5),
+                        np.median(data))
+        assert_allclose(utils.weighted_quantile_1d(data[:4], w[:4], 0.5),
+                        np.median(data[:4]))
+
+        # The extremes
+        assert_allclose(utils.weighted_quantile_1d(data, w, 0), data.min())
+        assert_allclose(utils.weighted_quantile_1d(data, w, 1), data.max())
+
+        # Order does not matter
+        assert_allclose(utils.weighted_quantile_1d(data[::-1], w, 0.5),
+                        np.median(data))
+
+        # Two values: the result is pulled towards the heavier one, and the
+        # two mirrored cases are symmetric
+        lo = utils.weighted_quantile_1d([0., 1.], [3., 1.], 0.5)
+        hi = utils.weighted_quantile_1d([0., 1.], [1., 3.], 0.5)
+        assert lo < 0.5 < hi
+        assert_allclose(lo, 1 - hi)
+        assert_allclose(utils.weighted_quantile_1d([0., 1.], [1., 1.], 0.5), 0.5)
+
+        # Weighting one value out is like removing it
+        assert_allclose(utils.weighted_quantile_1d(data, [1, 1, 1, 1, 0], 0.5),
+                        utils.weighted_quantile_1d(data[:4], w[:4], 0.5))
+
+        with pytest.raises(InvalidParamsError):
+            utils.weighted_quantile_1d(data, w, 1.5)
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_quantile_1d(data, np.zeros(5), 0.5)
 
     def test_utm_proj4_from_lonlat(self):
 
@@ -2332,6 +2369,303 @@ class TestPreproCLI:
         entity = rgidf.iloc[0]
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
+
+
+def _fake_glacier_statistics(grid_points, reg='11', dlon=0.5, dlat=0.5,
+                             seed=0):
+    """A synthetic `glacier_statistics` file of a `temp_melt` run.
+
+    `grid_points` is a list of (lon, lat, n_glaciers) tuples. The temp bias of
+    a glacier is its grid point longitude plus some noise, so that the
+    aggregated values are easy to check.
+    """
+    rng = np.random.RandomState(seed)
+    rows = []
+    for lon, lat, n in grid_points:
+        for _ in range(n):
+            rows.append({'rgi_id': 'RGI60-{}.{:05d}'.format(reg, len(rows)),
+                         'rgi_region': reg,
+                         'rgi_subregion': f'{reg}-01',
+                         'cenlon': lon + rng.uniform(-dlon / 2, dlon / 2),
+                         'cenlat': lat + rng.uniform(-dlat / 2, dlat / 2),
+                         'rgi_area_km2': rng.uniform(0.1, 10),
+                         'temp_bias': lon + rng.normal(scale=0.1),
+                         'reference_mb_err': rng.uniform(100, 300),
+                         'baseline_climate_ref_pix_lon': lon,
+                         'baseline_climate_ref_pix_lat': lat,
+                         })
+    return pd.DataFrame(rows)
+
+
+class TestTempBiasCLI:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
+        self.testdir = str(tmpdir_factory.mktemp("tmp_temp_bias"))
+        utils.mkdir(self.testdir, reset=True)
+        cfg.initialize()
+
+    def test_parse_args(self):
+
+        from oggm.cli import temp_bias
+
+        kwargs = temp_bias.parse_args(['--input', 'in_dir'])
+        assert kwargs['input_files'] == ['in_dir']
+        assert kwargs['output_file'] == 'temp_bias.csv'
+        assert kwargs['make_plots']
+        assert kwargs['min_glaciers'] == 12
+        assert kwargs['max_radius'] == 10
+        assert kwargs['err_fill_quantile'] == 0.9
+        assert kwargs['rgi_region'] is None
+        assert kwargs['rgi_subregion'] is None
+
+        kwargs = temp_bias.parse_args(['--input', 'd1', 'd2',
+                                       '--output-file', 'out/tb.csv',
+                                       '--no-plots',
+                                       '--min-glaciers', '5',
+                                       '--max-radius', '3',
+                                       '--err-fill-quantile', '0.5',
+                                       '--rgi-subregion', '11-01',
+                                       ])
+        assert kwargs['input_files'] == ['d1', 'd2']
+        assert kwargs['output_file'] == 'out/tb.csv'
+        assert not kwargs['make_plots']
+        assert kwargs['min_glaciers'] == 5
+        assert kwargs['max_radius'] == 3
+        assert kwargs['err_fill_quantile'] == 0.5
+        assert kwargs['rgi_subregion'] == ['11-01']
+
+        with pytest.raises(InvalidParamsError):
+            temp_bias.parse_args([])
+
+        with TempEnvironmentVariable(OGGM_TEMP_BIAS_INPUT='d1 d2'):
+            kwargs = temp_bias.parse_args([])
+            assert kwargs['input_files'] == ['d1', 'd2']
+
+    def test_compute_temp_bias_dataframe(self):
+
+        # Three grid points: two well populated, one with too few glaciers
+        df = _fake_glacier_statistics([(10.25, 46.25, 20),
+                                       (10.75, 46.25, 15),
+                                       (11.25, 46.25, 3)])
+        # A failed glacier and a missing MB error should not be a problem
+        df.loc[0, 'temp_bias'] = np.nan
+        df.loc[1, 'reference_mb_err'] = np.nan
+
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=12)
+
+        # The file format is set in stone - this is what OGGM reads back
+        assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
+        assert out.index.name == 'unique_id'
+        assert len(out) == 3
+        assert out['n_glaciers'].sum() == len(df) - 1  # the failed one is out
+
+        # The grid was correctly inferred from the ref pix coordinates
+        assert_allclose(sorted(out['lon_val']), [10.25, 10.75, 11.25])
+        assert_array_equal(sorted(out['lon_id']), [0, 1, 2])
+        assert_array_equal(out['lat_id'], 0)
+
+        # The values are dominated by the grid point longitude
+        for _, s in out.iterrows():
+            assert_allclose(s['median_temp_bias'], s['lon_val'], atol=0.1)
+
+        # Populated grid points are used as is
+        big = out.loc[out['n_glaciers'] >= 12]
+        assert len(big) == 2
+        assert_array_equal(big['search_radius'], 0)
+        assert_array_equal(big['n_glaciers_grouped'], big['n_glaciers'])
+        for c in ['median_temp_bias', 'median_temp_bias_w_area',
+                  'median_temp_bias_w_err']:
+            assert_allclose(big[c], big[c + '_grouped'])
+
+        # The lonely one is grouped with its neighbours
+        small = out.loc[out['n_glaciers'] < 12]
+        assert len(small) == 1
+        assert small['search_radius'].iloc[0] == 1
+        # radius 1 around 11.25 reaches 10.75 but not 10.25
+        assert small['n_glaciers_grouped'].iloc[0] == 3 + 15
+        assert (small['median_temp_bias_grouped'].iloc[0] <
+                small['median_temp_bias'].iloc[0])
+
+        # Check one weighted median by hand
+        sel = df.loc[df['baseline_climate_ref_pix_lon'] == 10.75]
+        assert_allclose(out.loc['001_000', 'median_temp_bias_w_area'],
+                        utils.weighted_quantile_1d(sel['temp_bias'].values,
+                                                   sel['rgi_area_km2'].values,
+                                                   0.5))
+        assert_allclose(out.loc['001_000', 'median_temp_bias_w_err'],
+                        utils.weighted_quantile_1d(
+                            sel['temp_bias'].values,
+                            1 / sel['reference_mb_err'].values, 0.5))
+
+        # Without grouping, all grid points are on their own
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=1)
+        assert_array_equal(out['search_radius'], 0)
+        assert_array_equal(out['n_glaciers_grouped'], out['n_glaciers'])
+
+        # Subregion selection
+        df['rgi_subregion'] = ['11-01'] * 20 + ['11-02'] * 18
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=1,
+                                                rgi_subregion='11-02')
+        assert len(out) == 2
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=1,
+                                                rgi_region=11)
+        assert len(out) == 3
+
+        # Garbage in
+        with pytest.raises(InvalidWorkflowError):
+            utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
+        with pytest.raises(InvalidWorkflowError):
+            # All the glaciers in the same grid point
+            utils.compute_temp_bias_dataframe(
+                _fake_glacier_statistics([(10.25, 46.25, 20)]))
+
+    def test_compute_temp_bias_dataframe_wrap(self):
+
+        # Grid points on both sides of the dateline should see each other
+        df = _fake_glacier_statistics([(-179.75, 60.25, 2),
+                                       (-179.25, 60.25, 2),
+                                       (179.25, 60.25, 2),
+                                       (179.75, 60.25, 2)])
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=6)
+
+        # 720 longitudes at 0.5 deg - the grid is anchored on the westernmost
+        assert_array_equal(sorted(out['lon_id']), [0, 1, 718, 719])
+
+        # The two grid points either side of the dateline are neighbours: at
+        # radius 1 they see each other and reach the 6 glaciers they need
+        for uid in ['000_000', '719_000']:
+            assert out.loc[uid, 'search_radius'] == 1
+            assert out.loc[uid, 'n_glaciers_grouped'] == 6
+
+        # Without the wrap-around they would never find enough glaciers
+        assert (out['n_glaciers_grouped'] >= 6).all()
+
+    def test_temp_bias_cli(self):
+
+        from oggm.cli.temp_bias import run_temp_bias
+
+        # Two "regions", written as two files, as prepro_levels would
+        sum_dir = os.path.join(self.testdir, 'summary')
+        utils.mkdir(sum_dir)
+        for reg, lon0 in [('11', 10.25), ('12', 20.25)]:
+            df = _fake_glacier_statistics([(lon0, 46.25, 20),
+                                           (lon0 + 0.5, 46.25, 20),
+                                           (lon0 + 1, 46.75, 3)], reg=reg)
+            df.to_csv(os.path.join(sum_dir,
+                                   f'glacier_statistics_{reg}.csv'),
+                      index=False)
+
+        opath = os.path.join(self.testdir, 'out', 'temp_bias_v42.csv')
+        run_temp_bias(input_files=[sum_dir], output_file=opath,
+                      min_glaciers=12)
+
+        out = pd.read_csv(opath, index_col=0)
+        assert len(out) == 6
+        assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
+        assert os.path.isfile(os.path.join(self.testdir, 'out',
+                                           'temp_bias_v42_map.png'))
+        assert os.path.isfile(os.path.join(self.testdir, 'out',
+                                           'temp_bias_v42_hist.png'))
+
+        # This is what OGGM does with the file: it must be readable and the
+        # nearest grid point lookup must work (see mb_calibration_from_
+        # geodetic_mb)
+        bias_df = utils.get_temp_bias_dataframe(file_path=opath)
+        assert_array_equal(bias_df.index, out.index)
+        dis = ((bias_df.lon_val - 20.75) ** 2 +
+               (bias_df.lat_val - 46.25) ** 2) ** 0.5
+        assert dis.min() < 1
+        sel = bias_df.iloc[np.argmin(dis)]
+        assert_allclose(sel['median_temp_bias_w_err_grouped'], 20.75, atol=0.1)
+        assert np.isfinite(bias_df['median_temp_bias_w_err_grouped']).all()
+
+        # No plots if asked
+        opath = os.path.join(self.testdir, 'out2', 'temp_bias_v42.csv')
+        run_temp_bias(input_files=[sum_dir], output_file=opath,
+                      make_plots=False)
+        assert os.path.isfile(opath)
+        assert not os.path.isfile(os.path.join(self.testdir, 'out2',
+                                               'temp_bias_v42_map.png'))
+
+    @pytest.mark.slow
+    def test_prepro_temp_bias_run(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+
+        # Two glaciers in one W5E5 grid point, one in the next
+        test_ids = ['RGI60-11.00897', 'RGI60-11.00746', 'RGI60-11.00929']
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir,
+                          is_test=True, test_ids=test_ids,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          continue_on_error=False,
+                          temp_bias_run=True,
+                          temp_bias_run_kwargs={'min_glaciers': 2},
+                          override_params={},
+                          )
+
+        sum_dir = os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary')
+        opath = os.path.join(sum_dir, 'temp_bias_11.csv')
+        assert os.path.isfile(opath)
+        assert os.path.isfile(os.path.join(sum_dir, 'temp_bias_11_map.png'))
+        assert os.path.isfile(os.path.join(sum_dir, 'temp_bias_11_hist.png'))
+
+        # The gdirs are not copied back, and we stopped at L3
+        for lev in ['L0', 'L1', 'L2', 'L3']:
+            base = os.path.join(odir, 'RGI61', 'b_020', lev)
+            assert len(glob.glob(os.path.join(base, '*.tar*'))) == 0
+            assert len(glob.glob(os.path.join(base, 'RGI*'))) == 0
+        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+
+        # The two grid points are there, one of them had to be grouped
+        out = pd.read_csv(opath, index_col=0)
+        assert len(out) == 2
+        assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
+        assert out['n_glaciers'].sum() == 3
+        assert (out['search_radius'] == [0, 1]).all()
+        assert np.isfinite(out['median_temp_bias_w_err_grouped']).all()
+
+        # And now the real test: the file we just made must work as a prior
+        wdir2 = os.path.join(self.testdir, 'wd2')
+        utils.mkdir(wdir2)
+        odir2 = os.path.join(self.testdir, 'levs2')
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir2, working_dir=wdir2,
+                          is_test=True, test_ids=test_ids,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          continue_on_error=False,
+                          max_level=3, skip_inversion=True,
+                          mb_calibration_strategy='informed_threestep',
+                          temp_bias_file_path=opath,
+                          override_params={},
+                          )
+
+        df = pd.read_csv(os.path.join(odir2, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'glacier_statistics_11.csv'),
+                         index_col=0)
+        assert len(df) == 3
+        assert np.isfinite(df['temp_bias']).all()
+        # The prior was used: the calibrated bias is close to the file value
+        # (informed_threestep only moves it as a last resort)
+        for rid, s in df.iterrows():
+            dis = ((out.lon_val - s['baseline_climate_ref_pix_lon']) ** 2 +
+                   (out.lat_val - s['baseline_climate_ref_pix_lat']) ** 2) ** 0.5
+            prior = out.iloc[np.argmin(dis)]['median_temp_bias_w_err_grouped']
+            assert_allclose(s['temp_bias'], prior, atol=1e-3)
 
 
 class TestBenchmarkCLI(unittest.TestCase):

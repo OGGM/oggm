@@ -126,7 +126,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       dynamic_spinup_periods_to_try=None,
                       continue_on_error=True, store_fl_diagnostics=False,
                       store_hydro_output=False, store_monthly_hydro=True,
-                      ref_area_yr=None):
+                      ref_area_yr=None, temp_bias_run=False,
+                      temp_bias_run_kwargs=None):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -286,7 +287,35 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         per default is the largest area covered by the glacier in the simulation
         period. Use this kwarg to force a specific area to the state of the
         glacier at the provided simulation year.
+    temp_bias_run : bool
+        set to True to run the preprocessing needed to create the temperature
+        bias prior file used by the `informed_threestep` calibration. This is
+        a preset which forces `max_level=3`, `skip_inversion=True` and the
+        `temp_melt` calibration strategy, skips writing the glacier directory
+        tar files (they are of no use here) and, at the end of L3, computes the
+        temperature bias file for this region with
+        `utils.compute_temp_bias_dataframe`.
+        Note that the grouping of climate grid points crosses RGI region
+        borders: for multi-region setups, the resulting file is only a
+        diagnostic, and the `oggm_temp_bias` command should be run over the
+        glacier statistics of all the regions instead.
+    temp_bias_run_kwargs : dict
+        if `temp_bias_run` is set, optional kwargs passed to
+        `utils.compute_temp_bias_dataframe` (e.g. `min_glaciers`).
     """
+
+    # The temp bias preset overrides a couple of options - be loud about it
+    if temp_bias_run:
+        if not mb_calibration_strategy.startswith('temp_melt'):
+            log.workflow('`temp_bias_run` is set: overriding the mass balance '
+                         'calibration strategy '
+                         f'({mb_calibration_strategy}) with `temp_melt`.')
+            mb_calibration_strategy = 'temp_melt'
+        log.workflow('`temp_bias_run` is set: forcing max_level=3, '
+                     'skip_inversion=True, and not writing the glacier '
+                     'directory tar files.')
+        max_level = 3
+        skip_inversion = True
 
     # Input check
     if max_level not in [1, 2, 3, 4, 5]:
@@ -474,11 +503,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L0 OK - compress all in output directory
-        log.workflow('L0 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L0'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        if not temp_bias_run:
+            log.workflow('L0 done. Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L0'
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
         if max_level == 0:
             _time_log()
             return
@@ -545,11 +575,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs, source=dem_source)
 
             # L1 OK - compress all in output directory
-            log.workflow('L1 done. Writing to tar...')
-            level_base_dir = Path(output_base_dir) / 'L1'
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+            if not temp_bias_run:
+                log.workflow('L1 done. Writing to tar...')
+                level_base_dir = Path(output_base_dir) / 'L1'
+                workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
+                                             delete=False,
+                                             base_dir=level_base_dir)
+                utils.base_dir_to_tar(level_base_dir)
 
             _time_log()
             return
@@ -580,11 +612,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L1 OK - compress all in output directory
-        log.workflow('L1 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L1'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        if not temp_bias_run:
+            log.workflow('L1 done. Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L1'
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
         if max_level == 1:
             _time_log()
             return
@@ -751,11 +784,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                              path=opath)
 
         # L2 OK - compress all in output directory
-        log.workflow('L2 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L2'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        if not temp_bias_run:
+            log.workflow('L2 done. Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L2'
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
         if max_level == 2:
             _time_log()
             return
@@ -858,6 +892,20 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Glacier stats
         opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
+
+        if temp_bias_run:
+            # This is all we need - summarize the biases per climate grid point
+            log.warning('The grouping of climate grid points crosses RGI '
+                        'region borders: for multi-region setups, run the '
+                        '`oggm_temp_bias` command on the glacier statistics '
+                        'of all the regions instead of using this file.')
+            utils.compute_temp_bias_dataframe(
+                opath,
+                path=sum_dir / f'temp_bias_{rgi_reg}.csv',
+                plot_path=sum_dir / f'temp_bias_{rgi_reg}',
+                **(temp_bias_run_kwargs or {}))
+            _time_log()
+            return
 
         # Export thickness to GeoTIFF if requested
         if add_export_thickness_geotiff and add_distributed_thickness:
@@ -1248,6 +1296,17 @@ def parse_args(args):
                         help='optional path or URL to a custom temperature-bias '
                              'file passed to MB calibration (informed_threestep '
                              'only). Use together with --custom-climate-task.')
+    parser.add_argument('--temp-bias-run', nargs='?', const=True, default=False,
+                        help='run the preprocessing needed to create the '
+                             'temperature bias prior file (see the '
+                             '`oggm_temp_bias` command). This forces '
+                             '--max-level 3, --skip-inversion and the '
+                             '`temp_melt` calibration strategy, and does not '
+                             'write the glacier directory tar files.')
+    parser.add_argument('--temp-bias-run-kwargs', type=json.loads, default=None,
+                        help='optional kwargs passed to '
+                             'utils.compute_temp_bias_dataframe when '
+                             '--temp-bias-run is set.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1339,6 +1398,8 @@ def parse_args(args):
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
                 temp_bias_file_path=args.temp_bias_file_path,
+                temp_bias_run=args.temp_bias_run,
+                temp_bias_run_kwargs=args.temp_bias_run_kwargs,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 store_hydro_output=args.store_hydro_output,
                 store_monthly_hydro=args.store_monthly_hydro,
