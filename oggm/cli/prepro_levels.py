@@ -341,16 +341,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # define the default melt_f depending on the the used mb_model_class
     if mb_model_class == 'MonthlyTIModel':
-        override_params['melt_f'] = 5.
         mb_model_class = MonthlyTIModel
         store_mb_diagnostics = False
     elif mb_model_class == 'SfcTypeTIModel':
-        # TODO: According to Schuster et al. (2023) Figure 1, the default melt_f
-        # should be larger when including snow tacking (around 6. to 7.). If we
-        # change this we also need to include this for the preparation of the
-        # three step calibration. Currently I stick to the same value as the
-        # MonthlyTIModel.
-        override_params['melt_f'] = 5.
         mb_model_class = SfcTypeTIModel
         store_mb_diagnostics = True
     else:
