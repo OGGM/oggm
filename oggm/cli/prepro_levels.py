@@ -126,7 +126,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       dynamic_spinup_periods_to_try=None,
                       continue_on_error=True, store_fl_diagnostics=False,
                       store_hydro_output=False, store_monthly_hydro=True,
-                      ref_area_yr=None):
+                      ref_area_yr=None, temp_bias_run=False):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
     Parameters
@@ -286,7 +286,31 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         per default is the largest area covered by the glacier in the simulation
         period. Use this kwarg to force a specific area to the state of the
         glacier at the provided simulation year.
+    temp_bias_run : bool
+        set to True to run the preprocessing needed to create the temperature
+        bias prior file used by the `informed_threestep` calibration. This is
+        a preset which forces `max_level=3` and `skip_inversion=True`, and
+        skips everything which is of no use for this purpose: the glacier
+        directory tar files, the climate statistics and the fixed geometry
+        mass balance. `mb_calibration_strategy` has to be set explicitly to
+        `temp_melt` (or `temp_melt_regional`), an error is raised otherwise.
+        The only output is the L3 `glacier_statistics` file, which is then
+        turned into the temperature bias file with the `oggm_temp_bias`
+        command (the grouping of climate grid points crosses RGI region
+        borders, so this has to be done over all the regions at once).
     """
+
+    # The temp bias preset overrides a couple of options. We log about it
+    # further down, once cfg.initialize() has set the logging up.
+    if temp_bias_run:
+        if not mb_calibration_strategy.startswith('temp_melt'):
+            raise InvalidParamsError(
+                'With `temp_bias_run`, the mass balance calibration strategy '
+                'has to be set explicitly to `temp_melt` (or to '
+                '`temp_melt_regional` for the regional flavor of the '
+                f'temperature bias file), not `{mb_calibration_strategy}`.')
+        max_level = 3
+        skip_inversion = True
 
     # Input check
     if max_level not in [1, 2, 3, 4, 5]:
@@ -362,6 +386,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Prepare the download of climate file to be shared across processes
     # TODO
+
+    if temp_bias_run:
+        log.workflow('`temp_bias_run` is set: forcing max_level=3 and '
+                     'skip_inversion=True. The only output will be the L3 '
+                     'glacier statistics file: no glacier directory tar '
+                     'files, no climate statistics, no fixed geometry mass '
+                     'balance.')
 
     # Log the parameters
     msg = '# OGGM Run parameters:'
@@ -474,11 +505,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L0 OK - compress all in output directory
-        log.workflow('L0 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L0'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        if not temp_bias_run:
+            log.workflow('L0 done. Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L0'
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
         if max_level == 0:
             _time_log()
             return
@@ -545,11 +577,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs, source=dem_source)
 
             # L1 OK - compress all in output directory
-            log.workflow('L1 done. Writing to tar...')
-            level_base_dir = Path(output_base_dir) / 'L1'
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+            if not temp_bias_run:
+                log.workflow('L1 done. Writing to tar...')
+                level_base_dir = Path(output_base_dir) / 'L1'
+                workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
+                                             delete=False,
+                                             base_dir=level_base_dir)
+                utils.base_dir_to_tar(level_base_dir)
 
             _time_log()
             return
@@ -580,11 +614,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L1 OK - compress all in output directory
-        log.workflow('L1 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L1'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        if not temp_bias_run:
+            log.workflow('L1 done. Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L1'
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
         if max_level == 1:
             _time_log()
             return
@@ -751,11 +786,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                              path=opath)
 
         # L2 OK - compress all in output directory
-        log.workflow('L2 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L2'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        if not temp_bias_run:
+            log.workflow('L2 done. Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L2'
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
         if max_level == 2:
             _time_log()
             return
@@ -858,6 +894,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Glacier stats
         opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
+
+        if temp_bias_run:
+            # The glacier statistics is all we need: the temperature bias file
+            # itself is made by the `oggm_temp_bias` command, out of the
+            # statistics of all the RGI regions at once.
+            log.workflow('`temp_bias_run` is done. Now run the '
+                         '`oggm_temp_bias` command on the L3 summary folder '
+                         'of all the regions to create the temperature bias '
+                         'file.')
+            _time_log()
+            return
 
         # Export thickness to GeoTIFF if requested
         if add_export_thickness_geotiff and add_distributed_thickness:
@@ -1248,6 +1295,15 @@ def parse_args(args):
                         help='optional path or URL to a custom temperature-bias '
                              'file passed to MB calibration (informed_threestep '
                              'only). Use together with --custom-climate-task.')
+    parser.add_argument('--temp-bias-run', nargs='?', const=True, default=False,
+                        help='run the preprocessing needed to create the '
+                             'temperature bias prior file. This forces '
+                             '--max-level 3 and --skip-inversion, and writes '
+                             'nothing but the L3 glacier statistics file. '
+                             'Requires --mb-calibration-strategy temp_melt '
+                             '(or temp_melt_regional). Feed the result to the '
+                             '`oggm_temp_bias` command (together with the '
+                             'other regions) to create the file.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
@@ -1339,6 +1395,7 @@ def parse_args(args):
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,
                 temp_bias_file_path=args.temp_bias_file_path,
+                temp_bias_run=args.temp_bias_run,
                 store_fl_diagnostics=args.store_fl_diagnostics,
                 store_hydro_output=args.store_hydro_output,
                 store_monthly_hydro=args.store_monthly_hydro,

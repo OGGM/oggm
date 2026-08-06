@@ -1317,8 +1317,11 @@ def get_temp_bias_dataframe(dataset=None, regional=False, rgi_version='62',
     The dataframe was created by the OGGM>=v16 pre-calibration
     (further explained in the `OGGM mass balance tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_
 
-    The data preparation script is available at
-    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/1.6.1/prepare_bias_map.ipynb
+    To create such a file yourself (e.g. for a custom climate dataset), run the
+    preprocessing with the `temp_melt` calibration strategy
+    (``oggm_prepro --temp-bias-run``) and summarize its glacier statistics with
+    the ``oggm_temp_bias`` command (see
+    :py:func:`utils.compute_temp_bias_dataframe`).
 
     The file differs between climate datasets and OGGM versions. For W5E5 and OGGM v162, it is e.g.
     https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_temp_bias_v2023.4.csv
