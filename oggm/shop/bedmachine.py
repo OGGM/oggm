@@ -21,6 +21,7 @@ except ImportError:
 
 
 from oggm import utils, cfg
+from oggm.core.gis import GriddedNcdfFile
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def bedmachine_to_gdir(gdir):
         thick[thick <= 0] = np.NaN
 
     # Write
-    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         vn = 'bedmachine_ice_thickness'
         if vn in nc.variables:
@@ -97,7 +98,7 @@ def bedmachine_statistics(gdir):
     d['bedmachine_vol_km3'] = np.nan
 
     try:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             thick = ds['bedmachine_ice_thickness'].where(ds['glacier_mask'], np.nan).load()
             gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             d['bedmachine_area_km2'] = float((~thick.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)

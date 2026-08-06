@@ -630,7 +630,7 @@ def init_columbia_eb(dir_name, reset=False):
 def characs_apply_func(gdir, d):
 
     # add some new stats to the mix
-    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+    with gdir.open_group('gridded_data') as ds:
         glc_ext = ds['glacier_ext'].values
         glc_mask = ds['glacier_mask'].values
         d['glc_ext_num_perc'] = np.sum(glc_ext) / np.sum(glc_mask)

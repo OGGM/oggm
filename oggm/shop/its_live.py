@@ -17,6 +17,7 @@ except ImportError:
 
 from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
+from oggm.core.gis import GriddedNcdfFile
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ def _reproject_and_scale(gdir, do_error=False):
     vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
 
     # Write
-    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         vn = 'itslive_v'
         if do_error:
@@ -257,7 +258,7 @@ def itslive_statistics(gdir):
     d['rgi_area_km2'] = gdir.rgi_area_km2
 
     try:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             v = ds['itslive_v'].where(ds['glacier_mask'], np.nan).load()
             gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             with warnings.catch_warnings():

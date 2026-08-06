@@ -313,11 +313,11 @@ class TestGIS(unittest.TestCase):
         gis.glacier_masks(gdir)
         gis.gridded_attributes(gdir)
 
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            glacier_mask = nc.variables['glacier_mask'][:]
-            glacier_ext = nc.variables['glacier_ext'][:]
-            glacier_ext_erosion = nc.variables['glacier_ext_erosion'][:]
-            ice_divides = nc.variables['ice_divides'][:]
+        with gdir.open_group('gridded_data') as ds:
+            glacier_mask = ds['glacier_mask'].values
+            glacier_ext = ds['glacier_ext'].values
+            glacier_ext_erosion = ds['glacier_ext_erosion'].values
+            ice_divides = ds['ice_divides'].values
 
         area = np.sum(glacier_mask * gdir.grid.dx**2)
         np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
@@ -347,15 +347,15 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
 
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
+        with gdir.open_group('gridded_data') as ds:
+            area = np.sum(ds['glacier_mask'].values * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
 
             # Check that HEF doesn't "badly" need a divide
-            mask = nc.variables['glacier_mask'][:]
-            ext = nc.variables['glacier_ext'][:]
-            dem = nc.variables['topo'][:]
+            mask = ds['glacier_mask'].values
+            ext = ds['glacier_ext'].values
+            dem = ds['topo'].values
             np.testing.assert_allclose(np.max(dem[mask.astype(bool)]),
                                        np.max(dem[ext.astype(bool)]),
                                        atol=10)
@@ -429,15 +429,11 @@ class TestGIS(unittest.TestCase):
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         # The test below does NOT pass on OGGM
-        shutil.copyfile(gdir.get_filepath('gridded_data'),
-                        os.path.join(self.testdir, 'default_masks.nc'))
         gis.simple_glacier_masks(gdir)
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            area = np.sum(nc.variables['glacier_mask'][:] * gdir.grid.dx**2)
+        with gdir.open_group('gridded_data') as ds:
+            area = np.sum(ds['glacier_mask'].values * gdir.grid.dx**2)
             np.testing.assert_allclose(area*10**-6, gdir.rgi_area_km2,
                                        rtol=1e-1)
-        shutil.copyfile(gdir.get_filepath('gridded_data'),
-                        os.path.join(self.testdir, 'simple_masks.nc'))
 
     @pytest.mark.skipif((Version(rasterio.__version__) <
                          Version('1.0')),
@@ -531,9 +527,10 @@ class TestGIS(unittest.TestCase):
 
         cfg.add_to_basenames('mybn', 'testfb.pkl', docstr='Some docs')
 
+        # TODO: replace read & write pickle methods
         out = {'foo': 1.5}
-        gdir.write_pickle(out, 'mybn')
-        assert gdir.read_pickle('mybn') == out
+        gdir.write_store(out, 'mybn')
+        assert gdir.read_store('mybn') == out
 
     def test_gridded_data_var_to_geotiff(self):
 
@@ -547,7 +544,7 @@ class TestGIS(unittest.TestCase):
         gtiff_path = os.path.join(gdir.dir, f'{gdir.rgi_id}_{target_var}.tif')
         assert os.path.exists(gtiff_path)
 
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             gridded_topo = ds[target_var]
             gtiff_ds = rioxr.open_rasterio(gtiff_path)
             np.allclose(ds.salem.grid.x_coord, gtiff_ds.x)
@@ -654,7 +651,7 @@ class TestCenterlines(unittest.TestCase):
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
 
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
         for cl in cls:
             for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
                                  cl.inflows):
@@ -685,8 +682,8 @@ class TestCenterlines(unittest.TestCase):
         centerlines.initialize_flowlines(gdir)
         centerlines.compute_downstream_line(gdir)
 
-        d = gdir.read_pickle('downstream_line')
-        cl = gdir.read_pickle('inversion_flowlines')[-1]
+        d = gdir.read_store('downstream_line')
+        cl = gdir.read_store('inversion_flowlines')[-1]
         self.assertEqual(
             len(d['full_line'].coords) - len(d['downstream_line'].coords),
             cl.nx)
@@ -708,13 +705,13 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_downstream_line(gdir)
         centerlines.compute_downstream_bedshape(gdir)
 
-        out = gdir.read_pickle('downstream_line')
+        out = gdir.read_store('downstream_line')
         for o, h in zip(out['bedshapes'], out['surface_h']):
             assert np.all(np.isfinite(o))
             assert np.all(np.isfinite(h))
 
-        tpl = gdir.read_pickle('inversion_flowlines')[-1]
-        c = gdir.read_pickle('downstream_line')['downstream_line']
+        tpl = gdir.read_store('inversion_flowlines')[-1]
+        c = gdir.read_store('downstream_line')['downstream_line']
         c = centerlines.Centerline(c, dx=tpl.dx)
 
         # Independent reproduction for a few points
@@ -730,10 +727,10 @@ class TestCenterlines(unittest.TestCase):
             from oggm.core.centerlines import line_interpol
             from scipy.interpolate import RegularGridInterpolator
             points = line_interpol(line, 0.5)
-            with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-                topo = nc.variables['topo_smoothed'][:]
-                x = nc.variables['x'][:]
-                y = nc.variables['y'][:]
+            with gdir.open_group('gridded_data') as ds:
+                topo = ds['topo_smoothed'].values
+                x = ds['x'].values
+                y = ds['y'].values
             xy = (np.arange(0, len(y) - 0.1, 1), np.arange(0, len(x) - 0.1, 1))
             interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
@@ -787,7 +784,7 @@ class TestCenterlines(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
 
         my_mask = np.zeros((gdir.grid.ny, gdir.grid.nx), dtype=np.uint8)
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
 
         assert gdir.rgi_date == 2009
 
@@ -919,17 +916,17 @@ class TestElevationBandFlowlines(unittest.TestCase):
         hgt = []
         harea = []
 
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
             evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            otherarea += np.sum(nc.variables['glacier_mask'][:])
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo_smoothed'][:]
+        with gdir.open_group('gridded_data') as ds:
+            otherarea += np.sum(ds['glacier_mask'].values)
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
+            topo = ds['topo_smoothed'].values
         rhgt = topo[np.where(mask)][:]
 
         tdf = gdir.read_shapefile('outlines').iloc[0]
@@ -970,7 +967,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         v1 = inversion.mass_conservation_inversion(gdir)
         inversion.distribute_thickness_per_altitude(gdir)
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             ds1 = ds.load()
 
         # Repeat multiple flowlines workflow
@@ -988,7 +985,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         v2 = inversion.mass_conservation_inversion(gdir)
         inversion.distribute_thickness_per_altitude(gdir)
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             ds2 = ds.load()
 
         # Total volume is different at only 15%
@@ -1009,7 +1006,7 @@ class TestElevationBandFlowlines(unittest.TestCase):
         centerlines.elevation_band_flowline(gdir)
         centerlines.fixed_dx_elevation_band_flowline(gdir)
         centerlines.compute_downstream_line(gdir)
-        dl = gdir.read_pickle('downstream_line')
+        dl = gdir.read_store('downstream_line')
         np.testing.assert_allclose(dl['downstream_line'].length, 12, atol=0.5)
         centerlines.compute_downstream_bedshape(gdir)
 
@@ -1070,11 +1067,11 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.catchment_area(gdir)
 
-        cis = gdir.read_pickle('geometries')['catchment_indices']
+        cis = gdir.read_store('geometries')['catchment_indices']
 
         # The catchment area must be as big as expected
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
 
         mymask_a = mask * 0
         mymask_b = mask * 0
@@ -1095,7 +1092,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
 
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             for j, ip, ob in zip(cl.inflow_indices, cl.inflow_points,
                                  cl.inflows):
@@ -1133,6 +1130,41 @@ class TestGeometry(unittest.TestCase):
         centerlines.catchment_intersections(gdir)
         centerlines.catchment_width_geom(gdir)
 
+    def test_geom_width_store_roundtrip(self):
+        """Test ragged arrays for catrchment widths."""
+        hef_file = get_demo_file("Hintereisferner_RGI5.shp")
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        gis.glacier_masks(gdir)
+        centerlines.compute_centerlines(gdir)
+        centerlines.initialize_flowlines(gdir)
+        centerlines.catchment_area(gdir)
+        centerlines.catchment_intersections(gdir)
+        centerlines.catchment_width_geom(gdir)
+
+        fls = gdir.read_store("inversion_flowlines")
+        # HEF has neither two-member or empty widths
+        mls2 = shpg.MultiLineString(
+            [[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 4.0)]]
+        )
+        empty = shpg.MultiLineString()
+        fls[0].geometrical_widths[0] = mls2
+        fls[0].geometrical_widths[1] = empty
+        gdir.write_store(fls, "inversion_flowlines")
+
+        back = gdir.read_store("inversion_flowlines")
+        w0, w1 = back[0].geometrical_widths[:2]
+        assert len(w0.geoms) == 2
+        assert w0.equals(mls2)
+        assert w1.is_empty
+        # Every other width round-trips identically too.
+        for a, b in zip(fls, back):
+            for wa, wb in zip(a.geometrical_widths, b.geometrical_widths):
+                assert len(wa.geoms) == len(wb.geoms)
+                assert wa.equals(wb)
+
     def test_width(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
@@ -1153,18 +1185,18 @@ class TestGeometry(unittest.TestCase):
         hgt = []
         harea = []
 
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for cl in cls:
             harea.extend(list(cl.widths * cl.dx))
             hgt.extend(list(cl.surface_h))
             area += np.sum(cl.widths * cl.dx)
             evenotherarea += np.sum(cl.widths_m * cl.dx_meter)
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            otherarea += np.sum(nc.variables['glacier_mask'][:])
+        with gdir.open_group('gridded_data') as ds:
+            otherarea += np.sum(ds['glacier_mask'].values)
 
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            mask = nc.variables['glacier_mask'][:]
-            topo = nc.variables['topo_smoothed'][:]
+        with gdir.open_group('gridded_data') as ds:
+            mask = ds['glacier_mask'].values
+            topo = ds['topo_smoothed'].values
         rhgt = topo[np.where(mask)][:]
 
         tdf = gdir.read_shapefile('outlines').iloc[0]
@@ -1212,7 +1244,7 @@ class TestGeometry(unittest.TestCase):
         centerlines.compute_centerlines(gdir)
         centerlines.initialize_flowlines(gdir)
 
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         min_slope = np.deg2rad(cfg.PARAMS['min_slope'])
         for fl in fls:
             dx = fl.dx * gdir.grid.dx
@@ -1274,11 +1306,10 @@ class TestClimate:
             ref_p = nc_r.variables['prcp'][3:-9, 1, 1]
             ref_t = nc_r.variables['temp'][3:-9, 1, 1]
 
-        f = os.path.join(gdir.dir, 'climate_historical.nc')
-        with utils.ncDataset(f) as nc_r:
-            assert ref_h == nc_r.ref_hgt
-            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
-            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+        with gdir.open_group('climate_historical') as nc_r:
+            assert ref_h == nc_r.attrs['ref_hgt']
+            np.testing.assert_allclose(ref_t, nc_r['temp'].values)
+            np.testing.assert_allclose(ref_p, nc_r['prcp'].values)
 
     def test_distribute_climate_parallel(self):
 
@@ -1299,11 +1330,10 @@ class TestClimate:
             ref_p = nc_r.variables['prcp'][3:-9, 1, 1]
             ref_t = nc_r.variables['temp'][3:-9, 1, 1]
 
-        f = os.path.join(gdir.dir, 'climate_historical.nc')
-        with utils.ncDataset(f) as nc_r:
-            assert ref_h == nc_r.ref_hgt
-            np.testing.assert_allclose(ref_t, nc_r.variables['temp'][:])
-            np.testing.assert_allclose(ref_p, nc_r.variables['prcp'][:])
+        with gdir.open_group('climate_historical') as nc_r:
+            assert ref_h == nc_r.attrs['ref_hgt']
+            np.testing.assert_allclose(ref_t, nc_r['temp'].values)
+            np.testing.assert_allclose(ref_p, nc_r['prcp'].values)
 
     def test_distribute_climate_cru(self):
 
@@ -1331,10 +1361,8 @@ class TestClimate:
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
-        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
-        with xr.open_dataset(f1) as nc_h:
-            with xr.open_dataset(f2) as nc_c:
+        with gdh.open_group('climate_historical') as nc_h:
+            with gdc.open_group('climate_historical') as nc_c:
                 # put on the same altitude
                 # (using default gradient because better)
                 temp_cor = nc_c.temp - 0.0065 * (nc_h.ref_hgt - nc_c.ref_hgt)
@@ -1370,10 +1398,8 @@ class TestClimate:
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
-        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
-        with xr.open_dataset(f1) as nc_d:
-            with xr.open_dataset(f2) as nc_c:
+        with gdh.open_group('climate_historical') as nc_d:
+            with gdc.open_group('climate_historical') as nc_c:
                 # same altitude
                 assert nc_d.ref_hgt == nc_c.ref_hgt
                 np.testing.assert_allclose(nc_d.temp.mean(), nc_c.temp.mean(),
@@ -1416,10 +1442,8 @@ class TestClimate:
 
         gdh = gdirs[0]
         gdc = gdirs[1]
-        f1 = os.path.join(gdh.dir, 'climate_historical.nc')
-        f2 = os.path.join(gdc.dir, 'climate_historical.nc')
-        with xr.open_dataset(f1) as nc_h:
-            with xr.open_dataset(f2) as nc_c:
+        with gdh.open_group('climate_historical') as nc_h:
+            with gdc.open_group('climate_historical') as nc_c:
                 nc_h = nc_h.sel(time=nc_c.time)
                 np.testing.assert_allclose(nc_h['temp'], nc_c['temp'])
                 # for precip the data changed in between versions, we
@@ -2465,12 +2489,12 @@ class TestClimate:
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2002])
 
         # Artificially make some arms even lower to have multiple branches
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         assert fls[0].flows_to is fls[-1]
         assert fls[1].flows_to is fls[-1]
         fls[0].surface_h -= 700
         fls[1].surface_h -= 700
-        gdir.write_pickle(fls, 'inversion_flowlines')
+        gdir.write_store(fls, 'inversion_flowlines')
 
         mb_calibration_from_scalar_mb(gdir, ref_mb=ref_mb,
                                       ref_mb_period=ref_mb_period)
@@ -2587,7 +2611,7 @@ class TestInversion(unittest.TestCase):
         # maxH = 242+-13
         inversion.prepare_for_inversion(gdir)
         # Check how many clips:
-        cls = gdir.read_pickle('inversion_input')
+        cls = gdir.read_store('inversion_input')
         nabove = 0
         maxs = 0.
         npoints = 0.
@@ -2629,8 +2653,8 @@ class TestInversion(unittest.TestCase):
                                                   write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        cls = gdir.read_pickle('inversion_output')
-        fls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_output')
+        fls = gdir.read_store('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -2642,7 +2666,7 @@ class TestInversion(unittest.TestCase):
 
         maxs = 0.
         v = 0.
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         for cl in cls:
             thick = cl['thick']
             _max = np.max(thick)
@@ -2654,7 +2678,7 @@ class TestInversion(unittest.TestCase):
         np.testing.assert_allclose(ref_v, inversion.get_inversion_volume(gdir))
 
         # Sanity check - velocities
-        inv = gdir.read_pickle('inversion_output')[-1]
+        inv = gdir.read_store('inversion_output')[-1]
 
         # vol in m3 and dx in m -> section in m2
         section = inv['volume'] / inv['dx']
@@ -2668,7 +2692,7 @@ class TestInversion(unittest.TestCase):
         # Some reference value I just computed - see if other computers agree
         np.testing.assert_allclose(np.mean(velocity[:-1]), 42, atol=5)
         inversion.compute_inversion_velocities(gdir, fs=fs, glen_a=glen_a)
-        inv = gdir.read_pickle('inversion_output')[-1]
+        inv = gdir.read_store('inversion_output')[-1]
         np.testing.assert_allclose(velocity, inv['u_integrated'])
 
     @pytest.mark.slow
@@ -2867,7 +2891,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
         v = inversion.mass_conservation_inversion(gdir, water_level=10000)
 
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         v_bwl = np.nansum([np.nansum(fl.get('volume_bwl', 0)) for fl in cls])
         n_trap = np.sum([np.sum(fl['is_trapezoid']) for fl in cls])
         np.testing.assert_allclose(v, v_bwl)
@@ -2897,7 +2921,7 @@ class TestInversion(unittest.TestCase):
         inversion.prepare_for_inversion(gdir)
 
         # Check how many clips:
-        cls = gdir.read_pickle('inversion_input')
+        cls = gdir.read_store('inversion_input')
         nabove = 0
         maxs = 0.
         npoints = 0.
@@ -2939,8 +2963,8 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        cls = gdir.read_pickle('inversion_output')
-        fls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_output')
+        fls = gdir.read_store('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -2950,7 +2974,7 @@ class TestInversion(unittest.TestCase):
 
         maxs = 0.
         v = 0.
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         for cl in cls:
             thick = cl['thick']
             _max = np.max(thick)
@@ -2977,7 +3001,7 @@ class TestInversion(unittest.TestCase):
         # Reference
         massbalance.apparent_mb_from_linear_mb(gdir)
         inversion.prepare_for_inversion(gdir)
-        cls1 = gdir.read_pickle('inversion_input')
+        cls1 = gdir.read_store('inversion_input')
         v1 = inversion.mass_conservation_inversion(gdir)
         # New should be equivalent
         mb_model = massbalance.LinearMassBalance(ela_h=1800, grad=3)
@@ -2985,7 +3009,7 @@ class TestInversion(unittest.TestCase):
                                             mb_years=np.arange(30))
         inversion.prepare_for_inversion(gdir)
         v2 = inversion.mass_conservation_inversion(gdir)
-        cls2 = gdir.read_pickle('inversion_input')
+        cls2 = gdir.read_store('inversion_input')
 
         # Now the tests
         for cl1, cl2 in zip(cls1, cls2):
@@ -3039,13 +3063,9 @@ class TestInversion(unittest.TestCase):
         inversion.distribute_thickness_per_altitude(gdir,
                                                     varname_suffix='_alt')
 
-        grids_file = gdir.get_filepath('gridded_data')
-        with utils.ncDataset(grids_file) as nc:
-            with warnings.catch_warnings():
-                # https://github.com/Unidata/netcdf4-python/issues/766
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                t1 = nc.variables['distributed_thickness_interp'][:]
-                t2 = nc.variables['distributed_thickness_alt'][:]
+        with gdir.open_group('gridded_data') as ds:
+            t1 = ds['distributed_thickness_interp'].values
+            t2 = ds['distributed_thickness_alt'].values
 
         np.testing.assert_allclose(np.nansum(t1), np.nansum(t2))
 
@@ -3099,8 +3119,8 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
         np.testing.assert_allclose(ref_v, v)
 
-        cls = gdir.read_pickle('inversion_output')
-        fls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_output')
+        fls = gdir.read_store('inversion_flowlines')
         maxs = 0.
         for cl, fl in zip(cls, fls):
             thick = cl['thick']
@@ -3123,7 +3143,7 @@ class TestInversion(unittest.TestCase):
                                                      write=True)
 
         np.testing.assert_allclose(v, ref_v, rtol=0.06)
-        cls = gdir.read_pickle('inversion_output')
+        cls = gdir.read_store('inversion_output')
         maxs = 0.
         for cl in cls:
             thick = cl['thick']
@@ -3133,7 +3153,7 @@ class TestInversion(unittest.TestCase):
 
         inversion.compute_inversion_velocities(gdir, fs=0, glen_a=glen_a)
 
-        inv = gdir.read_pickle('inversion_output')[-1]
+        inv = gdir.read_store('inversion_output')[-1]
 
         # In the middle section the velocities look OK and should be close
         # to the no sliding assumption
@@ -3225,13 +3245,13 @@ class TestCoxeCalving(unittest.TestCase):
 
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
-        cls1 = gdir.read_pickle('inversion_output')
+        cls1 = gdir.read_store('inversion_output')
         # Increase calving for this one
         cfg.PARAMS['inversion_calving_k'] = 1
 
         res_bef = gdir.get_diagnostics()['apparent_mb_from_any_mb_residual']
         out = inversion.find_inversion_calving_from_any_mb(gdir)
-        cls2 = gdir.read_pickle('inversion_output')
+        cls2 = gdir.read_store('inversion_output')
 
         # Calving increases the volume and adds a residual
         v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
@@ -3244,7 +3264,7 @@ class TestCoxeCalving(unittest.TestCase):
         v_new_bsl = np.sum([np.sum(fl.get('volume_bsl', 0)) for fl in cls2])
         v_new_bwl = np.sum([np.sum(fl.get('volume_bwl', 0)) for fl in cls2])
         flowline.init_present_time_glacier(gdir)
-        flsg = gdir.read_pickle('model_flowlines')
+        flsg = gdir.read_store('model_flowlines')
         for fl in flsg:
             fl.water_level = out['calving_water_level']
         v_new_bsl_g = np.sum([np.sum(fl.volume_bsl_m3) for fl in flsg])
@@ -3389,11 +3409,11 @@ class TestGrindelInvert(unittest.TestCase):
             towrite.append(cl_dic)
 
         # Write out
-        gdir.write_pickle(towrite, 'inversion_input')
+        gdir.write_store(towrite, 'inversion_input')
         v = inversion.mass_conservation_inversion(gdir, glen_a=glen_a)
         np.testing.assert_allclose(v, model.volume_m3, rtol=0.01)
 
-        cl = gdir.read_pickle('inversion_output')[0]
+        cl = gdir.read_store('inversion_output')[0]
         rmsd = utils.rmsd(cl['thick'], model.fls[0].thick[:len(cl['thick'])])
         assert rmsd < 10.
 
@@ -3410,7 +3430,7 @@ class TestGrindelInvert(unittest.TestCase):
         centerlines.catchment_width_correction(gdir)
 
         # see that we have as many catchments as flowlines
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
         gdfc = gdir.read_shapefile('flowline_catchments')
         self.assertEqual(len(fls), len(gdfc))
         # and at least as many intersects
@@ -3474,21 +3494,19 @@ class TestGCMClimate(unittest.TestCase):
                                           apply_bias_correction=True,
                                           output_filesuffix='_with_OGGM_bc',
                                           testing=True)
-        fh = gdir.get_filepath('climate_historical')
-        # with additional bias correction of OGGM
-        fgcm = gdir.get_filepath('gcm_data',
-                                 filesuffix='_with_OGGM_bc')
-        # without any bias correction of OGGM (as ISIMIP3b is already
-        # externally bias-corrected to W5E5)
-        fgcm_nc = gdir.get_filepath('gcm_data',
-                                    filesuffix='_no_OGGM_bc')
-        # with additional bias correction and with selected time series
-        fgcm_y0_y1 = gdir.get_filepath('gcm_data',
-                                       filesuffix='_with_OGGM_bc_y0_y1')
 
-        with xr.open_dataset(fh) as clim, xr.open_dataset(fgcm) as gcm, \
-                xr.open_dataset(fgcm_nc) as gcm_nc, \
-                xr.open_dataset(fgcm_y0_y1) as gcm_y0_y1:
+        with (
+            gdir.open_group("climate_historical") as clim,
+            # with additional bias correction of OGGM
+            gdir.open_group("gcm_data", filesuffix="_with_OGGM_bc") as gcm,
+            # without any bias correction of OGGM (as ISIMIP3b is
+            # already externally bias-corrected to W5E5)
+            gdir.open_group("gcm_data", filesuffix="_no_OGGM_bc") as gcm_nc,
+            # with additional bias correction and with selected time series
+            gdir.open_group(
+                "gcm_data", filesuffix="_with_OGGM_bc_y0_y1"
+            ) as gcm_y0_y1,
+        ):
             # Let's do some basic checks
             sclim = clim.sel(time=slice('1979', '2014'))
             sgcm = gcm.load().isel(time=((gcm['time.year'] >= 1979) &
@@ -3646,7 +3664,10 @@ class TestGCMClimate(unittest.TestCase):
             cftime_kwargs = {'decode_times': decode_times}
         except AttributeError:
             cftime_kwargs = {'use_cftime': True}
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcesm, **cftime_kwargs) as cesm:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', **cftime_kwargs) as cesm,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -3703,12 +3724,13 @@ class TestGCMClimate(unittest.TestCase):
                                       filesuffix='_CCSM4_y0_y1', y0=1960-15,
                                       y1=2080+15)
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        fcmip_y0_y1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_y0_y1')
-        with xr.open_dataset(fh) as cru, \
-              xr.open_dataset(fcmip) as cmip, \
-              xr.open_dataset(fcmip_y0_y1) as cmip_y0_y1:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as cmip,
+            gdir.open_group(
+                'gcm_data', filesuffix='_CCSM4_y0_y1'
+            ) as cmip_y0_y1,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -3786,9 +3808,10 @@ class TestGCMClimate(unittest.TestCase):
                                       fpath_precip=fp,
                                       filesuffix='_CCSM4')
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as cmip,
+        ):
 
             # Let's do some basic checks
             assert cru['time.year'][0] == 1901
@@ -3851,9 +3874,10 @@ class TestGCMClimate(unittest.TestCase):
                                          fpath_precip=fpath_precip,
                                          output_filesuffix=fs)
 
-            fh = gdir.get_filepath('climate_historical')
-            fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
-            with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+            with (
+                gdir.open_group('climate_historical') as cru,
+                gdir.open_group('gcm_data', filesuffix=fs) as cmip,
+            ):
 
                 # Let's do some basic checks
                 scru = cru.sel(time=slice('1951', '1980'))
@@ -3894,9 +3918,10 @@ class TestGCMClimate(unittest.TestCase):
                                      fpath_temp=fpath_temp,
                                      output_filesuffix=fs)
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix=fs) as cmip,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1951', '1980'))
@@ -3959,9 +3984,10 @@ class TestGCMClimate(unittest.TestCase):
                                             fpath_precip=fpath_precip,
                                             output_filesuffix=fs)
 
-            fh = gdir.get_filepath('climate_historical')
-            fcmip = gdir.get_filepath('gcm_data', filesuffix=fs)
-            with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+            with (
+                gdir.open_group('climate_historical') as cru,
+                gdir.open_group('gcm_data', filesuffix=fs) as cmip,
+            ):
 
                 # Let's do some basic checks
                 scru = cru.sel(time=slice('1901', '2000'))
@@ -4019,9 +4045,10 @@ class TestGCMClimate(unittest.TestCase):
                                       fpath_precip=fpath_precip,
                                       filesuffix='_CCSM4')
 
-        fh = gdir.get_filepath('climate_historical')
-        fcmip = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(fh) as cru, xr.open_dataset(fcmip) as cmip:
+        with (
+            gdir.open_group('climate_historical') as cru,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as cmip,
+        ):
 
             # Let's do some basic checks
             scru = cru.sel(time=slice('1961', '1990'))
@@ -4059,9 +4086,10 @@ class TestGCMClimate(unittest.TestCase):
             np.testing.assert_allclose(scmip1.prcp, scmip2.prcp, rtol=0.3)
 
         # Check that the two variabilies still correlate a lot
-        f1 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4_ns')
-        f2 = gdir.get_filepath('gcm_data', filesuffix='_CCSM4')
-        with xr.open_dataset(f1) as ds1, xr.open_dataset(f2) as ds2:
+        with (
+            gdir.open_group('gcm_data', filesuffix='_CCSM4_ns') as ds1,
+            gdir.open_group('gcm_data', filesuffix='_CCSM4') as ds2,
+        ):
             n = 30*12+1
             ss1 = ds1.temp.rolling(time=n, min_periods=1, center=True).std()
             ss2 = ds2.temp.rolling(time=n, min_periods=1, center=True).std()
@@ -4093,9 +4121,10 @@ class TestGCMClimate(unittest.TestCase):
 
         # CRU
         f1 = os.path.join(cfg.PATHS['working_dir'], 'climate_input.nc')
-        f2 = gdir.get_filepath(filename='climate_historical')
-        with xr.open_dataset(f1) as clim_cru1, \
-                xr.open_dataset(f2) as clim_cru2:
+        with (
+            xr.open_dataset(f1) as clim_cru1,
+            gdir.open_group('climate_historical') as clim_cru2,
+        ):
             np.testing.assert_allclose(np.squeeze(clim_cru1.prcp),
                                        clim_cru2.prcp)
             np.testing.assert_allclose(np.squeeze(clim_cru1.temp),
@@ -4118,14 +4147,17 @@ class TestGCMClimate(unittest.TestCase):
         # CESM
         f1 = os.path.join(cfg.PATHS['working_dir'],
                           'climate_input_cesm.nc')
-        f2 = gdir.get_filepath(filename=filename, filesuffix=filesuffix)
         try:
             decode_times = xr.coders.CFDatetimeCoder(use_cftime=True)
             cftime_kwargs = {'decode_times': decode_times}
         except AttributeError:
             cftime_kwargs = {'use_cftime': True}
-        with xr.open_dataset(f1) as clim_cesm1, \
-                xr.open_dataset(f2, **cftime_kwargs) as clim_cesm2:
+        with (
+            xr.open_dataset(f1, **cftime_kwargs) as clim_cesm1,
+            gdir.open_group(
+                filename, filesuffix=filesuffix, **cftime_kwargs
+            ) as clim_cesm2,
+        ):
             np.testing.assert_allclose(np.squeeze(clim_cesm1.prcp),
                                        clim_cesm2.prcp)
             np.testing.assert_allclose(np.squeeze(clim_cesm1.temp),
@@ -4183,10 +4215,10 @@ class TestIdealizedGdir(unittest.TestCase):
         massbalance.apparent_mb_from_linear_mb(gdir)
         inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
         v1 = inversion.mass_conservation_inversion(gdir)
-        tt1 = gdir.read_pickle('inversion_input')[0]
+        tt1 = gdir.read_store('inversion_input')[0]
         gdir1 = gdir
 
-        fl = gdir.read_pickle('inversion_flowlines')[0]
+        fl = gdir.read_store('inversion_flowlines')[0]
         map_dx = gdir.grid.dx
         gdir = utils.idealized_gdir(fl.surface_h,
                                     fl.widths * map_dx,
@@ -4197,7 +4229,7 @@ class TestIdealizedGdir(unittest.TestCase):
         inversion.prepare_for_inversion(gdir, invert_all_rectangular=True)
         v2 = inversion.mass_conservation_inversion(gdir)
 
-        tt2 = gdir.read_pickle('inversion_input')[0]
+        tt2 = gdir.read_store('inversion_input')[0]
         np.testing.assert_allclose(tt1['width'], tt2['width'])
         np.testing.assert_allclose(tt1['slope_angle'], tt2['slope_angle'])
         np.testing.assert_allclose(tt1['dx'], tt2['dx'])
@@ -4398,7 +4430,7 @@ class TestPyGEM_compat(unittest.TestCase):
                                            width_path=width_path)
 
         pygem_compat.present_time_glacier_from_bins(gdir, data=data)
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         data = data.loc[::-1]
         area = np.asarray(data['area'])
         width = np.asarray(data['width'])

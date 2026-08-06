@@ -1,12 +1,17 @@
 """Wrappers for the single tasks, multi processor handling."""
 # Built ins
+import glob
+import json
 import logging
 import os
 import shutil
 import warnings
-from collections.abc import Sequence
-# External libs
+import tarfile
 import multiprocessing
+import zipfile
+from collections.abc import Sequence
+
+# External libs
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -44,6 +49,17 @@ ICEBOOST_V2_FILES = {
 CONSENSUS_REF_TABLE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/g2ti/'
                            'rgi62_itmix_df_v20260617.parquet')
 
+"""
+For dealing with multiprocessing with fork. Child processes must reset
+zarr's async globals so they don't inherit stale references that cause
+deadlocks when starting new I/O threads.
+"""
+try:
+    from zarr.core.sync import reset_resources_after_fork as _zarr_reset
+    os.register_at_fork(after_in_child=_zarr_reset)
+except (ImportError, AttributeError):
+    pass
+
 # Multiprocessing Pool
 _mp_manager = None
 _mp_pool = None
@@ -63,6 +79,7 @@ def init_mp_pool(reset=False):
     cfg.CONFIG_MODIFIED = False
     if _mp_pool:
         _mp_pool.terminate()
+        _mp_pool.join()  # wait for workers to exit before shutting down manager
         _mp_pool = None
     if _mp_manager:
         cfg.set_manager(None)
@@ -132,11 +149,36 @@ def reset_multiprocessing():
     Call this if you changed configuration parameters mid-run and need them to
     be re-propagated to child processes.
     """
-    global _mp_pool
+    global _mp_pool, _mp_manager
     if _mp_pool:
         _mp_pool.terminate()
+        _mp_pool.join()  # wait for workers to fully exit
         _mp_pool = None
+    if _mp_manager:
+        # next test should start with clean state
+        cfg.set_manager(None)
+        _mp_manager.shutdown()
+        _mp_manager = None
     cfg.CONFIG_MODIFIED = False
+    # Flush zarr's background async I/O threads so they don't deadlock
+    # child processes after fork
+    try:
+        import zarr.core.sync as _zs
+
+        _iothread = _zs.iothread[0]  # save ref before cleanup clears it
+        _loop = _zs.loop[0]
+        if _loop is not None and not _loop.is_closed():
+            _exc = getattr(_loop, "_default_executor", None)
+            if _exc is not None:
+                _exc.shutdown(wait=True)
+                _loop._default_executor = None
+        _zs.cleanup_resources()
+        # cleanup_resources() waits only 0.2 s for iothread; ensure it is
+        # truly dead before any subsequent fork (Pool/Manager creation).
+        if _iothread is not None and _iothread.is_alive():
+            _iothread.join(timeout=5.0)  # TODO: Play around with timeout
+    except Exception:
+        pass
 
 
 def execute_entity_task(task, gdirs, **kwargs):
@@ -249,9 +291,87 @@ def execute_parallel_tasks(gdir, tasks):
             task(gd, **kw)
 
 
+def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
+    """Read a glacier's level manifest from inside a cached bundle.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the cached bundle file. Supports legacy and v1 tars, or
+        v2 zip.
+    rgi_id : str
+        The glacier's RGI ID.
+    level : int
+        The preprocessinglevel of the manifest to read.
+
+    Returns
+    -------
+    dict | None
+        The parsed ``L{level}.manifest.json`` of the glacier's member
+        archive, or None for legacy (pre-manifest) bundles.
+    """
+    bundle_dir = os.path.basename(tar_base)
+    if bundle_dir.endswith((".tar", ".zip")):
+        bundle_dir = bundle_dir[:-4]
+    if tar_base.endswith(".zip"):
+        # zip-of-zip bundle; member names always use '/'
+        try:
+            with zipfile.ZipFile(tar_base) as outer:
+                with outer.open(f"{bundle_dir}/{rgi_id}.zip") as fobj:
+                    with zipfile.ZipFile(fobj) as inner:
+                        with inner.open(
+                            f"{rgi_id}/L{level}.manifest.json"
+                        ) as mf:
+                            return json.load(mf)
+        # KeyError means a bundle without a manifest
+        # BadZipFile means a possible truncated download
+        except (KeyError, zipfile.BadZipFile, OSError):
+            return None
+    try:
+        with tarfile.open(tar_base, "r") as tf:
+            member = tf.getmember(os.path.join(bundle_dir, rgi_id + ".tar.gz"))
+            with tf.extractfile(member) as fobj:
+                with tarfile.open(fileobj=fobj, mode="r:gz") as inner:
+                    mf = inner.extractfile(
+                        os.path.join(rgi_id, f"L{level}.manifest.json")
+                    )
+                    if mf is None:
+                        return None
+                    with mf:
+                        return json.load(mf)
+    # KeyError means a legacy, pre-manifest bundle
+    # ReadError means a possible truncated download
+    except (KeyError, tarfile.ReadError, OSError):
+        return None
+
+
+def _get_applied_levels(rgi_id:str)->set[int]:
+    """Gets the levels already layered into the glacier's existing
+    directory.
+    
+    Parameters
+    ----------
+    rgi_id : str
+        The glacier's RGI ID.
+
+    Returns
+    -------
+    set[int]
+        Levels already applied to the glacier's directory.
+    """
+    gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier',
+                          rgi_id[:-6], rgi_id[:-3], rgi_id)
+    included = set()
+    for fp in glob.glob(os.path.join(gl_dir, 'L*.manifest.json')):
+        with open(fp) as f:
+            m = json.load(f)
+        included.update(m.get('includes_levels') or [m['level']])
+    return included
+
+
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
-                     base_url=None):
+                     base_url=None, append=False):
 
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
@@ -268,8 +388,37 @@ def gdir_from_prepro(entity, from_prepro_level=None,
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
-    from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')
-    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+    tars = {from_prepro_level: tar_base}
+    manifest = _peek_level_manifest(tar_base, rid, from_prepro_level)
+    if manifest is not None and manifest.get("kind") != "standalone":
+        # for deltas fetch whatever required levels the requested
+        # artifact doesn't include
+        included = set(manifest.get("includes_levels") or [from_prepro_level])
+        if append:
+            included |= _get_applied_levels(rid)
+        missing = set(manifest.get("requires") or []) - included
+        while missing:
+            lvl = max(missing)
+            tb = utils.get_prepro_gdir(
+                prepro_rgi_version, rid, prepro_border, lvl, base_url=base_url
+            )
+            tars[lvl] = tb
+            m = _peek_level_manifest(tb, rid, lvl)
+            included |= set((m.get("includes_levels") if m else None) or [lvl])
+            missing |= set((m.get("requires") if m else None) or [])
+            missing -= included
+
+    # Legacy bundles without manifest are cumulative so one fetch is enough
+    from_tar = [
+        os.path.join(
+            tb[:-4], rid + (".zip" if tb.endswith(".zip") else ".tar.gz")
+        )
+        for _, tb in sorted(tars.items())
+    ]
+    if len(from_tar) == 1 and not append:
+        from_tar = from_tar[0]
+    return oggm.GlacierDirectory(entity, from_tar=from_tar, append=append)
 
 
 def gdir_from_tar(entity, from_tar):
@@ -284,17 +433,19 @@ def gdir_from_tar(entity, from_tar):
     # TODO: add support for bundle sizes of 10 and 1
     region = rgi_id[:-6]
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
+    zip_path = os.path.join(from_tar, region, new_bundle + ".zip")
     new_path = os.path.join(from_tar, region, new_bundle + ".tar")
     old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
-    if os.path.exists(new_path):
-        from_tar = new_path
+    if os.path.exists(zip_path):
+        from_tar = os.path.join(zip_path[:-4], rgi_id + ".zip")
+    elif os.path.exists(new_path):
+        from_tar = os.path.join(new_path[:-4], rgi_id + ".tar.gz")
     elif os.path.exists(old_path):
-        from_tar = old_path
+        from_tar = os.path.join(old_path[:-4], rgi_id + ".tar.gz")
     else:
         raise FileNotFoundError(
             "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
         )
-    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
@@ -353,7 +504,8 @@ def _isdir(path):
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
-                             from_tar=False, delete_tar=False):
+                             from_tar=False, delete_tar=False,
+                             append: bool=False):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -390,6 +542,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         will check for a tar file at the expected location in `base_dir`.
         delete the original tar file after extraction. If this
         argument is set, the existing directories will be overwritten!
+    append : bool, default False
+        For `from_prepro_level` only. Layer the downloaded level(s) on
+        top of existing glacier directories instead of replacing them
+        (e.g. to top up directories initialised at a lower level).
 
     Returns
     -------
@@ -457,7 +613,8 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
                                         prepro_rgi_version=prepro_rgi_version,
-                                        base_url=prepro_base_url)
+                                        base_url=prepro_base_url,
+                                        append=append)
         else:
             # We can set the intersects file automatically here
             if (cfg.PARAMS['use_intersects'] and

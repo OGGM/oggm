@@ -81,7 +81,7 @@ def prepare_for_inversion(gdir,
     """
 
     # variables
-    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
+    fls = gdir.read_store('inversion_flowlines', filesuffix=input_filesuffix)
 
     towrite = []
     for fl in fls:
@@ -153,7 +153,7 @@ def prepare_for_inversion(gdir,
         towrite.append(cl_dic)
 
     # Write out
-    gdir.write_pickle(towrite, 'inversion_input', filesuffix=output_filesuffix)
+    gdir.write_store(towrite, 'inversion_input', filesuffix=output_filesuffix)
 
 
 def _inversion_poly(a3, a0):
@@ -440,7 +440,7 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
 
     out_volume = 0.
 
-    cls = gdir.read_pickle('inversion_input', filesuffix=input_filesuffix)
+    cls = gdir.read_store('inversion_input', filesuffix=input_filesuffix)
     for cl in cls:
         # Clip slope to avoid negative and small slopes
         slope = cl['slope_angle']
@@ -530,7 +530,7 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
         out_volume += np.sum(volume)
 
     if write:
-        gdir.write_pickle(cls, 'inversion_output', filesuffix=output_filesuffix)
+        gdir.write_store(cls, 'inversion_output', filesuffix=output_filesuffix)
         gdir.settings['inversion_glen_a'] = glen_a
         gdir.settings['inversion_fs'] = fs
 
@@ -580,7 +580,7 @@ def filter_inversion_output(gdir, settings_filesuffix='',
 
     if gdir.is_tidewater:
         # No need for filter in tidewater case
-        cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
+        cls = gdir.read_store('inversion_output', filesuffix=input_filesuffix)
         init_vol = np.sum([np.sum(cl['volume']) for cl in cls])
         return init_vol
 
@@ -590,8 +590,8 @@ def filter_inversion_output(gdir, settings_filesuffix='',
                                    'compute_dowstream_line and '
                                    'compute_downstream_bedshape tasks')
 
-    dic_ds = gdir.read_pickle('downstream_line')
-    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
+    dic_ds = gdir.read_store('downstream_line')
+    cls = gdir.read_store('inversion_output', filesuffix=input_filesuffix)
     cl = cls[-1]
 
     # check that their are enough grid points for smoothing
@@ -667,7 +667,7 @@ def filter_inversion_output(gdir, settings_filesuffix='',
     cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
     cl['volume'][n_smoothing:] = new_volume
 
-    gdir.write_pickle(cls, 'inversion_output', filesuffix=output_filesuffix)
+    gdir.write_store(cls, 'inversion_output', filesuffix=output_filesuffix)
 
     # Return volume for convenience
     return np.sum([np.sum(cl['volume']) for cl in cls])
@@ -676,7 +676,7 @@ def filter_inversion_output(gdir, settings_filesuffix='',
 @entity_task(log)
 def get_inversion_volume(gdir, input_filesuffix=''):
     """Small utility task to get to the volume of all glaciers."""
-    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
+    cls = gdir.read_store('inversion_output', filesuffix=input_filesuffix)
     return np.sum([np.sum(cl['volume']) for cl in cls])
 
 
@@ -735,7 +735,7 @@ def compute_inversion_velocities(gdir, settings_filesuffix='',
         with_sliding = fs != 0
 
     # Getting the data for the main flowline
-    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
+    cls = gdir.read_store('inversion_output', filesuffix=input_filesuffix)
 
     for cl in cls:
         # vol in m3 and dx in m
@@ -782,7 +782,7 @@ def compute_inversion_velocities(gdir, settings_filesuffix='',
         cl['u_basal'] = u_basal
         cl['u_deformation'] = u_deformation
 
-    gdir.write_pickle(cls, 'inversion_output', filesuffix=output_filesuffix)
+    gdir.write_store(cls, 'inversion_output', filesuffix=output_filesuffix)
 
 
 @entity_task(log, writes=['gridded_data'])
@@ -824,26 +824,25 @@ def distribute_thickness_per_altitude(gdir, settings_filesuffix='',
     """
 
     # Variables
-    grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
-    with utils.ncDataset(grids_file) as nc:
-        has_masks = 'glacier_ext_erosion' in nc.variables
+    with gdir.open_group('gridded_data') as ds:
+        has_masks = 'glacier_ext_erosion' in ds
     if not has_masks:
         from oggm.core.gis import gridded_attributes
         gridded_attributes(gdir)
 
-    with utils.ncDataset(grids_file) as nc:
-        topo = nc.variables[topo_variable][:]
-        glacier_mask = nc.variables['glacier_mask'][:]
-        dis_from_border = nc.variables['dis_from_border'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds[topo_variable].values
+        glacier_mask = ds['glacier_mask'].values
+        dis_from_border = ds['dis_from_border'].values
         if add_slope:
-            slope_factor = nc.variables['slope_factor'][:]
+            slope_factor = ds['slope_factor'].values
         else:
             slope_factor = 1.
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
-    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
+    cls = gdir.read_store('inversion_output', filesuffix=input_filesuffix)
+    fls = gdir.read_store('inversion_flowlines', filesuffix=input_filesuffix)
     hs, ts, vs, xs, ys = [], [], [], [], []
     for cl, fl in zip(cls, fls):
         hs = np.append(hs, fl.surface_h)
@@ -908,7 +907,8 @@ def distribute_thickness_per_altitude(gdir, settings_filesuffix='',
     thick *= init_vol / tmp_vol
 
     # write
-    with utils.ncDataset(grids_file, 'a') as nc:
+    from oggm.core.gis import GriddedNcdfFile
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -954,20 +954,19 @@ def distribute_thickness_interp(gdir, settings_filesuffix='',
     """
 
     # Variables
-    grids_file = gdir.get_filepath('gridded_data')
     # See if we have the masks, else compute them
-    with utils.ncDataset(grids_file) as nc:
-        has_masks = 'ice_divides' in nc.variables
+    with gdir.open_group('gridded_data') as ds:
+        has_masks = 'ice_divides' in ds
     if not has_masks:
         from oggm.core.gis import gridded_attributes
         gridded_attributes(gdir)
 
-    with utils.ncDataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:]
-        glacier_ext = nc.variables['glacier_ext_erosion'][:]
-        ice_divides = nc.variables['ice_divides'][:]
+    with gdir.open_group('gridded_data') as ds:
+        glacier_mask = ds['glacier_mask'].values
+        glacier_ext = ds['glacier_ext_erosion'].values
+        ice_divides = ds['ice_divides'].values
         if add_slope:
-            slope_factor = nc.variables['slope_factor'][:]
+            slope_factor = ds['slope_factor'].values
         else:
             slope_factor = 1.
 
@@ -981,8 +980,8 @@ def distribute_thickness_interp(gdir, settings_filesuffix='',
     thick[:, -1] = 0.
 
     # Along the lines
-    cls = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)
-    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
+    cls = gdir.read_store('inversion_output', filesuffix=input_filesuffix)
+    fls = gdir.read_store('inversion_flowlines', filesuffix=input_filesuffix)
     vs = []
     for cl, fl in zip(cls, fls):
         vs.extend(cl['volume'])
@@ -1019,8 +1018,8 @@ def distribute_thickness_interp(gdir, settings_filesuffix='',
     thick *= init_vol / tmp_vol
 
     # write
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file, 'a') as nc:
+    from oggm.core.gis import GriddedNcdfFile
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'distributed_thickness' + varname_suffix
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -1077,7 +1076,7 @@ def calving_flux_from_depth(gdir, input_filesuffix='',
         k = gdir.settings['inversion_calving_k']
 
     # Read necessary data
-    fl = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)[-1]
+    fl = gdir.read_store('inversion_flowlines', filesuffix=input_filesuffix)[-1]
 
     # Altitude at the terminus and frontal width
     free_board = utils.clip_min(fl.surface_h[-1], 0) - water_level
@@ -1085,7 +1084,7 @@ def calving_flux_from_depth(gdir, input_filesuffix='',
 
     # Calving formula
     if thick is None:
-        cl = gdir.read_pickle('inversion_output', filesuffix=input_filesuffix)[-1]
+        cl = gdir.read_store('inversion_output', filesuffix=input_filesuffix)[-1]
         thick = cl['thick'][-1]
     if water_depth is None:
         water_depth = thick - free_board
@@ -1187,7 +1186,7 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
         gdir.add_to_diagnostics('volume_before_calving', v_ref)
 
     # Get the relevant variables
-    cls = gdir.read_pickle('inversion_input', filesuffix=output_filesuffix)[-1]
+    cls = gdir.read_store('inversion_input', filesuffix=output_filesuffix)[-1]
     slope = cls['slope_angle'][-1]
     width = cls['width'][-1]
 
@@ -1289,7 +1288,7 @@ def find_inversion_calving_from_any_mb(gdir, settings_filesuffix='',
     out = calving_flux_from_depth(gdir, input_filesuffix=output_filesuffix,
                                   water_level=water_level)
 
-    fl = gdir.read_pickle('inversion_flowlines', filesuffix=output_filesuffix)[-1]
+    fl = gdir.read_store('inversion_flowlines', filesuffix=output_filesuffix)[-1]
     f_calving = (fl.flux[-1] * (gdir.grid.dx ** 2) * 1e-9 /
                  gdir.settings['ice_density'])
 

@@ -257,11 +257,11 @@ def plot_raster(gdirs, var_name=None, cmap='viridis', ax=None, smap=None):
     # Files
     gdir = gdirs[0]
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        var = nc.variables[var_name]
-        data = var[:]
-        description = var.long_name
-        description += ' [{}]'.format(var.units)
+    with gdir.open_group('gridded_data') as ds:
+        var = ds[var_name]
+        data = var.values
+        description = var.attrs['long_name']
+        description += ' [{}]'.format(var.attrs['units'])
 
     smap.set_data(data)
 
@@ -271,7 +271,7 @@ def plot_raster(gdirs, var_name=None, cmap='viridis', ax=None, smap=None):
         crs = gdir.grid.center_grid
 
         try:
-            geom = gdir.read_pickle('geometries')
+            geom = gdir.read_store('geometries')
             # Plot boundaries
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='none',
@@ -304,8 +304,8 @@ def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
     # Files
     gdir = gdirs[0]
     if use_netcdf:
-        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            topo = nc.variables['topo'][:]
+        with gdir.open_group('gridded_data') as ds:
+            topo = ds['topo'].values
     else:
         topo = gis.read_geotiff_dem(gdir)
     try:
@@ -320,7 +320,7 @@ def plot_domain(gdirs, ax=None, smap=None, use_netcdf=False):
         crs = gdir.grid.center_grid
 
         try:
-            geom = gdir.read_pickle('geometries')
+            geom = gdir.read_store('geometries')
 
             # Plot boundaries
             poly_pix = geom['polygon_pix']
@@ -358,15 +358,15 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
     if gdir.get_diagnostics().get('flowline_type', '') == 'elevation_band':
         raise InvalidWorkflowError('Elevation-band flowlines cannot be '
                                    'plotted on a map')
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
 
     cm = truncate_colormap(OGGM_CMAPS['terrain'], minval=0.25, maxval=1.0)
     smap.set_plot_params(cmap=cm)
     smap.set_data(topo)
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
+        geom = gdir.read_store('geometries')
 
         # Plot boundaries
         poly_pix = geom['polygon_pix']
@@ -379,7 +379,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
                 smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # plot Centerlines
-        cls = gdir.read_pickle(filename)
+        cls = gdir.read_store(filename)
 
         # Go in reverse order for red always being the longest
         cls = cls[::-1]
@@ -387,7 +387,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for i, (l, c) in enumerate(zip(cls, color)):
             if add_downstream and not gdir.is_tidewater and l is cls[0]:
-                line = gdir.read_pickle('downstream_line')['full_line']
+                line = gdir.read_store('downstream_line')['full_line']
             else:
                 line = l.line
 
@@ -421,14 +421,14 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
     if len(gdirs) > 1:
         raise NotImplementedError('Cannot plot a list of gdirs (yet)')
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
-        mask = nc.variables['glacier_mask'][:] * np.nan
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
+        mask = ds['glacier_mask'].values * np.nan
 
     smap.set_topography(topo)
 
     crs = gdir.grid.center_grid
-    geom = gdir.read_pickle('geometries')
+    geom = gdir.read_store('geometries')
 
     # Plot boundaries
     poly_pix = geom['polygon_pix']
@@ -438,14 +438,14 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
         smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
     # plot Centerlines
-    cls = gdir.read_pickle('centerlines')[::-1]
+    cls = gdir.read_store('centerlines')[::-1]
     color = gencolor(len(cls) + 1, cmap=lines_cmap)
     for l, c in zip(cls, color):
         smap.set_geometry(l.line, crs=crs, color=c,
                           linewidth=2.5, zorder=50)
 
     # catchment areas
-    cis = gdir.read_pickle('geometries')['catchment_indices']
+    cis = gdir.read_store('geometries')['catchment_indices']
     for j, ci in enumerate(cis[::-1]):
         mask[tuple(ci.T)] = j+1
 
@@ -469,8 +469,8 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
         raise InvalidWorkflowError('Elevation-band flowlines cannot be '
                                    'plotted on a map')
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
     # Dirty optim
     try:
         smap.set_topography(topo)
@@ -483,7 +483,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
+        geom = gdir.read_store('geometries')
 
         # Plot boundaries
         poly_pix = geom['polygon_pix']
@@ -498,7 +498,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
             smap.set_shapefile(gdf, color='k', linewidth=3.5, zorder=3)
 
         # plot Centerlines
-        cls = gdir.read_pickle('inversion_flowlines')[::-1]
+        cls = gdir.read_store('inversion_flowlines')[::-1]
         color = gencolor(len(cls) + 1, cmap=lines_cmap)
         for l, c in zip(cls, color):
             smap.set_geometry(l.line, crs=crs, color=c,
@@ -549,8 +549,8 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
         raise InvalidWorkflowError('Elevation-band flowlines cannot be '
                                    'plotted on a map')
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
 
     # Dirty optim
     try:
@@ -564,8 +564,8 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
     vol = []
     for gdir in gdirs:
         crs = gdir.grid.center_grid
-        geom = gdir.read_pickle('geometries')
-        inv = gdir.read_pickle('inversion_output')
+        geom = gdir.read_store('geometries')
+        inv = gdir.read_store('inversion_output')
         # Plot boundaries
         poly_pix = geom['polygon_pix']
         smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2,
@@ -574,7 +574,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
             smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
 
         # Plot Centerlines
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
         for l, c in zip(cls, inv):
 
             smap.set_geometry(l.line, crs=crs, color='gray',
@@ -614,8 +614,8 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
 
     gdir = gdirs[0]
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
 
     try:
         smap.set_topography(topo)
@@ -623,15 +623,10 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
         pass
 
     for gdir in gdirs:
-        grids_file = gdir.get_filepath('gridded_data')
-        with utils.ncDataset(grids_file) as nc:
-            import warnings
-            with warnings.catch_warnings():
-                # https://github.com/Unidata/netcdf4-python/issues/766
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                vn = 'distributed_thickness' + varname_suffix
-                thick = nc.variables[vn][:]
-                mask = nc.variables['glacier_mask'][:]
+        with gdir.open_group('gridded_data') as ds:
+            vn = 'distributed_thickness' + varname_suffix
+            thick = ds[vn].values
+            mask = ds['glacier_mask'].values
 
         thick = np.where(mask, thick, np.nan)
 
@@ -641,7 +636,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
         # Try to read geometries.pkl as the glacier boundary,
         # if it can't be found, we use the shapefile to instead.
         try:
-            geom = gdir.read_pickle('geometries')
+            geom = gdir.read_store('geometries')
             poly_pix = geom['polygon_pix']
             smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
             for l in poly_pix.interiors:
@@ -691,8 +686,8 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
         raise InvalidWorkflowError('Elevation-band flowlines cannot be '
                                    'plotted on a map')
 
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo = nc.variables['topo'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo = ds['topo'].values
 
     # Dirty optim
     try:
@@ -718,7 +713,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
         modelyr = models[0].yr
 
     for gdir, model in zip(gdirs, models):
-        geom = gdir.read_pickle('geometries')
+        geom = gdir.read_store('geometries')
         poly_pix = geom['polygon_pix']
 
         crs = gdir.grid.center_grid

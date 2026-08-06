@@ -32,7 +32,11 @@ dependencies = [
     "scipy",
     "shapely",
     "xarray",
+    "xvec>=0.5.2",
+    "zarr",
     "pyarrow",
+    "fsspec>=2026.6.0",
+    "aiohttp>=3.14.1",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +52,8 @@ full = [
     "bottleneck",
     "cartopy",
     "dask",
-    "geopandas",
+    # >=1.0 for stable geoparquet (to_parquet/read_parquet) support
+    "geopandas>=1.0",
     "ipython",
     "joblib",
     "motionless",
@@ -127,6 +132,12 @@ source = "vcs"
 build = [
     "build>=1.4.0",
     "twine>=6.2.0",
+]
+dev = [
+    "ipykernel>=7.3.0",
+    "nbconvert>=7.17.1",
+    "flake8>=7.3.0",
+    "pylint>=4.0.6",
 ]
 
 [tool.uv.build-backend]

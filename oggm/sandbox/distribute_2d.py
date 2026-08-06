@@ -77,14 +77,14 @@ def add_smoothed_glacier_topo(gdir, outline_offset=-40,
         may not work well for other values than 1. To investigate.
     """
 
-    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+    with gdir.open_group('gridded_data') as ds:
         raw_topo = xr.where(ds.glacier_mask == 1, ds.topo, np.nan)
         if outline_offset is not None:
             raw_topo += ds.glacier_ext * outline_offset
         raw_topo = raw_topo.data
 
     smooth_glacier = filter_nan_gaussian_conserving(raw_topo, smooth_radius)
-    with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'glacier_topo_smoothed'
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -136,7 +136,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         same order as ranking_variables! Default is [1].
     """
     # We need quite a few data from the gridded dataset
-    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+    with gdir.open_group('gridded_data') as ds:
         ds_grid = ds.load()
         topo_data = ds[topo_variable].data.copy()
         glacier_mask = ds.glacier_mask.data == 1
@@ -146,7 +146,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         weighting_per_pixel = topo_data * 0.  # container
 
     # For the flowline we need the model flowlines only
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     assert len(fls) == 1, 'Only works with one flowline.'
     fl = fls[0]
 
@@ -213,7 +213,7 @@ def assign_points_to_band(gdir, topo_variable='glacier_topo_smoothed',
         is_band = band_index == band_id
         per_band_rank[is_band] = mstats.rankdata(weighting_per_pixel[is_band])
 
-    with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'band_index'
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -405,7 +405,7 @@ def distribute_thickness_from_simulation(gdir,
     if debug_area_timeseries:
         out_df['smoothed_area'] = dg['area_m2'].sum(dim='dis_along_flowline').to_series()
 
-    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+    with gdir.open_group('gridded_data') as ds:
         band_index_mask = ds.band_index.data
         rank_per_band = ds.rank_per_band.data
         glacier_mask = ds.glacier_mask.data == 1
@@ -461,7 +461,7 @@ def distribute_thickness_from_simulation(gdir,
 
         out_thick[i, :] = new_thick
 
-    with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+    with gdir.open_group('gridded_data') as ds:
         ds['bedrock'] = ds['topo'] - ds['distributed_thickness'].fillna(0)
         ds = ds[['glacier_mask', 'topo', 'bedrock']].load()
 

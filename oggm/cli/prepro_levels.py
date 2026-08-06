@@ -99,6 +99,76 @@ def _move_hypsometry_to_dem_folder(gdir, source=''):
     os.rename(hypso_f, os.path.join(out, os.path.basename(hypso_f)))
 
 
+def _delta_tar_entries(
+    gdirs: list[GlacierDirectory],
+    level: int,
+    states: dict,
+    border: int,
+    rgi_version: str,
+    dataset_tag: str,
+    dataset_id: str = "",
+) -> list[tuple[GlacierDirectory, dict]]:
+    """Write per-glacier delta manifests for this level.
+
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectory
+        Glacier directories.
+    level : int
+        The directory processing level (0-5).
+    states : dict
+        A dict of previous level manifest states, keyed by RGI ID.
+    dataset_tag : str
+        The dataset tag for this run.
+    border : int
+        The number of pixels at the maps border.
+    rgi_version : str
+        The RGI version.
+    dataset_id : str, optional
+        The dataset ID for this run.
+
+    Returns
+    --------
+    list
+        A list of ``(gdir, {'include': changed_paths})`` entries for
+        ``execute_entity_task(utils.gdir_to_archive, entries, ...)``, so
+        each level artifact ships only what the level changed. Glaciers
+        whose manifest cannot be written (e.g. errored directories) fall
+        back to a full legacy archive.
+    """
+    if not dataset_id:
+        dataset_id = utils.dataset_id_from_tag(
+            dataset_tag, border, rgi_version
+        )
+    entries = []
+    for gdir in gdirs:
+        try:
+            _, changed = utils.write_level_manifest(
+                gdir,
+                level=level,
+                prev_state=states.get(gdir.rgi_id, {}),
+                dataset_tag=dataset_tag,
+                dataset_id=dataset_id,
+                requires=list(range(level)),
+                border=border,
+                rgi_version=rgi_version,
+                format_version=2,
+            )
+            states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
+            entries.append((gdir, {"include": changed}))
+        except Exception as err:
+            log.warning(
+                "(%s) could not write the L%d manifest (%s: %s); "
+                "writing a full tar instead.",
+                gdir.rgi_id,
+                level,
+                type(err).__name__,
+                err,
+            )
+            entries.append((gdir, {"include": None}))
+    return entries
+
+
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, rgi_file=None,
@@ -120,6 +190,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       custom_climate_task=None,
                       custom_climate_task_kwargs=None,
                       start_level=None, start_base_url=None, max_level=5,
+                      dataset_tag=None,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, ref_mb_err_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
@@ -243,6 +314,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the pre-processed base-url to fetch the data from.
     max_level : int
         the maximum pre-processing level before stopping
+    dataset_tag : str
+        explicit label identifying this dataset generation. It gets
+        hashed into level manifest's `dataset_id` to check layered
+        levels belong together. Defaults to the output folder name.
     skip_inversion : bool
          do not run the inversion (level 3 files). This is a temporary
          workaround for workflows that wont run that far into level 3.
@@ -375,6 +450,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgi_version = cfg.PARAMS['rgi_version']
     output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
 
+    if dataset_tag is None:
+        dataset_tag = (
+            os.path.basename(os.path.normpath(str(output_folder)))
+            or "oggm-prepro"
+        )
+    dataset_id = utils.dataset_id_from_tag(dataset_tag, border, rgi_version)
+    # Per-glacier content snapshots of the previous level for deltas
+    manifest_states = {}
+
     # Add a package version file
     utils.mkdir(output_base_dir)
     opath = output_base_dir / 'package_versions.txt'
@@ -441,27 +525,32 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Try to avoid concurrency
     if rgi_version == '70C':
-        fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
-                             'ref_mb_params/oggm_v1.6/inv_rgi7/'
-                             'rgi7c_rgi_year_2025.1.csv')
-        rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
-        rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
+        from oggm.utils._downloads import get_lock
+        with get_lock():
+            fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                                'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                                'rgi7c_rgi_year_2025.1.csv')
+            rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
+            rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
 
     # Add a new default source
     if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
         if rgi_version == '62':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
         if rgi_version == '70G':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
         if rgi_version == '70C':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_sourc`e'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
     # L0 - go
     if start_level == 0:
@@ -475,10 +564,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L0 OK - compress all in output directory
         log.workflow('L0 done. Writing to tar...')
+        for gdir in gdirs:
+            # L0 is the root artifact so fully shipped
+            utils.write_level_manifest(
+                gdir,
+                level=0,
+                prev_state={},
+                dataset_tag=dataset_tag,
+                dataset_id=dataset_id,  # save an extra computation
+                requires=[],
+                includes_levels=[0],
+                border=border,
+                rgi_version=rgi_version,
+                format_version=2,
+            )
+            manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
         level_base_dir = Path(output_base_dir) / 'L0'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        workflow.execute_entity_task(
+            utils.gdir_to_archive, gdirs, delete=False, base_dir=level_base_dir
+        )
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 0:
             _time_log()
             return
@@ -489,6 +594,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                   prepro_rgi_version=rgi_version,
                                                   prepro_base_url=start_base_url
                                                   )
+        # The first level produced is a delta against the downloaded state
+        for gdir in gdirs:
+            manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
 
     # L1 - Add dem files
     if start_level == 0:
@@ -581,10 +689,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L1 OK - compress all in output directory
         log.workflow('L1 done. Writing to tar...')
+        entries = _delta_tar_entries(
+            gdirs=gdirs,
+            level=1,
+            states=manifest_states,
+            border=border,
+            rgi_version=rgi_version,
+            dataset_tag=dataset_tag,
+            dataset_id=dataset_id,
+        )
         level_base_dir = Path(output_base_dir) / 'L1'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        workflow.execute_entity_task(
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
+        )
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 1:
             _time_log()
             return
@@ -752,10 +873,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L2 OK - compress all in output directory
         log.workflow('L2 done. Writing to tar...')
+        entries = _delta_tar_entries(
+            gdirs=gdirs,
+            level=2,
+            states=manifest_states,
+            border=border,
+            rgi_version=rgi_version,
+            dataset_tag=dataset_tag,
+            dataset_id=dataset_id,
+        )
         level_base_dir = Path(output_base_dir) / 'L2'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        workflow.execute_entity_task(
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
+        )
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 2:
             _time_log()
             return
@@ -874,10 +1008,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L3 OK - compress all in output directory
         log.workflow('L3 done. Writing to tar...')
+        entries = _delta_tar_entries(
+            gdirs=gdirs,
+            level=3,
+            states=manifest_states,
+            border=border,
+            rgi_version=rgi_version,
+            dataset_tag=dataset_tag,
+            dataset_id=dataset_id,
+        )
         level_base_dir = Path(output_base_dir) / 'L3'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        workflow.execute_entity_task(
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
+        )
+        utils.base_dir_to_bundles(level_base_dir)
         if max_level == 3:
             _time_log()
             return
@@ -1012,10 +1159,23 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L4 OK - compress all in output directory
         log.workflow('L4 done. Writing to tar...')
+        entries = _delta_tar_entries(
+            gdirs=gdirs,
+            level=4,
+            states=manifest_states,
+            border=border,
+            rgi_version=rgi_version,
+            dataset_tag=dataset_tag,
+            dataset_id=dataset_id,
+        )
         level_base_dir = Path(output_base_dir) / 'L4'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        workflow.execute_entity_task(
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
+        )
+        utils.base_dir_to_bundles(level_base_dir)
 
         sum_dir_L4 = sum_dir
 
@@ -1060,10 +1220,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L5 OK - compress all in output directory
     log.workflow('L5 done. Writing to tar...')
+    for gdir in mini_gdirs:
+        # The mini run bundle is self-sufficient, so shipped as standalone
+        utils.write_level_manifest(
+            gdir_or_dir=gdir,
+            level=5,
+            prev_state={},
+            dataset_id=dataset_id,
+            dataset_tag=dataset_tag,
+            requires=[],
+            includes_levels=[5],
+            kind="standalone",
+            border=border,
+            rgi_version=rgi_version,
+            format_version=2,
+        )
     level_base_dir = Path(output_base_dir) / 'L5'
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
+    workflow.execute_entity_task(
+        utils.gdir_to_archive, mini_gdirs, delete=False, base_dir=level_base_dir
+    )
+    utils.base_dir_to_bundles(level_base_dir)
 
     _time_log()
 
@@ -1094,6 +1270,11 @@ def parse_args(args):
     parser.add_argument('--max-level', type=int, default=5,
                         help='the maximum level you want to run the '
                              'pre-processing for (1, 2, 3, 4 or 5).')
+    parser.add_argument('--dataset-tag', type=str,
+                        help='explicit label identifying this dataset '
+                             'generation, hashed into the per-level '
+                             'manifests. Defaults to the output folder '
+                             'name.')
     parser.add_argument('--working-dir', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -1311,7 +1492,8 @@ def parse_args(args):
                 intersects_file=args.intersects_file,
                 dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
-                max_level=args.max_level, disable_mp=args.disable_mp,
+                max_level=args.max_level, dataset_tag=args.dataset_tag,
+                disable_mp=args.disable_mp,
                 logging_level=args.logging_level,
                 elev_bands=args.elev_bands,
                 skip_inversion=args.skip_inversion,
