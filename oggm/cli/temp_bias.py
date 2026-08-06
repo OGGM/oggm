@@ -11,7 +11,9 @@ mass balance calibration. The full workflow to make one for a new setup is:
      $ oggm_prepro --temp-bias-run <all your other options> --rgi-reg 01
      $ ...  # one job per RGI region
 
-2. summarize the per-glacier biases of all the regions per climate grid point::
+2. summarize the per-glacier biases of all the regions per climate grid point.
+   The grouping of grid points crosses RGI region borders, so this is always a
+   separate step, run once over all the regions::
 
      $ oggm_temp_bias --input RGI62/b_080/L3/summary \\
                       --output-file temp_bias_v2026.1.csv

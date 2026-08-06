@@ -2592,6 +2592,7 @@ class TestTempBiasCLI:
     def test_prepro_temp_bias_run(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
+        from oggm.cli.temp_bias import run_temp_bias
 
         inter, rgidf = _read_shp()
 
@@ -2611,15 +2612,15 @@ class TestTempBiasCLI:
                           elev_bands=True,
                           continue_on_error=False,
                           temp_bias_run=True,
-                          temp_bias_run_kwargs={'min_glaciers': 2},
                           override_params={},
                           )
 
+        # The statistics file is the only thing this run is good for
         sum_dir = os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary')
-        opath = os.path.join(sum_dir, 'temp_bias_11.csv')
-        assert os.path.isfile(opath)
-        assert os.path.isfile(os.path.join(sum_dir, 'temp_bias_11_map.png'))
-        assert os.path.isfile(os.path.join(sum_dir, 'temp_bias_11_hist.png'))
+        assert os.path.isfile(os.path.join(sum_dir,
+                                           'glacier_statistics_11.csv'))
+        assert not os.path.isfile(os.path.join(sum_dir,
+                                               'climate_statistics_11.csv'))
 
         # The gdirs are not copied back, and we stopped at L3
         for lev in ['L0', 'L1', 'L2', 'L3']:
@@ -2627,6 +2628,10 @@ class TestTempBiasCLI:
             assert len(glob.glob(os.path.join(base, '*.tar*'))) == 0
             assert len(glob.glob(os.path.join(base, 'RGI*'))) == 0
         assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+
+        # Second command: the temperature bias file itself
+        opath = os.path.join(self.testdir, 'temp_bias_test.csv')
+        run_temp_bias(input_files=[sum_dir], output_file=opath, min_glaciers=2)
 
         # The two grid points are there, one of them had to be grouped
         out = pd.read_csv(opath, index_col=0)
