@@ -2,6 +2,8 @@ import unittest
 import glob
 import os
 import shutil
+import subprocess
+import sys
 import time
 import hashlib
 import tarfile
@@ -2442,6 +2444,27 @@ class TestTempBiasCLI:
             kwargs = temp_bias.parse_args([])
             assert kwargs['input_files'] == ['d1', 'd2']
 
+    def test_temp_bias_run_preset_before_initialize(self):
+
+        # `log.workflow` is added to the Logger class by cfg.initialize(), so
+        # the --temp-bias-run preset must not log before that or it crashes on
+        # a fresh interpreter. A test session cannot catch this (cfg is
+        # already initialized), hence the subprocess.
+        code = (
+            'import logging\n'
+            'from oggm.cli.prepro_levels import run_prepro_levels\n'
+            'from oggm.exceptions import InvalidParamsError\n'
+            'assert not hasattr(logging.Logger, "workflow")\n'
+            'try:\n'
+            '    run_prepro_levels(rgi_reg="11", border=80,\n'
+            '                      temp_bias_run=True, start_level=2,\n'
+            '                      mb_calibration_strategy="temp_melt")\n'
+            'except InvalidParamsError:\n'
+            '    pass  # raised after the preset block, before cfg.initialize\n'
+        )
+        out = subprocess.run([sys.executable, '-c', code], capture_output=True)
+        assert out.returncode == 0, out.stderr.decode()
+
     def test_compute_temp_bias_dataframe(self):
 
         # Three grid points: two well populated, one with too few glaciers
@@ -2612,8 +2635,16 @@ class TestTempBiasCLI:
                           elev_bands=True,
                           continue_on_error=False,
                           temp_bias_run=True,
+                          mb_calibration_strategy='temp_melt',
                           override_params={},
                           )
+
+        # The strategy has to be explicit
+        with pytest.raises(InvalidParamsError):
+            run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                              output_folder=odir, working_dir=wdir,
+                              temp_bias_run=True,
+                              mb_calibration_strategy='informed_threestep')
 
         # The statistics file is the only thing this run is good for
         sum_dir = os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary')

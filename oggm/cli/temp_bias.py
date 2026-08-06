@@ -8,8 +8,11 @@ mass balance calibration. The full workflow to make one for a new setup is:
 1. run the preprocessing with the same options as your target setup, but with
    the `temp_melt` calibration strategy::
 
-     $ oggm_prepro --temp-bias-run <all your other options> --rgi-reg 01
+     $ oggm_prepro --temp-bias-run --mb-calibration-strategy temp_melt \\
+                   <all your other options> --rgi-reg 01
      $ ...  # one job per RGI region
+
+   (use `temp_melt_regional` instead to build the regional flavor of the file)
 
 2. summarize the per-glacier biases of all the regions per climate grid point.
    The grouping of grid points crosses RGI region borders, so this is always a

@@ -60,9 +60,10 @@ Enhancements
   ``--temp-bias-file-path``. The climate grid is inferred from the glacier
   statistics themselves, so this works with any (custom) climate dataset.
   ``oggm_prepro`` also gets a ``--temp-bias-run`` preset for the preprocessing
-  step itself: it forces the `temp_melt` strategy, stops at level 3, skips the
-  ice thickness inversion and writes nothing but the level 3 glacier statistics
-  file, which is the input of ``oggm_temp_bias``.
+  step itself: it stops at level 3, skips the ice thickness inversion and
+  writes nothing but the level 3 glacier statistics file, which is the input of
+  ``oggm_temp_bias`` (it requires ``--mb-calibration-strategy temp_melt`` or
+  ``temp_melt_regional`` to be set explicitly).
   New utility function ``utils.weighted_quantile_1d``.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).

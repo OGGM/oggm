@@ -289,26 +289,26 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     temp_bias_run : bool
         set to True to run the preprocessing needed to create the temperature
         bias prior file used by the `informed_threestep` calibration. This is
-        a preset which forces `max_level=3`, `skip_inversion=True` and the
-        `temp_melt` calibration strategy, and skips everything which is of no
-        use for this purpose: the glacier directory tar files, the climate
-        statistics and the fixed geometry mass balance. The only output is the
-        L3 `glacier_statistics` file, which is then turned into the
-        temperature bias file with the `oggm_temp_bias` command (the grouping
-        of climate grid points crosses RGI region borders, so this has to be
-        done over all the regions at once).
+        a preset which forces `max_level=3` and `skip_inversion=True`, and
+        skips everything which is of no use for this purpose: the glacier
+        directory tar files, the climate statistics and the fixed geometry
+        mass balance. `mb_calibration_strategy` has to be set explicitly to
+        `temp_melt` (or `temp_melt_regional`), an error is raised otherwise.
+        The only output is the L3 `glacier_statistics` file, which is then
+        turned into the temperature bias file with the `oggm_temp_bias`
+        command (the grouping of climate grid points crosses RGI region
+        borders, so this has to be done over all the regions at once).
     """
 
-    # The temp bias preset overrides a couple of options - be loud about it
+    # The temp bias preset overrides a couple of options. We log about it
+    # further down, once cfg.initialize() has set the logging up.
     if temp_bias_run:
         if not mb_calibration_strategy.startswith('temp_melt'):
-            log.workflow('`temp_bias_run` is set: overriding the mass balance '
-                         'calibration strategy '
-                         f'({mb_calibration_strategy}) with `temp_melt`.')
-            mb_calibration_strategy = 'temp_melt'
-        log.workflow('`temp_bias_run` is set: forcing max_level=3, '
-                     'skip_inversion=True, and not writing the glacier '
-                     'directory tar files.')
+            raise InvalidParamsError(
+                'With `temp_bias_run`, the mass balance calibration strategy '
+                'has to be set explicitly to `temp_melt` (or to '
+                '`temp_melt_regional` for the regional flavor of the '
+                f'temperature bias file), not `{mb_calibration_strategy}`.')
         max_level = 3
         skip_inversion = True
 
@@ -386,6 +386,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Prepare the download of climate file to be shared across processes
     # TODO
+
+    if temp_bias_run:
+        log.workflow('`temp_bias_run` is set: forcing max_level=3 and '
+                     'skip_inversion=True. The only output will be the L3 '
+                     'glacier statistics file: no glacier directory tar '
+                     'files, no climate statistics, no fixed geometry mass '
+                     'balance.')
 
     # Log the parameters
     msg = '# OGGM Run parameters:'
@@ -1291,11 +1298,12 @@ def parse_args(args):
     parser.add_argument('--temp-bias-run', nargs='?', const=True, default=False,
                         help='run the preprocessing needed to create the '
                              'temperature bias prior file. This forces '
-                             '--max-level 3, --skip-inversion and the '
-                             '`temp_melt` calibration strategy, and writes '
-                             'nothing but the L3 glacier statistics file. Feed '
-                             'it to the `oggm_temp_bias` command (together '
-                             'with the other regions) to create the file.')
+                             '--max-level 3 and --skip-inversion, and writes '
+                             'nothing but the L3 glacier statistics file. '
+                             'Requires --mb-calibration-strategy temp_melt '
+                             '(or temp_melt_regional). Feed the result to the '
+                             '`oggm_temp_bias` command (together with the '
+                             'other regions) to create the file.')
     parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
