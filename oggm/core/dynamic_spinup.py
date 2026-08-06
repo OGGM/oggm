@@ -2500,8 +2500,7 @@ def run_dynamic_melt_f_calibration(
             # step away from the limits until we are at the initial guess or we
             # found an error free run
             tmp_mismatch = None
-            while ((current_min_error | current_max_error | iteration == 0) &
-                   (iteration < max_iterations)):
+            while tmp_mismatch is None and iteration < max_iterations:
                 try:
                     tmp_mismatch = fct_to_minimise(melt_f)
                 except RuntimeError as e:
@@ -2560,7 +2559,7 @@ def run_dynamic_melt_f_calibration(
 
                 iteration += 1
 
-            if iteration >= max_iterations:
+            if tmp_mismatch is None:
                 # ok we were not able to find an mismatch without error
                 if current_min_error:
                     raise RuntimeError('Not able to find new lower limit for '
