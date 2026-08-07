@@ -102,6 +102,34 @@ def pytest_collection_modifyitems(config, items):
             if not HAS_MPL_FOR_TESTS:
                 item.add_marker(graphic_marker)
 
+def _full_zarr_cleanup():
+    """Shut down Zarr's background asyncio threads completely.
+
+    This introduces a five second timeout *only* to tests that call
+    `restore_oggm_cfg()`, but a slow test is better than a failing one.
+
+    .. note: Workaround since Zarr v3 doesn't seem to wait properly for
+    iothreads to stop, which can cause a deadlock. Works by stopping
+    executor before event loop is closed before cleanup, then explicitly
+    joining the queue.
+    """
+    try:
+        import zarr.core.sync as zs
+        iothread = zs.iothread[0]   # save ref before cleanup clears it
+        loop = zs.loop[0]
+        if loop is not None and not loop.is_closed():
+            exc = getattr(loop, '_default_executor', None)
+            if exc is not None:
+                # to stop all worker threads cleanly
+                exc.shutdown(wait=True)
+                loop._default_executor = None
+        zs.cleanup_resources()
+        # ensure thread is truly dead before any subsequent fork
+        if iothread is not None and iothread.is_alive():
+            iothread.join(timeout=5.0)
+    except Exception:
+        pass
+
 
 @pytest.fixture(scope='function', autouse=True)
 def restore_oggm_cfg():
@@ -110,6 +138,7 @@ def restore_oggm_cfg():
     reset_multiprocessing()
     yield
     cfg.unpack_config(old_cfg)
+    _full_zarr_cleanup()
 
 
 @pytest.fixture(scope='class', autouse=True)
