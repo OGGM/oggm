@@ -51,6 +51,31 @@ Enhancements
   arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
   (:pull:`1941`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- **Breaking change**: the temperature-bias prior file of the
+  `informed_threestep` calibration is now always given explicitly. There is no
+  default file anymore: `utils.get_temp_bias_dataframe` takes a single
+  `file_path` argument (its `dataset`, `rgi_version` and `regional` arguments
+  are gone), and `mb_calibration_from_geodetic_mb` (hence `run_prepro_levels`
+  and ``oggm_prepro``) raises an error if `temp_bias_file_path` is not set.
+  The file has to match the setup it is used with, and it is created with a
+  `temp_bias_run` and the ``oggm_temp_bias`` command.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- **Breaking change**: the regional mass balance calibration is removed. The
+  `use_regional_avg` keyword of `mb_calibration_from_geodetic_mb` and the
+  `_regional` suffix of the `run_prepro_levels` / ``oggm_prepro``
+  `mb_calibration_strategy` are gone: the calibration always uses the
+  glacier specific geodetic observations, and the temperature bias prior
+  always the `median_temp_bias_w_err_grouped` column of the prior file.
+  `utils.get_geodetic_mb_dataframe` loses its `regional` keyword as well: the
+  regional averages of the observations are not used by OGGM anymore.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- `utils.get_geodetic_mb_dataframe` now selects the geodetic observations file
+  matching the RGI version (new `rgi_version` keyword, defaulting to
+  ``cfg.PARAMS['rgi_version']``): the observations are indexed by glacier id,
+  so RGI6 and RGI7G need different files. `mb_calibration_from_geodetic_mb`
+  passes the glacier's own RGI version, so RGI7G glacier directories now
+  calibrate on RGI7G observations out of the box. RGI7C is not available yet.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The temperature bias prior file used by the `informed_threestep` calibration
   can now be created from the command line, instead of with a notebook. The new
   ``oggm_temp_bias`` command (and the underlying

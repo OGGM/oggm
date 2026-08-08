@@ -25,6 +25,7 @@ from oggm.utils import _downloads
 from oggm import cfg
 from oggm.cfg import SEC_IN_YEAR
 from oggm.utils._workflow import compile_to_netcdf
+from oggm.tests import TEMP_BIAS_FILE_W5E5_RGI6, GEODETIC_MB_REGIONAL_AVG
 from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
@@ -1728,6 +1729,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           mb_model_class=mb_model_class,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           continue_on_error=False,
                           override_params={}
                           )
@@ -1763,7 +1765,7 @@ class TestPreproCLI:
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = utils.get_geodetic_mb_dataframe(regional=True)
+        dfh = pd.read_csv(utils.file_downloader(GEODETIC_MB_REGIONAL_AVG))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=200)  # Whole Alps
@@ -1890,6 +1892,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           max_level=3,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           add_distributed_thickness=True,
                           add_export_thickness_geotiff=True,
                           continue_on_error=False,
@@ -1953,6 +1956,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           max_level=4,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           store_hydro_output=True,
                           store_monthly_hydro=True,
                           ref_area_yr=2000,
@@ -2036,7 +2040,7 @@ class TestPreproCLI:
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = utils.get_geodetic_mb_dataframe(regional=True)
+        dfh = pd.read_csv(utils.file_downloader(GEODETIC_MB_REGIONAL_AVG))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=150)  # Whole Alps
@@ -2459,6 +2463,7 @@ class TestPreproCLI:
                           rgi_file=rgidf, intersects_file=inter,
                           logging_level='INFO',
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
@@ -2767,6 +2772,12 @@ class TestTempBiasCLI:
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                               output_folder=odir, working_dir=wdir,
                               temp_bias_run=True,
+                              mb_calibration_strategy='informed_threestep')
+
+        # And informed_threestep needs the file we are about to create
+        with pytest.raises(InvalidParamsError):
+            run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                              output_folder=odir, working_dir=wdir,
                               mb_calibration_strategy='informed_threestep')
 
         # The statistics file is the only thing this run is good for
@@ -3548,6 +3559,21 @@ class TestDataFiles(unittest.TestCase):
         with pytest.warns(DeprecationWarning, match="hdf"):
             df = _downloads.get_dataframe_from_file(hdf_path)
         pd.testing.assert_frame_equal(df, df_orig)
+
+    @pytest.mark.slow
+    def test_get_geodetic_mb_dataframe(self):
+
+        df = utils.get_geodetic_mb_dataframe(rgi_version='62')
+        assert df.index[0].startswith('RGI60-')
+        # RGI6 is the default
+        assert cfg.PARAMS['rgi_version'] == '62'
+        assert utils.get_geodetic_mb_dataframe().index[0].startswith('RGI60-')
+
+        df = utils.get_geodetic_mb_dataframe(rgi_version='70G')
+        assert df.index[0].startswith('RGI2000-v7.0-G-')
+
+        with pytest.raises(NotImplementedError):
+            utils.get_geodetic_mb_dataframe(rgi_version='70C')
 
     def test_srtmzone(self):
 
