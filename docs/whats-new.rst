@@ -209,6 +209,16 @@ Bug fixes
   longer silently calving with the default configuration. ``do_calving`` is now
   also ignored for non-tidewater glaciers (:pull:`1961`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- ``workflow.execute_entity_task`` no longer collects the model objects
+  returned by the ``run_*`` tasks. With multiprocessing these were pickled
+  back to the main process and kept in a list with one entry per glacier,
+  which nothing ever used but which was enough to run the main process out of
+  memory on large RGI regions - dramatically so with ``SfcTypeTIModel``, whose
+  models carry the full mass balance history. Entity tasks can now declare
+  ``@entity_task(log, workflow_return_value=False)``, which
+  ``execute_entity_task`` honours unless the caller passes ``return_value=True``
+  explicitly. Calling the tasks directly is unaffected (:pull:`1976`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

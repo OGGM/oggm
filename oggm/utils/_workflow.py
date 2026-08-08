@@ -438,7 +438,8 @@ class entity_task(object):
     exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, log, writes=[], fallback=None):
+    def __init__(self, log, writes=[], fallback=None,
+                 workflow_return_value=True):
         """Decorator syntax: ``@entity_task(log, writes=['dem', 'outlines'])``
 
         Parameters
@@ -450,15 +451,22 @@ class entity_task(object):
             available in ``cfg.BASENAMES``)
         fallback: python function
             will be executed on gdir if entity_task fails
-        return_value: bool
-            whether the return value from the task should be passed over
-            to the caller or not. In general you will always want this to
-            be true, but sometimes the task return things which are not
-            useful in production and my use a lot of memory, etc,
+        workflow_return_value: bool
+            whether ``workflow.execute_entity_task`` collects the return
+            value of this task. Set this to False for tasks returning objects
+            which are not useful in production but use a lot of memory (the
+            model objects returned by the ``run_*`` tasks, for example): with
+            multiprocessing these are pickled back to the main process and
+            kept in a list of one element per glacier, which is enough to
+            blow up the memory of large regions. Calling the task directly
+            (``tasks.run_random_climate(gdir)``) is unaffected by this, and
+            callers of ``execute_entity_task`` can still ask for the values
+            explicitly with ``return_value=True``.
         """
         self.log = log
         self.writes = writes
         self.fallback = fallback
+        self.workflow_return_value = workflow_return_value
 
         cnt = ['    Notes']
         cnt += ['    -----']
@@ -546,6 +554,10 @@ class entity_task(object):
                 return out
 
         _entity_task.__dict__['is_entity_task'] = True
+        # read by workflow.execute_entity_task to decide whether the return
+        # values are worth shipping back to the main process (see __init__)
+        _entity_task.__dict__['workflow_return_value'] = \
+            self.workflow_return_value
         # adds the possibility to use a function, decorated as entity_task,
         # without its decoration.
         _entity_task.unwrapped = task_func

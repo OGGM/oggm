@@ -28,7 +28,7 @@ from oggm.core.flowline import (decide_evolution_model, FileModel,
 log = logging.getLogger(__name__)
 
 
-@entity_task(log)
+@entity_task(log, workflow_return_value=False)
 def run_dynamic_spinup(gdir, settings_filesuffix='',
                        observations_filesuffix='', overwrite_observations=False,
                        target_yr=None, target_value=None,
@@ -1939,7 +1939,8 @@ def dynamic_melt_f_run_fallback(
     return model
 
 
-@entity_task(log, writes=['inversion_flowlines'])
+@entity_task(log, writes=['inversion_flowlines'],
+             workflow_return_value=False)
 def run_dynamic_melt_f_calibration(
         gdir, settings_filesuffix='', observations_filesuffix='',
         overwrite_observations=False,

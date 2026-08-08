@@ -1,5 +1,6 @@
 import unittest
 import glob
+import logging
 import os
 import shutil
 import subprocess
@@ -62,6 +63,19 @@ def clean_dir(testdir):
 def _read_prcp_fac(gdir):
     # module-level so it can be pickled and sent to multiprocessing workers
     return gdir.settings['prcp_fac']
+
+
+# module-level so they can be pickled and sent to multiprocessing workers
+@utils.entity_task(logging.getLogger(__name__), workflow_return_value=False)
+def _task_with_costly_return(gdir):
+    """Dummy task standing in for the run_* tasks."""
+    return np.zeros(10)
+
+
+@utils.entity_task(logging.getLogger(__name__))
+def _task_with_cheap_return(gdir):
+    """Dummy task whose return value is worth collecting."""
+    return gdir.rgi_id
 
 
 class TestFuncs(object):
@@ -967,6 +981,60 @@ class TestWorkflowTools(unittest.TestCase):
 
         # set prcp_fac back for other tests
         gdir.settings['prcp_fac'] = orig_prcp_fac
+
+    def test_workflow_return_value(self):
+        # tasks flagged with workflow_return_value=False must not have their
+        # return value collected by execute_entity_task - with
+        # multiprocessing this is what gets pickled back to the main process
+        # and kept, one per glacier, until the whole region is done
+        gdir = init_hef()
+
+        assert _task_with_costly_return.workflow_return_value is False
+        assert _task_with_cheap_return.workflow_return_value is True
+
+        # a direct call is unaffected by the flag
+        assert_array_equal(_task_with_costly_return(gdir), np.zeros(10))
+
+        # the outcome must not depend on multiprocessing being used or not
+        for use_mp in [False, True]:
+            cfg.PARAMS['use_multiprocessing'] = use_mp
+            cfg.PARAMS['mp_processes'] = 2
+            cfg.PARAMS['use_mp_spawn'] = False
+
+            # the flagged task returns nothing through the workflow...
+            out = workflow.execute_entity_task(_task_with_costly_return,
+                                               [gdir, gdir])
+            assert out == [None, None]
+
+            # ...but the caller can still ask for the values explicitly
+            out = workflow.execute_entity_task(_task_with_costly_return,
+                                               [gdir, gdir],
+                                               return_value=True)
+            assert len(out) == 2
+            assert_array_equal(out[0], np.zeros(10))
+
+            # unflagged tasks keep returning their values
+            out = workflow.execute_entity_task(_task_with_cheap_return,
+                                               [gdir, gdir])
+            assert out == [gdir.rgi_id, gdir.rgi_id]
+
+    def test_run_tasks_do_not_return_models_to_the_workflow(self):
+        # the run_* tasks return the full model (flowlines and mass balance
+        # model included). Collecting one per glacier is what made large
+        # regions run out of memory, see
+        # https://github.com/OGGM/oggm/issues/1976
+        from oggm.core.dynamic_spinup import (run_dynamic_spinup,
+                                              run_dynamic_melt_f_calibration)
+        for task in [flowline.flowline_model_run,
+                     flowline.run_random_climate,
+                     flowline.run_constant_climate,
+                     flowline.run_from_climate_data,
+                     run_dynamic_spinup,
+                     run_dynamic_melt_f_calibration]:
+            assert task.workflow_return_value is False, task.__name__
+
+        # the default is unchanged for everything else
+        assert tasks.glacier_masks.workflow_return_value is True
 
 
 class TestWorkflowUtils:

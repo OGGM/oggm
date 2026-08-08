@@ -163,6 +163,10 @@ def execute_entity_task(task, gdirs, **kwargs):
     Returns
     -------
     List of results from task. Last task if a list of tasks was given.
+    Tasks declared with ``@entity_task(log, workflow_return_value=False)``
+    (the ``run_*`` tasks, whose model objects are expensive to keep around)
+    return a list of ``None`` instead - pass ``return_value=True`` to get
+    them anyway.
     """
 
     # Normalize task into list of tuples for simplicity
@@ -180,6 +184,23 @@ def execute_entity_task(task, gdirs, **kwargs):
         if t[0].__dict__.get('is_global_task', False):
             raise InvalidWorkflowError('execute_entity_task cannot be used on '
                                        'global tasks.')
+
+    # Some tasks return objects which are useless here but expensive to keep
+    # around (the run_* tasks return the full model, mass balance model
+    # included). With multiprocessing these are pickled back to the main
+    # process and stored in a list of one element per glacier - for large
+    # regions this alone is enough to run out of memory. Unless the caller
+    # explicitly asked for the values, we tell those tasks not to return
+    # anything. This is decided per task and applied with and without
+    # multiprocessing, so that the outcome does not depend on it.
+    if 'return_value' not in kwargs:
+        for i, (t, t_kwargs) in enumerate(tasks):
+            if getattr(t, 'workflow_return_value', True):
+                continue
+            if 'return_value' in t_kwargs:
+                continue
+            # copy: the dict may belong to the caller
+            tasks[i] = (t, _merge_dicts(t_kwargs, {'return_value': False}))
 
     # Should be iterable
     gdirs = utils.tolist(gdirs)

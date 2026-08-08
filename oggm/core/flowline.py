@@ -3826,7 +3826,7 @@ def decide_evolution_model(gdir=None, evolution_model=None):
     return evolution_model
 
 
-@entity_task(log)
+@entity_task(log, workflow_return_value=False)
 def flowline_model_run(gdir, settings_filesuffix='',
                        output_filesuffix=None, mb_model=None,
                        ys=None, ye=None, zero_initial_glacier=False,
@@ -4055,7 +4055,7 @@ def flowline_model_run(gdir, settings_filesuffix='',
     return model
 
 
-@entity_task(log)
+@entity_task(log, workflow_return_value=False)
 def run_random_climate(gdir, settings_filesuffix='',
                        nyears=1000, y0=None, halfsize=15,
                        ys=None, ye=None,
@@ -4191,7 +4191,7 @@ def run_random_climate(gdir, settings_filesuffix='',
                               **kwargs)
 
 
-@entity_task(log)
+@entity_task(log, workflow_return_value=False)
 def run_constant_climate(gdir, settings_filesuffix='',
                          nyears=1000, y0=None, halfsize=15,
                          ys=None, ye=None,
@@ -4315,7 +4315,7 @@ def run_constant_climate(gdir, settings_filesuffix='',
                               **kwargs)
 
 
-@entity_task(log)
+@entity_task(log, workflow_return_value=False)
 def run_from_climate_data(gdir, settings_filesuffix='',
                           ys=None, ye=None, min_ys=None, max_ys=None,
                           fixed_geometry_spinup_yr=None,

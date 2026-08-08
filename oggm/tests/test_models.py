@@ -2634,6 +2634,9 @@ class TestMassBalanceModels:
         dyn_models = workflow.execute_entity_task(
             tasks.run_dynamic_melt_f_calibration,
             gdir,
+            # the run_* tasks don't return their model through the workflow
+            # per default (memory), here we do want it for the checks below
+            return_value=True,
             ys=1979,
             ye=gdir.get_climate_info()['baseline_yr_1'] + 1,
             ignore_errors=True,
