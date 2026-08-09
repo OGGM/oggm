@@ -5390,6 +5390,22 @@ class ModelSettings(YAMLFileObject):
         self.gdir = gdir
         self.add_default_values = add_parent_values
 
+    def __getstate__(self):
+        # the cfg.PARAMS snapshot is dropped from the pickled state (and
+        # rebuilt in __setstate__) so that it isn't re-shipped with every
+        # pickled object holding a settings instance - it can carry heavy
+        # objects such as cfg.PARAMS['intersects_gdf']
+        state = self.__dict__.copy()
+        if ('defaults' in state and
+                not isinstance(state['defaults'], ModelSettings)):
+            state['defaults'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if 'defaults' in state and state['defaults'] is None:
+            self.defaults = cfg.PARAMS.copy()
+
     def get(self, key):
         if self.always_reload_data:
             # to be always synced, if several objects work on the same file

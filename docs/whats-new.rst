@@ -199,6 +199,18 @@ Bug fixes
   dispatched to a worker process. They are now dropped before pickling and
   rebuilt from disk in the worker instead (:pull:`1967`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Fixed a large size regression in the glacier directories: the ``settings``
+  attached to each ``Flowline`` carried a shallow copy of ``cfg.PARAMS``, which
+  holds ``intersects_gdf`` - a region-wide table. It was serialized into
+  ``model_flowlines.pkl`` once per glacier, up to five times per glacier across
+  levels 3 to 5, making the L5 directories of dense regions such as RGI60-19 up
+  to 11 times bigger than in v1.6.3. ``Flowline``, ``FlowlineModel`` and
+  ``ModelSettings`` now drop that snapshot before pickling and rebuild it from
+  ``cfg.PARAMS`` on unpickling, as ``GlacierDirectory`` already did. Note that
+  flowlines read from an existing pickle now resolve their default parameters
+  against the current ``cfg.PARAMS``, instead of the values that happened to be
+  set when the file was written (:pull:`1976`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Model constructors no longer silently persist a non-default ``temp_melt`` to
   the gdir settings file. ``check_calib_params`` now validates the effective
   model parameters instead of the settings file, and calibration tasks record

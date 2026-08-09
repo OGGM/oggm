@@ -110,6 +110,23 @@ class Flowline(Centerline):
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
+    def __getstate__(self):
+        # a plain cfg.PARAMS copy (gdir=None) is dropped from the pickled
+        # state and rebuilt in __setstate__, so that it isn't written out
+        # with every flowline - see ModelSettings.__getstate__
+        state = self.__dict__.copy()
+        if ('settings' in state and
+                not isinstance(state['settings'], utils.ModelSettings)):
+            state['settings'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # pickles written by older OGGM versions have no settings at all,
+        # those are left without one (see length_m for how this is handled)
+        if 'settings' in state and state['settings'] is None:
+            self.settings = cfg.PARAMS.copy()
+
     def has_ice(self):
         return np.any(self.thick > 0)
 
@@ -738,6 +755,19 @@ class FlowlineModel(object):
         self._tributary_indices = None
         self.reset_flowlines(flowlines, inplace=inplace,
                              smooth_trib_influx=smooth_trib_influx)
+
+    def __getstate__(self):
+        # see Flowline.__getstate__
+        state = self.__dict__.copy()
+        if ('settings' in state and
+                not isinstance(state['settings'], utils.ModelSettings)):
+            state['settings'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if 'settings' in state and state['settings'] is None:
+            self.settings = cfg.PARAMS.copy()
 
     @property
     def mb_model(self):

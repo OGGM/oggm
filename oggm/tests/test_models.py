@@ -165,6 +165,69 @@ class TestInitPresentDayFlowline:
         with pytest.raises(InvalidParamsError):
             init_present_time_glacier(gdir)
 
+    def test_model_flowlines_do_not_pickle_params(self, hef_gdir):
+        # the settings attached to a flowline must not drag the cfg.PARAMS
+        # snapshot into the pickle: it holds intersects_gdf, a region-wide
+        # table, which used to be written out once per glacier and per file
+        # (see Flowline.__getstate__ and ModelSettings.__getstate__)
+        import pickle
+        import geopandas as gpd
+
+        gdir = hef_gdir
+        prev_gdf = cfg.PARAMS['intersects_gdf']
+        # the tests above leave this on the shared fixture
+        gdir.settings['downstream_line_shape'] = \
+            cfg.PARAMS['downstream_line_shape']
+
+        try:
+            # a deliberately big intersects db, of the order of what a dense
+            # region such as RGI60-19 actually produces
+            n = 5000
+            line = shpg.LineString([(0, 0), (1, 1)])
+            big_gdf = gpd.GeoDataFrame({'RGIId_1': ['x'] * n,
+                                        'RGIId_2': ['y'] * n},
+                                       geometry=[line] * n)
+            cfg.set_intersects_db(big_gdf)
+            # guard against the fixture silently becoming small
+            assert len(pickle.dumps(big_gdf)) > 200_000
+
+            init_present_time_glacier(gdir)
+
+            # the real regression: this file was ~300 kB and up
+            fp = gdir.get_filepath('model_flowlines')
+            assert os.path.getsize(fp) < 100_000
+
+            # ... and the flowlines must still resolve their settings
+            fls = gdir.read_pickle('model_flowlines')
+            assert isinstance(fls[0].settings, ModelSettings)
+            assert fls[0].settings['min_ice_thick_for_length'] == \
+                cfg.PARAMS['min_ice_thick_for_length']
+            assert fls[0].settings['glacier_length_method'] == \
+                cfg.PARAMS['glacier_length_method']
+            assert fls[0].length_m > 0
+
+            # the defaults are rebuilt from the live cfg.PARAMS on unpickling,
+            # they are not a snapshot frozen at write time
+            prev_glen_a = cfg.PARAMS['glen_a']
+            try:
+                cfg.PARAMS['glen_a'] = prev_glen_a * 2
+                fls = gdir.read_pickle('model_flowlines')
+                assert fls[0].settings['glen_a'] == prev_glen_a * 2
+            finally:
+                cfg.PARAMS['glen_a'] = prev_glen_a
+
+            # same story for a flowline built without a gdir, where settings
+            # is a plain cfg.PARAMS copy
+            fl = RectangularBedFlowline(surface_h=np.linspace(3000, 1000, 60),
+                                        bed_h=np.linspace(2900, 900, 60),
+                                        widths=np.zeros(60) + 3.,
+                                        map_dx=100.)
+            b = pickle.dumps(fl)
+            assert len(b) < 20_000
+            assert pickle.loads(b).settings['glen_a'] == cfg.PARAMS['glen_a']
+        finally:
+            cfg.set_intersects_db(prev_gdf)
+
     def test_init_present_time_glacier_obs_thick(
         self, hef_elev_gdir, rgi62_itmix_df, monkeypatch
     ):
