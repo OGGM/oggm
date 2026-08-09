@@ -455,13 +455,10 @@ class entity_task(object):
             whether ``workflow.execute_entity_task`` collects the return
             value of this task. Set this to False for tasks returning objects
             which are not useful in production but use a lot of memory (the
-            model objects returned by the ``run_*`` tasks, for example): with
-            multiprocessing these are pickled back to the main process and
-            kept in a list of one element per glacier, which is enough to
-            blow up the memory of large regions. Calling the task directly
-            (``tasks.run_random_climate(gdir)``) is unaffected by this, and
-            callers of ``execute_entity_task`` can still ask for the values
-            explicitly with ``return_value=True``.
+            model objects returned by the ``run_*`` tasks, for example).
+            Calling the task directly (``tasks.run_random_climate(gdir)``)
+            is unaffected by this, and callers of ``execute_entity_task``
+            can still ask for the values explicitly with ``return_value=True``.
         """
         self.log = log
         self.writes = writes
@@ -556,8 +553,7 @@ class entity_task(object):
         _entity_task.__dict__['is_entity_task'] = True
         # read by workflow.execute_entity_task to decide whether the return
         # values are worth shipping back to the main process (see __init__)
-        _entity_task.__dict__['workflow_return_value'] = \
-            self.workflow_return_value
+        _entity_task.__dict__['workflow_return_value'] = self.workflow_return_value
         # adds the possibility to use a function, decorated as entity_task,
         # without its decoration.
         _entity_task.unwrapped = task_func
