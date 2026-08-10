@@ -3650,7 +3650,7 @@ class GlacierDirectory(object):
         self.write_shapefile(towrite, 'outlines')
 
         # Also transform the intersects if necessary
-        gdf = cfg.PARAMS['intersects_gdf']
+        gdf = cfg.INTERSECTS_GDF
         if len(gdf) > 0:
             try:
                 gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |

@@ -866,6 +866,46 @@ class TestInitialize(unittest.TestCase):
         from oggm import DEFAULT_BASE_URL
         assert '2025.6' in DEFAULT_BASE_URL
 
+    def test_intersects_db(self):
+        # the intersects are a (potentially large, region wide) dataframe and
+        # not a parameter: they must stay out of cfg.PARAMS, which is copied
+        # and pickled all over the place as if it held scalars only
+        import pickle
+        import geopandas as gpd
+        import shapely.geometry as shpg
+
+        assert 'intersects_gdf' not in cfg.PARAMS
+        assert len(cfg.INTERSECTS_GDF) == 0
+
+        n = 500
+        line = shpg.LineString([(0, 0), (1, 1)])
+        gdf = gpd.GeoDataFrame({'RGIId_1': ['x'] * n, 'RGIId_2': ['y'] * n},
+                               geometry=[line] * n)
+
+        cfg.CONFIG_MODIFIED = False
+        cfg.set_intersects_db(gdf)
+        assert len(cfg.INTERSECTS_GDF) == n
+        assert 'intersects_gdf' not in cfg.PARAMS
+        # the workers must be told about the new database
+        assert cfg.CONFIG_MODIFIED
+
+        # cfg.PARAMS is what gets shipped to the workers and stored in the
+        # settings defaults: it should stay small
+        assert len(pickle.dumps(dict(cfg.PARAMS))) < 50_000
+
+        # ... but the intersects still travel to the workers
+        packed = cfg.pack_config()
+        cfg.INTERSECTS_GDF = pd.DataFrame()
+        cfg.unpack_config(packed)
+        assert len(cfg.INTERSECTS_GDF) == n
+
+        # both ways of asking for no intersects at all
+        cfg.set_intersects_db()
+        assert len(cfg.INTERSECTS_GDF) == 0
+        cfg.PARAMS['use_intersects'] = False
+        cfg.set_intersects_db(gdf)
+        assert len(cfg.INTERSECTS_GDF) == 0
+
 
 class TestWorkflowTools(unittest.TestCase):
 

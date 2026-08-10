@@ -219,6 +219,14 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The glacier intersects are no longer stored in
+  ``cfg.PARAMS['intersects_gdf']``, but in ``cfg.INTERSECTS_GDF``. They are a
+  (potentially large, region wide) dataframe and not a parameter, and having
+  them in ``cfg.PARAMS`` meant they were silently copied and pickled along
+  wherever the parameters are, which is not what a parameter dict is for. The
+  way to set them, ``cfg.set_intersects_db``, is unchanged, and so is
+  ``cfg.PARAMS['use_intersects']`` (:pull:`1980`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The default reference for RGI6 all initial glacier volumes is now
   IceBoost v2 - this replaces the previous consensus estimate (:pull:`1942`).
 - Renamed ``cfg.PARAMS['dynamic_spinup_min_ice_thick']`` to

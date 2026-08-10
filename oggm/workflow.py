@@ -482,7 +482,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         else:
             # We can set the intersects file automatically here
             if (cfg.PARAMS['use_intersects'] and
-                    len(cfg.PARAMS['intersects_gdf']) == 0 and
+                    len(cfg.INTERSECTS_GDF) == 0 and
                     not from_tar):
                 try:
                     rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
