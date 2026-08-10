@@ -322,6 +322,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if start_level > 0 and start_base_url is None:
             raise InvalidParamsError('With start_level, please also indicate '
                                      'start_base_url')
+        if start_level > 0 and intersects_file is not None:
+            log.workflow('`intersects_file` is ignored with start_level > 0: '
+                         'the intersects are written to the glacier '
+                         'directories at L0 and are already in the prepro '
+                         'files we start from.')
     else:
         start_level = 0
 
@@ -417,8 +422,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
-        # We use intersects
-        if rgi_version != '70C':
+        # We use intersects. They are only needed to build the glacier
+        # directories from the RGI (L0): from L1 on, each directory has its
+        # own intersects.shp and the region wide file is never read again
+        if rgi_version != '70C' and start_level == 0:
             if intersects_file is None:
                 rgif = utils.get_rgi_intersects_region_file(rgi_reg,
                                                             version=rgi_version)
@@ -451,7 +458,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             rgidf = gpd.read_file(rgi_file)
         else:
             rgidf = rgi_file
-        cfg.set_intersects_db(intersects_file)
+        if start_level == 0:
+            cfg.set_intersects_db(intersects_file)
 
     if is_test:
         if test_ids is not None:
