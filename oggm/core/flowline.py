@@ -103,29 +103,24 @@ class Flowline(Centerline):
         self.map_trafo = None
         if gdir is not None:
             gdir.settings_filesuffix = settings_filesuffix
-            self.settings = gdir.settings
+            settings = gdir.settings
             self.map_trafo = partial(gdir.grid.ij_to_crs, crs=salem.wgs84)
         else:
-            self.settings = cfg.PARAMS.copy()
+            settings = cfg.PARAMS
+        # a flowline only needs these two parameters (for its length), so we
+        # store them instead of a reference to the settings: the latter would
+        # be pickled with every flowline, together with everything it points
+        # to (the gdir, and a copy of cfg.PARAMS with its intersects_gdf)
+        try:
+            self.min_ice_thick_for_length = settings['min_ice_thick_for_length']
+        except KeyError:
+            self.min_ice_thick_for_length = 0
+        try:
+            self.glacier_length_method = settings['glacier_length_method']
+        except KeyError:
+            self.glacier_length_method = None
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
-
-    def __getstate__(self):
-        # a plain cfg.PARAMS copy (gdir=None) is dropped from the pickled
-        # state and rebuilt in __setstate__, so that it isn't written out
-        # with every flowline - see ModelSettings.__getstate__
-        state = self.__dict__.copy()
-        if ('settings' in state and
-                not isinstance(state['settings'], utils.ModelSettings)):
-            state['settings'] = None
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        # pickles written by older OGGM versions have no settings at all,
-        # those are left without one (see length_m for how this is handled)
-        if 'settings' in state and state['settings'] is None:
-            self.settings = cfg.PARAMS.copy()
 
     def has_ice(self):
         return np.any(self.thick > 0)
@@ -170,16 +165,14 @@ class Flowline(Centerline):
     def length_m(self):
         # TODO: take calving bucket into account for fine tuned length?
         try:
-            lt = self.settings['min_ice_thick_for_length']
-        except KeyError:
-            lt = 0
+            lt = self.min_ice_thick_for_length
         except AttributeError:
             # this is for backwards-compatibility with old gdirs
             lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
 
         # this is for backwards-compatibility with old gdirs
         try:
-            glacier_length_method = self.settings['glacier_length_method']
+            glacier_length_method = self.glacier_length_method
         except AttributeError:
             glacier_length_method = cfg.PARAMS.get('glacier_length_method')
 
@@ -197,16 +190,14 @@ class Flowline(Centerline):
         # the index of the last point with ice thickness above
         # min_ice_thick_for_length and consistent with length
         try:
-            lt = self.settings['min_ice_thick_for_length']
-        except KeyError:
-            lt = 0
+            lt = self.min_ice_thick_for_length
         except AttributeError:
             # this is for backwards-compatibility with old gdirs
             lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
 
         # this is for backwards-compatibility with old gdirs
         try:
-            glacier_length_method = self.settings['glacier_length_method']
+            glacier_length_method = self.glacier_length_method
         except AttributeError:
             glacier_length_method = cfg.PARAMS.get('glacier_length_method')
         if glacier_length_method == 'consecutive':
@@ -4032,7 +4023,8 @@ def flowline_model_run(gdir, settings_filesuffix='',
 
     # ensure the flowlines are using the right settings
     for fl in fls:
-        fl.settings = gdir.settings
+        fl.min_ice_thick_for_length = gdir.settings['min_ice_thick_for_length']
+        fl.glacier_length_method = gdir.settings['glacier_length_method']
 
     if (gdir.settings['use_kcalving_for_run'] and gdir.is_tidewater and
             water_level is None):

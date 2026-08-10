@@ -166,10 +166,9 @@ class TestInitPresentDayFlowline:
             init_present_time_glacier(gdir)
 
     def test_model_flowlines_do_not_pickle_params(self, hef_gdir):
-        # the settings attached to a flowline must not drag the cfg.PARAMS
-        # snapshot into the pickle: it holds intersects_gdf, a region-wide
-        # table, which used to be written out once per glacier and per file
-        # (see Flowline.__getstate__ and ModelSettings.__getstate__)
+        # a flowline stores the two parameters it needs, not a reference to
+        # the settings: the latter used to drag a copy of cfg.PARAMS into
+        # every pickle, and with it intersects_gdf, a region-wide table
         import pickle
         import geopandas as gpd
 
@@ -197,34 +196,29 @@ class TestInitPresentDayFlowline:
             fp = gdir.get_filepath('model_flowlines')
             assert os.path.getsize(fp) < 100_000
 
-            # ... and the flowlines must still resolve their settings
+            # ... and no settings object comes along for the ride
             fls = gdir.read_pickle('model_flowlines')
-            assert isinstance(fls[0].settings, ModelSettings)
-            assert fls[0].settings['min_ice_thick_for_length'] == \
-                cfg.PARAMS['min_ice_thick_for_length']
-            assert fls[0].settings['glacier_length_method'] == \
-                cfg.PARAMS['glacier_length_method']
+            assert not hasattr(fls[0], 'settings')
+
+            # the two parameters a flowline needs are taken from the gdir
+            # settings and are still there after a round trip
+            assert fls[0].min_ice_thick_for_length == \
+                gdir.settings['min_ice_thick_for_length']
+            assert fls[0].glacier_length_method == \
+                gdir.settings['glacier_length_method']
             assert fls[0].length_m > 0
 
-            # the defaults are rebuilt from the live cfg.PARAMS on unpickling,
-            # they are not a snapshot frozen at write time
-            prev_glen_a = cfg.PARAMS['glen_a']
-            try:
-                cfg.PARAMS['glen_a'] = prev_glen_a * 2
-                fls = gdir.read_pickle('model_flowlines')
-                assert fls[0].settings['glen_a'] == prev_glen_a * 2
-            finally:
-                cfg.PARAMS['glen_a'] = prev_glen_a
-
-            # same story for a flowline built without a gdir, where settings
-            # is a plain cfg.PARAMS copy
+            # same story for a flowline built without a gdir, which takes
+            # them from cfg.PARAMS
             fl = RectangularBedFlowline(surface_h=np.linspace(3000, 1000, 60),
                                         bed_h=np.linspace(2900, 900, 60),
                                         widths=np.zeros(60) + 3.,
                                         map_dx=100.)
+            assert fl.min_ice_thick_for_length == \
+                cfg.PARAMS['min_ice_thick_for_length']
             b = pickle.dumps(fl)
             assert len(b) < 20_000
-            assert pickle.loads(b).settings['glen_a'] == cfg.PARAMS['glen_a']
+            assert pickle.loads(b).length_m == fl.length_m
         finally:
             cfg.set_intersects_db(prev_gdf)
 
@@ -3721,16 +3715,16 @@ class TestModelFlowlines():
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        rec.settings['glacier_length_method'] = 'consecutive'
+        rec.glacier_length_method = 'consecutive'
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        rec.settings['min_ice_thick_for_length'] = 1
+        rec.min_ice_thick_for_length = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
-        rec.settings['glacier_length_method'] = 'naive'
+        rec.glacier_length_method = 'naive'
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
@@ -3740,7 +3734,7 @@ class TestModelFlowlines():
         assert rec.length_m == full_l - map_dx
         assert rec.terminus_index == nx - 1
 
-        rec.settings['glacier_length_method'] = 'consecutive'
+        rec.glacier_length_method = 'consecutive'
         assert rec.length_m == 1000
         assert rec.terminus_index == 9
 
