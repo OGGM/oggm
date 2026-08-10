@@ -23,7 +23,7 @@ def check_internet_access(
     hostname: str = "8.8.8.8", port: int = 53, timeout: int = 1
 ):
     """Check if Internet is available.
-    
+
     hostname : str, default "8.8.8.8"
         Web address. Can be a public DNS or an HTTP link.
     port : int, default 53
