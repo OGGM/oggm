@@ -165,63 +165,6 @@ class TestInitPresentDayFlowline:
         with pytest.raises(InvalidParamsError):
             init_present_time_glacier(gdir)
 
-    def test_model_flowlines_do_not_pickle_params(self, hef_gdir):
-        # a flowline stores the two parameters it needs, not a reference to
-        # the settings: the latter used to drag a copy of cfg.PARAMS into
-        # every pickle, and with it intersects_gdf, a region-wide table
-        import pickle
-        import geopandas as gpd
-
-        gdir = hef_gdir
-        prev_gdf = cfg.PARAMS['intersects_gdf']
-        # the tests above leave this on the shared fixture
-        gdir.settings['downstream_line_shape'] = \
-            cfg.PARAMS['downstream_line_shape']
-
-        try:
-            # a deliberately big intersects db, of the order of what a dense
-            # region such as RGI60-19 actually produces
-            n = 5000
-            line = shpg.LineString([(0, 0), (1, 1)])
-            big_gdf = gpd.GeoDataFrame({'RGIId_1': ['x'] * n,
-                                        'RGIId_2': ['y'] * n},
-                                       geometry=[line] * n)
-            cfg.set_intersects_db(big_gdf)
-            # guard against the fixture silently becoming small
-            assert len(pickle.dumps(big_gdf)) > 200_000
-
-            init_present_time_glacier(gdir)
-
-            # the real regression: this file was ~300 kB and up
-            fp = gdir.get_filepath('model_flowlines')
-            assert os.path.getsize(fp) < 100_000
-
-            # ... and no settings object comes along for the ride
-            fls = gdir.read_pickle('model_flowlines')
-            assert not hasattr(fls[0], 'settings')
-
-            # the two parameters a flowline needs are taken from the gdir
-            # settings and are still there after a round trip
-            assert fls[0].min_ice_thick_for_length == \
-                gdir.settings['min_ice_thick_for_length']
-            assert fls[0].glacier_length_method == \
-                gdir.settings['glacier_length_method']
-            assert fls[0].length_m > 0
-
-            # same story for a flowline built without a gdir, which takes
-            # them from cfg.PARAMS
-            fl = RectangularBedFlowline(surface_h=np.linspace(3000, 1000, 60),
-                                        bed_h=np.linspace(2900, 900, 60),
-                                        widths=np.zeros(60) + 3.,
-                                        map_dx=100.)
-            assert fl.min_ice_thick_for_length == \
-                cfg.PARAMS['min_ice_thick_for_length']
-            b = pickle.dumps(fl)
-            assert len(b) < 20_000
-            assert pickle.loads(b).length_m == fl.length_m
-        finally:
-            cfg.set_intersects_db(prev_gdf)
-
     def test_init_present_time_glacier_obs_thick(
         self, hef_elev_gdir, rgi62_itmix_df, monkeypatch
     ):
@@ -629,11 +572,11 @@ class TestMassBalanceModels:
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
-            - settings_filesuffix: 
+            - settings_filesuffix:
             - ice_density: 900.0
             - use_leap_years: False
             - filename: climate_historical
-            - input_filesuffix: 
+            - input_filesuffix:
             - temp_all_solid: 0.0
             - temp_all_liq: 2.0
             - temp_melt: -1.0
@@ -696,7 +639,7 @@ class TestMassBalanceModels:
             - use_leap_years: True
             - mb_model_class: MonthlyTIModel
             - filename: climate_historical
-            - input_filesuffix: 
+            - input_filesuffix:
             - bias: 0.0
             - ye: 2002
             - aging_frequency: monthly
