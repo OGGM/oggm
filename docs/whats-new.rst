@@ -14,7 +14,7 @@ Enhancements
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - New global task ``calibrate_inversion_from_ref_table`` generalises
   ``calibrate_inversion_from_consensus`` to calibrate the ice thickness
-  inversion against an arbitrary reference volume table (given as a DataFrame, 
+  inversion against an arbitrary reference volume table (given as a DataFrame,
   a path or a URL). By default it now uses the IceBoost v2 products, with the
   RGI6 or RGI7 table selected automatically from the glacier directories.
   ``calibrate_inversion_from_consensus`` is deprecated but still available: it
@@ -51,30 +51,13 @@ Enhancements
   arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
   (:pull:`1941`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- **Breaking change**: the temperature-bias prior file of the
-  `informed_threestep` calibration is now always given explicitly. There is no
-  default file anymore: `utils.get_temp_bias_dataframe` takes a single
-  `file_path` argument (its `dataset`, `rgi_version` and `regional` arguments
-  are gone), and `mb_calibration_from_geodetic_mb` (hence `run_prepro_levels`
-  and ``oggm_prepro``) raises an error if `temp_bias_file_path` is not set.
-  The file has to match the setup it is used with, and it is created with a
-  `temp_bias_run` and the ``oggm_temp_bias`` command.
-  By `Fabien Maussion <https://github.com/fmaussion>`_
-- **Breaking change**: the regional mass balance calibration is removed. The
-  `use_regional_avg` keyword of `mb_calibration_from_geodetic_mb` and the
-  `_regional` suffix of the `run_prepro_levels` / ``oggm_prepro``
-  `mb_calibration_strategy` are gone: the calibration always uses the
-  glacier specific geodetic observations, and the temperature bias prior
-  always the `median_temp_bias_w_err_grouped` column of the prior file.
-  `utils.get_geodetic_mb_dataframe` loses its `regional` keyword as well: the
-  regional averages of the observations are not used by OGGM anymore.
-  By `Fabien Maussion <https://github.com/fmaussion>`_
 - `utils.get_geodetic_mb_dataframe` now selects the geodetic observations file
   matching the RGI version (new `rgi_version` keyword, defaulting to
   ``cfg.PARAMS['rgi_version']``): the observations are indexed by glacier id,
   so RGI6 and RGI7G need different files. `mb_calibration_from_geodetic_mb`
   passes the glacier's own RGI version, so RGI7G glacier directories now
-  calibrate on RGI7G observations out of the box. RGI7C is not available yet.
+  calibrate on RGI7G observations out of the box. RGI7C is not available yet
+  (:pull:`1976`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The temperature bias prior file used by the `informed_threestep` calibration
   can now be created from the command line, instead of with a notebook. The new
@@ -98,8 +81,7 @@ Enhancements
   glaciers have no bias for their own grid point because it had to be grouped,
   which grid points are still below ``min_glaciers`` at the maximum search
   radius (with the largest ones listed), and the mean, standard deviation and
-  percentiles of all the bias columns. This is meant to be read after every run
-  - a temperature bias file without its summary cannot be judged.
+  percentiles of all the bias columns.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
@@ -273,6 +255,17 @@ Breaking changes
   wherever the parameters are, which is not what a parameter dict is for. The
   way to set them, ``cfg.set_intersects_db``, is unchanged, and so is
   ``cfg.PARAMS['use_intersects']`` (:pull:`1980`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The temperature-bias prior file of the `informed_threestep` calibration
+  now always has to given explicitly. There is no
+  default file anymore: `utils.get_temp_bias_dataframe` takes a single
+  `file_path` argument and `mb_calibration_from_geodetic_mb` raises an error
+  if `temp_bias_file_path` is not set.
+  The file has to match the setup it is used with, and it is created with a
+  `temp_bias_run` and the ``oggm_temp_bias`` command (:pull:`1976`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The regional mass balance calibration introduced in 163 is removed again.
+  It was useful as RGI7 calibration data was missing (:pull:`1976`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The default reference for RGI6 all initial glacier volumes is now
   IceBoost v2 - this replaces the previous consensus estimate (:pull:`1942`).
