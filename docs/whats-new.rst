@@ -207,9 +207,7 @@ Bug fixes
   longer has a ``settings`` attribute. They are read from the glacier settings
   (or from ``cfg.PARAMS`` when the flowline is built without a glacier
   directory) when the flowline is created, and can be overridden per flowline
-  by setting the attributes. ``FlowlineModel`` keeps its settings, but
-  ``ModelSettings`` no longer ships its ``cfg.PARAMS`` copy when pickled
-  (:pull:`1979`).
+  by setting the attributes (:pull:`1979`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Model constructors no longer silently persist a non-default ``temp_melt`` to
   the gdir settings file. ``check_calib_params`` now validates the effective
