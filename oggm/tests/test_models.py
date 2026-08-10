@@ -158,7 +158,7 @@ class TestInitPresentDayFlowline:
             plt.show()
 
         # test if providing a filesuffix is working
-        init_present_time_glacier(gdir, output_filesuffix='_test')
+        init_present_time_glacier(gdir, output='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
         gdir.settings['downstream_line_shape'] = 'free_shape'
@@ -572,11 +572,11 @@ class TestMassBalanceModels:
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
-            - settings_filesuffix:
+            - settings_filesuffix: 
             - ice_density: 900.0
             - use_leap_years: False
             - filename: climate_historical
-            - input_filesuffix:
+            - input_filesuffix: 
             - temp_all_solid: 0.0
             - temp_all_liq: 2.0
             - temp_melt: -1.0
@@ -639,7 +639,7 @@ class TestMassBalanceModels:
             - use_leap_years: True
             - mb_model_class: MonthlyTIModel
             - filename: climate_historical
-            - input_filesuffix:
+            - input_filesuffix: 
             - bias: 0.0
             - ye: 2002
             - aging_frequency: monthly
