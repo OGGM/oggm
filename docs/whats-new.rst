@@ -78,11 +78,28 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
-  provide a list of additional spinup periods, which are tried in order if both
-  the initially defined spinup period (`spinup_period_initial`) and the minimum
-  spinup period (`min_spinup_period`) fail (:pull:`1914`).
+- New kwarg `spinup_extra_years_to_try` in `run_dynamic_spinup` (and in the
+  dynamic melt_f calibration run and fallback functions, exposed on the command
+  line as ``--dynamic-spinup-extra-years-to-try``) to be able to provide a list
+  of years to start the spinup *before* the requested start year, if the spinup
+  at the requested start year failed. They are tried shortest extension first
+  (so the longest spinup is tried last), are clipped to the start of the
+  climate data and are only used if they result in a start year earlier than
+  all previously tried ones. This replaces the never released kwarg
+  `spinup_periods_to_try`, which was defined relative to the RGI date and could
+  therefore result in start years *after* the requested start year
+  (:pull:`1914`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New kwarg `allow_shorter_spinup` in `run_dynamic_spinup` (and in the dynamic
+  melt_f calibration run and fallback functions, exposed on the command line as
+  ``--dynamic-spinup-no-shorter-periods``). Per default (`True`, the previous
+  behaviour) shorter spinup periods are tried as a last resort if the spinup at
+  the requested start year failed; with `False` the dynamic spinup never starts
+  after the requested start year. Further, glacier outlines which are older
+  than the requested start year now keep their own target year (the dynamic
+  spinup starts before the requested start year), instead of moving the target
+  year to the start year, which resulted in a zero-length spinup.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - `base_dir_to_tar` now groups glacier directories into bundles of 100 by
   default (previously 1000); ``bundle_size`` accepts either 100 or 1000.
   Smaller bundles make downloads more granular and faster while keeping the

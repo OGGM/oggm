@@ -28,6 +28,90 @@ from oggm.core.flowline import (decide_evolution_model, FileModel,
 log = logging.getLogger(__name__)
 
 
+def _get_spinup_periods_to_run(target_yr, spinup_period_initial,
+                               min_spinup_period, yr_min,
+                               spinup_extra_years_to_try=None,
+                               allow_shorter_spinup=True,
+                               spinup_period_first_try=None):
+    """Define the spinup periods which are tried by run_dynamic_spinup, in order.
+
+    The periods are tried one after the other until one is successful (see
+    run_dynamic_spinup). The resulting order is:
+
+    1. spinup_period_first_try, if provided (the period which was successful in
+       a previous iteration of the dynamic melt_f calibration),
+    2. the period defined by the requested start year (spinup_period_initial,
+       but never shorter than min_spinup_period),
+    3. one period per spinup_extra_years_to_try, all starting *before* the
+       requested start year, shortest extension first (so the longest spinup is
+       tried last),
+    4. only if allow_shorter_spinup: shorter periods, down to
+       min_spinup_period (which itself is defined by spinup_start_yr_max, if
+       provided).
+
+    All periods are clipped to the length of the available climate data
+    (target_yr - yr_min), and periods which are not longer than the previous
+    one (e.g. after clipping) are dropped.
+
+    Parameters
+    ----------
+    target_yr : int
+        the year the dynamic spinup should match
+    spinup_period_initial : float
+        the spinup period defined by the requested start year
+        (target_yr - requested start year). Can be negative if the requested
+        start year is after target_yr (e.g. an RGI date before the start year
+        of the simulation).
+    min_spinup_period : float
+        the minimum spinup period to use (see run_dynamic_spinup)
+    yr_min : int
+        the first year of the available climate data
+    spinup_extra_years_to_try : list or None
+        years to start the spinup before the requested start year
+    allow_shorter_spinup : bool
+        if False, no period shorter than the initial one is tried
+    spinup_period_first_try : float or None
+        a spinup period which is tried first
+
+    Returns
+    -------
+    list of the spinup periods to try, in order
+    """
+    # the longest period the available climate data allows for
+    max_spinup_period = target_yr - yr_min
+
+    # the first attempt is the requested start year, but we must respect
+    # min_spinup_period (this can only result in an earlier start year)
+    period_initial = min(max(spinup_period_initial, min_spinup_period),
+                         max_spinup_period)
+
+    periods_to_run = [period_initial]
+
+    # start earlier than the requested start year, shortest extension first
+    if spinup_extra_years_to_try is not None:
+        # the extra years are counted from the requested start year, even if
+        # the actual first try starts earlier (due to min_spinup_period)
+        for extra_yr in sorted(spinup_extra_years_to_try):
+            period = min(spinup_period_initial + extra_yr, max_spinup_period)
+            # only keep start years which are earlier than all previous ones
+            if period > periods_to_run[-1]:
+                periods_to_run.append(period)
+
+    # and only in the end we try shorter spinup periods
+    if allow_shorter_spinup and period_initial > min_spinup_period:
+        periods_to_run.extend([(period_initial + min_spinup_period) / 2,
+                               min_spinup_period])
+
+    if spinup_period_first_try is not None:
+        if (min_spinup_period <= spinup_period_first_try <= max_spinup_period
+                and (allow_shorter_spinup or
+                     spinup_period_first_try >= period_initial)):
+            periods_to_run.insert(0, spinup_period_first_try)
+
+    # remove duplicates, keeping the order
+    return list(dict.fromkeys(periods_to_run))
+
+
 @entity_task(log, workflow_return_value=False)
 def run_dynamic_spinup(gdir, settings_filesuffix='',
                        observations_filesuffix='', overwrite_observations=False,
@@ -41,7 +125,9 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                        mb_model_historical=None, mb_model_spinup=None,
                        spinup_period_initial=20, spinup_start_yr=None,
                        min_spinup_period=10, spinup_start_yr_max=None,
-                       spinup_periods_to_try=None,
+                       spinup_extra_years_to_try=None,
+                       allow_shorter_spinup=True,
+                       spinup_period_first_try=None,
                        precision_percent=1,
                        precision_absolute=1, min_ice_thickness=None,
                        first_guess_t_spinup=-2, t_spinup_max_step_length=2,
@@ -136,21 +222,40 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         Default is None
     min_spinup_period : int
         If the dynamic spinup function fails with the initial 'spinup_period'
-        a shorter period is tried. Here you can define the minimum period to
-        try.
+        a shorter period is tried (only if allow_shorter_spinup is True). Here
+        you can define the minimum period to try. It is also the shortest
+        period which is used at all, so a shorter 'spinup_period_initial'
+        results in a spinup which starts before the requested start year.
         Default is 10
     spinup_start_yr_max : int or None
         Possibility to provide a maximum year where the dynamic spinup must
         start from at least. If set, this overrides the min_spinup_period if
         target_yr - spinup_start_yr_max > min_spinup_period.
         Default is None
-    spinup_periods_to_try : list or None
-        If spinup_period_initial and min_spinup_period were not successful, you
-        can provide here a list of spinup periods which should be tried in order.
+    spinup_extra_years_to_try : list or None
+        If the spinup starting at the requested start year (defined by
+        spinup_start_yr or spinup_period_initial) was not successful, you can
+        provide here a list of years to try to start the spinup *before* the
+        requested start year (e.g. [10, 20] means the start years
+        'requested start year - 10' and 'requested start year - 20' are tried,
+        in this order, so the longest spinup is tried last). Start years before
+        the start of the climate data are clipped to it, and start years which
+        are not earlier than an already tried one are ignored.
         Default is None
-    spinup_periods_to_try : list or None
-        If spinup_period_initial and min_spinup_period were not successful, you
-        can provide here a list of spinup periods which should be tried in order.
+    allow_shorter_spinup : bool
+        If True, and the spinup starting at the requested start year (and all
+        spinup_extra_years_to_try) was not successful, shorter spinup periods
+        are tried (in the end down to min_spinup_period, respectively
+        spinup_start_yr_max). If False, the spinup never starts after the
+        requested start year. Note that the spinup can still start before the
+        requested start year (e.g. if min_spinup_period or
+        spinup_start_yr_max force a longer period).
+        Default is True
+    spinup_period_first_try : float or None
+        Possibility to provide a spinup period which is tried first, before the
+        one defined by the requested start year. This is used for optimisation
+        during the dynamic melt_f calibration, where we can reuse the spinup
+        period which was successful in the previous iteration.
         Default is None
     precision_percent : float
         Gives the precision we want to match in percent. The algorithm makes
@@ -939,33 +1044,31 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
     c_fun, model_dynamic_spinup_end = init_cost_fct()
 
     # define the MassBalanceModels for different spinup periods and try to
-    # minimise, if minimisation fails a shorter spinup period is used
-    # (first a spinup period between initial period and 'min_spinup_period'
-    # years and the second try is to use a period of 'min_spinup_period' years,
-    # if it still fails the actual error is raised)
+    # minimise, if minimisation fails the next spinup period is used (see
+    # _get_spinup_periods_to_run for the order in which they are tried), if all
+    # of them fail the actual error is raised
     if spinup_start_yr is not None:
+        # can be negative if the target year is before the requested start year
         spinup_period_initial = min(target_yr - spinup_start_yr,
                                     target_yr - yr_min)
     else:
         spinup_period_initial = min(spinup_period_initial, target_yr - yr_min)
 
-    # define the spinup periods we try to run in order
-    if spinup_period_initial <= min_spinup_period:
-        spinup_periods_to_run = [min_spinup_period]
-    else:
-        # add initial and minimum spinup period
-        spinup_periods_to_run = [spinup_period_initial,
-                                 (spinup_period_initial + min_spinup_period) / 2,
-                                 min_spinup_period]
-    if spinup_periods_to_try is not None:
-        for spn_prd in spinup_periods_to_try:
-            if min_spinup_period < spn_prd < target_yr - yr_min:
-                spinup_periods_to_run.append(spn_prd)
+    spinup_periods_to_run = _get_spinup_periods_to_run(
+        target_yr=target_yr,
+        spinup_period_initial=spinup_period_initial,
+        min_spinup_period=min_spinup_period,
+        yr_min=yr_min,
+        spinup_extra_years_to_try=spinup_extra_years_to_try,
+        allow_shorter_spinup=allow_shorter_spinup,
+        spinup_period_first_try=spinup_period_first_try)
 
-    # after defining the initial spinup period we can define the year for the
-    # fixed_geometry_spinup
+    # after defining the spinup periods we can define the year for the
+    # fixed_geometry_spinup (the requested start year, except if the spinup
+    # itself starts earlier)
     if add_fixed_geometry_spinup:
-        fixed_geometry_spinup_yr = target_yr - spinup_period_initial
+        fixed_geometry_spinup_yr = min(target_yr - spinup_period_initial,
+                                       target_yr - spinup_periods_to_run[0])
     else:
         fixed_geometry_spinup_yr = None
 
@@ -994,15 +1097,15 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
                 input_filesuffix=climate_input_filesuffix, y0=y0_spinup,
                 halfsize=halfsize_spinup)
 
-        # try to conduct minimisation, if an error occurred try shorter spinup
+        # try to conduct minimisation, if an error occurred try the next spinup
         # period
         try:
             final_t_spinup_guess, final_mismatch = minimise_with_spline_fit(c_fun)
             # ok no error occurred so we succeeded
             break
         except RuntimeError as e:
-            # if the last spinup period was min_spinup_period the dynamic
-            # spinup failed
+            # if this was the last spinup period to try the dynamic spinup
+            # failed
             if spinup_period == spinup_periods_to_run[-1]:
                 log.warning('No dynamic spinup could be conducted and the '
                             'original model with no spinup is saved using the '
@@ -1114,7 +1217,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         store_model_geometry=True, store_fl_diagnostics=None,
         local_variables=None, set_local_variables=False, do_inversion=True,
         spinup_start_yr_max=None, add_fixed_geometry_spinup=True,
-        spinup_periods_to_try=None,
+        spinup_extra_years_to_try=None, allow_shorter_spinup=True,
         **kwargs):
     """
     This function is one option for a 'run_function' for the
@@ -1265,10 +1368,19 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
-    spinup_periods_to_try : list or None
-        If spinup_period_initial and min_spinup_period were not successful, you
-        can provide here a list of spinup periods which should be tried in order.
+    spinup_extra_years_to_try : list or None
+        If the spinup starting at ys was not successful, you can provide here a
+        list of years to try to start the spinup before ys (e.g. [10, 20] means
+        the start years 'ys - 10' and 'ys - 20' are tried, in this order, so
+        the longest spinup is tried last). For more details see
+        run_dynamic_spinup.
         Default is None
+    allow_shorter_spinup : bool
+        If True, and the spinup starting at ys (and all
+        spinup_extra_years_to_try) was not successful, shorter spinup periods
+        are tried (in the end down to min_spinup_period, respectively
+        spinup_start_yr_max). If False, the spinup never starts after ys.
+        Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1320,7 +1432,7 @@ def dynamic_melt_f_run_with_dynamic_spinup(
 
     if target_yr is None:
         target_yr = gdir.rgi_date + 1  # + 1 converted to hydro years
-    if min_spinup_period > target_yr - ys:
+    if 0 < target_yr - ys < min_spinup_period:
         log.info('The target year is closer to ys as the minimum spinup '
                  'period -> therefore the minimum spinup period is '
                  'adapted and it is the only period which is tried by the '
@@ -1386,14 +1498,10 @@ def dynamic_melt_f_run_with_dynamic_spinup(
                               output_filesuffix=model_flowlines_filesuffix,
                               add_to_log_file=False)
 
-    # check if there was already a successful run
-    if 'dynamic_spinup_period' in gdir.get_diagnostics():
-        last_spinup_period = gdir.get_diagnostics()['dynamic_spinup_period']
-        spinup_periods_to_try_forward = [last_spinup_period]
-        if spinup_periods_to_try is not None:
-            spinup_periods_to_try_forward.extend(spinup_periods_to_try)
-    else:
-        spinup_periods_to_try_forward = spinup_periods_to_try
+    # check if there was already a successful run, if so we start with the
+    # spinup period which was successful in the previous iteration
+    spinup_period_first_try = gdir.get_diagnostics().get(
+        'dynamic_spinup_period', None)
 
     # Now do a dynamic spinup to match area
     # do not ignore errors in dynamic spinup, so all 'bad'/intermediate files
@@ -1415,7 +1523,9 @@ def dynamic_melt_f_run_with_dynamic_spinup(
             spinup_start_yr=ys,
             spinup_start_yr_max=spinup_start_yr_max,
             min_spinup_period=min_spinup_period, target_yr=target_yr,
-            spinup_periods_to_try=spinup_periods_to_try_forward,
+            spinup_extra_years_to_try=spinup_extra_years_to_try,
+            allow_shorter_spinup=allow_shorter_spinup,
+            spinup_period_first_try=spinup_period_first_try,
             precision_percent=precision_percent,
             precision_absolute=precision_absolute,
             min_ice_thickness=min_ice_thickness,
@@ -1463,7 +1573,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         first_guess_t_spinup=-2, t_spinup_max_step_length=2, maxiter=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         do_inversion=True, spinup_start_yr_max=None,
-        add_fixed_geometry_spinup=True, spinup_periods_to_try=None,
+        add_fixed_geometry_spinup=True, spinup_extra_years_to_try=None,
+        allow_shorter_spinup=True,
         **kwargs):
     """
     This is the fallback function corresponding to the function
@@ -1593,10 +1704,19 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         fixed-geometry-spinup is added at the beginning so that the resulting
         model run always starts from ys.
         Default is True
-    spinup_periods_to_try : list or None
-        If spinup_period_initial and min_spinup_period were not successful, you
-        can provide here a list of spinup periods which should be tried in order.
+    spinup_extra_years_to_try : list or None
+        If the spinup starting at ys was not successful, you can provide here a
+        list of years to try to start the spinup before ys (e.g. [10, 20] means
+        the start years 'ys - 10' and 'ys - 20' are tried, in this order, so
+        the longest spinup is tried last). For more details see
+        run_dynamic_spinup.
         Default is None
+    allow_shorter_spinup : bool
+        If True, and the spinup starting at ys (and all
+        spinup_extra_years_to_try) was not successful, shorter spinup periods
+        are tried (in the end down to min_spinup_period, respectively
+        spinup_start_yr_max). If False, the spinup never starts after ys.
+        Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
 
@@ -1639,7 +1759,7 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
 
     if target_yr is None:
         target_yr = gdir.rgi_date + 1  # + 1 converted to hydro years
-    if min_spinup_period > target_yr - ys:
+    if 0 < target_yr - ys < min_spinup_period:
         log.info('The RGI year is closer to ys as the minimum spinup '
                  'period -> therefore the minimum spinup period is '
                  'adapted and it is the only period which is tried by the '
@@ -1665,7 +1785,8 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
             spinup_start_yr=ys,
             min_spinup_period=min_spinup_period,
             spinup_start_yr_max=spinup_start_yr_max,
-            spinup_periods_to_try=spinup_periods_to_try,
+            spinup_extra_years_to_try=spinup_extra_years_to_try,
+            allow_shorter_spinup=allow_shorter_spinup,
             target_yr=target_yr,
             minimise_for=minimise_for,
             precision_percent=precision_percent,
@@ -2235,13 +2356,9 @@ def run_dynamic_melt_f_calibration(
     if target_yr is None:
         target_yr = gdir.rgi_date + 1  # + 1 converted to hydro years
     if target_yr < ys:
-        if ignore_errors:
-            log.info('The rgi year is smaller than the provided start year '
-                     'ys -> setting the rgi year to ys to continue!')
-            target_yr = ys
-        else:
-            raise RuntimeError('The rgi year is smaller than the provided '
-                               'start year ys!')
+        log.info('The rgi year is smaller than the provided start year ys -> '
+                 'the dynamic spinup will start before ys (the target year is '
+                 'kept as it is)!')
     kwargs_run_function['target_yr'] = target_yr
     kwargs_fallback_function['target_yr'] = target_yr
 

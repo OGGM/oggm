@@ -123,7 +123,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, ref_mb_err_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
-                      dynamic_spinup_periods_to_try=None,
+                      dynamic_spinup_extra_years_to_try=None,
+                      dynamic_spinup_allow_shorter=True,
                       continue_on_error=True, store_fl_diagnostics=False,
                       store_hydro_output=False, store_monthly_hydro=True,
                       ref_area_yr=None, temp_bias_run=False):
@@ -265,11 +266,21 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
-    dynamic_spinup_periods_to_try : list or None
-        If the spinup_period defined by rgi_date - dynamic_spinup_start_yr was
-        not successful, you can provide here a list of spinup periods which
-        should be tried in order.
+    dynamic_spinup_extra_years_to_try : list or None
+        If the spinup starting at dynamic_spinup_start_year was not successful,
+        you can provide here a list of years to try to start the spinup
+        *before* dynamic_spinup_start_year (e.g. [10, 20] means the start years
+        'dynamic_spinup_start_year - 10' and 'dynamic_spinup_start_year - 20'
+        are tried, in this order, so the longest spinup is tried last). Start
+        years before the start of the climate data are clipped to it.
         Default is None
+    dynamic_spinup_allow_shorter : bool
+        If True, and the spinup starting at dynamic_spinup_start_year (and all
+        dynamic_spinup_extra_years_to_try) was not successful, shorter spinup
+        periods are tried (in the end starting at the start year of the
+        geodetic mass balance period). If False, the dynamic spinup never
+        starts after dynamic_spinup_start_year.
+        Default is True
     continue_on_error : bool
         if True the workflow continues if a task raises an error. For operational
         runs it should be set to True (the default).
@@ -1017,15 +1028,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 'ys': dynamic_spinup_start_year, 'ye': ye,
                 'melt_f_max': melt_f_max,
                 'mb_model_class': mb_model_class,
-                'kwargs_run_function': {'minimise_for': minimise_for,
-                                        'spinup_periods_to_try':
-                                            dynamic_spinup_periods_to_try
-                                        },
+                'kwargs_run_function': {
+                    'minimise_for': minimise_for,
+                    'spinup_extra_years_to_try':
+                        dynamic_spinup_extra_years_to_try,
+                    'allow_shorter_spinup': dynamic_spinup_allow_shorter,
+                },
                 'ignore_errors': True,
-                'kwargs_fallback_function': {'minimise_for': minimise_for,
-                                             'spinup_periods_to_try':
-                                                 dynamic_spinup_periods_to_try
-                                             },
+                'kwargs_fallback_function': {
+                    'minimise_for': minimise_for,
+                    'spinup_extra_years_to_try':
+                        dynamic_spinup_extra_years_to_try,
+                    'allow_shorter_spinup': dynamic_spinup_allow_shorter,
+                },
                 'save_mb_diagnostics_filesuffix': ('_spinup_historical'
                                                    if store_mb_diagnostics else None),
                 'output_filesuffix': '_spinup_historical',
@@ -1288,14 +1303,30 @@ def parse_args(args):
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
-    parser.add_argument('--dynamic-spinup-periods-to-try', nargs='*',
-                        default=[30, 40, 50, 60, 70, 80, 90, 100],
+    parser.add_argument('--dynamic-spinup-extra-years-to-try', nargs='*',
+                        default=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                         help="if --dynamic-spinup is set, define additional "
-                             "spinup periods to try, if the spinup starting "
-                             "from --dynamic-spinup-year is not successful. If"
-                             "you do not want to use set"
-                             "'--dynamic-spinup-periods-to-try none' in the"
-                             "terminal.")
+                             "years to start the spinup BEFORE "
+                             "--dynamic-spinup-start-year, if the spinup "
+                             "starting at --dynamic-spinup-start-year is not "
+                             "successful (e.g. '10 20' first tries to start 10 "
+                             "years before --dynamic-spinup-start-year, and "
+                             "then 20 years before, so the longest spinup is "
+                             "tried last). Start years before the start of the "
+                             "climate data are clipped to it. If you do not "
+                             "want to use it set "
+                             "'--dynamic-spinup-extra-years-to-try none' in "
+                             "the terminal.")
+    parser.add_argument('--dynamic-spinup-no-shorter-periods',
+                        action='store_true',
+                        help="if --dynamic-spinup is set, prevent the dynamic "
+                             "spinup from starting AFTER "
+                             "--dynamic-spinup-start-year. Per default, if the "
+                             "spinup at --dynamic-spinup-start-year (and all "
+                             "--dynamic-spinup-extra-years-to-try) failed, "
+                             "shorter spinup periods are tried as a last "
+                             "resort (down to the start year of the geodetic "
+                             "mass balance period).")
     parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')
@@ -1363,8 +1394,16 @@ def parse_args(args):
 
     dynamic_spinup = False if args.dynamic_spinup == '' else args.dynamic_spinup
 
-    if args.dynamic_spinup_periods_to_try == ['none']:
-        args.dynamic_spinup_periods_to_try = None
+    extra_years_to_try = args.dynamic_spinup_extra_years_to_try
+    if extra_years_to_try in [['none'], []]:
+        extra_years_to_try = None
+    else:
+        # argparse gives us strings if the user provided them in the terminal
+        extra_years_to_try = [int(yr) for yr in extra_years_to_try]
+        if any(yr <= 0 for yr in extra_years_to_try):
+            raise InvalidParamsError(
+                '--dynamic-spinup-extra-years-to-try must be positive (they '
+                'are counted backwards from --dynamic-spinup-start-year)!')
 
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
@@ -1398,7 +1437,9 @@ def parse_args(args):
                 dynamic_spinup=dynamic_spinup,
                 ref_mb_err_scaling_factor=args.ref_mb_err_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
-                dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
+                dynamic_spinup_extra_years_to_try=extra_years_to_try,
+                dynamic_spinup_allow_shorter=(
+                    not args.dynamic_spinup_no_shorter_periods),
                 mb_model_class=args.mb_model_class,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,

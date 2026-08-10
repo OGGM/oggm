@@ -48,7 +48,8 @@ from oggm.core.dynamic_spinup import (
     dynamic_melt_f_run_with_dynamic_spinup,
     dynamic_melt_f_run_with_dynamic_spinup_fallback,
     dynamic_melt_f_run,
-    dynamic_melt_f_run_fallback)
+    dynamic_melt_f_run_fallback,
+    _get_spinup_periods_to_run)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -5763,6 +5764,113 @@ class TestHEF:
                 assert (var_median <= var_95th).all()
 
 
+class TestDynamicSpinupPeriods:
+    """Tests for the order in which the spinup periods are tried.
+
+    These are pure unit tests of _get_spinup_periods_to_run, no glacier
+    involved. We express everything in start years, as this is easier to read
+    (start year = target_yr - spinup_period).
+    """
+
+    @staticmethod
+    def start_years(target_yr, ys, yr_min=1901, min_spinup_period=10,
+                    spinup_start_yr_max=None, **kwargs):
+        # mimic what run_dynamic_spinup does with spinup_start_yr and
+        # spinup_start_yr_max before defining the periods
+        if (spinup_start_yr_max is not None and
+                target_yr - spinup_start_yr_max > min_spinup_period):
+            min_spinup_period = target_yr - spinup_start_yr_max
+        periods = _get_spinup_periods_to_run(
+            target_yr=target_yr,
+            spinup_period_initial=min(target_yr - ys, target_yr - yr_min),
+            min_spinup_period=min_spinup_period,
+            yr_min=yr_min,
+            **kwargs)
+        return [target_yr - period for period in periods]
+
+    def test_default_behaviour(self):
+        # without extra years we get the 'old' behaviour: the requested start
+        # year, then two shorter spinups (down to spinup_start_yr_max)
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000) == \
+            [1975, 1987.5, 2000]
+
+        # if the requested start year is later than spinup_start_yr_max the
+        # spinup starts earlier than requested (and there is nothing to shorten)
+        assert self.start_years(target_yr=2011, ys=2005,
+                                spinup_start_yr_max=2000) == [2000]
+
+    def test_extra_years_are_tried_before_shortening(self):
+        # extra years always start before the requested start year, shortest
+        # extension first, and only afterwards we try shorter spinups
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[20, 10]) == \
+            [1975, 1965, 1955, 1987.5, 2000]
+
+        # no shorter spinup periods if not allowed
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20],
+                                allow_shorter_spinup=False) == \
+            [1975, 1965, 1955]
+
+        # extra years which do not result in an earlier start year are ignored
+        # (here the spinup must start at spinup_start_yr_max = 2000 anyway)
+        assert self.start_years(target_yr=2011, ys=2005,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20]) == \
+            [2000, 1995, 1985]
+
+    def test_clipping_to_climate_data(self):
+        # start years before the start of the climate data are clipped to it,
+        # and we do not try the same start year twice
+        assert self.start_years(target_yr=2011, ys=1975, yr_min=1950,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20, 30, 40]) == \
+            [1975, 1965, 1955, 1950, 1987.5, 2000]
+
+        # the requested start year itself is clipped as well, and then there is
+        # no room left for the extra years to try
+        assert self.start_years(target_yr=2011, ys=1975, yr_min=1979,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20]) == \
+            [1979, 1989.5, 2000]
+
+    def test_target_year_before_start_year(self):
+        # if the outline is older than the requested start year the spinup
+        # starts before the requested start year (min_spinup_period is used)
+        assert self.start_years(target_yr=1971, ys=1975,
+                                spinup_extra_years_to_try=[10, 20, 30]) == \
+            [1961, 1955, 1945]
+
+        # ... and this is not affected by allow_shorter_spinup
+        assert self.start_years(target_yr=1971, ys=1975,
+                                spinup_extra_years_to_try=[10, 20, 30],
+                                allow_shorter_spinup=False) == \
+            [1961, 1955, 1945]
+
+    def test_period_first_try(self):
+        # the period which was successful in the previous melt_f iteration is
+        # tried first, and not tried twice
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10],
+                                spinup_period_first_try=2011 - 1965) == \
+            [1965, 1975, 1987.5, 2000]
+
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_period_first_try=2011 - 2000) == \
+            [2000, 1975, 1987.5]
+
+        # but a shorter one is ignored if shorter spinups are not allowed
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                allow_shorter_spinup=False,
+                                spinup_period_first_try=2011 - 2000) == [1975]
+
+
 @pytest.mark.usefixtures('with_class_wd')
 @pytest.mark.test_env("models_dynamics")
 class TestDynamicSpinup:
@@ -6123,6 +6231,39 @@ class TestDynamicSpinup:
             assert (run_without_fixed_spinup.time.values[0] >=
                     run_with_fixed_spinup.time.values[0])
             assert run_with_fixed_spinup.time.values[0] == 1979
+
+    @pytest.mark.slow
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
+    def test_run_dynamic_spinup_start_yr_after_target_yr(self, hef_gdir):
+        # if the requested start year is after the target year (e.g. an outline
+        # which is older than the start year of the simulation) the spinup
+        # starts before the requested start year, using min_spinup_period
+        fls = hef_gdir.read_pickle('model_flowlines')
+        yr_rgi = 2002  # the test climate dataset ends in 2003
+        hef_gdir.observations['ref_area_m2'] = {
+            'value': np.sum([fl.area_m2 for fl in fls]),
+            'year': yr_rgi,
+        }
+
+        min_spinup_period = 10
+        model = run_dynamic_spinup(
+            hef_gdir,
+            minimise_for='area',
+            precision_percent=10,
+            precision_absolute=0.1,
+            min_ice_thickness=10,
+            spinup_start_yr=yr_rgi + 5,
+            min_spinup_period=min_spinup_period,
+            add_fixed_geometry_spinup=True,
+            output_filesuffix='_spinup_start_after_target')
+
+        assert model.yr == yr_rgi
+        assert (hef_gdir.get_diagnostics()['dynamic_spinup_period'] ==
+                min_spinup_period)
+        # no fixed geometry spinup is added after the start of the dynamic run
+        ds = utils.compile_run_output(
+            hef_gdir, input_filesuffix='_spinup_start_after_target', path=False)
+        assert ds.time.values[0] == yr_rgi - min_spinup_period
 
     @pytest.mark.parametrize("minimise_for", ["area", "volume"])
     @pytest.mark.slow

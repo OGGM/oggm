@@ -1522,6 +1522,10 @@ class TestPreproCLI:
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20, 30, 40,
+                                                               50, 60, 70, 80,
+                                                               90, 100]
+        assert kwargs['dynamic_spinup_allow_shorter']
         assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
         assert not kwargs['store_hydro_output']
@@ -1546,6 +1550,24 @@ class TestPreproCLI:
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
         assert kwargs['ref_area_yr'] == 2000
+
+        # the dynamic spinup years to try are converted to int, and can be
+        # switched off
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           '10', '20',
+                                           '--dynamic-spinup-no-shorter-periods',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20]
+        assert not kwargs['dynamic_spinup_allow_shorter']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           'none',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] is None
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
