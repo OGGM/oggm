@@ -101,8 +101,7 @@ def process_gcm_data(gdir, prcp=None, temp=None,
     assert len(temp) // 12 == len(temp) / 12, "Somehow we didn't get full years"
 
     # Get the reference data to apply the anomaly to
-    fpath = gdir.get_filepath('climate_historical')
-    with xr.open_dataset(fpath) as ds_ref:
+    with gdir.open_group('climate_historical') as ds_ref:
 
         ds_ref = ds_ref.sel(time=slice(*year_range))
         if apply_bias_correction:
@@ -645,8 +644,7 @@ def process_lmr_data(gdir, fpath_temp=None, fpath_precip=None,
 
     # OK now we have to turn these annual timeseries in monthly data
     # We take the ref climate
-    fpath = gdir.get_filepath('climate_historical')
-    with xr.open_dataset(fpath) as ds_ref:
+    with gdir.open_group('climate_historical') as ds_ref:
         ds_ref = ds_ref.sel(time=slice(*year_range))
 
         loc_tmp = ds_ref.temp.groupby('time.month').mean()
@@ -781,8 +779,7 @@ def process_modera_data(gdir, fpath_temp=None, fpath_precip=None,
 
         # Now add the anomalies to the reference data
         # We take the ref climate
-        fpath = gdir.get_filepath('climate_historical')
-        with xr.open_dataset(fpath) as ds_ref:
+        with gdir.open_group('climate_historical') as ds_ref:
             ds_ref = ds_ref.sel(time=slice(*year_range))
 
             loc_tmp = ds_ref.temp.groupby('time.month').mean()

@@ -2,6 +2,7 @@
 
 # Builtins
 import glob
+import io
 import os
 import gzip
 import bz2
@@ -33,6 +34,8 @@ import pandas as pd
 import numpy as np
 import shapely.geometry as shpg
 import requests
+from zarr.abc.store import (Store, OffsetByteRequest, RangeByteRequest,
+                            SuffixByteRequest)
 
 # Optional libs
 try:
@@ -1186,6 +1189,22 @@ def _get_prepro_gdir_unlocked(
     # the new-format url is ambiguous (legacy dataset vs. a glacier that is
     # simply missing), so caching it could wrongly downgrade sibling glaciers.
     fmt = _prepro_bundle_format.get(url)
+
+    # v2 datasets publish zip bundles so probe those first
+    zip_url = f"{url}{region}/{new_bundle}.zip"
+    if fmt in (None, "zip"):
+        try:
+            zip_base = file_downloader(zip_url)
+        except InvalidParamsError:
+            # zip URL not in allowlist -> fall back to tar layouts
+            zip_base = None
+        if zip_base is not None:
+            _prepro_bundle_format[url] = "zip"
+            return zip_base
+        if fmt == "zip":
+            # confirmed zip dataset, so this glacier is simply missing
+            raise RuntimeError(f"Could not find file at {zip_url}")
+
     new_url = f"{url}{region}/{new_bundle}.tar"
 
     # Try the new 100-glacier bundle first, unless we already know this dataset
@@ -1211,6 +1230,301 @@ def _get_prepro_gdir_unlocked(
 
     _prepro_bundle_format[url] = "old"
     return tar_base
+
+
+class _HTTPRangeFile(io.RawIOBase):
+    """Seekable read-only file over HTTP range requests.
+
+    Reads are block-aligned and cached, so every byte region of the
+    remote file is fetched at most once; contiguous runs of missing
+    blocks are coalesced into a single range request.
+    """
+
+    # ponytail: unbounded block cache - bundles are MB-scale, no eviction
+
+    def __init__(self, url, block_size=8192):
+        self._url = url
+        self._bs = block_size
+        self._pos = 0
+        self._blocks = {}
+        req = requests.head(url, timeout=120)
+        req.raise_for_status()
+        self._size = int(req.headers["Content-Length"])
+
+    def seekable(self):
+        return True
+
+    def readable(self):
+        return True
+
+    def tell(self):
+        return self._pos
+
+    def seek(self, offset, whence=io.SEEK_SET):
+        if whence == io.SEEK_SET:
+            self._pos = offset
+        elif whence == io.SEEK_CUR:
+            self._pos += offset
+        elif whence == io.SEEK_END:
+            self._pos = self._size + offset
+        return self._pos
+
+    def _fetch(self, first, last):
+        """Ensure blocks [first, last] are cached (coalesced requests)."""
+        i = first
+        while i <= last:
+            if i in self._blocks:
+                i += 1
+                continue
+            j = i
+            while j < last and (j + 1) not in self._blocks:
+                j += 1
+            lo = i * self._bs
+            hi = min((j + 1) * self._bs, self._size) - 1
+            req = requests.get(
+                self._url, timeout=120, headers={"Range": f"bytes={lo}-{hi}"}
+            )
+            req.raise_for_status()
+            if req.status_code != 206:
+                raise IOError(
+                    f"server did not honor the range request "
+                    f"(HTTP {req.status_code}): {self._url}"
+                )
+            data = req.content
+            for k in range(i, j + 1):
+                off = (k - i) * self._bs
+                self._blocks[k] = data[off : off + self._bs]
+            i = j + 1
+
+    def read(self, size=-1):
+        if size is None or size < 0:
+            size = self._size - self._pos
+        size = max(0, min(size, self._size - self._pos))
+        if size == 0:
+            return b""
+        start, end = self._pos, self._pos + size - 1
+        first, last = start // self._bs, end // self._bs
+        self._fetch(first, last)
+        data = b"".join(self._blocks[k] for k in range(first, last + 1))
+        off = start - first * self._bs
+        self._pos += size
+        return data[off : off + size]
+
+
+def _open_inner_zip(bundle_url, rgi_id, block_size=8192):
+    """Open the inner ``{rgi_id}.zip`` of a remote v2 bundle in place.
+
+    Returns ``(http_file, outer_zip, inner_zip)``. Works because both
+    zip layers of v2 bundles are STORED: the member is seekable in
+    place, no extraction or decompression. Each central directory is
+    read exactly once (block-cached range reads).
+
+    Raises ``KeyError`` when the glacier is not in the bundle.
+    """
+    bundle = os.path.basename(bundle_url)[:-4]  # strip .zip
+    http_file = _HTTPRangeFile(bundle_url, block_size=block_size)
+    outer = zipfile.ZipFile(http_file)
+    inner = zipfile.ZipFile(outer.open(f"{bundle}/{rgi_id}.zip"))
+    return http_file, outer, inner
+
+
+class RemoteBundleStore(Store):
+    """Read-only zarr store over one glacier's remote v2 bundle.
+
+    Serves the zarr keys of the glacier's ``data_store.zarr`` out of a
+    remote bundle (``{bundle}.zip`` -> ``{bundle}/{rgi_id}.zip`` ->
+    ``{rgi_id}/data_store.zarr/**``) via direct HTTP range requests:
+    the remote file is opened once, both zip central directories are
+    resolved once, then each key maps to one exact byte range (all
+    entries are STORED). Replaces the fsspec chain of HANDOFF_1896
+    Phase B, which re-read the outer central directory ~3x per open.
+
+    Parameters
+    ----------
+    bundle_url : str
+        URL of the outer bundle zip.
+    rgi_id : str
+        The glacier's RGI ID.
+    block_size : int, default 8192
+        HTTP range block size.
+    """
+
+    supports_writes = False
+    supports_deletes = False
+    supports_listing = True
+
+    def __init__(self, bundle_url, rgi_id, block_size=8192):
+        super().__init__(read_only=True)
+        self.bundle_url = bundle_url
+        self.rgi_id = rgi_id
+        self._block_size = block_size
+        self._entries = None
+
+    def _ensure_entries(self):
+        if self._entries is None:
+            self._http_file, self._outer, self._inner = _open_inner_zip(
+                self.bundle_url, self.rgi_id, block_size=self._block_size
+            )
+            prefix = f"{self.rgi_id}/data_store.zarr/"
+            self._entries = {
+                info.filename[len(prefix) :]: info
+                for info in self._inner.infolist()
+                if info.filename.startswith(prefix)
+                and not info.filename.endswith("/")
+            }
+        return self._entries
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, RemoteBundleStore)
+            and other.bundle_url == self.bundle_url
+            and other.rgi_id == self.rgi_id
+        )
+
+    async def get(self, key, prototype, byte_range=None):
+        info = self._ensure_entries().get(key)
+        if info is None:
+            return None
+        # ponytail: sync I/O inside async methods - zarr awaits these
+        # directly so reads serialize; revisit if real-network latency
+        # ever makes concurrent chunk fetches matter
+        with self._inner.open(info) as f:
+            if byte_range is None:
+                data = f.read()
+            elif isinstance(byte_range, RangeByteRequest):
+                f.seek(byte_range.start)
+                data = f.read(byte_range.end - byte_range.start)
+            elif isinstance(byte_range, OffsetByteRequest):
+                f.seek(byte_range.offset)
+                data = f.read()
+            elif isinstance(byte_range, SuffixByteRequest):
+                f.seek(max(0, info.file_size - byte_range.suffix))
+                data = f.read()
+            else:
+                raise TypeError(f"Unexpected byte_range: {byte_range!r}")
+        return prototype.buffer.from_bytes(data)
+
+    async def get_partial_values(self, prototype, key_ranges):
+        return [
+            await self.get(key, prototype, byte_range)
+            for key, byte_range in key_ranges
+        ]
+
+    async def exists(self, key):
+        return key in self._ensure_entries()
+
+    async def set(self, key, value):
+        raise NotImplementedError("RemoteBundleStore is read-only")
+
+    async def delete(self, key):
+        raise NotImplementedError("RemoteBundleStore is read-only")
+
+    async def list(self):
+        for key in self._ensure_entries():
+            yield key
+
+    async def list_prefix(self, prefix):
+        for key in self._ensure_entries():
+            if key.startswith(prefix):
+                yield key
+
+    async def list_dir(self, prefix):
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
+        seen = set()
+        for key in self._ensure_entries():
+            if key.startswith(prefix):
+                child = key[len(prefix) :].split("/")[0]
+                if child not in seen:
+                    seen.add(child)
+                    yield child
+
+    def close(self):
+        if self._entries is not None:
+            self._inner.close()
+            self._outer.close()
+            self._http_file.close()
+        super().close()
+
+
+def peek_remote_manifest(
+    bundle_url: str, rgi_id: str, level: int, block_size: int = 8192
+) -> dict | None:
+    """Read a glacier's level manifest out of a remote v2 zip bundle.
+
+    Streams via HTTP range requests - the bundle is never downloaded.
+    Works because both zip layers of v2 bundles are STORED.
+
+    Parameters
+    ----------
+    bundle_url : str
+        URL of the outer bundle zip, e.g. ``.../L3/RGI60-07/RGI60-07.000.zip``.
+    rgi_id : str
+        The glacier's RGI ID.
+    level : int
+        The prepro level of the manifest to read.
+
+    Returns
+    -------
+    dict | None
+        The parsed ``L{level}.manifest.json``, or None when the member
+        or manifest is missing.
+    """
+    try:
+        http_file, outer, inner = _open_inner_zip(
+            bundle_url, rgi_id, block_size=block_size
+        )
+        with http_file, outer, inner:
+            with inner.open(f"{rgi_id}/L{level}.manifest.json") as mf:
+                return json.load(mf)
+    except (KeyError, zipfile.BadZipFile, requests.HTTPError):
+        return None
+
+
+def open_remote_group(
+    bundle_url: str,
+    rgi_id: str,
+    filename: str,
+    filesuffix: str = "",
+    block_size: int = 8192,
+):
+    """Lazily open a zarr group of a glacier inside a remote v2 bundle.
+
+    Thin wrapper around :class:`RemoteBundleStore`: only the zip central
+    directories, the consolidated zarr metadata and the requested chunks
+    travel over the wire (range requests), never the bundle.
+
+    Parameters
+    ----------
+    bundle_url : str
+        URL of the outer bundle zip.
+    rgi_id : str
+        The glacier's RGI ID.
+    filename : str
+        Group base name (must be listed in cfg.BASENAMES), e.g.
+        ``'climate_historical'``.
+    filesuffix : str, optional
+        Append a suffix to the group name.
+    block_size : int, default 8192
+        HTTP range block size.
+
+    Returns
+    -------
+    xr.Dataset
+        The lazily-loaded group.
+    """
+    import xarray as xr
+
+    store = RemoteBundleStore(bundle_url, rgi_id, block_size=block_size)
+    group = f"{filename}{filesuffix or ''}"
+    # zarr 3 cannot probe the store format through a non-directory
+    # store - hint it
+    return xr.open_zarr(
+        store,
+        group=group,
+        consolidated=True,
+        zarr_format=cfg.PARAMS["zarr_format"],
+    )
 
 
 def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:

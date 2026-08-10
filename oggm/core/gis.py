@@ -710,6 +710,8 @@ class GriddedNcdfFile(object):
         if basename is None:
             basename = 'gridded_data'
 
+        self.gdir = gdir
+        self.basename = basename
         if gdir is not None:
             self.fpath = gdir.get_filepath(basename)
             self.grid = gdir.grid
@@ -721,10 +723,23 @@ class GriddedNcdfFile(object):
             self.fpath = os.path.join(fpath, basename + '.nc')
             self.grid = grid
 
-        if reset and os.path.exists(self.fpath):
-            os.remove(self.fpath)
+        if reset:
+            if os.path.exists(self.fpath):
+                os.remove(self.fpath)
+            if gdir is not None and gdir.has_file(basename):
+                gdir.delete_group(basename)
 
     def __enter__(self):
+
+        if (
+            self.gdir is not None
+            and not os.path.exists(self.fpath)
+            and self.gdir.has_file(self.basename)
+        ):
+            # v2: materialise the zarr group as the scratch netCDF so
+            # the template/append logic below stays unchanged.
+            with self.gdir.open_group(self.basename) as ds:
+                ds.load().to_netcdf(self.fpath)
 
         if os.path.exists(self.fpath):
             # Already there - just append
@@ -761,6 +776,13 @@ class GriddedNcdfFile(object):
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.nc.close()
+        if self.gdir is not None and exc_type is None:
+            # v2: sync the scratch netCDF into the zarr store, use
+            # decode_cf=False so encoded values are identical
+            with xr.open_dataset(self.fpath, decode_cf=False) as ds:
+                self.gdir.write_group(ds.load(), self.basename, mode="w")
+            # the zarr group is now the single source of truth!
+            os.remove(self.fpath)
 
 
 @entity_task(log, writes=['gridded_data'])
@@ -915,7 +937,7 @@ def glacier_masks(gdir):
     if gdir.is_nominal:
         raise GeometryError('{} is a nominal glacier.'.format(gdir.rgi_id))
 
-    if not os.path.exists(gdir.get_filepath('gridded_data')):
+    if not gdir.has_file('gridded_data'):
         # In a possible future, we might actually want to raise a
         # deprecation warning here
         process_dem(gdir)
@@ -981,7 +1003,7 @@ def glacier_masks(gdir):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    gdir.write_pickle(geometries, 'geometries')
+    gdir.write_store(geometries, 'geometries')
 
     # write out the grids in the netcdf file
     with GriddedNcdfFile(gdir) as nc:
@@ -1047,7 +1069,7 @@ def simple_glacier_masks(gdir):
     if gdir.is_nominal:
         raise GeometryError('{} is a nominal glacier.'.format(gdir.rgi_id))
 
-    if not os.path.exists(gdir.get_filepath('gridded_data')):
+    if not gdir.has_file('gridded_data'):
         # In a possible future, we might actually want to raise a
         # deprecation warning here
         process_dem(gdir)
@@ -1418,10 +1440,9 @@ def gridded_attributes(gdir):
     """
 
     # Variables
-    grids_file = gdir.get_filepath('gridded_data')
-    with ncDataset(grids_file) as nc:
-        topo_smoothed = nc.variables['topo_smoothed'][:]
-        glacier_mask = nc.variables['glacier_mask'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo_smoothed = ds['topo_smoothed'].values
+        glacier_mask = ds['glacier_mask'].values
 
     # Glacier exterior including nunataks
     erode = binary_erosion(glacier_mask)
@@ -1465,7 +1486,7 @@ def gridded_attributes(gdir):
     aspect = np.arctan2(-sx, sy)
     aspect[aspect < 0] += 2 * np.pi
 
-    with ncDataset(grids_file, 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         vn = 'glacier_ext_erosion'
         if vn in nc.variables:
@@ -1559,9 +1580,9 @@ def gridded_mb_attributes(gdir):
     from oggm.core.centerlines import line_inflows
 
     # Get the input data
-    with ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        topo_2d = nc.variables['topo_smoothed'][:]
-        glacier_mask_2d = nc.variables['glacier_mask'][:]
+    with gdir.open_group('gridded_data') as ds:
+        topo_2d = ds['topo_smoothed'].values
+        glacier_mask_2d = ds['glacier_mask'].values
         glacier_mask_2d = glacier_mask_2d == 1
         catchment_mask_2d = glacier_mask_2d * np.nan
 
@@ -1617,7 +1638,7 @@ def gridded_mb_attributes(gdir):
     oggm_mb_above_z = _fill_2d_like(oggm_mb_above_z)
 
     # Save to file
-    with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         vn = 'catchment_area'
         if vn in nc.variables:
@@ -1660,13 +1681,13 @@ def gridded_mb_attributes(gdir):
 
     # Hardest part - MB per catchment
     try:
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
     except FileNotFoundError:
         return
 
     # Make everything we need flat
     # Catchment areas
-    cis = gdir.read_pickle('geometries')['catchment_indices']
+    cis = gdir.read_store('geometries')['catchment_indices']
     for j, ci in enumerate(cis):
         catchment_mask_2d[tuple(ci.T)] = j
 
@@ -1716,7 +1737,7 @@ def gridded_mb_attributes(gdir):
     oggm_mb_above_z_on_catch = _fill_2d_like(oggm_mb_above_z_on_catch)
 
     # Save to file
-    with ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
         vn = 'catchment_area_on_catch'
         if vn in nc.variables:
             v = nc.variables[vn]
@@ -1871,7 +1892,7 @@ def merged_glacier_masks(gdir, geometry):
     geometries['polygon_hr'] = glacier_poly_hr
     geometries['polygon_pix'] = glacier_poly_pix
     geometries['polygon_area'] = geometry.area
-    gdir.write_pickle(geometries, 'geometries')
+    gdir.write_store(geometries, 'geometries')
 
 
 @entity_task(log)
@@ -1916,15 +1937,15 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None, output_folder=None):
 
     outpath = os.path.join(base_dir, fname)
 
-    # Locate gridded_data.nc file and read it
-    nc_path = gdir.get_filepath('gridded_data')
-    with xr.open_dataset(nc_path) as ds:
+    # Read the gridded data (zarr group or legacy netCDF)
+    with gdir.open_group('gridded_data') as ds:
 
         # Prepare the profile dict
         crs = ds.pyproj_srs
         var = ds[varname]
         grid = ds.salem.grid.corner_grid
-        data = var.data
+        # np.asarray: zarr-backed groups are lazy, rasterio needs values
+        data = np.asarray(var.data)
         data_type = data.dtype.name
         height, width = var.data.shape
         dx, dy = grid.dx, grid.dy
@@ -1998,8 +2019,7 @@ def reproject_gridded_data_variable_to_grid(gdir,
         The reprojected data as a np.array with spatial-dimensions defined by
         target_grid.
     """
-    with xr.open_dataset(gdir.get_filepath(filename,
-                                           filesuffix=filesuffix)) as ds:
+    with gdir.open_group(filename, filesuffix=filesuffix) as ds:
         if use_glacier_mask:
             # transpose is used to keep dimension order for 3d data, important
             # for map_gridded_data which expects the last two dimensions are y
@@ -2166,8 +2186,7 @@ def rgi7g_to_complex(gdir, rgi7g_file=None, rgi7c_to_g_links=None):
             # Update the mask: only change -1 to the new index
             mask = np.where((mask == -1) & glacier_mask, index, mask)
 
-    grids_file = gdir.get_filepath('gridded_data')
-    with ncDataset(grids_file, 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         vn = 'sub_entities'
         if vn in nc.variables:

@@ -186,7 +186,7 @@ def glathida_on_grid(gdir):
     df_agg['rgi_id'] = df['rgi_id'].iloc[0]
 
     try:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             ds = ds.load()
     except:
         return None
