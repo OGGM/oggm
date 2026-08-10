@@ -747,19 +747,6 @@ class FlowlineModel(object):
         self.reset_flowlines(flowlines, inplace=inplace,
                              smooth_trib_influx=smooth_trib_influx)
 
-    def __getstate__(self):
-        # see Flowline.__getstate__
-        state = self.__dict__.copy()
-        if ('settings' in state and
-                not isinstance(state['settings'], utils.ModelSettings)):
-            state['settings'] = None
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        if 'settings' in state and state['settings'] is None:
-            self.settings = cfg.PARAMS.copy()
-
     @property
     def mb_model(self):
         return self._mb_model
