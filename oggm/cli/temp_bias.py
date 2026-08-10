@@ -21,6 +21,10 @@ mass balance calibration. The full workflow to make one for a new setup is:
      $ oggm_temp_bias --input RGI62/b_080/L3/summary \\
                       --output-file temp_bias_v2026.1.csv
 
+   Besides the csv, this writes `temp_bias_v2026.1_summary.txt` (what was used,
+   what is missing, how much had to be grouped, and the statistics of the final
+   values - always read it) and two diagnostic plots.
+
 3. put the resulting csv somewhere your runs can reach it, and use it for the
    real preprocessing::
 
@@ -61,7 +65,8 @@ def run_temp_bias(input_files=None, output_file=None, make_plots=True,
     output_file : str
         path of the csv file to write.
     make_plots : bool
-        write the diagnostic plots next to the output file.
+        write the diagnostic plots next to the output file. The diagnostic
+        summary (`<output_file stem>_summary.txt`) is always written.
     """
 
     cfg.initialize(logging_level=logging_level)
@@ -73,6 +78,8 @@ def run_temp_bias(input_files=None, output_file=None, make_plots=True,
     if make_plots:
         plot_path = output_file.parent / output_file.stem
 
+    summary_path = output_file.parent / (output_file.stem + '_summary.txt')
+
     utils.compute_temp_bias_dataframe(input_files,
                                       min_glaciers=min_glaciers,
                                       max_radius=max_radius,
@@ -80,9 +87,11 @@ def run_temp_bias(input_files=None, output_file=None, make_plots=True,
                                       rgi_region=rgi_region,
                                       rgi_subregion=rgi_subregion,
                                       path=output_file,
-                                      plot_path=plot_path)
+                                      plot_path=plot_path,
+                                      summary_path=summary_path)
 
-    log.workflow(f'oggm_temp_bias is done! Output written to: {output_file}')
+    log.workflow(f'oggm_temp_bias is done! Output written to: {output_file} '
+                 f'(with the diagnostic summary in {summary_path})')
 
 
 def parse_args(args):
@@ -104,7 +113,9 @@ def parse_args(args):
                         help='path of the csv file to write (default: '
                              '`temp_bias.csv` in the current directory).')
     parser.add_argument('--no-plots', nargs='?', const=True, default=False,
-                        help='do not write the diagnostic plots.')
+                        help='do not write the diagnostic plots. The '
+                             '`_summary.txt` diagnostic file is always '
+                             'written.')
     parser.add_argument('--min-glaciers', type=int, default=12,
                         help='minimum number of glaciers per grid point. Grid '
                              'points with fewer glaciers are grouped with '

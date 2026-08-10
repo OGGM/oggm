@@ -64,7 +64,17 @@ Enhancements
   writes nothing but the level 3 glacier statistics file, which is the input of
   ``oggm_temp_bias`` (it requires ``--mb-calibration-strategy temp_melt`` or
   ``temp_melt_regional`` to be set explicitly).
-  New utility function ``utils.weighted_quantile_1d``.
+  New utility function ``utils.weighted_quantile_1d`` (:pull:`1973`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``oggm_temp_bias`` now writes a ``<output file stem>_summary.txt`` diagnostic
+  file next to the csv (the same content also goes to the log). It reports the
+  provenance and parameters of the run, how many glaciers are missing from the
+  file and which tasks they failed on (globally and per RGI region), how many
+  glaciers have no bias for their own grid point because it had to be grouped,
+  which grid points are still below ``min_glaciers`` at the maximum search
+  radius (with the largest ones listed), and the mean, standard deviation and
+  percentiles of all the bias columns. This is meant to be read after every run
+  - a temperature bias file without its summary cannot be judged.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_

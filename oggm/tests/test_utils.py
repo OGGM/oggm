@@ -2699,6 +2699,21 @@ class TestTempBiasCLI:
         assert os.path.isfile(os.path.join(self.testdir, 'out',
                                            'temp_bias_v42_hist.png'))
 
+        # The summary is written next to the file - it is what is left after
+        # the run, especially when there is no job log to go back to
+        with open(os.path.join(self.testdir, 'out',
+                               'temp_bias_v42_summary.txt')) as f:
+            summary = f.read()
+        for expected in ['Input glaciers', 'MISSING from this file',
+                         'Per RGI region', 'Climate grid', 'Grouping of the',
+                         'Final bias values', 'median_temp_bias_w_err_grouped',
+                         'min_glaciers      : 12',
+                         'glacier_statistics_11.csv']:
+            assert expected in summary, expected
+        # the headline numbers are the real ones
+        assert '{}'.format(int(out.n_glaciers.sum())) in summary
+        assert '{}'.format(len(out)) in summary
+
         # This is what OGGM does with the file: it must be readable and the
         # nearest grid point lookup must work (see mb_calibration_from_
         # geodetic_mb)

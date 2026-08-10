@@ -2482,11 +2482,11 @@ def _read_glacier_statistics_files(glacier_statistics):
 
     Returns
     -------
-    a DataFrame with one row per glacier
+    (DataFrame with one row per glacier, list of the files which were read)
     """
 
     if isinstance(glacier_statistics, pd.DataFrame):
-        return glacier_statistics.copy()
+        return glacier_statistics.copy(), ['<DataFrame>']
 
     files = []
     for item in tolist(glacier_statistics):
@@ -2516,7 +2516,7 @@ def _read_glacier_statistics_files(glacier_statistics):
         if len(df) != n_before:
             log.warning(f'{n_before - len(df)} duplicated glaciers were found '
                         'in the input files and were removed.')
-    return df
+    return df, files
 
 
 def _infer_grid_spacing(values, name):
@@ -2538,7 +2538,7 @@ def _infer_grid_spacing(values, name):
 def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
                                 max_radius=10, err_fill_quantile=0.9,
                                 rgi_region=None, rgi_subregion=None,
-                                path=None, plot_path=None):
+                                path=None, plot_path=None, summary_path=None):
     """Computes the temperature bias prior file out of a `temp_melt` run.
 
     This is the counterpart of :py:func:`utils.get_temp_bias_dataframe`: it
@@ -2586,13 +2586,22 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     plot_path : str or Path, optional
         base path for the diagnostic plots (without extension). Two files are
         written: `{plot_path}_map.png` and `{plot_path}_hist.png`.
+    summary_path : str or Path, optional
+        where to write the diagnostic summary (a text file). The same content
+        is sent to the log, but the file is what you will still have after the
+        fact. Recommended!
 
     Returns
     -------
     a DataFrame with one row per climate grid point.
     """
 
-    df = _read_glacier_statistics_files(glacier_statistics)
+    # Everything worth reporting is collected in here as we go along
+    diag = {'min_glaciers': min_glaciers, 'max_radius': max_radius,
+            'err_fill_quantile': err_fill_quantile,
+            'rgi_region': rgi_region, 'rgi_subregion': rgi_subregion}
+
+    df, diag['files'] = _read_glacier_statistics_files(glacier_statistics)
 
     if rgi_region is not None:
         regs = ['{:02d}'.format(int(r)) for r in tolist(rgi_region)]
@@ -2610,22 +2619,32 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
             'column(s). Are you sure they come from a level 3 run with the '
             '`temp_melt` mass balance calibration strategy?')
 
-    n_tot = len(df)
-    area_tot = df['rgi_area_km2'].sum()
+    diag['n_input'] = len(df)
+    diag['area_input'] = df['rgi_area_km2'].sum()
 
     # Sanitize: glaciers without a calibrated temp bias are of no use here
-    odf = df.loc[df['temp_bias'].notnull() &
-                 df['baseline_climate_ref_pix_lon'].notnull() &
-                 df['baseline_climate_ref_pix_lat'].notnull()].copy()
+    no_bias = df['temp_bias'].isnull()
+    no_pix = (df['baseline_climate_ref_pix_lon'].isnull() |
+              df['baseline_climate_ref_pix_lat'].isnull())
+    odf = df.loc[~(no_bias | no_pix)].copy()
     if len(odf) == 0:
         raise InvalidWorkflowError('No glacier with a valid temperature bias '
                                    'found in the glacier statistics file(s).')
 
+    diag['n_used'] = len(odf)
+    diag['area_used'] = odf['rgi_area_km2'].sum()
+    diag['n_no_bias'] = int(no_bias.sum())
+    diag['n_no_pix'] = int((no_pix & ~no_bias).sum())
+    # Why did the discarded ones fail? The stats file tells us
+    if 'error_task' in df:
+        errs = df.loc[no_bias | no_pix, 'error_task'].value_counts()
+        diag['error_tasks'] = errs.head(5)
+
     log.workflow('compute_temp_bias_dataframe: using {} glaciers out of {} '
                  '({:.1f}% of the area was discarded because the calibration '
-                 'failed).'.format(len(odf), n_tot,
-                                   (1 - odf['rgi_area_km2'].sum() /
-                                    area_tot) * 100))
+                 'failed).'.format(len(odf), diag['n_input'],
+                                   (1 - diag['area_used'] /
+                                    diag['area_input']) * 100))
 
     # The MB error is used as a weight - fill the missing ones
     err = odf['reference_mb_err'].copy()
@@ -2636,6 +2655,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         err = pd.Series(1., index=err.index)
         invalid = pd.Series(False, index=err.index)
     err_fill = err.loc[~invalid].quantile(err_fill_quantile)
+    diag['n_err_filled'] = int(invalid.sum())
+    diag['err_fill'] = err_fill
     if invalid.sum() > 0:
         log.workflow('compute_temp_bias_dataframe: {} glaciers have no valid '
                      'reference MB error - using the {} quantile instead '
@@ -2644,6 +2665,16 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
                                                     err_fill))
         err.loc[invalid] = err_fill
     odf['reference_mb_err'] = err
+
+    # Per region accounting - useful to spot a region which went wrong
+    if 'rgi_region' in df:
+        reg = df['rgi_region'].astype(str).str.zfill(2)
+        diag['per_region'] = pd.DataFrame({
+            'n_input': reg.groupby(reg).size(),
+            'n_used': reg.loc[odf.index].groupby(reg.loc[odf.index]).size(),
+            'area_input': df['rgi_area_km2'].groupby(reg).sum(),
+            'area_used': odf['rgi_area_km2'].groupby(reg.loc[odf.index]).sum(),
+        }).fillna(0)
 
     # The climate grid, inferred from the coordinates the calibration uses
     lon = odf['baseline_climate_ref_pix_lon'].values.astype(float)
@@ -2682,6 +2713,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     # Positional indices of the glaciers in each grid point
     groups = odf.groupby('unique_id').indices
 
+    diag['dlon'], diag['dlat'] = dlon, dlat
+    diag['n_grid_points'] = len(groups)
     log.workflow('compute_temp_bias_dataframe: inferred a {} x {} deg '
                  'lon-lat climate grid, with {} grid points containing '
                  'glaciers.'.format(dlon, dlat, len(groups)))
@@ -2746,23 +2779,148 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
               'search_radius']:
         mdf[c] = mdf[c].astype(int)
 
-    # Log a summary - this is the sanity check in the job log
-    counts = mdf['search_radius'].value_counts().sort_index()
-    log.workflow('compute_temp_bias_dataframe: number of grid points per '
-                 'search radius: {}'.format(counts.to_dict()))
-    qs = mdf['median_temp_bias_w_err_grouped'].quantile([0.1, 0.5, 0.9])
-    log.workflow('compute_temp_bias_dataframe: quantiles [0.1, 0.5, 0.9] of '
-                 'the final temperature bias: {}'
-                 ''.format(np.round(qs.values, 3).tolist()))
-
     if path is not None:
         mdf.to_csv(path)
+
+    # The summary: to the log, and to a file so that it survives the terminal
+    summary = _temp_bias_summary(mdf, diag, path=path)
+    log.workflow('compute_temp_bias_dataframe summary:\n' + summary)
+    if summary_path is not None:
+        with open(summary_path, 'w') as f:
+            f.write(summary)
 
     if plot_path is not None:
         _plot_temp_bias_dataframe(mdf, odf, plot_path,
                                   dlon=dlon, dlat=dlat, lon0=lon0, lat0=lat0)
 
     return mdf
+
+
+def _temp_bias_summary(mdf, diag, path=None):
+    """The diagnostic summary of `compute_temp_bias_dataframe`, as text."""
+
+    min_glaciers = diag['min_glaciers']
+    lines = []
+    add = lines.append
+
+    def title(t):
+        add('')
+        add(t)
+        add('-' * len(t))
+
+    add('OGGM temperature bias file - diagnostic summary')
+    add('=' * 47)
+    add('Created on {} with OGGM {}'
+        ''.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                  __version__))
+    if path is not None:
+        add(f'Output file: {path}')
+    add('')
+    add('Input files ({}):'.format(len(diag['files'])))
+    for f in diag['files']:
+        add(f'    {f}')
+    add('Parameters:')
+    for k in ['min_glaciers', 'max_radius', 'err_fill_quantile',
+              'rgi_region', 'rgi_subregion']:
+        add('    {:<18s}: {}'.format(k, diag[k]))
+
+    title('Input glaciers')
+    n_in, a_in = diag['n_input'], diag['area_input']
+    n_us, a_us = diag['n_used'], diag['area_used']
+    add('    in the input file(s)     : {:>8d}  ({:>12.1f} km2)'
+        ''.format(n_in, a_in))
+    add('    used for this file       : {:>8d}  ({:>12.1f} km2, {:.2f}% of '
+        'the area)'.format(n_us, a_us, a_us / a_in * 100))
+    add('    MISSING from this file   : {:>8d}  ({:>12.1f} km2, {:.2f}% of '
+        'the area)'.format(n_in - n_us, a_in - a_us,
+                           (1 - a_us / a_in) * 100))
+    add('        no calibrated temp_bias  : {:>8d}'.format(diag['n_no_bias']))
+    add('        no climate ref pixel     : {:>8d}'.format(diag['n_no_pix']))
+    if diag.get('error_tasks') is not None and len(diag['error_tasks']):
+        add('    tasks the missing glaciers failed on:')
+        for k, v in diag['error_tasks'].items():
+            add('        {:>8d}  {}'.format(v, k))
+    add('    with no valid reference MB error (weight set to the {} '
+        'quantile,'.format(diag['err_fill_quantile']))
+    add('        i.e. {:.1f} kg m-2 yr-1) : {:>8d}'
+        ''.format(diag['err_fill'], diag['n_err_filled']))
+
+    if diag.get('per_region') is not None:
+        title('Per RGI region')
+        add('    {:>4s} {:>9s} {:>9s} {:>9s} {:>14s} {:>12s}'
+            ''.format('reg', 'n_input', 'n_used', 'n_missing',
+                      'area_used_km2', 'area_miss_%'))
+        for r, s in diag['per_region'].iterrows():
+            add('    {:>4s} {:>9d} {:>9d} {:>9d} {:>14.1f} {:>12.2f}'
+                ''.format(r, int(s.n_input), int(s.n_used),
+                          int(s.n_input - s.n_used), s.area_used,
+                          (1 - s.area_used / s.area_input) * 100
+                          if s.area_input else 0))
+
+    title('Climate grid')
+    add('    inferred grid spacing    : {} x {} deg'
+        ''.format(diag['dlon'], diag['dlat']))
+    add('    grid points with glaciers: {:>8d}'.format(diag['n_grid_points']))
+    n = mdf['n_glaciers']
+    add('    glaciers per grid point  : min {}, median {:.0f}, mean {:.1f}, '
+        'max {}'.format(n.min(), n.median(), n.mean(), n.max()))
+
+    title('Grouping of the sparse grid points (min_glaciers = {})'
+          ''.format(min_glaciers))
+    grouped = mdf['search_radius'] > 0
+    add('    grid points used as is (radius 0) : {:>8d}  ({:.1f}%)'
+        ''.format(int((~grouped).sum()), (~grouped).mean() * 100))
+    add('    grid points grouped               : {:>8d}  ({:.1f}%)'
+        ''.format(int(grouped.sum()), grouped.mean() * 100))
+    add('    glaciers whose own grid point had to be grouped, i.e. which have')
+    add('        no bias of their own pixel    : {:>8d}  ({:.1f}% of the used '
+        'glaciers)'.format(int(mdf.loc[grouped, 'n_glaciers'].sum()),
+                           mdf.loc[grouped, 'n_glaciers'].sum() / n_us * 100))
+    add('    grid points per search radius:')
+    for k, v in mdf['search_radius'].value_counts().sort_index().items():
+        add('        radius {:>2d} : {:>8d}'.format(k, v))
+    failed = mdf['n_glaciers_grouped'] < min_glaciers
+    add('    grid points STILL below min_glaciers after radius {}: {}'
+        ''.format(diag['max_radius'], int(failed.sum())))
+    if failed.sum():
+        fdf = mdf.loc[failed]
+        add('        they hold {} glaciers, {:.1f} km2 ({:.2f}% of the used '
+            'area); their bias'.format(int(fdf['n_glaciers'].sum()),
+                                       fdf['rgi_area_km2'].sum(),
+                                       fdf['rgi_area_km2'].sum() /
+                                       diag['area_used'] * 100))
+        add('        rests on as few as {} glacier(s) - check the largest '
+            'ones below!'.format(int(fdf['n_glaciers_grouped'].min())))
+        add('        {:>9s} {:>9s} {:>6s} {:>8s} {:>12s} {:>9s}'
+            ''.format('lon', 'lat', 'n_gla', 'n_grpd', 'area_km2', 'bias_K'))
+        top = fdf.sort_values('rgi_area_km2', ascending=False).head(10)
+        for _, s in top.iterrows():
+            add('        {:>9.2f} {:>9.2f} {:>6d} {:>8d} {:>12.1f} {:>9.3f}'
+                ''.format(s.lon_val, s.lat_val, int(s.n_glaciers),
+                          int(s.n_glaciers_grouped), s.rgi_area_km2,
+                          s.median_temp_bias_w_err_grouped))
+
+    title('Final bias values (K)')
+    add('    {:<32s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} '
+        '{:>7s} {:>9s}'.format('column', 'mean', 'std', 'min', '5%', '25%',
+                               '50%', '75%', '95%', 'max', 'w_area*'))
+    for c in ['median_temp_bias', 'median_temp_bias_w_area',
+              'median_temp_bias_w_err', 'median_temp_bias_grouped',
+              'median_temp_bias_w_area_grouped',
+              'median_temp_bias_w_err_grouped']:
+        s = mdf[c]
+        q = s.quantile([0.05, 0.25, 0.5, 0.75, 0.95])
+        add('    {:<32s} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} '
+            '{:>7.3f} {:>7.3f} {:>7.3f} {:>9.3f}'
+            ''.format(c, s.mean(), s.std(), s.min(), *q.values, s.max(),
+                      np.average(s, weights=mdf['rgi_area_km2'])))
+    add('    * w_area: mean weighted by the glacier area of the grid point.')
+    add('    The two columns OGGM reads are `median_temp_bias_w_err_grouped`')
+    add('    (per-glacier calibration) and `median_temp_bias_w_area_grouped`')
+    add('    (regional calibration, use_regional_avg=True).')
+    add('')
+
+    return '\n'.join(lines)
 
 
 def _plot_temp_bias_dataframe(mdf, odf, plot_path, dlon=None, dlat=None,
