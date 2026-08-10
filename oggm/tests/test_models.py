@@ -158,7 +158,7 @@ class TestInitPresentDayFlowline:
             plt.show()
 
         # test if providing a filesuffix is working
-        init_present_time_glacier(gdir, output='_test')
+        init_present_time_glacier(gdir, output_filesuffix='_test')
         assert os.path.isfile(os.path.join(gdir.dir, 'model_flowlines_test.pkl'))
 
         gdir.settings['downstream_line_shape'] = 'free_shape'
