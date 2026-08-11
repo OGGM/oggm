@@ -2519,6 +2519,35 @@ def _read_glacier_statistics_files(glacier_statistics):
     return df, files
 
 
+def _failed_tasks_hint(df):
+    """What the error columns of a glacier statistics file have to say.
+
+    `glacier_statistics` writes only the data it could gather, i.e. a task
+    which failed for all the glaciers takes its columns down with it. When
+    that happens, the `error_task` / `error_msg` columns are the ones telling
+    us why, so we add them to the error messages below.
+
+    Returns an empty string if the statistics have nothing to say about it.
+    """
+
+    if 'error_task' not in df or len(df) == 0:
+        return ''
+
+    errs = df['error_task'].value_counts()
+    if len(errs) == 0:
+        # No glacier errored - the reason is somewhere else
+        return ''
+
+    task = errs.index[0]
+    out = (f' Note that the `{task}` task failed for {errs.iloc[0]} of the '
+           f'{len(df)} glaciers')
+    if 'error_msg' in df:
+        msgs = df.loc[df['error_task'] == task, 'error_msg'].value_counts()
+        if len(msgs) > 0:
+            out += f' (most frequent error: "{msgs.index[0]}")'
+    return out + ' - this is the more likely problem.'
+
+
 def _infer_grid_spacing(values, name):
     """Infer the spacing of a regular grid from the coordinates in use.
 
@@ -2617,7 +2646,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         raise InvalidWorkflowError(
             f'The glacier statistics file(s) are missing the {missing} '
             'column(s). Are you sure they come from a level 3 run with the '
-            '`temp_melt` mass balance calibration strategy?')
+            '`temp_melt` mass balance calibration strategy?' +
+            _failed_tasks_hint(df))
 
     diag['n_input'] = len(df)
     diag['area_input'] = df['rgi_area_km2'].sum()
@@ -2629,7 +2659,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     odf = df.loc[~(no_bias | no_pix)].copy()
     if len(odf) == 0:
         raise InvalidWorkflowError('No glacier with a valid temperature bias '
-                                   'found in the glacier statistics file(s).')
+                                   'found in the glacier statistics file(s).' +
+                                   _failed_tasks_hint(df))
 
     diag['n_used'] = len(odf)
     diag['area_used'] = odf['rgi_area_km2'].sum()

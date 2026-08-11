@@ -2656,6 +2656,38 @@ class TestTempBiasCLI:
             utils.compute_temp_bias_dataframe(
                 _fake_glacier_statistics([(10.25, 46.25, 20)]))
 
+    def test_compute_temp_bias_dataframe_failed_run(self):
+
+        # When the calibration fails for all the glaciers, `glacier_statistics`
+        # silently drops the columns it could not fill. The error message has
+        # to point at the calibration and not at the file itself (this is what
+        # a run of a version without RGI7 geodetic MB data looked like).
+        df = _fake_glacier_statistics([(10.25, 46.25, 20),
+                                       (10.75, 46.25, 15)])
+        df['error_task'] = 'mb_calibration_from_geodetic_mb'
+        df['error_msg'] = "KeyError: 'RGI2000-v7.0-G-06-00001'"
+        failed = df.drop(columns=['temp_bias', 'reference_mb_err'])
+
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(failed)
+        msg = str(exc.value)
+        assert 'mb_calibration_from_geodetic_mb' in msg
+        assert 'failed for 35 of the 35 glaciers' in msg
+        assert "KeyError: 'RGI2000-v7.0-G-06-00001'" in msg
+
+        # Same story when the columns are there but empty
+        df['temp_bias'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df)
+        assert 'mb_calibration_from_geodetic_mb' in str(exc.value)
+
+        # But we don't blame a task when none of them failed
+        df = _fake_glacier_statistics([(10.25, 46.25, 20)])
+        df['error_task'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
+        assert 'failed for' not in str(exc.value)
+
     def test_compute_temp_bias_dataframe_wrap(self):
 
         # Grid points on both sides of the dateline should see each other
