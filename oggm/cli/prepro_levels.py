@@ -126,7 +126,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       dynamic_spinup_extra_years_to_try=None,
                       dynamic_spinup_allow_shorter=True,
                       continue_on_error=True, store_fl_diagnostics=False,
-                      store_hydro_output=False, store_monthly_hydro=True,
+                      store_hydro_output=False, store_monthly_hydro=False,
                       ref_area_yr=None, temp_bias_run=False):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -180,18 +180,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'informed_threestep' (default)
         - 'melt_temp'
         - 'temp_melt'
-        Add the `_regional` suffix to use regional values instead,
-        for example `informed_threestep_regional`
     geodetic_mb_file_path : str
         optional path or URL to a custom geodetic MB file, passed to
         utils.get_geodetic_mb_dataframe and
         tasks.mb_calibration_from_geodetic_mb.
     temp_bias_file_path : str
-        optional path or URL to a custom temperature-bias file, passed to
-        tasks.mb_calibration_from_geodetic_mb (only used with the
-        'informed_threestep' calibration strategy). Use this together with a
-        `custom_climate_task` to calibrate on an arbitrary climate dataset.
-        The file must follow the same format as the default temp-bias files.
+        path or URL to the temperature-bias prior file, passed to
+        tasks.mb_calibration_from_geodetic_mb. Required by the
+        'informed_threestep' calibration strategy (and unused otherwise):
+        there is no default, the file has to match the setup it is used with
+        (climate dataset, RGI version, ...). It is created with a
+        `temp_bias_run` and the `oggm_temp_bias` command (see
+        utils.get_temp_bias_dataframe).
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -290,8 +290,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     store_hydro_output : bool
         if True, also store the hydrological model output.
     store_monthly_hydro : bool
-        if True and store_hydro_output is True the hydrological mode output will
-        also be stored in a monthly resolution (see flowline.run_with_hydro)
+        if True and store_hydro_output is True, the hydrological model output
+        is also stored at monthly resolution (see flowline.run_with_hydro).
+        This increases data usage quite a bit, hence the False default.
     ref_area_yr : int
         the hydrological output is computed over a reference area, which
         per default is the largest area covered by the glacier in the simulation
@@ -304,7 +305,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         skips everything which is of no use for this purpose: the glacier
         directory tar files, the climate statistics and the fixed geometry
         mass balance. `mb_calibration_strategy` has to be set explicitly to
-        `temp_melt` (or `temp_melt_regional`), an error is raised otherwise.
+        `temp_melt`, an error is raised otherwise.
         The only output is the L3 `glacier_statistics` file, which is then
         turned into the temperature bias file with the `oggm_temp_bias`
         command (the grouping of climate grid points crosses RGI region
@@ -314,18 +315,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # The temp bias preset overrides a couple of options. We log about it
     # further down, once cfg.initialize() has set the logging up.
     if temp_bias_run:
-        if not mb_calibration_strategy.startswith('temp_melt'):
+        if mb_calibration_strategy != 'temp_melt':
             raise InvalidParamsError(
                 'With `temp_bias_run`, the mass balance calibration strategy '
-                'has to be set explicitly to `temp_melt` (or to '
-                '`temp_melt_regional` for the regional flavor of the '
-                f'temperature bias file), not `{mb_calibration_strategy}`.')
+                'has to be set explicitly to `temp_melt`, not '
+                f'`{mb_calibration_strategy}`.')
         max_level = 3
         skip_inversion = True
 
     # Input check
     if max_level not in [1, 2, 3, 4, 5]:
         raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
+
+    if mb_calibration_strategy not in ['informed_threestep', 'melt_temp',
+                                       'temp_melt']:
+        raise InvalidParamsError('mb_calibration_strategy not understood: '
+                                 f'{mb_calibration_strategy}')
 
     if start_level is not None:
         if start_level not in [0, 1, 2, 3, 4]:
@@ -340,6 +345,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                          'files we start from.')
     else:
         start_level = 0
+
+    # The mass balance is calibrated in L3 only
+    if (start_level <= 2 and max_level >= 3 and
+            mb_calibration_strategy == 'informed_threestep' and
+            temp_bias_file_path is None):
+        raise InvalidParamsError(
+            'The `informed_threestep` calibration strategy needs a temperature '
+            'bias prior file: set `temp_bias_file_path` to the file matching '
+            'your setup. Such a file is created with a `temp_bias_run` and '
+            'the `oggm_temp_bias` command.')
 
     if dynamic_spinup:
         if dynamic_spinup not in ['area/dmdtda', 'volume/dmdtda']:
@@ -839,17 +854,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             workflow.execute_entity_task(tasks.process_climate_data, gdirs)
 
-        use_regional_avg = False
-        if '_regional' in mb_calibration_strategy:
-            use_regional_avg = True
-            mb_calibration_strategy = mb_calibration_strategy.replace('_regional', '')
-
         if mb_calibration_strategy == 'informed_threestep':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
                                          gdirs,
                                          informed_threestep=True,
                                          mb_model_class=mb_model_class,
-                                         use_regional_avg=use_regional_avg,
                                          file_path=geodetic_mb_file_path,
                                          temp_bias_file_path=temp_bias_file_path)
         elif mb_calibration_strategy == 'melt_temp':
@@ -858,7 +867,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          calibrate_param1='melt_f',
                                          calibrate_param2='temp_bias',
                                          mb_model_class=mb_model_class,
-                                         use_regional_avg=use_regional_avg,
                                          file_path=geodetic_mb_file_path)
         elif mb_calibration_strategy == 'temp_melt':
             workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
@@ -866,7 +874,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          calibrate_param1='temp_bias',
                                          calibrate_param2='melt_f',
                                          mb_model_class=mb_model_class,
-                                         use_regional_avg=use_regional_avg,
                                          file_path=geodetic_mb_file_path)
         else:
             raise InvalidParamsError('mb_calibration_strategy not understood: '
@@ -1178,13 +1185,13 @@ def parse_args(args):
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
-    parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
+    parser.add_argument('--elev-bands', action='store_true',
                         help='compute the flowlines based on the Huss & Farinotti '
                              '2012 method.')
-    parser.add_argument('--centerlines', nargs='?', const=True, default=False,
+    parser.add_argument('--centerlines', action='store_true',
                         help='compute the flowlines based on the OGGM '
                              'centerline(s) method.')
-    parser.add_argument('--skip-inversion', nargs='?', const=True, default=False,
+    parser.add_argument('--skip-inversion', action='store_true',
                         help='do not run the inversion (level 3 files). '
                              'this is a temporary workaround for workflows '
                              'that wont run that far into level 3.')
@@ -1200,11 +1207,11 @@ def parse_args(args):
                              "(Farinotti et al. 2019, RGI62 only).")
     parser.add_argument('--mb-calibration-strategy', type=str,
                         default='informed_threestep',
-                        help='how to calibrate the massbalance. Currently one of '
-                             'informed_threestep (default) , melt_temp '
-                             'or temp_melt. Add the _regional suffix to '
-                             'use regional values instead, for example '
-                             'informed_threestep_regional')
+                        choices=['informed_threestep', 'melt_temp',
+                                 'temp_melt'],
+                        help='how to calibrate the massbalance. Currently one '
+                             'of informed_threestep (default), melt_temp '
+                             'or temp_melt.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -1221,40 +1228,40 @@ def parse_args(args):
                         'If you set it to "BY_RES" here, COPDEM will be used and '
                         'its resolution chosen based on the gdirs map resolution '
                         '(COPDEM30 for dx < 60 m, COPDEM90 elsewhere).')
-    parser.add_argument('--keep-dem-folders', nargs='?', const=True, default=False,
+    parser.add_argument('--keep-dem-folders', action='store_true',
                         help='if `select_source_from_dir` is used, wether to keep '
                         'the original DEM folders in or not.')
-    parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
+    parser.add_argument('--add-consensus-thickness', action='store_true',
                         help='adds (reprojects) the consensus thickness '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-itslive-velocity', nargs='?', const=True, default=False,
+    parser.add_argument('--add-itslive-velocity', action='store_true',
                         help='adds (reprojects) the ITS_LIVE velocity '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
+    parser.add_argument('--add-millan-thickness', action='store_true',
                         help='adds (reprojects) the millan thickness '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-millan-velocity', nargs='?', const=True, default=False,
+    parser.add_argument('--add-millan-velocity', action='store_true',
                         help='adds (reprojects) the millan velocity '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-hugonnet-dhdt', nargs='?', const=True, default=False,
+    parser.add_argument('--add-hugonnet-dhdt', action='store_true',
                         help='adds (reprojects) the hugonnet dhdt '
                              'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-bedmachine', nargs='?', const=True, default=False,
+    parser.add_argument('--add-bedmachine', action='store_true',
                         help='adds (reprojects) the Bedmachine ice thickness '
                              'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-glathida', nargs='?', const=True, default=False,
+    parser.add_argument('--add-glathida', action='store_true',
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
                              'The data points are stored as csv.')
@@ -1263,18 +1270,18 @@ def parse_args(args):
                             'If provided, it replaces the default process_climate_data.')
     parser.add_argument('--custom-climate-task-kwargs', type=json.loads, default=None,
                         help='JSON dict of kwargs passed to the custom climate task.')
-    parser.add_argument('--add-distributed-thickness', nargs='?', const=True, default=False,
+    parser.add_argument('--add-distributed-thickness', action='store_true',
                         help='adds a thickness field to gridded_data using '
                              'distribute_thickness_per_altitude.')
-    parser.add_argument('--add-export-thickness-geotiff', nargs='?', const=True, default=False,
+    parser.add_argument('--add-export-thickness-geotiff', action='store_true',
                         help='exports the distributed thickness field to '
                              'GeoTIFF files in a subfolder of the L3 summary '
                              'directory. Requires --add-distributed-thickness.')
-    parser.add_argument('--compute-hypsometry', nargs='?', const=True, default=False,
+    parser.add_argument('--compute-hypsometry', action='store_true',
                         help='Compute the hypsometry tables for all glaciers, '
                              'added to the glacier directory and compiled in '
                              'the summary folder')
-    parser.add_argument('--test', nargs='?', const=True, default=False,
+    parser.add_argument('--test', action='store_true',
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
     parser.add_argument('--test-ids', nargs='+',
@@ -1286,7 +1293,7 @@ def parse_args(args):
     parser.add_argument('--intersects-file', type=str, default=None,
                         help='path to an intersects shapefile to use instead '
                              'of the default RGI intersects file.')
-    parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
+    parser.add_argument('--disable-mp', action='store_true',
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic-spinup', type=str, default='',
                         help="include a dynamic spinup for matching glacier area "
@@ -1331,27 +1338,32 @@ def parse_args(args):
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')
     parser.add_argument('--temp-bias-file-path', type=str, default=None,
-                        help='optional path or URL to a custom temperature-bias '
-                             'file passed to MB calibration (informed_threestep '
-                             'only). Use together with --custom-climate-task.')
-    parser.add_argument('--temp-bias-run', nargs='?', const=True, default=False,
+                        help='path or URL to the temperature-bias prior file '
+                             'passed to MB calibration. Required by the '
+                             'informed_threestep strategy (and unused '
+                             'otherwise): there is no default, the file has to '
+                             'match the setup it is used with. It is created '
+                             'with --temp-bias-run and the `oggm_temp_bias` '
+                             'command.')
+    parser.add_argument('--temp-bias-run', action='store_true',
                         help='run the preprocessing needed to create the '
                              'temperature bias prior file. This forces '
                              '--max-level 3 and --skip-inversion, and writes '
                              'nothing but the L3 glacier statistics file. '
-                             'Requires --mb-calibration-strategy temp_melt '
-                             '(or temp_melt_regional). Feed the result to the '
-                             '`oggm_temp_bias` command (together with the '
-                             'other regions) to create the file.')
-    parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
+                             'Requires --mb-calibration-strategy temp_melt. '
+                             'Feed the result to the `oggm_temp_bias` command '
+                             '(together with the other regions) to create the '
+                             'file.')
+    parser.add_argument('--store-fl-diagnostics', action='store_true',
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
                              "a bit.")
-    parser.add_argument('--store-hydro-output', nargs='?', const=True, default=False,
+    parser.add_argument('--store-hydro-output', action='store_true',
                         help='Add optional hydrological model output')
-    parser.add_argument('--store-monthly-hydro', nargs='?', const=True, default=True,
-                        help='If store-hydro-output is True, also store the '
-                             'hydrological model output in monthly resolution.')
+    parser.add_argument('--store-monthly-hydro', action='store_true',
+                        help='Requires --store-hydro-output. Also store the '
+                             'hydrological model output at monthly resolution. '
+                             'This increases data usage quite a bit.')
     parser.add_argument('--ref-area-yr', type=int, default=None,
                         help='Force the reference area used for the hydrological '
                              'output to the glacier state of the given simulation '
@@ -1399,7 +1411,13 @@ def parse_args(args):
         extra_years_to_try = None
     else:
         # argparse gives us strings if the user provided them in the terminal
-        extra_years_to_try = [int(yr) for yr in extra_years_to_try]
+        try:
+            extra_years_to_try = [int(yr) for yr in extra_years_to_try]
+        except (TypeError, ValueError):
+            raise InvalidParamsError(
+                '--dynamic-spinup-extra-years-to-try takes years to start the '
+                'spinup before --dynamic-spinup-start-year, or the single '
+                f'value "none", but got {extra_years_to_try}!')
         if any(yr <= 0 for yr in extra_years_to_try):
             raise InvalidParamsError(
                 '--dynamic-spinup-extra-years-to-try must be positive (they '

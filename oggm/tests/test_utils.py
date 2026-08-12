@@ -25,6 +25,7 @@ from oggm.utils import _downloads
 from oggm import cfg
 from oggm.cfg import SEC_IN_YEAR
 from oggm.utils._workflow import compile_to_netcdf
+from oggm.tests import TEMP_BIAS_FILE_W5E5_RGI6, GEODETIC_MB_REGIONAL_AVG
 from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
@@ -1529,7 +1530,7 @@ class TestPreproCLI:
         assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
         assert not kwargs['store_hydro_output']
-        assert kwargs['store_monthly_hydro']
+        assert not kwargs['store_monthly_hydro']
         assert kwargs['ref_area_yr'] is None
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -1699,6 +1700,77 @@ class TestPreproCLI:
 
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
         assert kwargs['ref_mb_err_scaling_factor'] == 0.5
+        assert kwargs['dynamic_spinup_periods_to_try'] == [30, 40, 50, 60, 70,
+                                                           80, 90, 100]
+
+        # The spinup periods are years, and 'none' is the documented way to
+        # ask for no additional period at all
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-periods-to-try',
+                                           '30',
+                                           ])
+        assert kwargs['dynamic_spinup_periods_to_try'] == [30]
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-periods-to-try',
+                                           '30', '40',
+                                           ])
+        assert kwargs['dynamic_spinup_periods_to_try'] == [30, 40]
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-periods-to-try',
+                                           'none',
+                                           ])
+        assert kwargs['dynamic_spinup_periods_to_try'] is None
+        assert kwargs['temp_bias_run'] is False
+
+        with pytest.raises(InvalidParamsError):
+            prepro_levels.parse_args(['--rgi-reg', '1',
+                                      '--map-border', '160',
+                                      '--dynamic-spinup-periods-to-try',
+                                      '30', 'abc',
+                                      ])
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--temp-bias-run',
+                                           ])
+        assert kwargs['temp_bias_run'] is True
+
+        # passed values should be treated as errors
+        for flag in ['--elev-bands', '--centerlines', '--skip-inversion',
+                     '--keep-dem-folders', '--add-consensus-thickness',
+                     '--add-itslive-velocity', '--add-millan-thickness',
+                     '--add-millan-velocity', '--add-hugonnet-dhdt',
+                     '--add-bedmachine', '--add-glathida',
+                     '--add-distributed-thickness',
+                     '--add-export-thickness-geotiff', '--compute-hypsometry',
+                     '--test', '--disable-mp', '--store-fl-diagnostics',
+                     '--store-hydro-output', '--store-monthly-hydro',
+                     '--temp-bias-run',
+                     ]:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160',
+                                          flag, 'whatever',
+                                          ])
+
+        # Monthly hydro output is opt-in, like in flowline.run_with_hydro
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--store-hydro-output',
+                                           ])
+        assert kwargs['store_hydro_output'] is True
+        assert kwargs['store_monthly_hydro'] is False
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--store-hydro-output',
+                                           '--store-monthly-hydro',
+                                           ])
+        assert kwargs['store_monthly_hydro'] is True
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1750,6 +1822,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           mb_model_class=mb_model_class,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           continue_on_error=False,
                           override_params={}
                           )
@@ -1785,7 +1858,7 @@ class TestPreproCLI:
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = utils.get_geodetic_mb_dataframe(regional=True)
+        dfh = pd.read_csv(utils.file_downloader(GEODETIC_MB_REGIONAL_AVG))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=200)  # Whole Alps
@@ -1912,6 +1985,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           max_level=3,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           add_distributed_thickness=True,
                           add_export_thickness_geotiff=True,
                           continue_on_error=False,
@@ -1975,6 +2049,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           max_level=4,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           store_hydro_output=True,
                           store_monthly_hydro=True,
                           ref_area_yr=2000,
@@ -2058,7 +2133,7 @@ class TestPreproCLI:
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = utils.get_geodetic_mb_dataframe(regional=True)
+        dfh = pd.read_csv(utils.file_downloader(GEODETIC_MB_REGIONAL_AVG))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=150)  # Whole Alps
@@ -2481,6 +2556,7 @@ class TestPreproCLI:
                           rgi_file=rgidf, intersects_file=inter,
                           logging_level='INFO',
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
@@ -2566,6 +2642,9 @@ class TestTempBiasCLI:
         assert kwargs['max_radius'] == 3
         assert kwargs['err_fill_quantile'] == 0.5
         assert kwargs['rgi_subregion'] == ['11-01']
+
+        with pytest.raises(SystemExit):
+            temp_bias.parse_args(['--input', 'in_dir', '--no-plots', 'whatever'])
 
         with pytest.raises(InvalidParamsError):
             temp_bias.parse_args([])
@@ -2791,6 +2870,12 @@ class TestTempBiasCLI:
                               temp_bias_run=True,
                               mb_calibration_strategy='informed_threestep')
 
+        # And informed_threestep needs the file we are about to create
+        with pytest.raises(InvalidParamsError):
+            run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                              output_folder=odir, working_dir=wdir,
+                              mb_calibration_strategy='informed_threestep')
+
         # The statistics file is the only thing this run is good for
         sum_dir = os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary')
         assert os.path.isfile(os.path.join(sum_dir,
@@ -2926,6 +3011,12 @@ class TestBenchmarkCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['is_test']
+
+        with pytest.raises(SystemExit):
+            benchmark.parse_args(['--rgi-reg', '1',
+                                  '--map-border', '160',
+                                  '--test', 'whatever',
+                                  ])
 
         kwargs = benchmark.parse_args(['--rgi-reg', '1',
                                        '--map-border', '160',
@@ -3570,6 +3661,21 @@ class TestDataFiles(unittest.TestCase):
         with pytest.warns(DeprecationWarning, match="hdf"):
             df = _downloads.get_dataframe_from_file(hdf_path)
         pd.testing.assert_frame_equal(df, df_orig)
+
+    @pytest.mark.slow
+    def test_get_geodetic_mb_dataframe(self):
+
+        df = utils.get_geodetic_mb_dataframe(rgi_version='62')
+        assert df.index[0].startswith('RGI60-')
+        # RGI6 is the default
+        assert cfg.PARAMS['rgi_version'] == '62'
+        assert utils.get_geodetic_mb_dataframe().index[0].startswith('RGI60-')
+
+        df = utils.get_geodetic_mb_dataframe(rgi_version='70G')
+        assert df.index[0].startswith('RGI2000-v7.0-G-')
+
+        with pytest.raises(NotImplementedError):
+            utils.get_geodetic_mb_dataframe(rgi_version='70C')
 
     def test_srtmzone(self):
 

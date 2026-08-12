@@ -14,7 +14,7 @@ Enhancements
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - New global task ``calibrate_inversion_from_ref_table`` generalises
   ``calibrate_inversion_from_consensus`` to calibrate the ice thickness
-  inversion against an arbitrary reference volume table (given as a DataFrame, 
+  inversion against an arbitrary reference volume table (given as a DataFrame,
   a path or a URL). By default it now uses the IceBoost v2 products, with the
   RGI6 or RGI7 table selected automatically from the glacier directories.
   ``calibrate_inversion_from_consensus`` is deprecated but still available: it
@@ -51,6 +51,14 @@ Enhancements
   arbitrary custom climate dataset instead of the hardcoded w5e5/era5 files
   (:pull:`1941`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- `utils.get_geodetic_mb_dataframe` now selects the geodetic observations file
+  matching the RGI version (new `rgi_version` keyword, defaulting to
+  ``cfg.PARAMS['rgi_version']``): the observations are indexed by glacier id,
+  so RGI6 and RGI7G need different files. `mb_calibration_from_geodetic_mb`
+  passes the glacier's own RGI version, so RGI7G glacier directories now
+  calibrate on RGI7G observations out of the box. RGI7C is not available yet
+  (:pull:`1976`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The temperature bias prior file used by the `informed_threestep` calibration
   can now be created from the command line, instead of with a notebook. The new
   ``oggm_temp_bias`` command (and the underlying
@@ -73,8 +81,7 @@ Enhancements
   glaciers have no bias for their own grid point because it had to be grouped,
   which grid points are still below ``min_glaciers`` at the maximum search
   radius (with the largest ones listed), and the mean, standard deviation and
-  percentiles of all the bias columns. This is meant to be read after every run
-  - a temperature bias file without its summary cannot be judged.
+  percentiles of all the bias columns.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
@@ -108,7 +115,8 @@ Enhancements
   newly created URLs use the 100-glacier bundles. Both RGI6 and RGI7 IDs are
   supported (:pull:`1925`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- Some tests have been refactored from unittest to pytest. (:pull:`1925`).
+- Some tests have been refactored from unittest to pytest. (:pull:`1925`,
+  :pull:`1936`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Replaced `scipy.linalg.solve_banded` with `scipy.linalg.lapack.dgtsv` for
   solving linear systems with a tridiagonal matrix in `SemiImplicitModel`. This
@@ -189,12 +197,13 @@ Enhancements
 - New ``store_hydro_output`` kwarg in ``run_prepro_levels`` (and
   ``--store-hydro-output`` CLI flag) to also compute and store hydrological
   model output during preprocessing, via ``run_with_hydro``. The accompanying
-  ``store_monthly_hydro`` kwarg (and ``--store-monthly-hydro`` CLI flag,
-  default ``True``) additionally stores this hydrological output at monthly
-  resolution. The new ``ref_area_yr`` kwarg (and ``--ref-area-yr`` CLI flag)
-  lets users force the hydrological reference area to the glacier state of a
-  given simulation year, instead of the default largest area during the
-  simulation period (:pull:`1965`).
+  ``store_monthly_hydro`` kwarg (and ``--store-monthly-hydro`` CLI flag)
+  additionally stores this hydrological output at monthly resolution. It is
+  opt-in and defaults to ``False``, like in ``run_with_hydro``, since it
+  increases data usage quite a bit. The new ``ref_area_yr`` kwarg (and
+  ``--ref-area-yr`` CLI flag) lets users force the hydrological reference area
+  to the glacier state of a given simulation year, instead of the default
+  largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
@@ -254,10 +263,24 @@ Bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Multiple fixes to the test suite, missing assertions, test logic (:pull:`1960`).
   By `Nicolas Gampierakis <http://github.com/gampnico>`_.
+- ``--dynamic-spinup-periods-to-try`` now converts its values to integers.
+  They were passed on as strings, which made the flag unusable: any explicit
+  value crashed the dynamic spinup with a ``TypeError``. Non-numeric values
+  (other than the documented ``none``) now raise an ``InvalidParamsError``
+  (:pull:`1986`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The boolean flags of the ``oggm_prepro``, ``oggm_benchmark`` and
+  ``oggm_temp_bias`` commands (``--elev-bands``, ``--test``, ``--disable-mp``,
+  and all the others) no longer accept a value. They used to store whatever
+  string followed them, and since every non-empty string is truthy,
+  ``--elev-bands False`` turned elev-bands *on*. Passing a value is now an
+  error: use the bare flag to switch a behaviour on, and omit it to switch it
+  off (:pull:`1986`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - The glacier intersects are no longer stored in
   ``cfg.PARAMS['intersects_gdf']``, but in ``cfg.INTERSECTS_GDF``. They are a
   (potentially large, region wide) dataframe and not a parameter, and having
@@ -265,6 +288,17 @@ Breaking changes
   wherever the parameters are, which is not what a parameter dict is for. The
   way to set them, ``cfg.set_intersects_db``, is unchanged, and so is
   ``cfg.PARAMS['use_intersects']`` (:pull:`1980`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The temperature-bias prior file of the `informed_threestep` calibration
+  now always has to given explicitly. There is no
+  default file anymore: `utils.get_temp_bias_dataframe` takes a single
+  `file_path` argument and `mb_calibration_from_geodetic_mb` raises an error
+  if `temp_bias_file_path` is not set.
+  The file has to match the setup it is used with, and it is created with a
+  `temp_bias_run` and the ``oggm_temp_bias`` command (:pull:`1976`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The regional mass balance calibration introduced in 163 is removed again.
+  It was useful as RGI7 calibration data was missing (:pull:`1976`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The default reference for RGI6 all initial glacier volumes is now
   IceBoost v2 - this replaces the previous consensus estimate (:pull:`1942`).

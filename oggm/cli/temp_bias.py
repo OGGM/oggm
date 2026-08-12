@@ -12,8 +12,6 @@ mass balance calibration. The full workflow to make one for a new setup is:
                    <all your other options> --rgi-reg 01
      $ ...  # one job per RGI region
 
-   (use `temp_melt_regional` instead to build the regional flavor of the file)
-
 2. summarize the per-glacier biases of all the regions per climate grid point.
    The grouping of grid points crosses RGI region borders, so this is always a
    separate step, run once over all the regions::
@@ -112,7 +110,7 @@ def parse_args(args):
     parser.add_argument('--output-file', type=str, default='temp_bias.csv',
                         help='path of the csv file to write (default: '
                              '`temp_bias.csv` in the current directory).')
-    parser.add_argument('--no-plots', nargs='?', const=True, default=False,
+    parser.add_argument('--no-plots', action='store_true',
                         help='do not write the diagnostic plots. The '
                              '`_summary.txt` diagnostic file is always '
                              'written.')
