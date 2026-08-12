@@ -263,7 +263,7 @@ Bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Multiple fixes to the test suite, missing assertions, test logic (:pull:`1960`).
   By `Nicolas Gampierakis <http://github.com/gampnico>`_.
-- ``--dynamic-spinup-periods-to-try`` now converts its values to integers.
+- ``--dynamic-spinup-extra-years-to-try`` now converts its values to integers.
   They were passed on as strings, which made the flag unusable: any explicit
   value crashed the dynamic spinup with a ``TypeError``. Non-numeric values
   (other than the documented ``none``) now raise an ``InvalidParamsError``

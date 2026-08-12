@@ -1552,24 +1552,6 @@ class TestPreproCLI:
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
         assert kwargs['ref_area_yr'] == 2000
 
-        # the dynamic spinup years to try are converted to int, and can be
-        # switched off
-        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
-                                           '--map-border', '160',
-                                           '--dynamic-spinup-extra-years-to-try',
-                                           '10', '20',
-                                           '--dynamic-spinup-no-shorter-periods',
-                                           ])
-        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20]
-        assert not kwargs['dynamic_spinup_allow_shorter']
-
-        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
-                                           '--map-border', '160',
-                                           '--dynamic-spinup-extra-years-to-try',
-                                           'none',
-                                           ])
-        assert kwargs['dynamic_spinup_extra_years_to_try'] is None
-
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
@@ -1700,37 +1682,47 @@ class TestPreproCLI:
 
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
         assert kwargs['ref_mb_err_scaling_factor'] == 0.5
-        assert kwargs['dynamic_spinup_periods_to_try'] == [30, 40, 50, 60, 70,
-                                                           80, 90, 100]
 
-        # The spinup periods are years, and 'none' is the documented way to
-        # ask for no additional period at all
+        # The extra years to try are years, and 'none' is the documented way
+        # to ask for no additional start year at all
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
-                                           '--dynamic-spinup-periods-to-try',
+                                           '--dynamic-spinup-extra-years-to-try',
                                            '30',
                                            ])
-        assert kwargs['dynamic_spinup_periods_to_try'] == [30]
-        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
-                                           '--map-border', '160',
-                                           '--dynamic-spinup-periods-to-try',
-                                           '30', '40',
-                                           ])
-        assert kwargs['dynamic_spinup_periods_to_try'] == [30, 40]
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [30]
+        assert kwargs['dynamic_spinup_allow_shorter']
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
-                                           '--dynamic-spinup-periods-to-try',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           '10', '20',
+                                           '--dynamic-spinup-no-shorter-periods',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20]
+        assert not kwargs['dynamic_spinup_allow_shorter']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
                                            'none',
                                            ])
-        assert kwargs['dynamic_spinup_periods_to_try'] is None
+        assert kwargs['dynamic_spinup_extra_years_to_try'] is None
         assert kwargs['temp_bias_run'] is False
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args(['--rgi-reg', '1',
                                       '--map-border', '160',
-                                      '--dynamic-spinup-periods-to-try',
+                                      '--dynamic-spinup-extra-years-to-try',
                                       '30', 'abc',
+                                      ])
+
+        # they are counted backwards from the start year, so must be positive
+        with pytest.raises(InvalidParamsError):
+            prepro_levels.parse_args(['--rgi-reg', '1',
+                                      '--map-border', '160',
+                                      '--dynamic-spinup-extra-years-to-try',
+                                      '0',
                                       ])
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
