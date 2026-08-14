@@ -3062,7 +3062,7 @@ def extend_past_climate_run(past_run_file=None,
 
         # Output data
         years = np.arange(y0_clim, y1_run+1)
-        ods = past_ds.reindex({'time': years})
+        ods = past_ds.reindex({'time': years}).load()
 
         # Time
         ods['hydro_year'].data[:] = years
@@ -3085,11 +3085,53 @@ def extend_past_climate_run(past_run_file=None,
         ods[vn].attrs['description'] += ' (replaced with fixed geom data)'
 
         rho = cfg.PARAMS['ice_density']
+
+        # Everything the loop below needs is materialized here. The frames
+        # returned by `read_csv` have one block per column, which makes
+        # `DataFrame.values` O(n_glaciers) per call - repeating it once per
+        # glacier made this loop quadratic. The xarray attribute lookups are
+        # cheaper but add up as well.
+        rgi_ids = ods.rgi_id.data
+        mb_vals = df.to_numpy()
+
+        def _calving_from_stats(cn):
+            # Same semantics as the previous per-glacier `stats_df.loc`
+            # lookup: a missing column, a missing glacier or a non-finite
+            # value all mean "no calving".
+            if cn not in stats_df.columns:
+                return np.zeros(len(rgi_ids))
+            out = stats_df[cn].reindex(rgi_ids).to_numpy(dtype=float)
+            return np.where(np.isfinite(out), out, 0)
+
+        calv_flux_all = _calving_from_stats('calving_flux') * 1e9
+        calv_rate_all = _calving_from_stats('calving_rate_myr')
+
+        # The `_ext` arrays are written to in place below - `.data` on a
+        # loaded variable returns the underlying array, not a copy.
+        vol_data = ods['volume'].data
+        vol_ext = ods['volume_ext'].data
+        area_ext = ods['area_ext'].data
+        vol_fg_ext = ods['volume_fixed_geom_ext'].data
+        length_ext = ods['length_ext'].data if 'length' in ods.data_vars else None
+        calv_ext = ods['calving_ext'].data if 'calving' in ods.data_vars else None
+        calv_rate_ext = (ods['calving_rate_ext'].data
+                         if 'calving_rate' in ods.data_vars else None)
+        vol_ice_ext = (ods['volume_ice_ext'].data
+                       if 'volume_ice' in ods.data_vars else None)
+        vol_firn_ext = (ods['volume_firn_ext'].data
+                        if 'volume_firn' in ods.data_vars else None)
+        has_bsl = 'volume_bsl' in ods.data_vars
+        has_bwl = 'volume_bwl' in ods.data_vars
+        bsl_data = ods['volume_bsl'].data if has_bsl else None
+        bsl_ext = ods['volume_bsl_ext'].data if has_bsl else None
+        bwl_data = ods['volume_bwl'].data if has_bwl else None
+        bwl_ext = ods['volume_bwl_ext'].data if has_bwl else None
+
         # Loop over the ids
-        for i, rid in enumerate(ods.rgi_id.data):
+        for i in range(len(rgi_ids)):
             # Both do not need to be same length but they need to start same
-            mb_ts = df.values[:, i]
-            orig_vol_ts = ods.volume_ext.data[:, i]
+            mb_ts = mb_vals[:, i]
+            orig_vol_ts = vol_ext[:, i]
             if not (np.isfinite(mb_ts[-1]) and np.isfinite(orig_vol_ts[-1])):
                 # Not a valid glacier
                 continue
@@ -3101,19 +3143,11 @@ def extend_past_climate_run(past_run_file=None,
             fid = np.argmax(np.isfinite(orig_vol_ts))
 
             # Add calving to the mix
-            try:
-                calv_flux = stats_df.loc[rid, 'calving_flux'] * 1e9
-                calv_rate = stats_df.loc[rid, 'calving_rate_myr']
-            except KeyError:
-                calv_flux = 0
-                calv_rate = 0
-            if not np.isfinite(calv_flux):
-                calv_flux = 0
-            if not np.isfinite(calv_rate):
-                calv_rate = 0
+            calv_flux = calv_flux_all[i]
+            calv_rate = calv_rate_all[i]
 
             # Fill area and length which stays constant before date
-            orig_area_ts = ods.area_ext.data[:, i]
+            orig_area_ts = area_ext[:, i]
             orig_area_ts[:fid] = orig_area_ts[fid]
 
             # We convert SMB to volume
@@ -3124,47 +3158,43 @@ def extend_past_climate_run(past_run_file=None,
             mb_vol_ts = mb_vol_ts + orig_vol_ts[fid] - mb_vol_ts[fid-1]
 
             # Now back to netcdf
-            ods.volume_fixed_geom_ext.data[1:, i] = mb_vol_ts
-            ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
-            ods.area_ext.data[:, i] = orig_area_ts
+            vol_fg_ext[1:, i] = mb_vol_ts
+            vol_ext[1:fid, i] = mb_vol_ts[0:fid-1]
+            area_ext[:, i] = orig_area_ts
 
             # Optional variables
-            if 'length' in ods.data_vars:
-                orig_length_ts = ods.length_ext.data[:, i]
+            if length_ext is not None:
+                orig_length_ts = length_ext[:, i]
                 orig_length_ts[:fid] = orig_length_ts[fid]
-                ods.length_ext.data[:, i] = orig_length_ts
+                length_ext[:, i] = orig_length_ts
 
-            if 'calving' in ods.data_vars:
-                orig_calv_ts = ods.calving_ext.data[:, i]
+            if calv_ext is not None:
+                orig_calv_ts = calv_ext[:, i]
                 # The -1 is because the volume change is known at end of year
                 calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
-                ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
+                calv_ext[1:fid, i] = calv_ts[0:fid-1]
 
-            if 'calving_rate' in ods.data_vars:
-                orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
+            if calv_rate_ext is not None:
+                orig_calv_rate_ts = calv_rate_ext[:, i]
                 # +1 because calving rate at year 0 is unknown from the dyns model
                 orig_calv_rate_ts[:fid+1] = calv_rate
-                ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
+                calv_rate_ext[:, i] = orig_calv_rate_ts
 
-            if 'volume_ice' in ods.data_vars:
+            if vol_ice_ext is not None:
                 # we can not calculate a ice volume for the fixed geometry
-                orig_volume_ice_ts = ods.volume_ice_ext.data[:, i]
-                orig_volume_ice_ts[:fid] = np.nan
-                ods.volume_ice_ext.data[:, i] = orig_volume_ice_ts
+                vol_ice_ext[:fid, i] = np.nan
 
-            if 'volume_firn' in ods.data_vars:
+            if vol_firn_ext is not None:
                 # we can not calculate a ice volume for the fixed geometry
-                orig_volume_firn_ts = ods.volume_firn_ext.data[:, i]
-                orig_volume_firn_ts[:fid] = np.nan
-                ods.volume_firn_ext.data[:, i] = orig_volume_firn_ts
+                vol_firn_ext[:fid, i] = np.nan
 
             # Extend vol bsl by assuming that % stays constant
-            if 'volume_bsl' in ods.data_vars:
-                bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
-                ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
-            if 'volume_bwl' in ods.data_vars:
-                bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
-                ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
+            if has_bsl:
+                bsl = bsl_data[fid, i] / vol_data[fid, i]
+                bsl_ext[:fid, i] = bsl * vol_ext[:fid, i]
+            if has_bwl:
+                bwl = bwl_data[fid, i] / vol_data[fid, i]
+                bwl_ext[:fid, i] = bwl * vol_ext[:fid, i]
 
         # Remove old vars
         for vn in list(ods.data_vars):
