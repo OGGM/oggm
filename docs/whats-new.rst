@@ -269,6 +269,13 @@ Bug fixes
   (other than the documented ``none``) now raise an ``InvalidParamsError``
   (:pull:`1986`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Fixed a quadratic slowdown in ``extend_past_climate_run``: with recent pandas
+  versions, ``read_csv`` returns a frame with one block per column, which made
+  the per-glacier ``DataFrame.values`` call in the loop rebuild the entire
+  table each time. Everything the loop needs is now materialized once. This
+  step took over two hours for RGI region 13 in a ``oggm_prepro`` run and is
+  back to seconds; the results are unchanged (:pull:`1990`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

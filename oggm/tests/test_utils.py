@@ -827,6 +827,182 @@ class TestFuncs(object):
                 cfg.strtobool(value=value)
 
 
+class TestExtendPastClimateRun:
+    """Multi-glacier tests for `extend_past_climate_run`.
+
+    The other test (test_models.py) runs the real workflow on a single
+    glacier. Here we build the compiled files by hand so that we can cover
+    several glaciers at once with the cases which occur in a real region:
+    different RGI dates, glaciers which errored, and tidewater glaciers.
+    """
+
+    Y0_CLIM = 1901
+    Y0_RUN = 1950
+    Y1_RUN = 2020
+
+    def _make_files(self, tmpdir, n_glaciers=20):
+        rng = np.random.default_rng(42)
+        rids = np.array([f'RGI60-11.{i:05d}' for i in range(n_glaciers)],
+                        dtype=object)
+        run_years = np.arange(self.Y0_RUN, self.Y1_RUN + 1)
+        nt = len(run_years)
+
+        # RGI dates differ from glacier to glacier
+        starts = np.arange(n_glaciers) % 5
+        # ... and one glacier is there from the very first year
+        starts[1] = 0
+        # ... while two of them errored during the run
+        failed = [3, 11]
+
+        base_vol = rng.uniform(1e7, 1e10, size=n_glaciers)
+        trend = np.linspace(1.0, 0.7, nt)[:, None]
+
+        ds = xr.Dataset(coords={'time': ('time', run_years),
+                                'rgi_id': ('rgi_id', rids)})
+        fields = {'volume': base_vol * 1.,
+                  'volume_ice': base_vol * 0.95,
+                  'volume_firn': base_vol * 0.05,
+                  'volume_bsl': base_vol * 0.02,
+                  'volume_bwl': base_vol * 0.01,
+                  'area': base_vol ** 0.7,
+                  'area_min_h': base_vol ** 0.7 * 0.9,
+                  'length': base_vol ** 0.3,
+                  'calving': base_vol * 0.001,
+                  'calving_rate': np.full(n_glaciers, 10.)}
+        for vn, ref in fields.items():
+            data = (ref[None, :] * trend).astype(np.float32)
+            for i, s in enumerate(starts):
+                data[:s, i] = np.nan
+            data[:, failed] = np.nan
+            ds[vn] = (('time', 'rgi_id'), data)
+            ds[vn].attrs['description'] = f'{vn} description'
+
+        for vn, val in [('hydro_year', run_years), ('hydro_month', 4),
+                        ('calendar_year', run_years), ('calendar_month', 1)]:
+            ds[vn] = ('time', np.full(nt, val) if np.isscalar(val) else val)
+            ds[vn].attrs['description'] = vn
+
+        past_run_file = os.path.join(tmpdir, 'compiled.nc')
+        ds.to_netcdf(past_run_file)
+
+        clim_years = np.arange(self.Y0_CLIM, self.Y1_RUN)
+        mb = pd.DataFrame(rng.uniform(-2000, 500,
+                                      size=(len(clim_years), n_glaciers)),
+                          index=clim_years, columns=rids)
+        mb_file = os.path.join(tmpdir, 'fixed_geometry_mb.csv')
+        mb.to_csv(mb_file)
+
+        stats = pd.DataFrame(index=pd.Index(rids, name='rgi_id'))
+        stats['calving_flux'] = 0.
+        stats['calving_rate_myr'] = 0.
+        tidewater = [2, 7]
+        stats.loc[rids[tidewater], 'calving_flux'] = 0.1
+        stats.loc[rids[tidewater], 'calving_rate_myr'] = 55.
+        # a NaN here has to be treated as "no calving"
+        stats.loc[rids[5], 'calving_flux'] = np.nan
+        stats_file = os.path.join(tmpdir, 'stats.csv')
+        stats.to_csv(stats_file)
+
+        return past_run_file, mb_file, stats_file, ds, mb, stats
+
+    def test_extend_multiple_glaciers(self, tmp_path):
+        cfg.initialize_minimal()
+        tmpdir = str(tmp_path)
+        pf, mf, sf, ds_in, mb, stats = self._make_files(tmpdir)
+        opath = os.path.join(tmpdir, 'extended.nc')
+
+        utils.extend_past_climate_run(past_run_file=pf,
+                                      fixed_geometry_mb_file=mf,
+                                      glacier_statistics_file=sf,
+                                      path=opath)
+
+        rho = cfg.PARAMS['ice_density']
+        # The first year is always NaN and is dropped on write
+        years = np.arange(self.Y0_CLIM + 1, self.Y1_RUN + 1)
+
+        with xr.open_dataset(opath) as ods:
+            assert_array_equal(ods.time.data, years)
+            assert_array_equal(ods.rgi_id.data, ds_in.rgi_id.data)
+            # the `_ext` suffix is dropped again on write
+            assert 'volume_ext' not in ods.data_vars
+            assert 'volume_fixed_geom' in ods.data_vars
+
+            for i, rid in enumerate(ods.rgi_id.data):
+                vol_in = ds_in.volume.values[:, i]
+                vol_out = ods.volume.values[:, i]
+                n_new = len(years) - len(vol_in)
+
+                if np.all(~np.isfinite(vol_in)):
+                    # errored glaciers are left alone
+                    assert np.all(~np.isfinite(vol_out))
+                    assert np.all(~np.isfinite(
+                        ods.volume_fixed_geom.values[:, i]))
+                    continue
+
+                # First year with a dynamical volume (everything before it
+                # is what the task has to fill in)
+                fid = n_new + np.argmax(np.isfinite(vol_in))
+                assert fid > 1
+                assert np.all(np.isfinite(vol_out[:fid]))
+
+                # the dynamical part of the run is never touched
+                assert_allclose(vol_out[fid:], vol_in[fid - n_new:], rtol=1e-6)
+
+                # Recompute the extension independently
+                calv_flux = stats.loc[rid, 'calving_flux']
+                calv_flux = 0 if not np.isfinite(calv_flux) else calv_flux * 1e9
+                area_fid = ods.area.values[fid, i]
+                mb_ts = mb[rid].values
+                mb_vol_ts = (mb_ts / rho * area_fid - calv_flux).cumsum()
+                mb_vol_ts = mb_vol_ts + vol_out[fid] - mb_vol_ts[fid]
+
+                assert_allclose(ods.volume_fixed_geom.values[:, i], mb_vol_ts,
+                                rtol=1e-4)
+                assert_allclose(vol_out[:fid], mb_vol_ts[:fid], rtol=1e-4)
+
+                # Area and length are kept constant before the RGI date
+                for vn in ['area', 'length']:
+                    ts = ods[vn].values[:, i]
+                    assert_allclose(ts[:fid], ts[fid], rtol=1e-6)
+
+                # No ice/firn partitioning for the fixed geometry period
+                for vn in ['volume_ice', 'volume_firn']:
+                    assert np.all(~np.isfinite(ods[vn].values[:fid, i]))
+
+                # bsl/bwl keep a constant fraction of the total volume
+                for vn in ['volume_bsl', 'volume_bwl']:
+                    frac = ods[vn].values[fid, i] / vol_out[fid]
+                    assert_allclose(ods[vn].values[:fid, i],
+                                    frac * vol_out[:fid], rtol=1e-4)
+
+                # Calving rate is constant before (and at) the RGI date
+                exp_rate = stats.loc[rid, 'calving_rate_myr']
+                assert_allclose(ods.calving_rate.values[:fid + 1, i],
+                                exp_rate, rtol=1e-6)
+
+    def test_extend_is_linear_in_n_glaciers(self, tmp_path):
+        # `DataFrame.values` on the (one block per column) frames returned by
+        # `read_csv` is O(n_glaciers): calling it inside the per-glacier loop
+        # made this task quadratic and cost hours on the large RGI regions.
+        cfg.initialize_minimal()
+
+        def time_it(n):
+            d = os.path.join(str(tmp_path), f'n{n}')
+            utils.mkdir(d, reset=True)
+            pf, mf, sf, _, _, _ = self._make_files(d, n_glaciers=n)
+            t0 = time.perf_counter()
+            utils.extend_past_climate_run(past_run_file=pf,
+                                          fixed_geometry_mb_file=mf,
+                                          glacier_statistics_file=sf,
+                                          path=os.path.join(d, 'ext.nc'))
+            return time.perf_counter() - t0
+
+        # Deliberately generous: quadratic scaling gives a factor of ~64 here
+        t_small = time_it(250)
+        t_large = time_it(2000)
+        assert t_large < 12 * t_small
+
+
 class TestInitialize(unittest.TestCase):
 
     def setUp(self):
@@ -2743,6 +2919,38 @@ class TestTempBiasCLI:
             # All the glaciers in the same grid point
             utils.compute_temp_bias_dataframe(
                 _fake_glacier_statistics([(10.25, 46.25, 20)]))
+
+    def test_compute_temp_bias_dataframe_failed_run(self):
+
+        # When the calibration fails for all the glaciers, `glacier_statistics`
+        # silently drops the columns it could not fill. The error message has
+        # to point at the calibration and not at the file itself (this is what
+        # a run of a version without RGI7 geodetic MB data looked like).
+        df = _fake_glacier_statistics([(10.25, 46.25, 20),
+                                       (10.75, 46.25, 15)])
+        df['error_task'] = 'mb_calibration_from_geodetic_mb'
+        df['error_msg'] = "KeyError: 'RGI2000-v7.0-G-06-00001'"
+        failed = df.drop(columns=['temp_bias', 'reference_mb_err'])
+
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(failed)
+        msg = str(exc.value)
+        assert 'mb_calibration_from_geodetic_mb' in msg
+        assert 'failed for 35 of the 35 glaciers' in msg
+        assert "KeyError: 'RGI2000-v7.0-G-06-00001'" in msg
+
+        # Same story when the columns are there but empty
+        df['temp_bias'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df)
+        assert 'mb_calibration_from_geodetic_mb' in str(exc.value)
+
+        # But we don't blame a task when none of them failed
+        df = _fake_glacier_statistics([(10.25, 46.25, 20)])
+        df['error_task'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
+        assert 'failed for' not in str(exc.value)
 
     def test_compute_temp_bias_dataframe_wrap(self):
 
