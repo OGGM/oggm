@@ -85,6 +85,7 @@ tests = [
 
 [project.scripts]
 oggm_prepro = "oggm.cli.prepro_levels:main"
+oggm_prepro_chunks = "oggm.cli.prepro_chunks:main"
 oggm_temp_bias = "oggm.cli.temp_bias:main"
 oggm_benchmark = "oggm.cli.benchmark:main"
 oggm_netrc_credentials = "oggm.cli.netrc_credentials:cli"
@@ -100,6 +101,7 @@ include = [
     "pytest.ini",
     "oggm/params.cfg",
     "oggm/data/dem_sources.txt",
+    "oggm/data/rgi_chunks.csv",
 ]
 # fallback if include group doesn't work as intended
 force-include = {"pytest.ini" = "pytest.ini"}
@@ -110,6 +112,7 @@ include = [
     "pytest.ini",
     "oggm/params.cfg",
     "oggm/data/dem_sources.txt",
+    "oggm/data/rgi_chunks.csv",
 ]
 # fallback if include group doesn't work as intended
 force-include = {"pytest.ini" = "pytest.ini"}

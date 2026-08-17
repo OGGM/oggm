@@ -358,6 +358,146 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
                                    'RGI IDs: {}'.format(u[c > 1]))
 
 
+def _rgi_ids_of(rgidf):
+    """The RGI ids of a dataframe (RGI6 or RGI7) or of a list of ids."""
+
+    if isinstance(rgidf, pd.DataFrame):
+        try:
+            return np.asarray(rgidf.RGIId)
+        except AttributeError:
+            # RGI7
+            return np.asarray(rgidf.rgi_id)
+    return np.asarray(utils.tolist(rgidf))
+
+
+def _chunk_index_of(rgi_ids, chunk_size):
+    """The chunk index of each glacier, out of its RGI id.
+
+    Chunks are blocks of the RGI id space, not slices of the sorted list of
+    glaciers: this is what makes them line up with the tar bundles written by
+    :py:func:`oggm.utils.base_dir_to_tar`. The slices below are correct for
+    both RGI6 (14 char ids) and RGI7 (23 char ids), as everywhere else in
+    OGGM where the bundles are computed.
+    """
+
+    if chunk_size == 1000:
+        sl = slice(-5, -3)
+    elif chunk_size == 100:
+        sl = slice(-5, -2)
+    else:
+        # The read side (gdir_from_tar, _get_prepro_gdir_unlocked) only knows
+        # how to locate 100- and 1000-glacier bundles, so anything else would
+        # make chunks that overlap the tar bundles - and chunks writing into
+        # the same bundle overwrite each other.
+        raise InvalidParamsError('chunk_size must be 100 or 1000, got '
+                                 '{}'.format(chunk_size))
+
+    return np.array([int(rid[sl]) for rid in rgi_ids])
+
+
+def count_rgi_chunks(rgidf, chunk_size=1000):
+    """Number of chunks the given glaciers fall into.
+
+    This is derived from the RGI ids, not chosen: it is the highest chunk
+    index plus one. Note that chunks can therefore be uneven, and the last
+    one is often small.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame or list of str
+        the glaciers to partition (an RGI dataframe or a list of RGI ids)
+    chunk_size : int
+        100 or 1000 (default). See :py:func:`oggm.workflow.get_rgi_chunk`.
+
+    Returns
+    -------
+    the number of chunks (int)
+    """
+
+    idx = _chunk_index_of(_rgi_ids_of(rgidf), chunk_size)
+    if len(idx) == 0:
+        return 0
+    return int(idx.max()) + 1
+
+
+def get_rgi_chunk(rgidf, chunk_idx, chunk_size=1000):
+    """Select the glaciers belonging to one chunk.
+
+    A chunk is a block of the RGI id space: with ``chunk_size=1000``, chunk 3
+    is made of the glaciers whose id ends in 03000 to 03999. This is what
+    makes chunks line up with the tar bundles written by
+    :py:func:`oggm.utils.base_dir_to_tar`, so that several chunk jobs writing
+    into the same output folder produce disjoint, complete bundle files.
+
+    Because the RGI ids have gaps, chunks are not all the same size, and a
+    chunk can even be empty - callers should handle that gracefully rather
+    than error out.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame or list of str
+        the glaciers to partition (an RGI dataframe or a list of RGI ids)
+    chunk_idx : int
+        which chunk to select, from 0 to ``count_rgi_chunks() - 1``
+    chunk_size : int
+        100 or 1000 (default). Only these two are allowed: they are the
+        bundle sizes that the glacier directory tars are written and read
+        with.
+
+    Returns
+    -------
+    the same type as `rgidf`, with only the glaciers of this chunk
+    """
+
+    if chunk_idx < 0:
+        raise InvalidParamsError('chunk_idx should be positive, got '
+                                 '{}'.format(chunk_idx))
+
+    idx = _chunk_index_of(_rgi_ids_of(rgidf), chunk_size)
+    sel = idx == chunk_idx
+
+    if isinstance(rgidf, pd.DataFrame):
+        return rgidf.loc[sel].copy()
+    return [rid for rid, ok in zip(utils.tolist(rgidf), sel) if ok]
+
+
+def print_slurm_array(rgidf, chunk_size=1000, command=None):
+    """Print the SLURM array directive matching a chunked run.
+
+    A convenience for writing cluster scripts: it tells you how many chunks
+    your glaciers fall into, and how to wire the array task id to
+    :py:func:`oggm.workflow.get_rgi_chunk`.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame or list of str
+        the glaciers to partition
+    chunk_size : int
+        100 or 1000 (default)
+    command : str
+        the command to run for each chunk. The chunk arguments are appended
+        to it. Defaults to a generic `oggm_prepro` call.
+
+    Returns
+    -------
+    the printed text (str)
+    """
+
+    n_chunks = count_rgi_chunks(rgidf, chunk_size=chunk_size)
+    if n_chunks == 0:
+        raise InvalidParamsError('No glaciers to chunk!')
+    if command is None:
+        command = 'oggm_prepro <your options>'
+
+    out = ('#SBATCH --array=0-{}\n'
+           '{} \\\n'
+           '    --chunk-idx $SLURM_ARRAY_TASK_ID \\\n'
+           '    --chunk-size {}'
+           ''.format(n_chunks - 1, command, chunk_size))
+    print(out)
+    return out
+
+
 def _isdir(path):
     """os.path.isdir, returning False instead of an error on non-string/path-like objects
     """
@@ -768,6 +908,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                                        ref_table=None,
                                        ignore_missing=True,
                                        fs=0, a_bounds=(0.1, 10),
+                                       glen_a_factor=None,
                                        apply_fs_on_mismatch=False,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
@@ -776,6 +917,11 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
     a valid inverted volume.
+
+    The A factor it converged to (and the `fs` that goes with it) are
+    available on the returned dataframe as ``df.attrs['glen_a_factor']`` and
+    ``df.attrs['fs']``, so that they can be stored and given back with
+    `glen_a_factor` later on.
 
     Parameters
     ----------
@@ -830,6 +976,14 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         invert with sliding (default: no)
     a_bounds: tuple
         factor to apply to default A
+    glen_a_factor : float
+        set this to skip the calibration altogether and invert all glaciers
+        with the given A factor (relative to the `inversion_glen_a` setting)
+        and the given `fs`. This is useful to reproduce a previous
+        calibration, for example when the glaciers of a region are processed
+        in several independent jobs: calibrate once, then pass the resulting
+        factor here. Everything else (including what is written to the
+        observations file) is unchanged.
     apply_fs_on_mismatch: false
         on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
         Oerlemans) and try to optimize A again.
@@ -873,7 +1027,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         # A per-glacier reference table is only needed when matching individual
         # volumes. When matching a single total volume (ref_volume_m3) and
         # no table was explicitly provided, we skip loading/downloading it.
-        if ref_volume_m3 is not None and ref_table is None:
+        if (glen_a_factor is not None and ref_volume_m3 is None and
+                ref_table is None):
+            # We are not calibrating anything, so no reference is needed
+            df = pd.DataFrame(index=rids_use)
+            ref_col = None
+        elif ref_volume_m3 is not None and ref_table is None:
             df = pd.DataFrame(index=rids_use)
             ref_col = None
         elif ref_volume_m3 is None and ref_table is not None:
@@ -935,6 +1094,23 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
             return odf.dropna(subset=[ref_col, 'oggm'])
         else:
             return odf
+
+    if glen_a_factor is not None:
+        # No calibration: the caller already knows which A to use
+        log.workflow('calibrate_inversion_from_ref_table: skipping the '
+                     'calibration, using the given Glen A factor {} with '
+                     'fs={}.'.format(glen_a_factor, fs))
+        out_fac = glen_a_factor
+        return _apply_inversion_a_factor(
+            gdirs, df, out_fac, def_a, fs,
+            settings_filesuffix=settings_filesuffix,
+            observations_filesuffix=observations_filesuffix,
+            input_filesuffix=input_filesuffix,
+            output_filesuffix=output_filesuffix,
+            ref_volume_year=ref_volume_year,
+            rids=rids, rids_use=rids_use,
+            filter_inversion_output=filter_inversion_output,
+            add_to_log_file=add_to_log_file)
 
     def to_minimize(x):
         log.workflow('Reference volume optimisation with '
@@ -999,7 +1175,30 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         log.workflow('We use A factor = {} and fs = {} and move on.'
                      ''.format(out_fac, fs))
 
-    # Compute the final volume with the correct A for all gdirs
+    return _apply_inversion_a_factor(
+        gdirs, df, out_fac, def_a, fs,
+        settings_filesuffix=settings_filesuffix,
+        observations_filesuffix=observations_filesuffix,
+        input_filesuffix=input_filesuffix,
+        output_filesuffix=output_filesuffix,
+        ref_volume_year=ref_volume_year,
+        rids=rids, rids_use=rids_use,
+        filter_inversion_output=filter_inversion_output,
+        add_to_log_file=add_to_log_file)
+
+
+def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, *,
+                              settings_filesuffix, observations_filesuffix,
+                              input_filesuffix, output_filesuffix,
+                              ref_volume_year, rids, rids_use,
+                              filter_inversion_output, add_to_log_file):
+    """Compute the final volume with the chosen A for all gdirs.
+
+    The last step of `calibrate_inversion_from_ref_table`, shared by the
+    calibrated and the `glen_a_factor` code paths so that both write exactly
+    the same thing to the glacier directories.
+    """
+
     if len(rids_use) != len(rids):
         df = pd.DataFrame(index=rids)
     inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
@@ -1028,6 +1227,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
             current_vol = {'value': vol_single}
         current_vol['year'] = year_single
         gdir.observations['ref_volume_m3'] = current_vol
+
+    # Tell the caller which A was used, so that it can be stored and given
+    # back with `glen_a_factor` later on
+    df.attrs['glen_a_factor'] = out_fac
+    df.attrs['glen_a'] = out_fac * def_a
+    df.attrs['fs'] = fs
 
     return df
 

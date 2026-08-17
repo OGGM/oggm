@@ -1,5 +1,6 @@
 import unittest
 import glob
+import json
 import logging
 import os
 import shutil
@@ -1719,7 +1720,7 @@ class TestPreproCLI:
         assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
-        assert kwargs['start_level'] == 2
+        assert kwargs['start_level'] == '2'
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
         assert kwargs['ref_area_yr'] == 2000
@@ -1747,6 +1748,45 @@ class TestPreproCLI:
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
+        # The chunking and half level arguments
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '13',
+                                           '--map-border', '160',
+                                           '--start-level', '2',
+                                           '--start-base-url', 'http://foo',
+                                           '--max-level', '3a',
+                                           '--chunk-idx', '7',
+                                           '--chunk-size', '100',
+                                           ])
+        assert kwargs['start_level'] == '2'
+        assert kwargs['max_level'] == '3a'
+        assert kwargs['chunk_idx'] == 7
+        assert kwargs['chunk_size'] == 100
+        assert kwargs['start_from_dir'] is None
+        assert kwargs['glen_a_factor'] is None
+        assert kwargs['inversion_fs'] == 0
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '13',
+                                           '--map-border', '160',
+                                           '--start-level', '4a',
+                                           '--start-from-dir', 'some/dir',
+                                           '--inversion-glen-a-factor', '1.37',
+                                           '--inversion-fs', '5.7e-20',
+                                           ])
+        assert kwargs['start_level'] == '4a'
+        assert kwargs['max_level'] == '5'
+        assert kwargs['start_from_dir'] == 'some/dir'
+        assert kwargs['chunk_idx'] is None
+        assert kwargs['chunk_size'] == 1000
+        assert kwargs['glen_a_factor'] == 1.37
+        assert kwargs['inversion_fs'] == 5.7e-20
+
+        # Levels and chunk sizes are validated by argparse
+        for bad in [['--max-level', '6'], ['--max-level', '3b'],
+                    ['--start-level', '5'], ['--chunk-size', '250']]:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160'] + bad)
+
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
@@ -1766,7 +1806,7 @@ class TestPreproCLI:
         assert not kwargs['is_test']
         assert not kwargs['disable_mp']
         assert not kwargs['skip_inversion']
-        assert kwargs['max_level'] == 5
+        assert kwargs['max_level'] == '5'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -1954,6 +1994,94 @@ class TestPreproCLI:
             assert kwargs['rgi_reg'] == '12'
             assert kwargs['border'] == 120
 
+    def test_chunk_selection(self):
+
+        _, rgidf = _read_shp()
+
+        # Chunks are blocks of the RGI id space, not slices of the sorted
+        # list of glaciers, so that they line up with the tar bundles
+        for chunk_size in [100, 1000]:
+            n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+            seen = []
+            for i in range(n_chunks):
+                sub = workflow.get_rgi_chunk(rgidf, i, chunk_size=chunk_size)
+                # A chunk is exactly one block of ids
+                for rid in sub.RGIId:
+                    assert int(rid[-5:]) // chunk_size == i
+                seen.extend(sub.RGIId)
+            # Disjoint and complete
+            assert sorted(seen) == sorted(rgidf.RGIId)
+            # And nothing beyond the last one
+            assert len(workflow.get_rgi_chunk(rgidf, n_chunks,
+                                              chunk_size=chunk_size)) == 0
+
+        # Some chunks are empty (the RGI ids have gaps) - this is normal
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=100)
+        sizes = [len(workflow.get_rgi_chunk(rgidf, i, chunk_size=100))
+                 for i in range(n_chunks)]
+        assert 0 in sizes
+        assert sum(sizes) == len(rgidf)
+
+        # Lists of ids work as well as dataframes
+        ids = list(rgidf.RGIId)
+        assert (workflow.get_rgi_chunk(ids, 6, chunk_size=100) ==
+                list(workflow.get_rgi_chunk(rgidf, 6, chunk_size=100).RGIId))
+
+        # RGI7 ids are sliced the same way
+        df7 = pd.DataFrame({'rgi_id': ['RGI2000-v7.0-G-13-01234',
+                                       'RGI2000-v7.0-G-13-00001']})
+        assert workflow.count_rgi_chunks(df7, chunk_size=1000) == 2
+        assert list(workflow.get_rgi_chunk(df7, 1, chunk_size=1000).rgi_id) == \
+            ['RGI2000-v7.0-G-13-01234']
+
+        # Only the two tar bundle sizes are allowed
+        for bad in [10, 250, 5000]:
+            with pytest.raises(InvalidParamsError):
+                workflow.count_rgi_chunks(rgidf, chunk_size=bad)
+        with pytest.raises(InvalidParamsError):
+            workflow.get_rgi_chunk(rgidf, -1, chunk_size=100)
+
+        # The slurm helper says how to wire it up
+        out = workflow.print_slurm_array(rgidf, chunk_size=100)
+        assert f'--array=0-{n_chunks - 1}' in out
+        assert '$SLURM_ARRAY_TASK_ID' in out
+
+    def test_rgi_chunks_table(self):
+
+        from oggm.cli import prepro_chunks
+
+        df = prepro_chunks.get_rgi_chunks_table()
+
+        # All versions, all regions, both chunk sizes
+        assert set(df.rgi_version) == set(prepro_chunks.RGI_VERSIONS)
+        assert set(df.chunk_size) == set(prepro_chunks.CHUNK_SIZES)
+        for v in prepro_chunks.RGI_VERSIONS:
+            for cs in prepro_chunks.CHUNK_SIZES:
+                sel = df.loc[(df.rgi_version == v) & (df.chunk_size == cs)]
+                assert len(sel) == 19
+        # A chunk can hold at most chunk_size glaciers
+        assert np.all(df.n_chunks * df.chunk_size >= df.n_glaciers)
+        assert np.all(df.n_chunks > 0)
+
+        # The lookup CLI reads it
+        assert prepro_chunks.run_prepro_chunks('13', chunk_size=1000) == int(
+            df.loc[(df.rgi_version == '62') & (df.rgi_reg == '13') &
+                   (df.chunk_size == 1000)].n_chunks.iloc[0])
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize('rgi_version', ['62', '70G', '70C'])
+    def test_rgi_chunks_table_is_current(self, rgi_version):
+        # The table is derived from the RGI files: make sure it has not
+        # gone stale. Needs the RGI files, hence slow.
+        from oggm.cli import prepro_chunks
+
+        cfg.initialize_minimal()
+        new = prepro_chunks.compute_rgi_chunks_table(
+            rgi_versions=[rgi_version])
+        old = prepro_chunks.get_rgi_chunks_table()
+        old = old.loc[old.rgi_version == rgi_version].reset_index(drop=True)
+        pd.testing.assert_frame_equal(new, old)
+
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
                                                 'SfcTypeTIModel'])
@@ -2115,6 +2243,127 @@ class TestPreproCLI:
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
+
+    @pytest.mark.slow
+    def test_full_run_chunked(self):
+        # The point of chunking: running the four stages of a chunked run
+        # has to give exactly what a single whole-region run gives.
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        chunk_size = 100
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+        # The demo glaciers are spread over a few id blocks, some empty
+        assert n_chunks > 2
+
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      rgi_file=rgidf, intersects_file=inter,
+                      test_topofile=topof, disable_mp=True,
+                      elev_bands=True,
+                      inversion_volume_dataset='consensus',
+                      temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
+                      continue_on_error=False,
+                      override_params={})
+
+        def wd(name):
+            out = os.path.join(self.testdir, name)
+            utils.mkdir(out)
+            return out
+
+        # The reference: one job for the whole region, as before
+        ref_dir = os.path.join(self.testdir, 'ref_out')
+        np.random.seed(0)
+        run_prepro_levels(output_folder=ref_dir, working_dir=wd('ref_wd'),
+                          max_level='5', **common)
+
+        # And now the four stages. L2 comes from the reference run here; on a
+        # cluster it comes from the published L2 base url.
+        out_dir = os.path.join(self.testdir, 'chunked_out')
+        scratch = os.path.join(self.testdir, 'scratch')
+
+        # 1 - the chunkable part of L3
+        for i in range(n_chunks):
+            run_prepro_levels(output_folder=scratch,
+                              working_dir=wd(f'wd_s1_{i}'),
+                              start_level='2', start_from_dir=ref_dir,
+                              max_level='3a',
+                              chunk_idx=i, chunk_size=chunk_size, **common)
+
+        # 2 - Glen A and the L3 summaries, whole region
+        run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s2'),
+                          start_level='3a', start_from_dir=scratch,
+                          max_level='3', **common)
+
+        # 3 - the runs
+        for i in range(n_chunks):
+            run_prepro_levels(output_folder=out_dir,
+                              working_dir=wd(f'wd_s3_{i}'),
+                              start_level='3', start_from_dir=out_dir,
+                              max_level='4a',
+                              chunk_idx=i, chunk_size=chunk_size, **common)
+
+        # 4 - the L4 summaries and L5, whole region
+        run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s4'),
+                          start_level='4a', start_from_dir=out_dir,
+                          max_level='5', **common)
+
+        def summary(root, lev, name):
+            return os.path.join(root, 'RGI61', 'b_020', lev, 'summary', name)
+
+        for lev, name in [('L3', 'glacier_statistics_11.csv'),
+                          ('L3', 'climate_statistics_11.csv'),
+                          ('L3', 'fixed_geometry_mass_balance_11.csv'),
+                          ('L4', 'glacier_statistics_11.csv'),
+                          ('L5', 'glacier_statistics_11.csv')]:
+            ref = pd.read_csv(summary(ref_dir, lev, name), index_col=0)
+            new = pd.read_csv(summary(out_dir, lev, name), index_col=0)
+            pd.testing.assert_frame_equal(ref.sort_index(), new.sort_index())
+
+        for lev, name in [('L4', 'historical_run_output_11.nc'),
+                          ('L4', 'historical_run_output_extended_11.nc'),
+                          ('L5', 'historical_run_output_11.nc')]:
+            with xr.open_dataset(summary(ref_dir, lev, name)) as ref, \
+                    xr.open_dataset(summary(out_dir, lev, name)) as new:
+                ref = ref.sortby('rgi_id')
+                new = new.sortby('rgi_id')
+                assert_array_equal(ref.rgi_id, new.rgi_id)
+                assert_allclose(ref.volume, new.volume)
+
+        # The tar files of the chunks add up to what one job would write
+        for lev in ['L3', 'L4', 'L5']:
+            ref = sorted(os.listdir(os.path.join(ref_dir, 'RGI61', 'b_020',
+                                                 lev, 'RGI60-11')))
+            new = sorted(os.listdir(os.path.join(out_dir, 'RGI61', 'b_020',
+                                                 lev, 'RGI60-11')))
+            assert ref == new
+            assert len(new) > 1
+
+        # The whole-region stage wrote down which Glen A it converged to
+        with open(summary(out_dir, 'L3',
+                          'inversion_glen_a_11.json')) as f:
+            glen_a = json.load(f)
+        assert glen_a['rgi_reg'] == '11'
+        assert glen_a['ref_table'] == 'consensus'
+        assert glen_a['n_glaciers'] == len(rgidf)
+        assert glen_a['glen_a_factor'] > 0
+        np.testing.assert_allclose(glen_a['glen_a'],
+                                   glen_a['glen_a_factor'] *
+                                   cfg.PARAMS['inversion_glen_a'])
+
+        # Given back, it reproduces the inversion without calibrating again
+        redo_dir = os.path.join(self.testdir, 'redo_out')
+        run_prepro_levels(output_folder=redo_dir, working_dir=wd('wd_redo'),
+                          start_level='3a', start_from_dir=scratch,
+                          max_level='3',
+                          glen_a_factor=glen_a['glen_a_factor'],
+                          inversion_fs=glen_a['fs'], **common)
+        ref = pd.read_csv(summary(ref_dir, 'L3', 'glacier_statistics_11.csv'),
+                          index_col=0).sort_index()
+        new = pd.read_csv(summary(redo_dir, 'L3', 'glacier_statistics_11.csv'),
+                          index_col=0).sort_index()
+        assert_allclose(ref['inv_volume_km3'], new['inv_volume_km3'])
 
     @pytest.mark.slow
     def test_distributed_thickness_and_geotiff_export(self):

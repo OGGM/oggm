@@ -9,6 +9,29 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- The preprocessing can now be run in chunks, so that a big RGI region does not
+  have to fit into a single cluster job. ``oggm_prepro`` gained
+  ``--chunk-idx`` / ``--chunk-size`` (chunks are blocks of the RGI id space, of
+  100 or 1000 glaciers, chosen so that they line up with the glacier directory
+  tar bundles), and two half levels ``3a`` and ``4a`` for ``--start-level`` /
+  ``--max-level`` which stop where the work stops being per-glacier: ``3a`` is
+  L3 without the Glen A calibration, the inversion and the summary files,
+  ``4a`` is L4 without the summary files. Stages are chained through glacier
+  directory tar files on disk with the new ``--start-from-dir``, the local
+  equivalent of ``--start-base-url``. Nothing needs merging afterwards: the
+  whole-region stages write the summary files exactly as a single job would.
+  New helpers :py:func:`workflow.get_rgi_chunk`,
+  :py:func:`workflow.count_rgi_chunks` and
+  :py:func:`workflow.print_slurm_array` make the same chunking available to
+  ordinary runs, and the new ``oggm_prepro_chunks`` command tells you how many
+  chunks a region has. See the documentation for a complete SLURM example.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``calibrate_inversion_from_ref_table`` gained a ``glen_a_factor`` keyword to
+  skip the calibration and invert with a known A factor instead. The factor a
+  run converged to is reported in ``df.attrs`` and written by
+  ``run_prepro_levels`` to ``L3/summary/inversion_glen_a_{rgi_reg}.json``, so
+  that it can be given back later with ``--inversion-glen-a-factor``.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
   (:pull:`1800`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
