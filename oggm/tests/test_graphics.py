@@ -208,7 +208,7 @@ def test_modelsection():
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
 
     fig = plt.figure(figsize=(12, 6))
@@ -223,7 +223,7 @@ def test_modelsection_withtrib():
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
 
     fig = plt.figure(figsize=(14, 10))
@@ -237,7 +237,7 @@ def test_modeloutput_map():
 
     gdir = init_hef()
     flowline.init_present_time_glacier(gdir)
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
 
     fig, ax = plt.subplots()
@@ -282,7 +282,7 @@ def test_multiple_models():
     models = []
     for gdir in gdirs:
         flowline.init_present_time_glacier(gdir)
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         models.append(flowline.FlowlineModel(fls))
 
     fig, ax = plt.subplots()
@@ -335,7 +335,7 @@ def test_model_section_calving():
     workflow.inversion_tasks(utils.tolist(gdir))
     flowline.init_present_time_glacier(gdir)
 
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
     mb_mod = massbalance.LinearMassBalance(1600)
     model = flowline.FluxBasedModel(fls, mb_model=mb_mod, y0=0,
                                     inplace=True,
@@ -394,7 +394,7 @@ def test_chhota_shigri():
     models = []
     for gdir in gdirs:
         flowline.init_present_time_glacier(gdir)
-        fls = gdir.read_pickle('model_flowlines')
+        fls = gdir.read_store('model_flowlines')
         models.append(flowline.FlowlineModel(fls))
 
     fig, ax = plt.subplots()
@@ -482,9 +482,9 @@ def test_coxe():
 
     flowline.init_present_time_glacier(gdir)
 
-    fls = gdir.read_pickle('model_flowlines')
+    fls = gdir.read_store('model_flowlines')
 
-    p = gdir.read_pickle('linear_mb_params')
+    p = gdir.read_store('linear_mb_params')
     mb_mod = massbalance.LinearMassBalance(ela_h=p['ela_h'],
                                            grad=p['grad'])
     mb_mod.temp_bias = -0.3
