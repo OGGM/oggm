@@ -2095,20 +2095,6 @@ class TestPreproCLI:
                    (df.chunk_size == 1000)].n_chunks.iloc[0])
 
     @pytest.mark.slow
-    @pytest.mark.parametrize('rgi_version', ['62', '70G', '70C'])
-    def test_rgi_chunks_table_is_current(self, rgi_version):
-        # The table is derived from the RGI files: make sure it has not
-        # gone stale. Needs the RGI files, hence slow.
-        from oggm.cli import prepro_chunks
-
-        cfg.initialize_minimal()
-        new = prepro_chunks.compute_rgi_chunks_table(
-            rgi_versions=[rgi_version])
-        old = prepro_chunks.get_rgi_chunks_table()
-        old = old.loc[old.rgi_version == rgi_version].reset_index(drop=True)
-        pd.testing.assert_frame_equal(new, old)
-
-    @pytest.mark.slow
     @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
                                                 'SfcTypeTIModel'])
     def test_full_run_defaults(self, mb_model_class):

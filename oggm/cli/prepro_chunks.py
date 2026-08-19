@@ -17,9 +17,19 @@ of the region rather than something you choose. See
 that some chunks can be small or even empty - an empty chunk job simply logs
 that there is nothing to do and exits.
 
-The counts are shipped with OGGM in `oggm/data/rgi_chunks.csv`. Use
-`--recompute` to read the RGI files and work them out again instead, which is
-what the test suite does to make sure the table has not gone stale.
+The counts are shipped with OGGM in `oggm/data/rgi_chunks.csv`. They follow
+from the RGI ids, so they only ever change when a new RGI version is added.
+Rebuild the table with `--recompute`, which reads the RGI files themselves::
+
+    $ python -c "from oggm import cfg; cfg.initialize_minimal(); \
+        from oggm.cli.prepro_chunks import compute_rgi_chunks_table as c; \
+        c().to_csv('oggm/data/rgi_chunks.csv', index=False)"
+
+or, for one version and chunk size, `oggm_prepro_chunks --recompute --csv`.
+
+This is not covered by the test suite: it needs the full RGI region files,
+which are far too large to download in CI (and are blocked by the download
+allowlist the tests run with). Rerun it by hand when the RGI files change.
 """
 
 # Standard libraries
@@ -109,7 +119,7 @@ def compute_rgi_chunks_table(rgi_versions=None, chunk_sizes=None):
 
 
 def run_prepro_chunks(rgi_reg=None, rgi_version='62', chunk_size=1000,
-                      recompute=False, verbose=False):
+                      recompute=False, verbose=False, to_csv=False):
     """How many chunks does this RGI region fall into?
 
     Parameters
@@ -125,6 +135,9 @@ def run_prepro_chunks(rgi_reg=None, rgi_version='62', chunk_size=1000,
         the table shipped with OGGM
     verbose : bool
         print the whole table instead of only the number of chunks
+    to_csv : bool
+        print the table as csv, so that it can be redirected into
+        `oggm/data/rgi_chunks.csv` to rebuild it
 
     Returns
     -------
@@ -152,6 +165,10 @@ def run_prepro_chunks(rgi_reg=None, rgi_version='62', chunk_size=1000,
             raise InvalidParamsError(
                 f'No chunk count for RGI version {rgi_version}, region '
                 f'{rgi_reg}, chunk size {chunk_size}. Try --recompute.')
+
+    if to_csv:
+        print(df.to_csv(index=False), end='')
+        return df
 
     if verbose or rgi_reg is None:
         print(df.to_string(index=False))
@@ -184,6 +201,9 @@ def parse_args(args):
     parser.add_argument('--verbose', action='store_true',
                         help='print the whole table instead of only the '
                              'number of chunks.')
+    parser.add_argument('--csv', action='store_true',
+                        help='print the table as csv, to rebuild '
+                             'oggm/data/rgi_chunks.csv.')
 
     args = parser.parse_args(args)
 
@@ -197,7 +217,7 @@ def parse_args(args):
 
     return dict(rgi_reg=rgi_reg, rgi_version=args.rgi_version,
                 chunk_size=args.chunk_size, recompute=args.recompute,
-                verbose=args.verbose)
+                verbose=args.verbose, to_csv=args.csv)
 
 
 def main():
