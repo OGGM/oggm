@@ -2265,10 +2265,26 @@ class TestPreproCLI:
 
         inter, rgidf = _read_shp()
         topof = utils.get_demo_file('srtm_oetztal.tif')
+
+        # Four glaciers spread over two id blocks: enough to have real chunks
+        # (and an empty one below them), few enough to keep this at the same
+        # cost as the other full-run tests. Hef (00897) is in there so the
+        # inversion has something well behaved to calibrate on.
+        test_ids = ['RGI60-11.00887', 'RGI60-11.00897',   # block 008
+                    'RGI60-11.00929', 'RGI60-11.00945']   # block 009
+        rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+        assert len(rgidf) == 4
+
         chunk_size = 100
         n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
-        # The demo glaciers are spread over a few id blocks, some empty
-        assert n_chunks > 2
+        # Only run the blocks which hold glaciers: the empty ones below them
+        # would just be no-op prepro calls, and the empty-chunk behaviour is
+        # asserted explicitly further down.
+        chunks = [i for i in range(n_chunks)
+                  if len(workflow.get_rgi_chunk(rgidf, i,
+                                                chunk_size=chunk_size))]
+        # two chunks is the minimum that actually splits and rejoins
+        assert chunks == [8, 9]
 
         common = dict(rgi_version='61', rgi_reg='11', border=20,
                       rgi_file=rgidf, intersects_file=inter,
@@ -2296,7 +2312,7 @@ class TestPreproCLI:
         scratch = os.path.join(self.testdir, 'scratch')
 
         # 1 - the chunkable part of L3
-        for i in range(n_chunks):
+        for i in chunks:
             run_prepro_levels(output_folder=scratch,
                               working_dir=wd(f'wd_s1_{i}'),
                               start_level='2', start_from_dir=ref_dir,
@@ -2309,7 +2325,7 @@ class TestPreproCLI:
                           max_level='3', **common)
 
         # 3 - the runs
-        for i in range(n_chunks):
+        for i in chunks:
             run_prepro_levels(output_folder=out_dir,
                               working_dir=wd(f'wd_s3_{i}'),
                               start_level='3', start_from_dir=out_dir,
@@ -2351,6 +2367,18 @@ class TestPreproCLI:
                                                  lev, 'RGI60-11')))
             assert ref == new
             assert len(new) > 1
+
+        # An empty chunk is a normal thing (the RGI ids have gaps) and has
+        # to return quietly: on a cluster it is one task of an array job, and
+        # an error would take the dependent jobs down with it.
+        empty = [i for i in range(n_chunks) if i not in chunks][0]
+        run_prepro_levels(output_folder=os.path.join(self.testdir, 'empty'),
+                          working_dir=wd('wd_empty'),
+                          start_level='3', start_from_dir=out_dir,
+                          max_level='4a',
+                          chunk_idx=empty, chunk_size=chunk_size, **common)
+        assert not os.path.exists(os.path.join(self.testdir, 'empty', 'RGI61',
+                                               'b_020', 'L4'))
 
         # The whole-region stage wrote down which Glen A it converged to
         with open(summary(out_dir, 'L3',
