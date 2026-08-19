@@ -5745,13 +5745,13 @@ class TestDynamicSpinupPeriods:
         assert self.start_years(target_yr=2011, ys=2005,
                                 spinup_start_yr_max=2000) == [2000]
 
-    def test_extra_years_are_tried_before_shortening(self):
+    def test_extra_years_are_tried_last(self):
         # extra years always start before the requested start year, shortest
-        # extension first, and only afterwards we try shorter spinups
+        # extension first, and only after all shorter spinups were tried
         assert self.start_years(target_yr=2011, ys=1975,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[20, 10]) == \
-            [1975, 1965, 1955, 1987.5, 2000]
+            [1975, 1987.5, 2000, 1965, 1955]
 
         # no shorter spinup periods if not allowed
         assert self.start_years(target_yr=2011, ys=1975,
@@ -5773,7 +5773,7 @@ class TestDynamicSpinupPeriods:
         assert self.start_years(target_yr=2011, ys=1975, yr_min=1950,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[10, 20, 30, 40]) == \
-            [1975, 1965, 1955, 1950, 1987.5, 2000]
+            [1975, 1987.5, 2000, 1965, 1955, 1950]
 
         # the requested start year itself is clipped as well, and then there is
         # no room left for the extra years to try
@@ -5797,17 +5797,19 @@ class TestDynamicSpinupPeriods:
 
     def test_period_first_try(self):
         # the period which was successful in the previous melt_f iteration is
-        # tried first, and not tried twice
+        # tried after the shorter periods (as before), and not tried twice
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10],
+                                spinup_period_first_try=2011 - 1990) == \
+            [1975, 1987.5, 2000, 1990, 1965]
+
+        # if it is already tried anyway it does not show up twice
         assert self.start_years(target_yr=2011, ys=1975,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[10],
                                 spinup_period_first_try=2011 - 1965) == \
-            [1965, 1975, 1987.5, 2000]
-
-        assert self.start_years(target_yr=2011, ys=1975,
-                                spinup_start_yr_max=2000,
-                                spinup_period_first_try=2011 - 2000) == \
-            [2000, 1975, 1987.5]
+            [1975, 1987.5, 2000, 1965]
 
         # but a shorter one is ignored if shorter spinups are not allowed
         assert self.start_years(target_yr=2011, ys=1975,

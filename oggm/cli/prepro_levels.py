@@ -267,18 +267,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
     dynamic_spinup_extra_years_to_try : list or None
-        If the spinup starting at dynamic_spinup_start_year was not successful,
-        you can provide here a list of years to try to start the spinup
-        *before* dynamic_spinup_start_year (e.g. [10, 20] means the start years
+        As a last resort, if all other spinup periods failed, you can provide
+        here a list of years to try to start the spinup *before*
+        dynamic_spinup_start_year (e.g. [10, 20] means the start years
         'dynamic_spinup_start_year - 10' and 'dynamic_spinup_start_year - 20'
         are tried, in this order, so the longest spinup is tried last). Start
         years before the start of the climate data are clipped to it.
         Default is None
     dynamic_spinup_allow_shorter : bool
-        If True, and the spinup starting at dynamic_spinup_start_year (and all
-        dynamic_spinup_extra_years_to_try) was not successful, shorter spinup
-        periods are tried (in the end starting at the start year of the
-        geodetic mass balance period). If False, the dynamic spinup never
+        If True, and the spinup starting at dynamic_spinup_start_year was not
+        successful, shorter spinup periods are tried first (down to the start
+        year of the geodetic mass balance period), before the
+        dynamic_spinup_extra_years_to_try. If False, the dynamic spinup never
         starts after dynamic_spinup_start_year.
         Default is True
     continue_on_error : bool
@@ -1314,26 +1314,24 @@ def parse_args(args):
                         default=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                         help="if --dynamic-spinup is set, define additional "
                              "years to start the spinup BEFORE "
-                             "--dynamic-spinup-start-year, if the spinup "
-                             "starting at --dynamic-spinup-start-year is not "
-                             "successful (e.g. '10 20' first tries to start 10 "
-                             "years before --dynamic-spinup-start-year, and "
-                             "then 20 years before, so the longest spinup is "
-                             "tried last). Start years before the start of the "
-                             "climate data are clipped to it. If you do not "
-                             "want to use it set "
-                             "'--dynamic-spinup-extra-years-to-try none' in "
-                             "the terminal.")
+                             "--dynamic-spinup-start-year, tried as a last "
+                             "resort if all other spinup periods failed (e.g. "
+                             "'10 20' first tries to start 10 years before "
+                             "--dynamic-spinup-start-year, and then 20 years "
+                             "before, so the longest spinup is tried last). "
+                             "Start years before the start of the climate data "
+                             "are clipped to it. If you do not want to use it "
+                             "set '--dynamic-spinup-extra-years-to-try none' "
+                             "in the terminal.")
     parser.add_argument('--dynamic-spinup-no-shorter-periods',
                         action='store_true',
                         help="if --dynamic-spinup is set, prevent the dynamic "
                              "spinup from starting AFTER "
                              "--dynamic-spinup-start-year. Per default, if the "
-                             "spinup at --dynamic-spinup-start-year (and all "
-                             "--dynamic-spinup-extra-years-to-try) failed, "
-                             "shorter spinup periods are tried as a last "
-                             "resort (down to the start year of the geodetic "
-                             "mass balance period).")
+                             "spinup at --dynamic-spinup-start-year failed, "
+                             "shorter spinup periods are tried first (down to "
+                             "the start year of the geodetic mass balance "
+                             "period).")
     parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')

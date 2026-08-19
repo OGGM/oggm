@@ -38,20 +38,20 @@ def _get_spinup_periods_to_run(target_yr, spinup_period_initial,
     The periods are tried one after the other until one is successful (see
     run_dynamic_spinup). The resulting order is:
 
-    1. spinup_period_first_try, if provided (the period which was successful in
-       a previous iteration of the dynamic melt_f calibration),
-    2. the period defined by the requested start year (spinup_period_initial,
+    1. the period defined by the requested start year (spinup_period_initial,
        but never shorter than min_spinup_period),
-    3. one period per spinup_extra_years_to_try, all starting *before* the
-       requested start year, shortest extension first (so the longest spinup is
-       tried last),
-    4. only if allow_shorter_spinup: shorter periods, down to
+    2. only if allow_shorter_spinup: shorter periods, down to
        min_spinup_period (which itself is defined by spinup_start_yr_max, if
-       provided).
+       provided),
+    3. spinup_period_first_try, if provided (the period which was successful in
+       a previous iteration of the dynamic melt_f calibration),
+    4. one period per spinup_extra_years_to_try, all starting *before* the
+       requested start year, shortest extension first (so the longest spinup is
+       tried last).
 
-    All periods are clipped to the length of the available climate data
-    (target_yr - yr_min), and periods which are not longer than the previous
-    one (e.g. after clipping) are dropped.
+    The extra periods are clipped to the length of the available climate data
+    (target_yr - yr_min), and those which do not result in a start year earlier
+    than the requested one (e.g. after clipping) are dropped.
 
     Parameters
     ----------
@@ -71,7 +71,7 @@ def _get_spinup_periods_to_run(target_yr, spinup_period_initial,
     allow_shorter_spinup : bool
         if False, no period shorter than the initial one is tried
     spinup_period_first_try : float or None
-        a spinup period which is tried first
+        a spinup period which is tried before the extra years to try
 
     Returns
     -------
@@ -87,26 +87,30 @@ def _get_spinup_periods_to_run(target_yr, spinup_period_initial,
 
     periods_to_run = [period_initial]
 
-    # start earlier than the requested start year, shortest extension first
-    if spinup_extra_years_to_try is not None:
-        # the extra years are counted from the requested start year, even if
-        # the actual first try starts earlier (due to min_spinup_period)
-        for extra_yr in sorted(spinup_extra_years_to_try):
-            period = min(spinup_period_initial + extra_yr, max_spinup_period)
-            # only keep start years which are earlier than all previous ones
-            if period > periods_to_run[-1]:
-                periods_to_run.append(period)
-
-    # and only in the end we try shorter spinup periods
+    # if the initial period fails we first try shorter spinup periods
     if allow_shorter_spinup and period_initial > min_spinup_period:
         periods_to_run.extend([(period_initial + min_spinup_period) / 2,
                                min_spinup_period])
 
+    # the period which was successful in a previous iteration
     if spinup_period_first_try is not None:
         if (min_spinup_period <= spinup_period_first_try <= max_spinup_period
                 and (allow_shorter_spinup or
                      spinup_period_first_try >= period_initial)):
-            periods_to_run.insert(0, spinup_period_first_try)
+            periods_to_run.append(spinup_period_first_try)
+
+    # and only in the end we start earlier than the requested start year,
+    # shortest extension first (so the longest spinup is tried last)
+    if spinup_extra_years_to_try is not None:
+        # the extra years are counted from the requested start year, even if
+        # the first try starts earlier (due to min_spinup_period)
+        longest_period = period_initial
+        for extra_yr in sorted(spinup_extra_years_to_try):
+            period = min(spinup_period_initial + extra_yr, max_spinup_period)
+            # only keep start years which are earlier than all previous ones
+            if period > longest_period:
+                periods_to_run.append(period)
+                longest_period = period
 
     # remove duplicates, keeping the order
     return list(dict.fromkeys(periods_to_run))
@@ -233,20 +237,20 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         target_yr - spinup_start_yr_max > min_spinup_period.
         Default is None
     spinup_extra_years_to_try : list or None
-        If the spinup starting at the requested start year (defined by
-        spinup_start_yr or spinup_period_initial) was not successful, you can
-        provide here a list of years to try to start the spinup *before* the
-        requested start year (e.g. [10, 20] means the start years
-        'requested start year - 10' and 'requested start year - 20' are tried,
-        in this order, so the longest spinup is tried last). Start years before
-        the start of the climate data are clipped to it, and start years which
-        are not earlier than an already tried one are ignored.
+        As a last resort, if all other spinup periods failed, you can provide
+        here a list of years to try to start the spinup *before* the requested
+        start year (defined by spinup_start_yr or spinup_period_initial). E.g.
+        [10, 20] means the start years 'requested start year - 10' and
+        'requested start year - 20' are tried, in this order, so the longest
+        spinup is tried last. Start years before the start of the climate data
+        are clipped to it, and start years which are not earlier than an
+        already tried one are ignored.
         Default is None
     allow_shorter_spinup : bool
-        If True, and the spinup starting at the requested start year (and all
-        spinup_extra_years_to_try) was not successful, shorter spinup periods
-        are tried (in the end down to min_spinup_period, respectively
-        spinup_start_yr_max). If False, the spinup never starts after the
+        If True, and the spinup starting at the requested start year was not
+        successful, shorter spinup periods are tried first (down to
+        min_spinup_period, respectively spinup_start_yr_max), before the
+        spinup_extra_years_to_try. If False, the spinup never starts after the
         requested start year. Note that the spinup can still start before the
         requested start year (e.g. if min_spinup_period or
         spinup_start_yr_max force a longer period).
@@ -1369,17 +1373,17 @@ def dynamic_melt_f_run_with_dynamic_spinup(
         model run always starts from ys.
         Default is True
     spinup_extra_years_to_try : list or None
-        If the spinup starting at ys was not successful, you can provide here a
-        list of years to try to start the spinup before ys (e.g. [10, 20] means
-        the start years 'ys - 10' and 'ys - 20' are tried, in this order, so
-        the longest spinup is tried last). For more details see
+        As a last resort, if all other spinup periods failed, you can provide
+        here a list of years to try to start the spinup before ys (e.g.
+        [10, 20] means the start years 'ys - 10' and 'ys - 20' are tried, in
+        this order, so the longest spinup is tried last). For more details see
         run_dynamic_spinup.
         Default is None
     allow_shorter_spinup : bool
-        If True, and the spinup starting at ys (and all
-        spinup_extra_years_to_try) was not successful, shorter spinup periods
-        are tried (in the end down to min_spinup_period, respectively
-        spinup_start_yr_max). If False, the spinup never starts after ys.
+        If True, and the spinup starting at ys was not successful, shorter
+        spinup periods are tried first (down to min_spinup_period, respectively
+        spinup_start_yr_max), before the spinup_extra_years_to_try. If False,
+        the spinup never starts after ys.
         Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance
@@ -1705,17 +1709,17 @@ def dynamic_melt_f_run_with_dynamic_spinup_fallback(
         model run always starts from ys.
         Default is True
     spinup_extra_years_to_try : list or None
-        If the spinup starting at ys was not successful, you can provide here a
-        list of years to try to start the spinup before ys (e.g. [10, 20] means
-        the start years 'ys - 10' and 'ys - 20' are tried, in this order, so
-        the longest spinup is tried last). For more details see
+        As a last resort, if all other spinup periods failed, you can provide
+        here a list of years to try to start the spinup before ys (e.g.
+        [10, 20] means the start years 'ys - 10' and 'ys - 20' are tried, in
+        this order, so the longest spinup is tried last). For more details see
         run_dynamic_spinup.
         Default is None
     allow_shorter_spinup : bool
-        If True, and the spinup starting at ys (and all
-        spinup_extra_years_to_try) was not successful, shorter spinup periods
-        are tried (in the end down to min_spinup_period, respectively
-        spinup_start_yr_max). If False, the spinup never starts after ys.
+        If True, and the spinup starting at ys was not successful, shorter
+        spinup periods are tried first (down to min_spinup_period, respectively
+        spinup_start_yr_max), before the spinup_extra_years_to_try. If False,
+        the spinup never starts after ys.
         Default is True
     kwargs : dict
         kwargs to pass to the evolution_model instance

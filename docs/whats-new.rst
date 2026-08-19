@@ -88,9 +88,9 @@ Enhancements
 - New kwarg `spinup_extra_years_to_try` in `run_dynamic_spinup` (and in the
   dynamic melt_f calibration run and fallback functions, exposed on the command
   line as ``--dynamic-spinup-extra-years-to-try``) to be able to provide a list
-  of years to start the spinup *before* the requested start year, if the spinup
-  at the requested start year failed. They are tried shortest extension first
-  (so the longest spinup is tried last), are clipped to the start of the
+  of years to start the spinup *before* the requested start year, as a last
+  resort if all other spinup periods failed. They are tried shortest extension
+  first (so the longest spinup is tried last), are clipped to the start of the
   climate data and are only used if they result in a start year earlier than
   all previously tried ones. This replaces the never released kwarg
   `spinup_periods_to_try`, which was defined relative to the RGI date and could
