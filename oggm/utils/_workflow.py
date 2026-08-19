@@ -1131,6 +1131,11 @@ def merge_consecutive_run_outputs(gdir,
 
     # Merge by removing the last step of file 1 and delete the files if asked
     out_ds = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+    # xr.concat keeps the attrs of the first file only, which silently loses
+    # the ones set by the second run alone - e.g. the `partial_output` and
+    # `error_during_run` flags of a truncated run. Keep both, the first file
+    # winning on the keys they share (as before).
+    out_ds.attrs = {**ds2.attrs, **ds1.attrs}
     if delete_input:
         os.remove(fp1)
         os.remove(fp2)
