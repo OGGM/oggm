@@ -692,8 +692,11 @@ class FlowlineModel(object):
         if gdir is not None:
             gdir.settings_filesuffix = settings_filesuffix
             self.settings = gdir.settings
+            # only used for logging - gdir may be a duck-typed stub
+            self.rgi_id = getattr(gdir, 'rgi_id', None)
         else:
             self.settings = cfg.PARAMS.copy()
+            self.rgi_id = None
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
@@ -1638,10 +1641,8 @@ class FlowlineModel(object):
                     # out below, truncated to the last completed step. The
                     # error is re-raised once the files are written.
                     run_error = e
-                    log.workflow('run_until_and_store: the run failed at year '
-                                 '%s (%s). Writing output truncated to the '
-                                 'last completed step before re-raising.',
-                                 yr, repr(e))
+                    log.workflow('%s: run truncated at year %s (%s)',
+                                 self.rgi_id or '?', yr, repr(e))
                     break
 
             # Glacier geometry
@@ -4635,9 +4636,8 @@ def run_with_hydro(gdir, settings_filesuffix='',
     # end (the files carry a `partial_output` flag in the meantime).
     run_error = getattr(out, 'run_error', None)
     if run_error is not None:
-        log.workflow('run_with_hydro: the dynamic run was truncated by an '
-                     'error (%s). Adding hydro diagnostics over the available '
-                     'years before re-raising.', repr(run_error))
+        log.debug('%s: hydro diagnostics added over truncated run (%s)',
+                  gdir.rgi_id, repr(run_error))
 
     do_spinup = fixed_geometry_spinup_yr is not None
     if do_spinup:

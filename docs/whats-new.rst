@@ -290,6 +290,13 @@ Bug fixes
   step took over two hours for RGI region 13 in a ``oggm_prepro`` run and is
   back to seconds; the results are unchanged (:pull:`1990`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``merge_consecutive_run_outputs`` no longer drops the global attributes of
+  the second file: ``xr.concat`` keeps the attributes of the first dataset
+  only, so merging a historical run with a truncated future run (see
+  ``store_output_on_error``) silently lost the ``partial_output`` and
+  ``error_during_run`` flags of the latter. Both files' attributes are now
+  kept, the first file still winning on the keys they share (:pull:`1991`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

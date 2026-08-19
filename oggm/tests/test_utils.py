@@ -1003,6 +1003,73 @@ class TestExtendPastClimateRun:
         assert t_large < 12 * t_small
 
 
+class TestMergeConsecutiveRunOutputs:
+    """Unit tests for `merge_consecutive_run_outputs` on hand-made files."""
+
+    class FakeGdir:
+        """All `merge_consecutive_run_outputs` needs from a gdir."""
+
+        def __init__(self, tmpdir):
+            self.tmpdir = tmpdir
+            self.rgi_id = 'RGI60-11.00897'
+            self.settings = cfg.PARAMS
+
+        def get_filepath(self, filename, filesuffix=''):
+            return os.path.join(self.tmpdir, filename + filesuffix + '.nc')
+
+        def get_task_status(self, task_name):
+            return None
+
+    def _write_diag(self, gdir, years, v0, v1, filesuffix, attrs):
+        ds = xr.Dataset(coords={'time': ('time', np.asarray(years))})
+        ds['volume_m3'] = ('time', np.linspace(v0, v1, len(years)))
+        ds['area_m2'] = ('time', np.linspace(v0, v1, len(years)) * 10)
+        ds.attrs = attrs
+        ds.to_netcdf(gdir.get_filepath('model_diagnostics',
+                                       filesuffix=filesuffix))
+
+    def test_attrs_are_kept(self, tmp_path):
+
+        cfg.initialize()
+        gdir = self.FakeGdir(str(tmp_path))
+
+        # The second file is the truncated one (as after a run with
+        # PARAMS['store_output_on_error'] = True)
+        self._write_diag(gdir, np.arange(2000, 2011), 100, 90, '_hist',
+                         {'calendar': 'noleap',
+                          'creation_date': 'first',
+                          'only_in_1': 'yes'})
+        self._write_diag(gdir, np.arange(2010, 2021), 90, 80, '_fut',
+                         {'calendar': 'noleap',
+                          'creation_date': 'second',
+                          'partial_output': 'True',
+                          'error_during_run': 'RuntimeError(boundaries)'})
+
+        out_ds = utils.merge_consecutive_run_outputs(
+            gdir,
+            input_filesuffix_1='_hist',
+            input_filesuffix_2='_fut',
+            output_filesuffix='_merged',
+            add_to_log_file=False)
+
+        fp = gdir.get_filepath('model_diagnostics', filesuffix='_merged')
+        with xr.open_dataset(fp) as ds:
+            for check in [out_ds, ds]:
+                # The data is merged as expected
+                assert check['time'][0] == 2000
+                assert check['time'][-1] == 2020
+                assert check['time'].size == 21
+                # The truncation flags of the second file are not lost
+                assert check.attrs['partial_output'] == 'True'
+                assert 'boundaries' in check.attrs['error_during_run']
+                # ... and neither are the attrs of the first one
+                assert check.attrs['calendar'] == 'noleap'
+                assert check.attrs['only_in_1'] == 'yes'
+                # On the keys both files have, the first one wins (as it did
+                # before both sets of attrs were kept)
+                assert check.attrs['creation_date'] == 'first'
+
+
 class TestInitialize(unittest.TestCase):
 
     def setUp(self):
