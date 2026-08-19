@@ -542,7 +542,11 @@ class MonthlyTIModel(MassBalanceModel):
             OGGM will try hard not to use wrongly calibrated parameters
             by checking the global parameters used during calibration
             and the ones you are using at run time. If they don't
-            match, it will raise an error. Set to ``False`` to suppress
+            match, it will raise an error. The baseline climate source
+            is compared as well, but only when running with the
+            baseline climate itself (``filename='climate_historical'``):
+            runs forced with other data such as GCMs are expected to use
+            a different climate source. Set to ``False`` to suppress
             this check.
         check_climate_data : bool, default True
             If True the climate input data is checked if it is provided in total
@@ -590,16 +594,22 @@ class MonthlyTIModel(MassBalanceModel):
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
-            src = self.calib_params['baseline_climate_source']
-            src_calib = gdir.get_climate_info(
-                filename=self.filename, input_filesuffix=self.input_filesuffix
-            )['baseline_climate_source']
-            if src != src_calib:
-                msg = (f'You seem to have calibrated with the {src} '
-                       f"climate data while this gdir was calibrated with "
-                       f"{src_calib}. Set `check_calib_params=False` to "
-                       f"ignore this warning.")
-                raise InvalidWorkflowError(msg)
+            # The climate source check only makes sense when running with
+            # the baseline climate: runs forced with other data (e.g. GCMs)
+            # differ from the calibration climate by construction.
+            if self.filename == 'climate_historical':
+                src_calib = self.calib_params['baseline_climate_source']
+                src_run = gdir.get_climate_info(
+                    filename=self.filename,
+                    input_filesuffix=self.input_filesuffix,
+                )['baseline_climate_source']
+                if src_calib != src_run:
+                    msg = (f'You seem to have calibrated with the '
+                           f'{src_calib} climate data while you are now '
+                           f'running with {src_run}. Set '
+                           f'`check_calib_params=False` to ignore this '
+                           f'warning.')
+                    raise InvalidWorkflowError(msg)
 
         self.melt_f = melt_f
         self.bias = bias
@@ -1066,7 +1076,11 @@ class DailyTIModel(MonthlyTIModel):
             OGGM will try hard not to use wrongly calibrated parameters
             by checking the global parameters used during calibration
             and the ones you are using at run time. If they don't
-            match, it will raise an error. Set to ``False`` to suppress
+            match, it will raise an error. The baseline climate source
+            is compared as well, but only when running with the
+            baseline climate itself (``filename='climate_historical'``):
+            runs forced with other data such as GCMs are expected to use
+            a different climate source. Set to ``False`` to suppress
             this check.
         check_climate_data : bool, default True
             If True, check the climate input data is provided in total

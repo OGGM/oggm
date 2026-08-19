@@ -661,6 +661,44 @@ class TestMassBalanceModels:
                                             check_calib_params=False)
         assert mb_mod.__repr__() == expected
 
+    def test_check_calib_params_climate_source(self, hef_gdir):
+        # The baseline climate source check should fire when the baseline
+        # climate of the gdir was swapped after calibration, but not when
+        # deliberately running with another climate file (e.g. a GCM).
+        from oggm.utils import ncDataset
+
+        gdir = hef_gdir
+
+        # The default run is fine
+        massbalance.MonthlyTIModel(gdir)
+
+        # Fake a GCM file: same data, but another climate source
+        fpath = gdir.get_filepath('climate_historical')
+        gcm_path = gdir.get_filepath('gcm_data', filesuffix='_fake_gcm')
+        shutil.copyfile(fpath, gcm_path)
+        with ncDataset(gcm_path, 'a') as nc:
+            nc.climate_source = 'FAKE-GCM_ssp585'
+
+        try:
+            # A GCM run never matches the calibration climate source by
+            # construction - this should not raise
+            massbalance.MonthlyTIModel(gdir, filename='gcm_data',
+                                       input_filesuffix='_fake_gcm')
+
+            # But a swapped baseline climate still has to raise
+            with ncDataset(fpath, 'a') as nc:
+                source = nc.climate_source
+                nc.climate_source = 'FAKE-BASELINE'
+            try:
+                with pytest.raises(InvalidWorkflowError,
+                                   match='FAKE-BASELINE'):
+                    massbalance.MonthlyTIModel(gdir)
+            finally:
+                with ncDataset(fpath, 'a') as nc:
+                    nc.climate_source = source
+        finally:
+            os.remove(gcm_path)
+
     @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
                                     massbalance.DailyTIModel,],)
     def test_prcp_fac_temp_bias_update(self, hef_gdir, cl):
@@ -5516,8 +5554,7 @@ class TestHEF:
 
         # Mass balance models
         mb_cru = massbalance.MonthlyTIModel(gdir)
-        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data',
-                                             check_calib_params=False)
+        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data')
 
         # Average over 1961-1990
         h, w = gdir.get_inversion_flowline_hw()
@@ -5556,10 +5593,6 @@ class TestHEF:
         run_from_climate_data(gdir, ys=1961, ye=1990,
                               output_filesuffix='_hist')
         run_from_climate_data(gdir, ys=1961, ye=1990,
-                              mb_model_class=partial(
-                                  massbalance.MonthlyTIModel,
-                                  check_calib_params=False,
-                              ),
                               climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
