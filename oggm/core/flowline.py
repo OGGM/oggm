@@ -692,7 +692,8 @@ class FlowlineModel(object):
         if gdir is not None:
             gdir.settings_filesuffix = settings_filesuffix
             self.settings = gdir.settings
-            self.rgi_id = gdir.rgi_id
+            # only used for logging - gdir may be a duck-typed stub
+            self.rgi_id = getattr(gdir, 'rgi_id', None)
         else:
             self.settings = cfg.PARAMS.copy()
             self.rgi_id = None
