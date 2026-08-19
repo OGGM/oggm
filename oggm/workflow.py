@@ -279,13 +279,7 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     if prepro_rgi_version is None:
         prepro_rgi_version = cfg.PARAMS['rgi_version']
 
-    if isinstance(entity, pd.Series):
-        try:
-            rid = entity.RGIId
-        except AttributeError:
-            rid = entity.rgi_id
-    else:
-        rid = entity
+    rid = _rgi_id_of(entity)
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
@@ -295,10 +289,7 @@ def gdir_from_prepro(entity, from_prepro_level=None,
 
 def gdir_from_tar(entity, from_tar):
 
-    try:
-        rgi_id = entity.RGIId
-    except AttributeError:
-        rgi_id = entity
+    rgi_id = _rgi_id_of(entity)
 
     # The region dir, the new 100-glacier bundle name and the old
     # 1000-glacier bundle name use the same slices for RGI6 and RGI7.
@@ -356,6 +347,22 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
     if len(u) < len(rgi_ids):
         raise InvalidWorkflowError('Found duplicates in the list of '
                                    'RGI IDs: {}'.format(u[c > 1]))
+
+
+def _rgi_id_of(entity):
+    """The RGI id of a single entity.
+
+    `entity` is either a row of an RGI dataframe - RGI6 has the id in `RGIId`
+    and RGI7 in `rgi_id` - or already the id itself.
+    """
+
+    if isinstance(entity, pd.Series):
+        try:
+            return entity.RGIId
+        except AttributeError:
+            # RGI7
+            return entity.rgi_id
+    return entity
 
 
 def _rgi_ids_of(rgidf):

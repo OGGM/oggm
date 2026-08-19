@@ -2072,6 +2072,28 @@ class TestPreproCLI:
                                             prepro_level=lev)
             assert url.endswith(end), (lev, url)
 
+    def test_gdir_from_tar_rgi_ids(self):
+        # gdir_from_tar used to fall back to `rgi_id = entity` when the row
+        # had no RGIId, i.e. for every RGI7 dataframe, which then blew up in
+        # os.path.join with a Series. --start-from-dir routes the prepro CLI
+        # through here, so RGI7 chunked runs hit it immediately.
+        from oggm.workflow import _rgi_id_of, gdir_from_tar
+
+        rgi6 = pd.Series({'RGIId': 'RGI60-06.00123', 'Area': 1.0})
+        rgi7 = pd.Series({'rgi_id': 'RGI2000-v7.0-G-06-00123', 'area_km2': 1.0})
+        assert _rgi_id_of(rgi6) == 'RGI60-06.00123'
+        assert _rgi_id_of(rgi7) == 'RGI2000-v7.0-G-06-00123'
+        assert _rgi_id_of('RGI60-06.00123') == 'RGI60-06.00123'
+
+        # and the id has to survive all the way into the bundle lookup: with
+        # no tars on disk that is a FileNotFoundError naming the glacier, not
+        # a TypeError from slicing a Series
+        for entity, rid in [(rgi6, 'RGI60-06.00123'),
+                            (rgi7, 'RGI2000-v7.0-G-06-00123')]:
+            with pytest.raises(FileNotFoundError) as err:
+                gdir_from_tar(entity, from_tar=str(self.testdir))
+            assert rid in str(err.value)
+
     def test_rgi_chunks_table(self):
 
         from oggm.cli import prepro_chunks
