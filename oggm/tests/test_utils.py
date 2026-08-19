@@ -2046,6 +2046,32 @@ class TestPreproCLI:
         assert f'--array=0-{n_chunks - 1}' in out
         assert '$SLURM_ARRAY_TASK_ID' in out
 
+    def test_half_level_addressing(self):
+        # A half level is decomposed into an integer plus a flag so that the
+        # existing `start_level <= n` logic keeps working, but the glacier
+        # directories still have to be read from the level they were *stored*
+        # under. Getting this wrong silently reads the wrong level.
+        from oggm.cli.prepro_levels import _level_dir_name, _parse_start_level
+
+        # '4a' holds the L4 directories, '3a' holds its own
+        assert _level_dir_name('4a') == 'L4'
+        assert _level_dir_name('3a') == 'L3a'
+        assert _level_dir_name('3') == 'L3'
+
+        # the logic integer is one below, and is NOT what to read from
+        assert _parse_start_level('4a') == (3, False, True)
+        assert _parse_start_level('3a') == (2, True, False)
+        assert _level_dir_name('4a')[1:] == '4'
+        assert _level_dir_name('3a')[1:] == '3a'
+
+        # and the url builder has to take the half levels, not just ints
+        for lev, end in [(3, '/L3/'), (4, '/L4/'),
+                         ('3a', '/L3a/'), ('4a', '/L4a/')]:
+            url = utils.get_prepro_base_url(base_url='http://foo',
+                                            rgi_version='62', border=160,
+                                            prepro_level=lev)
+            assert url.endswith(end), (lev, url)
+
     def test_rgi_chunks_table(self):
 
         from oggm.cli import prepro_chunks

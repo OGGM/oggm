@@ -571,8 +571,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         if cfg.PARAMS['has_internet'] and not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
+        # str() because the preprocessing also knows the half levels
+        # '3a' and '4a', which do not compare against an int
         if ('oggm_v1.4' in url and
-                from_prepro_level >= 3 and
+                str(from_prepro_level)[0] >= '3' and
                 not cfg.PARAMS['prcp_fac']):
             log.warning('You seem to be using v1.4 directories with a more '
                         'recent version of OGGM. While this is possible, be '

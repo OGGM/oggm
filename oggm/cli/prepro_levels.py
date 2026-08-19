@@ -107,6 +107,37 @@ def _level_dir(root, rgi_version, border, level):
             _level_dir_name(level))
 
 
+def _forward_summary_path(basename, level, start_from_dir, start_base_url,
+                          rgi_version, border):
+    """Where to read a summary file which is only carried forward.
+
+    A run starting from glacier directories it did not make itself still has
+    to copy the summary files of the level it started from along. Those can
+    sit next to the directories on disk, or on the base url they were
+    downloaded from. A chunked run often has both at once: the directories
+    are local, because the previous stage wrote them, while the summary files
+    are still remote, because no local run ever made them.
+    """
+
+    if start_from_dir is not None:
+        ipath = (_level_dir(start_from_dir, rgi_version, border, level) /
+                 'summary' / basename)
+        if ipath.exists():
+            return ipath
+        if start_base_url is None:
+            raise InvalidWorkflowError(
+                f'Could not find {ipath}. This run has to carry the L{level} '
+                'summary files forward, but they are not next to the glacier '
+                'directories it started from - which is normal if a previous '
+                'stage made those directories without writing any summary. '
+                'Also point start_base_url at the url they came from.')
+
+    return file_downloader(os.path.join(
+        get_prepro_base_url(base_url=start_base_url, rgi_version=rgi_version,
+                            border=border, prepro_level=int(level)),
+        'summary', basename))
+
+
 def apply_rgi_fixes(rgidf, rgi_version, rgi_reg):
     """The RGI input quality fixes the preprocessing applies before running.
 
@@ -372,6 +403,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         chains the stages of a chunked run together: it points at the folder
         which contains the `RGI{version}/b_{border}/L{level}/` tree, and the
         directories are read from there instead of being downloaded.
+        It can be combined with `start_base_url`, and often has to be: the
+        directories then come from disk, while the summary files which are
+        only carried forward are still fetched from the url. That is the
+        normal case when the previous stage made the directories without
+        writing any summary file (`max_level` '3a' or '4a').
     max_level : str or int
         the maximum pre-processing level before stopping. Besides 1 to 5,
         two half levels split L3 and L4 where the work stops being
@@ -488,16 +524,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if start_base_url is None and start_from_dir is None:
             raise InvalidParamsError('With start_level, please also indicate '
                                      'start_base_url or start_from_dir')
-        if intersects_file is not None:
-            log.workflow('`intersects_file` is ignored with start_level > 0: '
-                         'the intersects are written to the glacier '
-                         'directories at L0 and are already in the prepro '
-                         'files we start from.')
-
-    if start_base_url is not None and start_from_dir is not None:
-        raise InvalidParamsError('start_base_url and start_from_dir are two '
-                                 'ways of saying the same thing: please set '
-                                 'only one of them.')
+    # We log about this further down, once cfg.initialize() has set the
+    # logging up - `log.workflow` does not exist before that
+    ignoring_intersects = start_level_name != '0' and intersects_file is not None
 
     if start_level_name == '0' and start_from_dir is not None:
         raise InvalidParamsError('start_from_dir needs a start_level: with '
@@ -599,6 +628,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # Prepare the download of climate file to be shared across processes
     # TODO
+
+    if ignoring_intersects:
+        log.workflow('`intersects_file` is ignored with start_level > 0: '
+                     'the intersects are written to the glacier '
+                     'directories at L0 and are already in the prepro '
+                     'files we start from.')
 
     if temp_bias_run:
         log.workflow('`temp_bias_run` is set: forcing max_level=3 and '
@@ -741,10 +776,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      f'to start from in {from_tar}')
         log.workflow(f'Reading the L{start_level_name} glacier directories '
                      f'from {from_tar}')
-        gdirs = workflow.init_glacier_directories(rgidf, from_tar=str(from_tar))
+        gdirs = workflow.init_glacier_directories(rgidf, reset=True,
+                                                  force=True,
+                                                  from_tar=str(from_tar))
     else:
+        # The level to fetch is the one the directories are *stored* under,
+        # which is not the integer we use for the level logic: resuming at
+        # '4a' means reading the L4 directories, and start_level is 3 there.
+        prepro_level = _level_dir_name(start_level_name)[1:]
         gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True,
-                                                  from_prepro_level=start_level,
+                                                  from_prepro_level=prepro_level,
                                                   prepro_border=border,
                                                   prepro_rgi_version=rgi_version,
                                                   prepro_base_url=start_base_url
@@ -1212,16 +1253,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                        'fixed_geometry_mass_balance']:
                 if start_level <= 2:
                     ipath = sum_dir_L3 / f'{bn}_{rgi_reg}.csv'
-                elif start_from_dir is not None:
-                    ipath = (_level_dir(start_from_dir, rgi_version, border,
-                                        '3') / 'summary' /
-                             f'{bn}_{rgi_reg}.csv')
                 else:
-                    ipath = file_downloader(os.path.join(
-                        get_prepro_base_url(base_url=start_base_url,
-                                            rgi_version=rgi_version, border=border,
-                                            prepro_level=start_level), 'summary',
-                        bn + '_{}.csv'.format(rgi_reg)))
+                    ipath = _forward_summary_path(
+                        f'{bn}_{rgi_reg}.csv', start_level,
+                        start_from_dir, start_base_url, rgi_version, border)
 
                 opath = sum_dir / f'{bn}_{rgi_reg}.csv'
                 shutil.copyfile(ipath, opath)
@@ -1372,15 +1407,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     for bn, suffix in zip(files_to_copy, files_suffixes):
         if start_level <= 3:
             ipath = sum_dir_L4 / f'{bn}_{rgi_reg}.{suffix}'
-        elif start_from_dir is not None:
-            ipath = (_level_dir(start_from_dir, rgi_version, border, '4') /
-                     'summary' / f'{bn}_{rgi_reg}.{suffix}')
         else:
-            ipath = file_downloader(os.path.join(
-                get_prepro_base_url(base_url=start_base_url,
-                                    rgi_version=rgi_version, border=border,
-                                    prepro_level=start_level), 'summary',
-                f'{bn}_{rgi_reg}.{suffix}'))
+            ipath = _forward_summary_path(
+                f'{bn}_{rgi_reg}.{suffix}', start_level,
+                start_from_dir, start_base_url, rgi_version, border)
         opath = sum_dir / f'{bn}_{rgi_reg}.{suffix}'
         shutil.copyfile(ipath, opath)
 
@@ -1435,7 +1465,10 @@ def parse_args(args):
                              'directory tar files which are already on disk. '
                              'This is what chains the stages of a chunked '
                              'run together. Point it at the folder holding '
-                             'the RGI{version}/b_{border}/L{level}/ tree.')
+                             'the RGI{version}/b_{border}/L{level}/ tree. Can '
+                             'be combined with --start-base-url, which is '
+                             'then used for the summary files which are only '
+                             'carried forward.')
     parser.add_argument('--max-level', type=str, default='5',
                         choices=PREPRO_LEVELS[1:],
                         help='the maximum level you want to run the '
