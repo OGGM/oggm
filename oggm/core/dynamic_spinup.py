@@ -42,7 +42,8 @@ def _get_spinup_periods_to_run(target_yr, spinup_period_initial,
        but never shorter than min_spinup_period),
     2. only if allow_shorter_spinup: shorter periods, down to
        min_spinup_period (which itself is defined by spinup_start_yr_max, if
-       provided),
+       provided). The intermediate period between the two is rounded up to a
+       whole year,
     3. spinup_period_first_try, if provided (the period which was successful in
        a previous iteration of the dynamic melt_f calibration),
     4. one period per spinup_extra_years_to_try, all starting *before* the
@@ -89,8 +90,11 @@ def _get_spinup_periods_to_run(target_yr, spinup_period_initial,
 
     # if the initial period fails we first try shorter spinup periods
     if allow_shorter_spinup and period_initial > min_spinup_period:
-        periods_to_run.extend([(period_initial + min_spinup_period) / 2,
-                               min_spinup_period])
+        # the intermediate period is rounded up to a whole year, so that the
+        # spinup starts at a whole year (and not e.g. in the middle of 1989)
+        periods_to_run.extend(
+            [int(np.ceil((period_initial + min_spinup_period) / 2)),
+             min_spinup_period])
 
     # the period which was successful in a previous iteration
     if spinup_period_first_try is not None:

@@ -4157,7 +4157,7 @@ class TestLeapYears:
         # 1981 is not (365 d)
         assert model._yr_to_seconds(1982.0) == (366 + 365) * SEC
         # 1980–1984 spans two leap years (1980, 1984) and three normal ones
-        assert model._yr_to_seconds(1985.0) == (366 + 365 + 365 + 365 + 366) * SEC
+        assert model._yr_to_seconds(1985) == (366 + 365 + 365 + 365 + 366) * SEC
         # Fractional year: 0.5 through a 365-day year
         assert model._yr_to_seconds(1981.5) == (366 + 0.5 * 365) * SEC
 
@@ -5735,10 +5735,11 @@ class TestDynamicSpinupPeriods:
 
     def test_default_behaviour(self):
         # without extra years we get the 'old' behaviour: the requested start
-        # year, then two shorter spinups (down to spinup_start_yr_max)
+        # year, then two shorter spinups (down to spinup_start_yr_max). The
+        # intermediate period is rounded up, so we always start at a whole year
         assert self.start_years(target_yr=2011, ys=1975,
                                 spinup_start_yr_max=2000) == \
-            [1975, 1987.5, 2000]
+            [1975, 1987, 2000]  # intermediate period (36 + 11) / 2 -> 24
 
         # if the requested start year is later than spinup_start_yr_max the
         # spinup starts earlier than requested (and there is nothing to shorten)
@@ -5751,7 +5752,7 @@ class TestDynamicSpinupPeriods:
         assert self.start_years(target_yr=2011, ys=1975,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[20, 10]) == \
-            [1975, 1987.5, 2000, 1965, 1955]
+            [1975, 1987, 2000, 1965, 1955]
 
         # no shorter spinup periods if not allowed
         assert self.start_years(target_yr=2011, ys=1975,
@@ -5773,14 +5774,14 @@ class TestDynamicSpinupPeriods:
         assert self.start_years(target_yr=2011, ys=1975, yr_min=1950,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[10, 20, 30, 40]) == \
-            [1975, 1987.5, 2000, 1965, 1955, 1950]
+            [1975, 1987, 2000, 1965, 1955, 1950]
 
         # the requested start year itself is clipped as well, and then there is
         # no room left for the extra years to try
         assert self.start_years(target_yr=2011, ys=1975, yr_min=1979,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[10, 20]) == \
-            [1979, 1989.5, 2000]
+            [1979, 1989, 2000]
 
     def test_target_year_before_start_year(self):
         # if the outline is older than the requested start year the spinup
@@ -5802,14 +5803,14 @@ class TestDynamicSpinupPeriods:
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[10],
                                 spinup_period_first_try=2011 - 1990) == \
-            [1975, 1987.5, 2000, 1990, 1965]
+            [1975, 1987, 2000, 1990, 1965]
 
         # if it is already tried anyway it does not show up twice
         assert self.start_years(target_yr=2011, ys=1975,
                                 spinup_start_yr_max=2000,
                                 spinup_extra_years_to_try=[10],
                                 spinup_period_first_try=2011 - 1965) == \
-            [1975, 1987.5, 2000, 1965]
+            [1975, 1987, 2000, 1965]
 
         # but a shorter one is ignored if shorter spinups are not allowed
         assert self.start_years(target_yr=2011, ys=1975,

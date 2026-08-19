@@ -88,24 +88,38 @@ Enhancements
 - New kwarg `spinup_extra_years_to_try` in `run_dynamic_spinup` (and in the
   dynamic melt_f calibration run and fallback functions, exposed on the command
   line as ``--dynamic-spinup-extra-years-to-try``) to be able to provide a list
-  of years to start the spinup *before* the requested start year, as a last
-  resort if all other spinup periods failed. They are tried shortest extension
+  of years to start the spinup *before* the requested start year. They are
+  counted backwards from the requested start year, are tried shortest extension
   first (so the longest spinup is tried last), are clipped to the start of the
   climate data and are only used if they result in a start year earlier than
-  all previously tried ones. This replaces the never released kwarg
-  `spinup_periods_to_try`, which was defined relative to the RGI date and could
-  therefore result in start years *after* the requested start year
-  (:pull:`1914`).
+  all previously tried ones. They are a last resort: the dynamic spinup first
+  tries the requested start year, and then - unless `allow_shorter_spinup` is
+  set to `False`, see below - the two shorter periods it always fell back to
+  (halfway to the shortest allowed period, and then the shortest allowed period
+  itself, which during the melt_f calibration starts at the beginning of the
+  geodetic mass balance period). So for a glacier with an RGI date of 2010, a
+  requested start year of 1980 and a geodetic period starting in 2000, the
+  spinup is tried starting at 1980, 1990 and 2000, and only then at 1970,
+  1960, ... (for extra years 10, 20, ...). This replaces the never released
+  kwarg `spinup_periods_to_try`, whose values were counted backwards from the
+  RGI date instead, so that the same value meant a different start year for
+  every glacier, and could even result in an additional attempt starting
+  *after* the requested start year (:pull:`1914`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - New kwarg `allow_shorter_spinup` in `run_dynamic_spinup` (and in the dynamic
   melt_f calibration run and fallback functions, exposed on the command line as
   ``--dynamic-spinup-no-shorter-periods``). Per default (`True`, the previous
-  behaviour) shorter spinup periods are tried as a last resort if the spinup at
-  the requested start year failed; with `False` the dynamic spinup never starts
-  after the requested start year. Further, glacier outlines which are older
-  than the requested start year now keep their own target year (the dynamic
-  spinup starts before the requested start year), instead of moving the target
-  year to the start year, which resulted in a zero-length spinup.
+  behaviour) the dynamic spinup falls back to shorter spinup periods if the
+  spinup at the requested start year failed, and therefore can start after the
+  requested start year; with `False` these shorter periods are not tried and
+  the spinup never starts after the requested start year. The intermediate one
+  of these shorter periods is now rounded up to a whole year, so that the
+  dynamic spinup always starts at a whole year (before, it could start in the
+  middle of a year, e.g. in 1989.5). Further, glacier
+  outlines which are older than the requested start year now keep their own
+  target year (the dynamic spinup starts before the requested start year),
+  instead of moving the target year to the start year, which resulted in a
+  zero-length spinup.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - `base_dir_to_tar` now groups glacier directories into bundles of 100 by
   default (previously 1000); ``bundle_size`` accepts either 100 or 1000.
