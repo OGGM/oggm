@@ -246,6 +246,13 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
+  have origin widths > 0" when the inversion returns a trapezoid sitting
+  exactly on its physical boundary (thickness = width / lambda, i.e. a zero
+  origin width). Such sections are now nudged back just above their minimum
+  instead of raising, while sections which are materially below it still
+  raise, with a more informative error (:pull:`1989`).
+  By `Ruitang Yang <https://github.com/Ruitangtang>`_
 - Fixed a variable name bug in `prepare_for_inversion` where passing
   `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
   instead cleared the rectangular flag (:pull:`1931`).
@@ -312,6 +319,13 @@ Bug fixes
   table each time. Everything the loop needs is now materialized once. This
   step took over two hours for RGI region 13 in a ``oggm_prepro`` run and is
   back to seconds; the results are unchanged (:pull:`1990`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``merge_consecutive_run_outputs`` no longer drops the global attributes of
+  the second file: ``xr.concat`` keeps the attributes of the first dataset
+  only, so merging a historical run with a truncated future run (see
+  ``store_output_on_error``) silently lost the ``partial_output`` and
+  ``error_during_run`` flags of the latter. Both files' attributes are now
+  kept, the first file still winning on the keys they share (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
