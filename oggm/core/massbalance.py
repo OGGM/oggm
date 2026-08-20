@@ -4554,6 +4554,16 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                     f'{file_version}, but this run uses {gdir.rgi_version}: '
                     f'set `temp_bias_file_path` to the file matching your '
                     f'setup. File: {temp_bias_file_path}')
+            file_source = bias_df.get('baseline_climate_source')
+            file_source = None if file_source is None else file_source.iloc[0]
+            source = climinfo['baseline_climate_source']
+            if file_source is not None and not pd.isnull(file_source):
+                if str(file_source) != str(source):
+                    log.warning(f'The temperature bias file was made with '
+                                f'the {file_source} climate data, but this '
+                                f'run uses {source}: the prior is unlikely '
+                                f'to be a good one. '
+                                f'File: {temp_bias_file_path}')
         else:
             name = os.path.basename(str(temp_bias_file_path)).lower()
             guess = {'rgi70g': '70G', 'rgi70c': '70C', 'rgi6': '60'}
