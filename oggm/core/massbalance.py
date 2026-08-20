@@ -4538,12 +4538,52 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                      'utils.get_temp_bias_dataframe).')
         bias_df = get_temp_bias_dataframe(temp_bias_file_path)
         climinfo = gdir.get_climate_info()
+
+        # Is this file made for this run? RGI versions are not
+        # interchangeable: a file made for another one has no data where the
+        # two disagree on where the glaciers are. Recent files say what they
+        # were made for, older ones don't: for those the file name is all we
+        # have to go by, hence a warning only.
+        file_version = None
+        if 'rgi_version' in bias_df:
+            file_version = bias_df['rgi_version'].iloc[0]
+        if file_version is not None and not pd.isnull(file_version):
+            if str(file_version) != gdir.rgi_version:
+                raise InvalidWorkflowError(
+                    f'The temperature bias file was made for RGI version '
+                    f'{file_version}, but this run uses {gdir.rgi_version}: '
+                    f'set `temp_bias_file_path` to the file matching your '
+                    f'setup. File: {temp_bias_file_path}')
+        else:
+            name = os.path.basename(str(temp_bias_file_path)).lower()
+            guess = {'rgi70g': '70G', 'rgi70c': '70C', 'rgi6': '60'}
+            guess = next((v for k, v in guess.items() if k in name), None)
+            if guess is not None and guess != gdir.rgi_version:
+                log.warning(f'The name of the temperature bias file suggests '
+                            f'that it was made for RGI{guess}, but this run '
+                            f'uses RGI version {gdir.rgi_version}. Is it the '
+                            f'right file? File: {temp_bias_file_path}')
+
+        # Take nearest, with wrap-around at the dateline. A prior taken from
+        # far away is a poor prior: we warn above 1° and give up above 5°
+        # (the file itself groups grid points up to 5° away when needed).
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
-        # Take nearest
-        dis = ((bias_df.lon_val - ref_lon)**2 + (bias_df.lat_val - ref_lat)**2)**0.5
-        assert dis.min() < 1, 'Somethings wrong with lons'
-        sel_df = bias_df.iloc[np.argmin(dis)]
+        dlon = np.abs(bias_df.lon_val.values - ref_lon)
+        dis = (np.minimum(dlon, 360 - dlon)**2 +
+               (bias_df.lat_val.values - ref_lat)**2)**0.5
+        imin = np.argmin(dis)
+        if dis[imin] > 5:
+            raise InvalidWorkflowError(
+                f'The nearest temperature bias prior is {dis[imin]:.2f}° away '
+                f'from this glacier ({ref_lon:.2f}°E {ref_lat:.2f}°N): the '
+                f'file has no data for this part of the world. Is it the '
+                f'right file for this run? File: {temp_bias_file_path}')
+        if dis[imin] > 1:
+            log.warning(f'({gdir.rgi_id}) the nearest temperature bias prior '
+                        f'is {dis[imin]:.2f}° away from this glacier: we use '
+                        f'it, but it may not be a good prior.')
+        sel_df = bias_df.iloc[imin]
         temp_bias = sel_df['median_temp_bias_w_err_grouped']
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 

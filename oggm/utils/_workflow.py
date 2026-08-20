@@ -2472,6 +2472,7 @@ TEMP_BIAS_FILE_COLUMNS = [
     'median_temp_bias', 'median_temp_bias_w_area', 'median_temp_bias_w_err',
     'n_glaciers_grouped', 'search_radius', 'median_temp_bias_grouped',
     'median_temp_bias_w_area_grouped', 'median_temp_bias_w_err_grouped',
+    'rgi_version',
 ]
 
 
@@ -2810,6 +2811,17 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         rows.append(d)
 
     mdf = pd.DataFrame(rows).set_index('unique_id')
+
+    # Which RGI version was this file made for? The calibration checks it,
+    # since prior files are not interchangeable between RGI versions.
+    # RGI2000-v7.0-G-02-00003 -> 70G, RGI60-01.00001 -> 60
+    ids = odf['rgi_id'] if 'rgi_id' in odf else odf.index
+    versions = {'70' + str(i).split('-')[2] if str(i).startswith('RGI2000-')
+                else str(i).split('-')[0][-2:] for i in ids}
+    version = versions.pop() if len(versions) == 1 else None
+    valid = ['50', '60', '70G', '70C']
+    mdf['rgi_version'] = version if version in valid else None
+
     mdf = mdf[TEMP_BIAS_FILE_COLUMNS]
     for c in ['lon_id', 'lat_id', 'n_glaciers', 'n_glaciers_grouped',
               'search_radius']:
