@@ -42,7 +42,8 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_with_hydro, SemiImplicitModel)
+                                run_with_hydro, SemiImplicitModel,
+                                stabilize_trapezoid_section)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_melt_f_calibration,
     dynamic_melt_f_run_with_dynamic_spinup,
@@ -3621,6 +3622,90 @@ class TestModelFlowlines():
         assert 0 < rec.volume_bwl_km3 < rec.volume_km3
         assert rec.volume_bsl_km3 == 0
 
+    def test_trapezoid_at_min_section(self):
+        # A trapezoid whose section sits exactly at its physical minimum
+        # (lambda * thick**2 / 2) is the degenerate, triangular case with
+        # w0 = 0. It is not constructible, but a section a hair above the
+        # minimum must be - in particular the origin width must not be eaten
+        # by the surface_h -> bed_h -> thick round trip.
+        map_dx = 100.
+        dx = 1.
+        nx = 5
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        lambdas = np.zeros(nx) + 2.
+        is_trap = np.ones(nx, dtype=bool)
+
+        # chosen so that surface_h - bed_h is not bit-identical to thick
+        surface_h = np.zeros(nx) + 2035.4648741007702
+        bed_h = surface_h - 381.1762046038554
+        assert np.any((surface_h - bed_h) != 381.1762046038554)
+
+        min_section = lambdas * (surface_h - bed_h) ** 2 / 2
+        section = min_section * (1 + 64 * np.finfo(np.float64).eps)
+
+        fl = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                              surface_h=surface_h, bed_h=bed_h,
+                              section=section, bed_shape=np.zeros(nx),
+                              is_trapezoid=is_trap, lambdas=lambdas)
+        assert np.all(fl._w0_m > 0)
+        assert_allclose(fl.section, section)
+
+        with pytest.raises(ValueError, match='origin widths'):
+            MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                             surface_h=surface_h, bed_h=bed_h,
+                             section=min_section, bed_shape=np.zeros(nx),
+                             is_trapezoid=is_trap, lambdas=lambdas)
+
+    def test_stabilize_trapezoid_section(self):
+        # A section sitting exactly on the physical minimum of a trapezoid
+        # (w0 = 0) has to be nudged back to a constructible flowline. The
+        # surface_h -> bed_h -> thick round trip is not exact, so this is
+        # checked over many elevation / thickness combinations.
+        rng = np.random.default_rng(42)
+        nx = 2000
+        lam = 2.
+
+        surface_h = rng.uniform(-50, 4000, nx)
+        inv_thick = rng.uniform(1, 900, nx)
+        bed_h = surface_h - inv_thick
+        lambdas = np.zeros(nx) + lam
+
+        # the boundary as the inversion computes it, i.e. from its own
+        # thickness - which is not what MixedBedFlowline will recompute
+        assert np.any((surface_h - bed_h) != inv_thick)
+        section = lam * inv_thick ** 2 / 2
+
+        section = stabilize_trapezoid_section(section, surface_h, bed_h,
+                                              lambdas)
+
+        map_dx = 100.
+        dx = 1.
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        fl = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                              surface_h=surface_h, bed_h=bed_h,
+                              section=section, bed_shape=np.zeros(nx),
+                              is_trapezoid=np.ones(nx, dtype=bool),
+                              lambdas=lambdas)
+        assert np.all(fl._w0_m > 0)
+        # the correction is numerical noise only
+        assert_allclose(section, lam * inv_thick ** 2 / 2, rtol=1e-12)
+
+        # parabolic (nan) and rectangular (zero) grid points are left alone,
+        # they have no such constraint
+        no_slope = np.where(np.arange(nx) % 2, 0., np.nan)
+        out = stabilize_trapezoid_section(section * 0.5, surface_h, bed_h,
+                                          no_slope)
+        assert_allclose(out, section * 0.5)
+
+        # a section materially below the minimum is a real error
+        with pytest.raises(ValueError, match='physical minimum'):
+            stabilize_trapezoid_section(section * 0.5, surface_h, bed_h,
+                                        lambdas)
+
     def test_length_methods(self):
 
         cfg.initialize()
@@ -3677,6 +3762,54 @@ class TestModelFlowlines():
 @pytest.fixture(scope='class')
 def io_init_gdir(hef_gdir):
     init_present_time_glacier(hef_gdir)
+
+
+@pytest.mark.test_env("models_dynamics")
+class TestTrapezoidBoundary():
+    """The inversion brackets the trapezoid thickness at width / lambda,
+    i.e. exactly where the origin width of the trapezoid is zero. Check that
+    ``init_present_time_glacier`` can cope with sections landing on (or a few
+    ulp below) that physical boundary."""
+
+    def _put_on_boundary(self, gdir, fac):
+        """Sets one trapezoid grid point to a section of ``fac * minimum``."""
+        lam = gdir.settings['trapezoid_lambdas']
+        map_dx = gdir.grid.dx
+
+        invs = gdir.read_pickle('inversion_output')
+        cls = gdir.read_pickle('inversion_flowlines')
+        cl, inv = cls[-1], invs[-1]
+
+        pok = np.flatnonzero(inv['is_trapezoid'] & (inv['thick'] > 0))
+        assert len(pok) > 0
+        i = pok[len(pok) // 2]
+
+        # the minimum section, using the thickness as it is recomputed
+        # downstream (surface_h - bed_h)
+        thick = cl.surface_h[i] - (cl.surface_h[i] - inv['thick'][i])
+        inv['volume'][i] = lam * thick ** 2 / 2 * fac * cl.dx * map_dx
+
+        gdir.write_pickle(invs, 'inversion_output')
+        return i
+
+    def test_section_at_boundary(self, hef_gdir):
+        gdir = hef_gdir
+        # a few ulp below the minimum: this is numerical noise, we correct it
+        i = self._put_on_boundary(gdir, 1 - 8 * np.finfo(np.float64).eps)
+
+        init_present_time_glacier(gdir)
+
+        fl = gdir.read_pickle('model_flowlines')[-1]
+        assert np.all(fl._w0_m[fl.is_trapezoid] > 0)
+        assert fl._w0_m[i] > 0
+
+    def test_section_below_boundary(self, hef_gdir):
+        gdir = hef_gdir
+        # materially below the minimum: this is a real error, we raise
+        self._put_on_boundary(gdir, 0.5)
+
+        with pytest.raises(ValueError, match='physical minimum'):
+            init_present_time_glacier(gdir)
 
 
 @pytest.mark.usefixtures('io_init_gdir')
