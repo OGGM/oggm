@@ -548,7 +548,7 @@ class MixedBedFlowline(Flowline):
         # Here we have to compute the widths out of section and lambda
         thick = surface_h - bed_h
         with np.errstate(divide='ignore', invalid='ignore'):
-            self._w0_m = (section - lambdas * thick**2 / 2) / thick
+            self._w0_m = section / thick - lambdas * thick / 2
 
         assert np.all(section >= 0)
         need_w = (section == 0) & is_trapezoid
