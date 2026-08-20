@@ -626,7 +626,8 @@ def _fake_prepro_stats(reg, n):
     df['melt_f_before_dynamic_calibration'] = 5.
     df['melt_f_dynamic_calibration'] = 5.
 
-    # The first glacier of each region failed during the preprocessing
+    # The first glacier of each region failed during the preprocessing: it
+    # never ran, and is absent from the run output
     df.loc[ids[0], 'error_task'] = 'simple_glacier_masks'
     df.loc[ids[0], 'error_msg'] = 'GeometryError: nominal glacier'
     for c in ['used_spinup_option', 'run_dynamic_spinup_success',
@@ -635,6 +636,18 @@ def _fake_prepro_stats(reg, n):
     # The third one had to fall back to a fixed geometry spinup
     df.loc[ids[2], 'used_spinup_option'] = 'fixed geometry spinup'
     df.loc[ids[2], 'run_dynamic_spinup_success'] = False
+    # The fourth one errored *during* the dynamic melt_f calibration, which
+    # runs with `ignore_errors`: the error stays on record and its
+    # initialisation is never written down, but the fallback did run and its
+    # output is complete. It must therefore stay in the population.
+    df.loc[ids[3], 'error_task'] = 'run_dynamic_melt_f_calibration_spinup_historical'
+    df.loc[ids[3], 'error_msg'] = 'KeyError: not all values found in index'
+    for c in ['used_spinup_option', 'run_dynamic_spinup_success',
+              'dmdtda_mismatch_dynamic_calibration',
+              'dmdtda_dynamic_calibration_given_error',
+              'dmdtda_dynamic_calibration_error_scaling_factor',
+              'area_mismatch_dynamic_spinup_km2_percent']:
+        df.loc[ids[3], c] = np.nan
     # ... and the last one was moved by the dynamic melt_f calibration
     df.loc[ids[-1], 'melt_f_dynamic_calibration'] = 6.
     df.loc[ids[-1], 'melt_f'] = 6.
@@ -648,7 +661,10 @@ def _fake_prepro_run_output(sdf, reg, spinup=True):
     the spinup run and half of that for the fixed geometry one, so that the
     geodetic mass balance of the region can be computed by hand.
     """
-    ids = [i for i in sdf.index if sdf.loc[i, 'error_task'] is None]
+    # Only the glacier which failed during the preprocessing is missing from
+    # the run output - an error on record does not imply a missing run
+    ids = [i for i in sdf.index
+           if sdf.loc[i, 'error_task'] != 'simple_glacier_masks']
     nt, ng = len(FAKE_YEARS), len(ids)
 
     vol = np.zeros((nt, ng))
@@ -782,15 +798,26 @@ def test_prepro_diag_completion(fake_prepro_run):
 
     # Region 11: 6 glaciers, the first errored, the second stopped early
     assert df.loc['11', 'n_glaciers'] == 6
-    assert df.loc['11', 'n_ok_stats'] == 5
+    # Two glaciers have an error on record (the 2 and the 8 km2 ones), but
+    # only the first of them is actually missing from the runs
+    assert df.loc['11', 'n_ok_stats'] == 4
     assert df.loc['11', 'n_ok_spinup'] == 4
     assert df.loc['11', 'n_population'] == 4
+    # The population follows the runs, so the glacier which errored in the
+    # calibration but has a complete fallback run is in it
+    ids = diagnostics.read_prepro_run(fake_prepro_run).population('11')[0]
+    assert 'RGI60-11.00004' in ids
 
     # The areas are 2, 4, 6, ... km2, so the failed ones are the small ones
     assert_allclose(df.loc['11', 'rgi_area_km2'], 42)
-    assert_allclose(df.loc['11', 'area_ok_stats_km2'], 40)
+    assert_allclose(df.loc['11', 'area_ok_stats_km2'], 32)
     assert_allclose(df.loc['11', 'area_population_km2'], 34)
+    # ... which makes `ok_stats` the *lower* of the two, as in the real runs
+    assert (df.loc['11', 'perc_area_ok_stats'] <
+            df.loc['11', 'perc_area_ok_spinup'])
     assert_allclose(df.loc['11', 'perc_area_population'], 34 / 42 * 100)
+    # Both percentages are of the same total, the RGI area of the region
+    assert_allclose(df.loc['11', 'perc_area_ok_stats'], 32 / 42 * 100)
 
     # The global row is the sum
     assert df.loc['global', 'n_glaciers'] == 10
@@ -800,9 +827,12 @@ def test_prepro_diag_completion(fake_prepro_run):
     # The failed glaciers are accounted for, with their task and their area
     errs = diagnostics.compute_errors(prun)
     sel = errs.loc[(errs['region'] == 'global') &
-                   (errs['source'] == 'statistics')]
-    assert sel['error'].iloc[0] == 'simple_glacier_masks'
-    assert sel['n'].iloc[0] == 2  # one per region
+                   (errs['source'] == 'statistics')].set_index('error')
+    assert sel.loc['simple_glacier_masks', 'n'] == 2  # one per region
+    assert_allclose(sel.loc['simple_glacier_masks', 'area_km2'], 4)
+    # The calibration error is on record even though those glaciers ran
+    assert sel.loc['run_dynamic_melt_f_calibration_spinup_historical',
+                   'n'] == 2
     sel = errs.loc[(errs['region'] == '11') & (errs['source'] == 'run_spinup')]
     assert sel['n'].iloc[0] == 1  # the one which stopped early
 
@@ -819,8 +849,13 @@ def test_prepro_diag_spinup(fake_prepro_run):
     assert df.loc['11', 'n_fixed_geometry_spinup'] == 1
     assert_allclose(df.loc['11', 'perc_area_fixed_geometry_spinup'],
                     6 / 42 * 100)
-    # ... and one has no spinup option at all (it errored before)
-    assert df.loc['11', 'n_no_spinup_option'] == 1
+    # Two glaciers have no initialisation on record: the one which never ran
+    # and the one whose calibration errored - but the second one does have a
+    # complete run, and saying it had "no spinup" would overstate the failure
+    assert df.loc['11', 'n_not_recorded'] == 2
+    assert df.loc['11', 'n_not_recorded_but_ran'] == 1
+    assert_allclose(df.loc['11', 'area_not_recorded_km2'], 10)
+    assert_allclose(df.loc['11', 'area_not_recorded_but_ran_km2'], 8)
 
     # The mismatch of the fake run is 100 kg m-2 yr-1 for a tolerance of
     # 1000 * 0.2, so everything which was calibrated is inside it

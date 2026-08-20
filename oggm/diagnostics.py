@@ -80,6 +80,22 @@ RGI_REGION_NAMES = {
 RUN_VARIABLES = ['volume', 'area', 'area_min_h', 'mass_kg',
                  'error_during_run', 'is_partial_output']
 
+def _slug(name):
+    """A column-name friendly version of a free text option."""
+    for c in ' ()':
+        name = name.replace(c, '_')
+    return name.replace('__', '_').strip('_').lower()
+
+
+# The initialisation options `run_dynamic_melt_f_calibration` can end up with,
+# as they are written in the `used_spinup_option` column, plus the glaciers
+# for which nothing was written down at all. In plotting order.
+SPINUP_OPTIONS = ['dynamic melt_f calibration (full success)',
+                  'dynamic melt_f calibration (part success)',
+                  'dynamic spinup only',
+                  'fixed geometry spinup']
+SPINUP_CATEGORIES = [_slug(_o) for _o in SPINUP_OPTIONS] + ['not_recorded']
+
 # The index of the aggregated row in all the tables
 GLOBAL = 'global'
 
@@ -438,24 +454,48 @@ def compute_completion(prun):
 def compute_errors(prun, max_msg_length=80):
     """Which tasks the failed glaciers failed on, by number and by area.
 
+    Errors are split by what they cost us, in the `status` column:
+
+    - `fatal`: the glacier has no usable output at the end, so it is out of
+      every aggregated number of the report.
+    - `recovered`: the task errored, but the glacier still has a complete run
+      and is used like any other. This is what the dynamic melt_f calibration
+      does when it does not converge: it runs with `ignore_errors=True`, logs
+      the error and falls back to a simpler initialisation.
+
+    The split is made on the outcome (does this glacier have complete output
+    in every run?), not on the task itself. It has to be: the glacier
+    directory keeps only the *last* error of each glacier, so a task which
+    errored and was recovered is overwritten in the record by any later
+    failure. In other words `recovered` means "this glacier ended up usable
+    despite this error", not "this particular task was retried successfully".
+    The per-glacier log files of the run hold the full trace, but they are not
+    part of the summary output this tool reads.
+
     Returns
     -------
-    a DataFrame with one row per (source, region, error), sorted by area.
+    a DataFrame with one row per (source, region, error, status), sorted by
+    area.
     """
 
     rows = []
     for reg in prun.regions:
         sdf = prun.region_stats(reg)
+        pop, _ = prun.population(reg)
         if 'error_task' in sdf:
             failed = sdf.loc[sdf['error_task'].notnull()]
-            for task, sel in failed.groupby('error_task'):
-                msg = ''
-                if 'error_msg' in sel:
-                    msg = str(sel['error_msg'].iloc[0])[:max_msg_length]
-                rows.append({'source': 'statistics', 'region': reg,
-                             'error': task, 'n': len(sel),
-                             'area_km2': sel['rgi_area_km2'].sum(),
-                             'example_msg': msg})
+            recovered = failed.index.isin(pop)
+            for status, group in [('recovered', failed.loc[recovered]),
+                                  ('fatal', failed.loc[~recovered])]:
+                for task, sel in group.groupby('error_task'):
+                    msg = ''
+                    if 'error_msg' in sel:
+                        msg = str(sel['error_msg'].iloc[0])[:max_msg_length]
+                    rows.append({'source': 'statistics', 'region': reg,
+                                 'status': status,
+                                 'error': task, 'n': len(sel),
+                                 'area_km2': sel['rgi_area_km2'].sum(),
+                                 'example_msg': msg})
 
         for run in prun.runs:
             ds = prun.open_run(run, reg)
@@ -471,25 +511,27 @@ def compute_errors(prun, max_msg_length=80):
                                                  'the end)')
             for err, sel in errs.groupby(errs):
                 sel_ids = sel.index.intersection(sdf.index)
+                # These are fatal by definition: no complete output
                 rows.append({'source': f'run_{run}', 'region': reg,
+                             'status': 'fatal',
                              'error': str(err)[:max_msg_length],
                              'n': len(sel),
                              'area_km2': sdf['rgi_area_km2']
                              .reindex(sel_ids).sum(),
                              'example_msg': ''})
 
-    df = pd.DataFrame(rows, columns=['source', 'region', 'error', 'n',
-                                     'area_km2', 'example_msg'])
+    df = pd.DataFrame(rows, columns=['source', 'region', 'status', 'error',
+                                     'n', 'area_km2', 'example_msg'])
     if len(df) == 0:
         return df
 
     # The same, globally
-    glob_df = df.groupby(['source', 'error'], as_index=False).agg(
+    glob_df = df.groupby(['source', 'status', 'error'], as_index=False).agg(
         {'n': 'sum', 'area_km2': 'sum', 'example_msg': 'first'})
     glob_df['region'] = GLOBAL
     df = pd.concat([glob_df[df.columns], df], ignore_index=True)
-    return df.sort_values(['region', 'area_km2'],
-                          ascending=[True, False]).reset_index(drop=True)
+    return df.sort_values(['region', 'status', 'area_km2'],
+                          ascending=[True, True, False]).reset_index(drop=True)
 
 
 def compute_spinup(prun):
@@ -503,11 +545,7 @@ def compute_spinup(prun):
     if 'used_spinup_option' not in prun.stats:
         return None
 
-    # The options `run_dynamic_melt_f_calibration` can end up with
-    options = ['dynamic melt_f calibration (full success)',
-               'dynamic melt_f calibration (part success)',
-               'dynamic spinup only',
-               'fixed geometry spinup']
+    options = SPINUP_OPTIONS
 
     rows = OrderedDict()
     for reg in prun.regions:
@@ -520,8 +558,20 @@ def compute_spinup(prun):
             sel = opt == o
             d['n_' + _slug(o)] = int(sel.sum())
             d['area_' + _slug(o) + '_km2'] = area[sel].sum()
-        d['n_no_spinup_option'] = int(opt.isnull().sum())
-        d['area_no_spinup_option_km2'] = area[opt.isnull()].sum()
+        # Not all glaciers have their initialisation on record: when a task
+        # errors, the statistics are written without the diagnostics of that
+        # task. Most of these do have a complete (fallback) run - saying they
+        # had "no spinup" would overstate the failure by a lot, so we count
+        # them apart and say how many of them ran.
+        missing = opt.isnull()
+        d['n_not_recorded'] = int(missing.sum())
+        d['area_not_recorded_km2'] = area[missing].sum()
+        if prun.has_run('spinup'):
+            ds = prun.open_run('spinup', reg)
+            ok, _ = _valid_glaciers(ds)
+            ran = sdf.index[missing].intersection(ds['rgi_id'].values[ok])
+            d['n_not_recorded_but_ran'] = len(ran)
+            d['area_not_recorded_but_ran_km2'] = area.reindex(ran).sum()
 
         # The area match of the dynamic spinup. The calibration stops when it
         # is below 1%, so this is the fraction which reached its target.
@@ -591,13 +641,6 @@ def compute_spinup(prun):
             df.loc[GLOBAL, c] = vals[ok].max()
 
     return _add_area_percentages(df)
-
-
-def _slug(name):
-    """A column-name friendly version of a free text option."""
-    for c in ' ()':
-        name = name.replace(c, '_')
-    return name.replace('__', '_').strip('_').lower()
 
 
 def compute_mb_params(prun):
@@ -985,6 +1028,16 @@ def _run_label(run):
     return PREPRO_RUNS[run]['label']
 
 
+def _run_name(run):
+    """The name of the run as it appears on disk, e.g. `spinup_historical`.
+
+    Used where `_run_label` ('dynamic spinup') would claim more than the
+    number does: the `spinup_historical` files also hold the glaciers whose
+    dynamic spinup failed and fell back to something else.
+    """
+    return PREPRO_RUNS[run]['fname'].replace('_run_output', '')
+
+
 def prepro_diag_report(prun, tables, reference_period=None):
     """The diagnostic report of a preprocessing run, as text.
 
@@ -1067,19 +1120,49 @@ def prepro_diag_report(prun, tables, reference_period=None):
     if comp is not None:
         title('Completion')
         g = comp.loc[GLOBAL]
-        add('    {:.0f} glaciers ({:.0f} km2) in the statistics file(s), of '
-            'which'.format(g['n_glaciers'], g['rgi_area_km2']))
-        add('        {:.0f} without a preprocessing error ({:.3f}% of the '
-            'area)'.format(g['n_ok_stats'], g['perc_area_ok_stats']))
+        add('    Of the {:.0f} glaciers ({:.0f} km2) in the statistics '
+            'file(s), most to least'.format(g['n_glaciers'],
+                                            g['rgi_area_km2']))
+        add('    important:')
+        add('        {:.0f} are usable ({:.3f}% of the area): they have '
+            'complete output in'.format(g['n_population'],
+                                        g['perc_area_population']))
+        add('            {} - this is the population all the aggregated '
+            'numbers below'.format('every run' if len(prun.runs) > 1
+                                   else 'the run'))
+        add('            are computed on.')
         for run in prun.runs:
-            add('        {:.0f} with a complete `{}` run ({:.3f}% of the '
-                'area)'.format(g[f'n_ok_{run}'], _run_label(run),
-                               g[f'perc_area_ok_{run}']))
-        if len(prun.runs) > 1:
-            add('        {:.0f} valid in all the runs ({:.3f}% of the area) - '
-                'this is the population'.format(g['n_population'],
-                                                g['perc_area_population']))
-            add('        all the aggregated numbers below are computed on it.')
+            add('        {:.0f} have complete output in the `{}` run ({:.3f}% '
+                'of the area)'.format(g[f'n_ok_{run}'], _run_name(run),
+                                      g[f'perc_area_ok_{run}']))
+        add('        {:.0f} have no error at all on record ({:.3f}% of the '
+            'area)'.format(g['n_ok_stats'], g['perc_area_ok_stats']))
+        add('')
+        add('    Complete output is NOT the same as a successful dynamic '
+            'spinup: the glaciers')
+        add('    whose spinup or calibration failed and fell back to '
+            'something else are in')
+        add('    there too, with a perfectly complete run. How the glaciers '
+            'were actually')
+        add('    initialised is the next section - that is the number to look '
+            'at for the')
+        add('    success of the spinup itself.')
+        add('')
+        add('    All the percentages are of the total RGI area of the region. '
+            'The two columns')
+        add('    do not measure the same thing, and `ok_stats` can be the '
+            'lower one: it counts')
+        add('    the glaciers whose error log is empty, while `ok_<run>` '
+            'counts those whose run')
+        add('    output is complete. A glacier which errored in a task that '
+            'then fell back to')
+        add('    something usable (the dynamic melt_f calibration runs with '
+            '`ignore_errors`)')
+        add('    keeps the error on record but does have a complete run - '
+            'hence the population')
+        add('    follows the runs, not the error log. Note also that the '
+            'error log only keeps')
+        add('    the *last* error of each glacier.')
         cols = (['n_glaciers', 'rgi_area_km2', 'n_ok_stats',
                  'perc_area_ok_stats'] +
                 [f'perc_area_ok_{r}' for r in prun.runs] +
@@ -1089,11 +1172,38 @@ def prepro_diag_report(prun, tables, reference_period=None):
 
     errs = tables.get('errors')
     if errs is not None and len(errs) > 0:
-        title('Errors (the 15 largest by area, all regions together)')
-        sel = errs.loc[errs['region'] == GLOBAL].head(15)
-        add(_table_str(sel.set_index('source')[['error', 'n', 'area_km2',
-                                                'example_msg']],
-                       float_format='{:.1f}'))
+        title('Errors (all regions together, the 10 largest by area of each)')
+        glob = errs.loc[errs['region'] == GLOBAL]
+        for status, what in [
+                ('fatal', 'FATAL: these glaciers have no usable output and '
+                          'are out of every'),
+                ('recovered', 'RECOVERED: the task errored, but the glacier '
+                              'still has a complete')]:
+            sel = glob.loc[glob['status'] == status]
+            add('')
+            add('    ' + what)
+            if status == 'fatal':
+                add('    number of this report.')
+            else:
+                add('    run (the dynamic melt_f calibration runs with '
+                    '`ignore_errors` and falls')
+                add('    back), so it is used like any other.')
+            if len(sel) == 0:
+                add('        (none)')
+                continue
+            add('        {:.0f} glaciers, {:.1f} km2 in total'
+                ''.format(sel['n'].sum(), sel['area_km2'].sum()))
+            add(_table_str(sel.head(10).set_index('source')[
+                ['error', 'n', 'area_km2', 'example_msg']],
+                float_format='{:.1f}', indent=8))
+        add('')
+        add('    The split is on the outcome, not on the task: the glacier '
+            'directory keeps')
+        add('    only the *last* error of each glacier, so `recovered` means '
+            '"this glacier')
+        add('    ended up usable despite this error", not "this task was '
+            'retried successfully".')
+        add('    The per-glacier log files of the run hold the full trace.')
 
     # -- Spinup
     spin = tables.get('spinup')
@@ -1102,10 +1212,26 @@ def prepro_diag_report(prun, tables, reference_period=None):
         g = spin.loc[GLOBAL]
         add('    How the {:.0f} glaciers ended up being initialised (in % of '
             'the area):'.format(g['n_glaciers']))
-        for c in [c for c in spin.columns if c.startswith('perc_area_')
-                  and 'match' not in c]:
-            name = c.replace('perc_area_', '').replace('_', ' ')
-            add('        {:<45s}: {:>8.3f}%'.format(name, g[c]))
+        for cat in SPINUP_CATEGORIES:
+            c = f'perc_area_{cat}'
+            if c not in spin:
+                continue
+            add('        {:<45s}: {:>8.3f}%'.format(cat.replace('_', ' '),
+                                                    g[c]))
+        if 'n_not_recorded_but_ran' in spin:
+            add('    `not recorded` is not the same as "no spinup happened": '
+                'when a task errors,')
+            add('    the statistics are written without its diagnostics, so '
+                'we cannot tell how')
+            add('    those glaciers were initialised. {:.0f} of these {:.0f} '
+                'do have a complete run'.format(g['n_not_recorded_but_ran'],
+                                                g['n_not_recorded']))
+            add('    and are used below ({:.2f}% of the area, out of the '
+                '{:.2f}%); the rest never ran'
+                ''.format(g['perc_area_not_recorded_but_ran'],
+                          g['perc_area_not_recorded']))
+            add('    at all.')
+        add('')
         if 'perc_area_area_match' in spin:
             add('    Glaciers whose dynamic spinup matched its area target '
                 '(< 1%):')
@@ -1132,8 +1258,10 @@ def prepro_diag_report(prun, tables, reference_period=None):
                 'common period, which'.format(g['n_before_common_start']))
             add('        is the one the regional sums below are computed on.')
         add('')
-        cols = ([c for c in spin.columns if c.startswith('perc_area_')] +
-                ['median_area_mismatch_percent', 'median_dmdtda_mismatch',
+        cols = ([f'perc_area_{c}' for c in SPINUP_CATEGORIES] +
+                ['perc_area_not_recorded_but_ran', 'perc_area_area_match',
+                 'perc_area_dmdtda_match',
+                 'median_area_mismatch_percent', 'median_dmdtda_mismatch',
                  'median_spinup_period', 'first_output_yr_min',
                  'first_output_yr_max'])
         add(_table_str(spin, cols, float_format='{:.2f}'))
@@ -1512,8 +1640,8 @@ def _plot_completion(prun, comp, spin, path, title=''):
     if spin is not None:
         ax = axs[1]
         bottom = np.zeros(len(regions))
-        cols = [c for c in spin.columns if c.startswith('perc_area_') and
-                'match' not in c]
+        cols = [f'perc_area_{c}' for c in SPINUP_CATEGORIES
+                if f'perc_area_{c}' in spin]
         for i, c in enumerate(cols):
             v = spin.loc[regions, c].fillna(0).values
             ax.bar(x, v, bottom=bottom, zorder=2, color=plt.get_cmap('tab10')(i),
