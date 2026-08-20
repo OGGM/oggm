@@ -2926,6 +2926,9 @@ class TestTempBiasCLI:
         assert out.index.name == 'unique_id'
         # The RGI version is read from the IDs: the calibration checks it
         assert (out['rgi_version'] == '60').all()
+        # Grid points always have a value - the file never holds NaNs
+        vals = [c for c in out.columns if 'temp_bias' in c]
+        assert np.isfinite(out[vals].values).all()
         assert len(out) == 3
         assert out['n_glaciers'].sum() == len(df) - 1  # the failed one is out
 
@@ -3020,39 +3023,6 @@ class TestTempBiasCLI:
         with pytest.raises(InvalidWorkflowError) as exc:
             utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
         assert 'failed for' not in str(exc.value)
-
-    def test_compute_temp_bias_dataframe_empty_grid_point(self):
-
-        # A grid point where all the glaciers failed the calibration still
-        # needs a value, or the file has a hole where glaciers are
-        df = _fake_glacier_statistics([(10.25, 46.25, 20),
-                                       (10.75, 46.25, 3),
-                                       (20.25, 46.25, 20)])
-        pix = df['baseline_climate_ref_pix_lon']
-        df.loc[pix == 10.75, 'temp_bias'] = np.nan
-
-        out = utils.compute_temp_bias_dataframe(df, min_glaciers=12)
-        assert len(out) == 3
-        sel = out.loc[out['lon_val'] == 10.75].iloc[0]
-        assert sel['n_glaciers'] == 0
-        assert not np.isfinite(sel['median_temp_bias'])
-        # ... which it takes from its neighbour
-        assert sel['search_radius'] == 1
-        assert sel['n_glaciers_grouped'] == 20
-        assert_allclose(sel['median_temp_bias_w_err_grouped'], 10.25, atol=0.1)
-
-        # With nothing within max_radius we go as far as we have to: a weak
-        # prior is better than no prior (which would fail these glaciers)
-        df.loc[pix == 20.25, 'temp_bias'] = np.nan
-        out = utils.compute_temp_bias_dataframe(df, min_glaciers=12,
-                                                max_radius=2)
-        assert len(out) == 3
-        sel = out.loc[out['lon_val'] == 20.25].iloc[0]
-        assert sel['n_glaciers'] == 0
-        # 20 grid points away, which is what the file says
-        assert sel['search_radius'] == 20
-        assert sel['n_glaciers_grouped'] == 20
-        assert_allclose(sel['median_temp_bias_w_err_grouped'], 10.25, atol=0.1)
 
     def test_compute_temp_bias_dataframe_wrap(self):
 

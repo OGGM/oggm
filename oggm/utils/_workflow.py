@@ -2587,9 +2587,7 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     per-glacier temperature biases per climate grid point, using the (weighted)
     median of all glaciers within the grid point. Grid points with fewer than
     `min_glaciers` glaciers are grouped with their neighbours, by growing a
-    square search radius until enough glaciers are found. Grid points where
-    no glacier could be calibrated at all are treated the same way, so that
-    the file has no holes where the input data has glaciers.
+    square search radius until enough glaciers are found.
 
     The climate grid is reconstructed from the
     `baseline_climate_ref_pix_lon` / `baseline_climate_ref_pix_lat` columns of
@@ -2610,9 +2608,7 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         minimum number of glaciers per grid point. Grid points with fewer
         glaciers are grouped with their neighbours.
     max_radius : int, default 10
-        the maximum search radius (in grid points) used for the grouping. A
-        grid point with no calibrated glacier within this radius looks
-        further, as far as needed (`search_radius` says how far it went).
+        the maximum search radius (in grid points) used for the grouping.
     err_fill_quantile : float, default 0.9
         glaciers with a missing (or zero) reference mass balance error are
         attributed this quantile of the error distribution.
@@ -2717,16 +2713,11 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
             'area_used': odf['rgi_area_km2'].groupby(reg.loc[odf.index]).sum(),
         }).fillna(0)
 
-    # The climate grid, inferred from the coordinates the calibration uses.
-    # Glaciers which failed the calibration are of no use for the values, but
-    # they still tell us that their grid point has glaciers (see below).
-    pdf = df.loc[~no_pix]
-    lon_all = pdf['baseline_climate_ref_pix_lon'].values.astype(float)
-    lat_all = pdf['baseline_climate_ref_pix_lat'].values.astype(float)
+    # The climate grid, inferred from the coordinates the calibration uses
     lon = odf['baseline_climate_ref_pix_lon'].values.astype(float)
     lat = odf['baseline_climate_ref_pix_lat'].values.astype(float)
-    dlon = _infer_grid_spacing(lon_all, 'longitude')
-    dlat = _infer_grid_spacing(lat_all, 'latitude')
+    dlon = _infer_grid_spacing(lon, 'longitude')
+    dlat = _infer_grid_spacing(lat, 'latitude')
     if dlon is None and dlat is None:
         raise InvalidWorkflowError(
             'Cannot infer the climate grid spacing: all the glaciers are in '
@@ -2734,13 +2725,11 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
             'spread over at least two grid points.')
     dlon = dlat if dlon is None else dlon
     dlat = dlon if dlat is None else dlat
-    lon0, lat0 = lon_all.min(), lat_all.min()
-    lon_id_all = np.round((lon_all - lon0) / dlon).astype(int)
-    lat_id_all = np.round((lat_all - lat0) / dlat).astype(int)
+    lon0, lat0 = lon.min(), lat.min()
     lon_id = np.round((lon - lon0) / dlon).astype(int)
     lat_id = np.round((lat - lat0) / dlat).astype(int)
-    if not (np.allclose(lon0 + lon_id_all * dlon, lon_all, atol=dlon / 100) and
-            np.allclose(lat0 + lat_id_all * dlat, lat_all, atol=dlat / 100)):
+    if not (np.allclose(lon0 + lon_id * dlon, lon, atol=dlon / 100) and
+            np.allclose(lat0 + lat_id * dlat, lat, atol=dlat / 100)):
         raise InvalidWorkflowError(
             'The climate grid points do not lie on a regular lon-lat grid '
             f'(inferred spacing: {dlon} x {dlat}). This is not supported.')
@@ -2761,17 +2750,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     # Positional indices of the glaciers in each grid point
     groups = odf.groupby('unique_id').indices
 
-    # Grid points where none of the glaciers could be calibrated have no
-    # value of their own, but the grouping below can still give them one.
-    # Without them the file has holes, i.e. glaciers which end up far from
-    # any grid point of the file when it is used for a calibration.
-    empty = set(zip(lon_id_all, lat_id_all)) - set(zip(lon_id, lat_id))
-    groups.update({'{:03d}_{:03d}'.format(i, j): np.array([], dtype=int)
-                   for i, j in empty})
-
     diag['dlon'], diag['dlat'] = dlon, dlat
     diag['n_grid_points'] = len(groups)
-    diag['n_grid_points_empty'] = len(empty)
     log.workflow('compute_temp_bias_dataframe: inferred a {} x {} deg '
                  'lon-lat climate grid, with {} grid points containing '
                  'glaciers.'.format(dlon, dlat, len(groups)))
@@ -2785,14 +2765,14 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     rows = []
     for uid in sorted(groups.keys()):
         sel = groups[uid]
-        s_lon_id, s_lat_id = [int(i) for i in uid.split('_')]
-        med, med_area, med_err = _stats(sel) if len(sel) else (np.nan,) * 3
+        s_lon_id, s_lat_id = lon_id[sel[0]], lat_id[sel[0]]
+        med, med_area, med_err = _stats(sel)
 
         d = {'unique_id': uid,
              'lon_id': s_lon_id,
              'lat_id': s_lat_id,
-             'lon_val': lon0 + s_lon_id * dlon,
-             'lat_val': lat0 + s_lat_id * dlat,
+             'lon_val': lon[sel[0]],
+             'lat_val': lat[sel[0]],
              'rgi_area_km2': areas[sel].sum(),
              'n_glaciers': len(sel),
              'median_temp_bias': med,
@@ -2815,15 +2795,9 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         d_lat_id = np.abs(lat_id - s_lat_id)
         d_lon_id = np.abs(lon_id - s_lon_id)
         d_lon_id = np.minimum(d_lon_id, nlon - d_lon_id)  # wrap-around
-        d_id = np.maximum(d_lon_id, d_lat_id)
-
-        # If there is no calibrated glacier within `max_radius` at all we go
-        # as far as we have to: a prior from far away is a weak prior, but it
-        # is better than no prior at all (which would fail the glaciers of
-        # this grid point). `search_radius` says how far we had to go.
-        radius = max(1, int(d_id.min()))
-        while True:
-            sel = np.nonzero(d_id <= radius)[0]
+        radius = 1
+        while radius <= max_radius:
+            sel = np.nonzero((d_lon_id <= radius) & (d_lat_id <= radius))[0]
             med_g, med_area_g, med_err_g = _stats(sel)
             d.update({'n_glaciers_grouped': len(sel),
                       'search_radius': radius,
@@ -2831,7 +2805,7 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
                       'median_temp_bias_w_area_grouped': med_area_g,
                       'median_temp_bias_w_err_grouped': med_err_g,
                       })
-            if len(sel) >= min_glaciers or radius >= max_radius:
+            if len(sel) >= min_glaciers:
                 break
             radius += 1
         rows.append(d)
@@ -2940,9 +2914,6 @@ def _temp_bias_summary(mdf, diag, path=None):
     add('    inferred grid spacing    : {} x {} deg'
         ''.format(diag['dlon'], diag['dlat']))
     add('    grid points with glaciers: {:>8d}'.format(diag['n_grid_points']))
-    add('        of which with no calibrated glacier of their own (they take'
-        ' their value from their neighbours, or are left out if they have'
-        ' none): {:>8d}'.format(diag['n_grid_points_empty']))
     n = mdf['n_glaciers']
     add('    glaciers per grid point  : min {}, median {:.0f}, mean {:.1f}, '
         'max {}'.format(n.min(), n.median(), n.mean(), n.max()))
@@ -2961,10 +2932,6 @@ def _temp_bias_summary(mdf, diag, path=None):
     add('    grid points per search radius:')
     for k, v in mdf['search_radius'].value_counts().sort_index().items():
         add('        radius {:>2d} : {:>8d}'.format(k, v))
-    far = mdf['search_radius'] > diag['max_radius']
-    add('    grid points with no calibrated glacier within radius {}, which '
-        'had to look further: {:>8d}'.format(diag['max_radius'],
-                                             int(far.sum())))
     failed = mdf['n_glaciers_grouped'] < min_glaciers
     add('    grid points STILL below min_glaciers after radius {}: {}'
         ''.format(diag['max_radius'], int(failed.sum())))
