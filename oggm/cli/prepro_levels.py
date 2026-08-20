@@ -305,7 +305,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     params_file : str
         path to the OGGM parameter file (to override defaults)
     is_test : bool
-        to test on a couple of glaciers only!
+        to test on a couple of glaciers only! Picks 4 glaciers, always the
+        same ones (see `test_ids` to choose them): a chunked run needs every
+        job to select the same glaciers.
     test_ids : list
         if is_test: list of ids to process
     rgi_file : str or geopandas.GeoDataFrame, optional
@@ -704,7 +706,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 # RGI7
                 rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
-            rgidf = rgidf.sample(4)
+            # Seeded for chucked runs
+            rgidf = rgidf.sample(4, random_state=0)
 
     if len(rgidf) == 0:
         raise InvalidParamsError('Zero glaciers selected!')
