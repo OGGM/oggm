@@ -2924,6 +2924,11 @@ class TestTempBiasCLI:
         # The file format is set in stone - this is what OGGM reads back
         assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
         assert out.index.name == 'unique_id'
+        # The RGI version is read from the IDs: the calibration checks it
+        assert (out['rgi_version'] == '60').all()
+        # Grid points always have a value - the file never holds NaNs
+        vals = [c for c in out.columns if 'temp_bias' in c]
+        assert np.isfinite(out[vals].values).all()
         assert len(out) == 3
         assert out['n_glaciers'].sum() == len(df) - 1  # the failed one is out
 
