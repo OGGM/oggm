@@ -1152,7 +1152,9 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     url = base_url
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(int(border))
-    url += 'L{:d}/'.format(prepro_level)
+    # str() rather than {:d}: the preprocessing also knows the half
+    # levels '3a' and '4a' (see oggm.cli.prepro_levels)
+    url += 'L{}/'.format(prepro_level)
     return url
 
 
