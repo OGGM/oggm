@@ -1,11 +1,13 @@
 # Python imports
 import unittest
 import numpy as np
+import pandas as pd
 import os
 import shutil
 import xarray as xr
 import pytest
 import oggm
+from numpy.testing import assert_allclose
 from scipy import optimize as optimization
 
 salem = pytest.importorskip('salem')
@@ -19,6 +21,7 @@ from oggm.tests.funcs import get_test_dir
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
+from oggm.exceptions import InvalidParamsError
 
 pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
@@ -581,3 +584,411 @@ class TestCoxeGlacier(unittest.TestCase):
                                    temperature_bias=-0.5)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             assert ds.calving_m3[-1] > 10
+
+
+# --- Diagnostics of a preprocessing run (`oggm_prepro_diag`) ---
+#
+# These do not need a glacier directory: the tool reads the *summary* files a
+# preprocessing run leaves behind, so the fixture below writes a (tiny) fake
+# one, with the pathologies which have to be handled: a glacier which errored
+# during the preprocessing, one whose run stopped early, one which fell back to
+# a fixed geometry spinup, and one which starts earlier than the others.
+
+FAKE_REGIONS = {'11': 6, '16': 4}
+FAKE_YEARS = np.arange(1980, 2021)
+FAKE_RHO = 900.
+
+
+def _fake_prepro_stats(reg, n):
+    """The glacier statistics file of one fake region."""
+    ids = [f'RGI60-{reg}.{i + 1:05d}' for i in range(n)]
+    df = pd.DataFrame(index=pd.Index(ids, name='rgi_id'))
+    df['rgi_region'] = reg
+    df['rgi_area_km2'] = np.arange(1, n + 1) * 2.
+    df['rgi_year'] = 2000
+    df['error_task'] = None
+    df['error_msg'] = None
+    df['melt_f'] = 5.
+    df['prcp_fac'] = 2.
+    df['temp_bias'] = 0.5
+    df['bias'] = 0.
+    df['baseline_climate_source'] = 'FAKE'
+    df['reference_period'] = '2000-01-01_2020-01-01'
+    df['used_spinup_option'] = 'dynamic melt_f calibration (full success)'
+    # object dtype: like the real file, this one has NaNs where it failed
+    df['run_dynamic_spinup_success'] = np.array([True] * n, dtype=object)
+    df['dynamic_spinup_target_year'] = 2000.
+    df['dynamic_spinup_period'] = 20.
+    df['area_mismatch_dynamic_spinup_km2_percent'] = 0.5
+    df['dmdtda_mismatch_dynamic_calibration'] = 100.
+    df['dmdtda_dynamic_calibration_given_error'] = 1000.
+    df['dmdtda_dynamic_calibration_error_scaling_factor'] = 0.2
+    df['melt_f_before_dynamic_calibration'] = 5.
+    df['melt_f_dynamic_calibration'] = 5.
+
+    # The first glacier of each region failed during the preprocessing: it
+    # never ran, and is absent from the run output
+    df.loc[ids[0], 'error_task'] = 'simple_glacier_masks'
+    df.loc[ids[0], 'error_msg'] = 'GeometryError: nominal glacier'
+    for c in ['used_spinup_option', 'run_dynamic_spinup_success',
+              'dynamic_spinup_period', 'melt_f', 'prcp_fac', 'temp_bias']:
+        df.loc[ids[0], c] = np.nan
+    # The third one had to fall back to a fixed geometry spinup
+    df.loc[ids[2], 'used_spinup_option'] = 'fixed geometry spinup'
+    df.loc[ids[2], 'run_dynamic_spinup_success'] = False
+    # The fourth one errored *during* the dynamic melt_f calibration, which
+    # runs with `ignore_errors`: the error stays on record and its
+    # initialisation is never written down, but the fallback did run and its
+    # output is complete. It must therefore stay in the population.
+    df.loc[ids[3], 'error_task'] = 'run_dynamic_melt_f_calibration_spinup_historical'
+    df.loc[ids[3], 'error_msg'] = 'KeyError: not all values found in index'
+    for c in ['used_spinup_option', 'run_dynamic_spinup_success',
+              'dmdtda_mismatch_dynamic_calibration',
+              'dmdtda_dynamic_calibration_given_error',
+              'dmdtda_dynamic_calibration_error_scaling_factor',
+              'area_mismatch_dynamic_spinup_km2_percent']:
+        df.loc[ids[3], c] = np.nan
+    # ... and the last one was moved by the dynamic melt_f calibration
+    df.loc[ids[-1], 'melt_f_dynamic_calibration'] = 6.
+    df.loc[ids[-1], 'melt_f'] = 6.
+    return df
+
+
+def _fake_prepro_run_output(sdf, reg, spinup=True):
+    """The compiled run output of one fake region.
+
+    The volume decreases linearly, by 1 km3 per 100 years and per glacier for
+    the spinup run and half of that for the fixed geometry one, so that the
+    geodetic mass balance of the region can be computed by hand.
+    """
+    # Only the glacier which failed during the preprocessing is missing from
+    # the run output - an error on record does not imply a missing run
+    ids = [i for i in sdf.index
+           if sdf.loc[i, 'error_task'] != 'simple_glacier_masks']
+    nt, ng = len(FAKE_YEARS), len(ids)
+
+    vol = np.zeros((nt, ng))
+    for j, rid in enumerate(ids):
+        v0 = sdf.loc[rid, 'rgi_area_km2'] * 0.1  # km3
+        dvdt = -v0 / 100 * (1 if spinup else 0.5)
+        vol[:, j] = (v0 + dvdt * (FAKE_YEARS - 2000)) * 1e9  # m3
+
+    # The second glacier *of the run output* stopped early - no output at the
+    # end. In region 11 that is the 6 km2 one: the run output does not contain
+    # the glacier which errored during the preprocessing (the 2 km2 one), so
+    # the population of region 11 is 4 + 8 + 10 + 12 = 34 km2.
+    vol[-3:, 1] = np.nan
+    # The last glacier starts earlier than the others: everyone else only has
+    # data from 1990 on
+    early = ng - 1
+    for j in range(ng):
+        if j != early:
+            vol[FAKE_YEARS < 1990, j] = np.nan
+
+    area = np.repeat(sdf.loc[ids, 'rgi_area_km2'].values[np.newaxis, :] * 1e6,
+                     nt, axis=0)
+    area[np.isnan(vol)] = np.nan
+
+    err = np.array([''] * ng, dtype='<U20')
+    partial = np.zeros(ng)
+    partial[1] = 1
+
+    ds = xr.Dataset(
+        {'volume': (('time', 'rgi_id'), vol),
+         'area': (('time', 'rgi_id'), area),
+         # `area_min_h` is what the tool must use - make it clearly different
+         'area_min_h': (('time', 'rgi_id'), area * 0.9),
+         'mass_kg': (('time', 'rgi_id'), vol * FAKE_RHO),
+         'is_fixed_geometry_spinup': (('time', 'rgi_id'), np.zeros((nt, ng))),
+         'error_during_run': ('rgi_id', err),
+         'is_partial_output': ('rgi_id', partial),
+         },
+        coords={'time': FAKE_YEARS, 'rgi_id': ids},
+    )
+    ds.attrs['oggm_version'] = 'fake'
+    ds.attrs['creation_date'] = '2026-01-01'
+    return ds
+
+
+@pytest.fixture(scope='module')
+def fake_prepro_run(tmp_path_factory):
+    """A (tiny) fake `oggm_prepro` output directory."""
+    # The diagnostics log at the WORKFLOW level, which cfg defines
+    cfg.initialize_minimal()
+    base = tmp_path_factory.mktemp('prepro_diag') / 'fake_exp'
+    sdir = base / 'RGI62' / 'b_160' / 'L5' / 'summary'
+    sdir.mkdir(parents=True)
+    for reg, n in FAKE_REGIONS.items():
+        sdf = _fake_prepro_stats(reg, n)
+        sdf.to_csv(sdir / f'glacier_statistics_{reg}.csv')
+        _fake_prepro_run_output(sdf, reg, spinup=True).to_netcdf(
+            sdir / f'spinup_historical_run_output_{reg}.nc')
+        _fake_prepro_run_output(sdf, reg, spinup=False).to_netcdf(
+            sdir / f'historical_run_output_{reg}.nc')
+    return base
+
+
+@pytest.fixture
+def fake_geodetic_obs(monkeypatch):
+    """No download: a fake Hugonnet et al. dataset over the fake glaciers.
+
+    The observation is exactly the dmdtda of the spinup run (-0.9 m w.e. yr-1,
+    see `_fake_prepro_run_output`), so a correct comparison must come out with
+    a zero bias for that run.
+    """
+    obs_dmdtda = -0.9
+
+    def fake_get(file_path=None, rgi_version=None, regional=False):
+        if regional:
+            df = pd.DataFrame(index=pd.Index([11, 16], name='reg'))
+            df['period'] = '2000-01-01_2020-01-01'
+            df['dmdt'] = -1.
+            df['err_dmdt'] = 0.5
+            df['area'] = 1e9
+            df['tarea'] = 0.5e9
+            df['dmdtda'] = -2.
+            df['dmdtda_full_area'] = df['dmdt'] * 1e12 / df['area'] / 1000
+            df['err_dmdtda_full_area'] = (df['err_dmdt'] * 1e12 /
+                                          df['area'] / 1000)
+            return df
+        rows = []
+        for reg, n in FAKE_REGIONS.items():
+            for i in range(n):
+                rows.append({'rgiid': f'RGI60-{reg}.{i + 1:05d}',
+                             'period': '2000-01-01_2020-01-01',
+                             'area': (i + 1) * 2. * 1e6,
+                             'dmdtda': obs_dmdtda, 'err_dmdtda': 0.2,
+                             'reg': int(reg), 'is_cor': False})
+        return pd.DataFrame(rows).set_index('rgiid')
+
+    monkeypatch.setattr(utils, 'get_geodetic_mb_dataframe', fake_get)
+    return obs_dmdtda
+
+
+def test_prepro_diag_read(fake_prepro_run):
+
+    from oggm import diagnostics
+
+    prun = diagnostics.read_prepro_run(fake_prepro_run)
+    assert prun.level == 5
+    assert prun.rgi_version == '62'
+    assert prun.border == 160
+    assert prun.name == 'fake_exp'
+    assert prun.regions == ['11', '16']
+    assert prun.runs == ['spinup', 'fixed_geom']
+    assert len(prun.stats) == sum(FAKE_REGIONS.values())
+
+    # The summary dir, the level dir and the dir above all work
+    for p in [fake_prepro_run / 'RGI62' / 'b_160' / 'L5' / 'summary',
+              fake_prepro_run / 'RGI62' / 'b_160' / 'L5',
+              fake_prepro_run / 'RGI62' / 'b_160']:
+        assert diagnostics.read_prepro_run(p).regions == ['11', '16']
+
+    # One region only
+    assert diagnostics.read_prepro_run(fake_prepro_run,
+                                       rgi_region='11').regions == ['11']
+
+
+def test_prepro_diag_completion(fake_prepro_run):
+
+    from oggm import diagnostics
+
+    prun = diagnostics.read_prepro_run(fake_prepro_run)
+    df = diagnostics.compute_completion(prun)
+
+    # Region 11: 6 glaciers, the first errored, the second stopped early
+    assert df.loc['11', 'n_glaciers'] == 6
+    # Two glaciers have an error on record (the 2 and the 8 km2 ones), but
+    # only the first of them is actually missing from the runs
+    assert df.loc['11', 'n_ok_stats'] == 4
+    assert df.loc['11', 'n_ok_spinup'] == 4
+    assert df.loc['11', 'n_population'] == 4
+    # The population follows the runs, so the glacier which errored in the
+    # calibration but has a complete fallback run is in it
+    ids = diagnostics.read_prepro_run(fake_prepro_run).population('11')[0]
+    assert 'RGI60-11.00004' in ids
+
+    # The areas are 2, 4, 6, ... km2, so the failed ones are the small ones
+    assert_allclose(df.loc['11', 'rgi_area_km2'], 42)
+    assert_allclose(df.loc['11', 'area_ok_stats_km2'], 32)
+    assert_allclose(df.loc['11', 'area_population_km2'], 34)
+    # ... which makes `ok_stats` the *lower* of the two, as in the real runs
+    assert (df.loc['11', 'perc_area_ok_stats'] <
+            df.loc['11', 'perc_area_ok_spinup'])
+    assert_allclose(df.loc['11', 'perc_area_population'], 34 / 42 * 100)
+    # Both percentages are of the same total, the RGI area of the region
+    assert_allclose(df.loc['11', 'perc_area_ok_stats'], 32 / 42 * 100)
+
+    # The global row is the sum
+    assert df.loc['global', 'n_glaciers'] == 10
+    assert (df.loc['global', 'n_population'] ==
+            df.loc['11', 'n_population'] + df.loc['16', 'n_population'])
+
+    # The failed glaciers are accounted for, with their task and their area
+    errs = diagnostics.compute_errors(prun)
+    sel = errs.loc[(errs['region'] == 'global') &
+                   (errs['source'] == 'statistics')].set_index('error')
+    assert sel.loc['simple_glacier_masks', 'n'] == 2  # one per region
+    assert_allclose(sel.loc['simple_glacier_masks', 'area_km2'], 4)
+    # The calibration error is on record even though those glaciers ran
+    assert sel.loc['run_dynamic_melt_f_calibration_spinup_historical',
+                   'n'] == 2
+    sel = errs.loc[(errs['region'] == '11') & (errs['source'] == 'run_spinup')]
+    assert sel['n'].iloc[0] == 1  # the one which stopped early
+
+
+def test_prepro_diag_spinup(fake_prepro_run):
+
+    from oggm import diagnostics
+
+    prun = diagnostics.read_prepro_run(fake_prepro_run)
+    df = diagnostics.compute_spinup(prun)
+
+    # One glacier of each region fell back to a fixed geometry spinup: the
+    # third one, i.e. 6 km2 out of 42 in region 11
+    assert df.loc['11', 'n_fixed_geometry_spinup'] == 1
+    assert_allclose(df.loc['11', 'perc_area_fixed_geometry_spinup'],
+                    6 / 42 * 100)
+    # Two glaciers have no initialisation on record: the one which never ran
+    # and the one whose calibration errored - but the second one does have a
+    # complete run, and saying it had "no spinup" would overstate the failure
+    assert df.loc['11', 'n_not_recorded'] == 2
+    assert df.loc['11', 'n_not_recorded_but_ran'] == 1
+    assert_allclose(df.loc['11', 'area_not_recorded_km2'], 10)
+    assert_allclose(df.loc['11', 'area_not_recorded_but_ran_km2'], 8)
+
+    # The mismatch of the fake run is 100 kg m-2 yr-1 for a tolerance of
+    # 1000 * 0.2, so everything which was calibrated is inside it
+    assert df.loc['11', 'n_dmdtda_match'] == df.loc['11', 'n_dmdtda_calibrated']
+
+    # The last glacier starts in 1980, all the others in 1990
+    assert df.loc['11', 'first_output_yr_min'] == 1980
+    assert df.loc['11', 'first_output_yr_max'] == 1990
+    assert df.loc['11', 'n_before_common_start'] == 1
+    assert df.loc['global', 'first_output_yr_min'] == 1980
+
+
+def test_prepro_diag_timeseries(fake_prepro_run):
+
+    from oggm import diagnostics
+
+    prun = diagnostics.read_prepro_run(fake_prepro_run)
+    ts = diagnostics.compute_timeseries(prun)
+
+    sel = ts.loc[(ts['region'] == '11') & (ts['run'] == 'spinup')]
+    sel = sel.set_index('year')
+
+    # The years before 1990 are in the table, but only one glacier deep, and
+    # they are not part of the common period
+    assert not sel.loc[1985, 'is_common_period']
+    assert sel.loc[1985, 'n_glaciers'] == 1
+    assert sel.loc[1995, 'is_common_period']
+    assert sel.loc[1995, 'n_glaciers'] == 4
+    assert diagnostics.common_period_start(ts, '11', 'spinup') == 1990
+
+    # `area_min_h` is what is used, and it is not `area`
+    assert_allclose(sel.loc[1995, 'area_min_h_km2'],
+                    sel.loc[1995, 'area_km2'] * 0.9)
+    # The population of region 11 is 4 glaciers of 4, 8, 10 and 12 km2 (the
+    # 2 km2 one errored, the 6 km2 one stopped early)
+    assert_allclose(sel.loc[1995, 'area_km2'], 34)
+
+    # The global row is the sum of the regions
+    glob = ts.loc[(ts['region'] == 'global') &
+                  (ts['run'] == 'spinup')].set_index('year')
+    reg = [ts.loc[(ts['region'] == r) & (ts['run'] == 'spinup')]
+           .set_index('year')['volume_km3'] for r in prun.regions]
+    assert_allclose(glob['volume_km3'], sum(reg))
+
+
+def test_prepro_diag_geodetic(fake_prepro_run, fake_geodetic_obs):
+
+    from oggm import diagnostics
+
+    prun = diagnostics.read_prepro_run(fake_prepro_run)
+    df = diagnostics.compute_geodetic(prun)
+
+    # By construction the fake glaciers lose 1% of their initial volume per
+    # year in the spinup run, i.e. dmdtda = -0.1 km3 km-2 * 900 / 100 yr,
+    # which is -0.9 m w.e. yr-1 - and that is what the fake observation says
+    assert_allclose(df.loc['11', 'spinup_dmdtda'], -0.9, atol=1e-10)
+    assert_allclose(df.loc['11', 'fixed_geom_dmdtda'], -0.45, atol=1e-10)
+    assert_allclose(df.loc['11', 'hug_pergla_dmdtda'], fake_geodetic_obs)
+    assert_allclose(df.loc['11', 'bias_spinup_vs_hug_pergla_dmdtda'], 0,
+                    atol=1e-10)
+
+    # dmdt is the total, in Gt yr-1: 36 km2 * -0.9 m w.e. yr-1
+    assert_allclose(df.loc['11', 'spinup_dmdt_Gt'], 34 * -0.9 * 1e-3,
+                    rtol=1e-6)
+
+    # The global row is *not* the mean of the regional specific rates: it is
+    # recomputed from the totals (here they are all the same, so it is -0.9)
+    assert_allclose(df.loc['global', 'spinup_dmdtda'], -0.9, atol=1e-10)
+    assert_allclose(df.loc['global', 'spinup_dmdt_Gt'],
+                    df.loc['11', 'spinup_dmdt_Gt'] +
+                    df.loc['16', 'spinup_dmdt_Gt'])
+
+    # The published regional dmdtda is on the measured area and must not be
+    # confused with the one we compare to
+    assert_allclose(df.loc['11', 'hug_reg_dmdtda_published'], -2.)
+    assert_allclose(df.loc['11', 'hug_reg_dmdtda'], -1.)
+
+
+def test_prepro_diag_area_match(fake_prepro_run):
+
+    from oggm import diagnostics
+
+    prun = diagnostics.read_prepro_run(fake_prepro_run)
+    df = diagnostics.compute_area_match(prun)
+
+    # The RGI year of the fake glaciers is 2000, where the modelled
+    # `area_min_h` is 0.9 * the RGI area of the population
+    assert_allclose(df.loc['11', 'rgi_year_wmedian'], 2000)
+    assert_allclose(df.loc['11', 'rgi_area_km2'], 42)
+    assert_allclose(df.loc['11', 'rgi_area_population_km2'], 34)
+    assert_allclose(df.loc['11', 'area_min_h_at_rgi_yr_spinup_km2'], 34 * 0.9)
+    # Against the glaciers which ran - the number which is about the model
+    assert_allclose(df.loc['11', 'area_mismatch_pop_spinup_percent'], -10)
+    # Against the whole region - the missing glaciers are in there too
+    assert_allclose(df.loc['11', 'area_mismatch_spinup_percent'],
+                    (34 * 0.9 - 42) / 42 * 100)
+
+
+@pytest.mark.slow
+def test_prepro_diag_cli(fake_prepro_run, fake_geodetic_obs, tmp_path):
+
+    pytest.importorskip('matplotlib')
+    from oggm.cli.prepro_diag import run_prepro_diag, parse_args
+
+    out_dir = tmp_path / 'diag'
+    run_prepro_diag(input_dir=str(fake_prepro_run), output_dir=str(out_dir))
+
+    report = (out_dir / 'report.txt').read_text()
+    assert 'OGGM preprocessing diagnostics - fake_exp' in report
+    for section in ['Completion', 'Dynamic spinup', 'Geodetic mass balance',
+                    'Modelled area at the RGI date', 'Volume and area',
+                    'Calibrated mass balance parameters']:
+        assert section in report
+    # The area convention is stated, and it is the right one
+    assert 'area_min_h' in report
+
+    for table in ['completion', 'spinup', 'geodetic', 'timeseries',
+                  'mb_params', 'area_match', 'errors']:
+        assert (out_dir / 'tables' / f'{table}.csv').exists()
+
+    for plot in ['dmdtda_by_region', 'mass_loss_by_region',
+                 'volume_by_region', 'area_min_h_by_region',
+                 'volume_norm_all_regions', 'completion_by_region',
+                 'mb_params_hist']:
+        assert (out_dir / 'plots' / f'{plot}.png').exists()
+    assert (out_dir / 'plots' / 'per_region' / 'RGI11.png').exists()
+
+    # The command line arguments end up where they should
+    kwargs = parse_args(['--input', 'in_dir', '--output-dir', 'out_dir',
+                         '--rgi-region', '11', '--no-plots'])
+    assert kwargs['input_dir'] == 'in_dir'
+    assert kwargs['output_dir'] == 'out_dir'
+    assert kwargs['rgi_region'] == ['11']
+    assert not kwargs['make_plots']
+    with pytest.raises(InvalidParamsError):
+        parse_args([])

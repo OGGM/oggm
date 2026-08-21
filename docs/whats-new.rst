@@ -31,6 +31,19 @@ Enhancements
   run converged to is reported in ``df.attrs`` and written by
   ``run_prepro_levels`` to ``L3/summary/inversion_glen_a_{rgi_reg}.json``, so
   that it can be given back later with ``--inversion-glen-a-factor``.
+- New ``oggm_prepro_diag`` command (and the underlying ``oggm.diagnostics``
+  module) which diagnoses a finished preprocessing run: point it at the
+  summary files of an ``oggm_prepro`` run and it writes a report, the tables
+  it is made of, and a set of plots. It answers, per RGI region and globally:
+  how much of the run completed (and on which tasks the rest failed), how the
+  dynamic spinup and the dynamic melt_f calibration went, how the modelled
+  mass change compares to the geodetic observations of Hugonnet et al. (2021),
+  how the modelled area compares to the RGI inventory area at the date of the
+  inventory, and what the calibrated mass balance parameters look like. This
+  is meant for comparing two runs made with different options - e.g. to pick a
+  spinup strategy. ``utils.get_geodetic_mb_dataframe`` grows a ``regional``
+  keyword to fetch the regional averages published by Hugonnet et al., which
+  the comparison uses (:pull:`1988`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
   (:pull:`1800`).
