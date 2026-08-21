@@ -86,6 +86,7 @@ tests = [
 [project.scripts]
 oggm_prepro = "oggm.cli.prepro_levels:main"
 oggm_temp_bias = "oggm.cli.temp_bias:main"
+oggm_prepro_diag = "oggm.cli.prepro_diag:main"
 oggm_benchmark = "oggm.cli.benchmark:main"
 oggm_netrc_credentials = "oggm.cli.netrc_credentials:cli"
 "pytest.oggm" = "oggm.tests.__main__:main"
