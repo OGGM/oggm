@@ -1,5 +1,6 @@
 import unittest
 import glob
+import json
 import logging
 import os
 import shutil
@@ -827,6 +828,249 @@ class TestFuncs(object):
                 cfg.strtobool(value=value)
 
 
+class TestExtendPastClimateRun:
+    """Multi-glacier tests for `extend_past_climate_run`.
+
+    The other test (test_models.py) runs the real workflow on a single
+    glacier. Here we build the compiled files by hand so that we can cover
+    several glaciers at once with the cases which occur in a real region:
+    different RGI dates, glaciers which errored, and tidewater glaciers.
+    """
+
+    Y0_CLIM = 1901
+    Y0_RUN = 1950
+    Y1_RUN = 2020
+
+    def _make_files(self, tmpdir, n_glaciers=20):
+        rng = np.random.default_rng(42)
+        rids = np.array([f'RGI60-11.{i:05d}' for i in range(n_glaciers)],
+                        dtype=object)
+        run_years = np.arange(self.Y0_RUN, self.Y1_RUN + 1)
+        nt = len(run_years)
+
+        # RGI dates differ from glacier to glacier
+        starts = np.arange(n_glaciers) % 5
+        # ... and one glacier is there from the very first year
+        starts[1] = 0
+        # ... while two of them errored during the run
+        failed = [3, 11]
+
+        base_vol = rng.uniform(1e7, 1e10, size=n_glaciers)
+        trend = np.linspace(1.0, 0.7, nt)[:, None]
+
+        ds = xr.Dataset(coords={'time': ('time', run_years),
+                                'rgi_id': ('rgi_id', rids)})
+        fields = {'volume': base_vol * 1.,
+                  'volume_ice': base_vol * 0.95,
+                  'volume_firn': base_vol * 0.05,
+                  'volume_bsl': base_vol * 0.02,
+                  'volume_bwl': base_vol * 0.01,
+                  'area': base_vol ** 0.7,
+                  'area_min_h': base_vol ** 0.7 * 0.9,
+                  'length': base_vol ** 0.3,
+                  'calving': base_vol * 0.001,
+                  'calving_rate': np.full(n_glaciers, 10.)}
+        for vn, ref in fields.items():
+            data = (ref[None, :] * trend).astype(np.float32)
+            for i, s in enumerate(starts):
+                data[:s, i] = np.nan
+            data[:, failed] = np.nan
+            ds[vn] = (('time', 'rgi_id'), data)
+            ds[vn].attrs['description'] = f'{vn} description'
+
+        for vn, val in [('hydro_year', run_years), ('hydro_month', 4),
+                        ('calendar_year', run_years), ('calendar_month', 1)]:
+            ds[vn] = ('time', np.full(nt, val) if np.isscalar(val) else val)
+            ds[vn].attrs['description'] = vn
+
+        past_run_file = os.path.join(tmpdir, 'compiled.nc')
+        ds.to_netcdf(past_run_file)
+
+        clim_years = np.arange(self.Y0_CLIM, self.Y1_RUN)
+        mb = pd.DataFrame(rng.uniform(-2000, 500,
+                                      size=(len(clim_years), n_glaciers)),
+                          index=clim_years, columns=rids)
+        mb_file = os.path.join(tmpdir, 'fixed_geometry_mb.csv')
+        mb.to_csv(mb_file)
+
+        stats = pd.DataFrame(index=pd.Index(rids, name='rgi_id'))
+        stats['calving_flux'] = 0.
+        stats['calving_rate_myr'] = 0.
+        tidewater = [2, 7]
+        stats.loc[rids[tidewater], 'calving_flux'] = 0.1
+        stats.loc[rids[tidewater], 'calving_rate_myr'] = 55.
+        # a NaN here has to be treated as "no calving"
+        stats.loc[rids[5], 'calving_flux'] = np.nan
+        stats_file = os.path.join(tmpdir, 'stats.csv')
+        stats.to_csv(stats_file)
+
+        return past_run_file, mb_file, stats_file, ds, mb, stats
+
+    def test_extend_multiple_glaciers(self, tmp_path):
+        cfg.initialize_minimal()
+        tmpdir = str(tmp_path)
+        pf, mf, sf, ds_in, mb, stats = self._make_files(tmpdir)
+        opath = os.path.join(tmpdir, 'extended.nc')
+
+        utils.extend_past_climate_run(past_run_file=pf,
+                                      fixed_geometry_mb_file=mf,
+                                      glacier_statistics_file=sf,
+                                      path=opath)
+
+        rho = cfg.PARAMS['ice_density']
+        # The first year is always NaN and is dropped on write
+        years = np.arange(self.Y0_CLIM + 1, self.Y1_RUN + 1)
+
+        with xr.open_dataset(opath) as ods:
+            assert_array_equal(ods.time.data, years)
+            assert_array_equal(ods.rgi_id.data, ds_in.rgi_id.data)
+            # the `_ext` suffix is dropped again on write
+            assert 'volume_ext' not in ods.data_vars
+            assert 'volume_fixed_geom' in ods.data_vars
+
+            for i, rid in enumerate(ods.rgi_id.data):
+                vol_in = ds_in.volume.values[:, i]
+                vol_out = ods.volume.values[:, i]
+                n_new = len(years) - len(vol_in)
+
+                if np.all(~np.isfinite(vol_in)):
+                    # errored glaciers are left alone
+                    assert np.all(~np.isfinite(vol_out))
+                    assert np.all(~np.isfinite(
+                        ods.volume_fixed_geom.values[:, i]))
+                    continue
+
+                # First year with a dynamical volume (everything before it
+                # is what the task has to fill in)
+                fid = n_new + np.argmax(np.isfinite(vol_in))
+                assert fid > 1
+                assert np.all(np.isfinite(vol_out[:fid]))
+
+                # the dynamical part of the run is never touched
+                assert_allclose(vol_out[fid:], vol_in[fid - n_new:], rtol=1e-6)
+
+                # Recompute the extension independently
+                calv_flux = stats.loc[rid, 'calving_flux']
+                calv_flux = 0 if not np.isfinite(calv_flux) else calv_flux * 1e9
+                area_fid = ods.area.values[fid, i]
+                mb_ts = mb[rid].values
+                mb_vol_ts = (mb_ts / rho * area_fid - calv_flux).cumsum()
+                mb_vol_ts = mb_vol_ts + vol_out[fid] - mb_vol_ts[fid]
+
+                assert_allclose(ods.volume_fixed_geom.values[:, i], mb_vol_ts,
+                                rtol=1e-4)
+                assert_allclose(vol_out[:fid], mb_vol_ts[:fid], rtol=1e-4)
+
+                # Area and length are kept constant before the RGI date
+                for vn in ['area', 'length']:
+                    ts = ods[vn].values[:, i]
+                    assert_allclose(ts[:fid], ts[fid], rtol=1e-6)
+
+                # No ice/firn partitioning for the fixed geometry period
+                for vn in ['volume_ice', 'volume_firn']:
+                    assert np.all(~np.isfinite(ods[vn].values[:fid, i]))
+
+                # bsl/bwl keep a constant fraction of the total volume
+                for vn in ['volume_bsl', 'volume_bwl']:
+                    frac = ods[vn].values[fid, i] / vol_out[fid]
+                    assert_allclose(ods[vn].values[:fid, i],
+                                    frac * vol_out[:fid], rtol=1e-4)
+
+                # Calving rate is constant before (and at) the RGI date
+                exp_rate = stats.loc[rid, 'calving_rate_myr']
+                assert_allclose(ods.calving_rate.values[:fid + 1, i],
+                                exp_rate, rtol=1e-6)
+
+    def test_extend_is_linear_in_n_glaciers(self, tmp_path):
+        # `DataFrame.values` on the (one block per column) frames returned by
+        # `read_csv` is O(n_glaciers): calling it inside the per-glacier loop
+        # made this task quadratic and cost hours on the large RGI regions.
+        cfg.initialize_minimal()
+
+        def time_it(n):
+            d = os.path.join(str(tmp_path), f'n{n}')
+            utils.mkdir(d, reset=True)
+            pf, mf, sf, _, _, _ = self._make_files(d, n_glaciers=n)
+            t0 = time.perf_counter()
+            utils.extend_past_climate_run(past_run_file=pf,
+                                          fixed_geometry_mb_file=mf,
+                                          glacier_statistics_file=sf,
+                                          path=os.path.join(d, 'ext.nc'))
+            return time.perf_counter() - t0
+
+        # Deliberately generous: quadratic scaling gives a factor of ~64 here
+        t_small = time_it(250)
+        t_large = time_it(2000)
+        assert t_large < 12 * t_small
+
+
+class TestMergeConsecutiveRunOutputs:
+    """Unit tests for `merge_consecutive_run_outputs` on hand-made files."""
+
+    class FakeGdir:
+        """All `merge_consecutive_run_outputs` needs from a gdir."""
+
+        def __init__(self, tmpdir):
+            self.tmpdir = tmpdir
+            self.rgi_id = 'RGI60-11.00897'
+            self.settings = cfg.PARAMS
+
+        def get_filepath(self, filename, filesuffix=''):
+            return os.path.join(self.tmpdir, filename + filesuffix + '.nc')
+
+        def get_task_status(self, task_name):
+            return None
+
+    def _write_diag(self, gdir, years, v0, v1, filesuffix, attrs):
+        ds = xr.Dataset(coords={'time': ('time', np.asarray(years))})
+        ds['volume_m3'] = ('time', np.linspace(v0, v1, len(years)))
+        ds['area_m2'] = ('time', np.linspace(v0, v1, len(years)) * 10)
+        ds.attrs = attrs
+        ds.to_netcdf(gdir.get_filepath('model_diagnostics',
+                                       filesuffix=filesuffix))
+
+    def test_attrs_are_kept(self, tmp_path):
+
+        cfg.initialize()
+        gdir = self.FakeGdir(str(tmp_path))
+
+        # The second file is the truncated one (as after a run with
+        # PARAMS['store_output_on_error'] = True)
+        self._write_diag(gdir, np.arange(2000, 2011), 100, 90, '_hist',
+                         {'calendar': 'noleap',
+                          'creation_date': 'first',
+                          'only_in_1': 'yes'})
+        self._write_diag(gdir, np.arange(2010, 2021), 90, 80, '_fut',
+                         {'calendar': 'noleap',
+                          'creation_date': 'second',
+                          'partial_output': 'True',
+                          'error_during_run': 'RuntimeError(boundaries)'})
+
+        out_ds = utils.merge_consecutive_run_outputs(
+            gdir,
+            input_filesuffix_1='_hist',
+            input_filesuffix_2='_fut',
+            output_filesuffix='_merged',
+            add_to_log_file=False)
+
+        fp = gdir.get_filepath('model_diagnostics', filesuffix='_merged')
+        with xr.open_dataset(fp) as ds:
+            for check in [out_ds, ds]:
+                # The data is merged as expected
+                assert check['time'][0] == 2000
+                assert check['time'][-1] == 2020
+                assert check['time'].size == 21
+                # The truncation flags of the second file are not lost
+                assert check.attrs['partial_output'] == 'True'
+                assert 'boundaries' in check.attrs['error_during_run']
+                # ... and neither are the attrs of the first one
+                assert check.attrs['calendar'] == 'noleap'
+                assert check.attrs['only_in_1'] == 'yes'
+                # On the keys both files have, the first one wins (as it did
+                # before both sets of attrs were kept)
+                assert check.attrs['creation_date'] == 'first'
+
+
 class TestInitialize(unittest.TestCase):
 
     def setUp(self):
@@ -1523,10 +1767,14 @@ class TestPreproCLI:
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20, 30, 40,
+                                                               50, 60, 70, 80,
+                                                               90, 100]
+        assert kwargs['dynamic_spinup_allow_shorter']
         assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
         assert not kwargs['store_hydro_output']
-        assert kwargs['store_monthly_hydro']
+        assert not kwargs['store_monthly_hydro']
         assert kwargs['ref_area_yr'] is None
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -1543,7 +1791,7 @@ class TestPreproCLI:
         assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
-        assert kwargs['start_level'] == 2
+        assert kwargs['start_level'] == '2'
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
         assert kwargs['ref_area_yr'] == 2000
@@ -1571,6 +1819,45 @@ class TestPreproCLI:
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
+        # The chunking and half level arguments
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '13',
+                                           '--map-border', '160',
+                                           '--start-level', '2',
+                                           '--start-base-url', 'http://foo',
+                                           '--max-level', '3a',
+                                           '--chunk-idx', '7',
+                                           '--chunk-size', '100',
+                                           ])
+        assert kwargs['start_level'] == '2'
+        assert kwargs['max_level'] == '3a'
+        assert kwargs['chunk_idx'] == 7
+        assert kwargs['chunk_size'] == 100
+        assert kwargs['start_from_dir'] is None
+        assert kwargs['glen_a_factor'] is None
+        assert kwargs['inversion_fs'] == 0
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '13',
+                                           '--map-border', '160',
+                                           '--start-level', '4a',
+                                           '--start-from-dir', 'some/dir',
+                                           '--inversion-glen-a-factor', '1.37',
+                                           '--inversion-fs', '5.7e-20',
+                                           ])
+        assert kwargs['start_level'] == '4a'
+        assert kwargs['max_level'] == '5'
+        assert kwargs['start_from_dir'] == 'some/dir'
+        assert kwargs['chunk_idx'] is None
+        assert kwargs['chunk_size'] == 1000
+        assert kwargs['glen_a_factor'] == 1.37
+        assert kwargs['inversion_fs'] == 5.7e-20
+
+        # Levels and chunk sizes are validated by argparse
+        for bad in [['--max-level', '6'], ['--max-level', '3b'],
+                    ['--start-level', '5'], ['--chunk-size', '250']]:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160'] + bad)
+
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
@@ -1590,7 +1877,7 @@ class TestPreproCLI:
         assert not kwargs['is_test']
         assert not kwargs['disable_mp']
         assert not kwargs['skip_inversion']
-        assert kwargs['max_level'] == 5
+        assert kwargs['max_level'] == '5'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -1679,6 +1966,87 @@ class TestPreproCLI:
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
         assert kwargs['ref_mb_err_scaling_factor'] == 0.5
 
+        # The extra years to try are years, and 'none' is the documented way
+        # to ask for no additional start year at all
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           '30',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [30]
+        assert kwargs['dynamic_spinup_allow_shorter']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           '10', '20',
+                                           '--dynamic-spinup-no-shorter-periods',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20]
+        assert not kwargs['dynamic_spinup_allow_shorter']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           'none',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] is None
+        assert kwargs['temp_bias_run'] is False
+
+        with pytest.raises(InvalidParamsError):
+            prepro_levels.parse_args(['--rgi-reg', '1',
+                                      '--map-border', '160',
+                                      '--dynamic-spinup-extra-years-to-try',
+                                      '30', 'abc',
+                                      ])
+
+        # they are counted backwards from the start year, so must be positive
+        with pytest.raises(InvalidParamsError):
+            prepro_levels.parse_args(['--rgi-reg', '1',
+                                      '--map-border', '160',
+                                      '--dynamic-spinup-extra-years-to-try',
+                                      '0',
+                                      ])
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--temp-bias-run',
+                                           ])
+        assert kwargs['temp_bias_run'] is True
+
+        # passed values should be treated as errors
+        for flag in ['--elev-bands', '--centerlines', '--skip-inversion',
+                     '--keep-dem-folders', '--add-consensus-thickness',
+                     '--add-itslive-velocity', '--add-millan-thickness',
+                     '--add-millan-velocity', '--add-hugonnet-dhdt',
+                     '--add-bedmachine', '--add-glathida',
+                     '--add-distributed-thickness',
+                     '--add-export-thickness-geotiff', '--compute-hypsometry',
+                     '--test', '--disable-mp', '--store-fl-diagnostics',
+                     '--store-hydro-output', '--store-monthly-hydro',
+                     '--temp-bias-run',
+                     ]:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160',
+                                          flag, 'whatever',
+                                          ])
+
+        # Monthly hydro output is opt-in, like in flowline.run_with_hydro
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--store-hydro-output',
+                                           ])
+        assert kwargs['store_hydro_output'] is True
+        assert kwargs['store_monthly_hydro'] is False
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--store-hydro-output',
+                                           '--store-monthly-hydro',
+                                           ])
+        assert kwargs['store_monthly_hydro'] is True
+
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
                                      OGGM_OUTDIR='local/out',
@@ -1706,6 +2074,128 @@ class TestPreproCLI:
             assert kwargs['rgi_version'] is None
             assert kwargs['rgi_reg'] == '12'
             assert kwargs['border'] == 120
+
+    def test_chunk_selection(self):
+
+        _, rgidf = _read_shp()
+
+        # Chunks are blocks of the RGI id space, not slices of the sorted
+        # list of glaciers, so that they line up with the tar bundles
+        for chunk_size in [100, 1000]:
+            n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+            seen = []
+            for i in range(n_chunks):
+                sub = workflow.get_rgi_chunk(rgidf, i, chunk_size=chunk_size)
+                # A chunk is exactly one block of ids
+                for rid in sub.RGIId:
+                    assert int(rid[-5:]) // chunk_size == i
+                seen.extend(sub.RGIId)
+            # Disjoint and complete
+            assert sorted(seen) == sorted(rgidf.RGIId)
+            # And nothing beyond the last one
+            assert len(workflow.get_rgi_chunk(rgidf, n_chunks,
+                                              chunk_size=chunk_size)) == 0
+
+        # Some chunks are empty (the RGI ids have gaps) - this is normal
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=100)
+        sizes = [len(workflow.get_rgi_chunk(rgidf, i, chunk_size=100))
+                 for i in range(n_chunks)]
+        assert 0 in sizes
+        assert sum(sizes) == len(rgidf)
+
+        # Lists of ids work as well as dataframes
+        ids = list(rgidf.RGIId)
+        assert (workflow.get_rgi_chunk(ids, 6, chunk_size=100) ==
+                list(workflow.get_rgi_chunk(rgidf, 6, chunk_size=100).RGIId))
+
+        # RGI7 ids are sliced the same way
+        df7 = pd.DataFrame({'rgi_id': ['RGI2000-v7.0-G-13-01234',
+                                       'RGI2000-v7.0-G-13-00001']})
+        assert workflow.count_rgi_chunks(df7, chunk_size=1000) == 2
+        assert list(workflow.get_rgi_chunk(df7, 1, chunk_size=1000).rgi_id) == \
+            ['RGI2000-v7.0-G-13-01234']
+
+        # Only the two tar bundle sizes are allowed
+        for bad in [10, 250, 5000]:
+            with pytest.raises(InvalidParamsError):
+                workflow.count_rgi_chunks(rgidf, chunk_size=bad)
+        with pytest.raises(InvalidParamsError):
+            workflow.get_rgi_chunk(rgidf, -1, chunk_size=100)
+
+        # The slurm helper says how to wire it up
+        out = workflow.print_slurm_array(rgidf, chunk_size=100)
+        assert f'--array=0-{n_chunks - 1}' in out
+        assert '$SLURM_ARRAY_TASK_ID' in out
+
+    def test_half_level_addressing(self):
+        # A half level is decomposed into an integer plus a flag so that the
+        # existing `start_level <= n` logic keeps working, but the glacier
+        # directories still have to be read from the level they were *stored*
+        # under. Getting this wrong silently reads the wrong level.
+        from oggm.cli.prepro_levels import _level_dir_name, _parse_start_level
+
+        # '4a' holds the L4 directories, '3a' holds its own
+        assert _level_dir_name('4a') == 'L4'
+        assert _level_dir_name('3a') == 'L3a'
+        assert _level_dir_name('3') == 'L3'
+
+        # the logic integer is one below, and is NOT what to read from
+        assert _parse_start_level('4a') == (3, False, True)
+        assert _parse_start_level('3a') == (2, True, False)
+        assert _level_dir_name('4a')[1:] == '4'
+        assert _level_dir_name('3a')[1:] == '3a'
+
+        # and the url builder has to take the half levels, not just ints
+        for lev, end in [(3, '/L3/'), (4, '/L4/'),
+                         ('3a', '/L3a/'), ('4a', '/L4a/')]:
+            url = utils.get_prepro_base_url(base_url='http://foo',
+                                            rgi_version='62', border=160,
+                                            prepro_level=lev)
+            assert url.endswith(end), (lev, url)
+
+    def test_gdir_from_tar_rgi_ids(self):
+        # gdir_from_tar used to fall back to `rgi_id = entity` when the row
+        # had no RGIId, i.e. for every RGI7 dataframe, which then blew up in
+        # os.path.join with a Series. --start-from-dir routes the prepro CLI
+        # through here, so RGI7 chunked runs hit it immediately.
+        from oggm.workflow import _rgi_id_of, gdir_from_tar
+
+        rgi6 = pd.Series({'RGIId': 'RGI60-06.00123', 'Area': 1.0})
+        rgi7 = pd.Series({'rgi_id': 'RGI2000-v7.0-G-06-00123', 'area_km2': 1.0})
+        assert _rgi_id_of(rgi6) == 'RGI60-06.00123'
+        assert _rgi_id_of(rgi7) == 'RGI2000-v7.0-G-06-00123'
+        assert _rgi_id_of('RGI60-06.00123') == 'RGI60-06.00123'
+
+        # and the id has to survive all the way into the bundle lookup: with
+        # no tars on disk that is a FileNotFoundError naming the glacier, not
+        # a TypeError from slicing a Series
+        for entity, rid in [(rgi6, 'RGI60-06.00123'),
+                            (rgi7, 'RGI2000-v7.0-G-06-00123')]:
+            with pytest.raises(FileNotFoundError) as err:
+                gdir_from_tar(entity, from_tar=str(self.testdir))
+            assert rid in str(err.value)
+
+    def test_rgi_chunks_table(self):
+
+        from oggm.cli import prepro_chunks
+
+        df = prepro_chunks.get_rgi_chunks_table()
+
+        # All versions, all regions, both chunk sizes
+        assert set(df.rgi_version) == set(prepro_chunks.RGI_VERSIONS)
+        assert set(df.chunk_size) == set(prepro_chunks.CHUNK_SIZES)
+        for v in prepro_chunks.RGI_VERSIONS:
+            for cs in prepro_chunks.CHUNK_SIZES:
+                sel = df.loc[(df.rgi_version == v) & (df.chunk_size == cs)]
+                assert len(sel) == 19
+        # A chunk can hold at most chunk_size glaciers
+        assert np.all(df.n_chunks * df.chunk_size >= df.n_glaciers)
+        assert np.all(df.n_chunks > 0)
+
+        # The lookup CLI reads it
+        assert prepro_chunks.run_prepro_chunks('13', chunk_size=1000) == int(
+            df.loc[(df.rgi_version == '62') & (df.rgi_reg == '13') &
+                   (df.chunk_size == 1000)].n_chunks.iloc[0])
 
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
@@ -1870,6 +2360,155 @@ class TestPreproCLI:
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
+
+    @pytest.mark.slow
+    def test_full_run_chunked(self):
+        # The point of chunking: running the four stages of a chunked run
+        # has to give exactly what a single whole-region run gives.
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+
+        # Four glaciers spread over two id blocks: enough to have real chunks
+        # (and an empty one below them), few enough to keep this at the same
+        # cost as the other full-run tests. Hef (00897) is in there so the
+        # inversion has something well behaved to calibrate on.
+        test_ids = ['RGI60-11.00887', 'RGI60-11.00897',   # block 008
+                    'RGI60-11.00929', 'RGI60-11.00945']   # block 009
+        rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+        assert len(rgidf) == 4
+
+        chunk_size = 100
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+        # Only run the blocks which hold glaciers: the empty ones below them
+        # would just be no-op prepro calls, and the empty-chunk behaviour is
+        # asserted explicitly further down.
+        chunks = [i for i in range(n_chunks)
+                  if len(workflow.get_rgi_chunk(rgidf, i,
+                                                chunk_size=chunk_size))]
+        # two chunks is the minimum that actually splits and rejoins
+        assert chunks == [8, 9]
+
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      rgi_file=rgidf, intersects_file=inter,
+                      test_topofile=topof, disable_mp=True,
+                      elev_bands=True,
+                      inversion_volume_dataset='consensus',
+                      temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
+                      continue_on_error=False,
+                      override_params={})
+
+        def wd(name):
+            out = os.path.join(self.testdir, name)
+            utils.mkdir(out)
+            return out
+
+        # The reference: one job for the whole region, as before
+        ref_dir = os.path.join(self.testdir, 'ref_out')
+        np.random.seed(0)
+        run_prepro_levels(output_folder=ref_dir, working_dir=wd('ref_wd'),
+                          max_level='5', **common)
+
+        # And now the four stages. L2 comes from the reference run here; on a
+        # cluster it comes from the published L2 base url.
+        out_dir = os.path.join(self.testdir, 'chunked_out')
+        scratch = os.path.join(self.testdir, 'scratch')
+
+        # 1 - the chunkable part of L3
+        for i in chunks:
+            run_prepro_levels(output_folder=scratch,
+                              working_dir=wd(f'wd_s1_{i}'),
+                              start_level='2', start_from_dir=ref_dir,
+                              max_level='3a',
+                              chunk_idx=i, chunk_size=chunk_size, **common)
+
+        # 2 - Glen A and the L3 summaries, whole region
+        run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s2'),
+                          start_level='3a', start_from_dir=scratch,
+                          max_level='3', **common)
+
+        # 3 - the runs
+        for i in chunks:
+            run_prepro_levels(output_folder=out_dir,
+                              working_dir=wd(f'wd_s3_{i}'),
+                              start_level='3', start_from_dir=out_dir,
+                              max_level='4a',
+                              chunk_idx=i, chunk_size=chunk_size, **common)
+
+        # 4 - the L4 summaries and L5, whole region
+        run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s4'),
+                          start_level='4a', start_from_dir=out_dir,
+                          max_level='5', **common)
+
+        def summary(root, lev, name):
+            return os.path.join(root, 'RGI61', 'b_020', lev, 'summary', name)
+
+        for lev, name in [('L3', 'glacier_statistics_11.csv'),
+                          ('L3', 'climate_statistics_11.csv'),
+                          ('L3', 'fixed_geometry_mass_balance_11.csv'),
+                          ('L4', 'glacier_statistics_11.csv'),
+                          ('L5', 'glacier_statistics_11.csv')]:
+            ref = pd.read_csv(summary(ref_dir, lev, name), index_col=0)
+            new = pd.read_csv(summary(out_dir, lev, name), index_col=0)
+            pd.testing.assert_frame_equal(ref.sort_index(), new.sort_index())
+
+        for lev, name in [('L4', 'historical_run_output_11.nc'),
+                          ('L4', 'historical_run_output_extended_11.nc'),
+                          ('L5', 'historical_run_output_11.nc')]:
+            with xr.open_dataset(summary(ref_dir, lev, name)) as ref, \
+                    xr.open_dataset(summary(out_dir, lev, name)) as new:
+                ref = ref.sortby('rgi_id')
+                new = new.sortby('rgi_id')
+                assert_array_equal(ref.rgi_id, new.rgi_id)
+                assert_allclose(ref.volume, new.volume)
+
+        # The tar files of the chunks add up to what one job would write
+        for lev in ['L3', 'L4', 'L5']:
+            ref = sorted(os.listdir(os.path.join(ref_dir, 'RGI61', 'b_020',
+                                                 lev, 'RGI60-11')))
+            new = sorted(os.listdir(os.path.join(out_dir, 'RGI61', 'b_020',
+                                                 lev, 'RGI60-11')))
+            assert ref == new
+            assert len(new) > 1
+
+        # An empty chunk is a normal thing (the RGI ids have gaps) and has
+        # to return quietly: on a cluster it is one task of an array job, and
+        # an error would take the dependent jobs down with it.
+        empty = [i for i in range(n_chunks) if i not in chunks][0]
+        run_prepro_levels(output_folder=os.path.join(self.testdir, 'empty'),
+                          working_dir=wd('wd_empty'),
+                          start_level='3', start_from_dir=out_dir,
+                          max_level='4a',
+                          chunk_idx=empty, chunk_size=chunk_size, **common)
+        assert not os.path.exists(os.path.join(self.testdir, 'empty', 'RGI61',
+                                               'b_020', 'L4'))
+
+        # The whole-region stage wrote down which Glen A it converged to
+        with open(summary(out_dir, 'L3',
+                          'inversion_glen_a_11.json')) as f:
+            glen_a = json.load(f)
+        assert glen_a['rgi_reg'] == '11'
+        assert glen_a['ref_table'] == 'consensus'
+        assert glen_a['n_glaciers'] == len(rgidf)
+        assert glen_a['glen_a_factor'] > 0
+        np.testing.assert_allclose(glen_a['glen_a'],
+                                   glen_a['glen_a_factor'] *
+                                   cfg.PARAMS['inversion_glen_a'])
+
+        # Given back, it reproduces the inversion without calibrating again
+        redo_dir = os.path.join(self.testdir, 'redo_out')
+        run_prepro_levels(output_folder=redo_dir, working_dir=wd('wd_redo'),
+                          start_level='3a', start_from_dir=scratch,
+                          max_level='3',
+                          glen_a_factor=glen_a['glen_a_factor'],
+                          inversion_fs=glen_a['fs'], **common)
+        ref = pd.read_csv(summary(ref_dir, 'L3', 'glacier_statistics_11.csv'),
+                          index_col=0).sort_index()
+        new = pd.read_csv(summary(redo_dir, 'L3', 'glacier_statistics_11.csv'),
+                          index_col=0).sort_index()
+        assert_allclose(ref['inv_volume_km3'], new['inv_volume_km3'])
 
     @pytest.mark.slow
     def test_distributed_thickness_and_geotiff_export(self, tmpdir):
@@ -2549,6 +3188,9 @@ class TestTempBiasCLI:
         assert kwargs['err_fill_quantile'] == 0.5
         assert kwargs['rgi_subregion'] == ['11-01']
 
+        with pytest.raises(SystemExit):
+            temp_bias.parse_args(['--input', 'in_dir', '--no-plots', 'whatever'])
+
         with pytest.raises(InvalidParamsError):
             temp_bias.parse_args([])
 
@@ -2592,6 +3234,11 @@ class TestTempBiasCLI:
         # The file format is set in stone - this is what OGGM reads back
         assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
         assert out.index.name == 'unique_id'
+        # The RGI version is read from the IDs: the calibration checks it
+        assert (out['rgi_version'] == '60').all()
+        # Grid points always have a value - the file never holds NaNs
+        vals = [c for c in out.columns if 'temp_bias' in c]
+        assert np.isfinite(out[vals].values).all()
         assert len(out) == 3
         assert out['n_glaciers'].sum() == len(df) - 1  # the failed one is out
 
@@ -2654,6 +3301,38 @@ class TestTempBiasCLI:
             # All the glaciers in the same grid point
             utils.compute_temp_bias_dataframe(
                 _fake_glacier_statistics([(10.25, 46.25, 20)]))
+
+    def test_compute_temp_bias_dataframe_failed_run(self):
+
+        # When the calibration fails for all the glaciers, `glacier_statistics`
+        # silently drops the columns it could not fill. The error message has
+        # to point at the calibration and not at the file itself (this is what
+        # a run of a version without RGI7 geodetic MB data looked like).
+        df = _fake_glacier_statistics([(10.25, 46.25, 20),
+                                       (10.75, 46.25, 15)])
+        df['error_task'] = 'mb_calibration_from_geodetic_mb'
+        df['error_msg'] = "KeyError: 'RGI2000-v7.0-G-06-00001'"
+        failed = df.drop(columns=['temp_bias', 'reference_mb_err'])
+
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(failed)
+        msg = str(exc.value)
+        assert 'mb_calibration_from_geodetic_mb' in msg
+        assert 'failed for 35 of the 35 glaciers' in msg
+        assert "KeyError: 'RGI2000-v7.0-G-06-00001'" in msg
+
+        # Same story when the columns are there but empty
+        df['temp_bias'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df)
+        assert 'mb_calibration_from_geodetic_mb' in str(exc.value)
+
+        # But we don't blame a task when none of them failed
+        df = _fake_glacier_statistics([(10.25, 46.25, 20)])
+        df['error_task'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
+        assert 'failed for' not in str(exc.value)
 
     def test_compute_temp_bias_dataframe_wrap(self):
 
@@ -2914,6 +3593,12 @@ class TestBenchmarkCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['is_test']
+
+        with pytest.raises(SystemExit):
+            benchmark.parse_args(['--rgi-reg', '1',
+                                  '--map-border', '160',
+                                  '--test', 'whatever',
+                                  ])
 
         kwargs = benchmark.parse_args(['--rgi-reg', '1',
                                        '--map-border', '160',

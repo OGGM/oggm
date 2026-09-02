@@ -542,7 +542,11 @@ class MonthlyTIModel(MassBalanceModel):
             OGGM will try hard not to use wrongly calibrated parameters
             by checking the global parameters used during calibration
             and the ones you are using at run time. If they don't
-            match, it will raise an error. Set to ``False`` to suppress
+            match, it will raise an error. The baseline climate source
+            is compared as well, but only when running with the
+            baseline climate itself (``filename='climate_historical'``):
+            runs forced with other data such as GCMs are expected to use
+            a different climate source. Set to ``False`` to suppress
             this check.
         check_climate_data : bool, default True
             If True the climate input data is checked if it is provided in total
@@ -590,16 +594,22 @@ class MonthlyTIModel(MassBalanceModel):
                            'Set `check_calib_params=False` to ignore this '
                            'warning.')
                     raise InvalidWorkflowError(msg)
-            src = self.calib_params['baseline_climate_source']
-            src_calib = gdir.get_climate_info(
-                filename=self.filename, input_filesuffix=self.input_filesuffix
-            )['baseline_climate_source']
-            if src != src_calib:
-                msg = (f'You seem to have calibrated with the {src} '
-                       f"climate data while this gdir was calibrated with "
-                       f"{src_calib}. Set `check_calib_params=False` to "
-                       f"ignore this warning.")
-                raise InvalidWorkflowError(msg)
+            # The climate source check only makes sense when running with
+            # the baseline climate: runs forced with other data (e.g. GCMs)
+            # differ from the calibration climate by construction.
+            if self.filename == 'climate_historical':
+                src_calib = self.calib_params['baseline_climate_source']
+                src_run = gdir.get_climate_info(
+                    filename=self.filename,
+                    input_filesuffix=self.input_filesuffix,
+                )['baseline_climate_source']
+                if src_calib != src_run:
+                    msg = (f'You seem to have calibrated with the '
+                           f'{src_calib} climate data while you are now '
+                           f'running with {src_run}. Set '
+                           f'`check_calib_params=False` to ignore this '
+                           f'warning.')
+                    raise InvalidWorkflowError(msg)
 
         self.melt_f = melt_f
         self.bias = bias
@@ -1066,7 +1076,11 @@ class DailyTIModel(MonthlyTIModel):
             OGGM will try hard not to use wrongly calibrated parameters
             by checking the global parameters used during calibration
             and the ones you are using at run time. If they don't
-            match, it will raise an error. Set to ``False`` to suppress
+            match, it will raise an error. The baseline climate source
+            is compared as well, but only when running with the
+            baseline climate itself (``filename='climate_historical'``):
+            runs forced with other data such as GCMs are expected to use
+            a different climate source. Set to ``False`` to suppress
             this check.
         check_climate_data : bool, default True
             If True, check the climate input data is provided in total
@@ -4524,12 +4538,71 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                      'utils.get_temp_bias_dataframe).')
         bias_df = get_temp_bias_dataframe(temp_bias_file_path)
         climinfo = gdir.get_climate_info()
+
+        # Is this file made for this run? RGI versions are not
+        # interchangeable: a file made for another one has no data where the
+        # two disagree on where the glaciers are. Recent files say what they
+        # were made for, older ones don't: for those the file name is all we
+        # have to go by, hence a warning only.
+        file_version = None
+        if 'rgi_version' in bias_df:
+            file_version = bias_df['rgi_version'].iloc[0]
+        if file_version is not None and not pd.isnull(file_version):
+            if str(file_version) != gdir.rgi_version:
+                raise InvalidWorkflowError(
+                    f'The temperature bias file was made for RGI version '
+                    f'{file_version}, but this run uses {gdir.rgi_version}: '
+                    f'set `temp_bias_file_path` to the file matching your '
+                    f'setup. File: {temp_bias_file_path}')
+            file_source = bias_df.get('baseline_climate_source')
+            file_source = None if file_source is None else file_source.iloc[0]
+            source = climinfo['baseline_climate_source']
+            if file_source is not None and not pd.isnull(file_source):
+                if str(file_source) != str(source):
+                    log.warning(f'The temperature bias file was made with '
+                                f'the {file_source} climate data, but this '
+                                f'run uses {source}: the prior is unlikely '
+                                f'to be a good one. '
+                                f'File: {temp_bias_file_path}')
+        else:
+            name = os.path.basename(str(temp_bias_file_path)).lower()
+            guess = {'rgi70g': '70G', 'rgi70c': '70C', 'rgi6': '60'}
+            guess = next((v for k, v in guess.items() if k in name), None)
+            if guess is not None and guess != gdir.rgi_version:
+                log.warning(f'The name of the temperature bias file suggests '
+                            f'that it was made for RGI{guess}, but this run '
+                            f'uses RGI version {gdir.rgi_version}. Is it the '
+                            f'right file? File: {temp_bias_file_path}')
+
+        # The file is made of climate grid points, and this glacier sits on
+        # one of them: its own grid point is either in the file or it is not.
+        # So we measure the distance in grid cells (spacing taken from the
+        # file itself) and accept one at most - anything further means that
+        # the glacier was not part of the run which made this file.
         ref_lon = climinfo['baseline_climate_ref_pix_lon']
         ref_lat = climinfo['baseline_climate_ref_pix_lat']
-        # Take nearest
-        dis = ((bias_df.lon_val - ref_lon)**2 + (bias_df.lat_val - ref_lat)**2)**0.5
-        assert dis.min() < 1, 'Somethings wrong with lons'
-        sel_df = bias_df.iloc[np.argmin(dis)]
+        lon_val = bias_df.lon_val.values
+        lat_val = bias_df.lat_val.values
+        nx = np.ptp(bias_df.lon_id.values)
+        ny = np.ptp(bias_df.lat_id.values)
+        dlon = np.ptp(lon_val) / nx if nx else None
+        dlat = np.ptp(lat_val) / ny if ny else None
+        dlon = dlat if dlon is None else dlon
+        dlat = dlon if dlat is None else dlat
+
+        d_lon = np.abs(lon_val - ref_lon)
+        d_lon = np.minimum(d_lon, 360 - d_lon)  # wrap-around at the dateline
+        dis = np.maximum(d_lon / dlon, np.abs(lat_val - ref_lat) / dlat)
+        imin = np.argmin(dis)
+        if dis[imin] > 1:
+            raise InvalidWorkflowError(
+                f'The climate grid point of this glacier ({ref_lon:.2f}°E '
+                f'{ref_lat:.2f}°N) is not in the temperature bias file: the '
+                f'nearest one is {dis[imin]:.1f} grid cells away. This '
+                f'glacier was not part of the run which made this file - is '
+                f'it the right file for this run? '
+                f'File: {temp_bias_file_path}')
+        sel_df = bias_df.iloc[imin]
         temp_bias = sel_df['median_temp_bias_w_err_grouped']
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 

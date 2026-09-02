@@ -110,7 +110,7 @@ def parse_args(args):
     parser.add_argument('--output-file', type=str, default='temp_bias.csv',
                         help='path of the csv file to write (default: '
                              '`temp_bias.csv` in the current directory).')
-    parser.add_argument('--no-plots', nargs='?', const=True, default=False,
+    parser.add_argument('--no-plots', action='store_true',
                         help='do not write the diagnostic plots. The '
                              '`_summary.txt` diagnostic file is always '
                              'written.')

@@ -1152,7 +1152,9 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     url = base_url
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(int(border))
-    url += 'L{:d}/'.format(prepro_level)
+    # str() rather than {:d}: the preprocessing also knows the half
+    # levels '3a' and '4a' (see oggm.cli.prepro_levels)
+    url += 'L{}/'.format(prepro_level)
     return url
 
 
@@ -1260,7 +1262,7 @@ def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
     return df
 
 
-def get_geodetic_mb_dataframe(file_path=None, rgi_version=None):
+def get_geodetic_mb_dataframe(file_path=None, rgi_version=None, regional=False):
     """Fetches the reference geodetic dataframe for calibration.
 
     Currently that's the data from Hughonnet et al 2021, corrected for
@@ -1270,6 +1272,17 @@ def get_geodetic_mb_dataframe(file_path=None, rgi_version=None):
 
     The data is indexed by glacier id, i.e. there is one file per RGI version.
 
+    With `regional=True` this returns the regional averages published by
+    Hugonnet et al. instead, which is a different (and much smaller) file: one
+    row per region and period, indexed by the region number. These values
+    include an extrapolation to the glaciers which could not be measured, and
+    they come with an error estimate. Watch out for the area they refer to:
+    `dmdtda` is relative to the *measured* area (`tarea`), while `dmdt` is the
+    regional total, i.e. extrapolated to the full regional area (`area`).
+    Comparing a model estimate (which covers all glaciers) to `dmdtda` will
+    therefore show a bias which is not the model's. Use `dmdt` (or the
+    `dmdtda_full_area` column we add here, which is `dmdt` divided by `area`).
+
     Parameters
     ----------
     file_path : str
@@ -1278,7 +1291,11 @@ def get_geodetic_mb_dataframe(file_path=None, rgi_version=None):
     rgi_version : str
         the RGI version to fetch the file for: '62' (or the equivalent '60',
         '61') or '70G'. RGI70C is not available yet. Defaults to the one
-        specified in cfg.PARAMS.
+        specified in cfg.PARAMS. Ignored if `regional=True`: the regional file
+        is available for RGI6 only.
+    regional : bool
+        if True, fetch the regional averages instead of the per glacier data
+        (see above). The regional file is based on RGI6.
 
     Returns
     -------
@@ -1286,7 +1303,12 @@ def get_geodetic_mb_dataframe(file_path=None, rgi_version=None):
     """
 
     # fetch the file online or read custom file
-    if file_path is None:
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+    if file_path is None and regional:
+        # There is one file only - RGI6 based
+        file_path = file_downloader(base_url +
+                                    'hugonnet_2021_regional_avg.csv')
+    elif file_path is None:
         if rgi_version is None:
             rgi_version = cfg.PARAMS['rgi_version']
 
@@ -1298,7 +1320,6 @@ def get_geodetic_mb_dataframe(file_path=None, rgi_version=None):
             raise NotImplementedError('No geodetic mass balance data available '
                                       f'for RGI version: {rgi_version}')
 
-        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
         file_name = (f'hugonnet_2021_ds_{rgi_str}_pergla_rates_10_20_'
                      'worldwide_filled.parquet')
         file_path = file_downloader(base_url + file_name)
@@ -1306,12 +1327,26 @@ def get_geodetic_mb_dataframe(file_path=None, rgi_version=None):
     if file_path.startswith('http'):
         file_path = file_downloader(file_path)
 
-    # Did we open it yet?
-    if file_path in cfg.DATA:
-        return cfg.DATA[file_path]
+    # Did we open it yet? The two flavors are indexed differently, so they
+    # cannot share a cache entry (a custom file_path could be given to both)
+    cache_key = file_path + '_regional' if regional else file_path
+    if cache_key in cfg.DATA:
+        return cfg.DATA[cache_key]
 
     # If not let's go
     df = get_dataframe_from_file(file_path)
+
+    if regional:
+        # Index by region number, and add the value which is comparable to a
+        # model estimate covering the entire region (see docstring).
+        df['reg'] = df['reg'].astype(int)
+        df = df.set_index('reg')
+        # dmdt is in Gt yr-1, area in m2 -> m w.e. yr-1
+        df['dmdtda_full_area'] = df['dmdt'] * 1e12 / df['area'] / 1000
+        df['err_dmdtda_full_area'] = df['err_dmdt'] * 1e12 / df['area'] / 1000
+        cfg.DATA[cache_key] = df
+        return df
+
     # Check for missing data (old files)
     if len(df.loc[df['dmdtda'].isnull()]) > 0:
         raise InvalidParamsError('The reference file you are using has missing '

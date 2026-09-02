@@ -696,8 +696,11 @@ class FlowlineModel(object):
         if gdir is not None:
             gdir.settings_filesuffix = settings_filesuffix
             self.settings = gdir.settings
+            # only used for logging - gdir may be a duck-typed stub
+            self.rgi_id = getattr(gdir, 'rgi_id', None)
         else:
             self.settings = cfg.PARAMS.copy()
+            self.rgi_id = None
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
@@ -1642,10 +1645,8 @@ class FlowlineModel(object):
                     # out below, truncated to the last completed step. The
                     # error is re-raised once the files are written.
                     run_error = e
-                    log.workflow('run_until_and_store: the run failed at year '
-                                 '%s (%s). Writing output truncated to the '
-                                 'last completed step before re-raising.',
-                                 yr, repr(e))
+                    log.workflow('%s: run truncated at year %s (%s)',
+                                 self.rgi_id or '?', yr, repr(e))
                     break
 
             # Glacier geometry
@@ -3648,6 +3649,69 @@ def calving_glacier_downstream_line(line, n_points):
     return shpg.LineString(np.array([x, y]).T)
 
 
+def stabilize_trapezoid_section(section, surface_h, bed_h, lambdas,
+                                rgi_id=''):
+    """Keeps trapezoid sections above their physical minimum.
+
+    A sloping trapezoid requires ``section > lambda * thick**2 / 2``, i.e. a
+    strictly positive origin width. The inversion can land exactly on that
+    boundary, since it brackets the thickness at ``width / lambda`` (where
+    ``w0 = 0``), and there floating point cancellation can make the origin
+    width computed by :py:class:`MixedBedFlowline` zero or slightly negative.
+
+    Sections which are only a few ulp below the minimum are numerical noise
+    and are nudged back just above it (a degenerate, triangular trapezoid).
+    Sections which are materially below it are a real inconsistency and raise.
+
+    Note that the minimum has to be computed from the thickness as
+    ``MixedBedFlowline`` recomputes it (``surface_h - bed_h``), which is not
+    always bit-identical to the inverted thickness. Using the latter, the
+    correction can be undone by the round trip and the origin width still
+    comes out as zero or negative.
+
+    Parameters
+    ----------
+    section : ndarray
+        the cross-sections along the flowline (m2)
+    surface_h : ndarray
+        the surface elevations along the flowline (m)
+    bed_h : ndarray
+        the bed elevations along the flowline (m)
+    lambdas : ndarray
+        the trapezoid lambdas (nan for non-trapezoid grid points)
+    rgi_id : str
+        for a more informative error message
+
+    Returns
+    -------
+    the corrected sections (m2)
+    """
+
+    thick = surface_h - bed_h
+    is_sloping_trap = np.isfinite(lambdas) & (lambdas > 0) & (thick > 0)
+    min_section = lambdas * thick ** 2 / 2
+
+    # `thick` is a difference of two elevations, so its own rounding error
+    # scales with the elevation, not with the thickness: a thin trapezoid
+    # high up in the mountains has a much larger absolute uncertainty on its
+    # minimum section than `min_section` alone would suggest.
+    eps = np.finfo(np.float64).eps
+    scale = min_section + lambdas * thick * np.maximum(np.abs(surface_h),
+                                                       np.abs(bed_h))
+    tol = 16 * eps * np.maximum(1, scale)
+    invalid = is_sloping_trap & (section < min_section - tol)
+    if np.any(invalid):
+        raise ValueError(f'({rgi_id}) the trapezoid section is below its '
+                         'physical minimum (lambda * thick**2 / 2) at grid '
+                         f'points {np.flatnonzero(invalid).tolist()}.')
+
+    at_boundary = is_sloping_trap & (section <= min_section)
+    if np.any(at_boundary):
+        section = np.where(at_boundary, min_section * (1 + 64 * eps), section)
+
+    return section
+
+
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir, settings_filesuffix='',
                               input_filesuffix=None, output_filesuffix=None,
@@ -3717,6 +3781,9 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
 
             # Where the flux and the thickness is zero we just assume trapezoid:
             lambdas[bed_shape == 0] = def_lambda
+
+            section = stabilize_trapezoid_section(
+                section, surface_h, bed_h, lambdas, rgi_id=gdir.rgi_id)
 
         else:
             # here we use binned thickness data for the initialisation
@@ -4639,9 +4706,8 @@ def run_with_hydro(gdir, settings_filesuffix='',
     # end (the files carry a `partial_output` flag in the meantime).
     run_error = getattr(out, 'run_error', None)
     if run_error is not None:
-        log.workflow('run_with_hydro: the dynamic run was truncated by an '
-                     'error (%s). Adding hydro diagnostics over the available '
-                     'years before re-raising.', repr(run_error))
+        log.debug('%s: hydro diagnostics added over truncated run (%s)',
+                  gdir.rgi_id, repr(run_error))
 
     do_spinup = fixed_geometry_spinup_yr is not None
     if do_spinup:

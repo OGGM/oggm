@@ -9,6 +9,42 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- The preprocessing can now be run in chunks, so that a big RGI region does not
+  have to fit into a single cluster job. ``oggm_prepro`` gained
+  ``--chunk-idx`` / ``--chunk-size`` (chunks are blocks of the RGI id space, of
+  100 or 1000 glaciers, chosen so that they line up with the glacier directory
+  tar bundles), and two half levels ``3a`` and ``4a`` for ``--start-level`` /
+  ``--max-level`` which stop where the work stops being per-glacier: ``3a`` is
+  L3 without the Glen A calibration, the inversion and the summary files,
+  ``4a`` is L4 without the summary files. Stages are chained through glacier
+  directory tar files on disk with the new ``--start-from-dir``, the local
+  equivalent of ``--start-base-url``. Nothing needs merging afterwards: the
+  whole-region stages write the summary files exactly as a single job would.
+  New helpers :py:func:`workflow.get_rgi_chunk`,
+  :py:func:`workflow.count_rgi_chunks` and
+  :py:func:`workflow.print_slurm_array` make the same chunking available to
+  ordinary runs, and the new ``oggm_prepro_chunks`` command tells you how many
+  chunks a region has. See the documentation for a complete SLURM example.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``calibrate_inversion_from_ref_table`` gained a ``glen_a_factor`` keyword to
+  skip the calibration and invert with a known A factor instead. The factor a
+  run converged to is reported in ``df.attrs`` and written by
+  ``run_prepro_levels`` to ``L3/summary/inversion_glen_a_{rgi_reg}.json``, so
+  that it can be given back later with ``--inversion-glen-a-factor``.
+- New ``oggm_prepro_diag`` command (and the underlying ``oggm.diagnostics``
+  module) which diagnoses a finished preprocessing run: point it at the
+  summary files of an ``oggm_prepro`` run and it writes a report, the tables
+  it is made of, and a set of plots. It answers, per RGI region and globally:
+  how much of the run completed (and on which tasks the rest failed), how the
+  dynamic spinup and the dynamic melt_f calibration went, how the modelled
+  mass change compares to the geodetic observations of Hugonnet et al. (2021),
+  how the modelled area compares to the RGI inventory area at the date of the
+  inventory, and what the calibrated mass balance parameters look like. This
+  is meant for comparing two runs made with different options - e.g. to pick a
+  spinup strategy. ``utils.get_geodetic_mb_dataframe`` grows a ``regional``
+  keyword to fetch the regional averages published by Hugonnet et al., which
+  the comparison uses (:pull:`1988`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
   (:pull:`1800`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
@@ -85,11 +121,42 @@ Enhancements
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Test durations are now visible in Actions logs (:pull:`1920`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- New kwarg `spinup_periods_to_try` in `run_dynamic_spinup` to be able to
-  provide a list of additional spinup periods, which are tried in order if both
-  the initially defined spinup period (`spinup_period_initial`) and the minimum
-  spinup period (`min_spinup_period`) fail (:pull:`1914`).
+- New kwarg `spinup_extra_years_to_try` in `run_dynamic_spinup` (and in the
+  dynamic melt_f calibration run and fallback functions, exposed on the command
+  line as ``--dynamic-spinup-extra-years-to-try``) to be able to provide a list
+  of years to start the spinup *before* the requested start year. They are
+  counted backwards from the requested start year, are tried shortest extension
+  first (so the longest spinup is tried last), are clipped to the start of the
+  climate data and are only used if they result in a start year earlier than
+  all previously tried ones. They are a last resort: the dynamic spinup first
+  tries the requested start year, and then - unless `allow_shorter_spinup` is
+  set to `False`, see below - the two shorter periods it always fell back to
+  (halfway to the shortest allowed period, and then the shortest allowed period
+  itself, which during the melt_f calibration starts at the beginning of the
+  geodetic mass balance period). So for a glacier with an RGI date of 2010, a
+  requested start year of 1980 and a geodetic period starting in 2000, the
+  spinup is tried starting at 1980, 1990 and 2000, and only then at 1970,
+  1960, ... (for extra years 10, 20, ...). This replaces the never released
+  kwarg `spinup_periods_to_try`, whose values were counted backwards from the
+  RGI date instead, so that the same value meant a different start year for
+  every glacier, and could even result in an additional attempt starting
+  *after* the requested start year (:pull:`1914`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- New kwarg `allow_shorter_spinup` in `run_dynamic_spinup` (and in the dynamic
+  melt_f calibration run and fallback functions, exposed on the command line as
+  ``--dynamic-spinup-no-shorter-periods``). Per default (`True`, the previous
+  behaviour) the dynamic spinup falls back to shorter spinup periods if the
+  spinup at the requested start year failed, and therefore can start after the
+  requested start year; with `False` these shorter periods are not tried and
+  the spinup never starts after the requested start year. The intermediate one
+  of these shorter periods is now rounded up to a whole year, so that the
+  dynamic spinup always starts at a whole year (before, it could start in the
+  middle of a year, e.g. in 1989.5). Further, glacier
+  outlines which are older than the requested start year now keep their own
+  target year (the dynamic spinup starts before the requested start year),
+  instead of moving the target year to the start year, which resulted in a
+  zero-length spinup.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - `base_dir_to_tar` now groups glacier directories into bundles of 100 by
   default (previously 1000); ``bundle_size`` accepts either 100 or 1000.
   Smaller bundles make downloads more granular and faster while keeping the
@@ -180,17 +247,25 @@ Enhancements
 - New ``store_hydro_output`` kwarg in ``run_prepro_levels`` (and
   ``--store-hydro-output`` CLI flag) to also compute and store hydrological
   model output during preprocessing, via ``run_with_hydro``. The accompanying
-  ``store_monthly_hydro`` kwarg (and ``--store-monthly-hydro`` CLI flag,
-  default ``True``) additionally stores this hydrological output at monthly
-  resolution. The new ``ref_area_yr`` kwarg (and ``--ref-area-yr`` CLI flag)
-  lets users force the hydrological reference area to the glacier state of a
-  given simulation year, instead of the default largest area during the
-  simulation period (:pull:`1965`).
+  ``store_monthly_hydro`` kwarg (and ``--store-monthly-hydro`` CLI flag)
+  additionally stores this hydrological output at monthly resolution. It is
+  opt-in and defaults to ``False``, like in ``run_with_hydro``, since it
+  increases data usage quite a bit. The new ``ref_area_yr`` kwarg (and
+  ``--ref-area-yr`` CLI flag) lets users force the hydrological reference area
+  to the glacier state of a given simulation year, instead of the default
+  largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 
 Bug fixes
 ~~~~~~~~~
 
+- ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
+  have origin widths > 0" when the inversion returns a trapezoid sitting
+  exactly on its physical boundary (thickness = width / lambda, i.e. a zero
+  origin width). Such sections are now nudged back just above their minimum
+  instead of raising, while sections which are materially below it still
+  raise, with a more informative error (:pull:`1989`).
+  By `Ruitang Yang <https://github.com/Ruitangtang>`_
 - Fixed a variable name bug in `prepare_for_inversion` where passing
   `invert_with_trapezoid=False` did not disable trapezoidal bed shapes but
   instead cleared the rectangular flag (:pull:`1931`).
@@ -245,10 +320,38 @@ Bug fixes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Multiple fixes to the test suite, missing assertions, test logic (:pull:`1960`).
   By `Nicolas Gampierakis <http://github.com/gampnico>`_.
+- ``--dynamic-spinup-extra-years-to-try`` now converts its values to integers.
+  They were passed on as strings, which made the flag unusable: any explicit
+  value crashed the dynamic spinup with a ``TypeError``. Non-numeric values
+  (other than the documented ``none``) now raise an ``InvalidParamsError``
+  (:pull:`1986`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Fixed a quadratic slowdown in ``extend_past_climate_run``: with recent pandas
+  versions, ``read_csv`` returns a frame with one block per column, which made
+  the per-glacier ``DataFrame.values`` call in the loop rebuild the entire
+  table each time. Everything the loop needs is now materialized once. This
+  step took over two hours for RGI region 13 in a ``oggm_prepro`` run and is
+  back to seconds; the results are unchanged (:pull:`1990`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``merge_consecutive_run_outputs`` no longer drops the global attributes of
+  the second file: ``xr.concat`` keeps the attributes of the first dataset
+  only, so merging a historical run with a truncated future run (see
+  ``store_output_on_error``) silently lost the ``partial_output`` and
+  ``error_during_run`` flags of the latter. Both files' attributes are now
+  kept, the first file still winning on the keys they share (:pull:`1991`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The boolean flags of the ``oggm_prepro``, ``oggm_benchmark`` and
+  ``oggm_temp_bias`` commands (``--elev-bands``, ``--test``, ``--disable-mp``,
+  and all the others) no longer accept a value. They used to store whatever
+  string followed them, and since every non-empty string is truthy,
+  ``--elev-bands False`` turned elev-bands *on*. Passing a value is now an
+  error: use the bare flag to switch a behaviour on, and omit it to switch it
+  off (:pull:`1986`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - The glacier intersects are no longer stored in
   ``cfg.PARAMS['intersects_gdf']``, but in ``cfg.INTERSECTS_GDF``. They are a
   (potentially large, region wide) dataframe and not a parameter, and having
