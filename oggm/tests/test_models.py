@@ -3776,8 +3776,8 @@ class TestTrapezoidBoundary():
         lam = gdir.settings['trapezoid_lambdas']
         map_dx = gdir.grid.dx
 
-        invs = gdir.read_pickle('inversion_output')
-        cls = gdir.read_pickle('inversion_flowlines')
+        invs = gdir.read_store('inversion_output')
+        cls = gdir.read_store('inversion_flowlines')
         cl, inv = cls[-1], invs[-1]
 
         pok = np.flatnonzero(inv['is_trapezoid'] & (inv['thick'] > 0))
@@ -3789,7 +3789,7 @@ class TestTrapezoidBoundary():
         thick = cl.surface_h[i] - (cl.surface_h[i] - inv['thick'][i])
         inv['volume'][i] = lam * thick ** 2 / 2 * fac * cl.dx * map_dx
 
-        gdir.write_pickle(invs, 'inversion_output')
+        gdir.write_store(invs, 'inversion_output')
         return i
 
     def test_section_at_boundary(self, hef_gdir):
@@ -3799,7 +3799,7 @@ class TestTrapezoidBoundary():
 
         init_present_time_glacier(gdir)
 
-        fl = gdir.read_pickle('model_flowlines')[-1]
+        fl = gdir.read_store('model_flowlines')[-1]
         assert np.all(fl._w0_m[fl.is_trapezoid] > 0)
         assert fl._w0_m[i] > 0
 
@@ -6352,7 +6352,7 @@ class TestDynamicSpinup:
         # if the requested start year is after the target year (e.g. an outline
         # which is older than the start year of the simulation) the spinup
         # starts before the requested start year, using min_spinup_period
-        fls = hef_gdir.read_pickle('model_flowlines')
+        fls = hef_gdir.read_store('model_flowlines')
         yr_rgi = 2002  # the test climate dataset ends in 2003
         hef_gdir.observations['ref_area_m2'] = {
             'value': np.sum([fl.area_m2 for fl in fls]),
