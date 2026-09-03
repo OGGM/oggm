@@ -332,7 +332,7 @@ class CalvingFluxBasedModelJan(FlowlineModel):
             # We compute more complex dynamics when we have ice below water
             if fl.has_ice() and np.any(ice_below_wl) and self.do_calving:
                 ice_above_wl = ((fl.bed_h < self.water_level) &
-                                (fl.thick >= (rho_ocean / self.rho) * depth))
+                                (fl.thick >= (rho_ocean / self.ice_density) * depth))
                 # Some shenanigans to make sure we are at the front and not
                 # an upstream basin
                 if np.any(ice_above_wl):
@@ -360,7 +360,7 @@ class CalvingFluxBasedModelJan(FlowlineModel):
 
                 # Determine height above buoancy
                 z_a_b = utils.clip_min(0, thick_stag - depth_stag *
-                                       (rho_ocean / self.rho))
+                                       (rho_ocean / self.ice_density))
 
                 # Compute net hydrostatic force at the front. One could think
                 # about incorporating ice mélange / sea ice here as an
@@ -368,8 +368,8 @@ class CalvingFluxBasedModelJan(FlowlineModel):
                 # formulation below.)
                 if not land_interface:
                     # Calculate the additional (pull) force
-                    pull_last = utils.clip_min(0, 0.5 * G * (self.rho * h**2 -
-                                               rho_ocean * d**2))
+                    pull_last = utils.clip_min(0, 0.5 * G * (self.ice_density * h ** 2 -
+                                                             rho_ocean * d ** 2))
 
                     # Determine distance over which above force is distributed
                     stretch_length = (last_above_wl - first_ice) * dx
@@ -396,7 +396,7 @@ class CalvingFluxBasedModelJan(FlowlineModel):
                         slope_stag[last_above_wl+1] = np.nanmean(slope_stag
                                                                  [stretch_first-1:
                                                                   stretch_last-1])
-                stress = self.rho * G * slope_stag * thick_stag
+                stress = self.ice_density * G * slope_stag * thick_stag
                 # Add "stretching stress" to basal shear/driving stress
                 if not land_interface:
                     stress[stretch_first:stretch_last] = (stress[stretch_first:
@@ -443,7 +443,7 @@ class CalvingFluxBasedModelJan(FlowlineModel):
 
             # Usual ice dynamics
             else:
-                rhogh = (self.rho*G*slope_stag)**N
+                rhogh = (self.ice_density * G * slope_stag) ** N
                 u_drag[:] = (thick_stag**(N+1)) * self._fd * rhogh * \
                              sf_stag**N
                 u_slide[:] = (thick_stag**(N-1)) * self.fs * rhogh * \
@@ -608,7 +608,7 @@ class CalvingFluxBasedModelJan(FlowlineModel):
             # We do calving only if there is some ice grounded below water
             depth = utils.clip_min(0, self.water_level - fl.bed_h)
             ice_above_wl = ((fl.bed_h < self.water_level) &
-                            (fl.thick >= (rho_ocean / self.rho) * depth))
+                            (fl.thick >= (rho_ocean / self.ice_density) * depth))
             ice_below_wl = ((fl.bed_h < self.water_level) & (fl.thick > 0))
             # If there is only ice below water, we just remove it
             if np.all(fl.surface_h[fl.thick > 0] < self.water_level):
@@ -654,7 +654,7 @@ class CalvingFluxBasedModelJan(FlowlineModel):
                 fl.section = section
                 section = fl.section
                 if ((fl.bed_h[last_above_wl+1] < self.water_level) &
-                    (fl.thick[last_above_wl+1] >= (rho_ocean / self.rho) *
+                    (fl.thick[last_above_wl+1] >= (rho_ocean / self.ice_density) *
                      depth[last_above_wl+1])):
                     last_above_wl += 1
                 else:

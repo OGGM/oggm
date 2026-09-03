@@ -85,7 +85,7 @@ class MUSCLSuperBeeModel(FlowlineModel):
             # define Glen's law here
             N = self.glen_n
             # this is the correct Gamma !!
-            Gamma = 2.*self.glen_a*(self.rho*G)**N / (N+2.)
+            Gamma = 2. * self.glen_a * (self.ice_density * G) ** N / (N + 2.)
             # time stepping
             c_stab = 0.165
 

@@ -216,7 +216,7 @@ def parse_args(args):
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or'
                              '$OGGM_OUTDIR.')
-    parser.add_argument('--test', nargs='?', const=True, default=False,
+    parser.add_argument('--test', action='store_true',
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
     args = parser.parse_args(args)

@@ -507,10 +507,10 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
         mbdf = gdir.get_ref_mb_data()['ANNUAL_BALANCE']
 
     ref_mb = mbdf.mean()
-    ref_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+    ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
     massbalance.mb_calibration_from_scalar_mb(gdir,
                                               ref_mb=ref_mb,
-                                              ref_period=ref_period)
+                                              ref_mb_period=ref_mb_period)
     massbalance.apparent_mb_from_any_mb(gdir, mb_years=(1953, 2002))
     inversion.prepare_for_inversion(gdir)
 

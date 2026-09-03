@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - dev
   pull_request:
     branches:
       - master
+      - dev
 
 jobs:
   test:
@@ -17,14 +19,14 @@ jobs:
         test-env:
           - prepro
           - numerics
-          - models
+          - models_mb
+          - models_dynamics
           - benchmark
           - utils
           - workflow-single
           - workflow-multi
           - graphics-mpl
         container:
-          - ghcr.io/oggm/untested_base:20231004
           - ghcr.io/oggm/untested_base:20260223
           - ghcr.io/oggm/untested_base:py3.12
           - ghcr.io/oggm/untested_base:py3.14

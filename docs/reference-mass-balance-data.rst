@@ -87,6 +87,10 @@ You can access the table with:
     mbdf = utils.get_geodetic_mb_dataframe()
     mbdf.head()
 
+The table is indexed by glacier id, i.e. there is one file per RGI version:
+``get_geodetic_mb_dataframe`` selects it based on ``rgi_version`` (RGI6 per
+default, ``'70G'`` for RGI7G). RGI7C is not available yet.
+
 The data contains the climatic mass balance (in units meters water-equivalent per year)
 for three reference periods (2000-2010, 2010-2020, 2000-2020):
 

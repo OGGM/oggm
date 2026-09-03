@@ -45,3 +45,5 @@ docs/_images
 docs/.doctrees
 oggm/version.py
 oggm/ignore
+*_project*
+CLAUDE.md
