@@ -1,7 +1,7 @@
 .. currentmodule:: oggm
 
-OGGM Shop
-=========
+OGGM Shop and Glacier Directories
+=================================
 
 .. figure:: _static/logos/logo_shop.png
     :width: 100%

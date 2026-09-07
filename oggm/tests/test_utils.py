@@ -1,6 +1,11 @@
 import unittest
+import glob
+import json
+import logging
 import os
 import shutil
+import subprocess
+import sys
 import time
 import hashlib
 import tarfile
@@ -12,6 +17,7 @@ from unittest import mock
 import numpy as np
 import pandas as pd
 import xarray as xr
+import cftime
 from numpy.testing import assert_array_equal, assert_allclose
 
 import oggm
@@ -19,6 +25,8 @@ from oggm import utils, workflow, tasks, global_tasks
 from oggm.utils import _downloads
 from oggm import cfg
 from oggm.cfg import SEC_IN_YEAR
+from oggm.utils._workflow import compile_to_netcdf
+from oggm.tests import TEMP_BIAS_FILE_W5E5_RGI6, GEODETIC_MB_REGIONAL_AVG
 from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
@@ -54,6 +62,24 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
+def _read_prcp_fac(gdir):
+    # module-level so it can be pickled and sent to multiprocessing workers
+    return gdir.settings['prcp_fac']
+
+
+# module-level so they can be pickled and sent to multiprocessing workers
+@utils.entity_task(logging.getLogger(__name__), workflow_return_value=False)
+def _task_with_costly_return(gdir):
+    """Dummy task standing in for the run_* tasks."""
+    return np.zeros(10)
+
+
+@utils.entity_task(logging.getLogger(__name__))
+def _task_with_cheap_return(gdir):
+    """Dummy task whose return value is worth collecting."""
+    return gdir.rgi_id
+
+
 class TestFuncs(object):
 
     def setUp(self):
@@ -83,6 +109,60 @@ class TestFuncs(object):
         b = utils.smooth1d(a, 3, kernel=kernel)
         c = utils.smooth1d(a, 3)
         assert_allclose(b, c)
+
+    def test_weighted_quantile_1d(self):
+
+        data = np.array([1., 2., 3., 4., 5.])
+
+        # With equal weights this is the plain median
+        w = np.ones(5)
+        assert_allclose(utils.weighted_quantile_1d(data, w, 0.5),
+                        np.median(data))
+        assert_allclose(utils.weighted_quantile_1d(data[:4], w[:4], 0.5),
+                        np.median(data[:4]))
+
+        # The extremes
+        assert_allclose(utils.weighted_quantile_1d(data, w, 0), data.min())
+        assert_allclose(utils.weighted_quantile_1d(data, w, 1), data.max())
+
+        # Order does not matter
+        assert_allclose(utils.weighted_quantile_1d(data[::-1], w, 0.5),
+                        np.median(data))
+
+        # Two values: the result is pulled towards the heavier one, and the
+        # two mirrored cases are symmetric
+        lo = utils.weighted_quantile_1d([0., 1.], [3., 1.], 0.5)
+        hi = utils.weighted_quantile_1d([0., 1.], [1., 3.], 0.5)
+        assert lo < 0.5 < hi
+        assert_allclose(lo, 1 - hi)
+        assert_allclose(utils.weighted_quantile_1d([0., 1.], [1., 1.], 0.5), 0.5)
+
+        # Weighting one value out is like removing it
+        assert_allclose(utils.weighted_quantile_1d(data, [1, 1, 1, 1, 0], 0.5),
+                        utils.weighted_quantile_1d(data[:4], w[:4], 0.5))
+
+        with pytest.raises(InvalidParamsError):
+            utils.weighted_quantile_1d(data, w, 1.5)
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_quantile_1d(data, np.zeros(5), 0.5)
+
+    def test_utm_proj4_from_lonlat(self):
+
+        # A forced zone is returned as-is, without any lookup
+        assert utils.utm_proj4_from_lonlat(0, 0, utm_zone=32) == \
+            {'proj': 'utm', 'zone': 32}
+
+        # Regular mid-latitude points resolve to their EPSG UTM code
+        # (lon=10, lat=45 -> zone 32N -> EPSG:32632)
+        assert utils.utm_proj4_from_lonlat(10, 45) == '32632'
+        # Southern hemisphere -> 327xx
+        assert utils.utm_proj4_from_lonlat(10, -45) == '32732'
+
+        # Beyond UTM's validity band (>84N, <80S) there is no zone: we want a
+        # clear InvalidParamsError, not a cryptic IndexError (see #1945).
+        for lat in [85, 89, -81, -89]:
+            with pytest.raises(InvalidParamsError):
+                utils.utm_proj4_from_lonlat(10, lat)
 
     def test_filter_rgi_name(self):
 
@@ -115,23 +195,21 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, [0, 1])
         np.testing.assert_array_equal(m, [12, 12])
 
-        yr = 1998 + 2 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 3)
+        # test a leap year
+        y, m, d = utils.floatyear_to_date(1980.1612021857923, return_day=True)
+        assert y == 1980
+        assert m == 2
+        assert d == 29
 
-        yr = 1998 + 1 / 12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1998, 2)
-
-        # tests for floating point precision
-        yr = 1 + 1/12 - 1/12
-        r = utils.floatyear_to_date(yr)
-        assert r == (1, 1)
-
-        for i in range(12):
-            yr = 2000
-            r = utils.floatyear_to_date(yr + i / 12)
-            assert r == (yr, i + 1)
+        # test correct floor behaviour, this is very close to 1981.09.01
+        y, m, d = utils.floatyear_to_date(1981.6657534246575, return_day=True)
+        assert y == 1981
+        assert m == 8
+        assert d == 31
+        y, m, d = utils.floatyear_to_date(1981.6657534246576, return_day=True)
+        assert y == 1981
+        assert m == 9
+        assert d == 1
 
     def test_date_to_floatyear(self):
 
@@ -160,30 +238,149 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, 2099)
+        myr = utils.float_years_timeseries(1800, 2099)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
-        myr = utils.monthly_timeseries(1800, ny=300)
+        myr = utils.float_years_timeseries(1800, ny=300)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-1', freq='M')
-        myr = utils.monthly_timeseries(1, 6000)
+        myr = utils.float_years_timeseries(1, 6000)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         time = pd.period_range('0001-01', '6000-12', freq='M')
-        myr = utils.monthly_timeseries(1, 6000, include_last_year=True)
+        myr = utils.float_years_timeseries(1, 6000, include_last_year=True)
         y, m = utils.floatyear_to_date(myr)
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
         with pytest.raises(ValueError):
-            utils.monthly_timeseries(1)
+            utils.float_years_timeseries(1)
+
+        # test daily timeseries
+        myr = utils.float_years_timeseries(1800, 2099, daily=True)
+        time = pd.date_range('1/1/1800', periods=len(myr), freq='D')
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        myr = utils.float_years_timeseries(1800, ny=300, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01', '6000-1', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, daily=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+        time = pd.period_range('0001-01-01', '6000-12-31', freq='D')
+        myr = utils.float_years_timeseries(1, 6000, daily=True,
+                                           include_last_year=True)
+        y, m, d = utils.floatyear_to_date(myr, return_day=True)
+        np.testing.assert_array_equal(y, time.year)
+        np.testing.assert_array_equal(m, time.month)
+        np.testing.assert_array_equal(d, time.day)
+
+    def test_round_trip_floating_point_year(self):
+        # monthly round trip for all dates between 0000 and 3000
+        months_arr = np.arange(np.datetime64('0000-01', 'M'),
+                               np.datetime64('3001-01', 'M'),
+                               dtype='datetime64[M]')
+        years = months_arr.astype('datetime64[Y]').astype(int) + 1970
+        months = (months_arr.astype('datetime64[M]').astype(int) % 12) + 1
+
+        fy = utils.date_to_floatyear(years, months)
+        y2, m2 = utils.floatyear_to_date(fy)
+
+        ok = (years == y2) & (months == m2)
+        assert sum(~ok) == 0
+
+        y2, m2, d2 = utils.floatyear_to_date(fy, return_day=True)
+        ok = (years == y2) & (months == m2) & ([d == 1 for d in d2])
+        assert sum(~ok) == 0
+
+        # daily roundtrip for all dates between 0000 and 3000
+        start = np.datetime64('0000-01-01', 'D')
+        end_exclusive = np.datetime64('3001-01-01', 'D')
+        dates = np.arange(start, end_exclusive, dtype='datetime64[D]')
+
+        years = dates.astype('datetime64[Y]').astype(int) + 1970
+        months = (dates.astype('datetime64[M]').astype(int) % 12) + 1
+        mstart = dates.astype('datetime64[M]').astype('datetime64[D]')
+        days = (dates - mstart).astype(int) + 1
+
+        fy = utils.date_to_floatyear(years, months, days)
+        y2, m2, d2 = utils.floatyear_to_date(fy, return_day=True)
+
+        ok = (years == y2) & (months == m2) & (days == d2)
+        assert sum(~ok) == 0
+
+    def test_get_time_functions(self):
+        """Test scalar and array behavior of get_{days,seconds}_of_{year,month}."""
+        from oggm.utils._funcs import (get_days_of_year, get_seconds_of_year,
+                                       get_days_of_month, get_seconds_of_month)
+
+        # --- scalar input must return int ---
+        # no-leap: always 365
+        assert get_days_of_year(1980.0) == 365
+        assert isinstance(get_days_of_year(1980.0), int)
+        # leap-year aware: 1980 and 1984 are leap, 1981–1983 are not
+        assert get_days_of_year(1980.0, use_leap_years=True) == 366
+        assert isinstance(get_days_of_year(1980.0, use_leap_years=True), int)
+        assert get_days_of_year(1981.0, use_leap_years=True) == 365
+        assert get_days_of_year(1984.0, use_leap_years=True) == 366
+
+        assert get_seconds_of_year(1980.0) == 365 * 86400
+        assert get_seconds_of_year(1980.0, use_leap_years=True) == 366 * 86400
+        assert get_seconds_of_year(1981.0, use_leap_years=True) == 365 * 86400
+
+        # February: 29 days in a leap year, 28 otherwise
+        feb_1980 = utils.date_to_floatyear(1980, 2)
+        feb_1981 = utils.date_to_floatyear(1981, 2)
+        assert get_days_of_month(feb_1980, use_leap_years=True) == 29
+        assert get_days_of_month(feb_1981, use_leap_years=True) == 28
+        assert get_days_of_month(feb_1980, use_leap_years=False) == 28
+        assert isinstance(get_days_of_month(feb_1980, use_leap_years=True), int)
+
+        assert get_seconds_of_month(feb_1980, use_leap_years=True) == 29 * 86400
+        assert get_seconds_of_month(feb_1981, use_leap_years=True) == 28 * 86400
+
+        # --- array input must return np.ndarray of int64 ---
+        years = np.array([1980., 1981., 1982., 1983., 1984.])
+
+        days = get_days_of_year(years, use_leap_years=True)
+        assert isinstance(days, np.ndarray)
+        np.testing.assert_array_equal(days, [366, 365, 365, 365, 366])
+
+        secs = get_seconds_of_year(years, use_leap_years=True)
+        assert isinstance(secs, np.ndarray)
+        np.testing.assert_array_equal(secs, days * 86400)
+
+        # no-leap array: all 365
+        days_noleap = get_days_of_year(years, use_leap_years=False)
+        assert isinstance(days_noleap, np.ndarray)
+        np.testing.assert_array_equal(days_noleap, np.full(5, 365))
+
+        # monthly array for 1980 (leap year): February must have 29 days
+        monthly = utils.float_years_timeseries(1980., 1981.)
+        days_per_month = get_days_of_month(monthly, use_leap_years=True)
+        assert isinstance(days_per_month, np.ndarray)
+        _, m = utils.floatyear_to_date(monthly)
+        np.testing.assert_array_equal(days_per_month[m == 2], [29])
+
+        secs_per_month = get_seconds_of_month(monthly, use_leap_years=True)
+        np.testing.assert_array_equal(secs_per_month, days_per_month * 86400)
 
     @pytest.mark.parametrize("d,w", [
         (np.arange(10), np.arange(10)),
@@ -201,6 +398,25 @@ class TestFuncs(object):
         d, w = ([0], [0])
         with pytest.raises(ZeroDivisionError):
             utils.weighted_average_1d(d, weights=w)
+
+    @pytest.mark.parametrize("d,w", [
+        (np.arange(10), np.arange(10)),
+        (np.arange(10)-5, np.arange(10)-5),
+        (np.random.random(1000), np.random.random(1000)),
+        ([[2, 1]], [1]),
+        ([[0, 1]], [1]),
+    ])
+    def test_weighted_avg_2d(self, d, w):
+        if not isinstance(d, list):
+            d = d[:, None] + d
+        r1 = utils.weighted_average_2d(d, weights=w)
+        r2 = np.average(d, weights=w, axis=0)
+        assert_allclose(r1, r2)
+
+    def test_weighted_avg_2d_fail(self):
+        d, w = ([0, 0], [0])
+        with pytest.raises(ZeroDivisionError):
+            utils.weighted_average_2d(d, weights=w)
 
     @pytest.mark.parametrize(
             "in_data,out_type",
@@ -309,6 +525,202 @@ class TestFuncs(object):
         np.testing.assert_array_equal(y, time.year)
         np.testing.assert_array_equal(m, time.month)
 
+    def get_cftime_index(
+        self, start_day: int = 65286, years: int = 3
+    ) -> np.ndarray:
+        """Get a time index with cftime datetimes."""
+        end_day = start_day + (365 * years) + 1
+        days = np.arange(start_day, end_day)
+        units = "days since 1801-01-01"
+        time_index = cftime.num2date(days[:], units=units, calendar="standard")
+        return time_index
+
+    def test_get_cftime_index(self):
+        test_time_index = cftime.num2date(
+            np.arange(65286, 66382),
+            units="days since 1801-01-01",
+            calendar="standard",
+        )
+        compare_time_index = self.get_cftime_index(start_day=65286, years=3)
+        assert len(compare_time_index) == len(test_time_index)
+        assert (compare_time_index[:] == test_time_index[:]).all()
+
+    def get_expected_hydrodate_matrix(self, julian_year=1979):
+        """Get expected hydrological months and years.
+
+        Generates expected hydrological months and years for all
+        Julian months and possible hydrological start months.
+
+        Parameters
+        ----------
+        julian_year : int, default 1979
+            The reference calendar year.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Two matrices M[i,j], Y[i,j] where i is a hydrological year's
+            start month and j is the Julian calendar month.
+            * Month matrix: the element at (i,j) is the expected
+            hydrological month. Diagonal = 1.
+            * Year matrix: the element at (i, j) is the expected
+            hydrological year. Diagonal and above = julian_year,
+            below the diagonal = julian_year - 1.
+
+        """
+        nx = 13
+        months = np.diag(np.full(nx - 1, 1))
+        for i in range(2, nx):
+            months = (
+                months
+                + np.diag(np.full(nx - i, i), i - 1)
+                + np.diag(np.full(nx - i, nx + 1 - i), -i + 1)
+            )
+
+        years = np.full(nx * nx, julian_year).reshape(nx, nx)
+        years += np.tril(np.full(nx, -1), -1)
+
+        return months, years
+
+    @pytest.mark.parametrize("julian_year", [1979, 1980])  # leap year
+    def test_get_expected_hydrodate_matrix(self, julian_year):
+
+        months, years = self.get_expected_hydrodate_matrix(
+            julian_year=julian_year
+        )
+        nx = 12
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            np.testing.assert_array_equal(
+                months[0, i:], np.arange(i + 1, nx + 1)
+            )
+            np.testing.assert_array_less(months, nx + 1)
+            np.testing.assert_array_less(-months, 0)  # no array_greater
+
+        np.testing.assert_array_less(years, julian_year + 1)
+        np.testing.assert_array_equal(
+            years[np.triu_indices_from(years, 0)], julian_year
+        )
+        np.testing.assert_array_equal(
+            years[np.tril_indices_from(years, -1)], julian_year - 1
+        )
+
+    def get_expected_julian_matrix(self, hydro_year=1979) -> tuple:
+        """Get expected hydrological months and years.
+
+        Generates expected hydrological months and years for all
+        Julian months and possible hydrological start months.
+
+        Parameters
+        ----------
+        hydro_year : int, default 1979
+            The reference hydrological year.
+
+        Returns
+        -------
+        tuple[np.ndarray]
+            Two matrices M[i,j], Y[i,j] where i is a hydrological year's
+            start month and j is the hydrological calendar month.
+            * Month matrix: the element at (i,j) is the expected
+            Julian month. Diagonal = 1.
+            * Year matrix: the element at (i, j) is the expected
+            Julian year. Diagonal and below = hydrological_year + 1,
+            above the diagonal = hydrological_year
+        """
+        nx = 12
+        months = np.zeros((nx, nx), dtype=int)
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            months[i, :] = np.arange(1 + i, nx + i + 1)
+        mask = np.where(months > nx)
+        months[mask] = months[mask] - nx
+
+        years = np.full(nx * nx, hydro_year).reshape(nx, nx)
+        years[mask] += 1
+
+        return months, years
+
+    @pytest.mark.parametrize("hydro_year", [1979, 1980])  # leap year
+    def test_get_expected_julian_matrix(self, hydro_year):
+
+        months, years = self.get_expected_julian_matrix(hydro_year=hydro_year)
+        months = np.fliplr(months)  # all elements in a diag are equal
+        years = np.fliplr(years)
+        nx = 12
+        for i in range(nx):
+            np.all(np.diagonal(months, offset=i) == i + 1)
+            np.testing.assert_array_less(months, nx + 1)
+            np.testing.assert_array_less(-months, 0)  # no array_greater
+
+        np.testing.assert_array_less(years, hydro_year + 2)
+        np.testing.assert_array_less(-years, -hydro_year + 1)
+        np.testing.assert_array_equal(
+            years[np.triu_indices_from(years, 0)], hydro_year
+        )
+        np.testing.assert_array_equal(
+            years[np.tril_indices_from(years, -1)], hydro_year + 1
+        )
+
+    @pytest.mark.parametrize("julian_year", [1979, 1980])  # leap year
+    @pytest.mark.parametrize(
+        "start_month", np.arange(1, 13), ids=[f"{i}" for i in np.arange(1, 13)]
+    )
+    def test_calendardate_to_hydrodate_cftime(self, start_month, julian_year):
+        expected_months, _ = self.get_expected_hydrodate_matrix(
+            julian_year=julian_year
+        )
+        for julian_start_month in range(1, 13):
+            cf_date = cftime.datetime(
+                julian_year, julian_start_month, 1, calendar="standard"
+            )
+            julian_start_day = cftime.date2num(
+                cf_date, units="days since 1801-01-01"
+            )
+            time_index = self.get_cftime_index(start_day=julian_start_day)
+
+            compare_index = utils.calendardate_to_hydrodate_cftime(
+                dates=time_index, start_month=start_month
+            )
+            assert len(compare_index) == len(time_index)
+            expected = expected_months[start_month - 1, julian_start_month - 1]
+            if start_month <= julian_start_month:
+                assert compare_index[0].year == julian_year
+                assert compare_index[0].month == expected
+            else:
+                assert compare_index[0].year == julian_year - 1
+                assert compare_index[0].month == expected
+            assert compare_index[0].day == 1
+
+    @pytest.mark.parametrize("hydro_year", [1979, 1980])  # leap year
+    @pytest.mark.parametrize(
+        "start_month", np.arange(1, 13), ids=[f"{i}" for i in np.arange(1, 13)]
+    )
+    def test_hydrodate_to_calendardate_cftime(self, start_month, hydro_year):
+        expected_months, _ = self.get_expected_julian_matrix(
+            hydro_year=hydro_year
+        )
+        for hydro_start_month in range(1, 13):
+            cf_date = cftime.datetime(
+                hydro_year, hydro_start_month, 1, calendar="standard"
+            )
+            hydro_start_day = cftime.date2num(
+                cf_date, units="days since 1801-01-01"
+            )
+            time_index = self.get_cftime_index(start_day=hydro_start_day)
+
+            compare_index = utils.hydrodate_to_calendardate_cftime(
+                dates=time_index, start_month=start_month
+            )
+            assert len(compare_index) == len(time_index)
+            expected = expected_months[start_month - 1, hydro_start_month - 1]
+            if start_month + hydro_start_month > 13:
+                assert compare_index[0].year == hydro_year + 1
+                assert compare_index[0].month == expected
+            else:
+                assert compare_index[0].year == hydro_year
+                assert compare_index[0].month == expected
+            assert compare_index[0].day == 1
+
     def test_rgi_meta(self):
         cfg.initialize()
         reg_names, subreg_names = utils.parse_rgi_meta(version='6')
@@ -416,6 +828,249 @@ class TestFuncs(object):
                 cfg.strtobool(value=value)
 
 
+class TestExtendPastClimateRun:
+    """Multi-glacier tests for `extend_past_climate_run`.
+
+    The other test (test_models.py) runs the real workflow on a single
+    glacier. Here we build the compiled files by hand so that we can cover
+    several glaciers at once with the cases which occur in a real region:
+    different RGI dates, glaciers which errored, and tidewater glaciers.
+    """
+
+    Y0_CLIM = 1901
+    Y0_RUN = 1950
+    Y1_RUN = 2020
+
+    def _make_files(self, tmpdir, n_glaciers=20):
+        rng = np.random.default_rng(42)
+        rids = np.array([f'RGI60-11.{i:05d}' for i in range(n_glaciers)],
+                        dtype=object)
+        run_years = np.arange(self.Y0_RUN, self.Y1_RUN + 1)
+        nt = len(run_years)
+
+        # RGI dates differ from glacier to glacier
+        starts = np.arange(n_glaciers) % 5
+        # ... and one glacier is there from the very first year
+        starts[1] = 0
+        # ... while two of them errored during the run
+        failed = [3, 11]
+
+        base_vol = rng.uniform(1e7, 1e10, size=n_glaciers)
+        trend = np.linspace(1.0, 0.7, nt)[:, None]
+
+        ds = xr.Dataset(coords={'time': ('time', run_years),
+                                'rgi_id': ('rgi_id', rids)})
+        fields = {'volume': base_vol * 1.,
+                  'volume_ice': base_vol * 0.95,
+                  'volume_firn': base_vol * 0.05,
+                  'volume_bsl': base_vol * 0.02,
+                  'volume_bwl': base_vol * 0.01,
+                  'area': base_vol ** 0.7,
+                  'area_min_h': base_vol ** 0.7 * 0.9,
+                  'length': base_vol ** 0.3,
+                  'calving': base_vol * 0.001,
+                  'calving_rate': np.full(n_glaciers, 10.)}
+        for vn, ref in fields.items():
+            data = (ref[None, :] * trend).astype(np.float32)
+            for i, s in enumerate(starts):
+                data[:s, i] = np.nan
+            data[:, failed] = np.nan
+            ds[vn] = (('time', 'rgi_id'), data)
+            ds[vn].attrs['description'] = f'{vn} description'
+
+        for vn, val in [('hydro_year', run_years), ('hydro_month', 4),
+                        ('calendar_year', run_years), ('calendar_month', 1)]:
+            ds[vn] = ('time', np.full(nt, val) if np.isscalar(val) else val)
+            ds[vn].attrs['description'] = vn
+
+        past_run_file = os.path.join(tmpdir, 'compiled.nc')
+        ds.to_netcdf(past_run_file)
+
+        clim_years = np.arange(self.Y0_CLIM, self.Y1_RUN)
+        mb = pd.DataFrame(rng.uniform(-2000, 500,
+                                      size=(len(clim_years), n_glaciers)),
+                          index=clim_years, columns=rids)
+        mb_file = os.path.join(tmpdir, 'fixed_geometry_mb.csv')
+        mb.to_csv(mb_file)
+
+        stats = pd.DataFrame(index=pd.Index(rids, name='rgi_id'))
+        stats['calving_flux'] = 0.
+        stats['calving_rate_myr'] = 0.
+        tidewater = [2, 7]
+        stats.loc[rids[tidewater], 'calving_flux'] = 0.1
+        stats.loc[rids[tidewater], 'calving_rate_myr'] = 55.
+        # a NaN here has to be treated as "no calving"
+        stats.loc[rids[5], 'calving_flux'] = np.nan
+        stats_file = os.path.join(tmpdir, 'stats.csv')
+        stats.to_csv(stats_file)
+
+        return past_run_file, mb_file, stats_file, ds, mb, stats
+
+    def test_extend_multiple_glaciers(self, tmp_path):
+        cfg.initialize_minimal()
+        tmpdir = str(tmp_path)
+        pf, mf, sf, ds_in, mb, stats = self._make_files(tmpdir)
+        opath = os.path.join(tmpdir, 'extended.nc')
+
+        utils.extend_past_climate_run(past_run_file=pf,
+                                      fixed_geometry_mb_file=mf,
+                                      glacier_statistics_file=sf,
+                                      path=opath)
+
+        rho = cfg.PARAMS['ice_density']
+        # The first year is always NaN and is dropped on write
+        years = np.arange(self.Y0_CLIM + 1, self.Y1_RUN + 1)
+
+        with xr.open_dataset(opath) as ods:
+            assert_array_equal(ods.time.data, years)
+            assert_array_equal(ods.rgi_id.data, ds_in.rgi_id.data)
+            # the `_ext` suffix is dropped again on write
+            assert 'volume_ext' not in ods.data_vars
+            assert 'volume_fixed_geom' in ods.data_vars
+
+            for i, rid in enumerate(ods.rgi_id.data):
+                vol_in = ds_in.volume.values[:, i]
+                vol_out = ods.volume.values[:, i]
+                n_new = len(years) - len(vol_in)
+
+                if np.all(~np.isfinite(vol_in)):
+                    # errored glaciers are left alone
+                    assert np.all(~np.isfinite(vol_out))
+                    assert np.all(~np.isfinite(
+                        ods.volume_fixed_geom.values[:, i]))
+                    continue
+
+                # First year with a dynamical volume (everything before it
+                # is what the task has to fill in)
+                fid = n_new + np.argmax(np.isfinite(vol_in))
+                assert fid > 1
+                assert np.all(np.isfinite(vol_out[:fid]))
+
+                # the dynamical part of the run is never touched
+                assert_allclose(vol_out[fid:], vol_in[fid - n_new:], rtol=1e-6)
+
+                # Recompute the extension independently
+                calv_flux = stats.loc[rid, 'calving_flux']
+                calv_flux = 0 if not np.isfinite(calv_flux) else calv_flux * 1e9
+                area_fid = ods.area.values[fid, i]
+                mb_ts = mb[rid].values
+                mb_vol_ts = (mb_ts / rho * area_fid - calv_flux).cumsum()
+                mb_vol_ts = mb_vol_ts + vol_out[fid] - mb_vol_ts[fid]
+
+                assert_allclose(ods.volume_fixed_geom.values[:, i], mb_vol_ts,
+                                rtol=1e-4)
+                assert_allclose(vol_out[:fid], mb_vol_ts[:fid], rtol=1e-4)
+
+                # Area and length are kept constant before the RGI date
+                for vn in ['area', 'length']:
+                    ts = ods[vn].values[:, i]
+                    assert_allclose(ts[:fid], ts[fid], rtol=1e-6)
+
+                # No ice/firn partitioning for the fixed geometry period
+                for vn in ['volume_ice', 'volume_firn']:
+                    assert np.all(~np.isfinite(ods[vn].values[:fid, i]))
+
+                # bsl/bwl keep a constant fraction of the total volume
+                for vn in ['volume_bsl', 'volume_bwl']:
+                    frac = ods[vn].values[fid, i] / vol_out[fid]
+                    assert_allclose(ods[vn].values[:fid, i],
+                                    frac * vol_out[:fid], rtol=1e-4)
+
+                # Calving rate is constant before (and at) the RGI date
+                exp_rate = stats.loc[rid, 'calving_rate_myr']
+                assert_allclose(ods.calving_rate.values[:fid + 1, i],
+                                exp_rate, rtol=1e-6)
+
+    def test_extend_is_linear_in_n_glaciers(self, tmp_path):
+        # `DataFrame.values` on the (one block per column) frames returned by
+        # `read_csv` is O(n_glaciers): calling it inside the per-glacier loop
+        # made this task quadratic and cost hours on the large RGI regions.
+        cfg.initialize_minimal()
+
+        def time_it(n):
+            d = os.path.join(str(tmp_path), f'n{n}')
+            utils.mkdir(d, reset=True)
+            pf, mf, sf, _, _, _ = self._make_files(d, n_glaciers=n)
+            t0 = time.perf_counter()
+            utils.extend_past_climate_run(past_run_file=pf,
+                                          fixed_geometry_mb_file=mf,
+                                          glacier_statistics_file=sf,
+                                          path=os.path.join(d, 'ext.nc'))
+            return time.perf_counter() - t0
+
+        # Deliberately generous: quadratic scaling gives a factor of ~64 here
+        t_small = time_it(250)
+        t_large = time_it(2000)
+        assert t_large < 12 * t_small
+
+
+class TestMergeConsecutiveRunOutputs:
+    """Unit tests for `merge_consecutive_run_outputs` on hand-made files."""
+
+    class FakeGdir:
+        """All `merge_consecutive_run_outputs` needs from a gdir."""
+
+        def __init__(self, tmpdir):
+            self.tmpdir = tmpdir
+            self.rgi_id = 'RGI60-11.00897'
+            self.settings = cfg.PARAMS
+
+        def get_filepath(self, filename, filesuffix=''):
+            return os.path.join(self.tmpdir, filename + filesuffix + '.nc')
+
+        def get_task_status(self, task_name):
+            return None
+
+    def _write_diag(self, gdir, years, v0, v1, filesuffix, attrs):
+        ds = xr.Dataset(coords={'time': ('time', np.asarray(years))})
+        ds['volume_m3'] = ('time', np.linspace(v0, v1, len(years)))
+        ds['area_m2'] = ('time', np.linspace(v0, v1, len(years)) * 10)
+        ds.attrs = attrs
+        ds.to_netcdf(gdir.get_filepath('model_diagnostics',
+                                       filesuffix=filesuffix))
+
+    def test_attrs_are_kept(self, tmp_path):
+
+        cfg.initialize()
+        gdir = self.FakeGdir(str(tmp_path))
+
+        # The second file is the truncated one (as after a run with
+        # PARAMS['store_output_on_error'] = True)
+        self._write_diag(gdir, np.arange(2000, 2011), 100, 90, '_hist',
+                         {'calendar': 'noleap',
+                          'creation_date': 'first',
+                          'only_in_1': 'yes'})
+        self._write_diag(gdir, np.arange(2010, 2021), 90, 80, '_fut',
+                         {'calendar': 'noleap',
+                          'creation_date': 'second',
+                          'partial_output': 'True',
+                          'error_during_run': 'RuntimeError(boundaries)'})
+
+        out_ds = utils.merge_consecutive_run_outputs(
+            gdir,
+            input_filesuffix_1='_hist',
+            input_filesuffix_2='_fut',
+            output_filesuffix='_merged',
+            add_to_log_file=False)
+
+        fp = gdir.get_filepath('model_diagnostics', filesuffix='_merged')
+        with xr.open_dataset(fp) as ds:
+            for check in [out_ds, ds]:
+                # The data is merged as expected
+                assert check['time'][0] == 2000
+                assert check['time'][-1] == 2020
+                assert check['time'].size == 21
+                # The truncation flags of the second file are not lost
+                assert check.attrs['partial_output'] == 'True'
+                assert 'boundaries' in check.attrs['error_during_run']
+                # ... and neither are the attrs of the first one
+                assert check.attrs['calendar'] == 'noleap'
+                assert check.attrs['only_in_1'] == 'yes'
+                # On the keys both files have, the first one wins (as it did
+                # before both sets of attrs were kept)
+                assert check.attrs['creation_date'] == 'first'
+
+
 class TestInitialize(unittest.TestCase):
 
     def setUp(self):
@@ -455,6 +1110,46 @@ class TestInitialize(unittest.TestCase):
     def test_default_url(self):
         from oggm import DEFAULT_BASE_URL
         assert '2025.6' in DEFAULT_BASE_URL
+
+    def test_intersects_db(self):
+        # the intersects are a (potentially large, region wide) dataframe and
+        # not a parameter: they must stay out of cfg.PARAMS, which is copied
+        # and pickled all over the place as if it held scalars only
+        import pickle
+        import geopandas as gpd
+        import shapely.geometry as shpg
+
+        assert 'intersects_gdf' not in cfg.PARAMS
+        assert len(cfg.INTERSECTS_GDF) == 0
+
+        n = 500
+        line = shpg.LineString([(0, 0), (1, 1)])
+        gdf = gpd.GeoDataFrame({'RGIId_1': ['x'] * n, 'RGIId_2': ['y'] * n},
+                               geometry=[line] * n)
+
+        cfg.CONFIG_MODIFIED = False
+        cfg.set_intersects_db(gdf)
+        assert len(cfg.INTERSECTS_GDF) == n
+        assert 'intersects_gdf' not in cfg.PARAMS
+        # the workers must be told about the new database
+        assert cfg.CONFIG_MODIFIED
+
+        # cfg.PARAMS is what gets shipped to the workers and stored in the
+        # settings defaults: it should stay small
+        assert len(pickle.dumps(dict(cfg.PARAMS))) < 50_000
+
+        # ... but the intersects still travel to the workers
+        packed = cfg.pack_config()
+        cfg.INTERSECTS_GDF = pd.DataFrame()
+        cfg.unpack_config(packed)
+        assert len(cfg.INTERSECTS_GDF) == n
+
+        # both ways of asking for no intersects at all
+        cfg.set_intersects_db()
+        assert len(cfg.INTERSECTS_GDF) == 0
+        cfg.PARAMS['use_intersects'] = False
+        cfg.set_intersects_db(gdf)
+        assert len(cfg.INTERSECTS_GDF) == 0
 
 
 class TestWorkflowTools(unittest.TestCase):
@@ -527,6 +1222,105 @@ class TestWorkflowTools(unittest.TestCase):
         import multiprocessing
         assert type(cfg.DATA) is multiprocessing.managers.DictProxy
 
+    def test_gdir_pickle_excludes_settings_and_observations(self):
+        # settings/observations must not travel through pickle as-is:
+        # GlacierDirectory.__getstate__ drops them and __setstate__
+        # rebuilds them fresh from disk, so that a private copy of
+        # cfg.PARAMS isn't re-shipped on every multiprocessing task
+        import pickle
+
+        gdir = init_hef()
+
+        state = gdir.__getstate__()
+        assert 'settings' not in state
+        assert 'observations' not in state
+
+        gdir_unpickled = pickle.loads(pickle.dumps(gdir))
+        assert gdir_unpickled.settings is not gdir.settings
+        assert gdir_unpickled.observations is not gdir.observations
+        assert (gdir_unpickled.settings['use_rgi_area'] ==
+               gdir.settings['use_rgi_area'])
+
+        # changes written to the settings file on disk must be visible
+        # after unpickling, proving it is reloaded and not a stale copy
+        orig_prcp_fac = gdir.settings['prcp_fac']
+        gdir.settings['prcp_fac'] = 12345
+        gdir_unpickled = pickle.loads(pickle.dumps(gdir))
+        assert gdir_unpickled.settings['prcp_fac'] == 12345
+        gdir.settings['prcp_fac'] = orig_prcp_fac
+
+    def test_gdir_settings_survive_multiprocessing(self):
+        # end-to-end check that gdirs sent through a real worker pool
+        # can still read settings correctly after being rebuilt via
+        # GlacierDirectory.__setstate__
+        gdir = init_hef()
+        orig_prcp_fac = gdir.settings['prcp_fac']
+        gdir.settings['prcp_fac'] = 42
+
+        cfg.PARAMS['use_multiprocessing'] = True
+        cfg.PARAMS['mp_processes'] = 2
+        cfg.PARAMS['use_mp_spawn'] = False
+
+        out = workflow.execute_entity_task(_read_prcp_fac, [gdir, gdir])
+        assert out == [42, 42]
+
+        # set prcp_fac back for other tests
+        gdir.settings['prcp_fac'] = orig_prcp_fac
+
+    def test_workflow_return_value(self):
+        # tasks flagged with workflow_return_value=False must not have their
+        # return value collected by execute_entity_task - with
+        # multiprocessing this is what gets pickled back to the main process
+        # and kept, one per glacier, until the whole region is done
+        gdir = init_hef()
+
+        assert _task_with_costly_return.workflow_return_value is False
+        assert _task_with_cheap_return.workflow_return_value is True
+
+        # a direct call is unaffected by the flag
+        assert_array_equal(_task_with_costly_return(gdir), np.zeros(10))
+
+        # the outcome must not depend on multiprocessing being used or not
+        for use_mp in [False, True]:
+            cfg.PARAMS['use_multiprocessing'] = use_mp
+            cfg.PARAMS['mp_processes'] = 2
+            cfg.PARAMS['use_mp_spawn'] = False
+
+            # the flagged task returns nothing through the workflow...
+            out = workflow.execute_entity_task(_task_with_costly_return,
+                                               [gdir, gdir])
+            assert out == [None, None]
+
+            # ...but the caller can still ask for the values explicitly
+            out = workflow.execute_entity_task(_task_with_costly_return,
+                                               [gdir, gdir],
+                                               return_value=True)
+            assert len(out) == 2
+            assert_array_equal(out[0], np.zeros(10))
+
+            # unflagged tasks keep returning their values
+            out = workflow.execute_entity_task(_task_with_cheap_return,
+                                               [gdir, gdir])
+            assert out == [gdir.rgi_id, gdir.rgi_id]
+
+    def test_run_tasks_do_not_return_models_to_the_workflow(self):
+        # the run_* tasks return the full model (flowlines and mass balance
+        # model included). Collecting one per glacier is what made large
+        # regions run out of memory, see
+        # https://github.com/OGGM/oggm/issues/1976
+        from oggm.core.dynamic_spinup import (run_dynamic_spinup,
+                                              run_dynamic_melt_f_calibration)
+        for task in [flowline.flowline_model_run,
+                     flowline.run_random_climate,
+                     flowline.run_constant_climate,
+                     flowline.run_from_climate_data,
+                     run_dynamic_spinup,
+                     run_dynamic_melt_f_calibration]:
+            assert task.workflow_return_value is False, task.__name__
+
+        # the default is unchanged for everything else
+        assert tasks.glacier_masks.workflow_return_value is True
+
 
 class TestWorkflowUtils:
     def test_compile_run_output(self, hef_gdir, hef_copy_gdir):
@@ -541,11 +1335,13 @@ class TestWorkflowUtils:
                              'area_min_h', 'length', 'calving', 'calving_rate',
                              'off_area', 'on_area',
                              'melt_off_glacier', 'melt_on_glacier',
+                             'snow_melt_on_glacier', 'firn_melt_on_glacier',
+                             'ice_melt_on_glacier',
                              'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
                              'melt_residual_on_glacier', 'model_mb',
-                             'residual_mb', 'snow_bucket']
+                             'residual_mb', 'snow_bucket', 'mass']
         for gi in range(10):
             allowed_data_vars += [f'terminus_thick_{gi}']
 
@@ -593,6 +1389,14 @@ class TestWorkflowUtils:
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier'].values))
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['melt_on_glacier_monthly'].values))
+            assert 'mass_kg' in ds.data_vars
+            # the melt split components are only computed for mb models with
+            # surface type tracking, here they should be present but NaN
+            assert 'snow_melt_on_glacier' in ds.data_vars
+            assert 'firn_melt_on_glacier' in ds.data_vars
+            assert 'ice_melt_on_glacier' in ds.data_vars
+            assert np.all(np.isnan(
+                ds.loc[{'rgi_id': gdirs[1].rgi_id}]['snow_melt_on_glacier'].values))
 
         check_result(ds_1)
 
@@ -601,6 +1405,27 @@ class TestWorkflowUtils:
         ds_2 = utils.compile_run_output([gdirs[1], gdirs[0]],
                                         input_filesuffix=filesuffix)
         check_result(ds_2)
+
+    def test_compile_to_netcdf_allows_failing_chunks(self, tmpdir, test_dir):
+
+        logger = mock.Mock()
+        cfg.PATHS['working_dir'] = test_dir
+
+        @compile_to_netcdf(logger)
+        def _compile_dummy(gdirs, path=True, **kwargs):
+            gid = gdirs[0]
+            if gid.startswith('bad'):
+                raise RuntimeError('Found no valid glaciers!')
+            ds = xr.Dataset(coords={'rgi_id': [gid]})
+            ds['value'] = ('rgi_id', [1.])
+            ds.to_netcdf(path)
+
+        out = os.path.join(tmpdir, 'compiled.nc')
+        _compile_dummy(['bad_1', 'bad_2', 'good_1'], path=out, tmp_file_size=2)
+        with xr.open_dataset(out) as ds:
+            assert ds.rgi_id.values.tolist() == ['good_1']
+        with pytest.raises(RuntimeError, match='Found no valid glaciers!'):
+            _compile_dummy(['bad_1', 'bad_2'], path=out, tmp_file_size=1)
 
 
 class TestStartFromTar:
@@ -942,14 +1767,22 @@ class TestPreproCLI:
         assert kwargs['border'] == 160
         assert not kwargs['dynamic_spinup']
         assert kwargs['dynamic_spinup_start_year'] == 1979
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20, 30, 40,
+                                                               50, 60, 70, 80,
+                                                               90, 100]
+        assert kwargs['dynamic_spinup_allow_shorter']
         assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
         assert not kwargs['add_consensus_thickness']
+        assert not kwargs['store_hydro_output']
+        assert not kwargs['store_monthly_hydro']
+        assert kwargs['ref_area_yr'] is None
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--start-level', '2',
                                            '--mb-calibration-strategy', 'temp_melt',
                                            '--start-base-url', 'http://foo',
+                                           '--ref-area-yr', '2000',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -958,9 +1791,10 @@ class TestPreproCLI:
         assert kwargs['params_file'] is None
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
-        assert kwargs['start_level'] == 2
+        assert kwargs['start_level'] == '2'
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
+        assert kwargs['ref_area_yr'] == 2000
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
@@ -985,6 +1819,45 @@ class TestPreproCLI:
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
 
+        # The chunking and half level arguments
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '13',
+                                           '--map-border', '160',
+                                           '--start-level', '2',
+                                           '--start-base-url', 'http://foo',
+                                           '--max-level', '3a',
+                                           '--chunk-idx', '7',
+                                           '--chunk-size', '100',
+                                           ])
+        assert kwargs['start_level'] == '2'
+        assert kwargs['max_level'] == '3a'
+        assert kwargs['chunk_idx'] == 7
+        assert kwargs['chunk_size'] == 100
+        assert kwargs['start_from_dir'] is None
+        assert kwargs['glen_a_factor'] is None
+        assert kwargs['inversion_fs'] == 0
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '13',
+                                           '--map-border', '160',
+                                           '--start-level', '4a',
+                                           '--start-from-dir', 'some/dir',
+                                           '--inversion-glen-a-factor', '1.37',
+                                           '--inversion-fs', '5.7e-20',
+                                           ])
+        assert kwargs['start_level'] == '4a'
+        assert kwargs['max_level'] == '5'
+        assert kwargs['start_from_dir'] == 'some/dir'
+        assert kwargs['chunk_idx'] is None
+        assert kwargs['chunk_size'] == 1000
+        assert kwargs['glen_a_factor'] == 1.37
+        assert kwargs['inversion_fs'] == 5.7e-20
+
+        # Levels and chunk sizes are validated by argparse
+        for bad in [['--max-level', '6'], ['--max-level', '3b'],
+                    ['--start-level', '5'], ['--chunk-size', '250']]:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160'] + bad)
+
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
                                            '--output', 'local/out',
@@ -1004,7 +1877,7 @@ class TestPreproCLI:
         assert not kwargs['is_test']
         assert not kwargs['disable_mp']
         assert not kwargs['skip_inversion']
-        assert kwargs['max_level'] == 5
+        assert kwargs['max_level'] == '5'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -1087,11 +1960,92 @@ class TestPreproCLI:
                                            '--elev-bands',
                                            '--working-dir', '/local/work',
                                            '--dynamic-spinup', 'area/dmdtda',
-                                           '--err-dmdtda-scaling-factor', '0.5',
+                                           '--ref-mb-err-scaling-factor', '0.5',
                                            ])
 
         assert kwargs['dynamic_spinup'] == 'area/dmdtda'
-        assert kwargs['err_dmdtda_scaling_factor'] == 0.5
+        assert kwargs['ref_mb_err_scaling_factor'] == 0.5
+
+        # The extra years to try are years, and 'none' is the documented way
+        # to ask for no additional start year at all
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           '30',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [30]
+        assert kwargs['dynamic_spinup_allow_shorter']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           '10', '20',
+                                           '--dynamic-spinup-no-shorter-periods',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] == [10, 20]
+        assert not kwargs['dynamic_spinup_allow_shorter']
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--dynamic-spinup-extra-years-to-try',
+                                           'none',
+                                           ])
+        assert kwargs['dynamic_spinup_extra_years_to_try'] is None
+        assert kwargs['temp_bias_run'] is False
+
+        with pytest.raises(InvalidParamsError):
+            prepro_levels.parse_args(['--rgi-reg', '1',
+                                      '--map-border', '160',
+                                      '--dynamic-spinup-extra-years-to-try',
+                                      '30', 'abc',
+                                      ])
+
+        # they are counted backwards from the start year, so must be positive
+        with pytest.raises(InvalidParamsError):
+            prepro_levels.parse_args(['--rgi-reg', '1',
+                                      '--map-border', '160',
+                                      '--dynamic-spinup-extra-years-to-try',
+                                      '0',
+                                      ])
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--temp-bias-run',
+                                           ])
+        assert kwargs['temp_bias_run'] is True
+
+        # passed values should be treated as errors
+        for flag in ['--elev-bands', '--centerlines', '--skip-inversion',
+                     '--keep-dem-folders', '--add-consensus-thickness',
+                     '--add-itslive-velocity', '--add-millan-thickness',
+                     '--add-millan-velocity', '--add-hugonnet-dhdt',
+                     '--add-bedmachine', '--add-glathida',
+                     '--add-distributed-thickness',
+                     '--add-export-thickness-geotiff', '--compute-hypsometry',
+                     '--test', '--disable-mp', '--store-fl-diagnostics',
+                     '--store-hydro-output', '--store-monthly-hydro',
+                     '--temp-bias-run',
+                     ]:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160',
+                                          flag, 'whatever',
+                                          ])
+
+        # Monthly hydro output is opt-in, like in flowline.run_with_hydro
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--store-hydro-output',
+                                           ])
+        assert kwargs['store_hydro_output'] is True
+        assert kwargs['store_monthly_hydro'] is False
+
+        kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '160',
+                                           '--store-hydro-output',
+                                           '--store-monthly-hydro',
+                                           ])
+        assert kwargs['store_monthly_hydro'] is True
 
         with TempEnvironmentVariable(OGGM_RGI_REG='12',
                                      OGGM_MAP_BORDER='120',
@@ -1121,8 +2075,132 @@ class TestPreproCLI:
             assert kwargs['rgi_reg'] == '12'
             assert kwargs['border'] == 120
 
+    def test_chunk_selection(self):
+
+        _, rgidf = _read_shp()
+
+        # Chunks are blocks of the RGI id space, not slices of the sorted
+        # list of glaciers, so that they line up with the tar bundles
+        for chunk_size in [100, 1000]:
+            n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+            seen = []
+            for i in range(n_chunks):
+                sub = workflow.get_rgi_chunk(rgidf, i, chunk_size=chunk_size)
+                # A chunk is exactly one block of ids
+                for rid in sub.RGIId:
+                    assert int(rid[-5:]) // chunk_size == i
+                seen.extend(sub.RGIId)
+            # Disjoint and complete
+            assert sorted(seen) == sorted(rgidf.RGIId)
+            # And nothing beyond the last one
+            assert len(workflow.get_rgi_chunk(rgidf, n_chunks,
+                                              chunk_size=chunk_size)) == 0
+
+        # Some chunks are empty (the RGI ids have gaps) - this is normal
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=100)
+        sizes = [len(workflow.get_rgi_chunk(rgidf, i, chunk_size=100))
+                 for i in range(n_chunks)]
+        assert 0 in sizes
+        assert sum(sizes) == len(rgidf)
+
+        # Lists of ids work as well as dataframes
+        ids = list(rgidf.RGIId)
+        assert (workflow.get_rgi_chunk(ids, 6, chunk_size=100) ==
+                list(workflow.get_rgi_chunk(rgidf, 6, chunk_size=100).RGIId))
+
+        # RGI7 ids are sliced the same way
+        df7 = pd.DataFrame({'rgi_id': ['RGI2000-v7.0-G-13-01234',
+                                       'RGI2000-v7.0-G-13-00001']})
+        assert workflow.count_rgi_chunks(df7, chunk_size=1000) == 2
+        assert list(workflow.get_rgi_chunk(df7, 1, chunk_size=1000).rgi_id) == \
+            ['RGI2000-v7.0-G-13-01234']
+
+        # Only the two tar bundle sizes are allowed
+        for bad in [10, 250, 5000]:
+            with pytest.raises(InvalidParamsError):
+                workflow.count_rgi_chunks(rgidf, chunk_size=bad)
+        with pytest.raises(InvalidParamsError):
+            workflow.get_rgi_chunk(rgidf, -1, chunk_size=100)
+
+        # The slurm helper says how to wire it up
+        out = workflow.print_slurm_array(rgidf, chunk_size=100)
+        assert f'--array=0-{n_chunks - 1}' in out
+        assert '$SLURM_ARRAY_TASK_ID' in out
+
+    def test_half_level_addressing(self):
+        # A half level is decomposed into an integer plus a flag so that the
+        # existing `start_level <= n` logic keeps working, but the glacier
+        # directories still have to be read from the level they were *stored*
+        # under. Getting this wrong silently reads the wrong level.
+        from oggm.cli.prepro_levels import _level_dir_name, _parse_start_level
+
+        # '4a' holds the L4 directories, '3a' holds its own
+        assert _level_dir_name('4a') == 'L4'
+        assert _level_dir_name('3a') == 'L3a'
+        assert _level_dir_name('3') == 'L3'
+
+        # the logic integer is one below, and is NOT what to read from
+        assert _parse_start_level('4a') == (3, False, True)
+        assert _parse_start_level('3a') == (2, True, False)
+        assert _level_dir_name('4a')[1:] == '4'
+        assert _level_dir_name('3a')[1:] == '3a'
+
+        # and the url builder has to take the half levels, not just ints
+        for lev, end in [(3, '/L3/'), (4, '/L4/'),
+                         ('3a', '/L3a/'), ('4a', '/L4a/')]:
+            url = utils.get_prepro_base_url(base_url='http://foo',
+                                            rgi_version='62', border=160,
+                                            prepro_level=lev)
+            assert url.endswith(end), (lev, url)
+
+    def test_gdir_from_tar_rgi_ids(self):
+        # gdir_from_tar used to fall back to `rgi_id = entity` when the row
+        # had no RGIId, i.e. for every RGI7 dataframe, which then blew up in
+        # os.path.join with a Series. --start-from-dir routes the prepro CLI
+        # through here, so RGI7 chunked runs hit it immediately.
+        from oggm.workflow import _rgi_id_of, gdir_from_tar
+
+        rgi6 = pd.Series({'RGIId': 'RGI60-06.00123', 'Area': 1.0})
+        rgi7 = pd.Series({'rgi_id': 'RGI2000-v7.0-G-06-00123', 'area_km2': 1.0})
+        assert _rgi_id_of(rgi6) == 'RGI60-06.00123'
+        assert _rgi_id_of(rgi7) == 'RGI2000-v7.0-G-06-00123'
+        assert _rgi_id_of('RGI60-06.00123') == 'RGI60-06.00123'
+
+        # and the id has to survive all the way into the bundle lookup: with
+        # no tars on disk that is a FileNotFoundError naming the glacier, not
+        # a TypeError from slicing a Series
+        for entity, rid in [(rgi6, 'RGI60-06.00123'),
+                            (rgi7, 'RGI2000-v7.0-G-06-00123')]:
+            with pytest.raises(FileNotFoundError) as err:
+                gdir_from_tar(entity, from_tar=str(self.testdir))
+            assert rid in str(err.value)
+
+    def test_rgi_chunks_table(self):
+
+        from oggm.cli import prepro_chunks
+
+        df = prepro_chunks.get_rgi_chunks_table()
+
+        # All versions, all regions, both chunk sizes
+        assert set(df.rgi_version) == set(prepro_chunks.RGI_VERSIONS)
+        assert set(df.chunk_size) == set(prepro_chunks.CHUNK_SIZES)
+        for v in prepro_chunks.RGI_VERSIONS:
+            for cs in prepro_chunks.CHUNK_SIZES:
+                sel = df.loc[(df.rgi_version == v) & (df.chunk_size == cs)]
+                assert len(sel) == 19
+        # A chunk can hold at most chunk_size glaciers
+        assert np.all(df.n_chunks * df.chunk_size >= df.n_glaciers)
+        assert np.all(df.n_chunks > 0)
+
+        # The lookup CLI reads it
+        assert prepro_chunks.run_prepro_chunks('13', chunk_size=1000) == int(
+            df.loc[(df.rgi_version == '62') & (df.rgi_reg == '13') &
+                   (df.chunk_size == 1000)].n_chunks.iloc[0])
+
     @pytest.mark.slow
-    def test_full_run_defaults(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_full_run_defaults(self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1139,7 +2217,9 @@ class TestPreproCLI:
                           intersects_file=inter,
                           test_topofile=topof,
                           elev_bands=True,
+                          mb_model_class=mb_model_class,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           continue_on_error=False,
                           override_params={}
                           )
@@ -1175,7 +2255,7 @@ class TestPreproCLI:
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = utils.get_geodetic_mb_dataframe(regional=True)
+        dfh = pd.read_csv(utils.file_downloader(GEODETIC_MB_REGIONAL_AVG))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=200)  # Whole Alps
@@ -1245,7 +2325,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2020
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
@@ -1269,12 +2349,164 @@ class TestPreproCLI:
         with xr.open_dataset(fp) as ods:
             ref = ods.volume
             new = ods.volume_fixed_geom
+            # SfcTypeTIModel's snow tracking makes the fixed-geometry
+            # approximation less accurate than for MonthlyTIModel
+            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.15
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
-                                       rtol=0.05)
+                                       rtol=rtol)
 
             for vn in ['calving', 'volume_bsl', 'volume_bwl']:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
+
+    @pytest.mark.slow
+    def test_full_run_chunked(self):
+        # The point of chunking: running the four stages of a chunked run
+        # has to give exactly what a single whole-region run gives.
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+
+        # Four glaciers spread over two id blocks: enough to have real chunks
+        # (and an empty one below them), few enough to keep this at the same
+        # cost as the other full-run tests. Hef (00897) is in there so the
+        # inversion has something well behaved to calibrate on.
+        test_ids = ['RGI60-11.00887', 'RGI60-11.00897',   # block 008
+                    'RGI60-11.00929', 'RGI60-11.00945']   # block 009
+        rgidf = rgidf.loc[rgidf.RGIId.isin(test_ids)]
+        assert len(rgidf) == 4
+
+        chunk_size = 100
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+        # Only run the blocks which hold glaciers: the empty ones below them
+        # would just be no-op prepro calls, and the empty-chunk behaviour is
+        # asserted explicitly further down.
+        chunks = [i for i in range(n_chunks)
+                  if len(workflow.get_rgi_chunk(rgidf, i,
+                                                chunk_size=chunk_size))]
+        # two chunks is the minimum that actually splits and rejoins
+        assert chunks == [8, 9]
+
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      rgi_file=rgidf, intersects_file=inter,
+                      test_topofile=topof, disable_mp=True,
+                      elev_bands=True,
+                      inversion_volume_dataset='consensus',
+                      temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
+                      continue_on_error=False,
+                      override_params={})
+
+        def wd(name):
+            out = os.path.join(self.testdir, name)
+            utils.mkdir(out)
+            return out
+
+        # The reference: one job for the whole region, as before
+        ref_dir = os.path.join(self.testdir, 'ref_out')
+        np.random.seed(0)
+        run_prepro_levels(output_folder=ref_dir, working_dir=wd('ref_wd'),
+                          max_level='5', **common)
+
+        # And now the four stages. L2 comes from the reference run here; on a
+        # cluster it comes from the published L2 base url.
+        out_dir = os.path.join(self.testdir, 'chunked_out')
+        scratch = os.path.join(self.testdir, 'scratch')
+
+        # 1 - the chunkable part of L3
+        for i in chunks:
+            run_prepro_levels(output_folder=scratch,
+                              working_dir=wd(f'wd_s1_{i}'),
+                              start_level='2', start_from_dir=ref_dir,
+                              max_level='3a',
+                              chunk_idx=i, chunk_size=chunk_size, **common)
+
+        # 2 - Glen A and the L3 summaries, whole region
+        run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s2'),
+                          start_level='3a', start_from_dir=scratch,
+                          max_level='3', **common)
+
+        # 3 - the runs
+        for i in chunks:
+            run_prepro_levels(output_folder=out_dir,
+                              working_dir=wd(f'wd_s3_{i}'),
+                              start_level='3', start_from_dir=out_dir,
+                              max_level='4a',
+                              chunk_idx=i, chunk_size=chunk_size, **common)
+
+        # 4 - the L4 summaries and L5, whole region
+        run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s4'),
+                          start_level='4a', start_from_dir=out_dir,
+                          max_level='5', **common)
+
+        def summary(root, lev, name):
+            return os.path.join(root, 'RGI61', 'b_020', lev, 'summary', name)
+
+        for lev, name in [('L3', 'glacier_statistics_11.csv'),
+                          ('L3', 'climate_statistics_11.csv'),
+                          ('L3', 'fixed_geometry_mass_balance_11.csv'),
+                          ('L4', 'glacier_statistics_11.csv'),
+                          ('L5', 'glacier_statistics_11.csv')]:
+            ref = pd.read_csv(summary(ref_dir, lev, name), index_col=0)
+            new = pd.read_csv(summary(out_dir, lev, name), index_col=0)
+            pd.testing.assert_frame_equal(ref.sort_index(), new.sort_index())
+
+        for lev, name in [('L4', 'historical_run_output_11.nc'),
+                          ('L4', 'historical_run_output_extended_11.nc'),
+                          ('L5', 'historical_run_output_11.nc')]:
+            with xr.open_dataset(summary(ref_dir, lev, name)) as ref, \
+                    xr.open_dataset(summary(out_dir, lev, name)) as new:
+                ref = ref.sortby('rgi_id')
+                new = new.sortby('rgi_id')
+                assert_array_equal(ref.rgi_id, new.rgi_id)
+                assert_allclose(ref.volume, new.volume)
+
+        # The tar files of the chunks add up to what one job would write
+        for lev in ['L3', 'L4', 'L5']:
+            ref = sorted(os.listdir(os.path.join(ref_dir, 'RGI61', 'b_020',
+                                                 lev, 'RGI60-11')))
+            new = sorted(os.listdir(os.path.join(out_dir, 'RGI61', 'b_020',
+                                                 lev, 'RGI60-11')))
+            assert ref == new
+            assert len(new) > 1
+
+        # An empty chunk is a normal thing (the RGI ids have gaps) and has
+        # to return quietly: on a cluster it is one task of an array job, and
+        # an error would take the dependent jobs down with it.
+        empty = [i for i in range(n_chunks) if i not in chunks][0]
+        run_prepro_levels(output_folder=os.path.join(self.testdir, 'empty'),
+                          working_dir=wd('wd_empty'),
+                          start_level='3', start_from_dir=out_dir,
+                          max_level='4a',
+                          chunk_idx=empty, chunk_size=chunk_size, **common)
+        assert not os.path.exists(os.path.join(self.testdir, 'empty', 'RGI61',
+                                               'b_020', 'L4'))
+
+        # The whole-region stage wrote down which Glen A it converged to
+        with open(summary(out_dir, 'L3',
+                          'inversion_glen_a_11.json')) as f:
+            glen_a = json.load(f)
+        assert glen_a['rgi_reg'] == '11'
+        assert glen_a['ref_table'] == 'consensus'
+        assert glen_a['n_glaciers'] == len(rgidf)
+        assert glen_a['glen_a_factor'] > 0
+        np.testing.assert_allclose(glen_a['glen_a'],
+                                   glen_a['glen_a_factor'] *
+                                   cfg.PARAMS['inversion_glen_a'])
+
+        # Given back, it reproduces the inversion without calibrating again
+        redo_dir = os.path.join(self.testdir, 'redo_out')
+        run_prepro_levels(output_folder=redo_dir, working_dir=wd('wd_redo'),
+                          start_level='3a', start_from_dir=scratch,
+                          max_level='3',
+                          glen_a_factor=glen_a['glen_a_factor'],
+                          inversion_fs=glen_a['fs'], **common)
+        ref = pd.read_csv(summary(ref_dir, 'L3', 'glacier_statistics_11.csv'),
+                          index_col=0).sort_index()
+        new = pd.read_csv(summary(redo_dir, 'L3', 'glacier_statistics_11.csv'),
+                          index_col=0).sort_index()
+        assert_allclose(ref['inv_volume_km3'], new['inv_volume_km3'])
 
     @pytest.mark.slow
     def test_distributed_thickness_and_geotiff_export(self):
@@ -1299,6 +2531,7 @@ class TestPreproCLI:
                           elev_bands=True,
                           max_level=3,
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           add_distributed_thickness=True,
                           add_export_thickness_geotiff=True,
                           continue_on_error=False,
@@ -1342,6 +2575,44 @@ class TestPreproCLI:
         assert gtiff_ds.isel(band=0).sum() > 0
 
     @pytest.mark.slow
+    def test_store_hydro_output(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        inter, rgidf = _read_shp()
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'my_levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        np.random.seed(0)
+
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir, is_test=True,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          max_level=4,
+                          inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
+                          store_hydro_output=True,
+                          store_monthly_hydro=True,
+                          ref_area_yr=2000,
+                          continue_on_error=False,
+                          override_params={}
+                          )
+
+        opath = os.path.join(odir, 'RGI61', 'b_020', 'L4', 'summary',
+                             'historical_run_output_11.nc')
+        with xr.open_dataset(opath) as ds:
+            assert 'melt_on_glacier' in ds
+            assert 'liq_prcp_off_glacier' in ds
+            assert 'melt_on_glacier_monthly' in ds
+            assert 'month_2d' in ds.coords
+            assert np.all(np.isfinite(ds['on_area'].sel(time=2000)))
+
+    @pytest.mark.slow
     def test_full_run_cru_centerlines(self):
 
         from oggm.cli.prepro_levels import run_prepro_levels
@@ -1353,7 +2624,7 @@ class TestPreproCLI:
         odir = os.path.join(self.testdir, 'my_levs')
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
-        ref_period = '2000-01-01_2010-01-01'
+        ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf,
@@ -1364,7 +2635,7 @@ class TestPreproCLI:
                           centerlines=True,
                           inversion_volume_dataset='consensus',
                           continue_on_error=False,
-                          override_params={'geodetic_mb_period': ref_period,
+                          override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
                                            }
@@ -1408,14 +2679,14 @@ class TestPreproCLI:
         odf['AREA'] = df.rgi_area_km2
         smb_oggm = np.average(odf['SMB'], weights=odf['AREA'])
 
-        dfh = utils.get_geodetic_mb_dataframe(regional=True)
+        dfh = pd.read_csv(utils.file_downloader(GEODETIC_MB_REGIONAL_AVG))
         dfh = dfh.loc[dfh.period == '2000-01-01_2020-01-01'].set_index('reg')
         smb_ref = dfh.loc[11, 'dmdtda'] * 1000
         np.testing.assert_allclose(smb_oggm, smb_ref, atol=150)  # Whole Alps
 
         odf = pd.DataFrame(dfm.loc[2000:2009].mean(), columns=['SMB'])
         ref_mb = utils.get_geodetic_mb_dataframe().loc[odf.index]
-        ref_mb = ref_mb.loc[ref_mb['period'] == ref_period]['dmdtda']
+        ref_mb = ref_mb.loc[ref_mb['period'] == ref_mb_period]['dmdtda']
         odf['ref'] = ref_mb * 1000  # kg m-2 yr-1
         np.testing.assert_allclose(odf['SMB'], odf['ref'])
 
@@ -1478,7 +2749,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
@@ -1498,7 +2769,10 @@ class TestPreproCLI:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_elev_bands_and_spinup_run_with_different_evolution_models(self):
+    @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
+                                                'SfcTypeTIModel'])
+    def test_elev_bands_and_spinup_run_with_different_evolution_models(
+            self, mb_model_class):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -1518,7 +2792,7 @@ class TestPreproCLI:
 
             # change the reference geodetic mb period, because the climate data of
             # the test glaciers only go up to 2015
-            ref_period = '2000-01-01_2010-01-01'
+            ref_mb_period = '2000-01-01_2010-01-01'
             run_prepro_levels(rgi_version='61', rgi_reg='11', border=border,
                               output_folder=odir, working_dir=wdir, is_test=True,
                               test_ids=['RGI60-11.00929'],
@@ -1527,9 +2801,10 @@ class TestPreproCLI:
                               inversion_volume_dataset='consensus',
                               store_fl_diagnostics=True,
                               continue_on_error=False,
+                              mb_model_class=mb_model_class,
                               mb_calibration_strategy='melt_temp',
                               test_topofile=topof, elev_bands=True,
-                              override_params={'geodetic_mb_period': ref_period,
+                              override_params={'geodetic_mb_period': ref_mb_period,
                                                'baseline_climate': 'CRU',
                                                'evolution_model': evolution_model,
                                                'downstream_line_shape': downstream_line_shape,
@@ -1592,7 +2867,7 @@ class TestPreproCLI:
             assert isinstance(model, FlowlineModel)
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_historical'))
-            assert model.y0 == 2004
+            assert model.y0 == 1979
             assert model.last_yr == 2015
             model = FileModel(gdir.get_filepath('model_geometry',
                                                 filesuffix='_spinup_historical'))
@@ -1744,7 +3019,7 @@ class TestPreproCLI:
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
-        assert model.y0 == 2004
+        assert model.y0 == 1979
         assert model.last_yr == 2015
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
@@ -1772,7 +3047,7 @@ class TestPreproCLI:
         utils.mkdir(wdir)
         odir = os.path.join(self.testdir, 'my_levs')
         np.random.seed(0)
-        ref_period = '2000-01-01_2010-01-01'
+        ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf, intersects_file=inter,
@@ -1781,7 +3056,7 @@ class TestPreproCLI:
                           disable_mp=False,
                           inversion_volume_dataset='consensus',
                           logging_level='INFO', max_level=5, elev_bands=True,
-                          override_params={'geodetic_mb_period': ref_period,
+                          override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
                                            }
@@ -1827,6 +3102,7 @@ class TestPreproCLI:
                           rgi_file=rgidf, intersects_file=inter,
                           logging_level='INFO',
                           inversion_volume_dataset='consensus',
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                           test_topofile=topof, dem_source='ALL')
 
         rid = rgidf.iloc[0].RGIId
@@ -1847,6 +3123,398 @@ class TestPreproCLI:
         entity = rgidf.iloc[0]
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
+
+
+def _fake_glacier_statistics(grid_points, reg='11', dlon=0.5, dlat=0.5,
+                             seed=0):
+    """A synthetic `glacier_statistics` file of a `temp_melt` run.
+
+    `grid_points` is a list of (lon, lat, n_glaciers) tuples. The temp bias of
+    a glacier is its grid point longitude plus some noise, so that the
+    aggregated values are easy to check.
+    """
+    rng = np.random.RandomState(seed)
+    rows = []
+    for lon, lat, n in grid_points:
+        for _ in range(n):
+            rows.append({'rgi_id': 'RGI60-{}.{:05d}'.format(reg, len(rows)),
+                         'rgi_region': reg,
+                         'rgi_subregion': f'{reg}-01',
+                         'cenlon': lon + rng.uniform(-dlon / 2, dlon / 2),
+                         'cenlat': lat + rng.uniform(-dlat / 2, dlat / 2),
+                         'rgi_area_km2': rng.uniform(0.1, 10),
+                         'temp_bias': lon + rng.normal(scale=0.1),
+                         'reference_mb_err': rng.uniform(100, 300),
+                         'baseline_climate_ref_pix_lon': lon,
+                         'baseline_climate_ref_pix_lat': lat,
+                         })
+    return pd.DataFrame(rows)
+
+
+class TestTempBiasCLI:
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmpdir_factory):
+        self.testdir = str(tmpdir_factory.mktemp("tmp_temp_bias"))
+        utils.mkdir(self.testdir, reset=True)
+        cfg.initialize()
+
+    def test_parse_args(self):
+
+        from oggm.cli import temp_bias
+
+        kwargs = temp_bias.parse_args(['--input', 'in_dir'])
+        assert kwargs['input_files'] == ['in_dir']
+        assert kwargs['output_file'] == 'temp_bias.csv'
+        assert kwargs['make_plots']
+        assert kwargs['min_glaciers'] == 12
+        assert kwargs['max_radius'] == 10
+        assert kwargs['err_fill_quantile'] == 0.9
+        assert kwargs['rgi_region'] is None
+        assert kwargs['rgi_subregion'] is None
+
+        kwargs = temp_bias.parse_args(['--input', 'd1', 'd2',
+                                       '--output-file', 'out/tb.csv',
+                                       '--no-plots',
+                                       '--min-glaciers', '5',
+                                       '--max-radius', '3',
+                                       '--err-fill-quantile', '0.5',
+                                       '--rgi-subregion', '11-01',
+                                       ])
+        assert kwargs['input_files'] == ['d1', 'd2']
+        assert kwargs['output_file'] == 'out/tb.csv'
+        assert not kwargs['make_plots']
+        assert kwargs['min_glaciers'] == 5
+        assert kwargs['max_radius'] == 3
+        assert kwargs['err_fill_quantile'] == 0.5
+        assert kwargs['rgi_subregion'] == ['11-01']
+
+        with pytest.raises(SystemExit):
+            temp_bias.parse_args(['--input', 'in_dir', '--no-plots', 'whatever'])
+
+        with pytest.raises(InvalidParamsError):
+            temp_bias.parse_args([])
+
+        with TempEnvironmentVariable(OGGM_TEMP_BIAS_INPUT='d1 d2'):
+            kwargs = temp_bias.parse_args([])
+            assert kwargs['input_files'] == ['d1', 'd2']
+
+    def test_temp_bias_run_preset_before_initialize(self):
+
+        # `log.workflow` is added to the Logger class by cfg.initialize(), so
+        # the --temp-bias-run preset must not log before that or it crashes on
+        # a fresh interpreter. A test session cannot catch this (cfg is
+        # already initialized), hence the subprocess.
+        code = (
+            'import logging\n'
+            'from oggm.cli.prepro_levels import run_prepro_levels\n'
+            'from oggm.exceptions import InvalidParamsError\n'
+            'assert not hasattr(logging.Logger, "workflow")\n'
+            'try:\n'
+            '    run_prepro_levels(rgi_reg="11", border=80,\n'
+            '                      temp_bias_run=True, start_level=2,\n'
+            '                      mb_calibration_strategy="temp_melt")\n'
+            'except InvalidParamsError:\n'
+            '    pass  # raised after the preset block, before cfg.initialize\n'
+        )
+        out = subprocess.run([sys.executable, '-c', code], capture_output=True)
+        assert out.returncode == 0, out.stderr.decode()
+
+    def test_compute_temp_bias_dataframe(self):
+
+        # Three grid points: two well populated, one with too few glaciers
+        df = _fake_glacier_statistics([(10.25, 46.25, 20),
+                                       (10.75, 46.25, 15),
+                                       (11.25, 46.25, 3)])
+        # A failed glacier and a missing MB error should not be a problem
+        df.loc[0, 'temp_bias'] = np.nan
+        df.loc[1, 'reference_mb_err'] = np.nan
+
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=12)
+
+        # The file format is set in stone - this is what OGGM reads back
+        assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
+        assert out.index.name == 'unique_id'
+        # The RGI version is read from the IDs: the calibration checks it
+        assert (out['rgi_version'] == '60').all()
+        # Grid points always have a value - the file never holds NaNs
+        vals = [c for c in out.columns if 'temp_bias' in c]
+        assert np.isfinite(out[vals].values).all()
+        assert len(out) == 3
+        assert out['n_glaciers'].sum() == len(df) - 1  # the failed one is out
+
+        # The grid was correctly inferred from the ref pix coordinates
+        assert_allclose(sorted(out['lon_val']), [10.25, 10.75, 11.25])
+        assert_array_equal(sorted(out['lon_id']), [0, 1, 2])
+        assert_array_equal(out['lat_id'], 0)
+
+        # The values are dominated by the grid point longitude
+        for _, s in out.iterrows():
+            assert_allclose(s['median_temp_bias'], s['lon_val'], atol=0.1)
+
+        # Populated grid points are used as is
+        big = out.loc[out['n_glaciers'] >= 12]
+        assert len(big) == 2
+        assert_array_equal(big['search_radius'], 0)
+        assert_array_equal(big['n_glaciers_grouped'], big['n_glaciers'])
+        for c in ['median_temp_bias', 'median_temp_bias_w_area',
+                  'median_temp_bias_w_err']:
+            assert_allclose(big[c], big[c + '_grouped'])
+
+        # The lonely one is grouped with its neighbours
+        small = out.loc[out['n_glaciers'] < 12]
+        assert len(small) == 1
+        assert small['search_radius'].iloc[0] == 1
+        # radius 1 around 11.25 reaches 10.75 but not 10.25
+        assert small['n_glaciers_grouped'].iloc[0] == 3 + 15
+        assert (small['median_temp_bias_grouped'].iloc[0] <
+                small['median_temp_bias'].iloc[0])
+
+        # Check one weighted median by hand
+        sel = df.loc[df['baseline_climate_ref_pix_lon'] == 10.75]
+        assert_allclose(out.loc['001_000', 'median_temp_bias_w_area'],
+                        utils.weighted_quantile_1d(sel['temp_bias'].values,
+                                                   sel['rgi_area_km2'].values,
+                                                   0.5))
+        assert_allclose(out.loc['001_000', 'median_temp_bias_w_err'],
+                        utils.weighted_quantile_1d(
+                            sel['temp_bias'].values,
+                            1 / sel['reference_mb_err'].values, 0.5))
+
+        # Without grouping, all grid points are on their own
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=1)
+        assert_array_equal(out['search_radius'], 0)
+        assert_array_equal(out['n_glaciers_grouped'], out['n_glaciers'])
+
+        # Subregion selection
+        df['rgi_subregion'] = ['11-01'] * 20 + ['11-02'] * 18
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=1,
+                                                rgi_subregion='11-02')
+        assert len(out) == 2
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=1,
+                                                rgi_region=11)
+        assert len(out) == 3
+
+        # Garbage in
+        with pytest.raises(InvalidWorkflowError):
+            utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
+        with pytest.raises(InvalidWorkflowError):
+            # All the glaciers in the same grid point
+            utils.compute_temp_bias_dataframe(
+                _fake_glacier_statistics([(10.25, 46.25, 20)]))
+
+    def test_compute_temp_bias_dataframe_failed_run(self):
+
+        # When the calibration fails for all the glaciers, `glacier_statistics`
+        # silently drops the columns it could not fill. The error message has
+        # to point at the calibration and not at the file itself (this is what
+        # a run of a version without RGI7 geodetic MB data looked like).
+        df = _fake_glacier_statistics([(10.25, 46.25, 20),
+                                       (10.75, 46.25, 15)])
+        df['error_task'] = 'mb_calibration_from_geodetic_mb'
+        df['error_msg'] = "KeyError: 'RGI2000-v7.0-G-06-00001'"
+        failed = df.drop(columns=['temp_bias', 'reference_mb_err'])
+
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(failed)
+        msg = str(exc.value)
+        assert 'mb_calibration_from_geodetic_mb' in msg
+        assert 'failed for 35 of the 35 glaciers' in msg
+        assert "KeyError: 'RGI2000-v7.0-G-06-00001'" in msg
+
+        # Same story when the columns are there but empty
+        df['temp_bias'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df)
+        assert 'mb_calibration_from_geodetic_mb' in str(exc.value)
+
+        # But we don't blame a task when none of them failed
+        df = _fake_glacier_statistics([(10.25, 46.25, 20)])
+        df['error_task'] = np.nan
+        with pytest.raises(InvalidWorkflowError) as exc:
+            utils.compute_temp_bias_dataframe(df.drop(columns=['temp_bias']))
+        assert 'failed for' not in str(exc.value)
+
+    def test_compute_temp_bias_dataframe_wrap(self):
+
+        # Grid points on both sides of the dateline should see each other
+        df = _fake_glacier_statistics([(-179.75, 60.25, 2),
+                                       (-179.25, 60.25, 2),
+                                       (179.25, 60.25, 2),
+                                       (179.75, 60.25, 2)])
+        out = utils.compute_temp_bias_dataframe(df, min_glaciers=6)
+
+        # 720 longitudes at 0.5 deg - the grid is anchored on the westernmost
+        assert_array_equal(sorted(out['lon_id']), [0, 1, 718, 719])
+
+        # The two grid points either side of the dateline are neighbours: at
+        # radius 1 they see each other and reach the 6 glaciers they need
+        for uid in ['000_000', '719_000']:
+            assert out.loc[uid, 'search_radius'] == 1
+            assert out.loc[uid, 'n_glaciers_grouped'] == 6
+
+        # Without the wrap-around they would never find enough glaciers
+        assert (out['n_glaciers_grouped'] >= 6).all()
+
+    def test_temp_bias_cli(self):
+
+        from oggm.cli.temp_bias import run_temp_bias
+
+        # Two "regions", written as two files, as prepro_levels would
+        sum_dir = os.path.join(self.testdir, 'summary')
+        utils.mkdir(sum_dir)
+        for reg, lon0 in [('11', 10.25), ('12', 20.25)]:
+            df = _fake_glacier_statistics([(lon0, 46.25, 20),
+                                           (lon0 + 0.5, 46.25, 20),
+                                           (lon0 + 1, 46.75, 3)], reg=reg)
+            df.to_csv(os.path.join(sum_dir,
+                                   f'glacier_statistics_{reg}.csv'),
+                      index=False)
+
+        opath = os.path.join(self.testdir, 'out', 'temp_bias_v42.csv')
+        run_temp_bias(input_files=[sum_dir], output_file=opath,
+                      min_glaciers=12)
+
+        out = pd.read_csv(opath, index_col=0)
+        assert len(out) == 6
+        assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
+        assert os.path.isfile(os.path.join(self.testdir, 'out',
+                                           'temp_bias_v42_map.png'))
+        assert os.path.isfile(os.path.join(self.testdir, 'out',
+                                           'temp_bias_v42_hist.png'))
+
+        # The summary is written next to the file - it is what is left after
+        # the run, especially when there is no job log to go back to
+        with open(os.path.join(self.testdir, 'out',
+                               'temp_bias_v42_summary.txt')) as f:
+            summary = f.read()
+        for expected in ['Input glaciers', 'MISSING from this file',
+                         'Per RGI region', 'Climate grid', 'Grouping of the',
+                         'Final bias values', 'median_temp_bias_w_err_grouped',
+                         'min_glaciers      : 12',
+                         'glacier_statistics_11.csv']:
+            assert expected in summary, expected
+        # the headline numbers are the real ones
+        assert '{}'.format(int(out.n_glaciers.sum())) in summary
+        assert '{}'.format(len(out)) in summary
+
+        # This is what OGGM does with the file: it must be readable and the
+        # nearest grid point lookup must work (see mb_calibration_from_
+        # geodetic_mb)
+        bias_df = utils.get_temp_bias_dataframe(file_path=opath)
+        assert_array_equal(bias_df.index, out.index)
+        dis = ((bias_df.lon_val - 20.75) ** 2 +
+               (bias_df.lat_val - 46.25) ** 2) ** 0.5
+        assert dis.min() < 1
+        sel = bias_df.iloc[np.argmin(dis)]
+        assert_allclose(sel['median_temp_bias_w_err_grouped'], 20.75, atol=0.1)
+        assert np.isfinite(bias_df['median_temp_bias_w_err_grouped']).all()
+
+        # No plots if asked
+        opath = os.path.join(self.testdir, 'out2', 'temp_bias_v42.csv')
+        run_temp_bias(input_files=[sum_dir], output_file=opath,
+                      make_plots=False)
+        assert os.path.isfile(opath)
+        assert not os.path.isfile(os.path.join(self.testdir, 'out2',
+                                               'temp_bias_v42_map.png'))
+
+    @pytest.mark.slow
+    def test_prepro_temp_bias_run(self):
+
+        from oggm.cli.prepro_levels import run_prepro_levels
+        from oggm.cli.temp_bias import run_temp_bias
+
+        inter, rgidf = _read_shp()
+
+        # Two glaciers in one W5E5 grid point, one in the next
+        test_ids = ['RGI60-11.00897', 'RGI60-11.00746', 'RGI60-11.00929']
+
+        wdir = os.path.join(self.testdir, 'wd')
+        utils.mkdir(wdir)
+        odir = os.path.join(self.testdir, 'levs')
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir, working_dir=wdir,
+                          is_test=True, test_ids=test_ids,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          continue_on_error=False,
+                          temp_bias_run=True,
+                          mb_calibration_strategy='temp_melt',
+                          override_params={},
+                          )
+
+        # The strategy has to be explicit
+        with pytest.raises(InvalidParamsError):
+            run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                              output_folder=odir, working_dir=wdir,
+                              temp_bias_run=True,
+                              mb_calibration_strategy='informed_threestep')
+
+        # And informed_threestep needs the file we are about to create
+        with pytest.raises(InvalidParamsError):
+            run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                              output_folder=odir, working_dir=wdir,
+                              mb_calibration_strategy='informed_threestep')
+
+        # The statistics file is the only thing this run is good for
+        sum_dir = os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary')
+        assert os.path.isfile(os.path.join(sum_dir,
+                                           'glacier_statistics_11.csv'))
+        assert not os.path.isfile(os.path.join(sum_dir,
+                                               'climate_statistics_11.csv'))
+
+        # The gdirs are not copied back, and we stopped at L3
+        for lev in ['L0', 'L1', 'L2', 'L3']:
+            base = os.path.join(odir, 'RGI61', 'b_020', lev)
+            assert len(glob.glob(os.path.join(base, '*.tar*'))) == 0
+            assert len(glob.glob(os.path.join(base, 'RGI*'))) == 0
+        assert not os.path.isdir(os.path.join(odir, 'RGI61', 'b_020', 'L4'))
+
+        # Second command: the temperature bias file itself
+        opath = os.path.join(self.testdir, 'temp_bias_test.csv')
+        run_temp_bias(input_files=[sum_dir], output_file=opath, min_glaciers=2)
+
+        # The two grid points are there, one of them had to be grouped
+        out = pd.read_csv(opath, index_col=0)
+        assert len(out) == 2
+        assert list(out.columns) == utils.TEMP_BIAS_FILE_COLUMNS
+        assert out['n_glaciers'].sum() == 3
+        assert (out['search_radius'] == [0, 1]).all()
+        assert np.isfinite(out['median_temp_bias_w_err_grouped']).all()
+
+        # And now the real test: the file we just made must work as a prior
+        wdir2 = os.path.join(self.testdir, 'wd2')
+        utils.mkdir(wdir2)
+        odir2 = os.path.join(self.testdir, 'levs2')
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir2, working_dir=wdir2,
+                          is_test=True, test_ids=test_ids,
+                          rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter,
+                          test_topofile=topof,
+                          elev_bands=True,
+                          continue_on_error=False,
+                          max_level=3, skip_inversion=True,
+                          mb_calibration_strategy='informed_threestep',
+                          temp_bias_file_path=opath,
+                          override_params={},
+                          )
+
+        df = pd.read_csv(os.path.join(odir2, 'RGI61', 'b_020', 'L3', 'summary',
+                                      'glacier_statistics_11.csv'),
+                         index_col=0)
+        assert len(df) == 3
+        assert np.isfinite(df['temp_bias']).all()
+        # The prior was used: the calibrated bias is close to the file value
+        # (informed_threestep only moves it as a last resort)
+        for rid, s in df.iterrows():
+            dis = ((out.lon_val - s['baseline_climate_ref_pix_lon']) ** 2 +
+                   (out.lat_val - s['baseline_climate_ref_pix_lat']) ** 2) ** 0.5
+            prior = out.iloc[np.argmin(dis)]['median_temp_bias_w_err_grouped']
+            assert_allclose(s['temp_bias'], prior, atol=1e-3)
 
 
 class TestBenchmarkCLI(unittest.TestCase):
@@ -1926,6 +3594,12 @@ class TestBenchmarkCLI(unittest.TestCase):
         assert kwargs['rgi_reg'] == '01'
         assert kwargs['border'] == 160
         assert kwargs['is_test']
+
+        with pytest.raises(SystemExit):
+            benchmark.parse_args(['--rgi-reg', '1',
+                                  '--map-border', '160',
+                                  '--test', 'whatever',
+                                  ])
 
         kwargs = benchmark.parse_args(['--rgi-reg', '1',
                                        '--map-border', '160',
@@ -2570,6 +4244,21 @@ class TestDataFiles(unittest.TestCase):
         with pytest.warns(DeprecationWarning, match="hdf"):
             df = _downloads.get_dataframe_from_file(hdf_path)
         pd.testing.assert_frame_equal(df, df_orig)
+
+    @pytest.mark.slow
+    def test_get_geodetic_mb_dataframe(self):
+
+        df = utils.get_geodetic_mb_dataframe(rgi_version='62')
+        assert df.index[0].startswith('RGI60-')
+        # RGI6 is the default
+        assert cfg.PARAMS['rgi_version'] == '62'
+        assert utils.get_geodetic_mb_dataframe().index[0].startswith('RGI60-')
+
+        df = utils.get_geodetic_mb_dataframe(rgi_version='70G')
+        assert df.index[0].startswith('RGI2000-v7.0-G-')
+
+        with pytest.raises(NotImplementedError):
+            utils.get_geodetic_mb_dataframe(rgi_version='70C')
 
     def test_srtmzone(self):
 

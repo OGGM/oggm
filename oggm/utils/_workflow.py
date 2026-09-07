@@ -55,6 +55,10 @@ try:
     import pyproj
 except ImportError:
     pass
+try:
+    import yaml
+except ImportError:
+    pass
 
 # Python 3.12+ gives a deprecation warning if TarFile.extraction_filter is None.
 # https://docs.python.org/3.12/library/tarfile.html#tarfile-extraction-filter
@@ -66,7 +70,8 @@ from oggm import __version__
 from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                tolist, filter_rgi_name, parse_rgi_meta,
                                haversine, multipolygon_to_polygon,
-                               recursive_valid_polygons)
+                               recursive_valid_polygons,
+                               weighted_quantile_1d)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
 from oggm import cfg
@@ -243,6 +248,12 @@ def show_versions(logger=None):
         logger.workflow('\n'.join(out))
 
     return '\n'.join(out)
+
+
+def raise_oob_error(data: np.ndarray, name: str, msg: str = ""):
+    """Raises an out-of-bound error and displays data bounds."""
+    text = f"{name} is OOB: {data.min()}, {data.max()}.\n{msg}"
+    raise ValueError(text)
 
 
 class SuperclassMeta(type):
@@ -427,7 +438,8 @@ class entity_task(object):
     exceptions, logging, and (some day) database for job-controlling.
     """
 
-    def __init__(self, log, writes=[], fallback=None):
+    def __init__(self, log, writes=[], fallback=None,
+                 workflow_return_value=True):
         """Decorator syntax: ``@entity_task(log, writes=['dem', 'outlines'])``
 
         Parameters
@@ -439,15 +451,19 @@ class entity_task(object):
             available in ``cfg.BASENAMES``)
         fallback: python function
             will be executed on gdir if entity_task fails
-        return_value: bool
-            whether the return value from the task should be passed over
-            to the caller or not. In general you will always want this to
-            be true, but sometimes the task return things which are not
-            useful in production and my use a lot of memory, etc,
+        workflow_return_value: bool
+            whether ``workflow.execute_entity_task`` collects the return
+            value of this task. Set this to False for tasks returning objects
+            which are not useful in production but use a lot of memory (the
+            model objects returned by the ``run_*`` tasks, for example).
+            Calling the task directly (``tasks.run_random_climate(gdir)``)
+            is unaffected by this, and callers of ``execute_entity_task``
+            can still ask for the values explicitly with ``return_value=True``.
         """
         self.log = log
         self.writes = writes
         self.fallback = fallback
+        self.workflow_return_value = workflow_return_value
 
         cnt = ['    Notes']
         cnt += ['    -----']
@@ -471,6 +487,12 @@ class entity_task(object):
                          return_value=True, continue_on_error=None,
                          add_to_log_file=True, **kwargs):
 
+            settings_filesuffix = kwargs.get('settings_filesuffix', '')
+            gdir.settings_filesuffix = settings_filesuffix
+
+            observations_filesuffix = kwargs.get('observations_filesuffix', '')
+            gdir.observations_filesuffix = observations_filesuffix
+
             if reset is None:
                 reset = not cfg.PARAMS['auto_skip_task']
 
@@ -480,8 +502,11 @@ class entity_task(object):
             task_name = task_func.__name__
 
             # Filesuffix are typically used to differentiate tasks
-            fsuffix = (kwargs.get('filesuffix', False) or
-                       kwargs.get('output_filesuffix', False))
+            fsuffix = settings_filesuffix
+            if kwargs.get('filesuffix', False):
+                fsuffix += kwargs.get('filesuffix', False)
+            if kwargs.get('output_filesuffix', False):
+                fsuffix += kwargs.get('output_filesuffix', False)
             if fsuffix:
                 task_name += fsuffix
 
@@ -496,13 +521,13 @@ class entity_task(object):
 
             # Run the task
             try:
-                if cfg.PARAMS['task_timeout'] > 0:
+                if gdir.settings['task_timeout'] > 0:
                     signal.signal(signal.SIGALRM, _timeout_handler)
-                    signal.alarm(cfg.PARAMS['task_timeout'])
+                    signal.alarm(gdir.settings['task_timeout'])
                 ex_t = time.time()
                 out = task_func(gdir, **kwargs)
                 ex_t = time.time() - ex_t
-                if cfg.PARAMS['task_timeout'] > 0:
+                if gdir.settings['task_timeout'] > 0:
                     signal.alarm(0)
                 if task_name != 'gdir_to_tar':
                     if add_to_log_file:
@@ -526,7 +551,11 @@ class entity_task(object):
                 return out
 
         _entity_task.__dict__['is_entity_task'] = True
-        # adds the possibility to use a function, decorated as entity_task, without its decoration.
+        # read by workflow.execute_entity_task to decide whether the return
+        # values are worth shipping back to the main process (see __init__)
+        _entity_task.__dict__['workflow_return_value'] = self.workflow_return_value
+        # adds the possibility to use a function, decorated as entity_task,
+        # without its decoration.
         _entity_task.unwrapped = task_func
         return _entity_task
 
@@ -1002,18 +1031,25 @@ class compile_to_netcdf(object):
                                       'compile_tmp_{:06d}.nc'.format(i))
                          for i in range(len(sub_gdirs))]
 
-            try:
-                for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+            good_paths = []
+            failed_exception = None
+            for spath, sgdirs in zip(tmp_paths, sub_gdirs):
+                try:
                     task_func(sgdirs, input_filesuffix=input_filesuffix,
                               path=spath, **kwargs)
-            except BaseException:
-                # If something wrong, delete the tmp files
-                for f in tmp_paths:
+                    good_paths.append(spath)
+                except BaseException as err:
+                    failed_exception = err
+                    # If this chunk failed, remove its temporary file
                     try:
-                        os.remove(f)
+                        os.remove(spath)
                     except FileNotFoundError:
                         pass
-                raise
+
+            if not good_paths:
+                raise failed_exception
+
+            tmp_paths = good_paths
 
             # Ok, now merge and return
             try:
@@ -1095,6 +1131,11 @@ def merge_consecutive_run_outputs(gdir,
 
     # Merge by removing the last step of file 1 and delete the files if asked
     out_ds = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+    # xr.concat keeps the attrs of the first file only, which silently loses
+    # the ones set by the second run alone - e.g. the `partial_output` and
+    # `error_during_run` flags of a truncated run. Keep both, the first file
+    # winning on the keys they share (as before).
+    out_ds.attrs = {**ds2.attrs, **ds1.attrs}
     if delete_input:
         os.remove(fp1)
         os.remove(fp2)
@@ -1161,11 +1202,15 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                          # as it is a variable in gdirs v1.6 2023.1
                          'area_m2', 'area_min_h_m2', 'length_m', 'calving_m3',
                          'calving_rate_myr', 'off_area',
-                         'on_area', 'model_mb', 'is_fixed_geometry_spinup']
+                         'on_area', 'model_mb', 'is_fixed_geometry_spinup',
+                         'volume_ice_m3', 'volume_firn_m3', 'mass_kg',
+                         'mass_ice_kg', 'mass_firn_kg']
     for gi in range(10):
         allowed_data_vars += [f'terminus_thick_{gi}']
     # this hydro variables can be _monthly or _daily
     hydro_vars = ['melt_off_glacier', 'melt_on_glacier',
+                  'snow_melt_on_glacier', 'firn_melt_on_glacier',
+                  'ice_melt_on_glacier',
                   'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                   'snowfall_off_glacier', 'snowfall_on_glacier',
                   'melt_residual_off_glacier', 'melt_residual_on_glacier',
@@ -1618,7 +1663,8 @@ def compile_task_time(gdirs, task_names=[], filesuffix='', path=True,
 
 
 @entity_task(log)
-def glacier_statistics(gdir, inversion_only=False, apply_func=None):
+def glacier_statistics(gdir, settings_filesuffix='',
+                       inversion_only=False, apply_func=None):
     """Gather as much statistics as possible about this glacier.
 
     It can be used to do result diagnostics and other stuffs. If the data
@@ -1798,8 +1844,10 @@ def glacier_statistics(gdir, inversion_only=False, apply_func=None):
 
         try:
             # MB calib
-            mb_calib = gdir.read_json('mb_calib')
-            for k, v in mb_calib.items():
+            for k in ['rgi_id', 'bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                      'reference_mb', 'reference_mb_err', 'reference_period',
+                      'mb_global_params', 'baseline_climate_source']:
+                v = gdir.settings[k]
                 if np.isscalar(v):
                     d[k] = v
                 else:
@@ -2023,14 +2071,17 @@ def compile_glacier_hypsometry(gdirs, filesuffix='', path=True,
 
 
 @global_task(log)
-def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
+def compile_fixed_geometry_mass_balance(gdirs, settings_filesuffix='',
+                                        filesuffix='',
                                         path=True, csv=False,
                                         use_inversion_flowlines=True,
                                         ys=None, ye=None, years=None,
                                         climate_filename='climate_historical',
                                         climate_input_filesuffix='',
                                         temperature_bias=None,
-                                        precipitation_factor=None):
+                                        precipitation_factor=None,
+                                        mb_model_class=None,
+                                        ):
 
     """Compiles a table of specific mass balance timeseries for all glaciers.
 
@@ -2041,6 +2092,9 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -2069,17 +2123,22 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
         multiply a factor to the precipitation time series
         default is None and means that the precipitation factor from the
         calibration is applied which is cfg.PARAMS['prcp_fac']
+    mb_model_class : MassBalanceModel, defaults to ``MonthlyTIModel``
+        The MassBalanceModel class to use.
     """
 
     from oggm.workflow import execute_entity_task
     from oggm.core.massbalance import fixed_geometry_mass_balance
 
     out_df = execute_entity_task(fixed_geometry_mass_balance, gdirs,
+                                 settings_filesuffix=settings_filesuffix,
                                  use_inversion_flowlines=use_inversion_flowlines,
                                  ys=ys, ye=ye, years=years, climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
-                                 precipitation_factor=precipitation_factor)
+                                 precipitation_factor=precipitation_factor,
+                                 mb_model_class=mb_model_class,
+                                 )
 
     for idx, s in enumerate(out_df):
         if s is None:
@@ -2106,7 +2165,8 @@ def compile_fixed_geometry_mass_balance(gdirs, filesuffix='',
 
 
 @global_task(log)
-def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
+def compile_ela(gdirs, settings_filesuffix='', filesuffix='',
+                path=True, csv=False, ys=None, ye=None,
                 years=None, climate_filename='climate_historical', temperature_bias=None,
                 precipitation_factor=None, climate_input_filesuffix='',
                 mb_model_class=None):
@@ -2120,6 +2180,9 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     ----------
     gdirs : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments.
     filesuffix : str
         add suffix to output file
     path : str, bool
@@ -2154,7 +2217,9 @@ def compile_ela(gdirs, filesuffix='', path=True, csv=False, ys=None, ye=None,
     if mb_model_class is None:
         mb_model_class = MonthlyTIModel
 
-    out_df = execute_entity_task(compute_ela, gdirs, ys=ys, ye=ye, years=years,
+    out_df = execute_entity_task(compute_ela, gdirs,
+                                 settings_filesuffix=settings_filesuffix,
+                                 ys=ys, ye=ye, years=years,
                                  climate_filename=climate_filename,
                                  climate_input_filesuffix=climate_input_filesuffix,
                                  temperature_bias=temperature_bias,
@@ -2340,6 +2405,7 @@ def raw_climate_statistics(gdir, add_climate_period=1995, halfsize=15,
                                                                f'{fs[-4:]}-12-01'))
                     # check if we have the full time period
                     n_years = int(fs[-4:]) - int(fs[:4]) + 1
+                    # BUG: fails with daily data
                     assert len(ds_pr_winter.time) == n_years * 7, 'chosen time-span invalid'
                     ds_d_pr_winter_mean = (ds_pr_winter / ds_pr_winter.time.dt.daysinmonth).mean()
                     d[f'{fs}_uncorrected_winter_daily_mean_prcp'] = ds_d_pr_winter_mean.values
@@ -2397,6 +2463,561 @@ def compile_climate_statistics(gdirs, filesuffix='', path=True,
         else:
             out.to_csv(path)
     return out
+
+
+# Columns of the temperature bias file, in the order in which they are
+# written out. The index of the file is `unique_id`.
+TEMP_BIAS_FILE_COLUMNS = [
+    'lon_id', 'lat_id', 'lon_val', 'lat_val', 'rgi_area_km2', 'n_glaciers',
+    'median_temp_bias', 'median_temp_bias_w_area', 'median_temp_bias_w_err',
+    'n_glaciers_grouped', 'search_radius', 'median_temp_bias_grouped',
+    'median_temp_bias_w_area_grouped', 'median_temp_bias_w_err_grouped',
+    'rgi_version', 'baseline_climate_source',
+]
+
+
+def _read_glacier_statistics_files(glacier_statistics):
+    """Read and concatenate glacier statistics files.
+
+    Parameters
+    ----------
+    glacier_statistics : pandas.DataFrame, str, Path or list
+        a DataFrame (used as is), or one or more paths. A path can point to a
+        csv file, to a directory (all `glacier_statistics*.csv` files therein
+        are read) or be a glob pattern.
+
+    Returns
+    -------
+    (DataFrame with one row per glacier, list of the files which were read)
+    """
+
+    if isinstance(glacier_statistics, pd.DataFrame):
+        return glacier_statistics.copy(), ['<DataFrame>']
+
+    files = []
+    for item in tolist(glacier_statistics):
+        item = str(item)
+        if os.path.isdir(item):
+            found = sorted(glob.glob(os.path.join(item,
+                                                  'glacier_statistics*.csv')))
+            if not found:
+                raise InvalidParamsError('No `glacier_statistics*.csv` file '
+                                         f'found in directory: {item}')
+        elif os.path.isfile(item):
+            found = [item]
+        else:
+            found = sorted(glob.glob(item))
+            if not found:
+                raise InvalidParamsError(f'No such file or directory: {item}')
+        files.extend(found)
+
+    log.workflow(f'Reading {len(files)} glacier statistics file(s).')
+
+    df = pd.concat([pd.read_csv(f, low_memory=False) for f in files],
+                   axis=0, ignore_index=True)
+
+    if 'rgi_id' in df:
+        n_before = len(df)
+        df = df.drop_duplicates(subset='rgi_id').set_index('rgi_id').sort_index()
+        if len(df) != n_before:
+            log.warning(f'{n_before - len(df)} duplicated glaciers were found '
+                        'in the input files and were removed.')
+    return df, files
+
+
+def _failed_tasks_hint(df):
+    """What the error columns of a glacier statistics file have to say.
+
+    `glacier_statistics` writes only the data it could gather, i.e. a task
+    which failed for all the glaciers takes its columns down with it. When
+    that happens, the `error_task` / `error_msg` columns are the ones telling
+    us why, so we add them to the error messages below.
+
+    Returns an empty string if the statistics have nothing to say about it.
+    """
+
+    if 'error_task' not in df or len(df) == 0:
+        return ''
+
+    errs = df['error_task'].value_counts()
+    if len(errs) == 0:
+        # No glacier errored - the reason is somewhere else
+        return ''
+
+    task = errs.index[0]
+    out = (f' Note that the `{task}` task failed for {errs.iloc[0]} of the '
+           f'{len(df)} glaciers')
+    if 'error_msg' in df:
+        msgs = df.loc[df['error_task'] == task, 'error_msg'].value_counts()
+        if len(msgs) > 0:
+            out += f' (most frequent error: "{msgs.index[0]}")'
+    return out + ' - this is the more likely problem.'
+
+
+def _infer_grid_spacing(values, name):
+    """Infer the spacing of a regular grid from the coordinates in use.
+
+    Returns None if all the glaciers sit in the same band, in which case the
+    caller falls back on the spacing of the other axis.
+    """
+
+    uniq = np.unique(values)
+    if len(uniq) < 2:
+        log.warning(f'Cannot infer the climate grid {name} spacing: all '
+                    f'glaciers are in the same {name} band. Falling back on '
+                    'the spacing of the other axis.')
+        return None
+    return float(np.min(np.diff(uniq)))
+
+
+def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
+                                max_radius=10, err_fill_quantile=0.9,
+                                rgi_region=None, rgi_subregion=None,
+                                path=None, plot_path=None, summary_path=None):
+    """Computes the temperature bias prior file out of a `temp_melt` run.
+
+    This is the counterpart of :py:func:`utils.get_temp_bias_dataframe`: it
+    creates the file which the `informed_threestep` mass balance calibration
+    reads as a prior (see `mb_calibration_from_geodetic_mb`).
+
+    The input is the `glacier_statistics` file(s) of a preprocessing run made
+    with the `temp_melt` calibration strategy, i.e. a run in which the melt
+    factor was kept at its default and the temperature bias was chosen so as
+    to match the geodetic observations. This function summarizes these
+    per-glacier temperature biases per climate grid point, using the (weighted)
+    median of all glaciers within the grid point. Grid points with fewer than
+    `min_glaciers` glaciers are grouped with their neighbours, by growing a
+    square search radius until enough glaciers are found.
+
+    The climate grid is reconstructed from the
+    `baseline_climate_ref_pix_lon` / `baseline_climate_ref_pix_lat` columns of
+    the statistics file, i.e. the very coordinates the calibration matches
+    against. Note that the resulting `lon_id` / `lat_id` columns (and hence the
+    index) are relative to the extent of the data, not absolute indices into
+    the climate file. They are used internally only.
+
+    Since the grouping of grid points crosses RGI region borders, this should
+    be applied to the statistics files of *all* the regions at once.
+
+    Parameters
+    ----------
+    glacier_statistics : pandas.DataFrame, str, Path or list
+        the glacier statistics of a `temp_melt` run: a DataFrame, or one or
+        more paths to csv files, directories or glob patterns.
+    min_glaciers : int, default 12
+        minimum number of glaciers per grid point. Grid points with fewer
+        glaciers are grouped with their neighbours.
+    max_radius : int, default 10
+        the maximum search radius (in grid points) used for the grouping.
+    err_fill_quantile : float, default 0.9
+        glaciers with a missing (or zero) reference mass balance error are
+        attributed this quantile of the error distribution.
+    rgi_region : str or list, optional
+        select only these RGI regions (e.g. '11').
+    rgi_subregion : str or list, optional
+        select only these RGI subregions (e.g. '11-01').
+    path : str or Path, optional
+        where to write the resulting csv file.
+    plot_path : str or Path, optional
+        base path for the diagnostic plots (without extension). Two files are
+        written: `{plot_path}_map.png` and `{plot_path}_hist.png`.
+    summary_path : str or Path, optional
+        where to write the diagnostic summary (a text file). The same content
+        is sent to the log, but the file is what you will still have after the
+        fact. Recommended!
+
+    Returns
+    -------
+    a DataFrame with one row per climate grid point.
+    """
+
+    # Everything worth reporting is collected in here as we go along
+    diag = {'min_glaciers': min_glaciers, 'max_radius': max_radius,
+            'err_fill_quantile': err_fill_quantile,
+            'rgi_region': rgi_region, 'rgi_subregion': rgi_subregion}
+
+    df, diag['files'] = _read_glacier_statistics_files(glacier_statistics)
+
+    if rgi_region is not None:
+        regs = ['{:02d}'.format(int(r)) for r in tolist(rgi_region)]
+        sel = df['rgi_region'].apply(lambda r: '{:02d}'.format(int(r)))
+        df = df.loc[sel.isin(regs)]
+    if rgi_subregion is not None:
+        df = df.loc[df['rgi_subregion'].isin(tolist(rgi_subregion))]
+
+    needed = ['rgi_area_km2', 'temp_bias', 'reference_mb_err',
+              'baseline_climate_ref_pix_lon', 'baseline_climate_ref_pix_lat']
+    missing = [c for c in needed if c not in df]
+    if missing:
+        raise InvalidWorkflowError(
+            f'The glacier statistics file(s) are missing the {missing} '
+            'column(s). Are you sure they come from a level 3 run with the '
+            '`temp_melt` mass balance calibration strategy?' +
+            _failed_tasks_hint(df))
+
+    diag['n_input'] = len(df)
+    diag['area_input'] = df['rgi_area_km2'].sum()
+
+    # Sanitize: glaciers without a calibrated temp bias are of no use here
+    no_bias = df['temp_bias'].isnull()
+    no_pix = (df['baseline_climate_ref_pix_lon'].isnull() |
+              df['baseline_climate_ref_pix_lat'].isnull())
+    odf = df.loc[~(no_bias | no_pix)].copy()
+    if len(odf) == 0:
+        raise InvalidWorkflowError('No glacier with a valid temperature bias '
+                                   'found in the glacier statistics file(s).' +
+                                   _failed_tasks_hint(df))
+
+    diag['n_used'] = len(odf)
+    diag['area_used'] = odf['rgi_area_km2'].sum()
+    diag['n_no_bias'] = int(no_bias.sum())
+    diag['n_no_pix'] = int((no_pix & ~no_bias).sum())
+    # Why did the discarded ones fail? The stats file tells us
+    if 'error_task' in df:
+        errs = df.loc[no_bias | no_pix, 'error_task'].value_counts()
+        diag['error_tasks'] = errs.head(5)
+
+    log.workflow('compute_temp_bias_dataframe: using {} glaciers out of {} '
+                 '({:.1f}% of the area was discarded because the calibration '
+                 'failed).'.format(len(odf), diag['n_input'],
+                                   (1 - diag['area_used'] /
+                                    diag['area_input']) * 100))
+
+    # The MB error is used as a weight - fill the missing ones
+    err = odf['reference_mb_err'].copy()
+    invalid = err.isnull() | (err <= 0)
+    if invalid.all():
+        log.warning('compute_temp_bias_dataframe: no glacier has a valid '
+                    'reference MB error - using uniform weights instead.')
+        err = pd.Series(1., index=err.index)
+        invalid = pd.Series(False, index=err.index)
+    err_fill = err.loc[~invalid].quantile(err_fill_quantile)
+    diag['n_err_filled'] = int(invalid.sum())
+    diag['err_fill'] = err_fill
+    if invalid.sum() > 0:
+        log.workflow('compute_temp_bias_dataframe: {} glaciers have no valid '
+                     'reference MB error - using the {} quantile instead '
+                     '({:.1f} kg m-2 yr-1).'.format(invalid.sum(),
+                                                    err_fill_quantile,
+                                                    err_fill))
+        err.loc[invalid] = err_fill
+    odf['reference_mb_err'] = err
+
+    # Per region accounting - useful to spot a region which went wrong
+    if 'rgi_region' in df:
+        reg = df['rgi_region'].astype(str).str.zfill(2)
+        diag['per_region'] = pd.DataFrame({
+            'n_input': reg.groupby(reg).size(),
+            'n_used': reg.loc[odf.index].groupby(reg.loc[odf.index]).size(),
+            'area_input': df['rgi_area_km2'].groupby(reg).sum(),
+            'area_used': odf['rgi_area_km2'].groupby(reg.loc[odf.index]).sum(),
+        }).fillna(0)
+
+    # The climate grid, inferred from the coordinates the calibration uses
+    lon = odf['baseline_climate_ref_pix_lon'].values.astype(float)
+    lat = odf['baseline_climate_ref_pix_lat'].values.astype(float)
+    dlon = _infer_grid_spacing(lon, 'longitude')
+    dlat = _infer_grid_spacing(lat, 'latitude')
+    if dlon is None and dlat is None:
+        raise InvalidWorkflowError(
+            'Cannot infer the climate grid spacing: all the glaciers are in '
+            'the same grid point. The temperature bias file needs glaciers '
+            'spread over at least two grid points.')
+    dlon = dlat if dlon is None else dlon
+    dlat = dlon if dlat is None else dlat
+    lon0, lat0 = lon.min(), lat.min()
+    lon_id = np.round((lon - lon0) / dlon).astype(int)
+    lat_id = np.round((lat - lat0) / dlat).astype(int)
+    if not (np.allclose(lon0 + lon_id * dlon, lon, atol=dlon / 100) and
+            np.allclose(lat0 + lat_id * dlat, lat, atol=dlat / 100)):
+        raise InvalidWorkflowError(
+            'The climate grid points do not lie on a regular lon-lat grid '
+            f'(inferred spacing: {dlon} x {dlat}). This is not supported.')
+
+    # Number of longitudes of the (assumed global) grid, for the wrap-around
+    nlon = int(np.round(360 / dlon))
+
+    odf['lon_id'] = lon_id
+    odf['lat_id'] = lat_id
+    odf['unique_id'] = ['{:03d}_{:03d}'.format(i, j)
+                        for i, j in zip(lon_id, lat_id)]
+
+    # Numpy arrays - the grouping below is a hot loop
+    temp_bias = odf['temp_bias'].values.astype(float)
+    areas = odf['rgi_area_km2'].values.astype(float)
+    weights = 1 / odf['reference_mb_err'].values.astype(float)
+
+    # Positional indices of the glaciers in each grid point
+    groups = odf.groupby('unique_id').indices
+
+    diag['dlon'], diag['dlat'] = dlon, dlat
+    diag['n_grid_points'] = len(groups)
+    log.workflow('compute_temp_bias_dataframe: inferred a {} x {} deg '
+                 'lon-lat climate grid, with {} grid points containing '
+                 'glaciers.'.format(dlon, dlat, len(groups)))
+
+    def _stats(sel):
+        """The three flavors of median for a selection of glaciers."""
+        return (np.median(temp_bias[sel]),
+                weighted_quantile_1d(temp_bias[sel], areas[sel], 0.5),
+                weighted_quantile_1d(temp_bias[sel], weights[sel], 0.5))
+
+    rows = []
+    for uid in sorted(groups.keys()):
+        sel = groups[uid]
+        s_lon_id, s_lat_id = lon_id[sel[0]], lat_id[sel[0]]
+        med, med_area, med_err = _stats(sel)
+
+        d = {'unique_id': uid,
+             'lon_id': s_lon_id,
+             'lat_id': s_lat_id,
+             'lon_val': lon[sel[0]],
+             'lat_val': lat[sel[0]],
+             'rgi_area_km2': areas[sel].sum(),
+             'n_glaciers': len(sel),
+             'median_temp_bias': med,
+             'median_temp_bias_w_area': med_area,
+             'median_temp_bias_w_err': med_err,
+             }
+
+        if len(sel) >= min_glaciers:
+            # Enough glaciers in this grid point - no grouping needed
+            d.update({'n_glaciers_grouped': len(sel),
+                      'search_radius': 0,
+                      'median_temp_bias_grouped': med,
+                      'median_temp_bias_w_area_grouped': med_area,
+                      'median_temp_bias_w_err_grouped': med_err,
+                      })
+            rows.append(d)
+            continue
+
+        # Grow a square search radius until we have enough glaciers
+        d_lat_id = np.abs(lat_id - s_lat_id)
+        d_lon_id = np.abs(lon_id - s_lon_id)
+        d_lon_id = np.minimum(d_lon_id, nlon - d_lon_id)  # wrap-around
+        radius = 1
+        while radius <= max_radius:
+            sel = np.nonzero((d_lon_id <= radius) & (d_lat_id <= radius))[0]
+            med_g, med_area_g, med_err_g = _stats(sel)
+            d.update({'n_glaciers_grouped': len(sel),
+                      'search_radius': radius,
+                      'median_temp_bias_grouped': med_g,
+                      'median_temp_bias_w_area_grouped': med_area_g,
+                      'median_temp_bias_w_err_grouped': med_err_g,
+                      })
+            if len(sel) >= min_glaciers:
+                break
+            radius += 1
+        rows.append(d)
+
+    mdf = pd.DataFrame(rows).set_index('unique_id')
+
+    # Which RGI version was this file made for? The calibration checks it,
+    # since prior files are not interchangeable between RGI versions.
+    # RGI2000-v7.0-G-02-00003 -> 70G, RGI60-01.00001 -> 60
+    ids = odf['rgi_id'] if 'rgi_id' in odf else odf.index
+    versions = {'70' + str(i).split('-')[2] if str(i).startswith('RGI2000-')
+                else str(i).split('-')[0][-2:] for i in ids}
+    version = versions.pop() if len(versions) == 1 else None
+    valid = ['50', '60', '70G', '70C']
+    mdf['rgi_version'] = version if version in valid else None
+
+    # Same for the climate data it was calibrated on
+    sources = (odf['baseline_climate_source'].dropna().unique()
+               if 'baseline_climate_source' in odf else [])
+    mdf['baseline_climate_source'] = sources[0] if len(sources) == 1 else None
+
+    mdf = mdf[TEMP_BIAS_FILE_COLUMNS]
+    for c in ['lon_id', 'lat_id', 'n_glaciers', 'n_glaciers_grouped',
+              'search_radius']:
+        mdf[c] = mdf[c].astype(int)
+
+    if path is not None:
+        mdf.to_csv(path)
+
+    # The summary: to the log, and to a file so that it survives the terminal
+    summary = _temp_bias_summary(mdf, diag, path=path)
+    log.workflow('compute_temp_bias_dataframe summary:\n' + summary)
+    if summary_path is not None:
+        with open(summary_path, 'w') as f:
+            f.write(summary)
+
+    if plot_path is not None:
+        _plot_temp_bias_dataframe(mdf, odf, plot_path,
+                                  dlon=dlon, dlat=dlat, lon0=lon0, lat0=lat0)
+
+    return mdf
+
+
+def _temp_bias_summary(mdf, diag, path=None):
+    """The diagnostic summary of `compute_temp_bias_dataframe`, as text."""
+
+    min_glaciers = diag['min_glaciers']
+    lines = []
+    add = lines.append
+
+    def title(t):
+        add('')
+        add(t)
+        add('-' * len(t))
+
+    add('OGGM temperature bias file - diagnostic summary')
+    add('=' * 47)
+    add('Created on {} with OGGM {}'
+        ''.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                  __version__))
+    if path is not None:
+        add(f'Output file: {path}')
+    add('')
+    add('Input files ({}):'.format(len(diag['files'])))
+    for f in diag['files']:
+        add(f'    {f}')
+    add('Parameters:')
+    for k in ['min_glaciers', 'max_radius', 'err_fill_quantile',
+              'rgi_region', 'rgi_subregion']:
+        add('    {:<18s}: {}'.format(k, diag[k]))
+
+    title('Input glaciers')
+    n_in, a_in = diag['n_input'], diag['area_input']
+    n_us, a_us = diag['n_used'], diag['area_used']
+    add('    in the input file(s)     : {:>8d}  ({:>12.1f} km2)'
+        ''.format(n_in, a_in))
+    add('    used for this file       : {:>8d}  ({:>12.1f} km2, {:.2f}% of '
+        'the area)'.format(n_us, a_us, a_us / a_in * 100))
+    add('    MISSING from this file   : {:>8d}  ({:>12.1f} km2, {:.2f}% of '
+        'the area)'.format(n_in - n_us, a_in - a_us,
+                           (1 - a_us / a_in) * 100))
+    add('        no calibrated temp_bias  : {:>8d}'.format(diag['n_no_bias']))
+    add('        no climate ref pixel     : {:>8d}'.format(diag['n_no_pix']))
+    if diag.get('error_tasks') is not None and len(diag['error_tasks']):
+        add('    tasks the missing glaciers failed on:')
+        for k, v in diag['error_tasks'].items():
+            add('        {:>8d}  {}'.format(v, k))
+    add('    with no valid reference MB error (weight set to the {} '
+        'quantile,'.format(diag['err_fill_quantile']))
+    add('        i.e. {:.1f} kg m-2 yr-1) : {:>8d}'
+        ''.format(diag['err_fill'], diag['n_err_filled']))
+
+    if diag.get('per_region') is not None:
+        title('Per RGI region')
+        add('    {:>4s} {:>9s} {:>9s} {:>9s} {:>14s} {:>12s}'
+            ''.format('reg', 'n_input', 'n_used', 'n_missing',
+                      'area_used_km2', 'area_miss_%'))
+        for r, s in diag['per_region'].iterrows():
+            add('    {:>4s} {:>9d} {:>9d} {:>9d} {:>14.1f} {:>12.2f}'
+                ''.format(r, int(s.n_input), int(s.n_used),
+                          int(s.n_input - s.n_used), s.area_used,
+                          (1 - s.area_used / s.area_input) * 100
+                          if s.area_input else 0))
+
+    title('Climate grid')
+    add('    inferred grid spacing    : {} x {} deg'
+        ''.format(diag['dlon'], diag['dlat']))
+    add('    grid points with glaciers: {:>8d}'.format(diag['n_grid_points']))
+    n = mdf['n_glaciers']
+    add('    glaciers per grid point  : min {}, median {:.0f}, mean {:.1f}, '
+        'max {}'.format(n.min(), n.median(), n.mean(), n.max()))
+
+    title('Grouping of the sparse grid points (min_glaciers = {})'
+          ''.format(min_glaciers))
+    grouped = mdf['search_radius'] > 0
+    add('    grid points used as is (radius 0) : {:>8d}  ({:.1f}%)'
+        ''.format(int((~grouped).sum()), (~grouped).mean() * 100))
+    add('    grid points grouped               : {:>8d}  ({:.1f}%)'
+        ''.format(int(grouped.sum()), grouped.mean() * 100))
+    add('    glaciers whose own grid point had to be grouped, i.e. which have')
+    add('        no bias of their own pixel    : {:>8d}  ({:.1f}% of the used '
+        'glaciers)'.format(int(mdf.loc[grouped, 'n_glaciers'].sum()),
+                           mdf.loc[grouped, 'n_glaciers'].sum() / n_us * 100))
+    add('    grid points per search radius:')
+    for k, v in mdf['search_radius'].value_counts().sort_index().items():
+        add('        radius {:>2d} : {:>8d}'.format(k, v))
+    failed = mdf['n_glaciers_grouped'] < min_glaciers
+    add('    grid points STILL below min_glaciers after radius {}: {}'
+        ''.format(diag['max_radius'], int(failed.sum())))
+    if failed.sum():
+        fdf = mdf.loc[failed]
+        add('        they hold {} glaciers, {:.1f} km2 ({:.2f}% of the used '
+            'area); their bias'.format(int(fdf['n_glaciers'].sum()),
+                                       fdf['rgi_area_km2'].sum(),
+                                       fdf['rgi_area_km2'].sum() /
+                                       diag['area_used'] * 100))
+        add('        rests on as few as {} glacier(s) - check the largest '
+            'ones below!'.format(int(fdf['n_glaciers_grouped'].min())))
+        add('        {:>9s} {:>9s} {:>6s} {:>8s} {:>12s} {:>9s}'
+            ''.format('lon', 'lat', 'n_gla', 'n_grpd', 'area_km2', 'bias_K'))
+        top = fdf.sort_values('rgi_area_km2', ascending=False).head(10)
+        for _, s in top.iterrows():
+            add('        {:>9.2f} {:>9.2f} {:>6d} {:>8d} {:>12.1f} {:>9.3f}'
+                ''.format(s.lon_val, s.lat_val, int(s.n_glaciers),
+                          int(s.n_glaciers_grouped), s.rgi_area_km2,
+                          s.median_temp_bias_w_err_grouped))
+
+    title('Final bias values (K)')
+    add('    {:<32s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} '
+        '{:>7s} {:>9s}'.format('column', 'mean', 'std', 'min', '5%', '25%',
+                               '50%', '75%', '95%', 'max', 'w_area*'))
+    for c in ['median_temp_bias', 'median_temp_bias_w_area',
+              'median_temp_bias_w_err', 'median_temp_bias_grouped',
+              'median_temp_bias_w_area_grouped',
+              'median_temp_bias_w_err_grouped']:
+        s = mdf[c]
+        q = s.quantile([0.05, 0.25, 0.5, 0.75, 0.95])
+        add('    {:<32s} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} '
+            '{:>7.3f} {:>7.3f} {:>7.3f} {:>9.3f}'
+            ''.format(c, s.mean(), s.std(), s.min(), *q.values, s.max(),
+                      np.average(s, weights=mdf['rgi_area_km2'])))
+    add('    * w_area: mean weighted by the glacier area of the grid point.')
+    add('    The two columns OGGM reads are `median_temp_bias_w_err_grouped`')
+    add('    (per-glacier calibration) and `median_temp_bias_w_area_grouped`')
+    add('    (regional calibration, use_regional_avg=True).')
+    add('')
+
+    return '\n'.join(lines)
+
+
+def _plot_temp_bias_dataframe(mdf, odf, plot_path, dlon=None, dlat=None,
+                              lon0=None, lat0=None):
+    """Diagnostic plots for `compute_temp_bias_dataframe`.
+
+    Writes `{plot_path}_map.png` and `{plot_path}_hist.png`.
+    """
+    import matplotlib.pyplot as plt
+
+    # Map of the final bias
+    nx = int(mdf['lon_id'].max()) + 1
+    ny = int(mdf['lat_id'].max()) + 1
+    data = np.full((ny, nx), np.nan)
+    data[mdf['lat_id'].values, mdf['lon_id'].values] = \
+        mdf['median_temp_bias_w_err_grouped'].values
+    extent = [lon0 - dlon / 2, lon0 + (nx - 0.5) * dlon,
+              lat0 - dlat / 2, lat0 + (ny - 0.5) * dlat]
+    vmax = np.nanpercentile(np.abs(data), 98)
+
+    f, ax = plt.subplots(figsize=(12, 6))
+    im = ax.imshow(data, origin='lower', extent=extent, cmap='RdBu_r',
+                   vmin=-vmax, vmax=vmax, interpolation='nearest')
+    f.colorbar(im, ax=ax, label='Temp bias (K)')
+    ax.set_xlabel('Longitude (deg)')
+    ax.set_ylabel('Latitude (deg)')
+    ax.set_title('Median temp bias per climate grid point '
+                 '(weighted by the MB error)')
+    f.savefig(f'{plot_path}_map.png', dpi=150, bbox_inches='tight')
+    plt.close(f)
+
+    # Histograms
+    f, axs = plt.subplots(2, 2, figsize=(12, 8))
+    odf['temp_bias'].plot.hist(bins=101, ax=axs[0, 0])
+    axs[0, 0].set_title('Per-glacier temp bias (K)')
+    odf['reference_mb_err'].plot.hist(bins=101, ax=axs[0, 1])
+    axs[0, 1].set_title('Reference MB error (kg m-2 yr-1)')
+    mdf['search_radius'].value_counts().sort_index().plot.bar(ax=axs[1, 0])
+    axs[1, 0].set_title('Grid points per search radius')
+    mdf['median_temp_bias_w_err_grouped'].plot.hist(bins=101, ax=axs[1, 1])
+    axs[1, 1].set_title('Final temp bias per grid point (K)')
+    f.tight_layout()
+    f.savefig(f'{plot_path}_hist.png', dpi=150, bbox_inches='tight')
+    plt.close(f)
 
 
 def extend_past_climate_run(past_run_file=None,
@@ -2463,7 +3084,7 @@ def extend_past_climate_run(past_run_file=None,
 
         # Output data
         years = np.arange(y0_clim, y1_run+1)
-        ods = past_ds.reindex({'time': years})
+        ods = past_ds.reindex({'time': years}).load()
 
         # Time
         ods['hydro_year'].data[:] = years
@@ -2474,8 +3095,9 @@ def extend_past_climate_run(past_run_file=None,
             ods[vn] = ods[vn].astype(int)
 
         # New vars
-        for vn in ['volume', 'volume_m3_min_h', 'volume_bsl', 'volume_bwl',
-                   'area', 'area_min_h', 'length', 'calving', 'calving_rate']:
+        for vn in ['volume', 'volume_ice', 'volume_firn', 'volume_m3_min_h',
+                   'volume_bsl', 'volume_bwl', 'area', 'area_min_h', 'length',
+                   'calving', 'calving_rate']:
             if vn in ods.data_vars:
                 ods[vn + '_ext'] = ods[vn].copy(deep=True)
                 ods[vn + '_ext'].attrs['description'] += ' (extended with MB data)'
@@ -2485,11 +3107,53 @@ def extend_past_climate_run(past_run_file=None,
         ods[vn].attrs['description'] += ' (replaced with fixed geom data)'
 
         rho = cfg.PARAMS['ice_density']
+
+        # Everything the loop below needs is materialized here. The frames
+        # returned by `read_csv` have one block per column, which makes
+        # `DataFrame.values` O(n_glaciers) per call - repeating it once per
+        # glacier made this loop quadratic. The xarray attribute lookups are
+        # cheaper but add up as well.
+        rgi_ids = ods.rgi_id.data
+        mb_vals = df.to_numpy()
+
+        def _calving_from_stats(cn):
+            # Same semantics as the previous per-glacier `stats_df.loc`
+            # lookup: a missing column, a missing glacier or a non-finite
+            # value all mean "no calving".
+            if cn not in stats_df.columns:
+                return np.zeros(len(rgi_ids))
+            out = stats_df[cn].reindex(rgi_ids).to_numpy(dtype=float)
+            return np.where(np.isfinite(out), out, 0)
+
+        calv_flux_all = _calving_from_stats('calving_flux') * 1e9
+        calv_rate_all = _calving_from_stats('calving_rate_myr')
+
+        # The `_ext` arrays are written to in place below - `.data` on a
+        # loaded variable returns the underlying array, not a copy.
+        vol_data = ods['volume'].data
+        vol_ext = ods['volume_ext'].data
+        area_ext = ods['area_ext'].data
+        vol_fg_ext = ods['volume_fixed_geom_ext'].data
+        length_ext = ods['length_ext'].data if 'length' in ods.data_vars else None
+        calv_ext = ods['calving_ext'].data if 'calving' in ods.data_vars else None
+        calv_rate_ext = (ods['calving_rate_ext'].data
+                         if 'calving_rate' in ods.data_vars else None)
+        vol_ice_ext = (ods['volume_ice_ext'].data
+                       if 'volume_ice' in ods.data_vars else None)
+        vol_firn_ext = (ods['volume_firn_ext'].data
+                        if 'volume_firn' in ods.data_vars else None)
+        has_bsl = 'volume_bsl' in ods.data_vars
+        has_bwl = 'volume_bwl' in ods.data_vars
+        bsl_data = ods['volume_bsl'].data if has_bsl else None
+        bsl_ext = ods['volume_bsl_ext'].data if has_bsl else None
+        bwl_data = ods['volume_bwl'].data if has_bwl else None
+        bwl_ext = ods['volume_bwl_ext'].data if has_bwl else None
+
         # Loop over the ids
-        for i, rid in enumerate(ods.rgi_id.data):
+        for i in range(len(rgi_ids)):
             # Both do not need to be same length but they need to start same
-            mb_ts = df.values[:, i]
-            orig_vol_ts = ods.volume_ext.data[:, i]
+            mb_ts = mb_vals[:, i]
+            orig_vol_ts = vol_ext[:, i]
             if not (np.isfinite(mb_ts[-1]) and np.isfinite(orig_vol_ts[-1])):
                 # Not a valid glacier
                 continue
@@ -2501,19 +3165,11 @@ def extend_past_climate_run(past_run_file=None,
             fid = np.argmax(np.isfinite(orig_vol_ts))
 
             # Add calving to the mix
-            try:
-                calv_flux = stats_df.loc[rid, 'calving_flux'] * 1e9
-                calv_rate = stats_df.loc[rid, 'calving_rate_myr']
-            except KeyError:
-                calv_flux = 0
-                calv_rate = 0
-            if not np.isfinite(calv_flux):
-                calv_flux = 0
-            if not np.isfinite(calv_rate):
-                calv_rate = 0
+            calv_flux = calv_flux_all[i]
+            calv_rate = calv_rate_all[i]
 
             # Fill area and length which stays constant before date
-            orig_area_ts = ods.area_ext.data[:, i]
+            orig_area_ts = area_ext[:, i]
             orig_area_ts[:fid] = orig_area_ts[fid]
 
             # We convert SMB to volume
@@ -2524,35 +3180,43 @@ def extend_past_climate_run(past_run_file=None,
             mb_vol_ts = mb_vol_ts + orig_vol_ts[fid] - mb_vol_ts[fid-1]
 
             # Now back to netcdf
-            ods.volume_fixed_geom_ext.data[1:, i] = mb_vol_ts
-            ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
-            ods.area_ext.data[:, i] = orig_area_ts
+            vol_fg_ext[1:, i] = mb_vol_ts
+            vol_ext[1:fid, i] = mb_vol_ts[0:fid-1]
+            area_ext[:, i] = orig_area_ts
 
             # Optional variables
-            if 'length' in ods.data_vars:
-                orig_length_ts = ods.length_ext.data[:, i]
+            if length_ext is not None:
+                orig_length_ts = length_ext[:, i]
                 orig_length_ts[:fid] = orig_length_ts[fid]
-                ods.length_ext.data[:, i] = orig_length_ts
+                length_ext[:, i] = orig_length_ts
 
-            if 'calving' in ods.data_vars:
-                orig_calv_ts = ods.calving_ext.data[:, i]
+            if calv_ext is not None:
+                orig_calv_ts = calv_ext[:, i]
                 # The -1 is because the volume change is known at end of year
                 calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
-                ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
+                calv_ext[1:fid, i] = calv_ts[0:fid-1]
 
-            if 'calving_rate' in ods.data_vars:
-                orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
+            if calv_rate_ext is not None:
+                orig_calv_rate_ts = calv_rate_ext[:, i]
                 # +1 because calving rate at year 0 is unknown from the dyns model
                 orig_calv_rate_ts[:fid+1] = calv_rate
-                ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
+                calv_rate_ext[:, i] = orig_calv_rate_ts
+
+            if vol_ice_ext is not None:
+                # we can not calculate a ice volume for the fixed geometry
+                vol_ice_ext[:fid, i] = np.nan
+
+            if vol_firn_ext is not None:
+                # we can not calculate a ice volume for the fixed geometry
+                vol_firn_ext[:fid, i] = np.nan
 
             # Extend vol bsl by assuming that % stays constant
-            if 'volume_bsl' in ods.data_vars:
-                bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
-                ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
-            if 'volume_bwl' in ods.data_vars:
-                bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
-                ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
+            if has_bsl:
+                bsl = bsl_data[fid, i] / vol_data[fid, i]
+                bsl_ext[:fid, i] = bsl * vol_ext[:fid, i]
+            if has_bwl:
+                bwl = bwl_data[fid, i] / vol_data[fid, i]
+                bwl_ext[:fid, i] = bwl * vol_ext[:fid, i]
 
         # Remove old vars
         for vn in list(ods.data_vars):
@@ -2723,6 +3387,51 @@ def robust_tar_extract(
         os.remove(from_tar)
 
 
+def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
+    """Find the UTM projection covering a given point on the globe.
+
+    UTM is only defined between 80°S and 84°N. For locations outside of this
+    band no UTM zone exists and an ``InvalidParamsError`` is raised.
+
+    Parameters
+    ----------
+    lon : float
+        the point longitude (degrees). Ignored if ``utm_zone`` is provided.
+    lat : float
+        the point latitude (degrees). Ignored if ``utm_zone`` is provided.
+    utm_zone : int, optional
+        force a specific UTM zone number (e.g. the one shipped with RGI7),
+        in which case ``lon`` and ``lat`` are not used for the lookup.
+
+    Returns
+    -------
+    The CRS specification (a proj4 dict or an EPSG code string) understood
+    by pyproj.
+    """
+    if utm_zone:
+        return {'proj': 'utm', 'zone': utm_zone}
+
+    from pyproj.aoi import AreaOfInterest
+    from pyproj.database import query_utm_crs_info
+    utm_crs_list = query_utm_crs_info(
+        datum_name="WGS 84",
+        area_of_interest=AreaOfInterest(
+            west_lon_degree=lon,
+            south_lat_degree=lat,
+            east_lon_degree=lon,
+            north_lat_degree=lat,
+        ),
+    )
+    if not utm_crs_list:
+        raise InvalidParamsError(
+            f"No UTM zone is defined for the location "
+            f"(lon={lon:.4f}, lat={lat:.4f}). UTM is only valid between "
+            f"80°S and 84°N. Set cfg.PARAMS['map_proj'] = 'tmerc' for "
+            f"locations outside this band."
+        )
+    return utm_crs_list[0].code
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -2796,7 +3505,9 @@ class GlacierDirectory(object):
     """
 
     def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False):
+                 from_tar=False, delete_tar=False, settings_filesuffix='',
+                 observations_filesuffix='',
+                 add_parent_values_to_settings=False):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -2814,6 +3525,13 @@ class GlacierDirectory(object):
             will check for a tar file at the expected location in `base_dir`.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
+        settings_filesuffix : str, default=''
+            a filesuffix for a settings file to use
+        observations_filesuffix : str, default=''
+            a filesuffix for a observations file to use
+        add_parent_values_to_settings : bool, default=False
+            if True and a settings value is read from the parent settings file
+            this value is also added to the current settings file
         """
 
         if base_dir is None:
@@ -2866,8 +3584,39 @@ class GlacierDirectory(object):
             self.rgi_id = rgi_entity.RGIId
             self.glims_id = rgi_entity.GLIMSId
 
+        # Root directory
+        self.base_dir = os.path.normpath(base_dir)
+        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
+                                self.rgi_id[:-3], self.rgi_id)
+
+        # Do we have to extract the files first?
+        if (reset or from_tar) and os.path.exists(self.dir):
+            shutil.rmtree(self.dir)
+
+        if from_tar:
+            if from_tar is True:
+                from_tar = self.dir + '.tar.gz'
+            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            write_shp = False
+        else:
+            mkdir(self.dir)
+
+        if not os.path.isdir(self.dir):
+            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
+
+        # define the initial settings for this gdir
+        self.add_parent_values_to_settings = add_parent_values_to_settings
+        self._settings_filesuffix = settings_filesuffix
+        self.settings = self._get_settings_class(
+            filesuffix=settings_filesuffix)
+
+        # define the initial observations for this gdir
+        self._observations_filesuffix = observations_filesuffix
+        self.observations = self._get_observations_class(
+            filesuffix=observations_filesuffix)
+
         # Do we want to use the RGI center point or ours?
-        if cfg.PARAMS['use_rgi_area']:
+        if self.settings['use_rgi_area']:
             if is_rgi7:
                 self.cenlon = float(rgi_entity.cenlon)
                 self.cenlat = float(rgi_entity.cenlat)
@@ -3025,25 +3774,6 @@ class GlacierDirectory(object):
                         'to 2019 for workflow reasons.')
             rgi_date = 2019
         self.rgi_date = rgi_date
-        # Root directory
-        self.base_dir = os.path.normpath(base_dir)
-        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
-                                self.rgi_id[:-3], self.rgi_id)
-
-        # Do we have to extract the files first?
-        if (reset or from_tar) and os.path.exists(self.dir):
-            shutil.rmtree(self.dir)
-
-        if from_tar:
-            if from_tar is True:
-                from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
-            write_shp = False
-        else:
-            mkdir(self.dir)
-
-        if not os.path.isdir(self.dir):
-            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
@@ -3056,6 +3786,22 @@ class GlacierDirectory(object):
         self._mbdf = None
         self._mbprofdf = None
         self._mbprofdf_cte_dh = None
+
+    def __getstate__(self):
+        # settings/observations are dropped from the pickled state (and
+        # rebuilt in __setstate__) so that they don't have to be re-shipped
+        # (with a private copy of cfg.PARAMS) on every multiprocessing task
+        state = self.__dict__.copy()
+        del state['settings']
+        del state['observations']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.settings = self._get_settings_class(
+            filesuffix=self._settings_filesuffix)
+        self.observations = self._get_observations_class(
+            filesuffix=self._observations_filesuffix)
 
     def __repr__(self):
 
@@ -3081,23 +3827,10 @@ class GlacierDirectory(object):
     def _reproject_and_write_shapefile(self, entity):
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
-            if entity.get('utm_zone', False):
-                # RGI7 has an utm zone
-                proj4_str = {'proj': 'utm', 'zone': entity['utm_zone']}
-            else:
-                # Find it out
-                from pyproj.aoi import AreaOfInterest
-                from pyproj.database import query_utm_crs_info
-                utm_crs_list = query_utm_crs_info(
-                    datum_name="WGS 84",
-                    area_of_interest=AreaOfInterest(
-                        west_lon_degree=self.cenlon,
-                        south_lat_degree=self.cenlat,
-                        east_lon_degree=self.cenlon,
-                        north_lat_degree=self.cenlat,
-                    ),
-                )
-                proj4_str = utm_crs_list[0].code
+            # RGI7 ships a UTM zone; otherwise we look it up from the center
+            proj4_str = utm_proj4_from_lonlat(
+                self.cenlon, self.cenlat,
+                utm_zone=entity.get('utm_zone', False))
         elif cfg.PARAMS['map_proj'] == 'tmerc':
             params = dict(name='tmerc', lat_0=0., lon_0=self.cenlon,
                           k=0.9996, x_0=0, y_0=0, datum='WGS84')
@@ -3158,7 +3891,7 @@ class GlacierDirectory(object):
         self.write_shapefile(towrite, 'outlines')
 
         # Also transform the intersects if necessary
-        gdf = cfg.PARAMS['intersects_gdf']
+        gdf = cfg.INTERSECTS_GDF
         if len(gdf) > 0:
             try:
                 gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
@@ -3466,17 +4199,67 @@ class GlacierDirectory(object):
         with open(fp, 'w') as f:
             json.dump(var, f, default=np_convert)
 
-    def get_climate_info(self, input_filesuffix=''):
+    def read_yml(self, filename, filesuffix='', allow_empty=False):
+        """Reads a yml file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        allow_empty : bool
+            if True, does not raise an error if the file is not there.
+
+        Returns
+        -------
+        A dictionary read from the yml file
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        if allow_empty:
+            try:
+                with open(fp, 'r') as f:
+                    out = yaml.safe_load(f)
+            except FileNotFoundError:
+                out = {}
+        else:
+            with open(fp, 'r') as f:
+                out = yaml.safe_load(f)
+        return out
+
+    def write_yml(self, var, filename, filesuffix=''):
+        """ Writes a variable to a yml file on disk.
+
+        Parameters
+        ----------
+        var : object
+            the variable to write to yml (must be a dictionary)
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        """
+
+        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        with open(fp, 'w') as f:
+            yaml.dump(var, f)
+
+    def get_climate_info(self, filename='climate_historical',
+                         input_filesuffix=''):
         """Convenience function to read attributes of the historical climate.
 
         Parameters
         ----------
+        filename : str
+            the filename of the climate file we want to get the info.
+            Default is 'climate_historical'.
         input_filesuffix : str
             input_filesuffix of the climate_historical that should be used.
         """
         out = {}
         try:
-            f = self.get_filepath('climate_historical',
+            f = self.get_filepath(filename,
                                   filesuffix=input_filesuffix)
             with ncDataset(f) as nc:
                 out['baseline_climate_source'] = nc.climate_source
@@ -3570,14 +4353,15 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         _write_shape_to_disk(var, fp, to_tar=cfg.PARAMS['use_tar_shapefiles'])
 
-    def write_monthly_climate_file(self, time, prcp, temp,
-                                   ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
-                                   temp_std=None,
-                                   time_unit=None,
-                                   calendar=None,
-                                   source=None,
-                                   file_name='climate_historical',
-                                   filesuffix=''):
+    def write_climate_file(self, time, prcp, temp,
+                           ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
+                           temp_std=None,
+                           time_unit=None,
+                           calendar=None,
+                           source=None,
+                           file_name='climate_historical',
+                           filesuffix='',
+                           daily=False):
         """Creates a netCDF4 file with climate data timeseries.
 
         Parameters
@@ -3610,6 +4394,9 @@ class GlacierDirectory(object):
             How to name the file
         filesuffix : str
             Apply a suffix to the file
+        daily : bool, default False
+            Temporal resolution of the data. If True, adjust variable
+            long name in NetCDF file.
         """
 
         if isinstance(prcp, xr.DataArray):
@@ -3682,14 +4469,27 @@ class GlacierDirectory(object):
             timev[:] = numdate
 
             v = nc.createVariable('prcp', 'f4', ('time',), zlib=zlib)
-            v.units = 'kg m-2'
-            v.long_name = 'total monthly precipitation amount'
+            v.units = "kg m-2"
+
+            if not daily:
+                resolution = "monthly"
+            else:
+                resolution = "daily"
+                if not len(prcp) > (nc.yr_1 - nc.yr_0 + 1) * 28 * 12:
+                    raise ValueError(
+                        f"Data is not in daily resolution: {len(prcp)}"
+                    )
+                elif not (prcp.max() > 1):
+                    raise_oob_error(
+                        prcp, "Precipitation", "Check units are in kg m-2."
+                    )
+            v.long_name = f"total {resolution} precipitation amount"
 
             v[:] = prcp
 
             v = nc.createVariable('temp', 'f4', ('time',), zlib=zlib)
             v.units = 'degC'
-            v.long_name = '2m temperature at height ref_hgt'
+            v.long_name = f'2m {resolution} temperature at height ref_hgt'
             v[:] = temp
 
             if temp_std is not None:
@@ -3697,6 +4497,12 @@ class GlacierDirectory(object):
                 v.units = 'degC'
                 v.long_name = 'standard deviation of daily temperatures'
                 v[:] = temp_std
+                if daily and not np.all(v[:].data < 1e5):
+                    raise_oob_error(
+                        temp_std,
+                        "Temperature STD",
+                        "Ensure there are no fill values.",
+                    )
 
     def get_inversion_flowline_hw(self):
         """ Shortcut function to read the heights and widths of the glacier.
@@ -4046,6 +4852,341 @@ class GlacierDirectory(object):
         # OK all good
         return None
 
+    @property
+    def settings_filesuffix(self):
+        return self._settings_filesuffix
+
+    @settings_filesuffix.setter
+    def settings_filesuffix(self, value):
+        self._settings_filesuffix = value
+        self.settings = self._get_settings_class(filesuffix=value)
+
+    def _get_settings_class(self, filesuffix, **kwargs):
+        return ModelSettings(
+            self, filesuffix=filesuffix, always_reload_data=False,
+            add_parent_values=self.add_parent_values_to_settings, **kwargs)
+
+    def _create_new_settings_or_observations(self, name, filesuffix, data=None,
+                                             ignore_existing=False,
+                                             overwrite=False, **kwargs):
+        """Create a new settings.yml or observations.yml file with content.
+
+        Parameters
+        ----------
+        name : str
+            Whether to create a 'settings' or 'observations' file.
+        filesuffix : str
+            The filesuffix identifying the settings or observations file.
+        data : dict, optional
+            The data to write into the file.
+        ignore_existing : bool
+            If False (default), raises an error if the file already exists.
+            If True, adds the new data to the existing file (see also
+            ``overwrite``).
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        **kwargs
+            Passed to the underlying settings or observations class (e.g.
+            ``parent_filesuffix`` for settings files).
+
+        Returns
+        -------
+        None
+        """
+        path = Path(self.get_filepath(name,
+                                      filesuffix=filesuffix))
+
+        if path.exists() and not ignore_existing:
+            raise ValueError(f"{name}{filesuffix}.yml already "
+                             f"exists. You can ignore by using "
+                             f"ignore_existing=True.")
+
+        if data is None:
+            data = {}
+
+        # this will create a new file if it does not exist
+        if name == 'settings':
+            self._get_settings_class(filesuffix=filesuffix, **kwargs)
+            self.write_to_settings(data, filesuffix=filesuffix,
+                                   overwrite=overwrite)
+        elif name == 'observations':
+            self._get_observations_class(filesuffix=filesuffix,
+                                         **kwargs)
+            self.write_to_observations(data, filesuffix=filesuffix,
+                                       overwrite=overwrite)
+        else:
+            raise NotImplementedError()
+
+        return None
+
+    def _read_settings_and_observations(self, name, filesuffix, keys,
+                                        **kwargs):
+        """Read variables from a settings.yml or observations.yml file.
+
+        Parameters
+        ----------
+        name : str
+            Whether to read from 'settings' or 'observations'.
+        filesuffix : str
+            The filesuffix identifying the settings or observations file.
+        keys : str or list or None
+            The parameter name(s) to return. If None, all stored parameters
+            are returned.
+        **kwargs
+            Passed to the underlying settings or observations class.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the requested parameters and the
+            ``filesuffix`` of the file they were read from.
+        """
+        out = {f"filesuffix": filesuffix}
+
+        if keys is None:
+            if name == 'settings':
+                keys = self.get_stored_settings(filesuffix=filesuffix)
+            elif name == 'observations':
+                keys = self.get_stored_observations(
+                    filesuffix=filesuffix)
+            else:
+                raise NotImplementedError()
+
+        if not isinstance(keys, list):
+            keys = [keys]
+
+        if name == 'settings':
+            data = self._get_settings_class(
+                filesuffix=filesuffix, **kwargs)
+        elif name == 'observations':
+            data = self._get_observations_class(
+                filesuffix=filesuffix, **kwargs)
+
+        for v in keys:
+            out[v] = data[v]
+
+        return out
+
+    def _write_to_settings_and_observations(self, name, filesuffix, data,
+                                            overwrite=False, **kwargs):
+        """Write variables to a settings.yml or observations.yml file.
+
+        Parameters
+        ----------
+        name : str
+            Whether to write to 'settings' or 'observations'.
+        filesuffix : str
+            The filesuffix identifying the file. The file is created if it
+            does not exist yet.
+        data : dict
+            The data to write.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        **kwargs
+            Passed to the underlying settings or observations class.
+
+        Returns
+        -------
+        None
+        """
+        if name == 'settings':
+            yml_file_handler = self._get_settings_class(
+                filesuffix=filesuffix, **kwargs)
+        elif name == 'observations':
+            yml_file_handler = self._get_observations_class(
+                filesuffix=filesuffix, **kwargs)
+        else:
+            raise NotImplementedError()
+
+        if not overwrite:
+            existing_data = self._get_stored_settings_and_observations(
+                name=name, filesuffix=filesuffix)
+
+        for k, v in data.items():
+            if not overwrite:
+                if k in existing_data:
+                    raise ValueError(
+                        f"{k} present in {name}{filesuffix}.yml, use "
+                        f"overwrite=True if you want to overwrite.")
+
+            yml_file_handler[k] = v
+
+        return None
+
+    def _get_stored_settings_and_observations(self, name, filesuffix):
+        return list(self.read_yml(name, filesuffix=filesuffix,
+                                  allow_empty=True).keys())
+
+    def create_new_settings(self, filesuffix, data=None,
+                            parent_filesuffix=None, ignore_existing=False,
+                            overwrite=False, **kwargs):
+        """Create a new settings file (settings<filesuffix>.yml).
+
+        Parameters
+        ----------
+        filesuffix : str
+            Identifier for the new settings file. Use an empty string for the
+            default ``settings.yml``.
+        data : dict, optional
+            Parameters to store in the new file.
+        parent_filesuffix : str, optional
+            The filesuffix of the settings file to use as a fallback when a
+            parameter is not found in this file. Defaults to ``cfg.PARAMS`` to
+            fall back to the global configuration.
+        ignore_existing : bool
+            If False (default), raises an error if the file already exists.
+            If True, adds ``data`` to the existing file.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        return self._create_new_settings_or_observations(
+            name='settings', filesuffix=filesuffix, data=data,
+            ignore_existing=ignore_existing, overwrite=overwrite,
+            parent_filesuffix=parent_filesuffix, **kwargs)
+
+    def read_settings(self, keys=None, filesuffix='', **kwargs):
+        """Read parameters from a settings file.
+
+        Follows the parent chain defined by ``parent_filesuffix`` until the
+        requested parameter is found, falling back to ``cfg.PARAMS`` if
+        needed.
+
+        Parameters
+        ----------
+        keys : str or list, optional
+            The parameter name(s) to retrieve. If None, all stored parameters
+            are returned.
+        filesuffix : str
+            The filesuffix identifying the settings file to read from.
+            Defaults to the default ``settings.yml`` (empty string).
+
+        Returns
+        -------
+        dict
+            A dictionary containing the requested parameters and the
+            ``filesuffix`` of the file they were read from.
+        """
+        return self._read_settings_and_observations(
+            name='settings', filesuffix=filesuffix, keys=keys,
+            **kwargs)
+
+    def write_to_settings(self, data, filesuffix='', overwrite=False,
+                          **kwargs):
+        """Write parameters to a settings file.
+
+        Parameters
+        ----------
+        data : dict
+            The parameters to write.
+        filesuffix : str
+            The filesuffix identifying the settings file to write to.
+            The file is created if it does not exist yet.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        return self._write_to_settings_and_observations(
+            name='settings', filesuffix=filesuffix, data=data,
+            overwrite=overwrite, **kwargs)
+
+    def get_stored_settings(self, filesuffix=''):
+        return self._get_stored_settings_and_observations(
+            name='settings', filesuffix=filesuffix)
+
+    @property
+    def observations_filesuffix(self):
+        return self._observations_filesuffix
+
+    @observations_filesuffix.setter
+    def observations_filesuffix(self, value):
+        self._observations_filesuffix = value
+        self.observations = self._get_observations_class(filesuffix=value)
+
+    def _get_observations_class(self, filesuffix, **kwargs):
+        return Observations(self, filesuffix=filesuffix, **kwargs)
+
+    def create_new_observations(self, filesuffix, data=None,
+                                ignore_existing=False, overwrite=False,
+                                **kwargs):
+        """Create a new observations file (observations<filesuffix>.yml).
+
+        Parameters
+        ----------
+        filesuffix : str
+            Identifier for the new observations file. Use an empty string for
+            the default ``observations.yml``.
+        data : dict, optional
+            Observations to store in the new file. Each entry should follow
+            the standard structure with at least a ``'value'`` key and a
+            ``'year'`` or ``'period'`` key.
+        ignore_existing : bool
+            If False (default), raises an error if the file already exists.
+            If True, adds ``data`` to the existing file.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        self._create_new_settings_or_observations(
+            name='observations', filesuffix=filesuffix, data=data,
+            ignore_existing=ignore_existing, overwrite=overwrite, **kwargs)
+
+    def read_observations(self, keys=None, filesuffix='',
+                          **kwargs):
+        """Read observations from an observations file.
+
+        Parameters
+        ----------
+        keys : str or list, optional
+            The observation name(s) to retrieve. If None, all stored
+            observations are returned.
+        filesuffix : str
+            The filesuffix identifying the observations file to read from.
+            Defaults to the default ``observations.yml`` (empty string).
+
+        Returns
+        -------
+        dict
+            A dictionary containing the requested observations and the
+            ``filesuffix`` of the file they were read from.
+        """
+        return self._read_settings_and_observations(
+            name='observations', filesuffix=filesuffix, keys=keys,
+            **kwargs)
+
+    def write_to_observations(self, data, filesuffix='',
+                              overwrite=False, **kwargs):
+        """Write observations to an observations file.
+
+        Parameters
+        ----------
+        data : dict
+            The observations to write. Each entry should follow the standard
+            structure with at least a ``'value'`` key and a ``'year'`` or
+            ``'period'`` key.
+        filesuffix : str
+            The filesuffix identifying the observations file to write to.
+            The file is created if it does not exist yet.
+        overwrite : bool
+            If False (default), raises an error if any key in ``data`` is
+            already present in the file. If True, existing values are
+            overwritten silently.
+        """
+        return self._write_to_settings_and_observations(
+            name='observations', filesuffix=filesuffix, data=data,
+            overwrite=overwrite, **kwargs)
+
+    def get_stored_observations(self, filesuffix=''):
+        return self._get_stored_settings_and_observations(
+            name='observations', filesuffix=filesuffix)
+
 
 @entity_task(log)
 def copy_to_basedir(gdir, base_dir=None, setup='run'):
@@ -4078,7 +5219,7 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                            gdir.rgi_id[:-3], gdir.rgi_id)
     if setup == 'run':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
@@ -4086,14 +5227,14 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
-                 'mb_calib', 'climate_historical', 'gridded_data',
+                 'settings', 'climate_historical', 'gridded_data',
                  'gcm_data', 'log']
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
-                 'mb_calib', 'climate_historical', 'glacier_grid',
+                 'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
         paths = ('*' + p + '*' for p in paths)
@@ -4388,3 +5529,256 @@ def base_dir_to_tar(
 
     for dirname in to_delete:
         shutil.rmtree(dirname)
+
+
+class YAMLFileObject(object):
+    def __init__(self, path, allow_empty=True, always_reload_data=True):
+        self.path = Path(path)
+        self.allow_empty = allow_empty
+        self.always_reload_data = always_reload_data
+        self.data = self._load()
+
+    def _load(self):
+        if self.path.exists():
+            with open(self.path, 'r') as f:
+                return yaml.safe_load(f) or {}
+        elif not self.allow_empty:
+            raise FileNotFoundError(self.path)
+        return {}
+
+    def _save(self):
+        with open(self.path, 'w') as f:
+            yaml.safe_dump(self.data, f)
+
+    def _check_yaml_serializable(self, value):
+        try:
+            yaml.safe_dump(value)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Value '{value}' is not YAML serializable ({e})")
+
+    def _to_native_type(self, value):
+        if isinstance(value, (np.generic,)):
+            return value.item()
+        elif isinstance(value, dict):
+            return {k: self._to_native_type(v) for k, v in value.items()}
+        elif isinstance(value, list) or isinstance(value, np.ndarray):
+            return [self._to_native_type(v) for v in value]
+        return value
+
+    def get(self, key):
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
+        if key in self.data:
+            return self.data[key]
+        else:
+            raise KeyError(f"Key '{key}' not found!")
+
+    def set(self, key, value):
+        # to be always synced, if several objects work on the same file
+        self.data = self._load()
+        value = self._to_native_type(value)
+        self._check_yaml_serializable(value)
+        self.data[key] = value
+        self._save()
+
+    def __getitem__(self, key):
+        return self.get(key)
+
+    def __setitem__(self, key, value):
+        self.set(key, value)
+
+    def __repr__(self):
+        return repr(self.data)
+
+    def __contains__(self, key):
+        return key in self.data
+
+
+class ModelSettings(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', parent_filesuffix=None,
+                 reset_parent_filesuffix=False, allow_empty=True,
+                 always_reload_data=True, add_parent_values=False,
+                 ):
+        path = gdir.get_filepath('settings', filesuffix=filesuffix)
+
+        super(ModelSettings, self).__init__(path, allow_empty=allow_empty,
+                                            always_reload_data=always_reload_data,
+                                            )
+
+        # this is to inherit parameters from other setting files, the other file
+        # is stored with the parent_filesuffix
+        if 'parent_filesuffix' not in self.data:
+            if parent_filesuffix is not None:
+                self.set('parent_filesuffix', parent_filesuffix)
+            else:
+                # by default cfg.PARAMS is always the parent
+                self.set('parent_filesuffix', 'cfg.PARAMS')
+        elif isinstance(parent_filesuffix, str):
+            if self['parent_filesuffix'] != parent_filesuffix:
+                if not reset_parent_filesuffix:
+                    raise InvalidWorkflowError(
+                        f"Current parent_filesuffix="
+                        f"{self['parent_filesuffix']}, you provided "
+                        f"{parent_filesuffix}. If you want to set a new value "
+                        f"you can use reset_parent_filesuffix=True")
+                else:
+                    self.set('parent_filesuffix', parent_filesuffix)
+
+        self.filesuffix = filesuffix
+        if self.data['parent_filesuffix'] == 'cfg.PARAMS':
+            self.defaults = cfg.PARAMS.copy()
+        else:
+            self.defaults = ModelSettings(gdir,
+                                          filesuffix=self.data['parent_filesuffix'],
+                                          # check if parent exists
+                                          allow_empty=False,
+                                          always_reload_data=always_reload_data,
+                                          add_parent_values=add_parent_values,
+                                          )
+        self.gdir = gdir
+        self.add_default_values = add_parent_values
+
+    def get(self, key):
+        if self.always_reload_data:
+            # to be always synced, if several objects work on the same file
+            self.data = self._load()
+        if key in self.data:
+            return self.data[key]
+
+        # the following is for backwards compatibility
+        if self.data['parent_filesuffix'] == 'cfg.PARAMS':
+            if key in ['bias', 'melt_f', 'prcp_fac', 'temp_bias',
+                       'mb_global_params', 'baseline_climate_source']:
+                # this is for backwards compatibility when mb_calib files was used
+                try:
+                    value = self.gdir.read_json('mb_calib')[key]
+                    if self.add_default_values:
+                        self.set(key, value)
+                    return value
+                except FileNotFoundError:
+                    pass
+
+            if key in ['inversion_glen_a', 'inversion_fs', 'calving_water_level',
+                       ]:  # TODO: add calving variables
+                # this is for backwards compatibility when some parameters were
+                # stored in the diagnostics
+                try:
+                    value = self.gdir.get_diagnostics()[key]
+                    if self.add_default_values:
+                        self.set(key, value)
+                    return value
+                except KeyError:
+                    pass
+
+        # We try to get the parameter from the parent
+        try:
+            value = self.defaults[key]
+            # optionally add key from defaults to the settings file
+            if self.add_default_values:
+                self.set(key, value)
+            return value
+        except KeyError:
+            raise KeyError(f"Key '{key}' not found!")
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data: {repr(self.data)}")
+
+
+class Observations(YAMLFileObject):
+    def __init__(self, gdir, filesuffix='', allow_empty=True,
+                 always_reload_data=True,
+                 ):
+        path = gdir.get_filepath('observations', filesuffix=filesuffix)
+
+        super(Observations, self).__init__(path, allow_empty=allow_empty,
+                                           always_reload_data=always_reload_data,
+                                           )
+
+        self.filesuffix = filesuffix
+        self.gdir = gdir
+
+    def __repr__(self):
+        return ("filesuffix: "
+                f"{self.filesuffix if self.filesuffix != '' else 'None'}\n"
+                f"data: {repr(self.data)}")
+
+
+def compile_settings(gdirs, keys, filesuffix=''):
+    """Compile parameter values from settings files across one or more glacier
+    directories into a single DataFrame.
+
+    Parameters
+    ----------
+    gdirs : :py:class:`oggm.GlacierDirectory` or list thereof
+        The glacier directory or directories to read settings from.
+    keys : str or list
+        The parameter name(s) to retrieve from each settings file.
+    filesuffix : str or list of str
+        The filesuffix or list of filesuffixes identifying the settings files
+        to read from. Defaults to the default ``settings.yml`` (empty string).
+
+    Returns
+    -------
+    pandas.DataFrame
+        A DataFrame with one row per (gdir, filesuffix) combination. Columns
+        include ``rgi_id``, ``filesuffix``, and one column per requested
+        parameter.
+    """
+    if not isinstance(gdirs, list):
+        gdirs = [gdirs]
+
+    if not isinstance(filesuffix, list):
+        filesuffix = [filesuffix]
+
+    data = []
+    for gdir in gdirs:
+        for suffix in filesuffix:
+            out = {'rgi_id': gdir.rgi_id}
+            out.update(gdir.read_settings(
+                keys, filesuffix=suffix))
+            data.append(out)
+
+    return pd.DataFrame(data)
+
+
+def create_new_settings(gdirs, filesuffix, data=None,
+                        parent_filesuffix=None, ignore_existing=False,
+                        overwrite=False, **kwargs):
+    """Create a new settings file for each glacier directory in a list.
+
+    Convenience wrapper around :py:meth:`GlacierDirectory.create_new_settings`
+    that applies the same settings file to multiple glacier directories at
+    once.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        The glacier directories to create settings files for.
+    filesuffix : str
+        Identifier for the new settings file. Use an empty string for the
+        default ``settings.yml``.
+    data : dict, optional
+        Parameters to store in the new file.
+    parent_filesuffix : str, optional
+        The filesuffix of the settings file to use as a fallback when a
+        parameter is not found in this file.
+    ignore_existing : bool
+        If False (default), raises an error if the file already exists.
+        If True, adds ``data`` to the existing file.
+    overwrite : bool
+        If False (default), raises an error if any key in ``data`` is already
+        present in the file. If True, existing values are overwritten silently.
+    """
+    for gdir in gdirs:
+        try:
+            gdir.create_new_settings(filesuffix=filesuffix,
+                                     data=data,
+                                     parent_filesuffix=parent_filesuffix,
+                                     ignore_existing=ignore_existing,
+                                     overwrite=overwrite,
+                                     **kwargs)
+        except ValueError as e:
+            raise ValueError(f"{gdir.rgi_id}: {e}")

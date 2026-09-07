@@ -68,7 +68,8 @@ def get_histalp_file(var=None):
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
+def process_histalp_data(gdir, settings_filesuffix='',
+                         y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the HISTALP baseline climate data for this glacier.
 
     Extracts the nearest timeseries and writes everything to a NetCDF file.
@@ -77,6 +78,10 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     y0 : int
         the starting year of the timeseries to write. The default is to take
         1850 (because the data is quite bad before that)
@@ -89,8 +94,8 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
         previous experiments)
     """
 
-    if cfg.PARAMS['baseline_climate'] != 'HISTALP':
-        raise InvalidParamsError("cfg.PARAMS['baseline_climate'] should be "
+    if gdir.settings['baseline_climate'] != 'HISTALP':
+        raise InvalidParamsError("gdir.settings['baseline_climate'] should be "
                                  "set to HISTALP.")
 
     # read the time out of the pure netcdf file
@@ -158,7 +163,7 @@ def process_histalp_data(gdir, y0=None, y1=None, output_filesuffix=None):
     nc_ts_tmp._nc.close()
     nc_ts_pre._nc.close()
 
-    gdir.write_monthly_climate_file(time, prcp[:, 1, 1], temp[:, 1, 1],
-                                    hgt[1, 1], ref_lon[1], ref_lat[1],
-                                    filesuffix=output_filesuffix,
-                                    source=source)
+    gdir.write_climate_file(time, prcp[:, 1, 1], temp[:, 1, 1],
+                            hgt[1, 1], ref_lon[1], ref_lat[1],
+                            filesuffix=output_filesuffix,
+                            source=source)

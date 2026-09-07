@@ -70,7 +70,7 @@ logger = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 # The given commit will be downloaded from github and used as source for
 # all sample data
 SAMPLE_DATA_GH_REPO = 'OGGM/oggm-sample-data'
-SAMPLE_DATA_COMMIT = 'df58aaf6b55390ab831e4bd28815a9c3070f5235'
+SAMPLE_DATA_COMMIT = 'ae1dfa73a34bd31ba977945056d5ad34b58060ef'
 
 # Recommended url for runs
 DEFAULT_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/'
@@ -1152,7 +1152,9 @@ def get_prepro_base_url(base_url=None, rgi_version=None, border=None,
     url = base_url
     url += 'RGI{}/'.format(rgi_version)
     url += 'b_{:03d}/'.format(int(border))
-    url += 'L{:d}/'.format(prepro_level)
+    # str() rather than {:d}: the preprocessing also knows the half
+    # levels '3a' and '4a' (see oggm.cli.prepro_levels)
+    url += 'L{}/'.format(prepro_level)
     return url
 
 
@@ -1260,7 +1262,7 @@ def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:
     return df
 
 
-def get_geodetic_mb_dataframe(file_path=None, regional=False):
+def get_geodetic_mb_dataframe(file_path=None, rgi_version=None, regional=False):
     """Fetches the reference geodetic dataframe for calibration.
 
     Currently that's the data from Hughonnet et al 2021, corrected for
@@ -1268,13 +1270,32 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
     available at
     https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/convert.ipynb
 
+    The data is indexed by glacier id, i.e. there is one file per RGI version.
+
+    With `regional=True` this returns the regional averages published by
+    Hugonnet et al. instead, which is a different (and much smaller) file: one
+    row per region and period, indexed by the region number. These values
+    include an extrapolation to the glaciers which could not be measured, and
+    they come with an error estimate. Watch out for the area they refer to:
+    `dmdtda` is relative to the *measured* area (`tarea`), while `dmdt` is the
+    regional total, i.e. extrapolated to the full regional area (`area`).
+    Comparing a model estimate (which covers all glaciers) to `dmdtda` will
+    therefore show a bias which is not the model's. Use `dmdt` (or the
+    `dmdtda_full_area` column we add here, which is `dmdt` divided by `area`).
+
     Parameters
     ----------
     file_path : str
         in case you have your own file to parse (check the format first!).
-        Can be a url as well
+        Can be a url as well. If provided, `rgi_version` is ignored.
+    rgi_version : str
+        the RGI version to fetch the file for: '62' (or the equivalent '60',
+        '61') or '70G'. RGI70C is not available yet. Defaults to the one
+        specified in cfg.PARAMS. Ignored if `regional=True`: the regional file
+        is available for RGI6 only.
     regional : bool
-        to fetch the regional file instead - this is a different format!
+        if True, fetch the regional averages instead of the per glacier data
+        (see above). The regional file is based on RGI6.
 
     Returns
     -------
@@ -1282,24 +1303,50 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
     """
 
     # fetch the file online or read custom file
-    if file_path is None:
-        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
-        if regional:
-            file_name = 'hugonnet_2021_regional_avg.csv'
-            file_path = file_downloader(base_url + file_name)
+    base_url = 'https://cluster.klima.uni-bremen.de/~oggm/geodetic_ref_mb/'
+    if file_path is None and regional:
+        # There is one file only - RGI6 based
+        file_path = file_downloader(base_url +
+                                    'hugonnet_2021_regional_avg.csv')
+    elif file_path is None:
+        if rgi_version is None:
+            rgi_version = cfg.PARAMS['rgi_version']
+
+        if rgi_version in ['60', '61', '62']:
+            rgi_str = 'rgi60'
+        elif rgi_version == '70G':
+            rgi_str = 'rgi70G'
         else:
-            file_name = 'hugonnet_2021_ds_rgi60_pergla_rates_10_20_worldwide_filled.parquet'
-            file_path = file_downloader(base_url + file_name)
+            raise NotImplementedError('No geodetic mass balance data available '
+                                      f'for RGI version: {rgi_version}')
+
+        file_name = (f'hugonnet_2021_ds_{rgi_str}_pergla_rates_10_20_'
+                     'worldwide_filled.parquet')
+        file_path = file_downloader(base_url + file_name)
 
     if file_path.startswith('http'):
         file_path = file_downloader(file_path)
 
-    # Did we open it yet?
-    if file_path in cfg.DATA:
-        return cfg.DATA[file_path]
+    # Did we open it yet? The two flavors are indexed differently, so they
+    # cannot share a cache entry (a custom file_path could be given to both)
+    cache_key = file_path + '_regional' if regional else file_path
+    if cache_key in cfg.DATA:
+        return cfg.DATA[cache_key]
 
     # If not let's go
     df = get_dataframe_from_file(file_path)
+
+    if regional:
+        # Index by region number, and add the value which is comparable to a
+        # model estimate covering the entire region (see docstring).
+        df['reg'] = df['reg'].astype(int)
+        df = df.set_index('reg')
+        # dmdt is in Gt yr-1, area in m2 -> m w.e. yr-1
+        df['dmdtda_full_area'] = df['dmdt'] * 1e12 / df['area'] / 1000
+        df['err_dmdtda_full_area'] = df['err_dmdt'] * 1e12 / df['area'] / 1000
+        cfg.DATA[cache_key] = df
+        return df
+
     # Check for missing data (old files)
     if len(df.loc[df['dmdtda'].isnull()]) > 0:
         raise InvalidParamsError('The reference file you are using has missing '
@@ -1310,64 +1357,33 @@ def get_geodetic_mb_dataframe(file_path=None, regional=False):
     return df
 
 
-def get_temp_bias_dataframe(dataset=None, regional=False, rgi_version='62',
-                            file_path=None):
-    """Fetches the temperature bias dataframe.
+def get_temp_bias_dataframe(file_path):
+    """Reads the temperature bias dataframe used by `informed_threestep`.
 
-    The dataframe was created by the OGGM>=v16 pre-calibration
-    (further explained in the `OGGM mass balance tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_
+    There is no default file: it has to be created for the exact setup it is
+    used with (climate dataset, RGI version, OGGM version...), and its path
+    given explicitly. To create such a file, run the preprocessing with the
+    `temp_melt` calibration strategy (``oggm_prepro --temp-bias-run``) and
+    summarize its glacier statistics with the ``oggm_temp_bias`` command (see
+    :py:func:`utils.compute_temp_bias_dataframe`). The method is further
+    explained in the `OGGM mass balance tutorial <https://tutorials.oggm.org/stable/notebooks/tutorials/massbalance_calibration.html>`_.
 
-    The data preparation script is available at
-    https://nbviewer.jupyter.org/urls/cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/calibration/1.6.1/prepare_bias_map.ipynb
-
-    The file differs between climate datasets and OGGM versions. For W5E5 and OGGM v162, it is e.g.
-    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_temp_bias_v2023.4.csv
+    The files used by the OGGM preprocessed directories are available on the
+    cluster, e.g. for W5E5 and RGI6:
+    https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/w5e5_rgi6_perglacier_temp_bias_v2025.6.2.csv
 
     Parameters
     ----------
-    dataset : str
-        climate dataset used to choose temperature bias dataframe
-        (currently only w5e5 and era5 are available). Ignored if `file_path`
-        is provided.
-    regional : bool
-        fetch the regional file instead of the per-glacier one. Ignored if
-        `file_path` is provided.
-    rgi_version : str
-        the RGI version to fetch the file for. Ignored if `file_path` is
-        provided.
     file_path : str
-        in case you have your own file to parse (check the format first!).
-        Can be a url as well. If provided, `dataset`, `regional` and
-        `rgi_version` are ignored for fetching the file.
+        path to the temperature bias file (check the format first!).
+        Can be a url as well.
 
     Returns
     -------
     a DataFrame with the data.
     """
 
-    if file_path is None:
-        if dataset not in ['w5e5', 'era5']:
-            raise NotImplementedError(f'No such dataset available yet: {dataset}')
-        if rgi_version == '60':
-            rgi_version = '62'
-        if rgi_version not in ['62', '70G', '70C']:
-            raise NotImplementedError(f'RGI version not available yet: {rgi_version}')
-
-        # fetch the file online
-        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/ref_mb_params/oggm_v1.6/'
-        calibtype = 'regional' if regional else 'perglacier'
-        if rgi_version in ['70G', '70C']:
-            file_version = '1'
-        if rgi_version == '62':
-            file_version = '3' if regional else '2'
-            rgi_version = '6'
-        if dataset == 'w5e5':
-            base_url += f'w5e5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
-        if dataset == 'era5':
-            base_url += f'era5_rgi{rgi_version}_{calibtype}_temp_bias_v2025.6.{file_version}.csv'
-
-        file_path = file_downloader(base_url)
-    elif file_path.startswith('http'):
+    if file_path.startswith('http'):
         file_path = file_downloader(file_path)
 
     # Did we open it yet?

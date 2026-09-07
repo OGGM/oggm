@@ -33,7 +33,8 @@ log = logging.getLogger(__name__)
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
+def process_custom_climate_data(gdir, settings_filesuffix='',
+                                y0=None, y1=None, output_filesuffix=None):
     """Processes and writes the climate data from a user-defined climate file.
 
     The input file must have a specific format
@@ -46,6 +47,10 @@ def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     y0 : int
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
@@ -129,19 +134,20 @@ def process_custom_climate_data(gdir, y0=None, y1=None, output_filesuffix=None):
     iprcp = prcp[:, ilat, ilon]
     nc_ts.close()
 
-    gdir.write_monthly_climate_file(time, iprcp, itemp, ihgt,
-                                    ref_pix_lon, ref_pix_lat,
-                                    filesuffix=output_filesuffix,
-                                    source=fpath)
+    gdir.write_climate_file(time, iprcp, itemp, ihgt,
+                            ref_pix_lon, ref_pix_lat,
+                            filesuffix=output_filesuffix,
+                            source=fpath)
 
 
 @entity_task(log)
-def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
+def process_climate_data(gdir, settings_filesuffix='',
+                         y0=None, y1=None, output_filesuffix=None,
                          **kwargs):
     """Adds the selected climate data to this glacier directory.
 
     Short wrapper deciding on which task to run based on
-    `cfg.PARAMS['baseline_climate']`.
+    `gdir.settings['baseline_climate']`.
 
     If you want to make it explicit, simply call the relevant task
     (e.g. oggm.shop.cru.process_cru_data).
@@ -150,6 +156,10 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     y0 : int
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
@@ -166,26 +176,37 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
     """
 
     # Which climate should we use?
-    baseline = cfg.PARAMS['baseline_climate']
+    baseline = gdir.settings['baseline_climate']
     if baseline == 'CRU':
         from oggm.shop.cru import process_cru_data
-        process_cru_data(gdir, output_filesuffix=output_filesuffix,
+        process_cru_data(gdir, settings_filesuffix=settings_filesuffix,
+                         output_filesuffix=output_filesuffix,
                          y0=y0, y1=y1, **kwargs)
     elif baseline == 'HISTALP':
         from oggm.shop.histalp import process_histalp_data
-        process_histalp_data(gdir, output_filesuffix=output_filesuffix,
+        process_histalp_data(gdir, settings_filesuffix=settings_filesuffix,
+                             output_filesuffix=output_filesuffix,
                              y0=y0, y1=y1, **kwargs)
     elif baseline == 'W5E5':
         from oggm.shop.w5e5 import process_w5e5_data
-        process_w5e5_data(gdir, output_filesuffix=output_filesuffix,
+        process_w5e5_data(gdir, settings_filesuffix=settings_filesuffix,
+                          output_filesuffix=output_filesuffix,
                           y0=y0, y1=y1, **kwargs)
     elif baseline == 'GSWP3_W5E5':
         from oggm.shop.w5e5 import process_gswp3_w5e5_data
-        process_gswp3_w5e5_data(gdir, output_filesuffix=output_filesuffix,
+        process_gswp3_w5e5_data(gdir, settings_filesuffix=settings_filesuffix,
+                                output_filesuffix=output_filesuffix,
                                 y0=y0, y1=y1, **kwargs)
+    elif baseline == "W5E5_daily":
+        from oggm.shop.w5e5 import process_gswp3_w5e5_data
+        process_gswp3_w5e5_data(
+            gdir, output_filesuffix=output_filesuffix,
+            y0=y0, y1=y1, daily=True, **kwargs,
+        )
     elif baseline in ['ERA5', 'ERA5L', 'CERA', 'ERA5dr', 'ERA5L-HMA']:
         from oggm.shop.ecmwf import process_ecmwf_data
-        process_ecmwf_data(gdir, output_filesuffix=output_filesuffix,
+        process_ecmwf_data(gdir, settings_filesuffix=settings_filesuffix,
+                           output_filesuffix=output_filesuffix,
                            dataset=baseline, y0=y0, y1=y1, **kwargs)
     elif '+' in baseline:
         # This bit below assumes ECMWF only datasets, but it should be
@@ -193,11 +214,13 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         from oggm.shop.ecmwf import process_ecmwf_data
         his, ref = baseline.split('+')
         s = 'tmp_'
-        process_ecmwf_data(gdir, output_filesuffix=s+his, dataset=his,
+        process_ecmwf_data(gdir, settings_filesuffix=settings_filesuffix,
+                           output_filesuffix=s+his, dataset=his,
                            y0=y0, y1=y1, **kwargs)
-        process_ecmwf_data(gdir, output_filesuffix=s+ref, dataset=ref,
+        process_ecmwf_data(gdir, settings_filesuffix=settings_filesuffix,
+                           output_filesuffix=s+ref, dataset=ref,
                            y0=y0, y1=y1, **kwargs)
-        historical_delta_method(gdir,
+        historical_delta_method(gdir, settings_filesuffix=settings_filesuffix,
                                 ref_filesuffix=s+ref,
                                 hist_filesuffix=s+his,
                                 output_filesuffix=output_filesuffix)
@@ -205,25 +228,30 @@ def process_climate_data(gdir, y0=None, y1=None, output_filesuffix=None,
         from oggm.shop.ecmwf import process_ecmwf_data
         his, ref = baseline.split('|')
         s = 'tmp_'
-        process_ecmwf_data(gdir, output_filesuffix=s+his, dataset=his,
+        process_ecmwf_data(gdir, settings_filesuffix=settings_filesuffix,
+                           output_filesuffix=s+his, dataset=his,
                            y0=y0, y1=y1, **kwargs)
-        process_ecmwf_data(gdir, output_filesuffix=s+ref, dataset=ref,
+        process_ecmwf_data(gdir, settings_filesuffix=settings_filesuffix,
+                           output_filesuffix=s+ref, dataset=ref,
                            y0=y0, y1=y1, **kwargs)
-        historical_delta_method(gdir,
+        historical_delta_method(gdir, settings_filesuffix=settings_filesuffix,
                                 ref_filesuffix=s+ref,
                                 hist_filesuffix=s+his,
                                 output_filesuffix=output_filesuffix,
                                 replace_with_ref_data=False)
     elif baseline == 'CUSTOM':
-        process_custom_climate_data(gdir, y0=y0, y1=y1,
+        process_custom_climate_data(gdir, settings_filesuffix=settings_filesuffix,
+                                    y0=y0, y1=y1,
                                     output_filesuffix=output_filesuffix,
                                     **kwargs)
     else:
-        raise ValueError("cfg.PARAMS['baseline_climate'] not understood")
+        raise ValueError("gdir.settings['baseline_climate']="
+                         f"{gdir.settings['baseline_climate']} not understood")
 
 
 @entity_task(log, writes=['climate_historical'])
-def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
+def historical_delta_method(gdir, settings_filesuffix='',
+                            ref_filesuffix='', hist_filesuffix='',
                             output_filesuffix='', ref_year_range=None,
                             delete_input_files=True, scale_stddev=True,
                             replace_with_ref_data=True):
@@ -238,6 +266,10 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
     ----------
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     ref_filesuffix : str
         the filesuffix of the historical climate data to take as reference
     hist_filesuffix : str
@@ -356,11 +388,11 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
 
     if not replace_with_ref_data:
         # Just write what we have
-        gdir.write_monthly_climate_file(ts_tmp.time.values,
-                                        ts_pre.values, ts_tmp.values,
-                                        ref_hgt, ref_lon, ref_lat,
-                                        filesuffix=output_filesuffix,
-                                        source=source)
+        gdir.write_climate_file(ts_tmp.time.values,
+                                ts_pre.values, ts_tmp.values,
+                                ref_hgt, ref_lon, ref_lat,
+                                filesuffix=output_filesuffix,
+                                source=source)
     else:
         # Select all hist data before the ref
         ts_tmp = ts_tmp.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
@@ -368,12 +400,12 @@ def historical_delta_method(gdir, ref_filesuffix='', hist_filesuffix='',
         ts_pre = ts_pre.sel(time=slice(ts_tmp.time[0], ref_temp.time[0]))
         ts_pre = ts_pre.isel(time=slice(0, -1))
         # Concatenate and write
-        gdir.write_monthly_climate_file(np.append(ts_pre.time, ref_prcp.time),
-                                        np.append(ts_pre, ref_prcp),
-                                        np.append(ts_tmp, ref_temp),
-                                        ref_hgt, ref_lon, ref_lat,
-                                        filesuffix=output_filesuffix,
-                                        source=source)
+        gdir.write_climate_file(np.append(ts_pre.time, ref_prcp.time),
+                                np.append(ts_pre, ref_prcp),
+                                np.append(ts_tmp, ref_temp),
+                                ref_hgt, ref_lon, ref_lat,
+                                filesuffix=output_filesuffix,
+                                source=source)
 
     if delete_input_files:
         # Delete all files without suffix

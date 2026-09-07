@@ -1,9 +1,7 @@
 import logging
 
 # External libs
-import numpy as np
 import xarray as xr
-import pandas as pd
 
 # Optional libs
 try:
@@ -15,7 +13,6 @@ except ImportError:
 from oggm import cfg
 from oggm import utils
 from oggm import entity_task
-from oggm.shop import ecmwf
 from oggm.exceptions import InvalidParamsError
 
 # Module logger
@@ -23,14 +20,19 @@ log = logging.getLogger(__name__)
 
 GSWP3_W5E5_SERVER = 'https://cluster.klima.uni-bremen.de/~oggm/climate/'
 
-_base = 'gswp3-w5e5/flattened/2025.11.25/monthly/'
+_base = 'gswp3-w5e5/flattened/2025.11.25/'
 
 BASENAMES = {
     'GSWP3_W5E5': {
-        'inv': f'{_base}gswp3-w5e5_glacier_invariant_flat_v2025.11.25.nc',
-        'tmp': f'{_base}gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc',
-        'temp_std': f'{_base}gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc',
-        'prcp': f'{_base}gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc'
+        'inv': f'{_base}monthly/gswp3-w5e5_glacier_invariant_flat_v2025.11.25.nc',
+        'tmp': f'{_base}monthly/gswp3-w5e5_obsclim_tas_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc',
+        'temp_std': f'{_base}monthly/gswp3-w5e5_obsclim_temp_std_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc',
+        'prcp': f'{_base}monthly/gswp3-w5e5_obsclim_pr_global_monthly_1901_2019_flat_glaciers_v2025.11.25.nc'
+    },
+    'GSWP3_W5E5_daily': {
+        'inv': f'{_base}daily/gswp3-w5e5_glacier_invariant_flat_v2025.11.25.nc',
+        'tmp': f'{_base}daily/gswp3-w5e5_obsclim_tas_global_daily_1901_2019_flat_glaciers_v2025.11.25.nc',
+        'prcp': f'{_base}daily/gswp3-w5e5_obsclim_pr_global_daily_1901_2019_flat_glaciers_v2025.11.25.nc',
     }
 }
 
@@ -52,40 +54,44 @@ def get_gswp3_w5e5_file(dataset='GSWP3_W5E5', var=None):
 
     If the file is not present, downloads it.
 
-    var : str
-        'inv' for invariant
-        'tmp' for temperature
-        'prcp' for precipitation
-        'temp_std' for mean of daily temperature standard deviation
-    dataset : str
-        default option in OGGM is 'GSWP3_W5E5' (could also just use 'W5E5_monthly',
-        but this is the same for a shorter time period, and we only use it for testing)
+    var : str, default None
+        :inv: invariant
+        :tmp: temperature
+        :prcp: precipitation
+        :temp_std: mean of daily temperature standard deviation
+    dataset : str, default 'GSWP3_W5E5'
+        Dataset name.
     """
     # check if input makes sense
     basenames = _get_w5e5_basenames()
 
     if var not in basenames[dataset].keys():
-        raise InvalidParamsError('GSWP3-W5E5 variable {} not '
-                                 'in {}'.format(var,
-                                                basenames[dataset].keys()))
+        raise InvalidParamsError(f'{dataset} variable {var} not '
+                                 f'in {basenames[dataset].keys()}')
 
     # File to look for
     return utils.file_downloader(_get_w5e5_server() + basenames[dataset][var])
 
 
 @entity_task(log, writes=['climate_historical'])
-def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
-    """Processes and writes the GSWP3-W5E5+W5E5 baseline climate data for a glacier.
+def process_gswp3_w5e5_data(gdir, settings_filesuffix='',
+                            y0=None, y1=None, daily=False,
+                            output_filesuffix=''):
+    """Process and write GSWP3-W5E5+W5E5 baseline climate data for a glacier.
 
-    The data is the same as W5E5 after 79, and is GSWP3 before that.
+    Extracts the nearest timeseries and writes everything to a NetCDF
+    file. Uses GSWP3 data until 1979, then W5E5 data from 1979 onwards.
 
     Data source: https://www.isimip.org/gettingstarted/input-data-bias-adjustment/details/80/
-    If y0>=1979, the temperature lapse rate gradient from ERA5dr is added.
-
-    Extracts the nearest timeseries and writes everything to a NetCDF file.
 
     Parameters
     ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
     y0 : int
         the starting year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
@@ -95,10 +101,16 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         the end year of the timeseries to write. The default is to take
         the entire time period available in the file, but with this kwarg
         you can shorten it (to save space or to crop bad data)
+    daily : bool, default False
+        Provide data at a daily resolution if True, otherwise provide it
+        at monthly resolution. Adds an additional '_daily' to the filename
     output_filesuffix : str, optional
-         None by default
+         '' by default
     """
-    dataset = 'GSWP3_W5E5'  # 'W5E5_monthly'
+    if not daily:
+        dataset = 'GSWP3_W5E5'  # 'W5E5_monthly'
+    else:
+        dataset = 'GSWP3_W5E5_daily'
     tvar = 'tas'
     pvar = 'pr'
 
@@ -124,16 +136,19 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
         y0 = yrs[0] if y0 is None else y0
         y1 = yrs[-1] if y1 is None else y1
 
+        if not daily:
+            period = (f'{y0}-01-01', f'{y1}-12-01')
+        else:
+            period = (f'{y0}-01-01', f'{y1}-12-31')
+
         if y1 > 2019 or y0 < 1901:
-            text = 'The climate files only go from 1901--2019'
+            text = 'GSWP3 climate data are only available from 1901-2019.'
             raise InvalidParamsError(text)
-        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+        ds = ds.sel(time=slice(*period))
+        ds = utils.get_closest_grid_point_of_dataset(
+            dataset=ds, latitude=lat, longitude=lon)
 
-        # computing all the distances and choose the nearest gridpoint
-        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-        ds = ds.isel(points=np.argmin(c.data))
-
-        # Feth lon and lat
+        # Fetch lon and lat
         ds['longitude'] = ds.longitude
         ds['latitude'] = ds.latitude
 
@@ -150,73 +165,96 @@ def process_gswp3_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
     with xr.open_dataset(path_prcp) as ds:
 
         # here we take the same y0 and y1 as given from the
-        # tmp dataset
-        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
+        # temperature dataset
+        ds = ds.sel(time=slice(*period))
+        ds = utils.get_closest_grid_point_of_dataset(
+            dataset=ds, latitude=lat, longitude=lon)
 
-        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-        ds = ds.isel(points=np.argmin(c.data))
-
-        # convert kg m-2 s-1 monthly mean into monthly sum!!!
-        prcp = ds[pvar].data*cfg.SEC_IN_DAY*ds['time.daysinmonth']
+        # convert kg m-2 s-1
+        if not daily:
+            # into kg m-2 month-1 (monthly mean into monthly sum)
+            prcp = ds[pvar].data * cfg.SEC_IN_DAY * ds['time.daysinmonth']
+        else:
+            # into kg m-2 day-1
+            prcp = ds[pvar].data * cfg.SEC_IN_DAY
 
     # w5e5 invariant file
     with xr.open_dataset(path_inv) as ds:
         ds = ds.isel(time=0)
-
-        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-        ds = ds.isel(points=np.argmin(c.data))
-
+        ds = utils.get_closest_grid_point_of_dataset(
+            dataset=ds, latitude=lat, longitude=lon)
         # w5e5 inv ASurf/hgt is already in hgt coordinates
         hgt = ds['ASurf'].data
 
-    path_temp_std = get_gswp3_w5e5_file(dataset, 'temp_std')
-    with xr.open_dataset(path_temp_std) as ds:
-        ds = ds.sel(time=slice(f'{y0}-01-01', f'{y1}-12-01'))
-        c = (ds.longitude - lon)**2 + (ds.latitude - lat)**2
-        ds = ds.isel(points=np.argmin(c.data))
-        temp_std = ds['temp_std'].data
+    # temp_std only available for monthly
+    if not daily:
+        path_temp_std = get_gswp3_w5e5_file(dataset, 'temp_std')
+        with xr.open_dataset(path_temp_std) as ds:
+            ds = ds.sel(time=slice(*period))
+            ds = utils.get_closest_grid_point_of_dataset(
+                dataset=ds, latitude=lat, longitude=lon)
+
+            temp_std = ds['temp_std'].data  # tas_std for W5E5!!!
+    else:
+        temp_std = None
 
     # OK, ready to write
-    gdir.write_monthly_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
-                                    filesuffix=output_filesuffix,
-                                    temp_std=temp_std,
-                                    source=dataset)
+    if daily:
+        output_filesuffix = f"_daily{output_filesuffix}"
+
+    gdir.write_climate_file(time, prcp, temp, hgt, ref_lon, ref_lat,
+                            filesuffix=output_filesuffix,
+                            temp_std=temp_std,
+                            source=dataset,
+                            daily=daily)
 
 
-def process_w5e5_data(gdir, y0=None, y1=None, output_filesuffix=None):
+@entity_task(log, writes=["climate_historical"])
+def process_w5e5_data(gdir, settings_filesuffix='', y0=None, y1=None,
+                      daily=False, output_filesuffix=''):
     """Processes and writes the W5E5 baseline climate data for a glacier.
 
-    Internally, this is actually calling process_gswp3_w5e5_data but only for
-    the W5E5 part.
+    Internally, this calls ``process_gswp3_w5e5_data``, but only for the
+    W5E5 part. ``y0`` defaults to 1979 and cannot be set to a lower
+    value. Extracts nearest timeseries and writes everything to a NetCDF
+    file.
 
-    data source: https://data.isimip.org/10.48364/ISIMIP.342217
-    The temperature lapse rate gradient from ERA5dr is added.
-    Same as process_gswp3_w5e5_data, except that y0 is set to 1979
-    and can not be set to lower values.
-
-    Extracts the nearest timeseries and writes everything to a NetCDF file.
+    Data source: https://data.isimip.org/10.48364/ISIMIP.342217
 
     Parameters
     ----------
-    y0 : int
-        the starting year of the timeseries to write. The default is to take
-        the entire time period available in the file (1979-2019), but with this kwarg
-        you can shorten it (to save space or to crop bad data).
-    y1 : int
-        the end year of the timeseries to write. The default is to take
-        the entire time period available in the file (1979-2019), but with this kwarg
-        you can shorten it (to save space or to crop bad data)
-    output_filesuffix : str, optional
-         None by default
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to process
+    settings_filesuffix: str
+        You can use a different set of settings by providing a filesuffix. This
+        is useful for sensitivity experiments. Code-wise the settings_filesuffix
+        is set in the @entity-task decorater.
+    y0 : int, optional
+        The starting year of the desired timeseries. The default is to
+        take the entire time period available in the file, but with
+        this argument you can shorten it to save space or to crop bad
+        data. If y0>=1979, it only uses W5E5 data.
+    y1 : int, optional
+        The end year of the desired timeseries. The default is to take
+        the entire time period available in the file, but with this
+        argument you can shorten it to save space or to crop bad data.
+    daily : bool, default False
+        Provide data at a daily resolution if True, otherwise provide it
+        at monthly resolution.
+    output_filesuffix : str, default ''
+        Used to distinguish between different daily datasets.
     """
 
     y0 = 1979 if y0 is None else y0
     y1 = 2019 if y1 is None else y1
 
-    if y0 < 1979:
-        text = ('The W5E5 climate only goes from 1979-2019,'
-                'if you want older climate data,'
-                'use instead "process_gswp3_w5e5_data()"')
+    if y0 < 1979 or y1 > 2019:
+        text = ("W5E5 climate data are only available from 1979-2019."
+                "If you want older climate data, "
+                "use 'process_gswp3_w5e5_data()'")
         raise InvalidParamsError(text)
-    process_gswp3_w5e5_data(gdir, y0=y0, y1=y1,
-                            output_filesuffix=output_filesuffix)
+
+    process_gswp3_w5e5_data(
+        gdir, settings_filesuffix=settings_filesuffix, y0=y0, y1=y1,
+        daily=daily, output_filesuffix=output_filesuffix
+    )
