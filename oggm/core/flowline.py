@@ -4618,8 +4618,9 @@ def run_with_hydro(gdir, settings_filesuffix='',
 
     Two area-weighted air temperature diagnostics can be computed as well
     (the temperature after downscaling, i.e. the one used by the mass balance
-    model for melt and for the solid/liquid precipitation split). They are
-    opt-in: add their name to PARAMS['store_diagnostic_variables'].
+    model for melt and for the solid/liquid precipitation split). Like the
+    other hydro variables they are computed if their name is in
+    PARAMS['store_diagnostic_variables'] (the default).
 
     - ``temp_on_glacier``: weighted by the (evolving) glacier area, at the
       surface elevation of the model at that time.
