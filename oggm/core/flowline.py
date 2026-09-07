@@ -4616,6 +4616,21 @@ def run_with_hydro(gdir, settings_filesuffix='',
     ``use_previous_mbs`` is set to True after the dynamical run, because the
     mass balance values stored during the run are revisited here.
 
+    Two area-weighted air temperature diagnostics can be computed as well
+    (the temperature after downscaling, i.e. the one used by the mass balance
+    model for melt and for the solid/liquid precipitation split). They are
+    opt-in: add their name to PARAMS['store_diagnostic_variables'].
+
+    - ``temp_on_glacier``: weighted by the (evolving) glacier area, at the
+      surface elevation of the model at that time.
+    - ``temp_ref_area``: weighted by the reference area, at the reference
+      surface elevation, i.e. fixed geometry. This one is independent of the
+      glacier evolution and is the diagnostic asked for by GlacierMIP4.
+      Note that with the default ``ref_area_yr=None`` the reference area is
+      the largest area of the simulation while the elevations are the ones of
+      the first year of the (reference) geometry file: use ``ref_area_yr`` or
+      ``ref_area_from_y0`` for a consistent fixed geometry.
+
     TODOs:
         - Add the possibility to record MB during run to improve performance
           (requires change in API)
@@ -4787,11 +4802,13 @@ def run_with_hydro(gdir, settings_filesuffix='',
     bin_area_2ds = []
     bin_elev_2ds = []
     ref_areas = []
+    ref_elevs = []
     snow_buckets = []
     for fl in fmod_ref.fls:
         # Glacier area on bins
         bin_area = fl.bin_area_m2
         ref_areas.append(bin_area)
+        ref_elevs.append(fl.surface_h.copy())
         snow_buckets.append(bin_area * 0)
 
         # Output 2d data
@@ -4909,6 +4926,18 @@ def run_with_hydro(gdir, settings_filesuffix='',
                      else np.full(oshape, np.nan)),
         }
 
+    # Area-weighted temperatures are means, not sums: we accumulate the
+    # numerator and the denominator separately and divide at the end
+    out['temp_on_glacier'] = {
+        'description': 'Area-weighted 2m air temperature over the glacierized '
+                       'area, at the surface elevation of the model',
+        'unit': 'degC',
+        'agg': 'mean',
+        'data': np.full(oshape, np.nan),
+    }
+    t_on_num = np.zeros(oshape)
+    t_on_den = np.zeros(oshape)
+
     for i, yr in enumerate(years):
 
         # Now the loop over the months
@@ -4933,12 +4962,12 @@ def run_with_hydro(gdir, settings_filesuffix='',
                         mb_out = mb_mod.get_monthly_mb(bin_elev, fl_id=fl_id,
                                                        year=flt_yr,
                                                        add_climate=True)
-                        mb, _, _, prcp, prcpsol = mb_out
+                        mb, temp, _, prcp, prcpsol = mb_out
                         seconds = mb_mod.sec_in_month(flt_yr)
                     else:
                         mb_out = mb_mod.get_annual_mb(bin_elev, fl_id=fl_id,
                                                       year=yr, add_climate=True)
-                        mb, _, _, prcp, prcpsol = mb_out
+                        mb, temp, _, prcp, prcpsol = mb_out
                         seconds = mb_mod.sec_in_year(yr)
                 except ValueError as e:
                     if 'too many values to unpack' in str(e):
@@ -5016,6 +5045,10 @@ def run_with_hydro(gdir, settings_filesuffix='',
                 out['liq_prcp_on_glacier']['data'][i, m-1] += np.sum(liq_prcp_on_g)
                 out['snowfall_off_glacier']['data'][i, m-1] += np.sum(prcpsol_off_g)
                 out['snowfall_on_glacier']['data'][i, m-1] += np.sum(prcpsol_on_g)
+
+                # Area-weighted temperature (mean - divided by the weights below)
+                t_on_num[i, m-1] += np.sum(temp * bin_area)
+                t_on_den[i, m-1] += np.sum(bin_area)
 
                 # Snow bucket is a state variable - stored at end of timestamp
                 if store_monthly_hydro:
@@ -5121,8 +5154,48 @@ def run_with_hydro(gdir, settings_filesuffix='',
             out['ice_melt_on_glacier']['data'][i, :] += \
                 np.where(has_comp, 0, final_melt)
 
-    # Convert to xarray
+    # Area-weighted temperature: NaN where there is no glacier left
+    out['temp_on_glacier']['data'] = np.where(t_on_den > 0,
+                                              t_on_num / np.where(t_on_den > 0,
+                                                                  t_on_den, 1),
+                                              np.nan)
+
     out_vars = gdir.settings['store_diagnostic_variables']
+
+    if 'temp_ref_area' in out_vars:
+        # Area-weighted temperature over the reference geometry (fixed area
+        # and fixed elevation). This is independent of the dynamical run, so
+        # we compute it in its own loop.
+        num = np.zeros(oshape)
+        den = np.zeros(oshape)
+        for fl_id, (ref_area, ref_elev) in enumerate(zip(ref_areas, ref_elevs)):
+            fl_mb_mod = _get_fl_mb_mod(fl_id)
+            if not hasattr(fl_mb_mod, 'get_annual_climate'):
+                raise InvalidWorkflowError(
+                    "'temp_ref_area' needs a MB model with a "
+                    "`get_annual_climate` (and `get_monthly_climate`) method, "
+                    "which {} does not have."
+                    "".format(type(fl_mb_mod).__name__))
+            for i, yr in enumerate(years):
+                for m in months:
+                    if store_monthly_hydro:
+                        flt_yr = utils.date_to_floatyear(int(yr), m)
+                        t = fl_mb_mod.get_monthly_climate(ref_elev,
+                                                          year=flt_yr)[0]
+                    else:
+                        t = fl_mb_mod.get_annual_climate(ref_elev, year=yr)[0]
+                    num[i, m-1] += np.sum(t * ref_area)
+                    den[i, m-1] += np.sum(ref_area)
+
+        out['temp_ref_area'] = {
+            'description': 'Area-weighted 2m air temperature over the '
+                           'reference geometry (fixed area and elevation)',
+            'unit': 'degC',
+            'agg': 'mean',
+            'data': np.where(den > 0, num / np.where(den > 0, den, 1), np.nan),
+        }
+
+    # Convert to xarray
     ods = xr.Dataset()
     ods.coords['time'] = fmod.years
     if store_monthly_hydro:
@@ -5133,6 +5206,7 @@ def run_with_hydro(gdir, settings_filesuffix='',
         ods.coords['calendar_month_2d'] = ('month_2d', np.arange(1, 13))
     for varname, d in out.items():
         data = d.pop('data')
+        agg = d.pop('agg', 'sum')
         if varname not in out_vars:
             continue
         if len(data.shape) == 2:
@@ -5140,6 +5214,10 @@ def run_with_hydro(gdir, settings_filesuffix='',
             if varname == 'snow_bucket':
                 # Snowbucket is a state variable
                 ods[varname] = ('time', data[:, 0])
+            elif agg == 'mean':
+                # Intensive variables (e.g. temperature) are averaged
+                data[-1, :] = np.nan
+                ods[varname] = ('time', np.mean(data, axis=1))
             else:
                 # Last year is never good
                 data[-1, :] = np.nan

@@ -1341,7 +1341,8 @@ class TestWorkflowUtils:
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
                              'melt_residual_on_glacier', 'model_mb',
-                             'residual_mb', 'snow_bucket', 'mass']
+                             'residual_mb', 'snow_bucket', 'mass',
+                             'temp_on_glacier', 'temp_ref_area']
         for gi in range(10):
             allowed_data_vars += [f'terminus_thick_{gi}']
 

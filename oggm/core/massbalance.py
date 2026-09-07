@@ -1869,6 +1869,14 @@ class SfcTypeTIModel(MassBalanceModel):
         # Reset state, we do not want to change parameters midway
         self.reset_state()
 
+    def get_monthly_climate(self, heights, year=None):
+        """The climate is the one of the underlying mb model."""
+        return self.mbmod.get_monthly_climate(heights, year=year)
+
+    def get_annual_climate(self, heights, year=None):
+        """The climate is the one of the underlying mb model."""
+        return self.mbmod.get_annual_climate(heights, year=year)
+
     def set_melt_f_buckets(self):
         """Set the melt factor for each bucket."""
         if self.melt_f_change == "linear":
@@ -3451,6 +3459,15 @@ class RandomMassBalance(MassBalanceModel):
     def get_annual_mb(self, heights, year=None, **kwargs):
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_annual_mb(heights, year=ryr, **kwargs)
+
+    def get_monthly_climate(self, heights, year=None):
+        ryr, m = floatyear_to_date(year)
+        ryr = date_to_floatyear(self.get_state_yr(ryr), m)
+        return self.mbmod.get_monthly_climate(heights, year=ryr)
+
+    def get_annual_climate(self, heights, year=None):
+        ryr = self.get_state_yr(int(year))
+        return self.mbmod.get_annual_climate(heights, year=ryr)
 
 
 class UncertainMassBalance(MassBalanceModel):

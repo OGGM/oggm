@@ -9,6 +9,21 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- ``run_with_hydro`` can now store two area-weighted air temperature
+  diagnostics, i.e. the downscaled temperature (temperature bias and lapse
+  rate applied) which the mass balance model actually uses for melt and for
+  the solid/liquid precipitation split. ``temp_ref_area`` is weighted by the
+  reference area *and* evaluated at the reference surface elevation, i.e. it
+  is a fixed geometry diagnostic which does not depend on the glacier
+  evolution: this is the diagnostic asked for by GlacierMIP4 (use it together
+  with ``ref_area_yr`` or ``ref_area_from_y0``, so that areas and elevations
+  refer to the same year). ``temp_on_glacier`` is weighted by the evolving
+  glacier area, at the surface elevation of the model. Both are opt-in: add
+  their name to ``PARAMS['store_diagnostic_variables']``. Note that these are
+  per glacier means, so a regional average has to be area-weighted by the
+  user. ``SfcTypeTIModel`` and ``RandomMassBalance`` gained the
+  ``get_annual_climate`` / ``get_monthly_climate`` methods this needs.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The preprocessing can now be run in chunks, so that a big RGI region does not
   have to fit into a single cluster job. ``oggm_prepro`` gained
   ``--chunk-idx`` / ``--chunk-size`` (chunks are blocks of the RGI id space, of
