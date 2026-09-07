@@ -78,7 +78,9 @@ RGI_REGION_NAMES = {
 # `area_min_h` and not `area` is the area used everywhere (see the module
 # docstring).
 RUN_VARIABLES = ['volume', 'area', 'area_min_h', 'mass_kg',
-                 'error_during_run', 'is_partial_output']
+                 'error_during_run', 'is_partial_output',
+                 'is_fixed_geometry_spinup']
+
 
 def _slug(name):
     """A column-name friendly version of a free text option."""
@@ -534,13 +536,189 @@ def compute_errors(prun, max_msg_length=80):
                           ascending=[True, True, False]).reset_index(drop=True)
 
 
-def compute_spinup(prun):
+def _fixed_geometry_spinup_stats(ds, ok, area, ref_yr0,
+                                 labelled_success=None,
+                                 labelled_fallback=None):
+    """How much of the spinup run is a fixed geometry spinup, not a dynamic one.
+
+    `is_fixed_geometry_spinup` is True for the years of a glacier's series
+    which come from a fixed geometry reconstruction, i.e. before the dynamic
+    model starts (`flowline.py`, `run_until_and_store`). A glacier whose
+    dynamic spinup had to be shortened has its first years filled that way,
+    even though its melt_f calibration is reported as a success.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        the compiled output of the spinup run
+    ok : ndarray of bool
+        the glaciers of `ds` which ran to the end
+    area : pandas.Series
+        the RGI area of the glaciers, indexed by id
+    ref_yr0 : int
+        the first year of the geodetic reference period
+    labelled_success : pandas.Index, optional
+        the glaciers which `used_spinup_option` reports as a success (any of
+        the three options which involve a dynamic spinup). Those of them which
+        nevertheless start with a fixed geometry are the shortened spinups -
+        the ones the statistics alone cannot show.
+    labelled_fallback : pandas.Index, optional
+        the glaciers which `used_spinup_option` calls a fixed geometry spinup.
+        Needed because the flag alone misses some of them: when the RGI date
+        is *before* the start year of the run there is nothing to pad, so the
+        series carries no fixed geometry year at all even though the glacier
+        was never spun up (its initial state is simply the inventory
+        geometry). The union of the two is what "not dynamically spun up"
+        means.
+
+    Returns
+    -------
+    a dict of diagnostics for one region.
+    """
+
+    fg = ds['is_fixed_geometry_spinup'].values  # (time, rgi_id)
+    time = ds['time'].values
+    ids = pd.Index(ds['rgi_id'].values)
+    a = area.reindex(ids).values
+    fg = np.nan_to_num(fg) > 0
+
+    # "At the start" means at each glacier's *own* first year, not at the
+    # first year of the file: with variable spinup periods the series do not
+    # all start together, and the early rows of a ragged file are NaN for
+    # most glaciers - which would read as "starts dynamic" for all of them.
+    finite = np.isfinite(ds['volume'].values)
+    first_idx = np.argmax(finite, axis=0)
+    fg_at_own_start = fg[first_idx, np.arange(fg.shape[1])]
+
+    d = {}
+    at_start = fg_at_own_start & ok
+    dynamic = (~fg_at_own_start) & ok
+    d['n_fixed_geom_at_start'] = int(at_start.sum())
+    d['area_fixed_geom_at_start_km2'] = np.nansum(a[at_start])
+    d['n_dynamic_from_start'] = int(dynamic.sum())
+    d['area_dynamic_from_start_km2'] = np.nansum(a[dynamic])
+
+    if labelled_success is not None:
+        hidden = at_start & np.asarray(ids.isin(labelled_success))
+        d['n_fixed_geom_at_start_not_labelled'] = int(hidden.sum())
+        d['area_fixed_geom_at_start_not_labelled_km2'] = np.nansum(a[hidden])
+
+    if labelled_fallback is not None:
+        fallback = np.asarray(ids.isin(labelled_fallback)) & ok
+        # No dynamic spinup at all, and nothing padded either: these are the
+        # glaciers whose RGI date precedes the start year of the run
+        no_pad = fallback & ~at_start
+        d['n_no_spinup_no_padding'] = int(no_pad.sum())
+        d['area_no_spinup_no_padding_km2'] = np.nansum(a[no_pad])
+        # The honest total: everything which was not dynamically spun up
+        not_spun_up = at_start | fallback
+        d['n_not_spun_up'] = int(not_spun_up.sum())
+        d['area_not_spun_up_km2'] = np.nansum(a[not_spun_up])
+        d['n_spun_up'] = int((ok & ~not_spun_up).sum())
+        d['area_spun_up_km2'] = np.nansum(a[ok & ~not_spun_up])
+
+    # How long the fixed geometry part lasts, in years
+    n_years = fg.sum(axis=0)[ok]
+    if len(n_years):
+        d['median_fixed_geom_years'] = float(np.median(n_years))
+        d['max_fixed_geom_years'] = int(np.max(n_years))
+
+    # Does it still reach into the period the mass balance is evaluated over?
+    # If it does, that glacier's dmdtda is a fixed geometry mass balance.
+    if ref_yr0 in time:
+        i = int(np.nonzero(time == ref_yr0)[0][0])
+        at_ref = fg[i, :] & ok
+        d['n_fixed_geom_at_ref_yr'] = int(at_ref.sum())
+        d['area_fixed_geom_at_ref_yr_km2'] = np.nansum(a[at_ref])
+    return d
+
+
+def _recovered_outcome(prun):
+    """What the glaciers which errored but kept a usable run ended up with.
+
+    An error on record does not say what happened next. The fallback of
+    `run_dynamic_melt_f_calibration` puts melt_f back to its pre-calibration
+    value and *retries a dynamic spinup*; only if that fails too does the
+    glacier get a fixed geometry spinup. So "recovered" is not a synonym for
+    "fixed geometry was used instead" - this tells which it was.
+
+    Returns
+    -------
+    a DataFrame indexed by outcome, with the number and area of the glaciers.
+    """
+
+    rows = []
+    for reg in prun.regions:
+        sdf = prun.region_stats(reg)
+        if 'error_task' not in sdf:
+            continue
+        pop, _ = prun.population(reg)
+        ids = sdf.index[sdf['error_task'].notnull()].intersection(pop)
+        if len(ids) == 0:
+            continue
+        opt = sdf['used_spinup_option'].reindex(ids) \
+            if 'used_spinup_option' in sdf else pd.Series('?', index=ids)
+        opt = opt.fillna('not recorded in the statistics')
+        # The run output knows even when the statistics do not
+        starts_fg = pd.Series(False, index=ids)
+        if prun.has_run('spinup'):
+            ds = prun.open_run('spinup', reg)
+            if 'is_fixed_geometry_spinup' in ds:
+                fg = pd.Series(
+                    np.nan_to_num(ds['is_fixed_geometry_spinup']
+                                  .values[0, :]) > 0,
+                    index=pd.Index(ds['rgi_id'].values))
+                starts_fg = fg.reindex(ids).fillna(False)
+        for out, sel in opt.groupby(opt):
+            rows.append({'outcome': out, 'n': len(sel),
+                         'area_km2': sdf['rgi_area_km2'].reindex(sel.index).sum(),
+                         'n_starts_fixed_geom': int(starts_fg[sel.index].sum())})
+    if not rows:
+        return None
+    df = pd.DataFrame(rows).groupby('outcome').sum()
+    return df.sort_values('area_km2', ascending=False)
+
+
+def compute_spinup(prun, reference_period=None):
     """How the dynamic spinup and the dynamic melt_f calibration went.
+
+    Two independent sources, and they do not say the same thing:
+
+    - `used_spinup_option`, from the glacier statistics, is the *outcome of
+      the melt_f calibration*: whether it converged, and what the fallback
+      chain had to settle for. See `SPINUP_OPTIONS`.
+    - `is_fixed_geometry_spinup`, from the run output itself, is what the
+      series actually contains, year by year: it is True wherever the glacier
+      geometry is held fixed because the dynamic model had not started yet.
+
+    The second is the honest measure of "did the spinup do what was asked",
+    and it is worse than the first suggests: when a dynamic spinup does not
+    converge over the requested period, it is retried over shorter ones, and
+    the years before the shortened period are filled with a fixed geometry
+    spinup. Such a glacier is still labelled a full success, because the
+    melt_f calibration did succeed - but its early years are not dynamic.
+    `is_fixed_geometry_spinup` also survives a glacier whose statistics were
+    not written, so it covers glaciers `used_spinup_option` knows nothing
+    about.
+
+    Parameters
+    ----------
+    prun : PreproRun
+        the run to diagnose
+    reference_period : str, optional
+        the geodetic period, e.g. '2000-01-01_2020-01-01'. Used to report
+        whether the fixed geometry part of the spinup still reaches into the
+        period the mass balance is evaluated over. Defaults to
+        `cfg.PARAMS['geodetic_mb_period']`.
 
     Returns
     -------
     a DataFrame indexed by region, with a `global` row.
     """
+
+    if reference_period is None:
+        reference_period = cfg.PARAMS['geodetic_mb_period']
+    ref_yr0 = int(reference_period.split('_')[0].split('-')[0])
 
     if 'used_spinup_option' not in prun.stats:
         return None
@@ -572,6 +750,19 @@ def compute_spinup(prun):
             ran = sdf.index[missing].intersection(ds['rgi_id'].values[ok])
             d['n_not_recorded_but_ran'] = len(ran)
             d['area_not_recorded_but_ran_km2'] = area.reindex(ran).sum()
+
+            # What the series actually contains, from the run output. This
+            # does not depend on the statistics having been written, and it
+            # sees the shortened spinups which `used_spinup_option` reports
+            # as a success.
+            if 'is_fixed_geometry_spinup' in ds:
+                success = [o for o in SPINUP_OPTIONS
+                           if o != 'fixed geometry spinup']
+                d.update(_fixed_geometry_spinup_stats(
+                    ds, ok, area, ref_yr0,
+                    labelled_success=sdf.index[opt.isin(success)],
+                    labelled_fallback=sdf.index[opt == 'fixed geometry '
+                                                       'spinup']))
 
         # The area match of the dynamic spinup. The calibration stops when it
         # is below 1%, so this is the fraction which reached its target.
@@ -1185,17 +1376,46 @@ def prepro_diag_report(prun, tables, reference_period=None):
             if status == 'fatal':
                 add('    number of this report.')
             else:
-                add('    run (the dynamic melt_f calibration runs with '
-                    '`ignore_errors` and falls')
-                add('    back), so it is used like any other.')
+                add('    run and is used like any other. The dynamic melt_f '
+                    'calibration runs with')
+                add('    `ignore_errors`: its fallback puts melt_f back to '
+                    'the pre-calibration')
+                add('    value and *retries a dynamic spinup*, and only if '
+                    'that fails too does the')
+                add('    glacier end up with a fixed geometry spinup. So this '
+                    'is not the same as')
+                add('    "fixed geometry was used instead" - what they '
+                    'actually got is below.')
             if len(sel) == 0:
                 add('        (none)')
                 continue
-            add('        {:.0f} glaciers, {:.1f} km2 in total'
-                ''.format(sel['n'].sum(), sel['area_km2'].sum()))
+            if status == 'fatal' and comp is not None:
+                # Summing the rows would count a glacier once per source: the
+                # same glacier is missing from the statistics *and* from each
+                # run. The completion table has the unique count.
+                cg = comp.loc[GLOBAL]
+                add('        {:.0f} glaciers, {:.1f} km2 in total (unique '
+                    'glaciers; the rows below'
+                    ''.format(cg['n_glaciers'] - cg['n_population'],
+                              cg['rgi_area_km2'] - cg['area_population_km2']))
+                add('        count the same glacier once per source it is '
+                    'missing from)')
+            else:
+                add('        {:.0f} glaciers, {:.1f} km2 in total'
+                    ''.format(sel['n'].sum(), sel['area_km2'].sum()))
             add(_table_str(sel.head(10).set_index('source')[
                 ['error', 'n', 'area_km2', 'example_msg']],
                 float_format='{:.1f}', indent=8))
+        rec = _recovered_outcome(prun)
+        if rec is not None and len(rec):
+            add('')
+            add('    What the recovered glaciers ended up with '
+                '(`used_spinup_option`, and')
+            add('    `n_starts_fixed_geom` from the run output, which is set '
+                'even when the')
+            add('    statistics were not written):')
+            add(_table_str(rec, float_format='{:.1f}', indent=8))
+
         add('')
         add('    The split is on the outcome, not on the task: the glacier '
             'directory keeps')
@@ -1209,6 +1429,9 @@ def prepro_diag_report(prun, tables, reference_period=None):
     spin = tables.get('spinup')
     if spin is not None:
         title('Dynamic spinup and dynamic melt_f calibration')
+        ref_yr0 = int((reference_period or
+                       cfg.PARAMS['geodetic_mb_period']).split('_')[0]
+                      .split('-')[0])
         g = spin.loc[GLOBAL]
         add('    How the {:.0f} glaciers ended up being initialised (in % of '
             'the area):'.format(g['n_glaciers']))
@@ -1231,6 +1454,93 @@ def prepro_diag_report(prun, tables, reference_period=None):
                 ''.format(g['perc_area_not_recorded_but_ran'],
                           g['perc_area_not_recorded']))
             add('    at all.')
+        add('')
+        add('    What these mean - they are the outcome of the melt_f '
+            'calibration, not a')
+        add('    statement about the geometry (see '
+            '`run_dynamic_melt_f_calibration`):')
+        add('      full success        : melt_f was tuned until the modelled '
+            'dmdtda matched the')
+        add('                            observation within its tolerance, '
+            'with a dynamic spinup.')
+        add('      part success        : the calibration ran but never '
+            'reached the tolerance;')
+        add('                            the best melt_f it found is kept.')
+        add('      dynamic spinup only : the calibration failed. The fallback '
+            'put melt_f back to')
+        add('                            its pre-calibration value and did '
+            'get a dynamic spinup,')
+        add('                            so the geometry is dynamic but '
+            'melt_f is NOT')
+        add('                            dynamically calibrated.')
+        add('      fixed geometry      : the fallback could not do a dynamic '
+            'spinup either. This')
+        add('                            glacier has no dynamic spinup at '
+            'all: the years before')
+        add('                            the RGI date are a fixed geometry '
+            'mass balance.')
+
+        # What the series actually contains - the number `used_spinup_option`
+        # cannot give, because a shortened spinup is still a success to it
+        if 'perc_area_not_spun_up' in spin:
+            add('')
+            add('    Was the geometry actually spun up? This combines the '
+                'labels above with')
+            add('    `is_fixed_geometry_spinup` from the run output, and '
+                'neither of the two is')
+            add('    enough on its own (see below). Of the glaciers which '
+                'ran:')
+            add('        dynamically spun up     : {:>7.2f}% of the area'
+                ''.format(g['perc_area_spun_up']))
+            add('        NOT dynamically spun up : {:>7.2f}% of the area, '
+                'made of'.format(g['perc_area_not_spun_up']))
+            add('            [a] the series starts with fixed geometry years '
+                ': {:>7.2f}% ({:.0f} glaciers)'
+                ''.format(g['perc_area_fixed_geom_at_start'],
+                          g['n_fixed_geom_at_start']))
+            if 'perc_area_fixed_geom_at_start_not_labelled' in spin:
+                add('                of which reported as a SUCCESS above  '
+                    ': {:>7.2f}% ({:.0f} glaciers)'
+                    ''.format(g['perc_area_fixed_geom_at_start_not_labelled'],
+                              g['n_fixed_geom_at_start_not_labelled']))
+                add('                Their dynamic spinup did not converge '
+                    'over the requested period,')
+                add('                so it was retried over a shorter one and '
+                    'the years before it were')
+                add('                filled with a fixed geometry. The melt_f '
+                    'calibration still')
+                add('                succeeded, which is why the labels above '
+                    'call them a success -')
+                add('                but their early years are not dynamic. '
+                    'This is the part the')
+                add('                statistics alone cannot show.')
+            if 'perc_area_no_spinup_no_padding' in spin:
+                add('            [b] no dynamic spinup, and nothing padded    '
+                    ': {:>7.2f}% ({:.0f} glaciers)'
+                    ''.format(g['perc_area_no_spinup_no_padding'],
+                              g['n_no_spinup_no_padding']))
+                add('                Their RGI date is *before* the start '
+                    'year of the run, so there')
+                add('                is nothing to pad: the series is dynamic '
+                    'from its first year,')
+                add('                but the initial state is simply the '
+                    'inventory geometry - it was')
+                add('                never spun up. `is_fixed_geometry_spinup`'
+                    ' is empty for them, so')
+                add('                the flag alone would call them fine.')
+            if 'median_fixed_geom_years' in spin:
+                add('        length of the fixed geometry part   : median '
+                    '{:.0f} years, max {:.0f}'
+                    ''.format(g['median_fixed_geom_years'],
+                              g['max_fixed_geom_years']))
+            if 'perc_area_fixed_geom_at_ref_yr' in spin:
+                add('        still fixed geometry at {}        : {:>7.2f}% of '
+                    'the area - for those'.format(
+                        ref_yr0, g['perc_area_fixed_geom_at_ref_yr']))
+                add('            glaciers the mass balance over the geodetic '
+                    'period is a fixed')
+                add('            geometry one, not a dynamic one.')
+
         add('')
         if 'perc_area_area_match' in spin:
             add('    Glaciers whose dynamic spinup matched its area target '
@@ -1259,7 +1569,13 @@ def prepro_diag_report(prun, tables, reference_period=None):
             add('        is the one the regional sums below are computed on.')
         add('')
         cols = ([f'perc_area_{c}' for c in SPINUP_CATEGORIES] +
-                ['perc_area_not_recorded_but_ran', 'perc_area_area_match',
+                ['perc_area_spun_up', 'perc_area_not_spun_up',
+                 'perc_area_no_spinup_no_padding',
+                 'perc_area_fixed_geom_at_start',
+                 'perc_area_fixed_geom_at_start_not_labelled',
+                 'perc_area_fixed_geom_at_ref_yr',
+                 'median_fixed_geom_years',
+                 'perc_area_not_recorded_but_ran', 'perc_area_area_match',
                  'perc_area_dmdtda_match',
                  'median_area_mismatch_percent', 'median_dmdtda_mismatch',
                  'median_spinup_period', 'first_output_yr_min',
@@ -1617,7 +1933,8 @@ def _plot_completion(prun, comp, spin, path, title=''):
 
     regions = list(prun.regions) + [GLOBAL]
     x = np.arange(len(regions))
-    nrows = 2 if spin is not None else 1
+    has_fg = spin is not None and 'perc_area_fixed_geom_at_start' in spin
+    nrows = 1 + (spin is not None) + has_fg
     fig, axs = plt.subplots(nrows, 1, figsize=(13, 4 * nrows), squeeze=False)
     axs = axs.flatten()
 
@@ -1648,7 +1965,32 @@ def _plot_completion(prun, comp, spin, path, title=''):
                    label=c.replace('perc_area_', '').replace('_', ' '))
             bottom += v
         ax.set_ylabel('% of the RGI area')
-        ax.set_title('How the glaciers were initialised', fontsize=10)
+        ax.set_title('How the glaciers were initialised (outcome of the '
+                     'melt_f calibration)', fontsize=10)
+
+    if has_fg:
+        # What the series really contains: a shortened dynamic spinup is a
+        # success above, but its first years are not dynamic
+        ax = axs[2]
+        dyn = spin.loc[regions, 'perc_area_spun_up'].values
+        hidden = spin.reindex(regions).get(
+            'perc_area_fixed_geom_at_start_not_labelled',
+            pd.Series(0., index=regions)).fillna(0).values
+        rest = (spin.loc[regions, 'perc_area_not_spun_up'].values - hidden)
+        ax.bar(x, dyn, color='C0', zorder=2, label='dynamically spun up')
+        ax.bar(x, hidden, bottom=dyn, color='C1', zorder=2,
+               label='NOT spun up, but reported a success above '
+                     '(shortened spinup)')
+        ax.bar(x, rest, bottom=dyn + hidden, color='C3', zorder=2,
+               label='NOT spun up (no dynamic spinup at all)')
+        if 'perc_area_fixed_geom_at_ref_yr' in spin:
+            ax.plot(x, 100 - spin.loc[regions,
+                                      'perc_area_fixed_geom_at_ref_yr'].values,
+                    'k_', ms=14, mew=2, zorder=4,
+                    label='still dynamic at the start of the geodetic period')
+        ax.set_ylabel('% of the RGI area')
+        ax.set_title('Was the geometry actually spun up? (labels + '
+                     '`is_fixed_geometry_spinup`)', fontsize=10)
 
     for ax in axs:
         ax.set_xticks(x)
@@ -1869,7 +2211,8 @@ def compile_prepro_diagnostics(input_dir, output_dir, rgi_region=None,
     tables = OrderedDict()
     tables['completion'] = compute_completion(prun)
     tables['errors'] = compute_errors(prun)
-    tables['spinup'] = compute_spinup(prun)
+    tables['spinup'] = compute_spinup(prun,
+                                      reference_period=reference_period)
     tables['mb_params'] = compute_mb_params(prun)
     tables['rgi_reference'] = compute_rgi_reference(prun)
     tables['timeseries'] = compute_timeseries(prun)

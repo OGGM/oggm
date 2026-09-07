@@ -633,9 +633,14 @@ def _fake_prepro_stats(reg, n):
     for c in ['used_spinup_option', 'run_dynamic_spinup_success',
               'dynamic_spinup_period', 'melt_f', 'prcp_fac', 'temp_bias']:
         df.loc[ids[0], c] = np.nan
-    # The third one had to fall back to a fixed geometry spinup
+    # The third one had to fall back to a fixed geometry spinup (it is also
+    # the one whose run stops early, so it is out of the population)
     df.loc[ids[2], 'used_spinup_option'] = 'fixed geometry spinup'
     df.loc[ids[2], 'run_dynamic_spinup_success'] = False
+    # ... and so did the fifth one, which does run to the end
+    if len(ids) > 4:
+        df.loc[ids[4], 'used_spinup_option'] = 'fixed geometry spinup'
+        df.loc[ids[4], 'run_dynamic_spinup_success'] = False
     # The fourth one errored *during* the dynamic melt_f calibration, which
     # runs with `ignore_errors`: the error stays on record and its
     # initialisation is never written down, but the fallback did run and its
@@ -693,13 +698,30 @@ def _fake_prepro_run_output(sdf, reg, spinup=True):
     partial = np.zeros(ng)
     partial[1] = 1
 
+    # What the series contains, year by year. In the spinup run two glaciers
+    # do not start dynamic: the second one of the statistics had its spinup
+    # shortened (its first years are a fixed geometry padding) although it is
+    # reported as a full success, and the fifth one got no dynamic spinup at
+    # all and is labelled as such.
+    # The padding is the beginning of the glacier's own series, so it has to
+    # sit on years that glacier actually has (they do not all start together).
+    fixed_geom = np.zeros((nt, ng))
+    if spinup:
+        j = ids.index(sdf.index[1])
+        own = np.nonzero(np.isfinite(vol[:, j]))[0]
+        fixed_geom[own[:5], j] = 1
+        if len(sdf) > 4:
+            j = ids.index(sdf.index[4])
+            # this one only goes dynamic at the RGI date, i.e. after 2000
+            fixed_geom[np.isfinite(vol[:, j]) & (FAKE_YEARS <= 2000), j] = 1
+
     ds = xr.Dataset(
         {'volume': (('time', 'rgi_id'), vol),
          'area': (('time', 'rgi_id'), area),
          # `area_min_h` is what the tool must use - make it clearly different
          'area_min_h': (('time', 'rgi_id'), area * 0.9),
          'mass_kg': (('time', 'rgi_id'), vol * FAKE_RHO),
-         'is_fixed_geometry_spinup': (('time', 'rgi_id'), np.zeros((nt, ng))),
+         'is_fixed_geometry_spinup': (('time', 'rgi_id'), fixed_geom),
          'error_during_run': ('rgi_id', err),
          'is_partial_output': ('rgi_id', partial),
          },
@@ -844,11 +866,48 @@ def test_prepro_diag_spinup(fake_prepro_run):
     prun = diagnostics.read_prepro_run(fake_prepro_run)
     df = diagnostics.compute_spinup(prun)
 
-    # One glacier of each region fell back to a fixed geometry spinup: the
-    # third one, i.e. 6 km2 out of 42 in region 11
-    assert df.loc['11', 'n_fixed_geometry_spinup'] == 1
+    # In region 11 the third (6 km2) and the fifth (10 km2) fell back to a
+    # fixed geometry spinup, out of 42 km2
+    assert df.loc['11', 'n_fixed_geometry_spinup'] == 2
     assert_allclose(df.loc['11', 'perc_area_fixed_geometry_spinup'],
-                    6 / 42 * 100)
+                    16 / 42 * 100)
+
+    # What the series actually contains, which the labels above cannot say.
+    # Two glaciers of the population start with a fixed geometry: the 10 km2
+    # one which is labelled as such, and the 4 km2 one whose spinup was
+    # merely shortened - that one is reported as a full success above.
+    assert df.loc['11', 'n_fixed_geom_at_start'] == 2
+    assert_allclose(df.loc['11', 'area_fixed_geom_at_start_km2'], 14)
+    assert df.loc['11', 'n_fixed_geom_at_start_not_labelled'] == 1
+    assert_allclose(df.loc['11', 'area_fixed_geom_at_start_not_labelled_km2'],
+                    4)
+    # ... so the honest coverage is lower than the labels suggest
+    assert (df.loc['11', 'perc_area_fixed_geom_at_start'] >
+            df.loc['11', 'perc_area_fixed_geometry_spinup'] -
+            10 / 42 * 100)
+    assert df.loc['11', 'n_dynamic_from_start'] == 2
+    # The honest total is the union of the two indicators: a glacier can be
+    # labelled a fallback and still carry no fixed geometry year (when its RGI
+    # date precedes the start of the run there is nothing to pad), so neither
+    # indicator alone is enough
+    assert df.loc['11', 'n_not_spun_up'] == 2
+    assert_allclose(df.loc['11', 'area_not_spun_up_km2'], 14)
+    assert df.loc['11', 'n_spun_up'] == 2
+    assert_allclose(df.loc['11', 'area_spun_up_km2'], 20)
+    assert (df.loc['11', 'n_not_spun_up'] >=
+            df.loc['11', 'n_fixed_geom_at_start'])
+    # The 10 km2 one is fixed geometry until 2000 (11 of its years), the
+    # 4 km2 one for its first 5 years, the two others never
+    assert df.loc['11', 'max_fixed_geom_years'] == 11
+    assert_allclose(df.loc['11', 'median_fixed_geom_years'], 2.5)
+    # The fixed geometry one is still fixed geometry in 2000
+    assert df.loc['11', 'n_fixed_geom_at_ref_yr'] == 1
+    # The series do not all start in the same year (one glacier starts in
+    # 1980, the others in 1990), so the flag has to be read at each glacier's
+    # own first year: reading it at the first year of the *file* would find
+    # NaN for those and call them dynamic
+    assert (df.loc['11', 'perc_area_fixed_geom_at_ref_yr'] <=
+            df.loc['11', 'perc_area_fixed_geom_at_start'])
     # Two glaciers have no initialisation on record: the one which never ran
     # and the one whose calibration errored - but the second one does have a
     # complete run, and saying it had "no spinup" would overstate the failure

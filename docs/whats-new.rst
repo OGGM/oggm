@@ -43,7 +43,12 @@ Enhancements
   is meant for comparing two runs made with different options - e.g. to pick a
   spinup strategy. ``utils.get_geodetic_mb_dataframe`` grows a ``regional``
   keyword to fetch the regional averages published by Hugonnet et al., which
-  the comparison uses (:pull:`1988`).
+  the comparison uses (:pull:`1988`). The spinup section also reports what the
+  spinup series *contains* (from ``is_fixed_geometry_spinup``) and not only
+  what ``used_spinup_option`` says: a dynamic spinup which did not converge
+  over the requested period is retried over a shorter one and the years before
+  it are filled with a fixed geometry, which the statistics still report as a
+  success.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
   (:pull:`1800`).
