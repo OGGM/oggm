@@ -68,7 +68,7 @@ ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length', 'mass',
              'melt_on_glacier', 'snow_melt_on_glacier', 'firn_melt_on_glacier',
              'ice_melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
              'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
-             'residual_mb', 'snow_bucket']
+             'residual_mb', 'snow_bucket', 'temp_on_glacier', 'temp_ref_area']
 
 has_shapely2 = False
 try:
@@ -7578,9 +7578,33 @@ class TestHydro:
         # In the spinup run the residual is zero for the spinup part
         assert_allclose(odf_spin['residual_mb'].loc[:1990], 0)
 
+        # Area-weighted temperatures
+        for vn in ['temp_on_glacier', 'temp_ref_area']:
+            assert np.all(np.isfinite(odf[vn]))
+            assert np.all((odf[vn] > -20) & (odf[vn] < 5))
+        # The fixed geometry one is a pure climate diagnostic: recompute it
+        # here from the reference geometry the task used (default: max area
+        # over the run, surface elevation of the first year)
+        fmod = FileModel(gdir.get_filepath('model_geometry', filesuffix='_hist'))
+        ref_elevs = [fl.surface_h.copy() for fl in fmod.fls]
+        ref_areas = [fl.bin_area_m2 * 0 for fl in fmod.fls]
+        for yr in fmod.years[:-1]:
+            fmod.run_until(yr)
+            for ref_area, fl in zip(ref_areas, fmod.fls):
+                ref_area[:] = np.maximum(ref_area, fl.bin_area_m2)
+        mbmod = massbalance.MonthlyTIModel(gdir)
+        for yr in [odf.index[0], odf.index[-1]]:
+            num, den = 0, 0
+            for ref_area, ref_elev in zip(ref_areas, ref_elevs):
+                t = mbmod.get_annual_climate(ref_elev, year=yr)[0]
+                num += np.sum(t * ref_area)
+                den += np.sum(ref_area)
+            assert_allclose(odf['temp_ref_area'].loc[yr], num / den)
+
         # Also check output stuff
         nds = utils.compile_run_output([gdir], input_filesuffix='_hist')
         assert nds.residual_mb.attrs['unit'] == 'kg yr-1'
+        assert nds.temp_ref_area.attrs['unit'] == 'degC'
         assert_allclose(nds['snowfall_on_glacier'].squeeze()[:-1],
                         odf['snowfall_on_glacier'])
         if 'month_2d' in nds:
@@ -7590,6 +7614,11 @@ class TestHydro:
             odf_ma.columns = [c.replace('_monthly', '') for c in odf_ma.columns]
             # Runoff peak should follow a temperature curve
             assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 8)
+            # Temperature peaks in summer as well
+            assert_allclose(odf_ma['temp_ref_area'].idxmax(), 8)
+            # The annual value is the average of the monthly ones
+            assert_allclose(nds['temp_ref_area_monthly'].mean(dim='month_2d'),
+                            nds['temp_ref_area'])
 
         # check if melt on glacier is always above or equal zero
         assert np.all(odf['melt_on_glacier'] >= 0)

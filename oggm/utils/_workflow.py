@@ -1214,7 +1214,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                   'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                   'snowfall_off_glacier', 'snowfall_on_glacier',
                   'melt_residual_off_glacier', 'melt_residual_on_glacier',
-                  'snow_bucket', 'residual_mb']
+                  'snow_bucket', 'residual_mb',
+                  # These two are per glacier means, i.e. a regional average
+                  # has to be area-weighted by the user
+                  'temp_on_glacier', 'temp_ref_area']
     for v in hydro_vars:
         allowed_data_vars += [v]
         allowed_data_vars += [v + '_monthly']

@@ -1341,7 +1341,8 @@ class TestWorkflowUtils:
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
                              'melt_residual_on_glacier', 'model_mb',
-                             'residual_mb', 'snow_bucket', 'mass']
+                             'residual_mb', 'snow_bucket', 'mass',
+                             'temp_on_glacier', 'temp_ref_area']
         for gi in range(10):
             allowed_data_vars += [f'terminus_thick_{gi}']
 
@@ -2611,6 +2612,11 @@ class TestPreproCLI:
             assert 'melt_on_glacier_monthly' in ds
             assert 'month_2d' in ds.coords
             assert np.all(np.isfinite(ds['on_area'].sel(time=2000)))
+            # The temperature diagnostics come with the hydro output
+            assert 'temp_ref_area' in ds
+            assert 'temp_on_glacier_monthly' in ds
+            assert ds['temp_ref_area'].attrs['unit'] == 'degC'
+            assert np.all(np.isfinite(ds['temp_ref_area'].sel(time=2000)))
 
     @pytest.mark.slow
     def test_full_run_cru_centerlines(self):

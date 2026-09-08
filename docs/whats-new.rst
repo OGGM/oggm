@@ -9,6 +9,23 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- ``run_with_hydro`` can now store two area-weighted air temperature
+  diagnostics, i.e. the downscaled temperature (temperature bias and lapse
+  rate applied) which the mass balance model actually uses for melt and for
+  the solid/liquid precipitation split. ``temp_ref_area`` is weighted by the
+  reference area *and* evaluated at the reference surface elevation, i.e. it
+  is a fixed geometry diagnostic which does not depend on the glacier
+  evolution: this is the diagnostic asked for by GlacierMIP4 (use it together
+  with ``ref_area_yr`` or ``ref_area_from_y0``, so that areas and elevations
+  refer to the same year). ``temp_on_glacier`` is weighted by the evolving
+  glacier area, at the surface elevation of the model. Both are in the default
+  ``PARAMS['store_diagnostic_variables']``, like the other hydro variables, and
+  are only computed by ``run_with_hydro``. Note that these are per glacier
+  means, so a regional average has to be area-weighted by the user.
+  ``SfcTypeTIModel`` and ``RandomMassBalance`` gained the
+  ``get_annual_climate`` / ``get_monthly_climate`` methods this needs
+  (:pull:`1998`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The preprocessing can now be run in chunks, so that a big RGI region does not
   have to fit into a single cluster job. ``oggm_prepro`` gained
   ``--chunk-idx`` / ``--chunk-size`` (chunks are blocks of the RGI id space, of
@@ -24,7 +41,7 @@ Enhancements
   :py:func:`workflow.count_rgi_chunks` and
   :py:func:`workflow.print_slurm_array` make the same chunking available to
   ordinary runs, and the new ``oggm_prepro_chunks`` command tells you how many
-  chunks a region has. See the documentation for a complete SLURM example.
+  chunks a region has. See the documentation for a complete SLURM example (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``calibrate_inversion_from_ref_table`` gained a ``glen_a_factor`` keyword to
   skip the calibration and invert with a known A factor instead. The factor a
