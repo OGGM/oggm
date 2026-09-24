@@ -46,7 +46,7 @@ def _make_fake_gdir(path, extra_file=None):
         **{"inversion_flowlines/0/flux": data},
         dtype=np.float64,
     )
-    return path
+    return Path(path)
 
 
 def test_make_fake_dir(tmp_path):
@@ -73,14 +73,9 @@ def test_snapshot_gdir_state(tmp_path):
     # Regular files are keyed by relative path
     assert "diagnostics.json" in state
     assert "log.txt" in state
-    # The zarr store is keyed per top-level group, not per chunk file
-    assert "data_store.zarr/inversion_flowlines" in state
-    assert not any(
-        k.startswith("data_store.zarr/inversion_flowlines/") for k in state
-    )
-    # Root consolidated metadata is not tracked (stale after layering)
-    assert "data_store.zarr/.zmetadata" not in state
-    assert "data_store.zarr/zarr.json" not in state
+    group_key = "data_store/inversion_flowlines.npz"
+    assert group_key in state
+    assert "data_store" not in state
 
     # Unchanged directory -> identical snapshot
     assert utils.snapshot_gdir_state(gdir_dir) == state
@@ -91,26 +86,19 @@ def test_snapshot_gdir_state(tmp_path):
     new_state = utils.snapshot_gdir_state(gdir_dir)
     assert new_state["diagnostics.json"] != state["diagnostics.json"]
     assert new_state["log.txt"] == state["log.txt"]
-    assert (
-        new_state["data_store.zarr/inversion_flowlines"]
-        == state["data_store.zarr/inversion_flowlines"]
-    )
+    assert new_state[group_key] == state[group_key]
 
-    # Adding a zarr group shows up as a new key; existing group unchanged
-    ds = xr.Dataset({"w": ("x", np.ones(3))})
-    ds.to_zarr(
-        os.path.join(gdir_dir, "data_store.zarr"),
-        group="model_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
-    )
+    # Adding an npz group gives a new key, the existing group is unchanged
+    store = gdir_dir / "data_store"
+    np.savez(store / "model_flowlines.npz", w=np.ones(3))
     grown = utils.snapshot_gdir_state(gdir_dir)
-    assert "data_store.zarr/model_flowlines" in grown
-    assert (
-        grown["data_store.zarr/inversion_flowlines"]
-        == state["data_store.zarr/inversion_flowlines"]
-    )
+    assert "data_store/model_flowlines.npz" in grown
+    assert grown[group_key] == state[group_key]
+
+    # Rewriting a group changes its digest
+    np.savez(store / "inversion_flowlines.npz", w=np.zeros(3))
+    rewritten = utils.snapshot_gdir_state(gdir_dir)
+    assert rewritten[group_key] != state[group_key]
 
 
 def test_write_level_manifest_schema(tmp_path):
@@ -119,6 +107,7 @@ def test_write_level_manifest_schema(tmp_path):
 
     # Simulate a level's work: one updated file, one new file, one new
     # zarr group
+
     with open(os.path.join(gdir_dir, "log.txt"), "a") as f:
         f.write("more work\n")
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
@@ -666,7 +655,9 @@ def test_level_consistency_mismatch(tmp_path):
     materialisation_tar = utils.gdir_to_tar.unwrapped(
         _FakeGdir(gdir_dir, base), delete=False
     )
-    materialisation_tar = shutil.move(materialisation_tar, str(tmp_path / "materialisation.tar.gz"))
+    materialisation_tar = shutil.move(
+        materialisation_tar, str(tmp_path / "materialisation.tar.gz")
+    )
 
     # A level-4 delta from a *different* dataset
     prev = utils.snapshot_gdir_state(gdir_dir)

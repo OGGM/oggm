@@ -32,6 +32,7 @@ log = logging.getLogger(__name__)
 # means the two trees were generated from different inputs.
 _TREE_INVARIANTS = ("dem.tif", "glacier_grid.json", "dem_source.txt")
 
+
 def convert_pickles_to_npz(gdir, delete: bool = True):
     """Rewrite a glacier directory's pickles into npz.
 
@@ -73,6 +74,7 @@ def convert_pickles_to_npz(gdir, delete: bool = True):
                 os.remove(fp)
             else:
                 pass  # fell back to pickle so leave .pkl in place
+
 
 def convert_prepro_to_deltas(
     rgi_ids: list[str],

@@ -5749,13 +5749,10 @@ def _finalize_merged_dir(dirpath: str):
 def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     """Content hashes of a glacier directory, for computing level deltas.
 
-    Maps each file path (relative to the directory, posix separators) to
-    a sha256 hex digest of its content. The ``data_store.zarr`` store is
-    hashed per top-level group (one key ``data_store.zarr/<group>`` per
-    group) so a group added or rewritten by a prepro level is detected
-    as a single unit. The store's root-level metadata files (e.g. the
-    consolidated ``.zmetadata``) are ignored: they are regenerated after
-    delta layering and would otherwise churn in every snapshot diff.
+    Maps each relative file path to a sha256 hex digest of its content.
+    Each group of the data store is one npz file, so a group added or
+    rewritten by a prepro level shows up as its own key, e.g.
+    ``data_store/inversion_flowlines.npz``.
 
     Parameters
     ----------
@@ -5765,36 +5762,17 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     Returns
     -------
     dict
-        Mapping of relative path (or ``data_store.zarr/<group>``) to
-        sha256 hex digest.
+        Mapping of relative file path to sha256 hex digest.
     """
+
     root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
-    store_name = os.path.basename(cfg.BASENAMES["data_store"])
     state = {}
-    group_hashes = {}
-    for cur, dirs, files in os.walk(root):
-        # deterministic traversal so per-group digests are stable
-        dirs.sort()
-        for fname in sorted(files):
+    for cur, _, files in os.walk(root):
+        for fname in files:
             fpath = os.path.join(cur, fname)
             rel = os.path.relpath(fpath, root).replace(os.sep, "/")
-            parts = rel.split("/")
-            if parts[0] == store_name:
-                if len(parts) == 2:
-                    # root store metadata (.zmetadata, .zgroup, zarr.json)
-                    continue
-                hasher = group_hashes.setdefault(parts[1], hashlib.sha256())
-                # include the in-store path so renames are detected
-                hasher.update(rel.encode("utf-8"))
-            else:
-                hasher = hashlib.sha256()
             with open(fpath, "rb") as f:
-                for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                    hasher.update(chunk)
-            if parts[0] != store_name:
-                state[rel] = hasher.hexdigest()
-    for group, hasher in group_hashes.items():
-        state[f"{store_name}/{group}"] = hasher.hexdigest()
+                state[rel] = hashlib.file_digest(f, "sha256").hexdigest()
     return state
 
 
