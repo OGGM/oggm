@@ -3,6 +3,7 @@
 import io
 import json
 import os
+from pathlib import Path
 import tarfile
 
 import shutil
@@ -22,8 +23,8 @@ pytestmark = pytest.mark.test_env("utils")
 def _make_fake_gdir(path, extra_file=None):
     """A minimal on-disk stand-in for a glacier directory.
 
-    Contains regular files plus a data_store.zarr with one group, which
-    is the structure snapshot_gdir_state must understand.
+    Contains regular files plus a data_store with an npz, in a structure
+    readable by `snapshot_gdir_state`.
     """
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "diagnostics.json"), "w") as f:
@@ -33,16 +34,35 @@ def _make_fake_gdir(path, extra_file=None):
     if extra_file:
         with open(os.path.join(path, extra_file), "w") as f:
             f.write("data\n")
-    ds = xr.Dataset({"thick": ("x", np.arange(5, dtype=float))})
-    store = os.path.join(path, "data_store.zarr")
-    ds.to_zarr(
-        store,
-        group="inversion_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
+    # leaving this here in case we want to construct a linestring
+    # line_data = np.array(np.arange(20).reshape((10, 2)), dtype=np.float64)
+    # line_data[:, 1] = 0  # replace second coordinate with zeros
+    # match flux in inversion flowlines
+    data = 4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5)
+    os.makedirs(os.path.join(path, "data_store"), exist_ok=True)
+    store = Path(path) / "data_store"
+    np.savez(
+        store / "inversion_flowlines.npz",
+        **{"inversion_flowlines/0/flux": data},
+        dtype=np.float64,
     )
     return path
+
+
+def test_make_fake_dir(tmp_path):
+    # use pathlib instead of tmp_path to avoid pytest tmp_path cleanup
+    gdir_dir = _make_fake_gdir(tmp_path / "test_gdir", extra_file="dem.tif")
+    assert gdir_dir.is_dir()
+    assert (gdir_dir / "diagnostics.json").is_file()
+    assert (gdir_dir / "log.txt").is_file()
+    assert (gdir_dir / "dem.tif").is_file()
+    assert (gdir_dir / "data_store").is_dir()
+    assert (gdir_dir / "data_store" / "inversion_flowlines.npz").is_file()
+    test_npz = np.load(gdir_dir / "data_store" / "inversion_flowlines.npz")
+    assert "inversion_flowlines/0/flux" in test_npz
+    test_flux = test_npz["inversion_flowlines/0/flux"]
+    assert test_flux.shape == (20,)
+    np.testing.assert_array_less(0.0, test_flux)
 
 
 def test_snapshot_gdir_state(tmp_path):
@@ -348,33 +368,39 @@ class TestLayeredGdir:
         np.testing.assert_allclose(new_group["w"].values, np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
-    def test_convert_pickles_to_zarr(self, tmp_path, hef_gdir):
-        """Pickles are rewritten into the zarr store and then removed,
+    @pytest.mark.parametrize("arg_delete", [True, False])
+    def test_convert_pickles_to_npz(self, tmp_path, hef_gdir, arg_delete):
+        """Pickles are rewritten into the npz store and then removed,
         with the data reading back equivalently."""
-        from oggm.utils import compat
+        from oggm.utils import _compat
 
         rid = hef_gdir.rgi_id
-        workbase = str(tmp_path / "work")
-        workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
+        workbase = Path(tmp_path / "work")
+        # workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
+        workdir = workbase / rid[:-6] / rid[:-3] / rid
         shutil.copytree(hef_gdir.dir, workdir)
         gdir = oggm.GlacierDirectory(rid, base_dir=workbase)
 
         # Simulate pickle-only dataset by writing back out as pickles.
-        # Write_pickle drops the zarr group
+        # Write_pickle drops the npz group
         names = ["inversion_flowlines", "model_flowlines"]
         original = {n: gdir.read_store(n) for n in names}
         for n in names:
             gdir.write_pickle(original[n], n)
-            assert os.path.isfile(os.path.join(gdir.dir, f"{n}.pkl"))
-            assert not os.path.isdir(
-                os.path.join(gdir.dir, "data_store.zarr", n)
-            )
+            assert Path(gdir.dir, f"{n}.pkl").is_file()
+            assert not Path(gdir.dir, "data_store", n).is_dir()
 
-        compat._convert_pickles_to_zarr(gdir)
+        _compat.convert_pickles_to_npz(gdir, delete=arg_delete)
 
+        # check the pickles are gone
         for n in names:
-            assert not os.path.isfile(os.path.join(gdir.dir, f"{n}.pkl"))
-            assert os.path.isdir(os.path.join(gdir.dir, "data_store.zarr", n))
+            assert Path(gdir.dir, "data_store").is_dir()
+            assert Path(gdir.dir, "data_store", f"{n}.npz").is_file()
+            if arg_delete:
+                assert not Path(gdir.dir, f"{n}.pkl").is_file()
+            else:
+                assert Path(gdir.dir, f"{n}.pkl").is_file()
+
             assert len(gdir.read_store(n)) == len(original[n])
 
 

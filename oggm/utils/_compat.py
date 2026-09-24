@@ -68,7 +68,7 @@ def convert_pickles_to_npz(gdir, delete: bool = True):
             data = gdir.read_pickle(base, filesuffix=suffix)
             gdir.write_store(data, base, filesuffix=suffix)
             npz_fp = store_dir / f"{base}{suffix}.npz"
-            if os.path.isfile(npz_fp) and delete:
+            if npz_fp.is_file() and delete:
                 # npz write succeeded, drop the now-redundant pickle
                 os.remove(fp)
             else:
@@ -83,7 +83,7 @@ def convert_prepro_to_deltas(
     output_dir: str,
     dataset_tag: str,
     max_level: int = 5,
-    convert_to_zarr: bool = False,
+    convert_to_npz: bool = False,
 ):
     """Convert cumulative prepro artifacts into per-level delta bundles.
 
@@ -121,12 +121,12 @@ def convert_prepro_to_deltas(
         Must **not** be a source URL.
     max_level : int, default=5
         Convert levels up to and including this one.
-    convert_to_zarr : bool, default=False
+    convert_to_npz : bool, default=False
         If True, rewrite each glacier's pickle files into its
-        ``data_store.zarr`` store (and delete the pickles) before
-        tarring, so the output tree ships zarr instead of pickles.
-        This is a one-way process, but the output holds the same
-        information as the input pickles.
+        ``data_store`` store (and delete the pickles) before tarring, so
+        the output tree ships npz instead of pickles. This is a one-way
+        process, but the output holds the same information as the input
+        pickles.
 
     Returns
     -------
@@ -163,8 +163,8 @@ def convert_prepro_to_deltas(
 
             stage_dir = os.path.join(out_root, f"L{lvl}")
             for gdir in gdirs:
-                if convert_to_zarr:
-                    _convert_pickles_to_zarr(gdir)
+                if convert_to_npz:
+                    convert_pickles_to_npz(gdir)
                 include = _write_artifact_manifest(
                     gdir=gdir,
                     level=lvl,
