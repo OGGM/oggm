@@ -4360,7 +4360,13 @@ class GlacierDirectory(object):
         tmp_fp = f"{fp}.tmp{os.getpid()}"
         try:
             with open(tmp_fp, "wb") as f:
-                np.savez(f, **arrays, __meta__=json.dumps(meta), **kwargs)
+                np.savez(
+                    f,
+                    **arrays,
+                    __meta__=json.dumps(meta),
+                    allow_pickle=False,
+                    **kwargs,
+                )
             os.replace(tmp_fp, fp)
         finally:
             if os.path.exists(tmp_fp):

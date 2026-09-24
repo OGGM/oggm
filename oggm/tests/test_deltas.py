@@ -45,6 +45,7 @@ def _make_fake_gdir(path, extra_file=None):
         store / "inversion_flowlines.npz",
         **{"inversion_flowlines/0/flux": data},
         dtype=np.float64,
+        allow_pickle=False,
     )
     return Path(path)
 
@@ -90,13 +91,13 @@ def test_snapshot_gdir_state(tmp_path):
 
     # Adding an npz group gives a new key, the existing group is unchanged
     store = gdir_dir / "data_store"
-    np.savez(store / "model_flowlines.npz", w=np.ones(3))
+    np.savez(store / "model_flowlines.npz", w=np.ones(3), allow_pickle=False)
     grown = utils.snapshot_gdir_state(gdir_dir)
     assert "data_store/model_flowlines.npz" in grown
     assert grown[group_key] == state[group_key]
 
     # Rewriting a group changes its digest
-    np.savez(store / "inversion_flowlines.npz", w=np.zeros(3))
+    np.savez(store / "inversion_flowlines.npz", w=np.zeros(3), allow_pickle=False)
     rewritten = utils.snapshot_gdir_state(gdir_dir)
     assert rewritten[group_key] != state[group_key]
 
