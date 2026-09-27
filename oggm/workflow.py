@@ -381,25 +381,16 @@ def _chunk_index_of(rgi_ids, chunk_size):
     """The chunk index of each glacier, out of its RGI id.
 
     Chunks are blocks of the RGI id space, not slices of the sorted list of
-    glaciers: this is what makes them line up with the tar bundles written by
-    :py:func:`oggm.utils.base_dir_to_tar`. The slices below are correct for
-    both RGI6 (14 char ids) and RGI7 (23 char ids), as everywhere else in
-    OGGM where the bundles are computed.
+    glaciers: the index is the running number of the glacier (the last five
+    digits of the id, for RGI6 and RGI7 alike) divided by the chunk size.
     """
 
-    if chunk_size == 1000:
-        sl = slice(-5, -3)
-    elif chunk_size == 100:
-        sl = slice(-5, -2)
-    else:
-        # The read side (gdir_from_tar, _get_prepro_gdir_unlocked) only knows
-        # how to locate 100- and 1000-glacier bundles, so anything else would
-        # make chunks that overlap the tar bundles - and chunks writing into
-        # the same bundle overwrite each other.
-        raise InvalidParamsError('chunk_size must be 100 or 1000, got '
+    if int(chunk_size) != chunk_size or chunk_size < 1:
+        raise InvalidParamsError('chunk_size must be a positive integer, got '
                                  '{}'.format(chunk_size))
 
-    return np.array([int(rid[sl]) for rid in rgi_ids])
+    return np.array([int(rid[-5:]) // chunk_size for rid in rgi_ids],
+                    dtype=int)
 
 
 def count_rgi_chunks(rgidf, chunk_size=1000):
@@ -414,7 +405,8 @@ def count_rgi_chunks(rgidf, chunk_size=1000):
     rgidf : geopandas.GeoDataFrame or list of str
         the glaciers to partition (an RGI dataframe or a list of RGI ids)
     chunk_size : int
-        100 or 1000 (default). See :py:func:`oggm.workflow.get_rgi_chunk`.
+        the number of RGI ids per chunk (default: 1000).
+        See :py:func:`oggm.workflow.get_rgi_chunk`.
 
     Returns
     -------
@@ -430,15 +422,23 @@ def count_rgi_chunks(rgidf, chunk_size=1000):
 def get_rgi_chunk(rgidf, chunk_idx, chunk_size=1000):
     """Select the glaciers belonging to one chunk.
 
-    A chunk is a block of the RGI id space: with ``chunk_size=1000``, chunk 3
-    is made of the glaciers whose id ends in 03000 to 03999. This is what
-    makes chunks line up with the tar bundles written by
-    :py:func:`oggm.utils.base_dir_to_tar`, so that several chunk jobs writing
-    into the same output folder produce disjoint, complete bundle files.
+    This is meant to split an RGI region into several independent jobs,
+    typically the tasks of a SLURM array (see :ref:`chunked-runs`).
 
-    Because the RGI ids have gaps, chunks are not all the same size, and a
-    chunk can even be empty - callers should handle that gracefully rather
-    than error out.
+    A chunk is a block of the RGI id space: with ``chunk_size=1000``, chunk 3
+    is made of the glaciers whose id ends in 03000 to 03999. Chunk indices
+    start at 0. Because the RGI ids have gaps, chunks are not all the same
+    size, and a chunk can even be empty - callers should handle that
+    gracefully rather than error out.
+
+    Why blocks of ids rather than slices of the list of glaciers? Because
+    blocks of 100 or 1000 ids line up with the tar bundles written by
+    :py:func:`oggm.utils.base_dir_to_tar`: several chunk jobs writing
+    glacier directories into the same output folder then produce disjoint,
+    complete bundle files. This is required for the preprocessing
+    (``oggm_prepro`` only accepts 100 or 1000 for this reason). If your jobs
+    do not write tar files (e.g. projection runs starting from preprocessed
+    directories), any chunk size works.
 
     Parameters
     ----------
@@ -447,9 +447,8 @@ def get_rgi_chunk(rgidf, chunk_idx, chunk_size=1000):
     chunk_idx : int
         which chunk to select, from 0 to ``count_rgi_chunks() - 1``
     chunk_size : int
-        100 or 1000 (default). Only these two are allowed: they are the
-        bundle sizes that the glacier directory tars are written and read
-        with.
+        the number of RGI ids per chunk (default: 1000). Use 100 or 1000 if
+        your jobs write glacier directory tar files (see above).
 
     Returns
     -------
@@ -466,43 +465,6 @@ def get_rgi_chunk(rgidf, chunk_idx, chunk_size=1000):
     if isinstance(rgidf, pd.DataFrame):
         return rgidf.loc[sel].copy()
     return [rid for rid, ok in zip(utils.tolist(rgidf), sel) if ok]
-
-
-def print_slurm_array(rgidf, chunk_size=1000, command=None):
-    """Print the SLURM array directive matching a chunked run.
-
-    A convenience for writing cluster scripts: it tells you how many chunks
-    your glaciers fall into, and how to wire the array task id to
-    :py:func:`oggm.workflow.get_rgi_chunk`.
-
-    Parameters
-    ----------
-    rgidf : geopandas.GeoDataFrame or list of str
-        the glaciers to partition
-    chunk_size : int
-        100 or 1000 (default)
-    command : str
-        the command to run for each chunk. The chunk arguments are appended
-        to it. Defaults to a generic `oggm_prepro` call.
-
-    Returns
-    -------
-    the printed text (str)
-    """
-
-    n_chunks = count_rgi_chunks(rgidf, chunk_size=chunk_size)
-    if n_chunks == 0:
-        raise InvalidParamsError('No glaciers to chunk!')
-    if command is None:
-        command = 'oggm_prepro <your options>'
-
-    out = ('#SBATCH --array=0-{}\n'
-           '{} \\\n'
-           '    --chunk-idx $SLURM_ARRAY_TASK_ID \\\n'
-           '    --chunk-size {}'
-           ''.format(n_chunks - 1, command, chunk_size))
-    print(out)
-    return out
 
 
 def _isdir(path):

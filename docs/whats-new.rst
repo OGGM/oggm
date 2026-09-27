@@ -37,11 +37,11 @@ Enhancements
   directory tar files on disk with the new ``--start-from-dir``, the local
   equivalent of ``--start-base-url``. Nothing needs merging afterwards: the
   whole-region stages write the summary files exactly as a single job would.
-  New helpers :py:func:`workflow.get_rgi_chunk`,
-  :py:func:`workflow.count_rgi_chunks` and
-  :py:func:`workflow.print_slurm_array` make the same chunking available to
-  ordinary runs, and the new ``oggm_prepro_chunks`` command tells you how many
-  chunks a region has. See the documentation for a complete SLURM example (:pull:`1991`).
+  New helpers :py:func:`workflow.get_rgi_chunk` and
+  :py:func:`workflow.count_rgi_chunks` make the same chunking available to
+  ordinary runs (e.g. projections, with any chunk size), and the new
+  ``oggm_prepro_chunks`` command tells you how many chunks a region has. See
+  :ref:`chunked-runs` for the rationale and sample SLURM scripts (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``calibrate_inversion_from_ref_table`` gained a ``glen_a_factor`` keyword to
   skip the calibration and invert with a known A factor instead. The factor a
