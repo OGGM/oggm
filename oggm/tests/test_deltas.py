@@ -141,6 +141,10 @@ def test_snapshot_gdir_state(tmp_path):
     rewritten = utils.snapshot_gdir_state(gdir_dir)
     assert rewritten[group_key] != state[group_key]
 
+    # ensure partial npz left by interrupted write_npz is never snapshotted
+    (store / "x.npz.tmp123").write_bytes(b"partial")
+    assert "data_store/x.npz.tmp123" not in utils.snapshot_gdir_state(gdir_dir)
+
 
 def test_write_level_manifest_schema(tmp_path):
     gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
@@ -414,6 +418,8 @@ class TestLayeredGdir:
         workbase = Path(tmp_path / "work")
         # workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
         workdir = workbase / rid[:-6] / rid[:-3] / rid
+
+        # we delete pickles in this test, so work on copy
         shutil.copytree(hef_gdir.dir, workdir)
         gdir = oggm.GlacierDirectory(rid, base_dir=workbase)
 

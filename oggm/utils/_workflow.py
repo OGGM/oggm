@@ -3413,9 +3413,9 @@ def _extract_tars(
 
     Lists are extracted in order (ascending level: materialisation
     first, then deltas), later members overwriting earlier ones, after
-    which the merged directory is finalised by reconsolidating zarr and
-    checking the level manifests. Pass ``finalize=True`` to force
-    finalisation for a single tar layered onto an existing directory.
+    which the merged directory is finalised by checking the level
+    manifests. Pass ``finalize=True`` to force finalisation for a single
+    tar layered onto an existing directory.
 
     Parameters
     ----------
@@ -5729,21 +5729,8 @@ def _check_level_compat(manifests: list):
 def _finalize_merged_dir(dirpath: str):
     """Make a directory whole again after layering level tars into it.
 
-    Re-consolidates the zarr store metadata as deltas never ship the
-    root consolidated metadata, which would be stale. Checks that the
-    applied level manifests are compatible.
+    Checks that the applied level manifests are compatible.
     """
-    store = os.path.join(dirpath, os.path.basename(cfg.BASENAMES["data_store"]))
-    if os.path.isdir(store):
-        # A store assembled purely from delta group subtrees has no root metadata
-        # since deltas never ship it
-        if not (
-            os.path.isfile(os.path.join(store, ".zgroup"))
-            or os.path.isfile(os.path.join(store, "zarr.json"))
-        ):
-            fmt = 3 if glob.glob(os.path.join(store, "*", "zarr.json")) else 2
-            zarr.open_group(store, mode="a", zarr_format=fmt)
-        zarr.consolidate_metadata(store)
     manifests = []
     for fp in sorted(glob.glob(os.path.join(dirpath, "L*.manifest.json"))):
         with open(fp) as f:
@@ -5775,6 +5762,8 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     state = {}
     for cur, _, files in os.walk(root):
         for fname in files:
+            if regexp.search(r"\.tmp\d+$", fname):
+                continue  # remove partial write_npz outputs
             fpath = os.path.join(cur, fname)
             rel = os.path.relpath(fpath, root).replace(os.sep, "/")
             with open(fpath, "rb") as f:
@@ -5938,9 +5927,9 @@ def gdir_to_tar(
     include : list of str, optional
         Only add these paths (relative to the glacier directory) to the
         tar file, e.g. the changed paths from ``write_level_manifest``
-        when building a per-level delta. Directories (such as
-        ``data_store.zarr/<group>``) are added recursively. The default
-        adds the whole directory.
+        when building a per-level delta, such as
+        ``data_store/<group>.npz``. Directories are added recursively.
+        The default adds the whole directory.
 
     Returns
     -------
