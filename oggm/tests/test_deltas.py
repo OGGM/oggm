@@ -10,12 +10,12 @@ import shutil
 
 import numpy as np
 import pytest
-import xarray as xr
 
 import oggm
 from oggm import cfg, utils, workflow
 from oggm.exceptions import InvalidWorkflowError
 from oggm.utils import _downloads
+from oggm.utils.transcoder import encode_npz
 
 pytestmark = pytest.mark.test_env("utils")
 
@@ -28,8 +28,6 @@ def _create_npz_data(name: str = "flux"):
     data = np.array(
         4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5), dtype=np.float64
     )
-    from oggm.utils.transcoder import encode_npz
-
     arrays, meta = encode_npz(data, name)
     yield arrays, meta
 
@@ -262,7 +260,7 @@ def test_gdir_to_tar_include(tmp_path):
     assert f"{rid}/mb_calib.json" in files
     assert f"{rid}/log.txt" in files
     assert f"{rid}/L3.manifest.json" in files
-    # zarr group directory is included recursively
+    # npz group is included
     assert any(n.startswith(f"{rid}/data_store/model_flowlines") for n in files)
     # unchanged files are not shipped
     assert not any("dem.tif" in n or "diagnostics.json" in n for n in files)
@@ -361,19 +359,12 @@ class TestLayeredGdir:
             materialisation_tar, str(tmp_path / "materialisation.tar.gz")
         )
 
-        # L4 delta: a changed file and a new zarr group, written the way a
-        # delta ships it: group subtree only, no root consolidated metadata
+        # L4 delta: a changed file and a new npz group
         prev = utils.snapshot_gdir_state(workdir)
         with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
             json.dump({"melt_f": 6.0}, f)
-        ds = xr.Dataset({"w": ("x_delta", np.ones(4))})
-        ds.to_zarr(
-            os.path.join(workdir, "data_store.zarr"),
-            group="delta_check",
-            mode="a",
-            zarr_format=2,
-            consolidated=False,
-        )
+        arrays, meta = encode_npz(np.ones(4), "delta_check")
+        _write_npz_store(workdir, arrays, meta, name="delta_check")
         _, changed = utils.write_level_manifest(
             workdir,
             level=4,
@@ -383,7 +374,6 @@ class TestLayeredGdir:
             border=80,
             rgi_version="62",
         )
-        # The delta must not ship the store's root metadata
         delta_tar = utils.gdir_to_tar.unwrapped(
             _FakeGdir(workdir, workbase), delete=False, include=changed
         )
@@ -401,11 +391,7 @@ class TestLayeredGdir:
         # Both manifests document the layering
         assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
         assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
-        # Consolidated metadata was rebuilt: the new group is visible
-        # through the consolidated read path, and existing groups still
-        # read fine
-        new_group = gdir.read_zarr("delta_check", consolidated=True)
-        np.testing.assert_allclose(new_group["w"].values, np.ones(4))
+        np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
     @pytest.mark.parametrize("arg_delete", [True, False])
@@ -487,19 +473,12 @@ class TestDeltaServer:
             ),
         )
 
-        # L4 delta (requires 0..3): changed file + new zarr group, no
-        # root store metadata shipped
+        # L4 delta (requires 0..3): changed file + new npz group
         prev = utils.snapshot_gdir_state(workdir)
         with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
             json.dump({"melt_f": 6.0}, f)
-        ds = xr.Dataset({"w": ("x_delta", np.ones(4))})
-        ds.to_zarr(
-            os.path.join(workdir, "data_store.zarr"),
-            group="delta_check",
-            mode="a",
-            zarr_format=2,
-            consolidated=False,
-        )
+        arrays, meta = encode_npz(np.ones(4), "delta_check")
+        _write_npz_store(workdir, arrays, meta, name="delta_check")
         _, changed = utils.write_level_manifest(
             workdir,
             level=4,
@@ -573,8 +552,7 @@ class TestDeltaServer:
         assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
-        new_group = gdir.read_zarr("delta_check", consolidated=True)
-        np.testing.assert_allclose(new_group["w"].values, np.ones(4))
+        np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
 
         # Level 5 is standalone: one fetch only
         calls.clear()
@@ -617,8 +595,7 @@ class TestDeltaServer:
         assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
-        new_group = gdir.read_zarr("delta_check", consolidated=True)
-        np.testing.assert_allclose(new_group["w"].values, np.ones(4))
+        np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
 
 
 L12_BASE_URL = (
