@@ -4253,14 +4253,6 @@ class GlacierDirectory(object):
             append a suffix to the filename (useful for experiments).
         """
 
-        # TODO: disable warning as it tanks performance
-        # warnings.warn(
-        #     "gdir.write_pickle is deprecated and will be replaced "
-        #     "by gdir.write_store in a future OGGM release.",
-        #     PendingDeprecationWarning,
-        #     stacklevel=2,
-        # )
-
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
