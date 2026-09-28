@@ -555,9 +555,9 @@ class TestStoreRoundTrip:
         original = gdir.read_store(name)
 
         gdir.write_store(original, name, filesuffix="_npz")
-        gdir.write_pickle(original, name, filesuffix="_pkl")
+        gdir._write_pickle(original, name, filesuffix="_pkl")
         back = gdir.read_store(name, filesuffix="_npz")
-        expected = gdir.read_pickle(name, filesuffix="_pkl")
+        expected = gdir._read_pickle(name, filesuffix="_pkl")
 
         assert os.path.isfile(gdir.get_store_filepath(name, "_npz"))
         assert_store_equal(back, expected, name)
@@ -570,9 +570,9 @@ class TestStoreRoundTrip:
         original = gdir.read_store("centerlines")
 
         gdir.write_store(original, "centerlines", filesuffix="_npz")
-        gdir.write_pickle(original, "centerlines", filesuffix="_pkl")
+        gdir._write_pickle(original, "centerlines", filesuffix="_pkl")
         back = gdir.read_store("centerlines", filesuffix="_npz")
-        expected = gdir.read_pickle("centerlines", filesuffix="_pkl")
+        expected = gdir._read_pickle("centerlines", filesuffix="_pkl")
 
         assert any(cl.flows_to is not None for cl in expected)
         for got, want in zip(back, expected):
@@ -599,7 +599,7 @@ class TestStoreFallback:
         gdir.write_npz(
             {"flux": np.ones(2)}, "inversion_input", filesuffix="_npz"
         )
-        gdir.write_pickle(
+        gdir._write_pickle(
             {"flux": np.zeros(2)}, "inversion_input", filesuffix="_pkl"
         )
 
@@ -618,7 +618,7 @@ class TestStoreFallback:
         cfg.initialize()
         cfg.PATHS["working_dir"] = str(tmp_path)
         gdir = hef_gdir
-        gdir.write_pickle([1, 2, 3], "inversion_input", filesuffix="_pkl_only")
+        gdir._write_pickle([1, 2, 3], "inversion_input", filesuffix="_pkl_only")
 
         _workflow._warn_store_fallback.cache_clear()
         with pytest.warns(Warning, match="Store data not found"):
@@ -641,7 +641,7 @@ class TestStoreFallback:
             {"flux": np.ones(2)}, "inversion_input", filesuffix="_stale"
         )
 
-        gdir.write_pickle(
+        gdir._write_pickle(
             {"flux": np.zeros(2)}, "inversion_input", filesuffix="_stale"
         )
 
@@ -694,7 +694,7 @@ class TestCompatibility:
         gdir = hef_gdir
 
         # Write a pickle and a store group
-        gdir.write_pickle(np.ones(2), "inversion_input", filesuffix="_convert")
+        gdir._write_pickle(np.ones(2), "inversion_input", filesuffix="_convert")
         assert gdir.has_file("inversion_input", filesuffix="_convert")
         gdir.write_store(
             {"flux": np.ones(2)}, "inversion_input", filesuffix="_control"

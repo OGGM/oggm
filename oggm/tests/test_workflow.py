@@ -1125,20 +1125,17 @@ class TestGdirObservations:
 class TestStoreWorkflow:
     """Tests for the npz data store as used through the workflow."""
 
-    @pytest.mark.skip(reason="warning disabled for performance")
     def test_pickle_warnings(self, hef_gdir):
-        """Test that write_pickle raises a warning if used."""
+        """Test that write_pickle errors if called."""
         gdir = hef_gdir
 
-        with pytest.warns(
-            PendingDeprecationWarning,
-            match="gdir.write_pickle is deprecated and will be replaced by gdir.write_store in a future OGGM release.",
-        ):
+        with pytest.raises(AttributeError) as exc_info:
             gdir.write_pickle(
                 var={"array": [1, 2]},
                 filename="inversion_input",
                 filesuffix="test_pickle",
             )
+        assert "has no attribute 'write_pickle'" in str(exc_info.value)
 
     @pytest.mark.parametrize("arg_filesuffix", ["", "_exp01"])
     def test_write_npz(self, tmp_path, hef_gdir, arg_filesuffix):
@@ -1192,12 +1189,12 @@ class TestStoreWorkflow:
         np.testing.assert_array_equal(result[0]["flux"], [1.0, 2.0, 3.0])
 
     def test_read_store_fallback(self, hef_gdir):
-        """Test read_store falls back to read_pickle if npz is not found."""
+        """Test read_store falls back to _read_pickle if npz is not found."""
         from oggm.utils import _workflow
 
         gdir = hef_gdir
         # Force use of pickle, or this test can never fail
-        gdir.write_pickle(
+        gdir._write_pickle(
             var=[1, 2, 3],
             filename="inversion_flowlines",
             filesuffix="test_pickle",

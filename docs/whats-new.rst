@@ -465,6 +465,11 @@ Breaking changes
   returned by the ``run_*`` tasks. With multiprocessing this would
   run the main process out of memory on large RGI regions (:pull:`1977`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``read_pickle`` and ``write_pickle`` are now deprecated in favour of
+  ``read_store`` and ``write_store``. The latter uses npz files inside glacier
+  directories instead of pickles. Users should migrate to the new functions, as
+  compatibility with pickles is not guaranteed in the future. (:pull:`1908`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 
 
@@ -678,12 +683,6 @@ break some code, but remain minor in nature:
   resulting thickness fields. This would yield to weird effects at glacier boundaries
   and seemed overkill since topography is smoothed quite aggressively as well (:pull:`1773`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- ``read_pickle`` and ``write_pickle`` are now deprecated in favour of
-  ``read_store`` and ``write_store``. The latter uses npz files inside glacier
-  directories instead of pickles. Users should migrate to the new functions, as
-  compatibility with pickles is not guaranteed in the future. (:pull:`1908`).
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-
 
 v1.6.2 (August 25, 2024)
 ------------------------
