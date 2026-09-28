@@ -557,7 +557,7 @@ class TestStoreRoundTrip:
         gdir.write_store(original, name, filesuffix="_npz")
         gdir._write_pickle(original, name, filesuffix="_pkl")
         back = gdir.read_store(name, filesuffix="_npz")
-        expected = gdir.read_pickle(name, filesuffix="_pkl")
+        expected = gdir._read_pickle(name, filesuffix="_pkl")
 
         assert os.path.isfile(gdir.get_store_filepath(name, "_npz"))
         assert_store_equal(back, expected, name)
@@ -572,7 +572,7 @@ class TestStoreRoundTrip:
         gdir.write_store(original, "centerlines", filesuffix="_npz")
         gdir._write_pickle(original, "centerlines", filesuffix="_pkl")
         back = gdir.read_store("centerlines", filesuffix="_npz")
-        expected = gdir.read_pickle("centerlines", filesuffix="_pkl")
+        expected = gdir._read_pickle("centerlines", filesuffix="_pkl")
 
         assert any(cl.flows_to is not None for cl in expected)
         for got, want in zip(back, expected):

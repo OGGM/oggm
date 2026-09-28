@@ -48,7 +48,7 @@ def convert_pickles_to_npz(gdir, delete: bool = True):
         # we want all possible pickles
         for fp in glob.glob(os.path.join(Path(gdir.dir), f"{stem}*.pkl")):
             suffix = os.path.basename(fp)[len(stem) : -4]
-            data = gdir.read_pickle(base, filesuffix=suffix)
+            data = gdir._read_pickle(base, filesuffix=suffix)
             gdir.write_store(data, base, filesuffix=suffix)
             npz_fp = store_dir / f"{base}{suffix}.npz"
             if os.path.isfile(npz_fp) and delete:

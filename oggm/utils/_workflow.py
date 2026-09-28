@@ -4104,7 +4104,7 @@ class GlacierDirectory(object):
             out = json.load(f)
         return out
 
-    def read_pickle(self, filename, use_compression=None, filesuffix=''):
+    def _read_pickle(self, filename, use_compression=None, filesuffix=''):
         """Reads a pickle located in the directory.
 
         Parameters
@@ -4233,7 +4233,7 @@ class GlacierDirectory(object):
             else:
                 raise FileNotFoundError(f"No npz or pickle found for {fp}")
 
-            return self.read_pickle(
+            return self._read_pickle(
                 filename=filename, use_compression=None, filesuffix=filesuffix
             )
 

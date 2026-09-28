@@ -1189,7 +1189,7 @@ class TestStoreWorkflow:
         np.testing.assert_array_equal(result[0]["flux"], [1.0, 2.0, 3.0])
 
     def test_read_store_fallback(self, hef_gdir):
-        """Test read_store falls back to read_pickle if npz is not found."""
+        """Test read_store falls back to _read_pickle if npz is not found."""
         from oggm.utils import _workflow
 
         gdir = hef_gdir
