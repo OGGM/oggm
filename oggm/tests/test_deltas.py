@@ -38,15 +38,25 @@ def _make_fake_gdir(path, extra_file=None):
     # line_data = np.array(np.arange(20).reshape((10, 2)), dtype=np.float64)
     # line_data[:, 1] = 0  # replace second coordinate with zeros
     # match flux in inversion flowlines
-    data = 4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5)
+    data = np.array(
+        4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5), dtype=np.float64
+    )
+    from oggm.utils.transcoder import encode_npz
+
+    arrays, meta = encode_npz(data, "flux")
     os.makedirs(os.path.join(path, "data_store"), exist_ok=True)
     store = Path(path) / "data_store"
-    np.savez(
-        store / "inversion_flowlines.npz",
-        **{"inversion_flowlines/0/flux": data},
-        dtype=np.float64,
-        allow_pickle=False,
-    )
+    fp = store / "inversion_flowlines"
+    tmp_fp = f"{fp}.tmp{os.getpid()}"
+
+    with open(tmp_fp, "wb") as f:
+        np.savez(
+            f,
+            **arrays,
+            __meta__=json.dumps(meta),
+            allow_pickle=False,
+        )
+    os.replace(tmp_fp, fp)
     return Path(path)
 
 
@@ -60,8 +70,8 @@ def test_make_fake_dir(tmp_path):
     assert (gdir_dir / "data_store").is_dir()
     assert (gdir_dir / "data_store" / "inversion_flowlines.npz").is_file()
     test_npz = np.load(gdir_dir / "data_store" / "inversion_flowlines.npz")
-    assert "inversion_flowlines/0/flux" in test_npz
-    test_flux = test_npz["inversion_flowlines/0/flux"]
+    assert "flux" in test_npz
+    test_flux = test_npz["flux"]
     assert test_flux.shape == (20,)
     np.testing.assert_array_less(0.0, test_flux)
 
@@ -97,7 +107,9 @@ def test_snapshot_gdir_state(tmp_path):
     assert grown[group_key] == state[group_key]
 
     # Rewriting a group changes its digest
-    np.savez(store / "inversion_flowlines.npz", w=np.zeros(3), allow_pickle=False)
+    np.savez(
+        store / "inversion_flowlines.npz", w=np.zeros(3), allow_pickle=False
+    )
     rewritten = utils.snapshot_gdir_state(gdir_dir)
     assert rewritten[group_key] != state[group_key]
 
@@ -107,20 +119,19 @@ def test_write_level_manifest_schema(tmp_path):
     prev_state = utils.snapshot_gdir_state(gdir_dir)
 
     # Simulate a level's work: one updated file, one new file, one new
-    # zarr group
+    # npz store
 
     with open(os.path.join(gdir_dir, "log.txt"), "a") as f:
         f.write("more work\n")
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
         json.dump({"melt_f": 5.0}, f)
-    ds = xr.Dataset({"w": ("x", np.ones(3))})
-    ds.to_zarr(
-        os.path.join(gdir_dir, "data_store.zarr"),
-        group="model_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
+
+    np.savez(
+        gdir_dir / "data_store" / "model_flowlines",
+        w=np.ones(3),
+        allow_pickle=False,
     )
+    assert (gdir_dir / "data_store" / "model_flowlines.npz").is_file()
 
     manifest_path, changed = utils.write_level_manifest(
         gdir_dir,
@@ -149,14 +160,14 @@ def test_write_level_manifest_schema(tmp_path):
     assert manifest["created"]
     assert manifest["files"]["added"] == ["mb_calib.json"]
     assert manifest["files"]["updated"] == ["log.txt"]
-    assert manifest["zarr_groups"] == ["model_flowlines"]
+    assert manifest["data_store"] == ["model_flowlines.npz"]
 
     # changed_paths is what gdir_to_tar(include=...) needs: the changed
     # files, the changed store groups, and the manifest itself
     assert set(changed) == {
         "mb_calib.json",
         "log.txt",
-        "data_store.zarr/model_flowlines",
+        "data_store/model_flowlines.npz",
         "L3.manifest.json",
     }
 

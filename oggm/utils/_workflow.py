@@ -5861,7 +5861,7 @@ def write_level_manifest(
 
     store_name = os.path.basename(cfg.BASENAMES["data_store"])
     state = snapshot_gdir_state(root)
-    added, updated, zarr_groups = [], [], []
+    added, updated, data_store = [], [], []
     for rel, digest in sorted(state.items()):
         if regexp.match(r"^L\d+\.manifest\.json$", rel):
             continue
@@ -5873,7 +5873,7 @@ def write_level_manifest(
         if changed_kind is None:
             continue
         if rel.startswith(store_name + "/"):
-            zarr_groups.append(rel[len(store_name) + 1 :])
+            data_store.append(rel[len(store_name) + 1 :])
         elif changed_kind == "added":
             added.append(rel)
         else:
@@ -5899,7 +5899,7 @@ def write_level_manifest(
         "oggm_version": __version__,
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "files": {"added": added, "updated": updated},
-        "zarr_groups": zarr_groups,
+        "data_store": data_store,
     }
     manifest_path = os.path.join(root, manifest_name)
     with open(manifest_path, "w") as f:
@@ -5908,7 +5908,7 @@ def write_level_manifest(
     changed_paths = (
         added
         + updated
-        + [f"{store_name}/{g}" for g in zarr_groups]
+        + [f"{store_name}/{g}" for g in data_store]
         + [manifest_name]
     )
     return manifest_path, changed_paths
