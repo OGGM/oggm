@@ -4237,7 +4237,7 @@ class GlacierDirectory(object):
                 filename=filename, use_compression=None, filesuffix=filesuffix
             )
 
-    def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
+    def _write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
         Parameters
@@ -4247,7 +4247,7 @@ class GlacierDirectory(object):
         filename : str
             file name (must be listed in cfg.BASENAME)
         use_compression : bool
-            whether or not the file ws compressed. Default is to use
+            whether or not the file is compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         filesuffix : str
             append a suffix to the filename (useful for experiments).
@@ -4356,11 +4356,11 @@ class GlacierDirectory(object):
                     f"{e} Failed to write npz store, falling back to pickle.",
                     RuntimeWarning,
                 )
-                self.write_pickle(
+                self._write_pickle(
                     var=data, filename=filename, filesuffix=filesuffix
                 )
         else:
-            self.write_pickle(
+            self._write_pickle(
                 var=data, filename=filename, filesuffix=filesuffix, **kwargs
             )
 
