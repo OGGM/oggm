@@ -20,13 +20,58 @@ from oggm.utils import _downloads
 pytestmark = pytest.mark.test_env("utils")
 
 
+def _create_npz_data(name: str = "flux"):
+    """Minimal stand-in for an npz data store.
+
+    Contains a single npz file similar to an inversion flowline's flux.
+    """
+    data = np.array(
+        4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5), dtype=np.float64
+    )
+    from oggm.utils.transcoder import encode_npz
+
+    arrays, meta = encode_npz(data, name)
+    yield arrays, meta
+
+
+@pytest.fixture(name="npz_data", scope="function")
+def fixture_npz_data():
+    """Fixture for a minimal npz data store."""
+    yield from _create_npz_data()
+
+
+def _write_npz_store(
+    path: str | Path,
+    arrays: dict,
+    meta: dict,
+    name: str = "inversion_flowlines",
+):
+    """Write a minimal npz data store to disk."""
+
+    store = Path(path) / "data_store"
+    store.mkdir(parents=True, exist_ok=True)
+    # avoid double suffixes
+    fp = store / f"{name.removesuffix(".npz")}.npz"
+    tmp_fp = f"{fp}.tmp{os.getpid()}"
+
+    with open(tmp_fp, "wb") as f:
+        np.savez(
+            f,
+            **arrays,
+            __meta__=json.dumps(meta),
+            allow_pickle=False,
+        )
+    os.replace(tmp_fp, fp)
+    return Path(store)
+
+
 def _make_fake_gdir(path, extra_file=None):
     """A minimal on-disk stand-in for a glacier directory.
 
     Contains regular files plus a data_store with an npz, in a structure
     readable by `snapshot_gdir_state`.
     """
-    os.makedirs(path, exist_ok=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
     with open(os.path.join(path, "diagnostics.json"), "w") as f:
         json.dump({"a": 1}, f)
     with open(os.path.join(path, "log.txt"), "w") as f:
@@ -38,25 +83,8 @@ def _make_fake_gdir(path, extra_file=None):
     # line_data = np.array(np.arange(20).reshape((10, 2)), dtype=np.float64)
     # line_data[:, 1] = 0  # replace second coordinate with zeros
     # match flux in inversion flowlines
-    data = np.array(
-        4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5), dtype=np.float64
-    )
-    from oggm.utils.transcoder import encode_npz
-
-    arrays, meta = encode_npz(data, "flux")
-    os.makedirs(os.path.join(path, "data_store"), exist_ok=True)
-    store = Path(path) / "data_store"
-    fp = store / "inversion_flowlines"
-    tmp_fp = f"{fp}.tmp{os.getpid()}"
-
-    with open(tmp_fp, "wb") as f:
-        np.savez(
-            f,
-            **arrays,
-            __meta__=json.dumps(meta),
-            allow_pickle=False,
-        )
-    os.replace(tmp_fp, fp)
+    arrays, meta = next(_create_npz_data())
+    _write_npz_store(path, arrays, meta)
     return Path(path)
 
 
@@ -186,14 +214,9 @@ def _simulate_level(gdir_dir, level=3):
         f.write(f"level {level} work\n")
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
         json.dump({"melt_f": 5.0, "level": level}, f)
-    ds = xr.Dataset({"w": ("x", np.ones(3) * level)})
-    ds.to_zarr(
-        os.path.join(gdir_dir, "data_store.zarr"),
-        group="model_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
-    )
+    arrays, meta = next(_create_npz_data(name="w"))
+    arrays["w"] = arrays["w"] * level  # make it different per level
+    _write_npz_store(gdir_dir, arrays, meta, name="model_flowlines")
     return utils.write_level_manifest(
         gdir_dir,
         level=level,
@@ -203,6 +226,21 @@ def _simulate_level(gdir_dir, level=3):
         border=80,
         rgi_version="62",
     )
+
+
+def test_simulate_level(tmp_path):
+    gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+    manifest_path, changed = _simulate_level(gdir_dir, level=3)
+    assert os.path.basename(manifest_path) == "L3.manifest.json"
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    assert manifest["level"] == 3
+    assert set(changed) == {
+        "mb_calib.json",
+        "log.txt",
+        "data_store/model_flowlines.npz",
+        "L3.manifest.json",
+    }
 
 
 def test_gdir_to_tar_include(tmp_path):
@@ -221,14 +259,11 @@ def test_gdir_to_tar_include(tmp_path):
     assert f"{rid}/log.txt" in files
     assert f"{rid}/L3.manifest.json" in files
     # zarr group directory is included recursively
-    assert any(
-        n.startswith(f"{rid}/data_store.zarr/model_flowlines/") for n in files
-    )
+    assert any(n.startswith(f"{rid}/data_store/model_flowlines") for n in files)
     # unchanged files are not shipped
     assert not any("dem.tif" in n or "diagnostics.json" in n for n in files)
     assert not any(
-        n.startswith(f"{rid}/data_store.zarr/inversion_flowlines")
-        for n in files
+        n.startswith(f"{rid}/data_store/inversion_flowlines") for n in files
     )
     os.remove(opath)
 
@@ -302,7 +337,7 @@ class TestLayeredGdir:
         workbase = str(tmp_path / "work")
         workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
         shutil.copytree(hef_gdir.dir, workdir)
-        assert os.path.isdir(os.path.join(workdir, "data_store.zarr"))
+        assert os.path.isdir(os.path.join(workdir, "data_store"))
 
         # Materialisation artifact: everything up to L3 in one tar
         utils.write_level_manifest(
