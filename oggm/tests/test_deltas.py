@@ -414,7 +414,7 @@ class TestLayeredGdir:
         names = ["inversion_flowlines", "model_flowlines"]
         original = {n: gdir.read_store(n) for n in names}
         for n in names:
-            gdir.write_pickle(original[n], n)
+            gdir._write_pickle(original[n], n)
             assert Path(gdir.dir, f"{n}.pkl").is_file()
             assert not Path(gdir.dir, "data_store", n).is_dir()
 
