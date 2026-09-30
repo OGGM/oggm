@@ -4292,7 +4292,7 @@ class GlacierDirectory(object):
         tmp_fp = f"{fp}.tmp{os.getpid()}"
         try:
             with open(tmp_fp, "wb") as f:
-                np.savez(
+                np.savez_compressed(
                     f,
                     **arrays,
                     __meta__=json.dumps(meta),
