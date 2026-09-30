@@ -4525,9 +4525,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         # Get the reference data
         ref_mb_err = np.nan
         try:
+            # Double brackets: a DataFrame even with one period per glacier
             ref_mb_df = get_geodetic_mb_dataframe(
                 file_path=file_path,
-                rgi_version=gdir.rgi_version).loc[gdir.rgi_id]
+                rgi_version=gdir.rgi_version).loc[[gdir.rgi_id]]
             ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_mb_period]
             # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
             ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
