@@ -294,15 +294,21 @@ def _delta_tar_entries(
     entries = []
     for gdir in gdirs:
         try:
+            if gdir.rgi_id in states:
+                layers = dict(requires=list(range(level)))
+            else:
+                # Nothing to diff against if a run started from gdirs on disk
+                layers = dict(requires=[],
+                              includes_levels=list(range(level + 1)))
             _, changed = utils.write_level_manifest(
                 gdir,
                 level=level,
                 prev_state=states.get(gdir.rgi_id, {}),
                 dataset_tag=dataset_tag,
                 dataset_id=dataset_id,
-                requires=list(range(level)),
                 border=border,
                 rgi_version=rgi_version,
+                **layers,
             )
             states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
             entries.append((gdir, {"include": changed}))

@@ -597,6 +597,25 @@ class TestDeltaServer:
             assert json.load(f)["melt_f"] == 6.0
         np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
 
+    def test_init_from_local_delta_tree(self, delta_server, served_calls):
+        """Test initialization from a local delta tree.
+        
+        Server tree is read from disk, so the L4 delta is missing the
+        the grid from the L3 tar.
+        """
+        server, _ = delta_server
+        calls, rid = served_calls
+        gdirs = workflow.init_glacier_directories(
+            [rid], from_tar=os.path.join(server, "RGI62", "b_080", "L4")
+        )
+        gdir = gdirs[0]
+        assert calls == []
+        assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
+        assert gdir.grid.nx > 0
+        with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
+            assert json.load(f)["melt_f"] == 6.0
+
 
 L12_BASE_URL = (
     "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/"

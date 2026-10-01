@@ -4,6 +4,7 @@ import glob
 import json
 import logging
 import os
+import re
 import shutil
 import warnings
 import tarfile
@@ -344,6 +345,51 @@ def _get_applied_levels(rgi_id:str)->set[int]:
     return included
 
 
+def _layered_level_tars(
+    tar_base: str, rgi_id: str, level: int, locate, append=False
+) -> dict[int, str]:
+    """Gets the bundle tars to layer for a glacier, keyed by level.
+
+    A delta bundle needs the levels its manifest `requires`, which may
+    require more. Legacy and standalone bundles are enough on their own.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the bundle tar of the requested level.
+    rgi_id : str
+        The glacier's RGI ID.
+    level : int
+        The requested level.
+    locate : callable
+        Returns the path to the bundle tar of a given level.
+    append : bool
+        Whether the levels already in the glacier directory count as there.
+
+    Returns
+    -------
+    dict[int, str]
+        The bundle tars to layer, keyed by level.
+    """
+    tars = {level: tar_base}
+    manifest = _peek_level_manifest(tar_base, rgi_id, level)
+    if manifest is None or manifest.get("kind") == "standalone":
+        return tars
+    included = set(manifest.get("includes_levels") or [level])
+    if append:
+        included |= _get_applied_levels(rgi_id)
+    missing = set(manifest.get("requires") or []) - included
+    while missing:
+        lvl = max(missing)
+        tb = locate(lvl)
+        tars[lvl] = tb
+        m = _peek_level_manifest(tb, rgi_id, lvl)
+        included |= set((m.get("includes_levels") if m else None) or [lvl])
+        missing |= set((m.get("requires") if m else None) or [])
+        missing -= included
+    return tars
+
+
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
                      base_url=None, append=False):
@@ -358,25 +404,15 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
 
-    tars = {from_prepro_level: tar_base}
-    manifest = _peek_level_manifest(tar_base, rid, from_prepro_level)
-    if manifest is not None and manifest.get("kind") != "standalone":
-        # for deltas fetch whatever required levels the requested
-        # artifact doesn't include
-        included = set(manifest.get("includes_levels") or [from_prepro_level])
-        if append:
-            included |= _get_applied_levels(rid)
-        missing = set(manifest.get("requires") or []) - included
-        while missing:
-            lvl = max(missing)
-            tb = utils.get_prepro_gdir(
-                prepro_rgi_version, rid, prepro_border, lvl, base_url=base_url
-            )
-            tars[lvl] = tb
-            m = _peek_level_manifest(tb, rid, lvl)
-            included |= set((m.get("includes_levels") if m else None) or [lvl])
-            missing |= set((m.get("requires") if m else None) or [])
-            missing -= included
+    tars = _layered_level_tars(
+        tar_base,
+        rid,
+        from_prepro_level,
+        lambda lvl: utils.get_prepro_gdir(
+            prepro_rgi_version, rid, prepro_border, lvl, base_url=base_url
+        ),
+        append=append,
+    )
 
     # Legacy bundles without manifest are cumulative so one fetch is enough
     from_tar = [
@@ -397,17 +433,38 @@ def gdir_from_tar(entity, from_tar):
     # TODO: add support for bundle sizes of 10 and 1
     region = rgi_id[:-6]
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
-    new_path = os.path.join(from_tar, region, new_bundle + ".tar")
-    old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
-    if os.path.exists(new_path):
-        from_tar = new_path
-    elif os.path.exists(old_path):
-        from_tar = old_path
-    else:
+
+    def locate(level_dir):
+        new_path = os.path.join(level_dir, region, new_bundle + ".tar")
+        old_path = os.path.join(level_dir, region, rgi_id[:-3] + ".tar")
+        if os.path.exists(new_path):
+            return new_path
+        if os.path.exists(old_path):
+            return old_path
         raise FileNotFoundError(
-            "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
+            "Cannot find bundle tar for {} in {}".format(rgi_id, level_dir)
         )
-    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
+
+    tar_base = locate(from_tar)
+    # A delta level folder (`L<n>`) takes its required levels from the
+    # sibling folders of the same tree
+    root, name = os.path.split(os.path.normpath(from_tar))
+    if re.fullmatch(r"L\d", name):
+        tars = _layered_level_tars(
+            tar_base,
+            rgi_id,
+            int(name[1:]),
+            lambda lvl: locate(os.path.join(root, f"L{lvl}")),
+        )
+    else:
+        tars = {0: tar_base}
+
+    from_tar = [
+        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz")
+        for _, tb in sorted(tars.items())
+    ]
+    if len(from_tar) == 1:
+        from_tar = from_tar[0]
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
