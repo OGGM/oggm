@@ -465,10 +465,11 @@ Breaking changes
   returned by the ``run_*`` tasks. With multiprocessing this would
   run the main process out of memory on large RGI regions (:pull:`1977`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-- ``read_pickle`` and ``write_pickle`` are now deprecated in favour of
-  ``read_store`` and ``write_store``. The latter uses npz files inside glacier
-  directories instead of pickles. Users should migrate to the new functions, as
-  compatibility with pickles is not guaranteed in the future. (:pull:`1908`).
+- ``read_pickle`` and ``write_pickle`` have been removed in favour of
+  ``read_store`` and ``write_store``, which store data as npz files in the
+  glacier directory's ``data_store`` folder. Existing pickles from older
+  glacier directories are still read transparently by ``read_store``
+  (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 
