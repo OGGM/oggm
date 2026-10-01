@@ -63,6 +63,7 @@ def init_mp_pool(reset=False):
     cfg.CONFIG_MODIFIED = False
     if _mp_pool:
         _mp_pool.terminate()
+        _mp_pool.join()  # wait for workers to exit before shutting down manager
         _mp_pool = None
     if _mp_manager:
         cfg.set_manager(None)
@@ -132,10 +133,16 @@ def reset_multiprocessing():
     Call this if you changed configuration parameters mid-run and need them to
     be re-propagated to child processes.
     """
-    global _mp_pool
+    global _mp_pool, _mp_manager
     if _mp_pool:
         _mp_pool.terminate()
+        _mp_pool.join()  # wait for workers to fully exit
         _mp_pool = None
+    if _mp_manager:
+        # next test should start with clean state
+        cfg.set_manager(None)
+        _mp_manager.shutdown()
+        _mp_manager = None
     cfg.CONFIG_MODIFIED = False
 
 

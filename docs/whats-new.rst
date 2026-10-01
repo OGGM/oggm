@@ -465,6 +465,12 @@ Breaking changes
   returned by the ``run_*`` tasks. With multiprocessing this would
   run the main process out of memory on large RGI regions (:pull:`1977`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``read_pickle`` and ``write_pickle`` have been removed in favour of
+  ``read_store`` and ``write_store``, which store data as npz files in the
+  glacier directory's ``data_store`` folder. Existing pickles from older
+  glacier directories are still read transparently by ``read_store``
+  (:pull:`1908`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 
 
@@ -678,7 +684,6 @@ break some code, but remain minor in nature:
   resulting thickness fields. This would yield to weird effects at glacier boundaries
   and seemed overkill since topography is smoothed quite aggressively as well (:pull:`1773`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-
 
 v1.6.2 (August 25, 2024)
 ------------------------

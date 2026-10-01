@@ -18,7 +18,7 @@ import pickle
 import warnings
 import itertools
 from collections import OrderedDict
-from functools import partial, wraps
+from functools import partial, wraps, lru_cache
 from time import gmtime, strftime
 import fnmatch
 import platform
@@ -74,6 +74,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                weighted_quantile_1d)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
+import oggm.utils.transcoder as transcoder
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -109,6 +110,19 @@ RGI_DATE = {'01': 2009,
 
 # Module logger
 log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
+
+
+@lru_cache(maxsize=1)
+def _warn_store_fallback():
+    """Warn once per process that read_store fell back to a pickle.
+
+    Many stores are still pickles, so this fallback is expected and
+    floods the logs. Cached so it only fires once, tests can reset it
+    via ``cache_clear()``.
+    """
+    warnings.warn(
+        "Store data not found, attempting to read pickle file instead."
+    )
 
 
 def empty_cache():
@@ -731,9 +745,9 @@ def get_centerline_lonlat(gdir,
     a shapefile
     """
     if flowlines_output or geometrical_widths_output or corrected_widths_output:
-        cls = gdir.read_pickle('inversion_flowlines')
+        cls = gdir.read_store('inversion_flowlines')
     else:
-        cls = gdir.read_pickle('centerlines')
+        cls = gdir.read_store('centerlines')
 
     exterior = None
     if ensure_exterior_match:
@@ -1731,7 +1745,7 @@ def glacier_statistics(gdir, settings_filesuffix='',
                 vol = []
                 vol_bsl = []
                 vol_bwl = []
-                cl = gdir.read_pickle('inversion_output')
+                cl = gdir.read_store('inversion_output')
                 for c in cl:
                     vol.extend(c['volume'])
                     vol_bsl.extend(c.get('volume_bsl', [0]))
@@ -1802,7 +1816,7 @@ def glacier_statistics(gdir, settings_filesuffix='',
 
         try:
             # Centerlines
-            cls = gdir.read_pickle('centerlines')
+            cls = gdir.read_store('centerlines')
             longest = 0.
             for cl in cls:
                 longest = np.max([longest, cl.dis_on_line[-1]])
@@ -1816,7 +1830,7 @@ def glacier_statistics(gdir, settings_filesuffix='',
             h = np.array([])
             widths = np.array([])
             slope = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
             dx = fls[0].dx * gdir.grid.dx
             for fl in fls:
                 hgt = fl.surface_h
@@ -2300,7 +2314,7 @@ def climate_statistics(gdir, add_climate_period=1995, halfsize=15,
             # Flowline related stuff
             h = np.array([])
             widths = np.array([])
-            fls = gdir.read_pickle('inversion_flowlines')
+            fls = gdir.read_store('inversion_flowlines')
             dx = fls[0].dx * gdir.grid.dx
             for fl in fls:
                 hgt = fl.surface_h
@@ -3298,7 +3312,8 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     fl = Centerline(line, dx=flowline_dx, surface_h=surface_h, map_dx=map_dx)
     fl.widths = widths_m / map_dx
     fl.is_rectangular = np.ones(fl.nx).astype(bool)
-    gdir.write_pickle([fl], 'inversion_flowlines')
+
+    gdir.write_store([fl], 'inversion_flowlines')
 
     # Idealized map
     grid = salem.Grid(nxny=(1, 1), dxdy=(map_dx, map_dx), x0y0=(0, 0))
@@ -4048,7 +4063,13 @@ class GlacierDirectory(object):
             fp = fp.replace('.shp', '.tar')
             if cfg.PARAMS['use_compression']:
                 fp += '.gz'
-        return os.path.exists(fp)
+        if os.path.exists(fp):
+            return True
+
+        # check if data exists as a group in the npz store
+        return os.path.exists(
+            self.get_store_filepath(filename, filesuffix=filesuffix)
+        )
 
     def add_to_diagnostics(self, key, value):
         """Write a key, value pair to the gdir's runtime diagnostics.
@@ -4083,7 +4104,7 @@ class GlacierDirectory(object):
             out = json.load(f)
         return out
 
-    def read_pickle(self, filename, use_compression=None, filesuffix=''):
+    def _read_pickle(self, filename, use_compression=None, filesuffix=''):
         """Reads a pickle located in the directory.
 
         Parameters
@@ -4129,7 +4150,94 @@ class GlacierDirectory(object):
 
         return out
 
-    def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
+    def get_store_filepath(self, filename: str, filesuffix: str = "") -> str:
+        """Absolute path to a group of the npz data store.
+
+        Each group of the store is one npz file, named after the
+        filename and its suffix, so that a group can be written or
+        replaced without touching the rest of the store.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+
+        Returns
+        -------
+        str
+            The absolute path to the group's npz file.
+        """
+        return os.path.join(
+            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
+        )
+
+    def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
+        """Reads an npz file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to numpy.load().
+
+        Returns
+        -------
+        An object read from the npz file
+        """
+        fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+        with np.load(fp, allow_pickle=False, **kwargs) as data:
+            meta = json.loads(str(data["__meta__"]))
+            arrays = {k: data[k] for k in data.files if k != "__meta__"}
+
+        return transcoder.decode_npz(arrays, meta, filename)
+
+    def read_store(
+        self, filename: str, filesuffix: str = "", **kwargs
+    ) -> dict | list:
+        """Reads a data store located in the glacier directory.
+
+        Supports npz and pickle. Each group of the npz store is one file
+        under ``data_store``, named after the filename and its suffix.
+        If the group is not found, falls back to reading a pickle file
+        with the same name and suffix.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to ``read_npz()``.
+
+        Returns
+        -------
+        list or dict
+            The data read from the store, in the structures the older
+            pickle files held.
+        """
+
+        try:
+            return self.read_npz(
+                filename=filename, filesuffix=filesuffix, **kwargs
+            )
+        except FileNotFoundError:  # fall back to pickle if npz not found
+            fp = self.get_filepath(filename, filesuffix=filesuffix)
+            if os.path.exists(fp):
+                _warn_store_fallback()
+            else:
+                raise FileNotFoundError(f"No npz or pickle found for {fp}")
+
+            return self._read_pickle(
+                filename=filename, use_compression=None, filesuffix=filesuffix
+            )
+
+    def _write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
         Parameters
@@ -4139,17 +4247,114 @@ class GlacierDirectory(object):
         filename : str
             file name (must be listed in cfg.BASENAME)
         use_compression : bool
-            whether or not the file ws compressed. Default is to use
+            whether or not the file is compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         filesuffix : str
             append a suffix to the filename (useful for experiments).
         """
+
         use_comp = (use_compression if use_compression is not None
                     else cfg.PARAMS['use_compression'])
         _open = gzip.open if use_comp else open
         fp = self.get_filepath(filename, filesuffix=filesuffix)
-        with _open(fp, 'wb') as f:
+
+        # avoid serving stale data from the store if a user fell back to
+        # using a pickle.
+        store_fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+        if os.path.exists(store_fp):
+            os.remove(store_fp)
+
+        with _open(fp, "wb") as f:
             pickle.dump(var, f, protocol=4)
+
+    def write_npz(
+        self, var: object, filename: str, filesuffix: str = "", **kwargs
+    ) -> None:
+        """Writes a variable to an npz file on disk.
+
+        Parameters
+        ----------
+        var : object
+            The variable to write to disk
+        filename : str
+            File name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to numpy.savez().
+        """
+        group = f"{filename}{filesuffix}"
+        arrays, meta = transcoder.encode_npz(var, group)
+        fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+        mkdir(os.path.dirname(fp))
+        # Write beside the target and move it into place, so that an
+        # interrupted write cannot leave a half-written group behind.
+        tmp_fp = f"{fp}.tmp{os.getpid()}"
+        try:
+            with open(tmp_fp, "wb") as f:
+                np.savez(
+                    f,
+                    **arrays,
+                    __meta__=json.dumps(meta),
+                    allow_pickle=False,
+                    **kwargs,
+                )
+            os.replace(tmp_fp, fp)
+        finally:
+            if os.path.exists(tmp_fp):
+                os.remove(tmp_fp)
+
+    def write_store(
+        self,
+        data,
+        filename: str = "",
+        filesuffix: str = "",
+        use_pickle: bool = False,
+        **kwargs,
+    ):
+        """Writes data to disk.
+
+        Parameters
+        ----------
+        data : object
+            Data or variable to write to disk
+        filename : str
+            File name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            Append a suffix to the filename (useful for experiments).
+        use_pickle : bool, default False
+            Whether to use pickle for storage. If False, attempts to
+            write to npz, and falls back to pickle if this fails.
+        **kwargs
+            Additional keyword arguments to pass either to
+            ``write_npz()`` or ``write_pickle()``.
+        """
+
+        if not use_pickle:
+            try:
+                self.write_npz(
+                    var=data,
+                    filename=filename,
+                    filesuffix=filesuffix,
+                    **kwargs,
+                )
+            except Exception as e:
+                # Data that cannot be represented still belongs on disk,
+                # so keep the pickle as a fallback.
+                fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+                if os.path.exists(fp):
+                    os.remove(fp)
+                warnings.warn(
+                    f"{e} Failed to write npz store, falling back to pickle.",
+                    RuntimeWarning,
+                )
+                self._write_pickle(
+                    var=data, filename=filename, filesuffix=filesuffix
+                )
+        else:
+            self._write_pickle(
+                var=data, filename=filename, filesuffix=filesuffix, **kwargs
+            )
 
     def read_json(self, filename, filesuffix='', allow_empty=False):
         """Reads a JSON file located in the directory.
@@ -4520,7 +4725,7 @@ class GlacierDirectory(object):
 
         h = np.array([])
         w = np.array([])
-        fls = self.read_pickle('inversion_flowlines')
+        fls = self.read_store('inversion_flowlines')
         for fl in fls:
             w = np.append(w, fl.widths)
             h = np.append(h, fl.surface_h)
@@ -5225,6 +5430,8 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
                  'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
         paths = ('*' + p + '*' for p in paths)
+        # One npz per store group, each named after its BASENAME, so the
+        # patterns select the store's files along with the rest.
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
     elif setup == 'inversion':
@@ -5289,7 +5496,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     tribs = tolist(tribs)
 
     # read flowlines of the Main glacier
-    mfls = main.read_pickle('model_flowlines')
+    mfls = main.read_store('model_flowlines')
 
     # ------------------------------
     # 0. create the new GlacierDirectory from main glaciers GeoDataFrame
@@ -5303,7 +5510,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     # add tributary geometries to maindf
     merged_geometry = maindf.loc[idx, 'geometry'].iloc[0].buffer(0)
     for trib in tribs:
-        geom = trib.read_pickle('geometries')['polygon_hr']
+        geom = trib.read_store('geometries')['polygon_hr']
         geom = salem.transform_geometry(geom, crs=trib.grid)
         merged_geometry = merged_geometry.union(geom).buffer(0)
 
@@ -5388,7 +5595,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
         mfls[nr] = fl
 
     # Write the reprojecflowlines
-    merged.write_pickle(mfls, 'model_flowlines')
+    merged.write_store(mfls, 'model_flowlines')
 
     return merged
 

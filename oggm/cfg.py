@@ -309,6 +309,10 @@ BASENAMES['settings'] = ('settings.yml', _doc)
 _doc = "A dict containing all observations used during the OGGM workflow."
 BASENAMES['observations'] = ('observations.yml', _doc)
 
+_doc = "A store of npz files containing previously pickled data."
+BASENAMES['data_store'] = ('data_store', _doc)
+
+
 
 def set_logging_config(logging_level='INFO'):
     """Set the global logger parameters.
