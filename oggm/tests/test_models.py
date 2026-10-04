@@ -50,6 +50,7 @@ from oggm.core.dynamic_spinup import (
     dynamic_melt_f_run_with_dynamic_spinup_fallback,
     dynamic_melt_f_run,
     dynamic_melt_f_run_fallback,
+    define_new_melt_f_in_gdir,
     _get_spinup_periods_to_run)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
@@ -6548,6 +6549,7 @@ class TestDynamicSpinup:
 
         # this is used later
         ref_mb_hugonnet = gdir.observations['ref_mb']
+        melt_f_hugonnet = gdir.settings['melt_f']
 
         # check that we are matching all desired ref values
         ds = utils.compile_run_output(
@@ -6650,14 +6652,17 @@ class TestDynamicSpinup:
         if minimise_for == 'area' and do_inversion:
             # test providing adapted observations through the observations file
             ref_mb_adapted = ref_mb_hugonnet
+            # shift by two errors, so that the melt_f calibrated to hugonnet
+            # is for sure outside the tolerance and the calibration must move
             ref_mb_adapted['value'] = (ref_mb_adapted['value'] +
-                                       ref_mb_adapted['err'] / 2)
+                                       2 * ref_mb_adapted['err'])
             gdir.observations_filesuffix = '_hugonnet_adapted'
             gdir.observations['ref_mb'] = ref_mb_adapted
 
-            # save melt_f before calibration
+            # start from the melt_f calibrated to hugonnet (the runs above
+            # changed it)
             gdir.settings_filesuffix = ''
-            melt_f_before = gdir.settings['melt_f']
+            gdir.settings['melt_f'] = melt_f_hugonnet
 
             run_dynamic_melt_f_calibration(
                 gdir,
@@ -6678,7 +6683,7 @@ class TestDynamicSpinup:
 
             # with a less negative geodetic mass balance the melt f should be
             # smaller after calibration
-            assert gdir.settings['melt_f'] < melt_f_before
+            assert gdir.settings['melt_f'] < melt_f_hugonnet
 
     @pytest.mark.parametrize("do_inversion", [True, False])
     @pytest.mark.parametrize("minimise_for", ["area", "volume"])
@@ -7223,7 +7228,9 @@ class TestDynamicSpinup:
                 overwrite_observations=True,
                 maxiter=2)
         # test that fallback function works as expected if ignore_error=True and
-        # if the first guess can improve (but not enough)
+        # if the tolerance cannot be reached. Whether the second guess improves
+        # the first depends on how far the first guess is from the optimum,
+        # we only check that the label is consistent with the outcome
         model_fallback = run_dynamic_melt_f_calibration(
             gdir, melt_f_max=melt_f_max,
             run_function=dynamic_melt_f_run,
@@ -7235,8 +7242,15 @@ class TestDynamicSpinup:
             overwrite_observations=True,
             maxiter=2)
         assert isinstance(model_fallback, oggm.core.flowline.FluxBasedModel)
-        assert gdir.get_diagnostics()['used_spinup_option'] == \
-               'dynamic melt_f calibration (part success)'
+        diag = gdir.get_diagnostics()
+        if diag['melt_f_dynamic_calibration'] == \
+                diag['melt_f_before_dynamic_calibration']:
+            assert diag['used_spinup_option'] == 'dynamic spinup only'
+        else:
+            assert diag['used_spinup_option'] == \
+                   'dynamic melt_f calibration (part success)'
+        assert 'Could not find mismatch' in \
+               diag['run_dynamic_melt_f_calibration_stop_reason']
 
         # test that fallback function works as expected if ignore_error=True and
         # if no successful run can be conducted
@@ -7302,6 +7316,74 @@ class TestDynamicSpinup:
             init_model_filesuffix='_one_yr',
             run_function=dynamic_melt_f_run,
             fallback_function=dynamic_melt_f_run_fallback)
+
+    def test_run_dynamic_melt_f_calibration_search(self, hef_gdir, case_dir):
+        # tests the minimisation itself with a fake run_function, for which
+        # dmdtda decreases linearly with melt_f (as it does in reality)
+        gdir = tasks.copy_to_basedir(hef_gdir, base_dir=case_dir, setup='all')
+
+        ref_mb = -1000.
+        slope = 200.  # kg m-2 yr-1 per unit of melt_f
+        target = {'melt_f': None, 'max_ok': np.inf}
+
+        def fake_run(gdir, melt_f=None, set_local_variables=False, **kwargs):
+            if set_local_variables:
+                return None
+            if melt_f > target['max_ok']:
+                raise RuntimeError('Fake model error.')
+            define_new_melt_f_in_gdir(gdir, melt_f)
+            return None, ref_mb - slope * (melt_f - target['melt_f'])
+
+        def fake_fallback(gdir, **kwargs):
+            gdir.add_to_diagnostics('used_spinup_option', 'fallback')
+
+        def calib(melt_f_init, ref_mb_err=20., maxiter=20):
+            gdir.settings['melt_f'] = melt_f_init
+            run_dynamic_melt_f_calibration(
+                gdir, ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+                ref_mb_period='2000-01-01_2020-01-01',
+                overwrite_observations=True,
+                melt_f_min=1.5, melt_f_max=17, maxiter=maxiter,
+                ignore_errors=True, ys=2000, ye=2020,
+                run_function=fake_run, fallback_function=fake_fallback)
+            return gdir.get_diagnostics()
+
+        # the target is further away than the distance to melt_f_min, which
+        # was not reachable when the step length only considered melt_f_min
+        target['melt_f'] = 12
+        diag = calib(5)
+        assert diag['used_spinup_option'] == \
+               'dynamic melt_f calibration (full success)'
+        assert np.isclose(gdir.settings['melt_f'], 12, atol=0.1)
+        assert diag['run_dynamic_melt_f_calibration_stop_reason'] is None
+
+        # starting at melt_f_max the second guess must go down, not be
+        # clipped to melt_f_max (it went the wrong way before)
+        target['melt_f'] = 15
+        diag = calib(17)
+        assert diag['used_spinup_option'] == \
+               'dynamic melt_f calibration (full success)'
+        assert np.isclose(gdir.settings['melt_f'], 15, atol=0.1)
+
+        # with a linear response the second guess is in the right direction:
+        # it improves the first guess, so this is a part success
+        target['melt_f'] = 12
+        diag = calib(5, ref_mb_err=1e-6, maxiter=2)
+        assert diag['used_spinup_option'] == \
+               'dynamic melt_f calibration (part success)'
+        assert diag['melt_f_dynamic_calibration'] > 5
+        assert 'Could not find mismatch' in \
+               diag['run_dynamic_melt_f_calibration_stop_reason']
+
+        # all runs above the first guess fail: the error recovery searches
+        # back towards the first guess, which stays the best guess
+        target['max_ok'] = 5
+        diag = calib(5)
+        assert diag['used_spinup_option'] == 'dynamic spinup only'
+        assert np.isclose(gdir.settings['melt_f'], 5)
+        assert diag['run_dynamic_melt_f_calibration_stop_reason']
+        # the recovery tried more than once (it stopped after one try before)
+        assert diag['run_dynamic_melt_f_calibration_iterations'] > 3
 
 
 @pytest.mark.usefixtures('with_class_wd')

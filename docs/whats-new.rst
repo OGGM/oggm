@@ -281,6 +281,21 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Several fixes to the minimisation in ``run_dynamic_melt_f_calibration``,
+  which change the results of the dynamic melt_f calibration:
+  the second guess went in the wrong direction (a negative mismatch, i.e.
+  a too negative modelled mass balance, increased melt_f), which cost one
+  extra run for most glaciers and left glaciers starting at
+  ``melt_f_min`` / ``melt_f_max`` uncalibrated; the maximum step length only
+  considered the distance to ``melt_f_min`` instead of the farther of the
+  two bounds, which capped how far melt_f could move; the search for a new
+  limit after a failed run stopped after one try (operator precedence in
+  the loop condition) and rounded melt_f to one decimal, which got stuck
+  for small steps; and the ``used_spinup_option`` labels "part success" and
+  "dynamic spinup only" (i.e. the first guess was the best one) were
+  swapped. Why the minimisation stopped is now stored in the new
+  ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
   have origin widths > 0" when the inversion returns a trapezoid sitting
   exactly on its physical boundary (thickness = width / lambda, i.e. a zero

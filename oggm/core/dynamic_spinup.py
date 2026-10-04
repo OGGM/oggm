@@ -2400,7 +2400,7 @@ def run_dynamic_melt_f_calibration(
     # to avoid to large changes (=likely lead to an error). It is defined in a
     # way that in maxiter steps the further away limit can be reached
     melt_f_max_step_length = np.max(
-        [np.max(np.abs(np.array([melt_f_min, melt_f_min]) - melt_f_initial)) /
+        [np.max(np.abs(np.array([melt_f_min, melt_f_max]) - melt_f_initial)) /
          maxiter,
          melt_f_max_step_length_minimum])
 
@@ -2632,8 +2632,8 @@ def run_dynamic_melt_f_calibration(
             # step away from the limits until we are at the initial guess or we
             # found an error free run
             tmp_mismatch = None
-            while ((current_min_error | current_max_error | iteration == 0) &
-                   (iteration < max_iterations)):
+            while ((current_min_error or current_max_error or iteration == 0)
+                   and (iteration < max_iterations)):
                 try:
                     tmp_mismatch = fct_to_minimise(melt_f)
                 except RuntimeError as e:
@@ -2661,16 +2661,16 @@ def run_dynamic_melt_f_calibration(
                             was_errors[1] = True
                             current_max_error = True
 
+                    # no rounding here: melt_f_search_change is often smaller
+                    # than 0.05, and rounding to one decimal would get stuck
                     if current_min_error:
                         # currently we searching for a new lower limit with no
                         # error
-                        melt_f = np.round(melt_f + melt_f_search_change,
-                                          decimals=1)
+                        melt_f = melt_f + melt_f_search_change
                     elif current_max_error:
                         # currently we searching for a new upper limit with no
                         # error
-                        melt_f = np.round(melt_f - melt_f_search_change,
-                                          decimals=1)
+                        melt_f = melt_f - melt_f_search_change
 
                     # if we end close to an already executed guess while
                     # searching for a new limit we quite
@@ -2725,15 +2725,14 @@ def run_dynamic_melt_f_calibration(
             return mismatch[-1], new_melt_f
 
         # second (arbitrary) guess is given depending on the outcome of first
-        # guess, melt_f is changed for percent of mismatch relative to
-        # ref_mb_err times melt_f_max_step_length (if
-        # mismatch = 2 * ref_mb_err this corresponds to 100%; for 100% or
-        # 150% the next step is (-1) * melt_f_max_step_length; if mismatch
-        # -40%, next step is 0.4 * melt_f_max_step_length; but always at least
-        # an absolute change of 0.02 is imposed to prevent too close guesses).
-        # (-1) as if mismatch is negative we need a larger melt_f to get closer
-        # to 0.
-        step = (-1) * np.sign(mismatch[-1]) * \
+        # guess: the size of the step is (|mismatch| - ref_mb_err) / ref_mb_err
+        # times melt_f_max_step_length (e.g. one step length if
+        # |mismatch| = 2 * ref_mb_err), clipped to the limits by get_mismatch,
+        # but always at least an absolute change of 0.02 to prevent too close
+        # guesses. The mismatch is modelled minus observed: if it is positive
+        # the modelled mass balance is too positive and we need a larger melt_f
+        # to get closer to 0 (and vice versa).
+        step = np.sign(mismatch[-1]) * \
             max((np.abs(mismatch[-1]) - ref_mb_err) / ref_mb_err *
                 melt_f_max_step_length, 0.02)
         new_mismatch, new_melt_f = get_mismatch(melt_f_guess[0] + step)
@@ -2801,6 +2800,13 @@ def run_dynamic_melt_f_calibration(
     try:
         final_mismatch, final_melt_f = minimise_given_fct(c_fun)
     except RuntimeError as e:
+        # store why the minimisation stopped, otherwise this is only in the log
+        gdir.settings['run_dynamic_melt_f_calibration_stop_reason'] = str(e)
+        # this is only for backwards compatibility
+        if settings_filesuffix == '':
+            gdir.add_to_diagnostics(
+                'run_dynamic_melt_f_calibration_stop_reason', str(e))
+
         # something happened during minimisation, if there where some
         # successful runs we return the one with the best mismatch, otherwise
         # we conduct just a run with no dynamic spinup
@@ -2834,7 +2840,7 @@ def run_dynamic_melt_f_calibration(
 
                 # check if the first guess was the best guess
                 only_first_guess = False
-                if min_mismatch_index == 1:
+                if min_mismatch_index == 0:
                     only_first_guess = True
 
                 model_return = fallback_run(
@@ -2864,6 +2870,8 @@ def run_dynamic_melt_f_calibration(
         'melt_f_before_dynamic_calibration': float(melt_f_initial),
         'run_dynamic_melt_f_calibration_iterations':
             int(dynamic_melt_f_calibration_runs[-1]),
+        # reset a possible value from a previous calibration
+        'run_dynamic_melt_f_calibration_stop_reason': None,
     }
 
     for k, v in diag_dyn_melt.items():
