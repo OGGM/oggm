@@ -727,7 +727,7 @@ def test_convert_prepro_to_deltas(tmp_path):
         4: dict(kind="delta", includes=[4], requires=[0, 1, 2, 3]),
         5: dict(kind="standalone", includes=[5], requires=[]),
     }
-    dataset_ids = set()
+    artefact_ids = set()
     for rid in rgi_ids:
         region = rid[:-6]
         bundle = f"{region}.{rid[-5:-2]}"
@@ -741,9 +741,9 @@ def test_convert_prepro_to_deltas(tmp_path):
             assert manifest["kind"] == exp["kind"]
             assert manifest["includes_levels"] == exp["includes"]
             assert manifest["requires"] == exp["requires"]
-            dataset_ids.add(manifest["dataset_id"])
+            artefact_ids.add(manifest["artefact_id"])
     # One logical dataset across both source URLs
-    assert len(dataset_ids) == 1
+    assert len(artefact_ids) == 1
 
 
 def test_level_consistency_mismatch(tmp_path):
@@ -755,7 +755,7 @@ def test_level_consistency_mismatch(tmp_path):
         gdir_dir,
         level=3,
         prev_state={},
-        dataset_tag="ds1",
+        artefact_tag="ds1",
         requires=[],
         includes_levels=[0, 1, 2, 3],
         border=80,
@@ -776,7 +776,7 @@ def test_level_consistency_mismatch(tmp_path):
         gdir_dir,
         level=4,
         prev_state=prev,
-        dataset_tag="OTHER",
+        artefact_tag="OTHER",
         requires=[0, 1, 2, 3],
         border=80,
         rgi_version="62",

@@ -287,8 +287,8 @@ def _delta_tar_entries(
     states: dict,
     border: int,
     rgi_version: str,
-    dataset_tag: str,
-    dataset_id: str = "",
+    artefact_tag: str,
+    artefact_id: str = "",
 ) -> list[tuple[GlacierDirectory, dict]]:
     """Write per-glacier delta manifests for this level.
 
@@ -300,14 +300,14 @@ def _delta_tar_entries(
         The directory processing level (0-5).
     states : dict
         A dict of previous level manifest states, keyed by RGI ID.
-    dataset_tag : str
-        The dataset tag for this run.
+    artefact_tag : str
+        The artefact tag for this run.
     border : int
         The number of pixels at the maps border.
     rgi_version : str
         The RGI version.
-    dataset_id : str, optional
-        The dataset ID for this run.
+    artefact_id : str, optional
+        The artefact ID for this run.
 
     Returns
     --------
@@ -318,9 +318,9 @@ def _delta_tar_entries(
         manifest cannot be written (e.g. errored directories) fall back
         to a full, manifest-less (legacy) tar.
     """
-    if not dataset_id:
-        dataset_id = utils.dataset_id_from_tag(
-            dataset_tag, border, rgi_version
+    if not artefact_id:
+        artefact_id = utils.artefact_id_from_tag(
+            artefact_tag, border, rgi_version
         )
     entries = []
     for gdir in gdirs:
@@ -335,8 +335,8 @@ def _delta_tar_entries(
                 gdir,
                 level=level,
                 prev_state=states.get(gdir.rgi_id, {}),
-                dataset_tag=dataset_tag,
-                dataset_id=dataset_id,
+                artefact_tag=artefact_tag,
+                artefact_id=artefact_id,
                 border=border,
                 rgi_version=rgi_version,
                 **layers,
@@ -532,9 +532,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
           part of L4.
         A chunked cluster run is then 2 -> '3a' (chunks), '3a' -> 3 (whole
         region), 3 -> '4a' (chunks), '4a' -> 5 (whole region).
-    dataset_tag : str
-        explicit label identifying this dataset generation. It gets
-        hashed into level manifest's `dataset_id` to check layered
+    artefact_tag : str
+        explicit label identifying this artefact generation. It gets
+        hashed into level manifest's `artefact_id` to check layered
         levels belong together. Defaults to the output folder name.
     chunk_idx : int
         process only the glaciers of this chunk (see `chunk_size`). Chunks are
@@ -732,8 +732,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 states=manifest_states,
                 border=border,
                 rgi_version=rgi_version,
-                dataset_tag=dataset_tag,
-                dataset_id=dataset_id,
+                artefact_tag=artefact_tag,
+                artefact_id=artefact_id,
             )
         level_base_dir = Path(output_base_dir) / f'L{level}'
         workflow.execute_entity_task(
@@ -813,12 +813,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgi_version = cfg.PARAMS['rgi_version']
     output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
 
-    if dataset_tag is None:
-        dataset_tag = (
+    if artefact_tag is None:
+        artefact_tag = (
             os.path.basename(os.path.normpath(str(output_folder)))
             or "oggm-prepro"
         )
-    dataset_id = utils.dataset_id_from_tag(dataset_tag, border, rgi_version)
+    artefact_id = utils.artefact_id_from_tag(artefact_tag, border, rgi_version)
     # Per-glacier content snapshots of the previous level for deltas
     manifest_states = {}
 
@@ -938,8 +938,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     gdir,
                     level=0,
                     prev_state={},
-                    dataset_tag=dataset_tag,
-                    dataset_id=dataset_id,  # save an extra computation
+                    artefact_tag=artefact_tag,
+                    artefact_id=artefact_id,  # save an extra computation
                     requires=[],
                     includes_levels=[0],
                     border=border,
@@ -1613,8 +1613,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             gdir_or_dir=gdir,
             level=5,
             prev_state={},
-            dataset_id=dataset_id,
-            dataset_tag=dataset_tag,
+            artefact_id=artefact_id,
+            artefact_tag=artefact_tag,
             requires=[],
             includes_levels=[5],
             kind="standalone",

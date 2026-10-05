@@ -5660,18 +5660,19 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
-def dataset_id_from_tag(dataset_tag: str, border: int, rgi_version: str) -> str:
-    """The dataset_id shared by all levels of one logical dataset.
+
+def artefact_id_from_tag(artefact_tag: str, border: int, rgi_version: str) -> str:
+    """The artefact_id shared by all levels of one logical artefact.
 
     Derived from an explicit tag, never from a source URL. One logical
-    dataset can be served from several URLs (e.g. the reference v1.6
-    L0-L2 and L3-L5 trees). This is used for identifying datasets
+    artefact can be served from several URLs (e.g. the reference v1.6
+    L0-L2 and L3-L5 trees). This is used for identifying artefacts
     internally and is not meant to be human-readable.
 
     Parameters
     ----------
-    dataset_tag : str
-        A short string identifying the dataset. This is usually
+    artefact_tag : str
+        A short string identifying the artefact. This is usually
         generated from the base URL e.g. "oggm_v1.6_2025.6_elev_bands_w5e5".
     border : int
         Map border number.
@@ -5681,9 +5682,9 @@ def dataset_id_from_tag(dataset_tag: str, border: int, rgi_version: str) -> str:
     Returns
     -------
     str
-        A sha1 hex digest of the dataset tag, border, and RGI version.
+        A sha1 hex digest of the artefact tag, border, and RGI version.
     """
-    key = f"{dataset_tag}|{border}|{rgi_version}"
+    key = f"{artefact_tag}|{border}|{rgi_version}"
     return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
@@ -5695,11 +5696,11 @@ def _check_level_compat(manifests: list):
     not contiguous.
     """
 
-    dataset_ids = {m["dataset_id"] for m in manifests}
-    if len(dataset_ids) > 1:
+    artefact_ids = {m["artefact_id"] for m in manifests}
+    if len(artefact_ids) > 1:
         raise InvalidWorkflowError(
-            "Layered prepro levels come from different datasets: "
-            f"{sorted(dataset_ids)}"
+            "Layered prepro levels come from different artefacts: "
+            f"{sorted(artefact_ids)}"
         )
     included = set()
     for m in manifests:
@@ -5768,8 +5769,8 @@ def write_level_manifest(
     level: int,
     prev_state: dict,
     requires: list[int],
-    dataset_tag: str,
-    dataset_id: str = "",
+    artefact_tag: str,
+    artefact_id: str = "",
     includes_levels: list[int] | None = None,
     kind: str = "delta",
     border: int | None = None,
@@ -5795,12 +5796,12 @@ def write_level_manifest(
     requires : list[int]
         Levels that must be present below this one. Empty for materialisations
         and standalone bundles.
-    dataset_tag : str
-        Tag identifying the dataset, e.g.
+    artefact_tag : str
+        Tag identifying the artefact, e.g.
         "oggm_v1.6_2025.6_elev_bands_w5e5".
-    dataset_id : str
-        Identifier shared by all levels of one logical dataset. Must not
-        be derived from a source URL: one dataset can be served from
+    artefact_id : str
+        Identifier shared by all levels of one logical artefact. Must not
+        be derived from a source URL: one artefact can be served from
         several URLs.
     includes_levels : list[int] | None, optional
         Levels whose data this artifact contains. Defaults to
@@ -5823,9 +5824,9 @@ def write_level_manifest(
         paths, including the manifest itself, passed to
         ``gdir_to_tar(include=...)``.
     """
-    if not dataset_id:
-        dataset_id = dataset_id_from_tag(
-            dataset_tag,
+    if not artefact_id:
+        artefact_id = artefact_id_from_tag(
+            artefact_tag,
             border or cfg.PARAMS["border"],
             rgi_version or cfg.PARAMS["rgi_version"],
         )
@@ -5873,8 +5874,8 @@ def write_level_manifest(
                 includes_levels if includes_levels is not None else [level]
             )
         ),
-        "dataset_tag": dataset_tag,
-        "dataset_id": dataset_id,
+        "artefact_tag": artefact_tag,
+        "artefact_id": artefact_id,
         "border": int(border),
         "rgi_version": str(rgi_version),
         "oggm_version": __version__,

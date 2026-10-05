@@ -22,7 +22,7 @@ from pathlib import Path
 
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError
-from oggm.utils._workflow import (base_dir_to_tar, dataset_id_from_tag,
+from oggm.utils._workflow import (base_dir_to_tar, artefact_id_from_tag,
                                   gdir_to_tar, snapshot_gdir_state,
                                   write_level_manifest)
 
@@ -117,9 +117,9 @@ def convert_prepro_to_deltas(
         Scratch directory for the per-level downloads.
     output_dir : str
         Root of the delta-format output tree.
-    dataset_tag : str
-        Explicit label identifying the logical dataset. This is hashed
-        with border and RGI version into the manifest's ``dataset_id``.
+    artefact_tag : str
+        Explicit label identifying the logical artefact. This is hashed
+        with border and RGI version into the manifest's ``artefact_id``.
         Must **not** be a source URL.
     max_level : int, default=5
         Convert levels up to and including this one.
@@ -143,7 +143,7 @@ def convert_prepro_to_deltas(
     if not levels:
         raise InvalidParamsError("base_urls contains no level <= max_level")
     lowest = levels[0]
-    dataset_id = dataset_id_from_tag(dataset_tag, border, rgi_version)
+    artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
     out_root = os.path.join(
         output_dir, f"RGI{rgi_version}", f"b_{int(border):03d}"
     )
@@ -172,8 +172,8 @@ def convert_prepro_to_deltas(
                     level=lvl,
                     lowest=lowest,
                     prev_state=prev_states.get(gdir.rgi_id),
-                    dataset_tag=dataset_tag,
-                    dataset_id=dataset_id,
+                    artefact_tag=artefact_tag,
+                    artefact_id=artefact_id,
                     border=border,
                     rgi_version=rgi_version,
                 )
@@ -195,8 +195,8 @@ def _write_artifact_manifest(
     prev_state: dict,
     border: int,
     rgi_version: str,
-    dataset_tag: str,
-    dataset_id: str = "",
+    artefact_tag: str,
+    artefact_id: str = "",
 ):
     """Write the level manifest and return the tar include list.
 
@@ -218,11 +218,11 @@ def _write_artifact_manifest(
     prev_state : dict or None
         The previous level's snapshot of the glacier directory, or None
         if this is the lowest level.
-    dataset_id : str
-        The dataset identity, hashed from the dataset tag, border, and
+    artefact_id : str
+        The artefact identity, hashed from the artefact tag, border, and
         RGI version.
-    dataset_tag : str
-        The dataset tag, identifying the logical dataset.
+    artefact_tag : str
+        The artefact tag, identifying the logical artefact.
     border : int
         The map border of the source dataset.
     rgi_version : str
@@ -235,12 +235,12 @@ def _write_artifact_manifest(
         bundle, or a list of changed paths for delta levels.
     """
 
-    if not dataset_id:
-        dataset_id = dataset_id_from_tag(dataset_tag, border, rgi_version)
+    if not artefact_id:
+        artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
 
     common = dict(
-        dataset_id=dataset_id,
-        dataset_tag=dataset_tag,
+        artefact_id=artefact_id,
+        artefact_tag=artefact_tag,
         border=border,
         rgi_version=rgi_version,
     )

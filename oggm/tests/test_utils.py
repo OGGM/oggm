@@ -2449,7 +2449,7 @@ class TestPreproCLI:
                       inversion_volume_dataset='consensus',
                       temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                       continue_on_error=False,
-                      dataset_tag='chunked_test',
+                      artefact_tag='chunked_test',
                       override_params={})
 
         def wd(name):
